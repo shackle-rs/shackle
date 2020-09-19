@@ -8,11 +8,27 @@
         "required": true,
         "types": [
           {
+            "type": "absent",
+            "named": true
+          },
+          {
             "type": "boolean_literal",
             "named": true
           },
           {
+            "type": "float_literal",
+            "named": true
+          },
+          {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -50,6 +66,25 @@
     }
   },
   {
+    "type": "string_literal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "escape_sequence",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "\"",
+    "named": false
+  },
+  {
     "type": ";",
     "named": false
   },
@@ -58,11 +93,27 @@
     "named": false
   },
   {
+    "type": "absent",
+    "named": true
+  },
+  {
+    "type": "escape_sequence",
+    "named": true
+  },
+  {
     "type": "false",
     "named": false
   },
   {
+    "type": "float_literal",
+    "named": true
+  },
+  {
     "type": "identifier",
+    "named": true
+  },
+  {
+    "type": "integer_literal",
     "named": true
   },
   {

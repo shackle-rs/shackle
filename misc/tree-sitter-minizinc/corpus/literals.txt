@@ -1,0 +1,66 @@
+==============
+Absent Literal
+==============
+
+is_absent = <>;
+
+---
+
+(source_file
+  (assignment_item (identifier) (absent)))
+
+================
+Boolean Literals
+================
+
+boolean_id = false;
+boolean_id = true;
+
+---
+
+(source_file
+  (assignment_item (identifier) (boolean_literal))
+  (assignment_item (identifier) (boolean_literal)))
+
+===============
+Number Literals
+===============
+
+simple_float = 3.65;
+exponent_float = 4.5e10;
+simple_exponent_float = 5E-10;
+
+decimal_integer = 123;
+hexadecimal_integer = 0xA23F;
+octal_integer = 0o701;
+binary_integer = 0b00110101;
+
+
+---
+
+(source_file
+  (assignment_item (identifier) (float_literal))
+  (assignment_item (identifier) (float_literal))
+  (assignment_item (identifier) (float_literal))
+  (assignment_item (identifier) (integer_literal))
+  (assignment_item (identifier) (integer_literal))
+  (assignment_item (identifier) (integer_literal))
+  (assignment_item (identifier) (integer_literal)))
+
+===============
+String Literals
+===============
+
+empty_string = "";
+small_string = "test";
+spaced_string = "    Another test    ";
+escaped_string = "\t\n";
+
+---
+
+(source_file
+  (assignment_item (identifier) (string_literal))
+  (assignment_item (identifier) (string_literal))
+  (assignment_item (identifier) (string_literal))
+  (assignment_item (identifier) (string_literal
+    (escape_sequence) (escape_sequence))))
