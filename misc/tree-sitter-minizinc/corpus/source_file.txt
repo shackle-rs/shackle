@@ -1,3 +1,33 @@
+==========
+Empty File
+==========
+
+---
+
+(source_file)
+
+==================
+End with semicolon
+==================
+
+a = b;
+
+---
+
+(source_file
+  (assignment_item (identifier) (identifier)))
+
+=====================
+End without semicolon
+=====================
+
+a = b
+
+---
+
+(source_file
+  (assignment_item (identifier) (identifier)))
+
 ==============
 Block comments
 ==============

@@ -19,6 +19,7 @@ module.exports = grammar({
 
     _expression: $ => choice(
       $._literal,
+      $.identifier,
       // TODO: Other expression types
     ),
 

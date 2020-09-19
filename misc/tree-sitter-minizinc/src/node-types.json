@@ -10,6 +10,10 @@
           {
             "type": "boolean_literal",
             "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
           }
         ]
       },
