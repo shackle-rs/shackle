@@ -1,0 +1,29 @@
+{
+  "name": "tree-sitter-minizinc",
+  "version": "0.1.0",
+  "description": "MiniZinc grammer for tree-sitter",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dekker1/tree-sitter-minizinc.git"
+  },
+  "keywords": [
+    "parser",
+    "minizinc"
+  ],
+  "author": "Jip J. Dekker <jip@dekker.one> (https://dekker.one/)",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/Dekker1/tree-sitter-minizinc/issues"
+  },
+  "homepage": "https://github.com/Dekker1/tree-sitter-minizinc#readme",
+  "dependencies": {
+    "nan": "^2.14.1"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.16.9"
+  }
+}
