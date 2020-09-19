@@ -1,6 +1,8 @@
 module.exports = grammar({
   name: 'minizinc',
 
+  extras: $ => [/\s/, $.line_comment, $.block_comment],
+
   rules: {
     source_file: $ => seq(sepBy(';', $._items), optional(';')),
 
@@ -33,6 +35,9 @@ module.exports = grammar({
 
 
     identifier: $ => /[A-Za-z][A-Za-z0-9_]*/,
+
+    line_comment: $ => token(seq('%', /.*/)),
+    block_comment: $ => token(seq('/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/')),
 
   }
 });
