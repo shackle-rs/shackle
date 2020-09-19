@@ -1,0 +1,12 @@
+================
+Boolean Literals
+================
+
+boolean_id = false;
+boolean_id = true;
+
+---
+
+(source_file
+  (assignment_item (identifier) (boolean_literal))
+  (assignment_item (identifier) (boolean_literal)))
