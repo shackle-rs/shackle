@@ -70,7 +70,7 @@ module.exports = grammar({
     identifier: $ => /[A-Za-z][A-Za-z0-9_]*/,
 
     line_comment: $ => token(seq('%', /.*/)),
-    block_comment: $ => token(seq('/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/')),
+    block_comment: $ => token(seq('/*', /([^*]|\*[^\/]|\n)*?\*?/, '*/')),
 
   }
 });
