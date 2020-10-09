@@ -1,0 +1,74 @@
+===============
+Binary Operator
+===============
+
+exponent = x ^ y;
+mult = x * y;
+div = x / y;
+idiv = x div y;
+add = x + y;
+minus = x - y;
+set_inter = x intersect y;
+set_dotdot = x..y;
+set_symdiff = x symdiff y;
+set_diff = x diff y;
+set_union = x union y;
+same = x = y;
+samedouble = x == y;
+different = x != y;
+smaller = x < y;
+bigger = x > y;
+smalleq = x <= y;
+bigeq = x >= y;
+set_in = x in y;
+set_sub = x subset y;
+set_super = x superset y;
+and = x /\ y;
+bool_xor = x xor y;
+or = x \/ y;
+
+---
+
+(source_file
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
+  (assignment_item (identifier) (binary_operation (identifier) (identifier))))
+
+==============
+Unary Operator
+==============
+
+negatitve_number = -5;
+negative_ident = -num;
+
+negated_bool = not true;
+unicode_negation = ¬ b;
+
+---
+
+(source_file
+  (assignment_item (identifier) (unary_operation (integer_literal)))
+  (assignment_item (identifier) (unary_operation (identifier)))
+  (assignment_item (identifier) (unary_operation (boolean_literal)))
+  (assignment_item (identifier) (unary_operation (identifier))))

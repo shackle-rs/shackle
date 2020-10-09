@@ -1,3 +1,21 @@
+const PREC = {
+  annotation: 13,
+  exponent: 12,
+  multiplicative: 11,
+  additive: 10,
+  intersect: 9,
+  dotdot: 8,
+  symdiff: 7,
+  diff: 6,
+  union: 5,
+  comparative: 4,
+  and: 3,
+  xor: 2,
+  or: 1,
+  implication: 2,
+  equivalence: 1,
+}
+
 module.exports = grammar({
   name: 'minizinc',
 
@@ -20,11 +38,45 @@ module.exports = grammar({
     ),
 
     _expression: $ => choice(
-      $._literal,
       $.identifier,
+      $._literal,
+      $.unary_operation,
+      $.binary_operation,
       // TODO: Other expression types
     ),
 
+    binary_operation: $ => {
+      const table = [
+        [prec.left, PREC.equivalence, '<->'],
+        [prec.left, PREC.implication, choice('->', '<-')],
+        [prec.left, PREC.or, '\\/'],
+        [prec.left, PREC.xor, 'xor'],
+        [prec.left, PREC.and, '/\\'],
+        // TODO: Should really be nonassoc
+        [prec.left, PREC.comparative, choice('=', '==', '!=', '<', '<=', '>', '>=', 'in', 'subset', 'superset')],
+        [prec.left, PREC.union, 'union'],
+        [prec.left, PREC.diff, 'diff'],
+        [prec.left, PREC.symdiff, 'symdiff'],
+        [prec.left, PREC.intersect, 'intersect'],
+        // TODO: Could be nonassoc, will always give type error
+        [prec.left, PREC.dotdot, '..'],
+        [prec.left, PREC.additive, choice('+', '-', '++')],
+        [prec.left, PREC.multiplicative, choice('*', '/', 'div', 'mod')],
+        [prec.left, PREC.exponent, '^'],
+        [prec.left, PREC.annotation, '::'],
+      ];
+
+      return choice(...table.map(([assoc, precedence, operator]) => assoc(precedence, seq(
+        field('left', $._expression),
+        field('operator', operator),
+        field('right', $._expression),
+      ))));
+    },
+
+    unary_operation: $ => seq(
+      field('operator', choice('-', 'not', '¬')),
+      $._expression
+    ),
 
     _literal: $ => choice(
       $.absent,
