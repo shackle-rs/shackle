@@ -36,6 +36,10 @@
           "named": true
         },
         {
+          "type": "if_then_else",
+          "named": true
+        },
+        {
           "type": "index_expression",
           "named": true
         },
@@ -92,6 +96,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_then_else",
             "named": true
           },
           {
@@ -162,6 +170,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_then_else",
             "named": true
           },
           {
@@ -345,6 +357,10 @@
             "named": true
           },
           {
+            "type": "if_then_else",
+            "named": true
+          },
+          {
             "type": "index_expression",
             "named": true
           },
@@ -414,6 +430,10 @@
             "named": true
           },
           {
+            "type": "if_then_else",
+            "named": true
+          },
+          {
             "type": "index_expression",
             "named": true
           },
@@ -445,6 +465,69 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "if_then_else",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_literal",
+          "named": true
+        },
+        {
+          "type": "binary_operation",
+          "named": true
+        },
+        {
+          "type": "boolean_literal",
+          "named": true
+        },
+        {
+          "type": "call",
+          "named": true
+        },
+        {
+          "type": "float_literal",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "if_then_else",
+          "named": true
+        },
+        {
+          "type": "index_expression",
+          "named": true
+        },
+        {
+          "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "set_literal",
+          "named": true
+        },
+        {
+          "type": "string_literal",
+          "named": true
+        },
+        {
+          "type": "unary_operation",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -481,6 +564,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_then_else",
             "named": true
           },
           {
@@ -542,6 +629,10 @@
             "named": true
           },
           {
+            "type": "if_then_else",
+            "named": true
+          },
+          {
             "type": "index_expression",
             "named": true
           },
@@ -599,6 +690,10 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "if_then_else",
           "named": true
         },
         {
@@ -707,6 +802,10 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "if_then_else",
           "named": true
         },
         {
@@ -853,6 +952,18 @@
     "named": false
   },
   {
+    "type": "else",
+    "named": false
+  },
+  {
+    "type": "elseif",
+    "named": false
+  },
+  {
+    "type": "endif",
+    "named": false
+  },
+  {
     "type": "escape_sequence",
     "named": true
   },
@@ -867,6 +978,10 @@
   {
     "type": "identifier",
     "named": true
+  },
+  {
+    "type": "if",
+    "named": false
   },
   {
     "type": "in",
@@ -898,6 +1013,10 @@
   },
   {
     "type": "symdiff",
+    "named": false
+  },
+  {
+    "type": "then",
     "named": false
   },
   {

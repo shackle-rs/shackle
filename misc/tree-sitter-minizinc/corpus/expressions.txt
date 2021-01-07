@@ -71,6 +71,23 @@ mult_args = my_fn(2, "test");
   (assignment_item (identifier) (call (identifier) (integer_literal) (string_literal))))
 
 ================
+If-Then-Else
+================
+
+if_only = if b then i < j endif;
+value_select = if b then i else j endif;
+elseif = if b then i elseif c then j else k endif;
+elseif_no_else = if b then i < j elseif c then j > i endif;
+
+---
+
+(source_file
+  (assignment_item (identifier) (if_then_else (identifier) (binary_operation (identifier) (identifier))))
+  (assignment_item (identifier) (if_then_else (identifier) (identifier) (identifier)))
+  (assignment_item (identifier) (if_then_else (identifier) (identifier) (identifier) (identifier) (identifier)))
+  (assignment_item (identifier) (if_then_else (identifier) (binary_operation (identifier) (identifier)) (identifier) (binary_operation (identifier) (identifier)))))
+
+================
 Index Expression
 ================
 

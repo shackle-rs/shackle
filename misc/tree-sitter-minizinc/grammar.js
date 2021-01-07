@@ -45,6 +45,7 @@ module.exports = grammar({
 
       $.binary_operation,
       $.call,
+      $.if_then_else,
       $.index_expression,
       $.unary_operation,
       // TODO: Other expression types
@@ -84,6 +85,14 @@ module.exports = grammar({
       field('arguments', sepBy(',', $._expression)),
       ')',
     )),
+
+    if_then_else: $ => seq(
+      "if", $._expression,
+      "then", $._expression,
+      repeat(seq("elseif", $._expression, "then", $._expression)),
+      optional(seq("else", $._expression)),
+      "endif",
+    ),
 
     index_expression: $ => prec(PREC.call, seq(
       field('collection', $._expression),
