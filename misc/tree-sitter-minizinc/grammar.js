@@ -26,7 +26,7 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => seq(sepBy(';', $._items), optional(';')),
+    source_file: $ => seq(sepBy(';', $._items)),
 
     _items: $ => choice(
       $.assignment_item,
@@ -44,6 +44,7 @@ module.exports = grammar({
       $._literal,
 
       $.binary_operation,
+      $.call,
       $.index_expression,
       $.unary_operation,
       // TODO: Other expression types
@@ -77,6 +78,13 @@ module.exports = grammar({
       ))));
     },
 
+    call: $ => prec(PREC.call, seq(
+      field('name', $.identifier),
+      '(',
+      field('arguments', sepBy(',', $._expression)),
+      ')',
+    )),
+
     index_expression: $ => prec(PREC.call, seq(
       field('collection', $._expression),
       '[',
@@ -100,7 +108,7 @@ module.exports = grammar({
     ),
 
     absent: $ => '<>',
-    array_literal: $ => seq('[', repeat(seq($._expression, ',')), optional($._expression), ']'),
+    array_literal: $ => seq('[', sepBy(',', $._expression), ']'),
     boolean_literal: $ => choice('true', 'false'),
     float_literal: $ => token(choice(
       /\d+\.\d+/,
@@ -113,7 +121,7 @@ module.exports = grammar({
       /0b[01]+/,
       /0o[0-7]+/
     )),
-    set_literal: $ => seq('{', repeat(seq($._expression, ',')), optional($._expression), '}'),
+    set_literal: $ => seq('{', sepBy(',', $._expression), '}'),
 
     string_literal: $ => seq(
       '"',
@@ -142,10 +150,6 @@ module.exports = grammar({
   }
 });
 
-function sepBy1(sep, rule) {
-  return seq(rule, repeat(seq(sep, rule)))
-}
-
 function sepBy(sep, rule) {
-  return optional(sepBy1(sep, rule))
+  return seq(repeat(seq(rule, sep)), optional(rule))
 }

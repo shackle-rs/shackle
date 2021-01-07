@@ -55,6 +55,21 @@ or = x \/ y;
   (assignment_item (identifier) (binary_operation (identifier) (identifier)))
   (assignment_item (identifier) (binary_operation (identifier) (identifier))))
 
+====
+Call
+====
+
+no_args = my_fn();
+single_arg = my_fn(1);
+mult_args = my_fn(2, "test");
+
+---
+
+(source_file
+  (assignment_item (identifier) (call (identifier)))
+  (assignment_item (identifier) (call (identifier) (integer_literal)))
+  (assignment_item (identifier) (call (identifier) (integer_literal) (string_literal))))
+
 ================
 Index Expression
 ================
