@@ -55,6 +55,27 @@ or = x \/ y;
   (assignment_item (identifier) (binary_operation (identifier) (identifier)))
   (assignment_item (identifier) (binary_operation (identifier) (identifier))))
 
+================
+Index Expression
+================
+
+named_colection = my_collection[1];
+named_accessor = my_collection[i];
+literal_collection = [1,2,3][i];
+multiple_accessor = my_collection[i,2];
+expression_accessor = my_collection[-i + 2];
+slice = my_collection[1..2];
+
+---
+
+(source_file
+  (assignment_item (identifier) (index_expression (identifier) (integer_literal)))
+  (assignment_item (identifier) (index_expression (identifier) (identifier)))
+  (assignment_item (identifier) (index_expression (array_literal (integer_literal) (integer_literal) (integer_literal)) (identifier)))
+  (assignment_item (identifier) (index_expression (identifier) (identifier) (integer_literal)))
+  (assignment_item (identifier) (index_expression (identifier) (binary_operation (unary_operation (identifier)) (integer_literal))))
+  (assignment_item (identifier) (index_expression (identifier) (binary_operation (integer_literal) (integer_literal)))))
+
 ==============
 Unary Operator
 ==============

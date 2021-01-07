@@ -1,5 +1,7 @@
 const PREC = {
-  annotation: 13,
+  call: 15,
+  annotation: 14,
+  unary: 13,
   exponent: 12,
   multiplicative: 11,
   additive: 10,
@@ -40,8 +42,10 @@ module.exports = grammar({
     _expression: $ => choice(
       $.identifier,
       $._literal,
-      $.unary_operation,
+
       $.binary_operation,
+      $.index_expression,
+      $.unary_operation,
       // TODO: Other expression types
     ),
 
@@ -73,10 +77,17 @@ module.exports = grammar({
       ))));
     },
 
-    unary_operation: $ => seq(
+    index_expression: $ => prec(PREC.call, seq(
+      field('collection', $._expression),
+      '[',
+      field('indices', seq($._expression, repeat(seq(',', $._expression)))),
+      ']',
+    )),
+
+    unary_operation: $ => prec(PREC.unary, seq(
       field('operator', choice('-', 'not', '¬')),
       $._expression
-    ),
+    )),
 
     _literal: $ => choice(
       $.absent,
