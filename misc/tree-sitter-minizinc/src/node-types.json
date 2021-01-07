@@ -1,5 +1,56 @@
 [
   {
+    "type": "array_literal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_literal",
+          "named": true
+        },
+        {
+          "type": "binary_operation",
+          "named": true
+        },
+        {
+          "type": "boolean_literal",
+          "named": true
+        },
+        {
+          "type": "float_literal",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "set_literal",
+          "named": true
+        },
+        {
+          "type": "string_literal",
+          "named": true
+        },
+        {
+          "type": "unary_operation",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "assignment_item",
     "named": true,
     "fields": {
@@ -9,6 +60,10 @@
         "types": [
           {
             "type": "absent",
+            "named": true
+          },
+          {
+            "type": "array_literal",
             "named": true
           },
           {
@@ -29,6 +84,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "set_literal",
             "named": true
           },
           {
@@ -66,6 +125,10 @@
             "named": true
           },
           {
+            "type": "array_literal",
+            "named": true
+          },
+          {
             "type": "binary_operation",
             "named": true
           },
@@ -83,6 +146,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "set_literal",
             "named": true
           },
           {
@@ -230,6 +297,10 @@
             "named": true
           },
           {
+            "type": "array_literal",
+            "named": true
+          },
+          {
             "type": "binary_operation",
             "named": true
           },
@@ -250,6 +321,10 @@
             "named": true
           },
           {
+            "type": "set_literal",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           },
@@ -265,6 +340,57 @@
     "type": "boolean_literal",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "set_literal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_literal",
+          "named": true
+        },
+        {
+          "type": "binary_operation",
+          "named": true
+        },
+        {
+          "type": "boolean_literal",
+          "named": true
+        },
+        {
+          "type": "float_literal",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "set_literal",
+          "named": true
+        },
+        {
+          "type": "string_literal",
+          "named": true
+        },
+        {
+          "type": "unary_operation",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "source_file",
@@ -328,6 +454,10 @@
           "named": true
         },
         {
+          "type": "array_literal",
+          "named": true
+        },
+        {
           "type": "binary_operation",
           "named": true
         },
@@ -345,6 +475,10 @@
         },
         {
           "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "set_literal",
           "named": true
         },
         {
@@ -376,6 +510,10 @@
   },
   {
     "type": "++",
+    "named": false
+  },
+  {
+    "type": ",",
     "named": false
   },
   {
@@ -439,7 +577,15 @@
     "named": false
   },
   {
+    "type": "[",
+    "named": false
+  },
+  {
     "type": "\\/",
+    "named": false
+  },
+  {
+    "type": "]",
     "named": false
   },
   {
@@ -516,6 +662,14 @@
   },
   {
     "type": "xor",
+    "named": false
+  },
+  {
+    "type": "{",
+    "named": false
+  },
+  {
+    "type": "}",
     "named": false
   },
   {

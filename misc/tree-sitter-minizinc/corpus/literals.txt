@@ -9,6 +9,23 @@ is_absent = <>;
 (source_file
   (assignment_item (identifier) (absent)))
 
+==============
+Array Literals
+==============
+
+empty = [];
+single = [1.0];
+double = [1, 2.2];
+more = [<>, <>, 1, <>];
+
+---
+
+(source_file
+  (assignment_item (identifier) (array_literal))
+  (assignment_item (identifier) (array_literal (float_literal)))
+  (assignment_item (identifier) (array_literal (integer_literal) (float_literal)))
+  (assignment_item (identifier) (array_literal (absent) (absent) (integer_literal) (absent))))
+
 ================
 Boolean Literals
 ================
@@ -46,6 +63,23 @@ binary_integer = 0b00110101;
   (assignment_item (identifier) (integer_literal))
   (assignment_item (identifier) (integer_literal))
   (assignment_item (identifier) (integer_literal)))
+
+============
+Set Literals
+============
+
+empty = {};
+single = {1.0};
+double = {1, 2.2};
+more = {<>, <>, 1, <>};
+
+---
+
+(source_file
+  (assignment_item (identifier) (set_literal))
+  (assignment_item (identifier) (set_literal (float_literal)))
+  (assignment_item (identifier) (set_literal (integer_literal) (float_literal)))
+  (assignment_item (identifier) (set_literal (absent) (absent) (integer_literal) (absent))))
 
 ===============
 String Literals

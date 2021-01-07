@@ -80,13 +80,16 @@ module.exports = grammar({
 
     _literal: $ => choice(
       $.absent,
+      $.array_literal,
       $.boolean_literal,
       $.float_literal,
       $.integer_literal,
+      $.set_literal,
       $.string_literal,
     ),
 
     absent: $ => '<>',
+    array_literal: $ => seq('[', repeat(seq($._expression, ',')), optional($._expression), ']'),
     boolean_literal: $ => choice('true', 'false'),
     float_literal: $ => token(choice(
       /\d+\.\d+/,
@@ -99,6 +102,7 @@ module.exports = grammar({
       /0b[01]+/,
       /0o[0-7]+/
     )),
+    set_literal: $ => seq('{', repeat(seq($._expression, ',')), optional($._expression), '}'),
 
     string_literal: $ => seq(
       '"',
