@@ -49,6 +49,7 @@ module.exports = grammar({
       $.index_expression,
       $.unary_operation,
       // TODO: Other expression types
+      seq('(', $._expression, ')'),
     ),
 
     binary_operation: $ => {

@@ -108,6 +108,23 @@ slice = my_collection[1..2];
   (assignment_item (identifier) (index_expression (identifier) (binary_operation (unary_operation (identifier)) (integer_literal))))
   (assignment_item (identifier) (index_expression (identifier) (binary_operation (integer_literal) (integer_literal)))))
 
+===========
+Precedences
+===========
+
+given_precedence = (1 + 1) * 1;
+mult_first = 1 + 1 * 1;
+exp_first = 1 * 1 ^ 1;
+annotation_bind = 1 ^ 1::some_ann;
+
+---
+
+(source_file
+  (assignment_item (identifier) (binary_operation (binary_operation (integer_literal) (integer_literal)) (integer_literal)))
+  (assignment_item (identifier) (binary_operation (integer_literal) (binary_operation (integer_literal) (integer_literal))))
+  (assignment_item (identifier) (binary_operation (integer_literal) (binary_operation (integer_literal) (integer_literal))))
+  (assignment_item (identifier) (binary_operation (integer_literal) (binary_operation (integer_literal) (identifier)))))
+
 ==============
 Unary Operator
 ==============
