@@ -1,5 +1,80 @@
 [
   {
+    "type": "array_comprehension",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_comprehension",
+          "named": true
+        },
+        {
+          "type": "array_literal",
+          "named": true
+        },
+        {
+          "type": "boolean_literal",
+          "named": true
+        },
+        {
+          "type": "call",
+          "named": true
+        },
+        {
+          "type": "float_literal",
+          "named": true
+        },
+        {
+          "type": "generator",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "if_then_else",
+          "named": true
+        },
+        {
+          "type": "indexed_access",
+          "named": true
+        },
+        {
+          "type": "infix_operator",
+          "named": true
+        },
+        {
+          "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "prefix_operator",
+          "named": true
+        },
+        {
+          "type": "set_comprehension",
+          "named": true
+        },
+        {
+          "type": "set_literal",
+          "named": true
+        },
+        {
+          "type": "string_literal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "array_literal",
     "named": true,
     "fields": {},
@@ -9,6 +84,10 @@
       "types": [
         {
           "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_comprehension",
           "named": true
         },
         {
@@ -52,6 +131,10 @@
           "named": true
         },
         {
+          "type": "set_comprehension",
+          "named": true
+        },
+        {
           "type": "set_literal",
           "named": true
         },
@@ -80,6 +163,10 @@
           },
           {
             "type": "absent",
+            "named": true
+          },
+          {
+            "type": "array_comprehension",
             "named": true
           },
           {
@@ -120,6 +207,10 @@
           },
           {
             "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "set_comprehension",
             "named": true
           },
           {
@@ -174,6 +265,10 @@
             "named": true
           },
           {
+            "type": "array_comprehension",
+            "named": true
+          },
+          {
             "type": "array_literal",
             "named": true
           },
@@ -214,6 +309,10 @@
             "named": true
           },
           {
+            "type": "set_comprehension",
+            "named": true
+          },
+          {
             "type": "set_literal",
             "named": true
           },
@@ -236,7 +335,7 @@
     }
   },
   {
-    "type": "if_then_else",
+    "type": "generator",
     "named": true,
     "fields": {},
     "children": {
@@ -245,6 +344,10 @@
       "types": [
         {
           "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_comprehension",
           "named": true
         },
         {
@@ -288,6 +391,81 @@
           "named": true
         },
         {
+          "type": "set_comprehension",
+          "named": true
+        },
+        {
+          "type": "set_literal",
+          "named": true
+        },
+        {
+          "type": "string_literal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "if_then_else",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_comprehension",
+          "named": true
+        },
+        {
+          "type": "array_literal",
+          "named": true
+        },
+        {
+          "type": "boolean_literal",
+          "named": true
+        },
+        {
+          "type": "call",
+          "named": true
+        },
+        {
+          "type": "float_literal",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "if_then_else",
+          "named": true
+        },
+        {
+          "type": "indexed_access",
+          "named": true
+        },
+        {
+          "type": "infix_operator",
+          "named": true
+        },
+        {
+          "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "prefix_operator",
+          "named": true
+        },
+        {
+          "type": "set_comprehension",
+          "named": true
+        },
+        {
           "type": "set_literal",
           "named": true
         },
@@ -316,6 +494,10 @@
           },
           {
             "type": "absent",
+            "named": true
+          },
+          {
+            "type": "array_comprehension",
             "named": true
           },
           {
@@ -356,6 +538,10 @@
           },
           {
             "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "set_comprehension",
             "named": true
           },
           {
@@ -389,6 +575,10 @@
             "named": true
           },
           {
+            "type": "array_comprehension",
+            "named": true
+          },
+          {
             "type": "array_literal",
             "named": true
           },
@@ -426,6 +616,10 @@
           },
           {
             "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "set_comprehension",
             "named": true
           },
           {
@@ -461,6 +655,10 @@
             "named": true
           },
           {
+            "type": "array_comprehension",
+            "named": true
+          },
+          {
             "type": "array_literal",
             "named": true
           },
@@ -498,6 +696,10 @@
           },
           {
             "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "set_comprehension",
             "named": true
           },
           {
@@ -653,6 +855,10 @@
             "named": true
           },
           {
+            "type": "array_comprehension",
+            "named": true
+          },
+          {
             "type": "array_literal",
             "named": true
           },
@@ -690,6 +896,10 @@
           },
           {
             "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "set_comprehension",
             "named": true
           },
           {
@@ -736,6 +946,10 @@
           "named": true
         },
         {
+          "type": "array_comprehension",
+          "named": true
+        },
+        {
           "type": "array_literal",
           "named": true
         },
@@ -773,6 +987,85 @@
         },
         {
           "type": "prefix_operator",
+          "named": true
+        },
+        {
+          "type": "set_comprehension",
+          "named": true
+        },
+        {
+          "type": "set_literal",
+          "named": true
+        },
+        {
+          "type": "string_literal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "set_comprehension",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "absent",
+          "named": true
+        },
+        {
+          "type": "array_comprehension",
+          "named": true
+        },
+        {
+          "type": "array_literal",
+          "named": true
+        },
+        {
+          "type": "boolean_literal",
+          "named": true
+        },
+        {
+          "type": "call",
+          "named": true
+        },
+        {
+          "type": "float_literal",
+          "named": true
+        },
+        {
+          "type": "generator",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "if_then_else",
+          "named": true
+        },
+        {
+          "type": "indexed_access",
+          "named": true
+        },
+        {
+          "type": "infix_operator",
+          "named": true
+        },
+        {
+          "type": "integer_literal",
+          "named": true
+        },
+        {
+          "type": "prefix_operator",
+          "named": true
+        },
+        {
+          "type": "set_comprehension",
           "named": true
         },
         {
@@ -799,6 +1092,10 @@
           "named": true
         },
         {
+          "type": "array_comprehension",
+          "named": true
+        },
+        {
           "type": "array_literal",
           "named": true
         },
@@ -836,6 +1133,10 @@
         },
         {
           "type": "prefix_operator",
+          "named": true
+        },
+        {
+          "type": "set_comprehension",
           "named": true
         },
         {
@@ -1076,11 +1377,19 @@
     "named": false
   },
   {
+    "type": "where",
+    "named": false
+  },
+  {
     "type": "xor",
     "named": false
   },
   {
     "type": "{",
+    "named": false
+  },
+  {
+    "type": "|",
     "named": false
   },
   {

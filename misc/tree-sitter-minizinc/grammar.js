@@ -43,14 +43,47 @@ module.exports = grammar({
       $.identifier,
       $._literal,
 
+      $.array_comprehension,
       $.call,
       $.if_then_else,
       $.indexed_access,
       $.infix_operator,
       $.prefix_operator,
+      $.set_comprehension,
       // TODO: Other expression types
       seq('(', $._expression, ')'),
     ),
+
+    array_comprehension: $ => seq(
+      '[', $._expression, '|', sepBy1(',', $.generator), ']',
+    ),
+
+    call: $ => prec(PREC.call, seq(
+      field('name', $.identifier),
+      '(',
+      field('arguments', sepBy(',', $._expression)),
+      ')',
+    )),
+
+    generator: $ => seq(
+      $.identifier, 'in', $._expression,
+      optional(seq('where', $._expression))
+    ),
+
+    if_then_else: $ => seq(
+      "if", $._expression,
+      "then", $._expression,
+      repeat(seq("elseif", $._expression, "then", $._expression)),
+      optional(seq("else", $._expression)),
+      "endif",
+    ),
+
+    indexed_access: $ => prec(PREC.call, seq(
+      field('collection', $._expression),
+      '[',
+      field('indices', seq($._expression, repeat(seq(',', $._expression)))),
+      ']',
+    )),
 
     infix_operator: $ => {
       const table = [
@@ -80,32 +113,14 @@ module.exports = grammar({
       ))));
     },
 
-    call: $ => prec(PREC.call, seq(
-      field('name', $.identifier),
-      '(',
-      field('arguments', sepBy(',', $._expression)),
-      ')',
-    )),
-
-    if_then_else: $ => seq(
-      "if", $._expression,
-      "then", $._expression,
-      repeat(seq("elseif", $._expression, "then", $._expression)),
-      optional(seq("else", $._expression)),
-      "endif",
-    ),
-
-    indexed_access: $ => prec(PREC.call, seq(
-      field('collection', $._expression),
-      '[',
-      field('indices', seq($._expression, repeat(seq(',', $._expression)))),
-      ']',
-    )),
-
     prefix_operator: $ => prec(PREC.unary, seq(
       field('operator', choice('-', 'not', '¬')),
       $._expression
     )),
+
+    set_comprehension: $ => seq(
+      '{', $._expression, '|', sepBy1(',', $.generator), '}',
+    ),
 
     _literal: $ => choice(
       $.absent,
@@ -162,4 +177,8 @@ module.exports = grammar({
 
 function sepBy(sep, rule) {
   return seq(repeat(seq(rule, sep)), optional(rule))
+}
+
+function sepBy1(sep, rule) {
+  return seq(rule, repeat(seq(sep, rule)), optional(sep))
 }

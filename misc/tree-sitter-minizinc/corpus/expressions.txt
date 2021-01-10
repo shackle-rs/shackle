@@ -1,3 +1,71 @@
+===================
+Array Comprehension
+===================
+
+simple = [ i | i in X ];
+where = [ i | i in X where i == 2 ];
+multiple = [ i | i in X, j in Y where i == j];
+
+---
+
+(source_file
+  (assignment (identifier) (array_comprehension (identifier) (generator (identifier) (identifier))))
+  (assignment (identifier) (array_comprehension (identifier) (generator (identifier) (identifier) (infix_operator (identifier) (integer_literal)))))
+  (assignment (identifier) (array_comprehension (identifier) (generator (identifier) (identifier)) (generator (identifier) (identifier) (infix_operator (identifier) (identifier))))))
+
+====
+Call
+====
+
+no_args = my_fn();
+single_arg = my_fn(1);
+mult_args = my_fn(2, "test");
+
+---
+
+(source_file
+  (assignment (identifier) (call (identifier)))
+  (assignment (identifier) (call (identifier) (integer_literal)))
+  (assignment (identifier) (call (identifier) (integer_literal) (string_literal))))
+
+============
+If-Then-Else
+============
+
+if_only = if b then i < j endif;
+value_select = if b then i else j endif;
+elseif = if b then i elseif c then j else k endif;
+elseif_no_else = if b then i < j elseif c then j > i endif;
+
+---
+
+(source_file
+  (assignment (identifier) (if_then_else (identifier) (infix_operator (identifier) (identifier))))
+  (assignment (identifier) (if_then_else (identifier) (identifier) (identifier)))
+  (assignment (identifier) (if_then_else (identifier) (identifier) (identifier) (identifier) (identifier)))
+  (assignment (identifier) (if_then_else (identifier) (infix_operator (identifier) (identifier)) (identifier) (infix_operator (identifier) (identifier)))))
+
+============
+Index Access 
+============
+
+named_colection = my_collection[1];
+named_accessor = my_collection[i];
+literal_collection = [1,2,3][i];
+multiple_accessor = my_collection[i,2];
+expression_accessor = my_collection[-i + 2];
+slice = my_collection[1..2];
+
+---
+
+(source_file
+  (assignment (identifier) (indexed_access (identifier) (integer_literal)))
+  (assignment (identifier) (indexed_access (identifier) (identifier)))
+  (assignment (identifier) (indexed_access (array_literal (integer_literal) (integer_literal) (integer_literal)) (identifier)))
+  (assignment (identifier) (indexed_access (identifier) (identifier) (integer_literal)))
+  (assignment (identifier) (indexed_access (identifier) (infix_operator (prefix_operator (identifier)) (integer_literal))))
+  (assignment (identifier) (indexed_access (identifier) (infix_operator (integer_literal) (integer_literal)))))
+
 ==============
 Infix Operator
 ==============
@@ -55,59 +123,6 @@ or = x \/ y;
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier))))
 
-====
-Call
-====
-
-no_args = my_fn();
-single_arg = my_fn(1);
-mult_args = my_fn(2, "test");
-
----
-
-(source_file
-  (assignment (identifier) (call (identifier)))
-  (assignment (identifier) (call (identifier) (integer_literal)))
-  (assignment (identifier) (call (identifier) (integer_literal) (string_literal))))
-
-================
-If-Then-Else
-================
-
-if_only = if b then i < j endif;
-value_select = if b then i else j endif;
-elseif = if b then i elseif c then j else k endif;
-elseif_no_else = if b then i < j elseif c then j > i endif;
-
----
-
-(source_file
-  (assignment (identifier) (if_then_else (identifier) (infix_operator (identifier) (identifier))))
-  (assignment (identifier) (if_then_else (identifier) (identifier) (identifier)))
-  (assignment (identifier) (if_then_else (identifier) (identifier) (identifier) (identifier) (identifier)))
-  (assignment (identifier) (if_then_else (identifier) (infix_operator (identifier) (identifier)) (identifier) (infix_operator (identifier) (identifier)))))
-
-============
-Index Access 
-============
-
-named_colection = my_collection[1];
-named_accessor = my_collection[i];
-literal_collection = [1,2,3][i];
-multiple_accessor = my_collection[i,2];
-expression_accessor = my_collection[-i + 2];
-slice = my_collection[1..2];
-
----
-
-(source_file
-  (assignment (identifier) (indexed_access (identifier) (integer_literal)))
-  (assignment (identifier) (indexed_access (identifier) (identifier)))
-  (assignment (identifier) (indexed_access (array_literal (integer_literal) (integer_literal) (integer_literal)) (identifier)))
-  (assignment (identifier) (indexed_access (identifier) (identifier) (integer_literal)))
-  (assignment (identifier) (indexed_access (identifier) (infix_operator (prefix_operator (identifier)) (integer_literal))))
-  (assignment (identifier) (indexed_access (identifier) (infix_operator (integer_literal) (integer_literal)))))
-
 ===========
 Precedences
 ===========
@@ -142,3 +157,18 @@ unicode_negation = ¬ b;
   (assignment (identifier) (prefix_operator (identifier)))
   (assignment (identifier) (prefix_operator (boolean_literal)))
   (assignment (identifier) (prefix_operator (identifier))))
+
+=================
+Set Comprehension
+=================
+
+simple = { i | i in X };
+where = { i | i in X where i == 2 };
+multiple = { i | i in X, j in Y where i == j};
+
+---
+
+(source_file
+  (assignment (identifier) (set_comprehension (identifier) (generator (identifier) (identifier))))
+  (assignment (identifier) (set_comprehension (identifier) (generator (identifier) (identifier) (infix_operator (identifier) (integer_literal)))))
+  (assignment (identifier) (set_comprehension (identifier) (generator (identifier) (identifier)) (generator (identifier) (identifier) (infix_operator (identifier) (identifier))))))
