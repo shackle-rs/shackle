@@ -15,7 +15,7 @@
                 "members": [
                   {
                     "type": "SYMBOL",
-                    "name": "_items"
+                    "name": "_item"
                   },
                   {
                     "type": "STRING",
@@ -29,7 +29,7 @@
               "members": [
                 {
                   "type": "SYMBOL",
-                  "name": "_items"
+                  "name": "_item"
                 },
                 {
                   "type": "BLANK"
@@ -40,16 +40,16 @@
         }
       ]
     },
-    "_items": {
+    "_item": {
       "type": "CHOICE",
       "members": [
         {
           "type": "SYMBOL",
-          "name": "assignment_item"
+          "name": "assignment"
         }
       ]
     },
-    "assignment_item": {
+    "assignment": {
       "type": "SEQ",
       "members": [
         {
@@ -87,10 +87,6 @@
         },
         {
           "type": "SYMBOL",
-          "name": "binary_operation"
-        },
-        {
-          "type": "SYMBOL",
           "name": "call"
         },
         {
@@ -99,11 +95,15 @@
         },
         {
           "type": "SYMBOL",
-          "name": "index_expression"
+          "name": "indexed_access"
         },
         {
           "type": "SYMBOL",
-          "name": "unary_operation"
+          "name": "infix_operator"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "prefix_operator"
         },
         {
           "type": "SEQ",
@@ -124,7 +124,7 @@
         }
       ]
     },
-    "binary_operation": {
+    "infix_operator": {
       "type": "CHOICE",
       "members": [
         {
@@ -836,7 +836,7 @@
         }
       ]
     },
-    "index_expression": {
+    "indexed_access": {
       "type": "PREC",
       "value": 15,
       "content": {
@@ -890,7 +890,7 @@
         ]
       }
     },
-    "unary_operation": {
+    "prefix_operator": {
       "type": "PREC",
       "value": 13,
       "content": {

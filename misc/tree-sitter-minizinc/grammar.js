@@ -26,14 +26,14 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => seq(sepBy(';', $._items)),
+    source_file: $ => seq(sepBy(';', $._item)),
 
-    _items: $ => choice(
-      $.assignment_item,
+    _item: $ => choice(
+      $.assignment,
       // TODO: Other statements types
     ),
 
-    assignment_item: $ => seq(
+    assignment: $ => seq(
       field('name', $.identifier),
       '=',
       field('expr', $._expression)
@@ -43,16 +43,16 @@ module.exports = grammar({
       $.identifier,
       $._literal,
 
-      $.binary_operation,
       $.call,
       $.if_then_else,
-      $.index_expression,
-      $.unary_operation,
+      $.indexed_access,
+      $.infix_operator,
+      $.prefix_operator,
       // TODO: Other expression types
       seq('(', $._expression, ')'),
     ),
 
-    binary_operation: $ => {
+    infix_operator: $ => {
       const table = [
         [prec.left, PREC.equivalence, '<->'],
         [prec.left, PREC.implication, choice('->', '<-')],
@@ -95,14 +95,14 @@ module.exports = grammar({
       "endif",
     ),
 
-    index_expression: $ => prec(PREC.call, seq(
+    indexed_access: $ => prec(PREC.call, seq(
       field('collection', $._expression),
       '[',
       field('indices', seq($._expression, repeat(seq(',', $._expression)))),
       ']',
     )),
 
-    unary_operation: $ => prec(PREC.unary, seq(
+    prefix_operator: $ => prec(PREC.unary, seq(
       field('operator', choice('-', 'not', '¬')),
       $._expression
     )),

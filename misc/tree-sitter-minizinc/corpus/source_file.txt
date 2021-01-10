@@ -15,7 +15,7 @@ a = b;
 ---
 
 (source_file
-  (assignment_item (identifier) (identifier)))
+  (assignment (identifier) (identifier)))
 
 =====================
 End without semicolon
@@ -26,7 +26,7 @@ a = b
 ---
 
 (source_file
-  (assignment_item (identifier) (identifier)))
+  (assignment (identifier) (identifier)))
 
 ==============
 Block comments

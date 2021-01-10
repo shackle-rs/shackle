@@ -7,7 +7,7 @@ is_absent = <>;
 ---
 
 (source_file
-  (assignment_item (identifier) (absent)))
+  (assignment (identifier) (absent)))
 
 ==============
 Array Literals
@@ -21,10 +21,10 @@ more = [<>, <>, 1, <>];
 ---
 
 (source_file
-  (assignment_item (identifier) (array_literal))
-  (assignment_item (identifier) (array_literal (float_literal)))
-  (assignment_item (identifier) (array_literal (integer_literal) (float_literal)))
-  (assignment_item (identifier) (array_literal (absent) (absent) (integer_literal) (absent))))
+  (assignment (identifier) (array_literal))
+  (assignment (identifier) (array_literal (float_literal)))
+  (assignment (identifier) (array_literal (integer_literal) (float_literal)))
+  (assignment (identifier) (array_literal (absent) (absent) (integer_literal) (absent))))
 
 ================
 Boolean Literals
@@ -36,8 +36,8 @@ boolean_id = true;
 ---
 
 (source_file
-  (assignment_item (identifier) (boolean_literal))
-  (assignment_item (identifier) (boolean_literal)))
+  (assignment (identifier) (boolean_literal))
+  (assignment (identifier) (boolean_literal)))
 
 ===============
 Number Literals
@@ -56,13 +56,13 @@ binary_integer = 0b00110101;
 ---
 
 (source_file
-  (assignment_item (identifier) (float_literal))
-  (assignment_item (identifier) (float_literal))
-  (assignment_item (identifier) (float_literal))
-  (assignment_item (identifier) (integer_literal))
-  (assignment_item (identifier) (integer_literal))
-  (assignment_item (identifier) (integer_literal))
-  (assignment_item (identifier) (integer_literal)))
+  (assignment (identifier) (float_literal))
+  (assignment (identifier) (float_literal))
+  (assignment (identifier) (float_literal))
+  (assignment (identifier) (integer_literal))
+  (assignment (identifier) (integer_literal))
+  (assignment (identifier) (integer_literal))
+  (assignment (identifier) (integer_literal)))
 
 ============
 Set Literals
@@ -76,10 +76,10 @@ more = {<>, <>, 1, <>};
 ---
 
 (source_file
-  (assignment_item (identifier) (set_literal))
-  (assignment_item (identifier) (set_literal (float_literal)))
-  (assignment_item (identifier) (set_literal (integer_literal) (float_literal)))
-  (assignment_item (identifier) (set_literal (absent) (absent) (integer_literal) (absent))))
+  (assignment (identifier) (set_literal))
+  (assignment (identifier) (set_literal (float_literal)))
+  (assignment (identifier) (set_literal (integer_literal) (float_literal)))
+  (assignment (identifier) (set_literal (absent) (absent) (integer_literal) (absent))))
 
 ===============
 String Literals
@@ -93,8 +93,7 @@ escaped_string = "\t\n";
 ---
 
 (source_file
-  (assignment_item (identifier) (string_literal))
-  (assignment_item (identifier) (string_literal))
-  (assignment_item (identifier) (string_literal))
-  (assignment_item (identifier) (string_literal
-    (escape_sequence) (escape_sequence))))
+  (assignment (identifier) (string_literal))
+  (assignment (identifier) (string_literal))
+  (assignment (identifier) (string_literal))
+  (assignment (identifier) (string_literal (escape_sequence) (escape_sequence))))

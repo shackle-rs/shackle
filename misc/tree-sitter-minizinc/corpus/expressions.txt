@@ -1,6 +1,6 @@
-===============
-Binary Operator
-===============
+==============
+Infix Operator
+==============
 
 exponent = x ^ y;
 mult = x * y;
@@ -30,30 +30,30 @@ or = x \/ y;
 ---
 
 (source_file
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier)))
-  (assignment_item (identifier) (binary_operation (identifier) (identifier))))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier))))
 
 ====
 Call
@@ -66,9 +66,9 @@ mult_args = my_fn(2, "test");
 ---
 
 (source_file
-  (assignment_item (identifier) (call (identifier)))
-  (assignment_item (identifier) (call (identifier) (integer_literal)))
-  (assignment_item (identifier) (call (identifier) (integer_literal) (string_literal))))
+  (assignment (identifier) (call (identifier)))
+  (assignment (identifier) (call (identifier) (integer_literal)))
+  (assignment (identifier) (call (identifier) (integer_literal) (string_literal))))
 
 ================
 If-Then-Else
@@ -82,14 +82,14 @@ elseif_no_else = if b then i < j elseif c then j > i endif;
 ---
 
 (source_file
-  (assignment_item (identifier) (if_then_else (identifier) (binary_operation (identifier) (identifier))))
-  (assignment_item (identifier) (if_then_else (identifier) (identifier) (identifier)))
-  (assignment_item (identifier) (if_then_else (identifier) (identifier) (identifier) (identifier) (identifier)))
-  (assignment_item (identifier) (if_then_else (identifier) (binary_operation (identifier) (identifier)) (identifier) (binary_operation (identifier) (identifier)))))
+  (assignment (identifier) (if_then_else (identifier) (infix_operator (identifier) (identifier))))
+  (assignment (identifier) (if_then_else (identifier) (identifier) (identifier)))
+  (assignment (identifier) (if_then_else (identifier) (identifier) (identifier) (identifier) (identifier)))
+  (assignment (identifier) (if_then_else (identifier) (infix_operator (identifier) (identifier)) (identifier) (infix_operator (identifier) (identifier)))))
 
-================
-Index Expression
-================
+============
+Index Access 
+============
 
 named_colection = my_collection[1];
 named_accessor = my_collection[i];
@@ -101,12 +101,12 @@ slice = my_collection[1..2];
 ---
 
 (source_file
-  (assignment_item (identifier) (index_expression (identifier) (integer_literal)))
-  (assignment_item (identifier) (index_expression (identifier) (identifier)))
-  (assignment_item (identifier) (index_expression (array_literal (integer_literal) (integer_literal) (integer_literal)) (identifier)))
-  (assignment_item (identifier) (index_expression (identifier) (identifier) (integer_literal)))
-  (assignment_item (identifier) (index_expression (identifier) (binary_operation (unary_operation (identifier)) (integer_literal))))
-  (assignment_item (identifier) (index_expression (identifier) (binary_operation (integer_literal) (integer_literal)))))
+  (assignment (identifier) (indexed_access (identifier) (integer_literal)))
+  (assignment (identifier) (indexed_access (identifier) (identifier)))
+  (assignment (identifier) (indexed_access (array_literal (integer_literal) (integer_literal) (integer_literal)) (identifier)))
+  (assignment (identifier) (indexed_access (identifier) (identifier) (integer_literal)))
+  (assignment (identifier) (indexed_access (identifier) (infix_operator (prefix_operator (identifier)) (integer_literal))))
+  (assignment (identifier) (indexed_access (identifier) (infix_operator (integer_literal) (integer_literal)))))
 
 ===========
 Precedences
@@ -120,14 +120,14 @@ annotation_bind = 1 ^ 1::some_ann;
 ---
 
 (source_file
-  (assignment_item (identifier) (binary_operation (binary_operation (integer_literal) (integer_literal)) (integer_literal)))
-  (assignment_item (identifier) (binary_operation (integer_literal) (binary_operation (integer_literal) (integer_literal))))
-  (assignment_item (identifier) (binary_operation (integer_literal) (binary_operation (integer_literal) (integer_literal))))
-  (assignment_item (identifier) (binary_operation (integer_literal) (binary_operation (integer_literal) (identifier)))))
+  (assignment (identifier) (infix_operator (infix_operator (integer_literal) (integer_literal)) (integer_literal)))
+  (assignment (identifier) (infix_operator (integer_literal) (infix_operator (integer_literal) (integer_literal))))
+  (assignment (identifier) (infix_operator (integer_literal) (infix_operator (integer_literal) (integer_literal))))
+  (assignment (identifier) (infix_operator (integer_literal) (infix_operator (integer_literal) (identifier)))))
 
-==============
-Unary Operator
-==============
+===============
+Prefix Operator
+===============
 
 negatitve_number = -5;
 negative_ident = -num;
@@ -138,7 +138,7 @@ unicode_negation = ¬ b;
 ---
 
 (source_file
-  (assignment_item (identifier) (unary_operation (integer_literal)))
-  (assignment_item (identifier) (unary_operation (identifier)))
-  (assignment_item (identifier) (unary_operation (boolean_literal)))
-  (assignment_item (identifier) (unary_operation (identifier))))
+  (assignment (identifier) (prefix_operator (integer_literal)))
+  (assignment (identifier) (prefix_operator (identifier)))
+  (assignment (identifier) (prefix_operator (boolean_literal)))
+  (assignment (identifier) (prefix_operator (identifier))))
