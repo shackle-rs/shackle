@@ -1,6 +1,6 @@
-==============
-Absent Literal
-==============
+======
+Absent
+======
 
 is_absent = <>;
 
@@ -9,9 +9,9 @@ is_absent = <>;
 (source_file
   (assignment (identifier) (absent)))
 
-==============
-Array Literals
-==============
+=====
+Array
+=====
 
 empty = [];
 single = [1.0];
@@ -26,9 +26,9 @@ more = [<>, <>, 1, <>];
   (assignment (identifier) (array_literal (integer_literal) (float_literal)))
   (assignment (identifier) (array_literal (absent) (absent) (integer_literal) (absent))))
 
-================
-Boolean Literals
-================
+=======
+Boolean
+=======
 
 boolean_id = false;
 boolean_id = true;
@@ -39,9 +39,9 @@ boolean_id = true;
   (assignment (identifier) (boolean_literal))
   (assignment (identifier) (boolean_literal)))
 
-===============
-Number Literals
-===============
+======
+Number
+======
 
 simple_float = 3.65;
 exponent_float = 4.5e10;
@@ -51,7 +51,6 @@ decimal_integer = 123;
 hexadecimal_integer = 0xA23F;
 octal_integer = 0o701;
 binary_integer = 0b00110101;
-
 
 ---
 
@@ -64,9 +63,9 @@ binary_integer = 0b00110101;
   (assignment (identifier) (integer_literal))
   (assignment (identifier) (integer_literal)))
 
-============
-Set Literals
-============
+===
+Set
+===
 
 empty = {};
 single = {1.0};
@@ -81,9 +80,9 @@ more = {<>, <>, 1, <>};
   (assignment (identifier) (set_literal (integer_literal) (float_literal)))
   (assignment (identifier) (set_literal (absent) (absent) (integer_literal) (absent))))
 
-===============
-String Literals
-===============
+======
+String
+======
 
 empty_string = "";
 small_string = "test";
