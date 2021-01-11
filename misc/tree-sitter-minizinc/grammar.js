@@ -25,6 +25,10 @@ module.exports = grammar({
 
   word: $ => $.identifier,
 
+  conflicts: $ => [
+    [$._expression, $.generator],
+  ],
+
   rules: {
     source_file: $ => seq(sepBy(';', $._item)),
 
@@ -45,6 +49,7 @@ module.exports = grammar({
 
       $.array_comprehension,
       $.call,
+      $.generator_call,
       $.if_then_else,
       $.indexed_access,
       $.infix_operator,
@@ -62,6 +67,15 @@ module.exports = grammar({
       field('name', $.identifier),
       '(',
       field('arguments', sepBy(',', $._expression)),
+      ')',
+    )),
+
+    generator_call: $ => prec(PREC.call, seq(
+      field('name', $.identifier),
+      '(',
+      field('generators', sepBy1(',', $.generator)),
+      ')', '(',
+      field('template', $._expression),
       ')',
     )),
 

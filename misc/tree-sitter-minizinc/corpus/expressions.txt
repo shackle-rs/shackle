@@ -20,13 +20,28 @@ Call
 no_args = my_fn();
 single_arg = my_fn(1);
 mult_args = my_fn(2, "test");
+generator_lookalike = my_fn(x in Xs)
 
 ---
 
 (source_file
   (assignment (identifier) (call (identifier)))
   (assignment (identifier) (call (identifier) (integer_literal)))
-  (assignment (identifier) (call (identifier) (integer_literal) (string_literal))))
+  (assignment (identifier) (call (identifier) (integer_literal) (string_literal)))
+  (assignment (identifier) (call (identifier) (infix_operator (identifier) (identifier)))))
+
+==============
+Generator Call
+==============
+
+simple_sum = sum(i in N)(i);
+selective_sum = sum(i in N where i in X)(i);
+
+---
+
+(source_file
+  (assignment (identifier) (generator_call (identifier) (generator (identifier) (identifier)) (identifier)))
+  (assignment (identifier) (generator_call (identifier) (generator (identifier) (identifier) (infix_operator (identifier) (identifier))) (identifier))))
 
 ============
 If-Then-Else
