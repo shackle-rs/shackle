@@ -122,21 +122,25 @@
           "name": "string_interpolation"
         },
         {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "STRING",
-              "value": "("
-            },
-            {
-              "type": "SYMBOL",
-              "name": "_expression"
-            },
-            {
-              "type": "STRING",
-              "value": ")"
-            }
-          ]
+          "type": "SYMBOL",
+          "name": "parenthesised_expression"
+        }
+      ]
+    },
+    "parenthesised_expression": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_expression"
+        },
+        {
+          "type": "STRING",
+          "value": ")"
         }
       ]
     },
@@ -1568,6 +1572,9 @@
   ],
   "externals": [],
   "inline": [],
-  "supertypes": []
+  "supertypes": [
+    "_expression",
+    "_item"
+  ]
 }
 

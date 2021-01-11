@@ -29,6 +29,11 @@ module.exports = grammar({
     [$._expression, $.generator],
   ],
 
+  supertypes: $ => [
+    $._expression,
+    $._item,
+  ],
+
   rules: {
     source_file: $ => seq(sepBy(';', $._item)),
 
@@ -56,9 +61,10 @@ module.exports = grammar({
       $.prefix_operator,
       $.set_comprehension,
       $.string_interpolation,
-      // TODO: Other expression types
-      seq('(', $._expression, ')'),
+      $.parenthesised_expression,
     ),
+
+    parenthesised_expression: $ => seq('(', $._expression, ')'),
 
     array_comprehension: $ => seq(
       '[', $._expression, '|', sepBy1(',', $.generator), ']',

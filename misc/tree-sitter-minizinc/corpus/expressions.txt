@@ -150,7 +150,7 @@ annotation_bind = 1 ^ 1::some_ann;
 ---
 
 (source_file
-  (assignment (identifier) (infix_operator (infix_operator (integer_literal) (integer_literal)) (integer_literal)))
+  (assignment (identifier) (infix_operator (parenthesised_expression (infix_operator (integer_literal) (integer_literal))) (integer_literal)))
   (assignment (identifier) (infix_operator (integer_literal) (infix_operator (integer_literal) (integer_literal))))
   (assignment (identifier) (infix_operator (integer_literal) (infix_operator (integer_literal) (integer_literal))))
   (assignment (identifier) (infix_operator (integer_literal) (infix_operator (integer_literal) (identifier)))))
