@@ -187,3 +187,18 @@ multiple = { i | i in X, j in Y where i == j};
   (assignment (identifier) (set_comprehension (identifier) (generator (identifier) (identifier))))
   (assignment (identifier) (set_comprehension (identifier) (generator (identifier) (identifier) (infix_operator (identifier) (integer_literal)))))
   (assignment (identifier) (set_comprehension (identifier) (generator (identifier) (identifier)) (generator (identifier) (identifier) (infix_operator (identifier) (identifier))))))
+
+====================
+String Interpolation
+====================
+
+simple = "\(x)";
+with_text = "the \(i)th variable";
+multiple = "\(x) and \(y)";
+
+---
+
+(source_file
+  (assignment (identifier) (string_interpolation (identifier)))
+  (assignment (identifier) (string_interpolation (string_content) (identifier) (string_content)))
+  (assignment (identifier) (string_interpolation (identifier) (string_content) (identifier))))

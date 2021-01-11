@@ -55,6 +55,7 @@ module.exports = grammar({
       $.infix_operator,
       $.prefix_operator,
       $.set_comprehension,
+      $.string_interpolation,
       // TODO: Other expression types
       seq('(', $._expression, ')'),
     ),
@@ -136,6 +137,11 @@ module.exports = grammar({
       '{', $._expression, '|', sepBy1(',', $.generator), '}',
     ),
 
+    // TODO: Decide if string_literal and string_interpolation should be combined
+    string_interpolation: $ => seq(
+      '"', optional($.string_content), repeat1(seq('\\(', $._expression, ')', optional($.string_content))), '"',
+    ),
+
     _literal: $ => choice(
       $.absent,
       $.array_literal,
@@ -162,14 +168,11 @@ module.exports = grammar({
     )),
     set_literal: $ => seq('{', sepBy(',', $._expression), '}'),
 
-    string_literal: $ => seq(
-      '"',
-      repeat(choice(
-        token.immediate(prec(1, /[^"\n\\]+/)),
-        $.escape_sequence
-      )),
-      '"'
-    ),
+    string_literal: $ => seq('"', alias(optional($.string_content), 'content'), '"'),
+    string_content: $ => repeat1(choice(
+      token.immediate(prec(1, /[^"\n\\]+/)),
+      $.escape_sequence
+    )),
     escape_sequence: $ => token.immediate(seq(
       '\\',
       choice(
