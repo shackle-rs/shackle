@@ -84,6 +84,22 @@
       {
         "type": "assignment",
         "named": true
+      },
+      {
+        "type": "constraint",
+        "named": true
+      },
+      {
+        "type": "goal",
+        "named": true
+      },
+      {
+        "type": "include",
+        "named": true
+      },
+      {
+        "type": "output",
+        "named": true
       }
     ]
   },
@@ -183,6 +199,21 @@
     }
   },
   {
+    "type": "constraint",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "content",
     "named": false,
     "fields": {},
@@ -253,6 +284,34 @@
     }
   },
   {
+    "type": "goal",
+    "named": true,
+    "fields": {
+      "strategy": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "maximize",
+            "named": false
+          },
+          {
+            "type": "minimize",
+            "named": false
+          },
+          {
+            "type": "satisfy",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "if_then_else",
     "named": true,
     "fields": {},
@@ -262,6 +321,21 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "include",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "string_literal",
           "named": true
         }
       ]
@@ -447,6 +521,21 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "output",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -703,6 +792,10 @@
     "named": true
   },
   {
+    "type": "constraint",
+    "named": false
+  },
+  {
     "type": "diff",
     "named": false
   },
@@ -747,6 +840,10 @@
     "named": false
   },
   {
+    "type": "include",
+    "named": false
+  },
+  {
     "type": "integer_literal",
     "named": true
   },
@@ -755,11 +852,31 @@
     "named": false
   },
   {
+    "type": "maximize",
+    "named": false
+  },
+  {
+    "type": "minimize",
+    "named": false
+  },
+  {
     "type": "mod",
     "named": false
   },
   {
     "type": "not",
+    "named": false
+  },
+  {
+    "type": "output",
+    "named": false
+  },
+  {
+    "type": "satisfy",
+    "named": false
+  },
+  {
+    "type": "solve",
     "named": false
   },
   {

@@ -1,0 +1,59 @@
+==========
+Assignment
+==========
+
+this = that;
+
+---
+
+(source_file
+  (assignment (identifier) (identifier)))
+
+
+==========
+Constraint
+==========
+
+constraint true;
+
+---
+
+(source_file
+  (constraint (boolean_literal)))
+
+====
+Goal
+====
+
+solve satisfy;
+solve maximize this;
+solve minimize that;
+
+---
+
+(source_file
+  (goal)
+  (goal (identifier))
+  (goal (identifier)))
+
+=======
+Include
+=======
+
+include "globals.mzn";
+
+---
+
+(source_file
+  (include (string_literal)))
+
+=======
+Output
+=======
+
+output ["something"];
+
+---
+
+(source_file
+  (output (array_literal (string_literal))))

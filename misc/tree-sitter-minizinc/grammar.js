@@ -39,6 +39,10 @@ module.exports = grammar({
 
     _item: $ => choice(
       $.assignment,
+      $.constraint,
+      $.goal,
+      $.include,
+      $.output,
       // TODO: Other statements types
     ),
 
@@ -47,6 +51,20 @@ module.exports = grammar({
       '=',
       field('expr', $._expression)
     ),
+
+    constraint: $ => seq('constraint', $._expression),
+
+    goal: $ => seq(
+      'solve', field('strategy', choice(
+        'satisfy',
+        seq('maximize', $._expression),
+        seq('minimize', $._expression),
+      )),
+    ),
+
+    include: $ => seq('include', $.string_literal),
+
+    output: $ => seq('output', $._expression),
 
     _expression: $ => choice(
       $.identifier,
