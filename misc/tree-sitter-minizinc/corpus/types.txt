@@ -1,0 +1,112 @@
+=====
+Array
+=====
+
+array[int] of int: single_index;
+array[int, int] of int: two_indices;
+array[X] of int: named_index;
+array[1..10] of int: expr_index;
+
+---
+
+(source_file
+  (declaration (array_type (base_type (primitive_type)) (base_type (primitive_type))) (identifier))
+  (declaration (array_type (base_type (primitive_type)) (base_type (primitive_type)) (base_type (primitive_type))) (identifier))
+  (declaration (array_type (base_type (identifier)) (base_type (primitive_type))) (identifier))
+  (declaration (array_type (base_type (infix_operator (integer_literal) (integer_literal))) (base_type (primitive_type))) (identifier)))
+
+==========
+Identifier
+==========
+
+named: n;
+mybool: b;
+integer: i;
+
+---
+
+(source_file
+  (declaration (base_type (identifier)) (identifier))
+  (declaration (base_type (identifier)) (identifier))
+  (declaration (base_type (identifier)) (identifier)))
+
+==========
+Expression
+==========
+
+1..10: x;
+-1..length(X): y;
+
+---
+
+(source_file
+  (declaration (base_type (infix_operator (integer_literal) (integer_literal))) (identifier))
+  (declaration (base_type (infix_operator (prefix_operator (integer_literal)) (call (identifier) (identifier)))) (identifier)))
+
+========
+Optional
+========
+
+opt int: i;
+var opt int: voi;
+par opt int: poi;
+
+---
+
+(source_file
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier)))
+
+=======
+Par/Var
+=======
+
+par int: p;
+var float: v;
+var X: named_domain;
+par 1..10: expr_domain;
+
+---
+
+(source_file
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (identifier)) (identifier))
+  (declaration (base_type (infix_operator (integer_literal) (integer_literal))) (identifier)))
+
+=========
+Primitive
+=========
+
+ann: a;
+bool: b;
+float: f;
+int: i;
+string: s;
+
+---
+
+(source_file
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (base_type (primitive_type)) (identifier)))
+
+===
+Set
+===
+
+set of int: basic_set;
+set of var opt int: qualified_type_set;
+set of X: named_type_set;
+set of 1..10: expr_type_set;
+
+---
+
+(source_file
+  (declaration (set_type (base_type (primitive_type))) (identifier))
+  (declaration (set_type (base_type (primitive_type))) (identifier))
+  (declaration (set_type (base_type (identifier))) (identifier))
+  (declaration (set_type (base_type (infix_operator (integer_literal) (integer_literal)))) (identifier)))

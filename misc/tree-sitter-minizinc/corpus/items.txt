@@ -21,6 +21,19 @@ constraint true;
 (source_file
   (constraint (boolean_literal)))
 
+===========
+Declaration
+===========
+
+var int: simple_decl;
+array[X, 1..23] of var int: simple_decl = some_call(X);
+
+---
+
+(source_file
+  (declaration (base_type (primitive_type)) (identifier))
+  (declaration (array_type (base_type (identifier)) (base_type (infix_operator (integer_literal) (integer_literal))) (base_type (primitive_type))) (identifier) (call (identifier) (identifier))))
+
 ====
 Goal
 ====

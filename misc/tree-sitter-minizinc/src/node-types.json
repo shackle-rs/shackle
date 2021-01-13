@@ -90,6 +90,10 @@
         "named": true
       },
       {
+        "type": "declaration",
+        "named": true
+      },
+      {
         "type": "goal",
         "named": true
       },
@@ -99,6 +103,24 @@
       },
       {
         "type": "output",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_type",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "array_type",
+        "named": true
+      },
+      {
+        "type": "base_type",
+        "named": true
+      },
+      {
+        "type": "set_type",
         "named": true
       }
     ]
@@ -138,6 +160,21 @@
     }
   },
   {
+    "type": "array_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "base_type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "assignment",
     "named": true,
     "fields": {
@@ -161,6 +198,50 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "base_type",
+    "named": true,
+    "fields": {
+      "opt": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "opt",
+            "named": false
+          }
+        ]
+      },
+      "var_par": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "par",
+            "named": false
+          },
+          {
+            "type": "var",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "primitive_type",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -226,6 +307,42 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "declaration",
+    "named": true,
+    "fields": {
+      "expr": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -588,6 +705,11 @@
     }
   },
   {
+    "type": "primitive_type",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "set_comprehension",
     "named": true,
     "fields": {},
@@ -616,6 +738,21 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "set_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "base_type",
           "named": true
         }
       ]
@@ -728,6 +865,10 @@
     "named": false
   },
   {
+    "type": ":",
+    "named": false
+  },
+  {
     "type": "::",
     "named": false
   },
@@ -792,6 +933,18 @@
     "named": true
   },
   {
+    "type": "ann",
+    "named": false
+  },
+  {
+    "type": "array",
+    "named": false
+  },
+  {
+    "type": "bool",
+    "named": false
+  },
+  {
     "type": "constraint",
     "named": false
   },
@@ -824,6 +977,10 @@
     "named": false
   },
   {
+    "type": "float",
+    "named": false
+  },
+  {
     "type": "float_literal",
     "named": true
   },
@@ -841,6 +998,10 @@
   },
   {
     "type": "include",
+    "named": false
+  },
+  {
+    "type": "int",
     "named": false
   },
   {
@@ -868,7 +1029,19 @@
     "named": false
   },
   {
+    "type": "of",
+    "named": false
+  },
+  {
+    "type": "opt",
+    "named": false
+  },
+  {
     "type": "output",
+    "named": false
+  },
+  {
+    "type": "par",
     "named": false
   },
   {
@@ -876,7 +1049,15 @@
     "named": false
   },
   {
+    "type": "set",
+    "named": false
+  },
+  {
     "type": "solve",
+    "named": false
+  },
+  {
+    "type": "string",
     "named": false
   },
   {
@@ -901,6 +1082,10 @@
   },
   {
     "type": "union",
+    "named": false
+  },
+  {
+    "type": "var",
     "named": false
   },
   {
