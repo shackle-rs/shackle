@@ -89,6 +89,7 @@ module.exports = grammar({
         $.if_then_else,
         $.indexed_access,
         $.infix_operator,
+        $.let_expression,
         $.prefix_operator,
         $.set_comprehension,
         $.string_interpolation,
@@ -192,6 +193,19 @@ module.exports = grammar({
         )
       );
     },
+
+    let_expression: ($) =>
+      seq(
+        "let",
+        "{",
+        field(
+          "let",
+          sepBy(choice(",", ";"), choice($.declaration, $.constraint))
+        ),
+        "}",
+        "in",
+        field("in", $._expression)
+      ),
 
     prefix_operator: ($) =>
       prec(

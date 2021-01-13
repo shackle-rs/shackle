@@ -138,6 +138,23 @@ or = x \/ y;
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier))))
 
+==============
+Let Expression
+==============
+
+empty = let {} in 1;
+var_offset = let {var int: a;} in a + 3;
+constrained = let {constraint x = y} in x;
+multiple = let {var int: a, var int: b} in a + b;
+
+---
+
+(source_file
+  (assignment (identifier) (let_expression (integer_literal)))
+  (assignment (identifier) (let_expression (declaration (base_type (primitive_type)) (identifier)) (infix_operator (identifier) (integer_literal))))
+  (assignment (identifier) (let_expression (constraint (infix_operator (identifier) (identifier))) (identifier)))
+  (assignment (identifier) (let_expression (declaration (base_type (primitive_type)) (identifier)) (declaration (base_type (primitive_type)) (identifier)) (infix_operator (identifier) (identifier)))))
+
 ===========
 Precedences
 ===========

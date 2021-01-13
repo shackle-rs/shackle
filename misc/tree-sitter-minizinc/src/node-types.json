@@ -52,6 +52,10 @@
         "named": true
       },
       {
+        "type": "let_expression",
+        "named": true
+      },
+      {
         "type": "parenthesised_expression",
         "named": true
       },
@@ -641,6 +645,44 @@
     }
   },
   {
+    "type": "let_expression",
+    "named": true,
+    "fields": {
+      "in": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "let": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": ";",
+            "named": false
+          },
+          {
+            "type": "constraint",
+            "named": true
+          },
+          {
+            "type": "declaration",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "output",
     "named": true,
     "fields": {},
@@ -1010,6 +1052,10 @@
   },
   {
     "type": "intersect",
+    "named": false
+  },
+  {
+    "type": "let",
     "named": false
   },
   {
