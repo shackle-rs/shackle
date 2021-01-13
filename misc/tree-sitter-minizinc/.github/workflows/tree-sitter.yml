@@ -1,22 +1,20 @@
 name: Tree Sitter CI
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup Node.js
-      uses: actions/setup-node@v1
-    - name: Install Dependencies
-      run: npm install
-    - name: Check if generated file are up-to-date
-      run: npm run build --if-present && git diff --exit-code
-    - name: Run parser tests
-      run: npm test
+      - uses: actions/checkout@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v1
+      - name: Install Dependencies
+        run: npm install
+      - name: Check if files are formatted correctly
+        run: npx prettier --check .
+      - name: Check if generated file are up-to-date
+        run: npm run build --if-present && git diff --exit-code
+      - name: Run parser tests
+        run: npm test
