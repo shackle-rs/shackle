@@ -260,17 +260,17 @@ module.exports = grammar({
         '"'
       ),
 
-    _type: ($) => choice($.array_type, $.type_base, $.set_type),
+    _type: ($) => choice($.array_type, $.type_base),
     array_type: ($) =>
-      seq("array", "[", sepBy1(",", $.type_base), "]", "of", $.type_base),
+      seq("array", "[", sepBy1(",", $.type_base), "]", "of", $._type),
     type_base: ($) =>
       seq(
         optional(field("var_par", choice("var", "par"))),
         optional(field("opt", "opt")),
+        optional(field("set", seq("set", "of"))),
         choice($.primitive_type, $._expression)
       ),
     primitive_type: ($) => choice(...primitive_types),
-    set_type: ($) => seq("set", "of", $.type_base),
 
     _literal: ($) =>
       choice(

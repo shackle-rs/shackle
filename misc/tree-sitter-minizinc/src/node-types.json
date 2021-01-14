@@ -132,10 +132,6 @@
         "named": true
       },
       {
-        "type": "set_type",
-        "named": true
-      },
-      {
         "type": "type_base",
         "named": true
       }
@@ -240,7 +236,7 @@
       "required": true,
       "types": [
         {
-          "type": "type_base",
+          "type": "_type",
           "named": true
         }
       ]
@@ -974,21 +970,6 @@
     }
   },
   {
-    "type": "set_type",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "type_base",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "source_file",
     "named": true,
     "fields": {},
@@ -1052,6 +1033,20 @@
         "types": [
           {
             "type": "opt",
+            "named": false
+          }
+        ]
+      },
+      "set": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "of",
+            "named": false
+          },
+          {
+            "type": "set",
             "named": false
           }
         ]

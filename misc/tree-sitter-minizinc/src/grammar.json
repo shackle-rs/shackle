@@ -1842,10 +1842,6 @@
         {
           "type": "SYMBOL",
           "name": "type_base"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "set_type"
         }
       ]
     },
@@ -1907,7 +1903,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "type_base"
+          "name": "_type"
         }
       ]
     },
@@ -1959,6 +1955,31 @@
           "type": "CHOICE",
           "members": [
             {
+              "type": "FIELD",
+              "name": "set",
+              "content": {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "set"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "of"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
               "type": "SYMBOL",
               "name": "primitive_type"
             },
@@ -1992,23 +2013,6 @@
         {
           "type": "STRING",
           "value": "string"
-        }
-      ]
-    },
-    "set_type": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "set"
-        },
-        {
-          "type": "STRING",
-          "value": "of"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "type_base"
         }
       ]
     },

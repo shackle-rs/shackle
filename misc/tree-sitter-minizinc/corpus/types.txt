@@ -99,14 +99,14 @@ Set
 ===
 
 set of int: basic_set;
-set of var opt int: qualified_type_set;
+var opt set of float: qualified_type_set;
 set of X: named_type_set;
 set of 1..10: expr_type_set;
 
 ---
 
 (source_file
-  (declaration (set_type (type_base (primitive_type))) (identifier))
-  (declaration (set_type (type_base (primitive_type))) (identifier))
-  (declaration (set_type (type_base (identifier))) (identifier))
-  (declaration (set_type (type_base (infix_operator (integer_literal) (integer_literal)))) (identifier)))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (identifier)) (identifier))
+  (declaration (type_base (infix_operator (integer_literal) (integer_literal))) (identifier)))
