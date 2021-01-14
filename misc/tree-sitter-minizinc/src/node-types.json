@@ -86,6 +86,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "annotation",
+        "named": true
+      },
+      {
         "type": "assignment",
         "named": true
       },
@@ -98,6 +102,10 @@
         "named": true
       },
       {
+        "type": "function_item",
+        "named": true
+      },
+      {
         "type": "goal",
         "named": true
       },
@@ -107,6 +115,10 @@
       },
       {
         "type": "output",
+        "named": true
+      },
+      {
+        "type": "predicate",
         "named": true
       }
     ]
@@ -128,6 +140,62 @@
         "named": true
       }
     ]
+  },
+  {
+    "type": "annotation",
+    "named": true,
+    "fields": {
+      "expr": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameters": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": ":",
+            "named": false
+          },
+          {
+            "type": "_type",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "array_comprehension",
@@ -331,6 +399,86 @@
         "multiple": false,
         "required": true,
         "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "function_item",
+    "named": true,
+    "fields": {
+      "annotations": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "::",
+            "named": false
+          },
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "expr": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameters": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": ":",
+            "named": false
+          },
+          {
+            "type": "_type",
+            "named": true
+          },
           {
             "type": "identifier",
             "named": true
@@ -713,6 +861,90 @@
     }
   },
   {
+    "type": "predicate",
+    "named": true,
+    "fields": {
+      "annotations": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "::",
+            "named": false
+          },
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "expr": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameters": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": ":",
+            "named": false
+          },
+          {
+            "type": "_type",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "predicate",
+            "named": false
+          },
+          {
+            "type": "test",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "prefix_operator",
     "named": true,
     "fields": {
@@ -979,6 +1211,10 @@
     "named": false
   },
   {
+    "type": "annotation",
+    "named": false
+  },
+  {
     "type": "array",
     "named": false
   },
@@ -1025,6 +1261,10 @@
   {
     "type": "float_literal",
     "named": true
+  },
+  {
+    "type": "function",
+    "named": false
   },
   {
     "type": "identifier",
@@ -1091,6 +1331,10 @@
     "named": false
   },
   {
+    "type": "predicate",
+    "named": false
+  },
+  {
     "type": "satisfy",
     "named": false
   },
@@ -1116,6 +1360,10 @@
   },
   {
     "type": "symdiff",
+    "named": false
+  },
+  {
+    "type": "test",
     "named": false
   },
   {

@@ -39,13 +39,24 @@ module.exports = grammar({
 
     _item: ($) =>
       choice(
+        $.annotation,
         $.assignment,
-        $.declaration,
         $.constraint,
+        $.declaration,
+        $.function_item,
         $.goal,
         $.include,
-        $.output
+        $.output,
+        $.predicate
         // TODO: Other statements types
+      ),
+
+    annotation: ($) =>
+      seq(
+        "annotation",
+        field("name", $.identifier),
+        optional(field("parameters", $._parameters)),
+        optional(seq("=", field("expr", $._expression)))
       ),
 
     assignment: ($) =>
@@ -58,6 +69,17 @@ module.exports = grammar({
         field("type", $._type),
         ":",
         field("name", $.identifier),
+        optional(seq("=", field("expr", $._expression)))
+      ),
+
+    function_item: ($) =>
+      seq(
+        "function",
+        field("type", $._type),
+        ":",
+        field("name", $.identifier),
+        field("parameters", $._parameters),
+        optional(field("annotations", $._annotations)),
         optional(seq("=", field("expr", $._expression)))
       ),
 
@@ -78,6 +100,19 @@ module.exports = grammar({
 
     output: ($) => seq("output", $._expression),
 
+    predicate: ($) =>
+      seq(
+        field("type", choice("predicate", "test")),
+        field("name", $.identifier),
+        field("parameters", $._parameters),
+        optional(field("annotations", $._annotations)),
+        optional(seq("=", field("expr", $._expression)))
+      ),
+
+    _annotations: ($) => repeat1(seq("::", $._expression)),
+
+    _parameters: ($) =>
+      seq("(", sepBy(",", seq($._type, optional(seq(":", $.identifier)))), ")"),
     _expression: ($) =>
       choice(
         $.identifier,

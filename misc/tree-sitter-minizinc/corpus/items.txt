@@ -1,4 +1,21 @@
 ==========
+Annotation
+==========
+
+annotation simple;
+annotation redirect = simple;
+annotation funclike(int, int);
+annotation funcdef(int: x, int: y) = other(x, y);
+
+---
+
+(source_file
+  (annotation (identifier))
+  (annotation (identifier) (identifier))
+  (annotation (identifier) (base_type (primitive_type)) (base_type (primitive_type)))
+  (annotation (identifier) (base_type (primitive_type)) (identifier) (base_type (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
+
+==========
 Assignment
 ==========
 
@@ -33,6 +50,23 @@ array[X, 1..23] of var int: simple_decl = some_call(X);
 (source_file
   (declaration (base_type (primitive_type)) (identifier))
   (declaration (array_type (base_type (identifier)) (base_type (infix_operator (integer_literal) (integer_literal))) (base_type (primitive_type))) (identifier) (call (identifier) (identifier))))
+
+========
+Function
+========
+
+function int: this();
+function var int: that() = this();
+function X: with_args(int, float);
+function X: with_named_args(X: x, bool: b) = something(b, x);
+
+---
+
+(source_file
+  (function_item (base_type (primitive_type)) (identifier))
+  (function_item (base_type (primitive_type)) (identifier) (call (identifier)))
+  (function_item (base_type (identifier)) (identifier) (base_type (primitive_type)) (base_type (primitive_type)))
+  (function_item (base_type (identifier)) (identifier) (base_type (identifier)) (identifier) (base_type (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
 
 ====
 Goal
@@ -70,3 +104,18 @@ output ["something"];
 
 (source_file
   (output (array_literal (string_literal))))
+
+=========
+Predicate
+=========
+
+test pred();
+predicate redirecht() = pred();
+predicate with_args(1..10: x, var bool: b) = pred();
+
+---
+
+(source_file
+  (predicate (identifier))
+  (predicate (identifier) (call (identifier)))
+  (predicate (identifier) (base_type (infix_operator (integer_literal) (integer_literal))) (identifier) (base_type (primitive_type)) (identifier) (call (identifier))))
