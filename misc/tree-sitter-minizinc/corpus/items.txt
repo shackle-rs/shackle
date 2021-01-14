@@ -12,8 +12,8 @@ annotation funcdef(int: x, int: y) = other(x, y);
 (source_file
   (annotation (identifier))
   (annotation (identifier) (identifier))
-  (annotation (identifier) (base_type (primitive_type)) (base_type (primitive_type)))
-  (annotation (identifier) (base_type (primitive_type)) (identifier) (base_type (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
+  (annotation (identifier) (type_base (primitive_type)) (type_base (primitive_type)))
+  (annotation (identifier) (type_base (primitive_type)) (identifier) (type_base (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
 
 ==========
 Assignment
@@ -48,8 +48,8 @@ array[X, 1..23] of var int: simple_decl = some_call(X);
 ---
 
 (source_file
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (array_type (base_type (identifier)) (base_type (infix_operator (integer_literal) (integer_literal))) (base_type (primitive_type))) (identifier) (call (identifier) (identifier))))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (array_type (type_base (identifier)) (type_base (infix_operator (integer_literal) (integer_literal))) (type_base (primitive_type))) (identifier) (call (identifier) (identifier))))
 
 ========
 Function
@@ -63,10 +63,10 @@ function X: with_named_args(X: x, bool: b) = something(b, x);
 ---
 
 (source_file
-  (function_item (base_type (primitive_type)) (identifier))
-  (function_item (base_type (primitive_type)) (identifier) (call (identifier)))
-  (function_item (base_type (identifier)) (identifier) (base_type (primitive_type)) (base_type (primitive_type)))
-  (function_item (base_type (identifier)) (identifier) (base_type (identifier)) (identifier) (base_type (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
+  (function_item (type_base (primitive_type)) (identifier))
+  (function_item (type_base (primitive_type)) (identifier) (call (identifier)))
+  (function_item (type_base (identifier)) (identifier) (type_base (primitive_type)) (type_base (primitive_type)))
+  (function_item (type_base (identifier)) (identifier) (type_base (identifier)) (identifier) (type_base (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
 
 ====
 Goal
@@ -118,4 +118,4 @@ predicate with_args(1..10: x, var bool: b) = pred();
 (source_file
   (predicate (identifier))
   (predicate (identifier) (call (identifier)))
-  (predicate (identifier) (base_type (infix_operator (integer_literal) (integer_literal))) (identifier) (base_type (primitive_type)) (identifier) (call (identifier))))
+  (predicate (identifier) (type_base (infix_operator (integer_literal) (integer_literal))) (identifier) (type_base (primitive_type)) (identifier) (call (identifier))))

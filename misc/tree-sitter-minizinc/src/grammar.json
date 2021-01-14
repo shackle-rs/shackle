@@ -1841,7 +1841,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "base_type"
+          "name": "type_base"
         },
         {
           "type": "SYMBOL",
@@ -1865,7 +1865,7 @@
           "members": [
             {
               "type": "SYMBOL",
-              "name": "base_type"
+              "name": "type_base"
             },
             {
               "type": "REPEAT",
@@ -1878,7 +1878,7 @@
                   },
                   {
                     "type": "SYMBOL",
-                    "name": "base_type"
+                    "name": "type_base"
                   }
                 ]
               }
@@ -1907,11 +1907,11 @@
         },
         {
           "type": "SYMBOL",
-          "name": "base_type"
+          "name": "type_base"
         }
       ]
     },
-    "base_type": {
+    "type_base": {
       "type": "SEQ",
       "members": [
         {
@@ -2008,7 +2008,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "base_type"
+          "name": "type_base"
         }
       ]
     },

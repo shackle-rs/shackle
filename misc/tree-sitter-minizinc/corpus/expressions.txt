@@ -151,9 +151,9 @@ multiple = let {var int: a, var int: b} in a + b;
 
 (source_file
   (assignment (identifier) (let_expression (integer_literal)))
-  (assignment (identifier) (let_expression (declaration (base_type (primitive_type)) (identifier)) (infix_operator (identifier) (integer_literal))))
+  (assignment (identifier) (let_expression (declaration (type_base (primitive_type)) (identifier)) (infix_operator (identifier) (integer_literal))))
   (assignment (identifier) (let_expression (constraint (infix_operator (identifier) (identifier))) (identifier)))
-  (assignment (identifier) (let_expression (declaration (base_type (primitive_type)) (identifier)) (declaration (base_type (primitive_type)) (identifier)) (infix_operator (identifier) (identifier)))))
+  (assignment (identifier) (let_expression (declaration (type_base (primitive_type)) (identifier)) (declaration (type_base (primitive_type)) (identifier)) (infix_operator (identifier) (identifier)))))
 
 ===========
 Precedences

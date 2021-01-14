@@ -132,11 +132,11 @@
         "named": true
       },
       {
-        "type": "base_type",
+        "type": "set_type",
         "named": true
       },
       {
-        "type": "set_type",
+        "type": "type_base",
         "named": true
       }
     ]
@@ -240,7 +240,7 @@
       "required": true,
       "types": [
         {
-          "type": "base_type",
+          "type": "type_base",
           "named": true
         }
       ]
@@ -270,50 +270,6 @@
           }
         ]
       }
-    }
-  },
-  {
-    "type": "base_type",
-    "named": true,
-    "fields": {
-      "opt": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "opt",
-            "named": false
-          }
-        ]
-      },
-      "var_par": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "par",
-            "named": false
-          },
-          {
-            "type": "var",
-            "named": false
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "_expression",
-          "named": true
-        },
-        {
-          "type": "primitive_type",
-          "named": true
-        }
-      ]
     }
   },
   {
@@ -1026,7 +982,7 @@
       "required": true,
       "types": [
         {
-          "type": "base_type",
+          "type": "type_base",
           "named": true
         }
       ]
@@ -1085,6 +1041,50 @@
     "type": "string_literal",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "type_base",
+    "named": true,
+    "fields": {
+      "opt": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "opt",
+            "named": false
+          }
+        ]
+      },
+      "var_par": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "par",
+            "named": false
+          },
+          {
+            "type": "var",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "primitive_type",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "!=",

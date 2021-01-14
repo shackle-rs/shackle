@@ -10,10 +10,10 @@ array[1..10] of int: expr_index;
 ---
 
 (source_file
-  (declaration (array_type (base_type (primitive_type)) (base_type (primitive_type))) (identifier))
-  (declaration (array_type (base_type (primitive_type)) (base_type (primitive_type)) (base_type (primitive_type))) (identifier))
-  (declaration (array_type (base_type (identifier)) (base_type (primitive_type))) (identifier))
-  (declaration (array_type (base_type (infix_operator (integer_literal) (integer_literal))) (base_type (primitive_type))) (identifier)))
+  (declaration (array_type (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
+  (declaration (array_type (type_base (primitive_type)) (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
+  (declaration (array_type (type_base (identifier)) (type_base (primitive_type))) (identifier))
+  (declaration (array_type (type_base (infix_operator (integer_literal) (integer_literal))) (type_base (primitive_type))) (identifier)))
 
 ==========
 Identifier
@@ -26,9 +26,9 @@ integer: i;
 ---
 
 (source_file
-  (declaration (base_type (identifier)) (identifier))
-  (declaration (base_type (identifier)) (identifier))
-  (declaration (base_type (identifier)) (identifier)))
+  (declaration (type_base (identifier)) (identifier))
+  (declaration (type_base (identifier)) (identifier))
+  (declaration (type_base (identifier)) (identifier)))
 
 ==========
 Expression
@@ -40,8 +40,8 @@ Expression
 ---
 
 (source_file
-  (declaration (base_type (infix_operator (integer_literal) (integer_literal))) (identifier))
-  (declaration (base_type (infix_operator (prefix_operator (integer_literal)) (call (identifier) (identifier)))) (identifier)))
+  (declaration (type_base (infix_operator (integer_literal) (integer_literal))) (identifier))
+  (declaration (type_base (infix_operator (prefix_operator (integer_literal)) (call (identifier) (identifier)))) (identifier)))
 
 ========
 Optional
@@ -54,9 +54,9 @@ par opt int: poi;
 ---
 
 (source_file
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier)))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier)))
 
 =======
 Par/Var
@@ -70,10 +70,10 @@ par 1..10: expr_domain;
 ---
 
 (source_file
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (identifier)) (identifier))
-  (declaration (base_type (infix_operator (integer_literal) (integer_literal))) (identifier)))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (identifier)) (identifier))
+  (declaration (type_base (infix_operator (integer_literal) (integer_literal))) (identifier)))
 
 =========
 Primitive
@@ -88,11 +88,11 @@ string: s;
 ---
 
 (source_file
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier))
-  (declaration (base_type (primitive_type)) (identifier)))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier))
+  (declaration (type_base (primitive_type)) (identifier)))
 
 ===
 Set
@@ -106,7 +106,7 @@ set of 1..10: expr_type_set;
 ---
 
 (source_file
-  (declaration (set_type (base_type (primitive_type))) (identifier))
-  (declaration (set_type (base_type (primitive_type))) (identifier))
-  (declaration (set_type (base_type (identifier))) (identifier))
-  (declaration (set_type (base_type (infix_operator (integer_literal) (integer_literal)))) (identifier)))
+  (declaration (set_type (type_base (primitive_type))) (identifier))
+  (declaration (set_type (type_base (primitive_type))) (identifier))
+  (declaration (set_type (type_base (identifier))) (identifier))
+  (declaration (set_type (type_base (infix_operator (integer_literal) (integer_literal)))) (identifier)))
