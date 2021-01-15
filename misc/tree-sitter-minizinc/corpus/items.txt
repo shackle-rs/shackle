@@ -51,6 +51,21 @@ array[X, 1..23] of var int: simple_decl = some_call(X);
   (declaration (type_base (primitive_type)) (identifier))
   (declaration (array_type (type_base (identifier)) (type_base (infix_operator (integer_literal) (integer_literal))) (type_base (primitive_type))) (identifier) (call (identifier) (identifier))))
 
+===========
+Enumeration
+===========
+
+enum in_dzn;
+enum empty = {};
+enum with_members = {a, b, c};
+
+---
+
+(source_file
+  (enumeration name: (identifier))
+  (enumeration name: (identifier))
+  (enumeration name: (identifier) members: (identifier) members: (identifier) members: (identifier)))
+
 ========
 Function
 ========

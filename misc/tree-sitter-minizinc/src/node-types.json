@@ -102,6 +102,10 @@
         "named": true
       },
       {
+        "type": "enumeration",
+        "named": true
+      },
+      {
         "type": "function_item",
         "named": true
       },
@@ -363,6 +367,36 @@
         "types": [
           {
             "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "enumeration",
+    "named": true,
+    "fields": {
+      "members": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
             "named": true
           }
         ]
@@ -1239,6 +1273,10 @@
   },
   {
     "type": "endif",
+    "named": false
+  },
+  {
+    "type": "enum",
     "named": false
   },
   {

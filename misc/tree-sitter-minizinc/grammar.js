@@ -43,12 +43,12 @@ module.exports = grammar({
         $.assignment,
         $.constraint,
         $.declaration,
+        $.enumeration,
         $.function_item,
         $.goal,
         $.include,
         $.output,
         $.predicate
-        // TODO: Other statements types
       ),
 
     annotation: ($) =>
@@ -70,6 +70,13 @@ module.exports = grammar({
         ":",
         field("name", $.identifier),
         optional(seq("=", field("expr", $._expression)))
+      ),
+
+    enumeration: ($) =>
+      seq(
+        "enum",
+        field("name", $.identifier),
+        optional(seq("=", "{", field("members", sepBy(",", $.identifier)), "}"))
       ),
 
     function_item: ($) =>

@@ -24,6 +24,7 @@
   "else"
   "elseif"
   "endif"
+  "enum"
   "function"
   "if"
   "in"
