@@ -27,5 +27,15 @@
   "devDependencies": {
     "prettier": "2.2.1",
     "tree-sitter-cli": "^0.16.9"
-  }
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.minizinc",
+      "file-types": [
+        "mzn",
+        "fzn",
+        "dzn"
+      ]
+    }
+  ]
 }
