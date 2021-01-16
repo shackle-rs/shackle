@@ -43,19 +43,22 @@ Declaration
 ===========
 
 var int: simple_decl;
+var int: with_ann ::annotated;
 array[X, 1..23] of var int: simple_decl = some_call(X);
 
 ---
 
 (source_file
-  (declaration (type_base (primitive_type)) (identifier))
-  (declaration (array_type (type_base (identifier)) (type_base (infix_operator (integer_literal) (integer_literal))) (type_base (primitive_type))) (identifier) (call (identifier) (identifier))))
+  (declaration type: (type_base (primitive_type)) name: (identifier))
+  (declaration type: (type_base (primitive_type)) name: (identifier) annotations: (identifier))
+  (declaration type: (array_type (type_base (identifier)) (type_base (infix_operator left: (integer_literal) right: (integer_literal))) (type_base (primitive_type))) name: (identifier) expr: (call name: (identifier) arguments: (identifier))))
 
 ===========
 Enumeration
 ===========
 
 enum in_dzn;
+enum with_ann ::annotated;
 enum empty = {};
 enum with_members = {a, b, c};
 
@@ -63,6 +66,7 @@ enum with_members = {a, b, c};
 
 (source_file
   (enumeration name: (identifier))
+  (enumeration name: (identifier) annotations: (identifier))
   (enumeration name: (identifier))
   (enumeration name: (identifier) members: (identifier) members: (identifier) members: (identifier)))
 

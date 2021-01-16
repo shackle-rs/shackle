@@ -69,6 +69,7 @@ module.exports = grammar({
         field("type", $._type),
         ":",
         field("name", $.identifier),
+        optional(field("annotations", $._annotations)),
         optional(seq("=", field("expr", $._expression)))
       ),
 
@@ -76,6 +77,7 @@ module.exports = grammar({
       seq(
         "enum",
         field("name", $.identifier),
+        optional(field("annotations", $._annotations)),
         optional(seq("=", "{", field("members", sepBy(",", $.identifier)), "}"))
       ),
 

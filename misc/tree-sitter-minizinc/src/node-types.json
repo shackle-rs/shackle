@@ -341,6 +341,20 @@
     "type": "declaration",
     "named": true,
     "fields": {
+      "annotations": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "::",
+            "named": false
+          },
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
       "expr": {
         "multiple": false,
         "required": false,
@@ -377,6 +391,20 @@
     "type": "enumeration",
     "named": true,
     "fields": {
+      "annotations": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "::",
+            "named": false
+          },
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
       "members": {
         "multiple": true,
         "required": false,
