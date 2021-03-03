@@ -2,3 +2,9 @@ node_modules
 build
 *.log
 package-lock.json
+
+# Python Bindings
+.eggs/
+*.egg-info/
+*.so
+__pycache__/

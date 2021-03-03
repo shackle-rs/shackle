@@ -27,7 +27,6 @@
   "enum"
   "function"
   "if"
-  "in"
   "include"
   "let"
   "maximize"
