@@ -8,6 +8,10 @@ from pathlib import Path
 from platform import system
 from setuptools import Extension, find_packages, setup
 
+compile_args = []
+if system() != "Windows":
+    compile_args.extend(["-std=c99", "-Wno-unused-variable"])
+
 setup(
     name="tree-sitter-minizinc",
     use_scm_version=True,
@@ -30,9 +34,7 @@ setup(
             "tree_sitter_minizinc.binding",
             ["src/parser.c"],
             include_dirs=["src"],
-            extra_compile_args=(
-                ["-std=c99", "-Wno-unused-variable"] if system() != "Windows" else None
-            ),
+            extra_compile_args=compile_args,
         )
     ],
     classifiers=[
