@@ -51,7 +51,7 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Scientific/Engineering :: Mathematics",
     ],
-    install_requires=["tree-sitter"],
+    install_requires=["tree-sitter>= 0.19"],
     entry_points="""
         [pygments.lexers]
         minizinclexer = tree_sitter_minizinc:MiniZincLexer
