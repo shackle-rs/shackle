@@ -2,7 +2,7 @@
   "name": "tree-sitter-minizinc",
   "version": "0.1.0",
   "description": "MiniZinc grammer for tree-sitter",
-  "main": "index.js",
+  "main": "bindings/node",
   "scripts": {
     "build": "tree-sitter generate && node-gyp build",
     "test": "tree-sitter test"
@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "prettier": "2.2.1",
-    "tree-sitter-cli": "^0.16.9"
+    "tree-sitter-cli": "^0.19.1"
   },
   "tree-sitter": [
     {

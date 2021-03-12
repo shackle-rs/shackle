@@ -2468,6 +2468,7 @@
       "assignment"
     ]
   ],
+  "precedences": [],
   "externals": [],
   "inline": [],
   "supertypes": [
