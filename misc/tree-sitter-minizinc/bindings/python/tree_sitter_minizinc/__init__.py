@@ -34,6 +34,9 @@ try:
         def __init__(self, **options):
             self.parser = Parser()
             self.parser.set_language(self.language)
+            self.escape = options.get("escapeinside", None)
+            if self.escape is not None:
+                self.escape = bytes(self.escape, "utf8")
             super().__init__(**options)
 
         def get_tokens_unprocessed(self, text):
@@ -42,20 +45,41 @@ try:
             captures = self.highlight_query.captures(tree.root_node)
 
             last_pos = 0
+            escape_start = None
             for node, annotation in captures:
                 if last_pos > node.start_byte:
                     # Double match - only use the first capture
                     continue
                 if last_pos != node.start_byte:
-                    yield last_pos, token.Generic, to_bytes[
-                        last_pos : node.start_byte
+                    if self.escape is not None:
+                        if escape_start is None:
+                            if self.escape[0] in to_bytes[last_pos : node.start_byte]:
+                                escape_start = last_pos
+                            else:
+                                yield last_pos, token.Generic, to_bytes[
+                                    last_pos : node.start_byte
+                                ].decode()
+                        elif self.escape[1] in to_bytes[last_pos : node.start_byte]:
+                            yield last_pos, token.Generic, to_bytes[
+                                escape_start : node.start_byte
+                            ].decode()
+                            escape_start = None
+                    else:
+                        yield last_pos, token.Generic, to_bytes[
+                            last_pos : node.start_byte
+                        ].decode()
+
+                if escape_start is None:
+                    yield node.start_byte, self.ts_alias[annotation], to_bytes[
+                        node.start_byte : node.end_byte
                     ].decode()
-                yield node.start_byte, self.ts_alias[annotation], to_bytes[
-                    node.start_byte : node.end_byte
-                ].decode()
                 last_pos = node.end_byte
 
-            if last_pos != tree.root_node.end_byte:
+            if escape_start is not None:
+                yield last_pos, token.Generic, to_bytes[
+                    escape_start : tree.root_node.end_byte
+                ].decode()
+            elif last_pos != tree.root_node.end_byte:
                 yield last_pos, token.Generic, to_bytes[
                     last_pos : tree.root_node.end_byte
                 ].decode()
