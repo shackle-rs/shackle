@@ -1,10 +1,13 @@
-name: Tree Sitter CI
+name: Tree Sitter
 
 on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        parser: ["misc/tree-sitter-minizinc"]
 
     steps:
       - uses: actions/checkout@v2
@@ -12,9 +15,10 @@ jobs:
         uses: actions/setup-node@v1
       - name: Install Dependencies
         run: npm install
-      - name: Check if files are formatted correctly
-        run: npx prettier --check .
+        working-directory: ${{matrix.parser}}
       - name: Check if generated file are up-to-date
         run: npm run build --if-present && git diff --exit-code
+        working-directory: ${{matrix.parser}}
       - name: Run parser tests
         run: npm test
+        working-directory: ${{matrix.parser}}

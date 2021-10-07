@@ -1,0 +1,26 @@
+name: Check Format
+
+on: [push, pull_request]
+
+jobs:
+  check_format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # Check formatting of Rust files
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          components: rustfmt
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+      # Check formatting of other files
+      - uses: actionsx/prettier@v2
+        with:
+          args: --check .

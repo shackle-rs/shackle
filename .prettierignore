@@ -1,4 +1,4 @@
-bindings/node/
+node/
 build/
 node_modules/
 src/
