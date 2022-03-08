@@ -1,4 +1,4 @@
-use clap::{crate_version, AppSettings, Clap};
+use clap::{crate_version, Args, Parser, Subcommand};
 use env_logger::{fmt::TimestampPrecision, Builder};
 use miette::Result;
 use shackle::error::InternalError;
@@ -55,12 +55,11 @@ fn main() -> Result<()> {
 }
 
 /// A command line interface to the shackle constraint modelling and rewriting library.
-#[derive(Clap)]
+#[derive(Parser, Debug)]
 #[clap(
     name = "shackle",
 	version = crate_version!(),
 )]
-#[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
 	/// A level of verbosity, and can be used multiple times
 	#[clap(short, long, parse(from_occurrences))]
@@ -69,7 +68,7 @@ struct Opts {
 	subcmd: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Subcommand, Debug)]
 enum SubCommand {
 	Compile(compile::Compile),
 	Solve(Solve),
@@ -77,14 +76,14 @@ enum SubCommand {
 }
 
 /// Solve the given model instance using the given solver
-#[derive(Clap)]
+#[derive(Args, Debug)]
 struct Solve {
 	solver: String,
 	input: Vec<PathBuf>,
 }
 
 /// Check model files for correctness
-#[derive(Clap)]
+#[derive(Args, Debug)]
 struct Check {
 	input: Vec<PathBuf>,
 }

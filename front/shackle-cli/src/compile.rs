@@ -1,11 +1,11 @@
-use clap::Clap;
+use clap::Args;
 use miette::{Report, Result};
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
 
 /// Compile the given model to a shackle intermediate format
-#[derive(Clap)]
+#[derive(Args, Debug)]
 pub struct Compile {
 	#[clap(required = true)]
 	input: Vec<PathBuf>,
