@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+#![warn(unused_crate_dependencies, unused_extern_crates)]
+#![warn(variant_size_differences)]
+
 pub mod error;
 
 use error::{NamedSource, ShackleError, SyntaxError};
@@ -7,7 +11,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 
-// Parses a list of MiniZinc files given located using the Paths in the vector
+/// Parses a list of MiniZinc files given located using the Paths in the vector
 pub fn parse_files(paths: Vec<&Path>) -> Result<(), ShackleError> {
 	let mut parser = Parser::new();
 	parser

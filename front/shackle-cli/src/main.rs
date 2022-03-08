@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+#![warn(unused_crate_dependencies, unused_extern_crates)]
+#![warn(variant_size_differences)]
+
 use clap::{crate_version, Args, Parser, Subcommand};
 use env_logger::{fmt::TimestampPrecision, Builder};
 use miette::Result;
