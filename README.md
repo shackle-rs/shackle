@@ -5,5 +5,5 @@
 </p>
 
 Shackle is a constraint modelling and rewriting library and compiler framework written in rust.
-Shackle is still in the early stages of development. 
+Shackle is still in the early stages of development.
 Its components are not yet stable and might drastically change.

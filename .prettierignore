@@ -1,4 +1,5 @@
 node/
+docs/book
 build/
 node_modules/
 src/

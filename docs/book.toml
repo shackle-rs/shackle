@@ -1,0 +1,6 @@
+[book]
+authors = ["Jip J. Dekker"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The Shackle Almanac"
