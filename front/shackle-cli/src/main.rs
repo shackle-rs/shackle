@@ -1,3 +1,5 @@
+//! Command line interface for Shackle
+
 #![warn(missing_docs)]
 #![warn(unused_crate_dependencies, unused_extern_crates)]
 #![warn(variant_size_differences)]
