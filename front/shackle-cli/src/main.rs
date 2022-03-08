@@ -1,0 +1,90 @@
+use clap::{crate_version, AppSettings, Clap};
+use env_logger::{fmt::TimestampPrecision, Builder};
+use miette::Result;
+use shackle::error::InternalError;
+
+use std::panic;
+use std::path::PathBuf;
+
+mod compile;
+
+/// The main function is the entry point for the `schackle` executable.
+///
+/// It parses the command-line arguments using a Clap parser, processes the arguments, and then
+/// dispatches to called operation.
+fn main() -> Result<()> {
+	// Parse command line arguments
+	let opts: Opts = Opts::parse();
+
+	// Initialise logger based on how many times the user used the "verbose" flag
+	let mut logger = Builder::new();
+	logger
+		.format_target(false)
+		.format_module_path(opts.verbose >= 2)
+		.filter_level(log::LevelFilter::Warn)
+		.format_timestamp(match opts.verbose {
+			0 => None,
+			1 => Some(TimestampPrecision::Seconds),
+			_ => Some(TimestampPrecision::Millis),
+		})
+		.parse_default_env();
+	match opts.verbose {
+		0 => (),
+		1 => {
+			logger.filter_level(log::LevelFilter::Info);
+		}
+		2 => {
+			logger.filter_level(log::LevelFilter::Debug);
+		}
+		_ => {
+			logger.filter_level(log::LevelFilter::Trace);
+		}
+	};
+	logger.init();
+
+	log::warn!("Shackle is an unfinished product ready to be used for any purpose apart from its own development.");
+
+	// Dispatch to the correct subcommand
+	match panic::catch_unwind(|| match opts.subcmd {
+		SubCommand::Compile(s) => s.dispatch(),
+		_ => unimplemented!(),
+	}) {
+		Err(_) => Err(InternalError::new("Panic occurred during execution".into()).into()),
+		Ok(res) => res,
+	}
+}
+
+/// A command line interface to the shackle constraint modelling and rewriting library.
+#[derive(Clap)]
+#[clap(
+    name = "shackle",
+	version = crate_version!(),
+)]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+	/// A level of verbosity, and can be used multiple times
+	#[clap(short, long, parse(from_occurrences))]
+	verbose: i32,
+	#[clap(subcommand)]
+	subcmd: SubCommand,
+}
+
+#[derive(Clap)]
+enum SubCommand {
+	Compile(compile::Compile),
+	Solve(Solve),
+	Check(Check),
+}
+
+/// Solve the given model instance using the given solver
+#[derive(Clap)]
+struct Solve {
+	solver: String,
+	input: Vec<PathBuf>,
+}
+
+/// Check model files for correctness
+#[derive(Clap)]
+struct Check {
+	input: Vec<PathBuf>,
+}

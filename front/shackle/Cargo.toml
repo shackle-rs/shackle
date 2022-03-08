@@ -1,0 +1,11 @@
+[package]
+name = "shackle"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jip J. Dekker <jip@dekker.one>"]
+
+[dependencies]
+miette = { version = "^3.2" }
+thiserror = "^1.0"
+tree-sitter = "^0.20"
+tree-sitter-minizinc = { path = "../../misc/tree-sitter-minizinc" }
