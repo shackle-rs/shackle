@@ -750,6 +750,8 @@ FlatZinc.</li>
 The bytecode along with the data is interpreted to produce NanoZinc and later
 FlatZinc or any other format for solver backends.</li>
 </ol>
+<h2 id="query-structure"><a class="header" href="#query-structure">Query structure</a></h2>
+<p>TODO: discuss the design of the Salsa queries for the compiler.</p>
 <h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
 <ul>
 <li>Compilation to MicroZinc happens without data</li>
@@ -760,6 +762,11 @@ swapped out without recompilation.</li>
 pre-compiled into MicroZinc.</li>
 <li>The new compiler will use <a href="https://github.com/salsa-rs/salsa">Salsa</a> so that
 computed results can be memoised and only updated as needed.</li>
+<li>Salsa allows us to use a query based incremental approach to compilation.
+Compiler operations should ideally be designed to require as little context as
+possible to avoid unnecessary recomputation.</li>
+<li>TODO: More discussion of when certain transformations should happen
+(e.g. when are enums handled, how is output handled).</li>
 </ul>
 <h2 id="project-notes"><a class="header" href="#project-notes">Project notes</a></h2>
 <ul>
