@@ -32,6 +32,10 @@ milestones.
    The bytecode along with the data is interpreted to produce NanoZinc and later
    FlatZinc or any other format for solver backends.
 
+## Query structure
+
+TODO: discuss the design of the Salsa queries for the compiler.
+
 ## Notes
 
 - Compilation to MicroZinc happens without data
@@ -42,6 +46,11 @@ milestones.
   pre-compiled into MicroZinc.
 - The new compiler will use [Salsa](https://github.com/salsa-rs/salsa) so that
   computed results can be memoised and only updated as needed.
+- Salsa allows us to use a query based incremental approach to compilation.
+  Compiler operations should ideally be designed to require as little context as
+  possible to avoid unnecessary recomputation.
+- TODO: More discussion of when certain transformations should happen
+  (e.g. when are enums handled, how is output handled).
 
 ## Project notes
 
