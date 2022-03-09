@@ -3,33 +3,33 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>MiniZinc Syntax Changes - The Shackle Almanac</title>
+        <title>Parsing - The Shackle Almanac</title>
         <!-- Custom HTML head -->
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" href="highlight.css">
-        <link rel="stylesheet" href="tomorrow-night.css">
-        <link rel="stylesheet" href="ayu-highlight.css">
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
     </head>
     <body>
         <!-- Provide site root to javascript -->
         <script type="text/javascript">
-            var path_to_root = "";
+            var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
@@ -75,7 +75,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="mzn-syntax.html" class="active"><strong aria-hidden="true">2.</strong> MiniZinc Syntax Changes</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../process.html"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compilation/parsing.html" class="active"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="../compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="../compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="../compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="../compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="../compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="../compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="../compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="../mzn-syntax.html"><strong aria-hidden="true">2.</strong> MiniZinc Syntax Changes</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -107,7 +107,7 @@
                     <h1 class="menu-title">The Shackle Almanac</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                     </div>
@@ -134,14 +134,21 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="minizinc-syntax-changes"><a class="header" href="#minizinc-syntax-changes">MiniZinc Syntax Changes</a></h1>
+                        <h1 id="parsing"><a class="header" href="#parsing">Parsing</a></h1>
+<p><code>tree-sitter</code> is used to generate a concrete syntax tree from a MiniZinc model.</p>
+<p>Since this concrete syntax tree is too low level to perform most useful
+compilation steps, an abstract syntax tree will be constructed (with the AST
+nodes linked to the related CST nodes) during <a href="ast-gen.html">AST generation</a>.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="compilation/interpreter.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../process.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
+                            </a>
+                            <a rel="next" href="../compilation/ast-gen.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
                             </a>
                         <div style="clear: both"></div>
                     </nav>
@@ -149,8 +156,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="compilation/interpreter.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../process.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
+                    </a>
+                    <a rel="next" href="../compilation/ast-gen.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
 
@@ -159,14 +169,14 @@
         <script type="text/javascript">
             window.playground_copyable = true;
         </script>
-        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
-        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
-        <script type="text/javascript" src="theme/mzn-highlight.js"></script>
+        <script type="text/javascript" src="../theme/mzn-highlight.js"></script>
     </body>
 </html>
