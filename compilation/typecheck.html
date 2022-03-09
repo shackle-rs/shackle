@@ -138,25 +138,25 @@
 <p>The types for each expression will be determined in a bottom-up fashion. That
 is, the types of child nodes are used to determine the type of parent nodes (and
 check for correctness). This stage also matches calls with their declarations.</p>
-<pre><code class="language-mzn">constraint let {
-    var 1..10: x;
-} in x == 5;
-</code></pre>
 <h2 id="unification"><a class="header" href="#unification">Unification</a></h2>
-<p>For literals which have a bottom type (e.g. <code>&lt;&gt;</code> and <code>_</code>), a special unification
-step needs to be performed. Note that this unification does not perform
-inference across items. Instead, one of the types to be unified must be a
-concrete type.</p>
-<pre><code class="language-mzn">array [int] of var opt int: x = [&lt;&gt;, _];
+<p>For literals which have a bottom type (e.g. <code>&lt;&gt;</code>, <code>_</code>, <code>[]</code> and <code>{}</code>), a special
+unification step needs to be performed as bottom up typing is not sufficient.
+Note that this unification does not perform inference across calls.</p>
+<h3 id="variable-assignment-example"><a class="header" href="#variable-assignment-example">Variable assignment example</a></h3>
+<pre><code class="language-mzn">array [int] of var opt int: x = [_];
 </code></pre>
 <p>Bottom up typing will be unable to determine a concrete type for the <code>[&lt;&gt;, _]</code>
-literal (although it is known to be <code>var opt</code>). Instead, the left-hand side type should be pushed into it.</p>
-<pre><code class="language-mzn">test foo(array [int] of var opt int: x) = true;
-constraint foo([_, _]);
+literal (although it is known to be <code>var</code>). Instead, the left-hand side type
+should be pushed into it, making it an <code>array [int] of var opt int</code>.</p>
+<h3 id="function-call-example"><a class="header" href="#function-call-example">Function call example</a></h3>
+<pre><code class="language-mzn">test foo(array [int] of var opt int: x, int: y) = true;
+test foo(array [int] of var int: x, set of int: y) = false;
+constraint foo([_, _], 1);
 </code></pre>
 <p>Bottom up typing will be unable to determine a type for the <code>[_, _]</code> literal.
-The type from the parameter <code>x</code> in the declaration of <code>foo</code> should be pushed
-into it (since there is only one declaration of <code>foo</code>, this is unambiguous).</p>
+In this case, since second argument of the call is an <code>int</code>, only the first
+overload of <code>foo</code> is possible. Therefore the type should be
+<code>array [int] of var opt int</code>.</p>
 <h3 id="ambiguous-types"><a class="header" href="#ambiguous-types">Ambiguous types</a></h3>
 <p>When there is not a single unambiguous type for a value, this is considered a
 type error.</p>
@@ -166,7 +166,8 @@ constraint foo([_]);
 <p>The type of <code>[_]</code> could be <code>array [int] of var opt int</code> or
 <code>array [int] of var opt float</code>, or many others. Therefore, this would be a
 type error. To get around this, a variable declaration for <code>[_]</code> could be
-used. Otherwise, new syntax for annotating a literal with its type is required.</p>
+used. Otherwise, new syntax for annotating a literal with its type will be
+required.</p>
 
                     </main>
 
