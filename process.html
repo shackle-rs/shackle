@@ -751,15 +751,30 @@ The bytecode along with the data is interpreted to produce NanoZinc and later
 FlatZinc or any other format for solver backends.</li>
 </ol>
 <h2 id="query-structure"><a class="header" href="#query-structure">Query structure</a></h2>
-<p>TODO: discuss the design of the Salsa queries for the compiler.</p>
+<ul>
+<li>Discuss the design of the Salsa queries for the compiler.</li>
+<li>Think about the level of <a href="https://salsa-rs.github.io/salsa/common_patterns/selection.html">selection queries</a>
+required to avoid unnecessary recomputation</li>
+<li>What needs to be interned (probably most data structures should be interned)</li>
+<li>AST probably needs to use a path as the key to allow for top down queries where the result for a node depends on the
+result of its parents</li>
+</ul>
 <h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
 <ul>
 <li>Compilation to MicroZinc happens without data</li>
 <li>Models are compiled with only declarations of standard library functions.
 Calls are resolved later by the interpreter, allowing the library to be
-swapped out without recompilation.</li>
+swapped out without recompilation.
+<ul>
+<li>TODO: This may not be possible due to type specialisation</li>
+</ul>
+</li>
 <li>The standard library, and solver redefinition libraries can be distributed
-pre-compiled into MicroZinc.</li>
+pre-compiled into MicroZinc.
+<ul>
+<li>TODO: This may not be possible due to type specialisation</li>
+</ul>
+</li>
 <li>The new compiler will use <a href="https://github.com/salsa-rs/salsa">Salsa</a> so that
 computed results can be memoised and only updated as needed.</li>
 <li>Salsa allows us to use a query based incremental approach to compilation.

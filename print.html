@@ -757,15 +757,30 @@ The bytecode along with the data is interpreted to produce NanoZinc and later
 FlatZinc or any other format for solver backends.</li>
 </ol>
 <h2 id="query-structure"><a class="header" href="#query-structure">Query structure</a></h2>
-<p>TODO: discuss the design of the Salsa queries for the compiler.</p>
+<ul>
+<li>Discuss the design of the Salsa queries for the compiler.</li>
+<li>Think about the level of <a href="https://salsa-rs.github.io/salsa/common_patterns/selection.html">selection queries</a>
+required to avoid unnecessary recomputation</li>
+<li>What needs to be interned (probably most data structures should be interned)</li>
+<li>AST probably needs to use a path as the key to allow for top down queries where the result for a node depends on the
+result of its parents</li>
+</ul>
 <h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
 <ul>
 <li>Compilation to MicroZinc happens without data</li>
 <li>Models are compiled with only declarations of standard library functions.
 Calls are resolved later by the interpreter, allowing the library to be
-swapped out without recompilation.</li>
+swapped out without recompilation.
+<ul>
+<li>TODO: This may not be possible due to type specialisation</li>
+</ul>
+</li>
 <li>The standard library, and solver redefinition libraries can be distributed
-pre-compiled into MicroZinc.</li>
+pre-compiled into MicroZinc.
+<ul>
+<li>TODO: This may not be possible due to type specialisation</li>
+</ul>
+</li>
 <li>The new compiler will use <a href="https://github.com/salsa-rs/salsa">Salsa</a> so that
 computed results can be memoised and only updated as needed.</li>
 <li>Salsa allows us to use a query based incremental approach to compilation.
@@ -855,11 +870,21 @@ required.</p>
 concrete types. Name mangling is used to produce the new declarations (and
 allow recovery of the original name).</p>
 <h2 id="notes-3"><a class="header" href="#notes-3">Notes</a></h2>
-<p>Since we intend to pre-compile the standard library, we will have to
-monomorphise any polymorphic functions based on what the possible types for
-the call arguments are.</p>
-<p>Alternatively we could leave polymorphic functions un-compiled and instead
-compile them on the fly.</p>
+<ul>
+<li>If we want to pre-compile the standard library, we will have to monomorphise
+any polymorphic functions based on what the possible types for the call
+arguments are.
+<ul>
+<li>Actually this may not be possible because we need monomorphisation to
+specialise calls involving enums - and user enums which can be used with
+stdlib won't be available if precompiled</li>
+</ul>
+</li>
+<li>Alternatively we could leave polymorphic functions un-compiled and instead
+compile them on the fly.</li>
+<li>To start with, the initial implementation should probably just require
+compiling the library along with the model.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="minizinc-ast-to-ast-transformations"><a class="header" href="#minizinc-ast-to-ast-transformations">MiniZinc AST-to-AST transformations</a></h1>
 <p>In this phase, more complex desugaring operations are performed.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compilation-to-microzinc"><a class="header" href="#compilation-to-microzinc">Compilation to MicroZinc</a></h1>
