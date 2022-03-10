@@ -34,7 +34,12 @@ milestones.
 
 ## Query structure
 
-TODO: discuss the design of the Salsa queries for the compiler.
+- Discuss the design of the Salsa queries for the compiler.
+- Think about the level of [selection queries](https://salsa-rs.github.io/salsa/common_patterns/selection.html)
+  required to avoid unnecessary recomputation
+- What needs to be interned (probably most data structures should be interned)
+- AST probably needs to use a path as the key to allow for top down queries where the result for a node depends on the
+  result of its parents
 
 ## Notes
 
@@ -42,8 +47,10 @@ TODO: discuss the design of the Salsa queries for the compiler.
 - Models are compiled with only declarations of standard library functions.
   Calls are resolved later by the interpreter, allowing the library to be
   swapped out without recompilation.
+  - TODO: This may not be possible due to type specialisation
 - The standard library, and solver redefinition libraries can be distributed
   pre-compiled into MicroZinc.
+  - TODO: This may not be possible due to type specialisation
 - The new compiler will use [Salsa](https://github.com/salsa-rs/salsa) so that
   computed results can be memoised and only updated as needed.
 - Salsa allows us to use a query based incremental approach to compilation.

@@ -6,9 +6,13 @@ allow recovery of the original name).
 
 ## Notes
 
-Since we intend to pre-compile the standard library, we will have to
-monomorphise any polymorphic functions based on what the possible types for
-the call arguments are.
-
-Alternatively we could leave polymorphic functions un-compiled and instead
-compile them on the fly.
+- If we want to pre-compile the standard library, we will have to monomorphise
+  any polymorphic functions based on what the possible types for the call
+  arguments are.
+  - Actually this may not be possible because we need monomorphisation to
+    specialise calls involving enums - and user enums which can be used with
+    stdlib won't be available if precompiled
+- Alternatively we could leave polymorphic functions un-compiled and instead
+  compile them on the fly.
+- To start with, the initial implementation should probably just require
+  compiling the library along with the model.
