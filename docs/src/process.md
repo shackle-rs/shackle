@@ -58,6 +58,13 @@ milestones.
   possible to avoid unnecessary recomputation.
 - TODO: More discussion of when certain transformations should happen
   (e.g. when are enums handled, how is output handled).
+- Some other compiler projects which may be interesting include
+  - [Dada](https://github.com/dada-lang/dada)
+  - [Mun](https://github.com/mun-lang/mun)
+  - [Quench](https://github.com/quench-lang/quench)
+  - [Shade](https://github.com/Xiulf/shade)
+  - [Turse](https://github.com/DropDemBits/turse-rs)
+  - [Tydi](https://github.com/tydi-lang/tydi)
 
 ## Project notes
 
