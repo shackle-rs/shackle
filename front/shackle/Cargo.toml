@@ -1,8 +1,10 @@
 [package]
 name = "shackle"
 version = "0.1.0"
-edition = "2021"
 authors = ["Jip J. Dekker <jip@dekker.one>"]
+license = "MPL-2.0"
+
+edition = "2021"
 
 [dependencies]
 miette = { version = "4.2.1" }
