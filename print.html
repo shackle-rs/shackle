@@ -953,6 +953,13 @@ transformed such that these variables are passed as arguments to the function.</
 <p>The top-level decision variable and constraints are added as a <code>let</code> expression
 in this function, taking the model parameters as arguments.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="bytecode-generation"><a class="header" href="#bytecode-generation">Bytecode generation</a></h1>
+<h2 id="output-generation"><a class="header" href="#output-generation">Output generation</a></h2>
+<p>Some kind of code which maps from FlatZinc output variables to user model
+output should be generated similarly to how we generate <code>.ozn</code> output models
+currently.</p>
+<p>This functionality could be extended to allow for mapping of other solver
+information such as statistics, duals, etc to report these in the context of
+the user model.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="bytecode-interpretation"><a class="header" href="#bytecode-interpretation">Bytecode interpretation</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="minizinc-syntax-changes"><a class="header" href="#minizinc-syntax-changes">MiniZinc Syntax Changes</a></h1>
 <p>New syntax includes</p>
