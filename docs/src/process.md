@@ -32,6 +32,21 @@ milestones.
    The bytecode along with the data is interpreted to produce NanoZinc and later
    FlatZinc or any other format for solver backends.
 
+## Compiler steps
+
+These steps need to be fit into the phases.
+
+- Changing operators into calls
+- Changing generators into comprehensions
+- Overloading resolution
+- Monomorphisation
+- Decomposition of option types
+- Removal of partiality
+- Decomposition of var if-then-else/comprehensions
+- Type erasure for enums
+- Closing of functions (need to think about first class functions)
+- Converting records into tuples
+
 ## Query structure
 
 - Discuss the design of the Salsa queries for the compiler.
@@ -65,6 +80,19 @@ milestones.
   - [Shade](https://github.com/Xiulf/shade)
   - [Turse](https://github.com/DropDemBits/turse-rs)
   - [Tydi](https://github.com/tydi-lang/tydi)
+- Need to think about what should actually go into MicroZinc (e.g. need `case`?, what level of nesting is supported?)
+- For tools which suggest changes to user models, it would be useful to have AST
+  to CST transformation, so that we can leave the rest of the user model alone
+  and insert the suggested transformations in place. 
+- Need to think about what AST levels we need. Potentially some or all of:
+  - MiniZinc CST
+  - MiniZinc AST
+  - Typed MiniZinc AST
+  - Type specialised MiniZinc AST
+  - Intermediate representation (e.g. Static single assignment form)
+  - MicroZinc AST
+- Need to think about whether we generate actual data structures for this,
+  or use queries to introduce new information to a node.
 
 ## Project notes
 

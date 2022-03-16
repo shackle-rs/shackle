@@ -12,6 +12,9 @@ allow recovery of the original name).
   - Actually this may not be possible because we need monomorphisation to
     specialise calls involving enums - and user enums which can be used with
     stdlib won't be available if precompiled
+  - Could we compile the model + stdlib separately from the solver library?
+    Probably not because decompositions in the solver library may use library
+    functions which need to be specialised
 - Alternatively we could leave polymorphic functions un-compiled and instead
   compile them on the fly.
 - To start with, the initial implementation should probably just require
