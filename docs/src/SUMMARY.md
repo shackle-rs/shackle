@@ -11,3 +11,4 @@
   - [Bytecode generation](./compilation/bytecode-gen.md)
   - [Bytecode interpretation](./compilation/interpreter.md)
 - [MiniZinc Syntax Changes](./mzn-syntax.md)
+- [Error handling](./error-handling.md)
