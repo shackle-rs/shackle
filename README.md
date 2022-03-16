@@ -1,7 +1,8 @@
 <p align="center">
   <img
     src="https://raw.githubusercontent.com/shackle-rs/shackle/develop/assets/logo.svg"
-    alt="shackle logo">
+    alt="shackle logo"
+    height="250px">
 </p>
 
 Shackle is a constraint modelling and rewriting library and compiler framework written in rust.
