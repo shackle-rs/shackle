@@ -75,7 +75,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html" class="active"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="mzn-syntax.html"><strong aria-hidden="true">2.</strong> MiniZinc Syntax Changes</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html" class="active"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="mzn-syntax.html"><strong aria-hidden="true">2.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="error-handling.html"><strong aria-hidden="true">3.</strong> Error handling</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -750,6 +750,20 @@ FlatZinc.</li>
 The bytecode along with the data is interpreted to produce NanoZinc and later
 FlatZinc or any other format for solver backends.</li>
 </ol>
+<h2 id="compiler-steps"><a class="header" href="#compiler-steps">Compiler steps</a></h2>
+<p>These steps need to be fit into the phases.</p>
+<ul>
+<li>Changing operators into calls</li>
+<li>Changing generators into comprehensions</li>
+<li>Overloading resolution</li>
+<li>Monomorphisation</li>
+<li>Decomposition of option types</li>
+<li>Removal of partiality</li>
+<li>Decomposition of var if-then-else/comprehensions</li>
+<li>Type erasure for enums</li>
+<li>Closing of functions (need to think about first class functions)</li>
+<li>Converting records into tuples</li>
+</ul>
 <h2 id="query-structure"><a class="header" href="#query-structure">Query structure</a></h2>
 <ul>
 <li>Discuss the design of the Salsa queries for the compiler.</li>
@@ -792,6 +806,22 @@ possible to avoid unnecessary recomputation.</li>
 <li><a href="https://github.com/tydi-lang/tydi">Tydi</a></li>
 </ul>
 </li>
+<li>Need to think about what should actually go into MicroZinc (e.g. need <code>case</code>?, what level of nesting is supported?)</li>
+<li>For tools which suggest changes to user models, it would be useful to have AST
+to CST transformation, so that we can leave the rest of the user model alone
+and insert the suggested transformations in place. </li>
+<li>Need to think about what AST levels we need. Potentially some or all of:
+<ul>
+<li>MiniZinc CST</li>
+<li>MiniZinc AST</li>
+<li>Typed MiniZinc AST</li>
+<li>Type specialised MiniZinc AST</li>
+<li>Intermediate representation (e.g. Static single assignment form)</li>
+<li>MicroZinc AST</li>
+</ul>
+</li>
+<li>Need to think about whether we generate actual data structures for this,
+or use queries to introduce new information to a node.</li>
 </ul>
 <h2 id="project-notes"><a class="header" href="#project-notes">Project notes</a></h2>
 <ul>
