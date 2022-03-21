@@ -55,7 +55,7 @@ module.exports = grammar({
       seq(
         "annotation",
         field("name", $.identifier),
-        optional(field("parameters", $._parameters)),
+        optional($._parameters),
         optional(seq("=", field("body", $._expression)))
       ),
 
@@ -78,7 +78,7 @@ module.exports = grammar({
         "enum",
         field("name", $.identifier),
         optional($._annotation_list),
-        optional(seq("=", "{", field("members", sepBy(",", $.identifier)), "}"))
+        optional(seq("=", "{", sepBy(",", field("member", $.identifier)), "}"))
       ),
 
     function_item: ($) =>
@@ -87,7 +87,7 @@ module.exports = grammar({
         field("type", $._type),
         ":",
         field("name", $.identifier),
-        field("parameters", $._parameters),
+        $._parameters,
         optional($._annotation_list),
         optional(seq("=", field("body", $._expression)))
       ),
@@ -105,9 +105,9 @@ module.exports = grammar({
         )
       ),
 
-    include: ($) => seq("include", $.string_literal),
+    include: ($) => seq("include", field("file", $.string_literal)),
 
-    output: ($) => seq("output", $._expression),
+    output: ($) => seq("output", field("expr", $._expression)),
 
     predicate: ($) =>
       seq(
@@ -155,7 +155,13 @@ module.exports = grammar({
     parenthesised_expression: ($) => seq("(", $._expression, ")"),
 
     array_comprehension: ($) =>
-      seq("[", $._expression, "|", sepBy1(",", $.generator), "]"),
+      seq(
+        "[",
+        field("template", $._expression),
+        "|",
+        sepBy1(",", field("generator", $.generator)),
+        "]"
+      ),
 
     call: ($) =>
       prec(
@@ -174,7 +180,7 @@ module.exports = grammar({
         seq(
           field("name", $.identifier),
           "(",
-          field("generators", sepBy1(",", $.generator)),
+          sepBy1(",", field("generator", $.generator)),
           ")",
           "(",
           field("template", $._expression),
@@ -207,7 +213,7 @@ module.exports = grammar({
         seq(
           field("collection", $._expression),
           "[",
-          field("indices", seq($._expression, repeat(seq(",", $._expression)))),
+          sepBy1(",", field("index", $._expression)),
           "]"
         )
       ),
@@ -256,7 +262,10 @@ module.exports = grammar({
         "{",
         field(
           "let",
-          sepBy(choice(",", ";"), choice($.declaration, $.constraint))
+          sepBy(
+            choice(",", ";"),
+            field("item", choice($.declaration, $.constraint))
+          )
         ),
         "}",
         "in",
@@ -266,11 +275,20 @@ module.exports = grammar({
     prefix_operator: ($) =>
       prec(
         PREC.unary,
-        seq(field("operator", choice("-", "not", "¬")), $._expression)
+        seq(
+          field("operator", choice("-", "not", "¬")),
+          field("operand", $._expression)
+        )
       ),
 
     set_comprehension: ($) =>
-      seq("{", $._expression, "|", sepBy1(",", $.generator), "}"),
+      seq(
+        "{",
+        field("template", $._expression),
+        "|",
+        sepBy1(",", field("generator", $.generator)),
+        "}"
+      ),
 
     // TODO: Decide if string_literal and string_interpolation should be combined
     string_interpolation: ($) =>
@@ -305,7 +323,8 @@ module.exports = grammar({
       ),
 
     absent: ($) => "<>",
-    array_literal: ($) => seq("[", sepBy(",", $._expression), "]"),
+    array_literal: ($) =>
+      seq("[", sepBy(",", field("member", $._expression)), "]"),
     boolean_literal: ($) => choice("true", "false"),
     float_literal: ($) =>
       token(
@@ -317,7 +336,8 @@ module.exports = grammar({
       ),
     integer_literal: ($) =>
       token(choice(/[0-9]+/, /0x[0-9a-fA-F]+/, /0b[01]+/, /0o[0-7]+/)),
-    set_literal: ($) => seq("{", sepBy(",", $._expression), "}"),
+    set_literal: ($) =>
+      seq("{", sepBy(",", field("member", $._expression)), "}"),
 
     string_literal: ($) =>
       seq('"', alias(optional($.string_content), "content"), '"'),

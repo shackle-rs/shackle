@@ -70,7 +70,7 @@ enum with_members = {a, b, c};
   (enumeration name: (identifier))
   (enumeration name: (identifier) annotation: (identifier))
   (enumeration name: (identifier))
-  (enumeration name: (identifier) members: (identifier) members: (identifier) members: (identifier)))
+  (enumeration name: (identifier) member: (identifier) member: (identifier) member: (identifier)))
 
 ========
 Function
