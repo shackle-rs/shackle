@@ -12,8 +12,8 @@ annotation funcdef(int: x, int: y) = other(x, y);
 (source_file
   (annotation (identifier))
   (annotation (identifier) (identifier))
-  (annotation (identifier) (type_base (primitive_type)) (type_base (primitive_type)))
-  (annotation (identifier) (type_base (primitive_type)) (identifier) (type_base (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
+  (annotation (identifier) (parameter (type_base (primitive_type))) (parameter (type_base (primitive_type))))
+  (annotation (identifier) (parameter (type_base (primitive_type)) (identifier)) (parameter (type_base (primitive_type)) (identifier)) (call (identifier) (identifier) (identifier))))
 
 ==========
 Assignment
@@ -44,14 +44,16 @@ Declaration
 
 var int: simple_decl;
 var int: with_ann ::annotated;
+var int: with_more_ann ::annotated ::and_again ::and_again;
 array[X, 1..23] of var int: simple_decl = some_call(X);
 
 ---
 
 (source_file
   (declaration type: (type_base (primitive_type)) name: (identifier))
-  (declaration type: (type_base (primitive_type)) name: (identifier) annotations: (identifier))
-  (declaration type: (array_type (type_base (identifier)) (type_base (infix_operator left: (integer_literal) right: (integer_literal))) (type_base (primitive_type))) name: (identifier) expr: (call name: (identifier) arguments: (identifier))))
+  (declaration type: (type_base (primitive_type)) name: (identifier) annotation: (identifier))
+  (declaration type: (type_base (primitive_type)) name: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier))
+  (declaration type: (array_type (type_base (identifier)) (type_base (infix_operator left: (integer_literal) right: (integer_literal))) (type_base (primitive_type))) name: (identifier) definition: (call name: (identifier) argument: (identifier))))
 
 ===========
 Enumeration
@@ -66,7 +68,7 @@ enum with_members = {a, b, c};
 
 (source_file
   (enumeration name: (identifier))
-  (enumeration name: (identifier) annotations: (identifier))
+  (enumeration name: (identifier) annotation: (identifier))
   (enumeration name: (identifier))
   (enumeration name: (identifier) members: (identifier) members: (identifier) members: (identifier)))
 
@@ -78,14 +80,16 @@ function int: this();
 function var int: that() = this();
 function X: with_args(int, float);
 function X: with_named_args(X: x, bool: b) = something(b, x);
+function X: with_annotation(int, float) ::func_ann;
 
 ---
 
 (source_file
-  (function_item (type_base (primitive_type)) (identifier))
-  (function_item (type_base (primitive_type)) (identifier) (call (identifier)))
-  (function_item (type_base (identifier)) (identifier) (type_base (primitive_type)) (type_base (primitive_type)))
-  (function_item (type_base (identifier)) (identifier) (type_base (identifier)) (identifier) (type_base (primitive_type)) (identifier) (call (identifier) (identifier) (identifier))))
+  (function_item type: (type_base (primitive_type)) name: (identifier))
+  (function_item type: (type_base (primitive_type)) name: (identifier) body: (call name: (identifier)))
+  (function_item type: (type_base (identifier)) name: (identifier) parameter: (parameter type: (type_base (primitive_type))) parameter: (parameter type: (type_base (primitive_type))))
+  (function_item type: (type_base (identifier)) name: (identifier) parameter: (parameter type: (type_base (identifier)) name: (identifier)) parameter: (parameter type: (type_base (primitive_type)) name: (identifier)) body: (call name: (identifier) argument: (identifier) argument: (identifier)))
+  (function_item type: (type_base (identifier)) name: (identifier) parameter: (parameter type: (type_base (primitive_type))) parameter: (parameter type: (type_base (primitive_type))) annotation: (identifier)))
 
 ====
 Goal
@@ -137,4 +141,4 @@ predicate with_args(1..10: x, var bool: b) = pred();
 (source_file
   (predicate (identifier))
   (predicate (identifier) (call (identifier)))
-  (predicate (identifier) (type_base (infix_operator (integer_literal) (integer_literal))) (identifier) (type_base (primitive_type)) (identifier) (call (identifier))))
+  (predicate (identifier) (parameter (type_base (infix_operator (integer_literal) (integer_literal))) (identifier)) (parameter (type_base (primitive_type)) (identifier)) (call (identifier))))

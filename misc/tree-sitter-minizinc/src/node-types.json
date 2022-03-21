@@ -145,7 +145,7 @@
     "type": "annotation",
     "named": true,
     "fields": {
-      "expr": {
+      "body": {
         "multiple": false,
         "required": false,
         "types": [
@@ -161,6 +161,16 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "parameter",
             "named": true
           }
         ]
@@ -182,15 +192,7 @@
             "named": false
           },
           {
-            "type": ":",
-            "named": false
-          },
-          {
-            "type": "_type",
-            "named": true
-          },
-          {
-            "type": "identifier",
+            "type": "parameter",
             "named": true
           }
         ]
@@ -250,7 +252,7 @@
     "type": "assignment",
     "named": true,
     "fields": {
-      "expr": {
+      "definition": {
         "multiple": false,
         "required": true,
         "types": [
@@ -281,14 +283,10 @@
     "type": "call",
     "named": true,
     "fields": {
-      "arguments": {
+      "argument": {
         "multiple": true,
         "required": false,
         "types": [
-          {
-            "type": ",",
-            "named": false
-          },
           {
             "type": "_expression",
             "named": true
@@ -310,16 +308,17 @@
   {
     "type": "constraint",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "_expression",
-          "named": true
-        }
-      ]
+    "fields": {
+      "expr": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -341,21 +340,17 @@
     "type": "declaration",
     "named": true,
     "fields": {
-      "annotations": {
+      "annotation": {
         "multiple": true,
         "required": false,
         "types": [
-          {
-            "type": "::",
-            "named": false
-          },
           {
             "type": "_expression",
             "named": true
           }
         ]
       },
-      "expr": {
+      "definition": {
         "multiple": false,
         "required": false,
         "types": [
@@ -391,14 +386,10 @@
     "type": "enumeration",
     "named": true,
     "fields": {
-      "annotations": {
+      "annotation": {
         "multiple": true,
         "required": false,
         "types": [
-          {
-            "type": "::",
-            "named": false
-          },
           {
             "type": "_expression",
             "named": true
@@ -435,21 +426,17 @@
     "type": "function_item",
     "named": true,
     "fields": {
-      "annotations": {
+      "annotation": {
         "multiple": true,
         "required": false,
         "types": [
-          {
-            "type": "::",
-            "named": false
-          },
           {
             "type": "_expression",
             "named": true
           }
         ]
       },
-      "expr": {
+      "body": {
         "multiple": false,
         "required": false,
         "types": [
@@ -465,6 +452,16 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "parameter",
             "named": true
           }
         ]
@@ -486,15 +483,7 @@
             "named": false
           },
           {
-            "type": ":",
-            "named": false
-          },
-          {
-            "type": "_type",
-            "named": true
-          },
-          {
-            "type": "identifier",
+            "type": "parameter",
             "named": true
           }
         ]
@@ -860,6 +849,32 @@
     }
   },
   {
+    "type": "parameter",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "parenthesised_expression",
     "named": true,
     "fields": {},
@@ -878,21 +893,17 @@
     "type": "predicate",
     "named": true,
     "fields": {
-      "annotations": {
+      "annotation": {
         "multiple": true,
         "required": false,
         "types": [
-          {
-            "type": "::",
-            "named": false
-          },
           {
             "type": "_expression",
             "named": true
           }
         ]
       },
-      "expr": {
+      "body": {
         "multiple": false,
         "required": false,
         "types": [
@@ -912,32 +923,12 @@
           }
         ]
       },
-      "parameters": {
+      "parameter": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": ",",
-            "named": false
-          },
-          {
-            "type": ":",
-            "named": false
-          },
-          {
-            "type": "_type",
-            "named": true
-          },
-          {
-            "type": "identifier",
+            "type": "parameter",
             "named": true
           }
         ]
