@@ -56,28 +56,28 @@ module.exports = grammar({
         "annotation",
         field("name", $.identifier),
         optional(field("parameters", $._parameters)),
-        optional(seq("=", field("expr", $._expression)))
+        optional(seq("=", field("body", $._expression)))
       ),
 
     assignment: ($) =>
-      seq(field("name", $.identifier), "=", field("expr", $._expression)),
+      seq(field("name", $.identifier), "=", field("definition", $._expression)),
 
-    constraint: ($) => seq("constraint", $._expression),
+    constraint: ($) => seq("constraint", field("expr", $._expression)),
 
     declaration: ($) =>
       seq(
         field("type", $._type),
         ":",
         field("name", $.identifier),
-        optional(field("annotations", $._annotations)),
-        optional(seq("=", field("expr", $._expression)))
+        optional($._annotation_list),
+        optional(seq("=", field("definition", $._expression)))
       ),
 
     enumeration: ($) =>
       seq(
         "enum",
         field("name", $.identifier),
-        optional(field("annotations", $._annotations)),
+        optional($._annotation_list),
         optional(seq("=", "{", field("members", sepBy(",", $.identifier)), "}"))
       ),
 
@@ -88,8 +88,8 @@ module.exports = grammar({
         ":",
         field("name", $.identifier),
         field("parameters", $._parameters),
-        optional(field("annotations", $._annotations)),
-        optional(seq("=", field("expr", $._expression)))
+        optional($._annotation_list),
+        optional(seq("=", field("body", $._expression)))
       ),
 
     goal: ($) =>
@@ -113,15 +113,27 @@ module.exports = grammar({
       seq(
         field("type", choice("predicate", "test")),
         field("name", $.identifier),
-        field("parameters", $._parameters),
-        optional(field("annotations", $._annotations)),
-        optional(seq("=", field("expr", $._expression)))
+        $._parameters,
+        optional($._annotation_list),
+        optional(seq("=", field("body", $._expression)))
       ),
 
-    _annotations: ($) => repeat1(seq("::", $._expression)),
+    _annotation_list: ($) =>
+      repeat1(
+        prec.left(
+          PREC.annotation,
+          seq("::", field("annotation", $._expression))
+        )
+      ),
 
     _parameters: ($) =>
-      seq("(", sepBy(",", seq($._type, optional(seq(":", $.identifier)))), ")"),
+      seq("(", sepBy(",", field("parameter", $.parameter)), ")"),
+    parameter: ($) =>
+      seq(
+        field("type", $._type),
+        optional(seq(":", field("name", $.identifier)))
+      ),
+
     _expression: ($) =>
       choice(
         $.identifier,
@@ -151,7 +163,7 @@ module.exports = grammar({
         seq(
           field("name", $.identifier),
           "(",
-          field("arguments", sepBy(",", $._expression)),
+          sepBy(",", field("argument", $._expression)),
           ")"
         )
       ),
