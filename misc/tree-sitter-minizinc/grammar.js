@@ -28,8 +28,8 @@ module.exports = grammar({
   word: ($) => $.identifier,
 
   conflicts: ($) => [
-    [$._expression, $.generator],
-    [$._expression, $.assignment],
+    [$._unannotated_expression, $.generator],
+    [$._unannotated_expression, $.assignment],
   ],
 
   supertypes: ($) => [$._expression, $._item, $._type],
@@ -62,7 +62,7 @@ module.exports = grammar({
     assignment: ($) =>
       seq(field("name", $.identifier), "=", field("definition", $._expression)),
 
-    constraint: ($) => seq("constraint", field("expr", $._expression)),
+    constraint: ($) => seq("constraint", field("expression", $._expression)),
 
     declaration: ($) =>
       seq(
@@ -107,7 +107,7 @@ module.exports = grammar({
 
     include: ($) => seq("include", field("file", $.string_literal)),
 
-    output: ($) => seq("output", field("expr", $._expression)),
+    output: ($) => seq("output", field("expression", $._expression)),
 
     predicate: ($) =>
       seq(
@@ -119,10 +119,12 @@ module.exports = grammar({
       ),
 
     _annotation_list: ($) =>
-      repeat1(
-        prec.left(
-          PREC.annotation,
-          seq("::", field("annotation", $._expression))
+      seq(
+        repeat1(
+          prec.left(
+            PREC.annotation,
+            seq("::", field("annotation", $._unannotated_expression))
+          )
         )
       ),
 
@@ -135,6 +137,8 @@ module.exports = grammar({
       ),
 
     _expression: ($) =>
+      choice($._unannotated_expression, $.annotated_expression),
+    _unannotated_expression: ($) =>
       choice(
         $.identifier,
         $._literal,
@@ -239,7 +243,6 @@ module.exports = grammar({
         [prec.left, PREC.additive, choice("+", "-", "++")],
         [prec.left, PREC.multiplicative, choice("*", "/", "div", "mod")],
         [prec.left, PREC.exponent, "^"],
-        [prec.left, PREC.annotation, "::"],
       ];
 
       return choice(
@@ -255,6 +258,20 @@ module.exports = grammar({
         )
       );
     },
+
+    annotated_expression: ($) =>
+      prec(
+        PREC.annotation,
+        seq(
+          field("expression", $._unannotated_expression),
+          repeat1(
+            prec.left(
+              PREC.annotation,
+              seq("::", field("annotation", $._unannotated_expression))
+            )
+          )
+        )
+      ),
 
     let_expression: ($) =>
       seq(
