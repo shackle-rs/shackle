@@ -173,7 +173,7 @@
         },
         {
           "type": "FIELD",
-          "name": "expr",
+          "name": "expression",
           "content": {
             "type": "SYMBOL",
             "name": "_expression"
@@ -482,7 +482,7 @@
         },
         {
           "type": "FIELD",
-          "name": "expr",
+          "name": "expression",
           "content": {
             "type": "SYMBOL",
             "name": "_expression"
@@ -562,28 +562,33 @@
       ]
     },
     "_annotation_list": {
-      "type": "REPEAT1",
-      "content": {
-        "type": "PREC_LEFT",
-        "value": 14,
-        "content": {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "STRING",
-              "value": "::"
-            },
-            {
-              "type": "FIELD",
-              "name": "annotation",
-              "content": {
-                "type": "SYMBOL",
-                "name": "_expression"
-              }
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "REPEAT1",
+          "content": {
+            "type": "PREC_LEFT",
+            "value": 14,
+            "content": {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "::"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "annotation",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_unannotated_expression"
+                  }
+                }
+              ]
             }
-          ]
+          }
         }
-      }
+      ]
     },
     "_parameters": {
       "type": "SEQ",
@@ -678,6 +683,19 @@
       ]
     },
     "_expression": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_unannotated_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "annotated_expression"
+        }
+      ]
+    },
+    "_unannotated_expression": {
       "type": "CHOICE",
       "members": [
         {
@@ -1695,41 +1713,49 @@
               }
             ]
           }
-        },
-        {
-          "type": "PREC_LEFT",
-          "value": 14,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "left",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "_expression"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "operator",
-                "content": {
-                  "type": "STRING",
-                  "value": "::"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "right",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "_expression"
-                }
-              }
-            ]
-          }
         }
       ]
+    },
+    "annotated_expression": {
+      "type": "PREC",
+      "value": 14,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "expression",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_unannotated_expression"
+            }
+          },
+          {
+            "type": "REPEAT1",
+            "content": {
+              "type": "PREC_LEFT",
+              "value": 14,
+              "content": {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "::"
+                  },
+                  {
+                    "type": "FIELD",
+                    "name": "annotation",
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "_unannotated_expression"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     },
     "let_expression": {
       "type": "SEQ",
@@ -2526,11 +2552,11 @@
   ],
   "conflicts": [
     [
-      "_expression",
+      "_unannotated_expression",
       "generator"
     ],
     [
-      "_expression",
+      "_unannotated_expression",
       "assignment"
     ]
   ],
