@@ -30,12 +30,13 @@ module.exports = grammar({
   conflicts: ($) => [
     [$._unannotated_expression, $.generator],
     [$._unannotated_expression, $.assignment],
+    [$.array_literal_2d, $.array_literal_2d_row],
   ],
 
   supertypes: ($) => [$._expression, $._item, $._type],
 
   rules: {
-    source_file: ($) => seq(sepBy(";", $._item)),
+    source_file: ($) => seq(sepBy(";", field("item", $._item))),
 
     _item: ($) =>
       choice(
@@ -54,21 +55,30 @@ module.exports = grammar({
     annotation: ($) =>
       seq(
         "annotation",
-        field("name", $.identifier),
+        field("name", $._identifier),
         optional($._parameters),
         optional(seq("=", field("body", $._expression)))
       ),
 
     assignment: ($) =>
-      seq(field("name", $.identifier), "=", field("definition", $._expression)),
+      seq(
+        field("name", $._identifier),
+        "=",
+        field("definition", $._expression)
+      ),
 
-    constraint: ($) => seq("constraint", field("expression", $._expression)),
+    constraint: ($) =>
+      seq(
+        "constraint",
+        optional($._annotation_list),
+        field("expression", $._expression)
+      ),
 
     declaration: ($) =>
       seq(
         field("type", $._type),
         ":",
-        field("name", $.identifier),
+        field("name", $._identifier),
         optional($._annotation_list),
         optional(seq("=", field("definition", $._expression)))
       ),
@@ -76,9 +86,9 @@ module.exports = grammar({
     enumeration: ($) =>
       seq(
         "enum",
-        field("name", $.identifier),
+        field("name", $._identifier),
         optional($._annotation_list),
-        optional(seq("=", "{", sepBy(",", field("member", $.identifier)), "}"))
+        optional(seq("=", "{", sepBy(",", field("member", $._identifier)), "}"))
       ),
 
     function_item: ($) =>
@@ -86,7 +96,7 @@ module.exports = grammar({
         "function",
         field("type", $._type),
         ":",
-        field("name", $.identifier),
+        field("name", $._identifier),
         $._parameters,
         optional($._annotation_list),
         optional(seq("=", field("body", $._expression)))
@@ -95,24 +105,29 @@ module.exports = grammar({
     goal: ($) =>
       seq(
         "solve",
-        field(
-          "strategy",
-          choice(
-            "satisfy",
-            seq("maximize", $._expression),
-            seq("minimize", $._expression)
+        optional($._annotation_list),
+        choice(
+          field("strategy", "satisfy"),
+          seq(
+            field("strategy", choice("maximize", "minimize")),
+            field("objective", $._expression)
           )
         )
       ),
 
     include: ($) => seq("include", field("file", $.string_literal)),
 
-    output: ($) => seq("output", field("expression", $._expression)),
+    output: ($) =>
+      seq(
+        "output",
+        optional($._annotation_list),
+        field("expression", $._expression)
+      ),
 
     predicate: ($) =>
       seq(
         field("type", choice("predicate", "test")),
-        field("name", $.identifier),
+        field("name", $._identifier),
         $._parameters,
         optional($._annotation_list),
         optional(seq("=", field("body", $._expression)))
@@ -133,14 +148,14 @@ module.exports = grammar({
     parameter: ($) =>
       seq(
         field("type", $._type),
-        optional(seq(":", field("name", $.identifier)))
+        optional(seq(":", field("name", $._identifier)))
       ),
 
     _expression: ($) =>
       choice($._unannotated_expression, $.annotated_expression),
     _unannotated_expression: ($) =>
       choice(
-        $.identifier,
+        $._identifier,
         $._literal,
 
         $.array_comprehension,
@@ -156,11 +171,13 @@ module.exports = grammar({
         $.parenthesised_expression
       ),
 
-    parenthesised_expression: ($) => seq("(", $._expression, ")"),
+    parenthesised_expression: ($) =>
+      seq("(", field("expression", $._expression), ")"),
 
     array_comprehension: ($) =>
       seq(
         "[",
+        optional(seq(field("index", $._index_tuple), ":")),
         field("template", $._expression),
         "|",
         sepBy1(",", field("generator", $.generator)),
@@ -171,7 +188,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("name", $.identifier),
+          field("name", $._identifier),
           "(",
           sepBy(",", field("argument", $._expression)),
           ")"
@@ -182,7 +199,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("name", $.identifier),
+          field("name", $._identifier),
           "(",
           sepBy1(",", field("generator", $.generator)),
           ")",
@@ -194,20 +211,27 @@ module.exports = grammar({
 
     generator: ($) =>
       seq(
-        $.identifier,
+        sepBy1(",", field("name", $._identifier)),
         "in",
-        $._expression,
-        optional(seq("where", $._expression))
+        field("collection", $._expression),
+        optional(seq("where", field("where", $._expression)))
       ),
 
     if_then_else: ($) =>
       seq(
         "if",
-        $._expression,
+        field("condition", $._expression),
         "then",
-        $._expression,
-        repeat(seq("elseif", $._expression, "then", $._expression)),
-        optional(seq("else", $._expression)),
+        field("result", $._expression),
+        repeat(
+          seq(
+            "elseif",
+            field("condition", $._expression),
+            "then",
+            field("result", $._expression)
+          )
+        ),
+        optional(seq("else", field("else", $._expression))),
         "endif"
       ),
 
@@ -311,27 +335,53 @@ module.exports = grammar({
     string_interpolation: ($) =>
       seq(
         '"',
-        optional($.string_content),
-        repeat1(seq("\\(", $._expression, ")", optional($.string_content))),
+        optional(field("item", alias($._string_content, "string"))),
+        repeat1(
+          seq(
+            "\\(",
+            field("item", alias($._expression, "expression")),
+            ")",
+            optional(field("item", alias($._string_content, "string")))
+          )
+        ),
         '"'
       ),
 
     _type: ($) => choice($.array_type, $.type_base),
     array_type: ($) =>
-      seq("array", "[", sepBy1(",", $.type_base), "]", "of", $._type),
+      seq(
+        "array",
+        "[",
+        sepBy1(",", field("dimension", $.type_base)),
+        "]",
+        "of",
+        field("type", $.type_base)
+      ),
     type_base: ($) =>
       seq(
         optional(field("var_par", choice("var", "par"))),
         optional(field("opt", "opt")),
         optional(field("set", seq("set", "of"))),
-        choice($.primitive_type, $._expression)
+        field(
+          "domain",
+          choice(
+            $.primitive_type,
+            $.type_inst_id,
+            $.type_inst_enum_id,
+            $._expression
+          )
+        )
       ),
     primitive_type: ($) => choice(...primitive_types),
+    type_inst_id: ($) => /\$[A-Za-z][A-Za-z0-9_]*/,
+    type_inst_enum_id: ($) => /\$\$[A-Za-z][A-Za-z0-9_]*/,
 
     _literal: ($) =>
       choice(
         $.absent,
+        $.anonymous,
         $.array_literal,
+        $.array_literal_2d,
         $.boolean_literal,
         $.float_literal,
         $.integer_literal,
@@ -340,8 +390,42 @@ module.exports = grammar({
       ),
 
     absent: ($) => "<>",
+    anonymous: ($) => "_",
     array_literal: ($) =>
-      seq("[", sepBy(",", field("member", $._expression)), "]"),
+      seq("[", sepBy(",", field("member", $.array_literal_member)), "]"),
+    array_literal_member: ($) =>
+      seq(optional(seq($._index_tuple, ":")), field("value", $._expression)),
+    _index_tuple: ($) =>
+      choice(
+        seq(
+          "(",
+          field("index", $._expression),
+          ",",
+          sepBy1(",", field("index", $._expression)),
+          ")"
+        ),
+        field("index", $._expression)
+      ),
+    array_literal_2d: ($) =>
+      seq(
+        "[|",
+        optional(
+          seq(
+            choice(
+              repeat1(seq(field("column_index", $._expression), ":")),
+              field("row", $.array_literal_2d_row)
+            ),
+            repeat(seq("|", field("row", $.array_literal_2d_row))),
+            optional("|")
+          )
+        ),
+        "|]"
+      ),
+    array_literal_2d_row: ($) =>
+      seq(
+        optional(seq(field("index", $._expression), ":")),
+        sepBy1(",", field("member", $._expression))
+      ),
     boolean_literal: ($) => choice("true", "false"),
     float_literal: ($) =>
       token(
@@ -356,25 +440,31 @@ module.exports = grammar({
     set_literal: ($) =>
       seq("{", sepBy(",", field("member", $._expression)), "}"),
 
-    string_literal: ($) =>
-      seq('"', alias(optional($.string_content), "content"), '"'),
-    string_content: ($) =>
-      repeat1(choice(token.immediate(prec(1, /[^"\n\\]+/)), $.escape_sequence)),
-    escape_sequence: ($) =>
-      token.immediate(
-        seq(
-          "\\",
-          choice(
-            /[^xuU]/,
-            /\d{2,3}/,
-            /x[0-9a-fA-F]{2,}/,
-            /u[0-9a-fA-F]{4}/,
-            /U[0-9a-fA-F]{8}/
-          )
-        )
-      ),
+    string_literal: ($) => seq('"', optional($._string_content), '"'),
+    _string_content: ($) =>
+      repeat1(field("content", choice($.string_characters, $.escape_sequence))),
+    string_characters: ($) => token.immediate(prec(1, /[^"\n\\]+/)),
+    escape_sequence: ($) => {
+      const simpleEscape = [
+        ["\\'", "'"],
+        ['\\"', '"'],
+        ["\\\\", "\\"],
+        ["\\r", "\r"],
+        ["\\n", "\n"],
+        ["\\t", "\t"],
+      ];
+      return choice(
+        field("escape", choice(...simpleEscape.map(([e, v]) => alias(e, v)))),
+        seq("\\", field("escape", alias(/[0-7]{1,3}/, "octal"))),
+        seq("\\x", field("escape", alias(/[0-9a-fA-F]{2}/, "hexadecimal"))),
+        seq("\\u", field("escape", alias(/[0-9a-fA-F]{4}/, "hexadecimal"))),
+        seq("\\U", field("escape", alias(/[0-9a-fA-F]{8}/, "hexadecimal")))
+      );
+    },
 
     identifier: ($) => /[A-Za-z][A-Za-z0-9_]*/,
+    quoted_identifier: ($) => /'[^']*'/,
+    _identifier: ($) => choice($.identifier, $.quoted_identifier),
 
     line_comment: ($) => token(seq("%", /.*/)),
     block_comment: ($) => token(seq("/*", /([^*]|\*[^\/]|\n)*?\*?/, "*/")),

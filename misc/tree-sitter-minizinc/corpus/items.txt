@@ -50,10 +50,10 @@ array[X, 1..23] of var int: simple_decl = some_call(X);
 ---
 
 (source_file
-  (declaration type: (type_base (primitive_type)) name: (identifier))
-  (declaration type: (type_base (primitive_type)) name: (identifier) annotation: (identifier))
-  (declaration type: (type_base (primitive_type)) name: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier))
-  (declaration type: (array_type (type_base (identifier)) (type_base (infix_operator left: (integer_literal) right: (integer_literal))) (type_base (primitive_type))) name: (identifier) definition: (call name: (identifier) argument: (identifier))))
+  item: (declaration type: (type_base domain: (primitive_type)) name: (identifier))
+  item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))
+  item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier))
+  item: (declaration type: (array_type dimension: (type_base domain: (identifier)) dimension: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) type: (type_base domain: (primitive_type))) name: (identifier) definition: (call name: (identifier) argument: (identifier))))
 
 ===========
 Enumeration
@@ -67,10 +67,10 @@ enum with_members = {a, b, c};
 ---
 
 (source_file
-  (enumeration name: (identifier))
-  (enumeration name: (identifier) annotation: (identifier))
-  (enumeration name: (identifier))
-  (enumeration name: (identifier) member: (identifier) member: (identifier) member: (identifier)))
+  item: (enumeration name: (identifier))
+  item: (enumeration name: (identifier) annotation: (identifier))
+  item: (enumeration name: (identifier))
+  item: (enumeration name: (identifier) member: (identifier) member: (identifier) member: (identifier)))
 
 ========
 Function
@@ -85,11 +85,11 @@ function X: with_annotation(int, float) ::func_ann;
 ---
 
 (source_file
-  (function_item type: (type_base (primitive_type)) name: (identifier))
-  (function_item type: (type_base (primitive_type)) name: (identifier) body: (call name: (identifier)))
-  (function_item type: (type_base (identifier)) name: (identifier) parameter: (parameter type: (type_base (primitive_type))) parameter: (parameter type: (type_base (primitive_type))))
-  (function_item type: (type_base (identifier)) name: (identifier) parameter: (parameter type: (type_base (identifier)) name: (identifier)) parameter: (parameter type: (type_base (primitive_type)) name: (identifier)) body: (call name: (identifier) argument: (identifier) argument: (identifier)))
-  (function_item type: (type_base (identifier)) name: (identifier) parameter: (parameter type: (type_base (primitive_type))) parameter: (parameter type: (type_base (primitive_type))) annotation: (identifier)))
+  item: (function_item type: (type_base domain: (primitive_type)) name: (identifier))
+  item: (function_item type: (type_base domain: (primitive_type)) name: (identifier) body: (call name: (identifier)))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (identifier)) name: (identifier)) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier)) body: (call name: (identifier) argument: (identifier) argument: (identifier)))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))) annotation: (identifier)))
 
 ====
 Goal
@@ -115,18 +115,20 @@ include "globals.mzn";
 ---
 
 (source_file
-  (include (string_literal)))
+  (include (string_literal (string_characters))))
 
 =======
 Output
 =======
 
 output ["something"];
+output :: "section" ["something"];
 
 ---
 
 (source_file
-  (output (array_literal (string_literal))))
+  (output (array_literal (array_literal_member (string_literal (string_characters)))))
+  (output (string_literal (string_characters)) (array_literal (array_literal_member (string_literal (string_characters))))))
 
 =========
 Predicate

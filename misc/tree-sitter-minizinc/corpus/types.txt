@@ -110,3 +110,18 @@ set of 1..10: expr_type_set;
   (declaration (type_base (primitive_type)) (identifier))
   (declaration (type_base (identifier)) (identifier))
   (declaration (type_base (infix_operator (integer_literal) (integer_literal))) (identifier)))
+
+============
+Type-inst ID
+============
+
+var $T: x;
+array [$$T, $$U] of $V: y;
+set of $$T: z;
+
+---
+
+(source_file
+  (declaration (type_base (type_inst_id)) (identifier))
+  (declaration (array_type (type_base (type_inst_enum_id)) (type_base (type_inst_enum_id)) (type_base (type_inst_id))) (identifier))
+  (declaration (type_base (type_inst_enum_id)) (identifier)))
