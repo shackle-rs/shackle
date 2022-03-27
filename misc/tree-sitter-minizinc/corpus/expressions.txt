@@ -11,11 +11,11 @@ constraint x :: (one :: two);
 ---
 
 (source_file
-  (constraint expression: (annotated_expression expression: (identifier) annotation: (identifier)))
-  (constraint expression: (annotated_expression expression: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier)))
-  (constraint expression: (annotated_expression expression: (identifier) annotation: (call name: (identifier) argument: (integer_literal) argument: (identifier) argument: (string_literal))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (identifier)))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier)))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (call name: (identifier) argument: (integer_literal) argument: (identifier) argument: (string_literal content: (string_characters)))))
   (line_comment)
-  (constraint expression: (annotated_expression expression: (identifier) annotation: (parenthesised_expression (annotated_expression expression: (identifier) annotation: (identifier))))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (parenthesised_expression expression: (annotated_expression expression: (identifier) annotation: (identifier))))))
 
 ===================
 Array Comprehension
@@ -32,6 +32,21 @@ multiple = [ i | i in X, j in Y where i == j];
   (assignment (identifier) (array_comprehension (identifier) (generator (identifier) (identifier) (infix_operator (identifier) (integer_literal)))))
   (assignment (identifier) (array_comprehension (identifier) (generator (identifier) (identifier)) (generator (identifier) (identifier) (infix_operator (identifier) (identifier))))))
 
+===========================
+Indexed Array Comprehension
+===========================
+
+simple = [ i: 1 | i in X ];
+where = [ i: 2.2 | i in X where i > 1 ];
+multiple = [ (i, j): i * j | i in X, j in Y];
+
+---
+
+(source_file
+  (assignment (identifier) (array_comprehension (identifier) (integer_literal) (generator (identifier) (identifier))))
+  (assignment (identifier) (array_comprehension (identifier) (float_literal) (generator (identifier) (identifier) (infix_operator (identifier) (integer_literal)))))
+  (assignment (identifier) (array_comprehension (identifier) (identifier) (infix_operator (identifier) (identifier)) (generator (identifier) (identifier)) (generator (identifier) (identifier)))))
+
 ====
 Call
 ====
@@ -46,7 +61,7 @@ generator_lookalike = my_fn(x in Xs)
 (source_file
   (assignment (identifier) (call (identifier)))
   (assignment (identifier) (call (identifier) (integer_literal)))
-  (assignment (identifier) (call (identifier) (integer_literal) (string_literal)))
+  (assignment (identifier) (call (identifier) (integer_literal) (string_literal (string_characters))))
   (assignment (identifier) (call (identifier) (infix_operator (identifier) (identifier)))))
 
 ==============
@@ -95,7 +110,7 @@ slice = my_collection[1..2];
 (source_file
   (assignment (identifier) (indexed_access (identifier) (integer_literal)))
   (assignment (identifier) (indexed_access (identifier) (identifier)))
-  (assignment (identifier) (indexed_access (array_literal (integer_literal) (integer_literal) (integer_literal)) (identifier)))
+  (assignment (identifier) (indexed_access (array_literal (array_literal_member (integer_literal)) (array_literal_member (integer_literal)) (array_literal_member (integer_literal))) (identifier)))
   (assignment (identifier) (indexed_access (identifier) (identifier) (integer_literal)))
   (assignment (identifier) (indexed_access (identifier) (infix_operator (prefix_operator (identifier)) (integer_literal))))
   (assignment (identifier) (indexed_access (identifier) (infix_operator (integer_literal) (integer_literal)))))
@@ -236,5 +251,24 @@ multiple = "\(x) and \(y)";
 
 (source_file
   (assignment (identifier) (string_interpolation (identifier)))
-  (assignment (identifier) (string_interpolation (string_content) (identifier) (string_content)))
-  (assignment (identifier) (string_interpolation (identifier) (string_content) (identifier))))
+  (assignment (identifier) (string_interpolation (string_characters) (identifier) (string_characters)))
+  (assignment (identifier) (string_interpolation (identifier) (string_characters) (identifier))))
+
+===========
+Identifiers
+===========
+
+simple = 1;
+under_score = 1;
+'quoted' = 1;
+'foo/bar' = 1;
+'✔️' = 1;
+
+---
+
+(source_file
+  (assignment (identifier) (integer_literal))
+  (assignment (identifier) (integer_literal))
+  (assignment (quoted_identifier) (integer_literal))
+  (assignment (quoted_identifier) (integer_literal))
+  (assignment (quoted_identifier) (integer_literal)))
