@@ -172,6 +172,52 @@ or = x \/ y;
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier))))
 
+
+==============
+UTF8 Operators
+==============
+
+equiv = a ⟷  b;
+equiv = a ⇔ b;
+impl = a → b;
+impl = a ⇒ b;
+rimpl = a ← b;
+rimpl = a ⇐ b;
+disj = a ∨ b;
+excl_disj = a ⊻ b;
+conj = a ∧ b;
+not_eq = a ≠ b;
+leq = a ≤ b;
+geq = a ≥ b;
+_in = a ∈ b;
+sub = a ⊆ b;
+sup = a ⊇ b;
+_union = a ∪ b;
+_diff = a ∖ b;
+inter = a ∩ b;
+
+---
+
+(source_file
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier))))
+
 ==============
 Let Expression
 ==============
@@ -262,7 +308,11 @@ simple = 1;
 under_score = 1;
 'quoted' = 1;
 'foo/bar' = 1;
-'✔️' = 1;
+'++' = 1;
+'∪' = 1;
+✔️ = 1;
+Δ = 1;
+🥳 = "party";
 
 ---
 
@@ -271,4 +321,8 @@ under_score = 1;
   (assignment (identifier) (integer_literal))
   (assignment (quoted_identifier) (integer_literal))
   (assignment (quoted_identifier) (integer_literal))
-  (assignment (quoted_identifier) (integer_literal)))
+  (assignment (quoted_identifier) (integer_literal))
+  (assignment (quoted_identifier) (integer_literal))
+  (assignment (identifier) (integer_literal))
+  (assignment (identifier) (integer_literal))
+  (assignment (identifier) (string_literal (string_characters))))

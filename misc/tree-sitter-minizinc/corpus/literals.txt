@@ -20,6 +20,19 @@ is_anonymous = _;
 (source_file
   (assignment (identifier) (anonymous)))
 
+========
+Infinity
+========
+
+word = infinity;
+utf8 = ∞;
+
+---
+
+(source_file
+  (assignment (identifier) (infinity))
+  (assignment (identifier) (infinity)))
+
 =====
 Array
 =====
@@ -172,6 +185,7 @@ Set
 ===
 
 empty = {};
+empty_utf8 = ∅;
 single = {1.0};
 double = {1, 2.2};
 more = {<>, <>, 1, <>};
@@ -179,6 +193,7 @@ more = {<>, <>, 1, <>};
 ---
 
 (source_file
+  (assignment (identifier) (set_literal))
   (assignment (identifier) (set_literal))
   (assignment (identifier) (set_literal (float_literal)))
   (assignment (identifier) (set_literal (integer_literal) (float_literal)))

@@ -56,6 +56,10 @@
         "named": true
       },
       {
+        "type": "infinity",
+        "named": true
+      },
+      {
         "type": "infix_operator",
         "named": true
       },
@@ -214,6 +218,10 @@
             "named": true
           },
           {
+            "type": "infinity",
+            "named": true
+          },
+          {
             "type": "infix_operator",
             "named": true
           },
@@ -305,6 +313,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
             "named": true
           },
           {
@@ -681,6 +693,10 @@
             "named": true
           },
           {
+            "type": "infinity",
+            "named": true
+          },
+          {
             "type": "infix_operator",
             "named": true
           },
@@ -788,6 +804,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
             "named": true
           },
           {
@@ -922,6 +942,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
             "named": true
           },
           {
@@ -1094,6 +1118,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
             "named": true
           },
           {
@@ -1321,6 +1349,10 @@
             "named": true
           },
           {
+            "type": "infinity",
+            "named": true
+          },
+          {
             "type": "infix_operator",
             "named": true
           },
@@ -1471,6 +1503,11 @@
     }
   },
   {
+    "type": "infinity",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "infix_operator",
     "named": true,
     "fields": {
@@ -1603,6 +1640,78 @@
           {
             "type": "xor",
             "named": false
+          },
+          {
+            "type": "←",
+            "named": false
+          },
+          {
+            "type": "→",
+            "named": false
+          },
+          {
+            "type": "⇐",
+            "named": false
+          },
+          {
+            "type": "⇒",
+            "named": false
+          },
+          {
+            "type": "⇔",
+            "named": false
+          },
+          {
+            "type": "∈",
+            "named": false
+          },
+          {
+            "type": "∖",
+            "named": false
+          },
+          {
+            "type": "∧",
+            "named": false
+          },
+          {
+            "type": "∨",
+            "named": false
+          },
+          {
+            "type": "∩",
+            "named": false
+          },
+          {
+            "type": "∪",
+            "named": false
+          },
+          {
+            "type": "≠",
+            "named": false
+          },
+          {
+            "type": "≤",
+            "named": false
+          },
+          {
+            "type": "≥",
+            "named": false
+          },
+          {
+            "type": "⊆",
+            "named": false
+          },
+          {
+            "type": "⊇",
+            "named": false
+          },
+          {
+            "type": "⊻",
+            "named": false
+          },
+          {
+            "type": "⟷",
+            "named": false
           }
         ]
       },
@@ -1724,6 +1833,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
             "named": true
           },
           {
@@ -1880,6 +1993,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
             "named": true
           },
           {
@@ -2442,6 +2559,10 @@
     "named": false
   },
   {
+    "type": "infinity",
+    "named": false
+  },
+  {
     "type": "int",
     "named": false
   },
@@ -2591,6 +2712,86 @@
   },
   {
     "type": "¬",
+    "named": false
+  },
+  {
+    "type": "←",
+    "named": false
+  },
+  {
+    "type": "→",
+    "named": false
+  },
+  {
+    "type": "⇐",
+    "named": false
+  },
+  {
+    "type": "⇒",
+    "named": false
+  },
+  {
+    "type": "⇔",
+    "named": false
+  },
+  {
+    "type": "∅",
+    "named": false
+  },
+  {
+    "type": "∈",
+    "named": false
+  },
+  {
+    "type": "∖",
+    "named": false
+  },
+  {
+    "type": "∞",
+    "named": false
+  },
+  {
+    "type": "∧",
+    "named": false
+  },
+  {
+    "type": "∨",
+    "named": false
+  },
+  {
+    "type": "∩",
+    "named": false
+  },
+  {
+    "type": "∪",
+    "named": false
+  },
+  {
+    "type": "≠",
+    "named": false
+  },
+  {
+    "type": "≤",
+    "named": false
+  },
+  {
+    "type": "≥",
+    "named": false
+  },
+  {
+    "type": "⊆",
+    "named": false
+  },
+  {
+    "type": "⊇",
+    "named": false
+  },
+  {
+    "type": "⊻",
+    "named": false
+  },
+  {
+    "type": "⟷",
     "named": false
   }
 ]
