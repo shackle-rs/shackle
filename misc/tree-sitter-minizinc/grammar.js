@@ -1,24 +1,54 @@
 const PREC = {
-  call: 15,
-  annotation: 14,
-  unary: 13,
-  exponent: 12,
-  multiplicative: 11,
-  additive: 10,
-  intersect: 9,
-  dotdot: 8,
-  symdiff: 7,
-  diff: 6,
-  union: 5,
-  comparative: 4,
-  and: 3,
-  xor: 2,
-  or: 1,
+  call: 17,
+  annotation: 16,
+  unary: 15,
+  exponent: 14,
+  multiplicative: 13,
+  additive: 12,
+  intersect: 11,
+  dotdot: 10,
+  symdiff: 9,
+  set_diff: 8,
+  union: 7,
+  comparative: 6,
+  conjunction: 5,
+  exclusive_disjunction: 4,
+  disjunction: 3,
   implication: 2,
   equivalence: 1,
 };
 
 const primitive_types = ["ann", "bool", "float", "int", "string"];
+
+const EQUIVALENCE_OPERATORS = ["<->", "⟷", "⇔"];
+const IMPLICATION_OPERATORS = ["->", "→", "⇒", "<-", "←", "⇐"];
+const DISJUNCTION_OPERATORS = ["\\/", "∨"];
+const EXCLUSIVE_DISJUNCTION_OPERATORS = ["xor", "⊻"];
+const CONJUNCTION_OPERATORS = ["/\\", "∧"];
+// prettier-ignore
+const COMPARISON_OPERATORS = [
+  "=", "==", "!=", "≠", "<", "<=", "≤", ">", ">=",
+  "≥", "in", "∈", "subset", "⊆", "superset", "⊇",
+];
+const UNION_OPERATORS = ["union", "∪"];
+const SET_DIFF_OPERATORS = ["diff", "∖"];
+const INTERSECTION_OPERATORS = ["intersect", "∩"];
+const ADDITIVE_OPERATORS = ["+", "-", "++"];
+const MULTIPLICATIVE_OPERATORS = ["*", "/", "div", "mod"];
+
+const OPERATOR_CHARACTERS = `,;:(){}&|$.∞`.concat(
+  getOpChars(EQUIVALENCE_OPERATORS),
+  getOpChars(IMPLICATION_OPERATORS),
+  getOpChars(DISJUNCTION_OPERATORS),
+  getOpChars(EXCLUSIVE_DISJUNCTION_OPERATORS),
+  getOpChars(CONJUNCTION_OPERATORS),
+  getOpChars(COMPARISON_OPERATORS),
+  getOpChars(UNION_OPERATORS),
+  getOpChars(SET_DIFF_OPERATORS),
+  getOpChars(INTERSECTION_OPERATORS),
+  getOpChars(ADDITIVE_OPERATORS),
+  getOpChars(MULTIPLICATIVE_OPERATORS)
+);
 
 module.exports = grammar({
   name: "minizinc",
@@ -247,25 +277,27 @@ module.exports = grammar({
       ),
 
     infix_operator: ($) => {
+      // WARNING: All non-word operators must be included in the OPERATOR_CHARACTERS string
       const table = [
-        [prec.left, PREC.equivalence, "<->"],
-        [prec.left, PREC.implication, choice("->", "<-")],
-        [prec.left, PREC.or, "\\/"],
-        [prec.left, PREC.xor, "xor"],
-        [prec.left, PREC.and, "/\\"],
+        [prec.left, PREC.equivalence, choice(...EQUIVALENCE_OPERATORS)],
+        [prec.left, PREC.implication, choice(...IMPLICATION_OPERATORS)],
+        [prec.left, PREC.disjunction, choice(...DISJUNCTION_OPERATORS)],
+        [
+          prec.left,
+          PREC.exclusive_disjunction,
+          choice(...EXCLUSIVE_DISJUNCTION_OPERATORS),
+        ],
+        [prec.left, PREC.conjunction, choice(...CONJUNCTION_OPERATORS)],
         // TODO: Should really be nonassoc
-        // prettier-ignore
-        [prec.left, PREC.comparative, choice(
-          "=", "==", "!=", "<", "<=", ">", ">=", "in", "subset", "superset"
-        )],
-        [prec.left, PREC.union, "union"],
-        [prec.left, PREC.diff, "diff"],
+        [prec.left, PREC.comparative, choice(...COMPARISON_OPERATORS)],
+        [prec.left, PREC.union, choice(...UNION_OPERATORS)],
+        [prec.left, PREC.set_diff, choice(...SET_DIFF_OPERATORS)],
         [prec.left, PREC.symdiff, "symdiff"],
-        [prec.left, PREC.intersect, "intersect"],
+        [prec.left, PREC.intersect, choice(...INTERSECTION_OPERATORS)],
         // TODO: Could be nonassoc, will always give type error
         [prec.left, PREC.dotdot, ".."],
-        [prec.left, PREC.additive, choice("+", "-", "++")],
-        [prec.left, PREC.multiplicative, choice("*", "/", "div", "mod")],
+        [prec.left, PREC.additive, choice(...ADDITIVE_OPERATORS)],
+        [prec.left, PREC.multiplicative, choice(...MULTIPLICATIVE_OPERATORS)],
         [prec.left, PREC.exponent, "^"],
       ];
 
@@ -380,10 +412,11 @@ module.exports = grammar({
       choice(
         $.absent,
         $.anonymous,
-        $.array_literal,
         $.array_literal_2d,
+        $.array_literal,
         $.boolean_literal,
         $.float_literal,
+        $.infinity,
         $.integer_literal,
         $.set_literal,
         $.string_literal
@@ -437,8 +470,9 @@ module.exports = grammar({
       ),
     integer_literal: ($) =>
       token(choice(/[0-9]+/, /0x[0-9a-fA-F]+/, /0b[01]+/, /0o[0-7]+/)),
+    infinity: ($) => choice("infinity", "∞"),
     set_literal: ($) =>
-      seq("{", sepBy(",", field("member", $._expression)), "}"),
+      choice("∅", seq("{", sepBy(",", field("member", $._expression)), "}")),
 
     string_literal: ($) => seq('"', optional($._string_content), '"'),
     _string_content: ($) =>
@@ -462,7 +496,9 @@ module.exports = grammar({
       );
     },
 
-    identifier: ($) => /[A-Za-z][A-Za-z0-9_]*/,
+    identifier: ($) => {
+      return new RegExp(`[^"'\\s\\.\\-\\[\\]\\^${OPERATOR_CHARACTERS}]+`);
+    },
     quoted_identifier: ($) => /'[^']*'/,
     _identifier: ($) => choice($.identifier, $.quoted_identifier),
 
@@ -477,4 +513,8 @@ function sepBy(sep, rule) {
 
 function sepBy1(sep, rule) {
   return seq(rule, repeat(seq(sep, rule)), optional(sep));
+}
+
+function getOpChars(list) {
+  return list.filter((str) => /^[a-fA-F]*$/.test(str)).join("");
 }
