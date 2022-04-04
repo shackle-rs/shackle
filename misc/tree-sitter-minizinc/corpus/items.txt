@@ -63,14 +63,18 @@ enum in_dzn;
 enum with_ann ::annotated;
 enum empty = {};
 enum with_members = {a, b, c};
+enum anonymous_enum = _(1..3);
+enum enum_constructor = {d, e} ++ Foo(with_members);
 
 ---
 
 (source_file
   item: (enumeration name: (identifier))
   item: (enumeration name: (identifier) annotation: (identifier))
-  item: (enumeration name: (identifier))
-  item: (enumeration name: (identifier) member: (identifier) member: (identifier) member: (identifier)))
+  item: (enumeration name: (identifier) case: (enumeration_members))
+  item: (enumeration name: (identifier) case: (enumeration_members member: (identifier) member: (identifier) member: (identifier)))
+  item: (enumeration name: (identifier) case: (anonymous_enumeration argument: (infix_operator left: (integer_literal) right: (integer_literal))))
+  item: (enumeration name: (identifier) case: (enumeration_members member: (identifier) member: (identifier)) case: (enumeration_constructor name: (identifier) argument: (identifier))))
 
 ========
 Function
