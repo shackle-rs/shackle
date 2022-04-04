@@ -404,6 +404,27 @@
     }
   },
   {
+    "type": "anonymous",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "anonymous_enumeration",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "array_comprehension",
     "named": true,
     "fields": {
@@ -990,9 +1011,27 @@
           }
         ]
       },
-      "member": {
+      "case": {
         "multiple": true,
         "required": false,
+        "types": [
+          {
+            "type": "anonymous_enumeration",
+            "named": true
+          },
+          {
+            "type": "enumeration_constructor",
+            "named": true
+          },
+          {
+            "type": "enumeration_members",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
         "types": [
           {
             "type": "identifier",
@@ -1003,10 +1042,46 @@
             "named": true
           }
         ]
+      }
+    }
+  },
+  {
+    "type": "enumeration_constructor",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
       },
       "name": {
         "multiple": false,
         "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "enumeration_members",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": true,
+        "required": false,
         "types": [
           {
             "type": "identifier",
@@ -2467,6 +2542,10 @@
     "named": false
   },
   {
+    "type": "_",
+    "named": false
+  },
+  {
     "type": "absent",
     "named": true
   },
@@ -2477,10 +2556,6 @@
   {
     "type": "annotation",
     "named": false
-  },
-  {
-    "type": "anonymous",
-    "named": true
   },
   {
     "type": "array",
