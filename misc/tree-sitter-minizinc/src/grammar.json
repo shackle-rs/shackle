@@ -723,6 +723,18 @@
               "type": "BLANK"
             }
           ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_annotation_list"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },

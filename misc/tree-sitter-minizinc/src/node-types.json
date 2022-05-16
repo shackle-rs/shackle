@@ -1972,6 +1972,104 @@
     "type": "parameter",
     "named": true,
     "fields": {
+      "annotation": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "array_comprehension",
+            "named": true
+          },
+          {
+            "type": "array_literal",
+            "named": true
+          },
+          {
+            "type": "array_literal_2d",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "float_literal",
+            "named": true
+          },
+          {
+            "type": "generator_call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_then_else",
+            "named": true
+          },
+          {
+            "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "let_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "set_comprehension",
+            "named": true
+          },
+          {
+            "type": "set_literal",
+            "named": true
+          },
+          {
+            "type": "string_interpolation",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": false,
