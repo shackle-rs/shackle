@@ -143,10 +143,12 @@ set_super = x superset y;
 and = x /\ y;
 bool_xor = x xor y;
 or = x \/ y;
+def = x default y;
 
 ---
 
 (source_file
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))

@@ -1,5 +1,6 @@
 const PREC = {
-  call: 17,
+  call: 18,
+  default: 17,
   annotation: 16,
   unary: 15,
   exponent: 14,
@@ -319,6 +320,7 @@ module.exports = grammar({
         [prec.left, PREC.additive, choice(...ADDITIVE_OPERATORS)],
         [prec.left, PREC.multiplicative, choice(...MULTIPLICATIVE_OPERATORS)],
         [prec.left, PREC.exponent, "^"],
+        [prec.left, PREC.default, "default"],
       ];
 
       return choice(
