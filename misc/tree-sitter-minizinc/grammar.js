@@ -566,5 +566,5 @@ function sepBy1(sep, rule) {
 }
 
 function getOpChars(list) {
-  return list.filter((str) => /^[a-fA-F]*$/.test(str)).join("");
+  return list.join("").replace(/[A-Za-z0-9\-\\]/g, "");
 }
