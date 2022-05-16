@@ -2425,9 +2425,19 @@
     "type": "type_base",
     "named": true,
     "fields": {
+      "any": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "any",
+            "named": false
+          }
+        ]
+      },
       "domain": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "_expression",
@@ -2653,6 +2663,10 @@
   },
   {
     "type": "annotation",
+    "named": false
+  },
+  {
+    "type": "any",
     "named": false
   },
   {

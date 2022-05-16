@@ -36,7 +36,7 @@ const INTERSECTION_OPERATORS = ["intersect", "∩"];
 const ADDITIVE_OPERATORS = ["+", "-", "++"];
 const MULTIPLICATIVE_OPERATORS = ["*", "/", "div", "mod"];
 
-const OPERATOR_CHARACTERS = `,;:(){}&|$.∞`.concat(
+const OPERATOR_CHARACTERS = `,;:(){}&|$.∞%`.concat(
   getOpChars(EQUIVALENCE_OPERATORS),
   getOpChars(IMPLICATION_OPERATORS),
   getOpChars(DISJUNCTION_OPERATORS),
@@ -410,19 +410,22 @@ module.exports = grammar({
         field("type", $.type_base)
       ),
     type_base: ($) =>
-      seq(
-        optional(field("var_par", choice("var", "par"))),
-        optional(field("opt", "opt")),
-        optional(field("set", seq("set", "of"))),
-        field(
-          "domain",
-          choice(
-            $.primitive_type,
-            $.type_inst_id,
-            $.type_inst_enum_id,
-            $._expression
+      choice(
+        seq(
+          optional(field("var_par", choice("var", "par"))),
+          optional(field("opt", "opt")),
+          optional(field("set", seq("set", "of"))),
+          field(
+            "domain",
+            choice(
+              $.primitive_type,
+              $.type_inst_id,
+              $.type_inst_enum_id,
+              $._expression
+            )
           )
-        )
+        ),
+        seq(field("any", "any"), optional(field("domain", $.type_inst_id)))
       ),
     primitive_type: ($) => choice(...primitive_types),
     type_inst_id: ($) => /\$[A-Za-z][A-Za-z0-9_]*/,
