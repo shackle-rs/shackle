@@ -230,7 +230,7 @@ module.exports = grammar({
     array_comprehension: ($) =>
       seq(
         "[",
-        optional(seq(field("index", $._index_tuple), ":")),
+        optional(seq($._index_tuple, ":")),
         field("template", $._expression),
         "|",
         sepBy1(",", field("generator", $.generator)),

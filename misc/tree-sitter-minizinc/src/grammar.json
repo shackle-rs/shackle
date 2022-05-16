@@ -972,12 +972,8 @@
               "type": "SEQ",
               "members": [
                 {
-                  "type": "FIELD",
-                  "name": "index",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "_index_tuple"
-                  }
+                  "type": "SYMBOL",
+                  "name": "_index_tuple"
                 },
                 {
                   "type": "STRING",

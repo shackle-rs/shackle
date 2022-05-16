@@ -1652,24 +1652,24 @@ static const TSFieldMapSlice ts_field_map_slices[PRODUCTION_ID_COUNT] = {
   [113] = {.index = 232, .length = 1},
   [114] = {.index = 233, .length = 4},
   [115] = {.index = 237, .length = 3},
-  [116] = {.index = 240, .length = 4},
-  [117] = {.index = 244, .length = 3},
-  [118] = {.index = 247, .length = 4},
-  [119] = {.index = 251, .length = 2},
-  [120] = {.index = 253, .length = 3},
-  [121] = {.index = 256, .length = 3},
-  [122] = {.index = 259, .length = 3},
-  [123] = {.index = 262, .length = 3},
-  [124] = {.index = 265, .length = 5},
-  [125] = {.index = 270, .length = 5},
-  [126] = {.index = 275, .length = 5},
-  [127] = {.index = 280, .length = 3},
-  [128] = {.index = 283, .length = 3},
-  [129] = {.index = 286, .length = 4},
-  [130] = {.index = 290, .length = 3},
-  [131] = {.index = 293, .length = 4},
-  [132] = {.index = 297, .length = 4},
-  [133] = {.index = 301, .length = 4},
+  [116] = {.index = 240, .length = 3},
+  [117] = {.index = 243, .length = 3},
+  [118] = {.index = 246, .length = 4},
+  [119] = {.index = 250, .length = 2},
+  [120] = {.index = 252, .length = 3},
+  [121] = {.index = 255, .length = 3},
+  [122] = {.index = 258, .length = 3},
+  [123] = {.index = 261, .length = 3},
+  [124] = {.index = 264, .length = 5},
+  [125] = {.index = 269, .length = 4},
+  [126] = {.index = 273, .length = 5},
+  [127] = {.index = 278, .length = 3},
+  [128] = {.index = 281, .length = 3},
+  [129] = {.index = 284, .length = 4},
+  [130] = {.index = 288, .length = 3},
+  [131] = {.index = 291, .length = 4},
+  [132] = {.index = 295, .length = 4},
+  [133] = {.index = 299, .length = 4},
 };
 
 static const TSFieldMapEntry ts_field_map_entries[] = {
@@ -2030,83 +2030,81 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_index, 4, .inherited = true},
   [240] =
     {field_generator, 5},
-    {field_index, 1},
     {field_index, 1, .inherited = true},
     {field_template, 3},
-  [244] =
+  [243] =
     {field_condition, 1},
     {field_else, 5},
     {field_result, 3},
-  [247] =
+  [246] =
     {field_in, 6},
     {field_item, 2, .inherited = true},
     {field_item, 3},
     {field_let, 2},
-  [251] =
+  [250] =
     {field_dimension, 2},
     {field_type, 6},
-  [253] =
+  [252] =
     {field_dimension, 2},
     {field_dimension, 3, .inherited = true},
     {field_type, 6},
-  [256] =
+  [255] =
     {field_generator, 2},
     {field_name, 0},
     {field_template, 5},
-  [259] =
+  [258] =
     {field_collection, 2},
     {field_name, 0},
     {field_where, 4},
-  [262] =
+  [261] =
     {field_collection, 4},
     {field_name, 0},
     {field_name, 1, .inherited = true},
-  [265] =
+  [264] =
     {field_annotation, 5, .inherited = true},
     {field_body, 7},
     {field_name, 3},
     {field_parameter, 4, .inherited = true},
     {field_type, 1},
-  [270] =
+  [269] =
     {field_generator, 5},
     {field_generator, 6, .inherited = true},
-    {field_index, 1},
     {field_index, 1, .inherited = true},
     {field_template, 3},
-  [275] =
+  [273] =
     {field_condition, 1},
     {field_condition, 4, .inherited = true},
     {field_else, 6},
     {field_result, 3},
     {field_result, 4, .inherited = true},
-  [280] =
+  [278] =
     {field_dimension, 2},
     {field_dimension, 3, .inherited = true},
     {field_type, 7},
-  [283] =
+  [281] =
     {field_generator, 2},
     {field_name, 0},
     {field_template, 6},
-  [286] =
+  [284] =
     {field_generator, 2},
     {field_generator, 3, .inherited = true},
     {field_name, 0},
     {field_template, 6},
-  [290] =
+  [288] =
     {field_collection, 3},
     {field_name, 0},
     {field_where, 5},
-  [293] =
+  [291] =
     {field_collection, 3},
     {field_name, 0},
     {field_name, 1, .inherited = true},
     {field_where, 5},
-  [297] =
+  [295] =
     {field_generator, 2},
     {field_generator, 3, .inherited = true},
     {field_name, 0},
     {field_template, 7},
-  [301] =
+  [299] =
     {field_collection, 4},
     {field_name, 0},
     {field_name, 1, .inherited = true},
