@@ -76,6 +76,10 @@
         "named": true
       },
       {
+        "type": "postfix_operator",
+        "named": true
+      },
+      {
         "type": "prefix_operator",
         "named": true
       },
@@ -238,6 +242,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -333,6 +341,10 @@
           },
           {
             "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -734,6 +746,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -845,6 +861,10 @@
           },
           {
             "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -983,6 +1003,10 @@
           },
           {
             "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -1216,6 +1240,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -1444,6 +1472,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -1570,6 +1602,22 @@
         "required": true,
         "types": [
           {
+            "type": "..",
+            "named": false
+          },
+          {
+            "type": "..<",
+            "named": false
+          },
+          {
+            "type": "<..",
+            "named": false
+          },
+          {
+            "type": "<..<",
+            "named": false
+          },
+          {
             "type": "_expression",
             "named": true
           }
@@ -1629,6 +1677,10 @@
             "named": false
           },
           {
+            "type": "..<",
+            "named": false
+          },
+          {
             "type": "/",
             "named": false
           },
@@ -1646,6 +1698,14 @@
           },
           {
             "type": "<->",
+            "named": false
+          },
+          {
+            "type": "<..",
+            "named": false
+          },
+          {
+            "type": "<..<",
             "named": false
           },
           {
@@ -1935,6 +1995,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -2049,6 +2113,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -2111,6 +2179,44 @@
           {
             "type": "_expression",
             "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "postfix_operator",
+    "named": true,
+    "fields": {
+      "operand": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "..",
+            "named": false
+          },
+          {
+            "type": "..<",
+            "named": false
+          },
+          {
+            "type": "<..",
+            "named": false
+          },
+          {
+            "type": "<..<",
+            "named": false
           }
         ]
       }
@@ -2190,6 +2296,10 @@
           },
           {
             "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -2288,6 +2398,22 @@
         "types": [
           {
             "type": "-",
+            "named": false
+          },
+          {
+            "type": "..",
+            "named": false
+          },
+          {
+            "type": "..<",
+            "named": false
+          },
+          {
+            "type": "<..",
+            "named": false
+          },
+          {
+            "type": "<..<",
             "named": false
           },
           {
@@ -2562,6 +2688,10 @@
     "named": false
   },
   {
+    "type": "..<",
+    "named": false
+  },
+  {
     "type": "/",
     "named": false
   },
@@ -2591,6 +2721,14 @@
   },
   {
     "type": "<->",
+    "named": false
+  },
+  {
+    "type": "<..",
+    "named": false
+  },
+  {
+    "type": "<..<",
     "named": false
   },
   {
