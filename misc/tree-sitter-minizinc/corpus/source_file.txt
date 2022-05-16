@@ -50,7 +50,13 @@ Line comments
 
 % Comment
 
+%---%
+
+%
+
 ----
 
 (source_file
+  (line_comment)
+  (line_comment)
   (line_comment))

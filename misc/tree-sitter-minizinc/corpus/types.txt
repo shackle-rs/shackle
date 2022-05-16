@@ -125,3 +125,16 @@ set of $$T: z;
   (declaration (type_base (type_inst_id)) (identifier))
   (declaration (array_type (type_base (type_inst_enum_id)) (type_base (type_inst_enum_id)) (type_base (type_inst_id))) (identifier))
   (declaration (type_base (type_inst_enum_id)) (identifier)))
+
+===
+Any
+===
+
+any: x;
+any $T: y;
+
+---
+
+(source_file
+  (declaration (type_base) (identifier))
+  (declaration (type_base (type_inst_id)) (identifier)))
