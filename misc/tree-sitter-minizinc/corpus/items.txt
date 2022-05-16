@@ -85,6 +85,7 @@ function var int: that() = this();
 function X: with_args(int, float);
 function X: with_named_args(X: x, bool: b) = something(b, x);
 function X: with_annotation(int, float) ::func_ann;
+function X: with_annotated_param(int, bool: x :: foo);
 
 ---
 
@@ -93,7 +94,8 @@ function X: with_annotation(int, float) ::func_ann;
   item: (function_item type: (type_base domain: (primitive_type)) name: (identifier) body: (call name: (identifier)))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (identifier)) name: (identifier)) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier)) body: (call name: (identifier) argument: (identifier) argument: (identifier)))
-  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))) annotation: (identifier)))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))) annotation: (identifier))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))))
 
 ====
 Goal

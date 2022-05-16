@@ -178,7 +178,8 @@ module.exports = grammar({
     parameter: ($) =>
       seq(
         field("type", $._type),
-        optional(seq(":", field("name", $._identifier)))
+        optional(seq(":", field("name", $._identifier))),
+        optional($._annotation_list)
       ),
 
     _enumeration_case: ($) =>
