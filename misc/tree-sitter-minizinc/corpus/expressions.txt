@@ -104,6 +104,7 @@ literal_collection = [1,2,3][i];
 multiple_accessor = my_collection[i,2];
 expression_accessor = my_collection[-i + 2];
 slice = my_collection[1..2];
+infinite_slice = my_collection[..];
 
 ---
 
@@ -113,7 +114,8 @@ slice = my_collection[1..2];
   (assignment (identifier) (indexed_access (array_literal (array_literal_member (integer_literal)) (array_literal_member (integer_literal)) (array_literal_member (integer_literal))) (identifier)))
   (assignment (identifier) (indexed_access (identifier) (identifier) (integer_literal)))
   (assignment (identifier) (indexed_access (identifier) (infix_operator (prefix_operator (identifier)) (integer_literal))))
-  (assignment (identifier) (indexed_access (identifier) (infix_operator (integer_literal) (integer_literal)))))
+  (assignment (identifier) (indexed_access (identifier) (infix_operator (integer_literal) (integer_literal))))
+  (assignment (identifier) (indexed_access (identifier))))
 
 ==============
 Infix Operator
@@ -127,6 +129,8 @@ add = x + y;
 minus = x - y;
 set_inter = x intersect y;
 set_dotdot = x..y;
+set_dotdot_le = x..<y;
+set_le_dotdot_le = x<..<y;
 set_symdiff = x symdiff y;
 set_diff = x diff y;
 set_union = x union y;
@@ -172,8 +176,9 @@ def = x default y;
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
+  (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier))))
-
 
 ==============
 UTF8 Operators
@@ -258,11 +263,15 @@ annotation_bind = 1 ^ 1::some_ann;
 Prefix Operator
 ===============
 
-negatitve_number = -5;
+negative_number = -5;
 negative_ident = -num;
 
 negated_bool = not true;
 unicode_negation = ¬ b;
+
+dot_dot_right = ..y;
+le_dot_dot_right = <..y;
+le_dot_dot_le_right = <..<y;
 
 ---
 
@@ -270,7 +279,26 @@ unicode_negation = ¬ b;
   (assignment (identifier) (prefix_operator (integer_literal)))
   (assignment (identifier) (prefix_operator (identifier)))
   (assignment (identifier) (prefix_operator (boolean_literal)))
+  (assignment (identifier) (prefix_operator (identifier)))
+  (assignment (identifier) (prefix_operator (identifier)))
+  (assignment (identifier) (prefix_operator (identifier)))
   (assignment (identifier) (prefix_operator (identifier))))
+
+
+================
+Postfix Operator
+================
+
+left_dot_dot = x..;
+left_le_dot_dot = x<..;
+left_le_dot_dot_le = x<..<;
+
+---
+
+(source_file
+  (assignment (identifier) (postfix_operator (identifier)))
+  (assignment (identifier) (postfix_operator (identifier)))
+  (assignment (identifier) (postfix_operator (identifier))))
 
 =================
 Set Comprehension

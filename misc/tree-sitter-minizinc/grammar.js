@@ -7,7 +7,7 @@ const PREC = {
   multiplicative: 13,
   additive: 12,
   intersect: 11,
-  dotdot: 10,
+  range: 10,
   symdiff: 9,
   set_diff: 8,
   union: 7,
@@ -34,6 +34,7 @@ const COMPARISON_OPERATORS = [
 const UNION_OPERATORS = ["union", "∪"];
 const SET_DIFF_OPERATORS = ["diff", "∖"];
 const INTERSECTION_OPERATORS = ["intersect", "∩"];
+const RANGE_OPERATORS = ["..", "<..", "..<", "<..<"];
 const ADDITIVE_OPERATORS = ["+", "-", "++"];
 const MULTIPLICATIVE_OPERATORS = ["*", "/", "div", "mod"];
 
@@ -217,6 +218,7 @@ module.exports = grammar({
         $.infix_operator,
         $.let_expression,
         $.prefix_operator,
+        $.postfix_operator,
         $.set_comprehension,
         $.string_interpolation,
         $.parenthesised_expression
@@ -292,7 +294,10 @@ module.exports = grammar({
         seq(
           field("collection", $._expression),
           "[",
-          sepBy1(",", field("index", $._expression)),
+          sepBy1(
+            ",",
+            field("index", choice(...RANGE_OPERATORS, $._expression))
+          ),
           "]"
         )
       ),
@@ -316,7 +321,7 @@ module.exports = grammar({
         [prec.left, PREC.symdiff, "symdiff"],
         [prec.left, PREC.intersect, choice(...INTERSECTION_OPERATORS)],
         // TODO: Could be nonassoc, will always give type error
-        [prec.left, PREC.dotdot, ".."],
+        [prec.left, PREC.range, choice(...RANGE_OPERATORS)],
         [prec.left, PREC.additive, choice(...ADDITIVE_OPERATORS)],
         [prec.left, PREC.multiplicative, choice(...MULTIPLICATIVE_OPERATORS)],
         [prec.left, PREC.exponent, "^"],
@@ -368,11 +373,31 @@ module.exports = grammar({
       ),
 
     prefix_operator: ($) =>
-      prec(
-        PREC.unary,
+      choice(
+        prec(
+          PREC.unary,
+          seq(
+            field("operator", choice("-", "not", "¬")),
+            field("operand", $._expression)
+          )
+        ),
+        // TODO: Could be nonassoc, will always give type error
+        prec.left(
+          PREC.range,
+          seq(
+            field("operator", choice(...RANGE_OPERATORS)),
+            field("operand", $._expression)
+          )
+        )
+      ),
+
+    postfix_operator: ($) =>
+      // TODO: Could be nonassoc, will always give type error
+      prec.left(
+        PREC.range,
         seq(
-          field("operator", choice("-", "not", "¬")),
-          field("operand", $._expression)
+          field("operand", $._expression),
+          field("operator", choice(...RANGE_OPERATORS))
         )
       ),
 

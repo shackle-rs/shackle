@@ -921,6 +921,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "postfix_operator"
+        },
+        {
+          "type": "SYMBOL",
           "name": "set_comprehension"
         },
         {
@@ -1403,8 +1407,29 @@
                 "type": "FIELD",
                 "name": "index",
                 "content": {
-                  "type": "SYMBOL",
-                  "name": "_expression"
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "STRING",
+                      "value": ".."
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<.."
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "..<"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<..<"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "_expression"
+                    }
+                  ]
                 }
               },
               {
@@ -1420,8 +1445,29 @@
                       "type": "FIELD",
                       "name": "index",
                       "content": {
-                        "type": "SYMBOL",
-                        "name": "_expression"
+                        "type": "CHOICE",
+                        "members": [
+                          {
+                            "type": "STRING",
+                            "value": ".."
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "<.."
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "..<"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "<..<"
+                          },
+                          {
+                            "type": "SYMBOL",
+                            "name": "_expression"
+                          }
+                        ]
                       }
                     }
                   ]
@@ -1956,8 +2002,25 @@
                 "type": "FIELD",
                 "name": "operator",
                 "content": {
-                  "type": "STRING",
-                  "value": ".."
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "STRING",
+                      "value": ".."
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<.."
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "..<"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<..<"
+                    }
+                  ]
                 }
               },
               {
@@ -2278,11 +2341,104 @@
       ]
     },
     "prefix_operator": {
-      "type": "PREC",
-      "value": 15,
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "PREC",
+          "value": 15,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "operator",
+                "content": {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "STRING",
+                      "value": "-"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "not"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "¬"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "operand",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_expression"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "PREC_LEFT",
+          "value": 10,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "operator",
+                "content": {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "STRING",
+                      "value": ".."
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<.."
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "..<"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<..<"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "operand",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_expression"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "postfix_operator": {
+      "type": "PREC_LEFT",
+      "value": 10,
       "content": {
         "type": "SEQ",
         "members": [
+          {
+            "type": "FIELD",
+            "name": "operand",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_expression"
+            }
+          },
           {
             "type": "FIELD",
             "name": "operator",
@@ -2291,25 +2447,21 @@
               "members": [
                 {
                   "type": "STRING",
-                  "value": "-"
+                  "value": ".."
                 },
                 {
                   "type": "STRING",
-                  "value": "not"
+                  "value": "<.."
                 },
                 {
                   "type": "STRING",
-                  "value": "¬"
+                  "value": "..<"
+                },
+                {
+                  "type": "STRING",
+                  "value": "<..<"
                 }
               ]
-            }
-          },
-          {
-            "type": "FIELD",
-            "name": "operand",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_expression"
             }
           }
         ]
