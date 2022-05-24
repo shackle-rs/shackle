@@ -152,7 +152,7 @@ module.exports = grammar({
     output: ($) =>
       seq(
         "output",
-        optional($._annotation_list),
+        optional(seq("::", field("section", $.string_literal))),
         field("expression", $._expression)
       ),
 
@@ -194,12 +194,17 @@ module.exports = grammar({
     enumeration_members: ($) =>
       seq("{", sepBy(",", field("member", $._identifier)), "}"),
     anonymous_enumeration: ($) =>
-      seq("_", "(", field("argument", $._expression), ")"),
+      seq(
+        field("name", $.anonymous),
+        "(",
+        sepBy1(",", field("argument", $._expression)),
+        ")"
+      ),
     enumeration_constructor: ($) =>
       seq(
         field("name", $._identifier),
         "(",
-        field("argument", $._expression),
+        sepBy1(",", field("argument", $._expression)),
         ")"
       ),
 
