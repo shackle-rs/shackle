@@ -88,6 +88,10 @@
         "named": true
       },
       {
+        "type": "record_literal",
+        "named": true
+      },
+      {
         "type": "set_comprehension",
         "named": true
       },
@@ -101,6 +105,10 @@
       },
       {
         "type": "string_literal",
+        "named": true
+      },
+      {
+        "type": "tuple_literal",
         "named": true
       }
     ]
@@ -148,6 +156,10 @@
       {
         "type": "predicate",
         "named": true
+      },
+      {
+        "type": "type_alias",
+        "named": true
       }
     ]
   },
@@ -157,6 +169,14 @@
     "subtypes": [
       {
         "type": "array_type",
+        "named": true
+      },
+      {
+        "type": "record_type",
+        "named": true
+      },
+      {
+        "type": "tuple_type",
         "named": true
       },
       {
@@ -254,6 +274,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -267,6 +291,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -356,6 +384,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -369,6 +401,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -456,7 +492,7 @@
         ]
       },
       "index": {
-        "multiple": true,
+        "multiple": false,
         "required": false,
         "types": [
           {
@@ -550,7 +586,7 @@
     "named": true,
     "fields": {
       "index": {
-        "multiple": true,
+        "multiple": false,
         "required": false,
         "types": [
           {
@@ -590,7 +626,7 @@
         "required": true,
         "types": [
           {
-            "type": "type_base",
+            "type": "_type",
             "named": true
           }
         ]
@@ -751,6 +787,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -764,6 +804,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -869,6 +913,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -882,6 +930,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -1011,6 +1063,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -1024,6 +1080,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -1245,6 +1305,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -1258,6 +1322,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -1477,6 +1545,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -1490,6 +1562,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -2026,6 +2102,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -2039,6 +2119,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -2212,6 +2296,10 @@
             "named": true
           },
           {
+            "type": "record_literal",
+            "named": true
+          },
+          {
             "type": "set_comprehension",
             "named": true
           },
@@ -2225,6 +2313,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -2333,6 +2425,98 @@
     "type": "primitive_type",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "record_literal",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "record_member",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "record_member",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "record_type",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "record_type_field",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "record_type_field",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "set_comprehension",
@@ -2446,6 +2630,68 @@
           },
           {
             "type": "string_characters",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "tuple_literal",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "tuple_type",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "type_alias",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
             "named": true
           }
         ]
@@ -2861,6 +3107,10 @@
     "named": true
   },
   {
+    "type": "record",
+    "named": false
+  },
+  {
     "type": "satisfy",
     "named": false
   },
@@ -2902,6 +3152,14 @@
   },
   {
     "type": "true",
+    "named": false
+  },
+  {
+    "type": "tuple",
+    "named": false
+  },
+  {
+    "type": "type",
     "named": false
   },
   {

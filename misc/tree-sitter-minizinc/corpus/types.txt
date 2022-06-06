@@ -138,3 +138,35 @@ any $T: y;
 (source_file
   (declaration (type_base) (identifier))
   (declaration (type_base (type_inst_id)) (identifier)))
+
+=====
+Tuple
+=====
+
+tuple(int, float): double;
+tuple(int, float, string): triple;
+tuple(array [int] of tuple(int, float), tuple(string, bool)): complex;
+
+---
+
+(source_file
+  (declaration (tuple_type (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
+  (declaration (tuple_type (type_base (primitive_type)) (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
+  (declaration (tuple_type (array_type (type_base (primitive_type)) (tuple_type (type_base (primitive_type)) (type_base (primitive_type)))) (tuple_type (type_base (primitive_type)) (type_base (primitive_type)))) (identifier)))
+
+======
+Record
+======
+
+record(int: a): single;
+record(int: a, float: b): double;
+record(array [int] of record(string: a, float: b): c, tuple(bool, record(ann: e)): f): complex;
+
+---
+
+(source_file
+  (declaration (record_type (record_type_field (type_base (primitive_type)) (identifier))) (identifier))
+  (declaration (record_type (record_type_field (type_base (primitive_type)) (identifier)) (record_type_field (type_base (primitive_type)) (identifier))) (identifier))
+  (declaration (record_type
+    (record_type_field (array_type (type_base (primitive_type)) (record_type (record_type_field (type_base (primitive_type)) (identifier)) (record_type_field (type_base (primitive_type)) (identifier)))) (identifier))
+    (record_type_field (tuple_type (type_base (primitive_type)) (record_type (record_type_field (type_base (primitive_type)) (identifier)))) (identifier))) (identifier)))

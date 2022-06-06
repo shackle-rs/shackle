@@ -45,7 +45,7 @@ multiple = [ (i, j): i * j | i in X, j in Y];
 (source_file
   (assignment (identifier) (array_comprehension (identifier) (integer_literal) (generator (identifier) (identifier))))
   (assignment (identifier) (array_comprehension (identifier) (float_literal) (generator (identifier) (identifier) (infix_operator (identifier) (integer_literal)))))
-  (assignment (identifier) (array_comprehension (identifier) (identifier) (infix_operator (identifier) (identifier)) (generator (identifier) (identifier)) (generator (identifier) (identifier)))))
+  (assignment (identifier) (array_comprehension (tuple_literal (identifier) (identifier)) (infix_operator (identifier) (identifier)) (generator (identifier) (identifier)) (generator (identifier) (identifier)))))
 
 ====
 Call
@@ -98,7 +98,7 @@ elseif_no_else = if b then i < j elseif c then j > i endif;
 Index Access 
 ============
 
-named_colection = my_collection[1];
+named_collection = my_collection[1];
 named_accessor = my_collection[i];
 literal_collection = [1,2,3][i];
 multiple_accessor = my_collection[i,2];

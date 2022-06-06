@@ -154,3 +154,18 @@ predicate with_args(1..10: x, var bool: b) = pred();
   (predicate (identifier))
   (predicate (identifier) (call (identifier)))
   (predicate (identifier) (parameter (type_base (infix_operator (integer_literal) (integer_literal))) (identifier)) (parameter (type_base (primitive_type)) (identifier)) (call (identifier))))
+
+==========
+Type alias
+==========
+
+type foo = set of int;
+type bar = array [int] of int;
+type qux = foo;
+
+---
+
+(source_file
+  (type_alias (identifier) (type_base (primitive_type)))
+  (type_alias (identifier) (array_type (type_base (primitive_type)) (type_base (primitive_type))))
+  (type_alias (identifier) (type_base (identifier))))
