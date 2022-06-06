@@ -81,7 +81,8 @@ module.exports = grammar({
         $.goal,
         $.include,
         $.output,
-        $.predicate
+        $.predicate,
+        $.type_alias
       ),
 
     annotation: ($) =>
@@ -208,6 +209,9 @@ module.exports = grammar({
         ")"
       ),
 
+    type_alias: ($) =>
+      seq("type", field("name", $._identifier), "=", field("type", $._type)),
+
     _expression: ($) =>
       choice($._unannotated_expression, $.annotated_expression),
     _unannotated_expression: ($) =>
@@ -235,7 +239,7 @@ module.exports = grammar({
     array_comprehension: ($) =>
       seq(
         "[",
-        optional(seq($._index_tuple, ":")),
+        optional(seq(field("index", $._expression), ":")),
         field("template", $._expression),
         "|",
         sepBy1(",", field("generator", $.generator)),
@@ -431,7 +435,8 @@ module.exports = grammar({
         '"'
       ),
 
-    _type: ($) => choice($.array_type, $.type_base),
+    _type: ($) =>
+      choice($.array_type, $.tuple_type, $.record_type, $.type_base),
     array_type: ($) =>
       seq(
         "array",
@@ -439,8 +444,21 @@ module.exports = grammar({
         sepBy1(",", field("dimension", $.type_base)),
         "]",
         "of",
-        field("type", $.type_base)
+        field("type", $._type)
       ),
+    tuple_type: ($) =>
+      seq(
+        "tuple",
+        "(",
+        field("field", $._type),
+        ",",
+        sepBy1(",", field("field", $._type)),
+        ")"
+      ),
+    record_type: ($) =>
+      seq("record", "(", sepBy1(",", field("field", $.record_type_field)), ")"),
+    record_type_field: ($) =>
+      seq(field("type", $._type), ":", field("name", $._identifier)),
     type_base: ($) =>
       choice(
         seq(
@@ -474,7 +492,9 @@ module.exports = grammar({
         $.infinity,
         $.integer_literal,
         $.set_literal,
-        $.string_literal
+        $.string_literal,
+        $.tuple_literal,
+        $.record_literal
       ),
 
     absent: ($) => "<>",
@@ -482,17 +502,9 @@ module.exports = grammar({
     array_literal: ($) =>
       seq("[", sepBy(",", field("member", $.array_literal_member)), "]"),
     array_literal_member: ($) =>
-      seq(optional(seq($._index_tuple, ":")), field("value", $._expression)),
-    _index_tuple: ($) =>
-      choice(
-        seq(
-          "(",
-          field("index", $._expression),
-          ",",
-          sepBy1(",", field("index", $._expression)),
-          ")"
-        ),
-        field("index", $._expression)
+      seq(
+        optional(seq(field("index", $._expression), ":")),
+        field("value", $._expression)
       ),
     array_literal_2d: ($) =>
       seq(
@@ -550,6 +562,19 @@ module.exports = grammar({
         seq("\\U", field("escape", alias(/[0-9a-fA-F]{8}/, "hexadecimal")))
       );
     },
+
+    tuple_literal: ($) =>
+      seq(
+        "(",
+        field("member", $._expression),
+        ",",
+        sepBy1(",", field("member", $._expression)),
+        ")"
+      ),
+    record_literal: ($) =>
+      seq("(", sepBy1(",", field("member", $.record_member)), ")"),
+    record_member: ($) =>
+      seq(field("name", $._identifier), ":", field("value", $._expression)),
 
     identifier: ($) => {
       return new RegExp(`[^"'\\s\\.\\-\\[\\]\\^${OPERATOR_CHARACTERS}]+`);
