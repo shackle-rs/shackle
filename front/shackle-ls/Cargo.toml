@@ -1,0 +1,15 @@
+[package]
+name = "shackle-ls"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lsp-server = "0.6.0"
+lsp-types = "0.93.0"
+serde_json = "1.0.81"
+serde = { version = "1.0.137", features = ["derive"] }
+tree-sitter = "0.20.6"
+tree-sitter-minizinc = { path = "../../misc/tree-sitter-minizinc" }
+shackle = { path = "../shackle" }
