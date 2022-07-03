@@ -1033,6 +1033,14 @@
         },
         {
           "type": "SYMBOL",
+          "name": "tuple_access"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "record_access"
+        },
+        {
+          "type": "SYMBOL",
           "name": "infix_operator"
         },
         {
@@ -1614,6 +1622,64 @@
           {
             "type": "STRING",
             "value": "]"
+          }
+        ]
+      }
+    },
+    "tuple_access": {
+      "type": "PREC",
+      "value": 18,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "tuple",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_expression"
+            }
+          },
+          {
+            "type": "STRING",
+            "value": "."
+          },
+          {
+            "type": "FIELD",
+            "name": "field",
+            "content": {
+              "type": "PATTERN",
+              "value": "[1-9][0-9]*"
+            }
+          }
+        ]
+      }
+    },
+    "record_access": {
+      "type": "PREC",
+      "value": 18,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "record",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_expression"
+            }
+          },
+          {
+            "type": "STRING",
+            "value": "."
+          },
+          {
+            "type": "FIELD",
+            "name": "field",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_identifier"
+            }
           }
         ]
       }
