@@ -224,6 +224,8 @@ module.exports = grammar({
         $.generator_call,
         $.if_then_else,
         $.indexed_access,
+        $.tuple_access,
+        $.record_access,
         $.infix_operator,
         $.let_expression,
         $.prefix_operator,
@@ -309,6 +311,18 @@ module.exports = grammar({
           ),
           "]"
         )
+      ),
+
+    tuple_access: ($) =>
+      prec(
+        PREC.call,
+        seq(field("tuple", $._expression), ".", field("field", /[1-9][0-9]*/))
+      ),
+
+    record_access: ($) =>
+      prec(
+        PREC.call,
+        seq(field("record", $._expression), ".", field("field", $._identifier))
       ),
 
     infix_operator: ($) => {

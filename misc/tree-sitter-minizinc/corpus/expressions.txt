@@ -356,3 +356,37 @@ under_score = 1;
   (assignment (identifier) (integer_literal))
   (assignment (identifier) (integer_literal))
   (assignment (identifier) (string_literal (string_characters))))
+
+============
+Tuple access
+============
+
+first = my_tuple.1;
+second = my_tuple.2;
+large = my_tuple.23;
+double = my_tuple.1.2;
+
+---
+
+(source_file
+  (assignment (identifier) (tuple_access (identifier)))
+  (assignment (identifier) (tuple_access (identifier)))
+  (assignment (identifier) (tuple_access (identifier)))
+  (assignment (identifier) (tuple_access (tuple_access (identifier)))))
+
+=============
+Record access
+=============
+
+simple = my_record.foo;
+unicode = my_record.✔️;
+quoted = my_record.'foo/bar';
+double = my_record.foo.bar;
+
+---
+
+(source_file
+  (assignment (identifier) (record_access (identifier) (identifier)))
+  (assignment (identifier) (record_access (identifier) (identifier)))
+  (assignment (identifier) (record_access (identifier) (quoted_identifier)))
+  (assignment (identifier) (record_access (record_access (identifier) (identifier)) (identifier))))

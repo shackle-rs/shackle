@@ -88,6 +88,10 @@
         "named": true
       },
       {
+        "type": "record_access",
+        "named": true
+      },
+      {
         "type": "record_literal",
         "named": true
       },
@@ -105,6 +109,10 @@
       },
       {
         "type": "string_literal",
+        "named": true
+      },
+      {
+        "type": "tuple_access",
         "named": true
       },
       {
@@ -274,6 +282,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -291,6 +303,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -384,6 +400,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -401,6 +421,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -787,6 +811,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -804,6 +832,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -913,6 +945,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -930,6 +966,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -1063,6 +1103,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -1080,6 +1124,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -1305,6 +1353,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -1322,6 +1374,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -1545,6 +1601,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -1562,6 +1622,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -2102,6 +2166,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -2119,6 +2187,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -2296,6 +2368,10 @@
             "named": true
           },
           {
+            "type": "record_access",
+            "named": true
+          },
+          {
             "type": "record_literal",
             "named": true
           },
@@ -2313,6 +2389,10 @@
           },
           {
             "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "tuple_access",
             "named": true
           },
           {
@@ -2425,6 +2505,36 @@
     "type": "primitive_type",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "record_access",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "record": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "record_literal",
@@ -2637,6 +2747,22 @@
     }
   },
   {
+    "type": "tuple_access",
+    "named": true,
+    "fields": {
+      "tuple": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "tuple_literal",
     "named": true,
     "fields": {
@@ -2828,6 +2954,10 @@
   },
   {
     "type": "->",
+    "named": false
+  },
+  {
+    "type": ".",
     "named": false
   },
   {
