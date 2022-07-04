@@ -252,7 +252,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("name", $._identifier),
+          field("function", $._unannotated_expression),
           "(",
           sepBy(",", field("argument", $._expression)),
           ")"
@@ -263,7 +263,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("name", $._identifier),
+          field("function", $._unannotated_expression),
           "(",
           sepBy1(",", field("generator", $.generator)),
           ")",
@@ -303,7 +303,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("collection", $._expression),
+          field("collection", $._unannotated_expression),
           "[",
           sepBy1(
             ",",
@@ -316,13 +316,21 @@ module.exports = grammar({
     tuple_access: ($) =>
       prec(
         PREC.call,
-        seq(field("tuple", $._expression), ".", field("field", /[1-9][0-9]*/))
+        seq(
+          field("tuple", $._unannotated_expression),
+          ".",
+          field("field", alias(/[1-9][0-9]*/, $.integer_literal))
+        )
       ),
 
     record_access: ($) =>
       prec(
         PREC.call,
-        seq(field("record", $._expression), ".", field("field", $._identifier))
+        seq(
+          field("record", $._unannotated_expression),
+          ".",
+          field("field", $._identifier)
+        )
       ),
 
     infix_operator: ($) => {
@@ -450,7 +458,13 @@ module.exports = grammar({
       ),
 
     _type: ($) =>
-      choice($.array_type, $.tuple_type, $.record_type, $.type_base),
+      choice(
+        $.array_type,
+        $.tuple_type,
+        $.record_type,
+        $.operation_type,
+        $.type_base
+      ),
     array_type: ($) =>
       seq(
         "array",
@@ -473,6 +487,17 @@ module.exports = grammar({
       seq("record", "(", sepBy1(",", field("field", $.record_type_field)), ")"),
     record_type_field: ($) =>
       seq(field("type", $._type), ":", field("name", $._identifier)),
+    operation_type: ($) =>
+      seq(
+        "op",
+        "(",
+        field("return_type", $._type),
+        ":",
+        "(",
+        sepBy(",", field("parameter", $._type)),
+        ")",
+        ")"
+      ),
     type_base: ($) =>
       choice(
         seq(

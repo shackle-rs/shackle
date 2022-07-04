@@ -170,3 +170,20 @@ record(array [int] of record(string: a, float: b): c, tuple(bool, record(ann: e)
   (declaration (record_type
     (record_type_field (array_type (type_base (primitive_type)) (record_type (record_type_field (type_base (primitive_type)) (identifier)) (record_type_field (type_base (primitive_type)) (identifier)))) (identifier))
     (record_type_field (tuple_type (type_base (primitive_type)) (record_type (record_type_field (type_base (primitive_type)) (identifier)))) (identifier))) (identifier)))
+
+=========
+Operation
+=========
+
+op(int: ()): none;
+op(int: (bool)): one;
+op(int: (bool, int)): two;
+op(int: (op(bool: (int, float)))): nested;
+
+---
+
+(source_file
+  (declaration (operation_type (type_base (primitive_type))) (identifier))
+  (declaration (operation_type (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
+  (declaration (operation_type (type_base (primitive_type)) (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
+  (declaration (operation_type (type_base (primitive_type)) (operation_type (type_base (primitive_type)) (type_base (primitive_type)) (type_base (primitive_type)))) (identifier)))

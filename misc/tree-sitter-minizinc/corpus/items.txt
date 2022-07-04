@@ -53,7 +53,7 @@ array[X, 1..23] of var int: simple_decl = some_call(X);
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier))
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier))
-  item: (declaration type: (array_type dimension: (type_base domain: (identifier)) dimension: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) type: (type_base domain: (primitive_type))) name: (identifier) definition: (call name: (identifier) argument: (identifier))))
+  item: (declaration type: (array_type dimension: (type_base domain: (identifier)) dimension: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) type: (type_base domain: (primitive_type))) name: (identifier) definition: (call function: (identifier) argument: (identifier))))
 
 ===========
 Enumeration
@@ -95,9 +95,9 @@ function X: with_annotated_param(int, bool: x :: foo);
 
 (source_file
   item: (function_item type: (type_base domain: (primitive_type)) name: (identifier))
-  item: (function_item type: (type_base domain: (primitive_type)) name: (identifier) body: (call name: (identifier)))
+  item: (function_item type: (type_base domain: (primitive_type)) name: (identifier) body: (call function: (identifier)))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))))
-  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (identifier)) name: (identifier)) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier)) body: (call name: (identifier) argument: (identifier) argument: (identifier)))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (identifier)) name: (identifier)) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier)) body: (call function: (identifier) argument: (identifier) argument: (identifier)))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))) annotation: (identifier))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))))
 

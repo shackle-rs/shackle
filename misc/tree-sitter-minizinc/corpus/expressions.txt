@@ -7,15 +7,20 @@ constraint x :: one :: two :: three;
 constraint x :: ann_func(1, ident, "string");
 % not well-defined, but should be parsed correctly
 constraint x :: (one :: two);
-
+constraint x :: indexed[2];
+constraint x :: one.1;
+constraint x :: one.two;
 ---
 
 (source_file
   item: (constraint expression: (annotated_expression expression: (identifier) annotation: (identifier)))
   item: (constraint expression: (annotated_expression expression: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier)))
-  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (call name: (identifier) argument: (integer_literal) argument: (identifier) argument: (string_literal content: (string_characters)))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (call function: (identifier) argument: (integer_literal) argument: (identifier) argument: (string_literal content: (string_characters)))))
   (line_comment)
-  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (parenthesised_expression expression: (annotated_expression expression: (identifier) annotation: (identifier))))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (parenthesised_expression expression: (annotated_expression expression: (identifier) annotation: (identifier)))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (indexed_access collection: (identifier) index: (integer_literal))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (tuple_access tuple: (identifier) field: (integer_literal))))
+  item: (constraint expression: (annotated_expression expression: (identifier) annotation: (record_access record: (identifier) field: (identifier)))))
 
 ===================
 Array Comprehension
@@ -54,7 +59,8 @@ Call
 no_args = my_fn();
 single_arg = my_fn(1);
 mult_args = my_fn(2, "test");
-generator_lookalike = my_fn(x in Xs)
+generator_lookalike = my_fn(x in Xs);
+double = my_fn(foo)(1);
 
 ---
 
@@ -62,7 +68,8 @@ generator_lookalike = my_fn(x in Xs)
   (assignment (identifier) (call (identifier)))
   (assignment (identifier) (call (identifier) (integer_literal)))
   (assignment (identifier) (call (identifier) (integer_literal) (string_literal (string_characters))))
-  (assignment (identifier) (call (identifier) (infix_operator (identifier) (identifier)))))
+  (assignment (identifier) (call (identifier) (infix_operator (identifier) (identifier))))
+  (assignment (identifier) (call (call (identifier) (identifier)) (integer_literal))))
 
 ==============
 Generator Call
@@ -365,14 +372,16 @@ first = my_tuple.1;
 second = my_tuple.2;
 large = my_tuple.23;
 double = my_tuple.1.2;
+call = my_tuple.1(2).3;
 
 ---
 
 (source_file
-  (assignment (identifier) (tuple_access (identifier)))
-  (assignment (identifier) (tuple_access (identifier)))
-  (assignment (identifier) (tuple_access (identifier)))
-  (assignment (identifier) (tuple_access (tuple_access (identifier)))))
+  (assignment (identifier) (tuple_access (identifier) (integer_literal)))
+  (assignment (identifier) (tuple_access (identifier) (integer_literal)))
+  (assignment (identifier) (tuple_access (identifier) (integer_literal)))
+  (assignment (identifier) (tuple_access (tuple_access (identifier) (integer_literal)) (integer_literal)))
+  (assignment (identifier) (tuple_access (call (tuple_access (identifier) (integer_literal)) (integer_literal)) (integer_literal))))
 
 =============
 Record access
@@ -382,6 +391,7 @@ simple = my_record.foo;
 unicode = my_record.✔️;
 quoted = my_record.'foo/bar';
 double = my_record.foo.bar;
+call = my_record.foo(3).bar;
 
 ---
 
@@ -389,4 +399,5 @@ double = my_record.foo.bar;
   (assignment (identifier) (record_access (identifier) (identifier)))
   (assignment (identifier) (record_access (identifier) (identifier)))
   (assignment (identifier) (record_access (identifier) (quoted_identifier)))
-  (assignment (identifier) (record_access (record_access (identifier) (identifier)) (identifier))))
+  (assignment (identifier) (record_access (record_access (identifier) (identifier)) (identifier)))
+  (assignment (identifier) (record_access (call (record_access (identifier) (identifier)) (integer_literal)) (identifier))))

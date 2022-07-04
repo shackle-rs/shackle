@@ -2,4 +2,4 @@
 (predicate name: (identifier) @name) @definition.function
 (annotation name: (identifier) @name) @definition.function
 
-(call name: (identifier) @name) @reference.call
+(call function: (identifier) @name) @reference.call
