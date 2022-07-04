@@ -1,5 +1,5 @@
 ; Function calls
-(call name: (identifier) @function)
+(call function: (identifier) @function)
 ; Function definitions
 (function_item name: (identifier) @function)
 (predicate name: (identifier) @function)
