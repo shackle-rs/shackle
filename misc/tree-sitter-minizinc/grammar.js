@@ -68,7 +68,7 @@ module.exports = grammar({
   supertypes: ($) => [$._expression, $._item, $._type],
 
   rules: {
-    source_file: ($) => seq(sepBy(";", field("item", $._item))),
+    source_file: ($) => sepBy(";", field("item", $._item)),
 
     _item: ($) =>
       choice(
