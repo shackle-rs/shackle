@@ -36,6 +36,10 @@
         "named": true
       },
       {
+        "type": "case_expression",
+        "named": true
+      },
+      {
         "type": "float_literal",
         "named": true
       },
@@ -234,6 +238,10 @@
             "named": true
           },
           {
+            "type": "case_expression",
+            "named": true
+          },
+          {
             "type": "float_literal",
             "named": true
           },
@@ -349,6 +357,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -743,6 +755,10 @@
             "named": true
           },
           {
+            "type": "case_expression",
+            "named": true
+          },
+          {
             "type": "float_literal",
             "named": true
           },
@@ -831,6 +847,94 @@
     }
   },
   {
+    "type": "case_expression",
+    "named": true,
+    "fields": {
+      "case": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "case_expression_case",
+            "named": true
+          }
+        ]
+      },
+      "expression": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "case_expression_case",
+    "named": true,
+    "fields": {
+      "pattern": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "constraint",
     "named": true,
     "fields": {
@@ -864,6 +968,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -1001,6 +1109,10 @@
             "named": true
           },
           {
+            "type": "case_expression",
+            "named": true
+          },
+          {
             "type": "float_literal",
             "named": true
           },
@@ -1101,11 +1213,43 @@
         "required": true,
         "types": [
           {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
           {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
             "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1156,6 +1300,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -1409,6 +1557,10 @@
             "named": true
           },
           {
+            "type": "case_expression",
+            "named": true
+          },
+          {
             "type": "float_literal",
             "named": true
           },
@@ -1617,6 +1769,10 @@
             "named": true
           },
           {
+            "type": "case_expression",
+            "named": true
+          },
+          {
             "type": "float_literal",
             "named": true
           },
@@ -1758,6 +1914,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -1962,6 +2122,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -2460,6 +2624,10 @@
             "named": true
           },
           {
+            "type": "case_expression",
+            "named": true
+          },
+          {
             "type": "float_literal",
             "named": true
           },
@@ -2550,11 +2718,43 @@
         "required": false,
         "types": [
           {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
           {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
             "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -2581,6 +2781,240 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pattern_call",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      },
+      "identifier": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pattern_numeric_literal",
+    "named": true,
+    "fields": {
+      "negative": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "float_literal",
+            "named": true
+          },
+          {
+            "type": "infinity",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pattern_record",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "pattern_record_field",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pattern_record_field",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pattern_tuple",
+    "named": true,
+    "fields": {
+      "field": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -2659,6 +3093,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -2900,6 +3338,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -3244,6 +3686,10 @@
           },
           {
             "type": "call",
+            "named": true
+          },
+          {
+            "type": "case_expression",
             "named": true
           },
           {
@@ -3593,6 +4039,10 @@
     "named": false
   },
   {
+    "type": "=>",
+    "named": false
+  },
+  {
     "type": ">",
     "named": false
   },
@@ -3673,6 +4123,10 @@
     "named": false
   },
   {
+    "type": "case",
+    "named": false
+  },
+  {
     "type": "constraint",
     "named": false
   },
@@ -3694,6 +4148,10 @@
   },
   {
     "type": "elseif",
+    "named": false
+  },
+  {
+    "type": "endcase",
     "named": false
   },
   {
