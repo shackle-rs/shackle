@@ -46,6 +46,7 @@ var int: simple_decl;
 var int: with_ann ::annotated;
 var int: with_more_ann ::annotated ::and_again ::and_again;
 array[X, 1..23] of var int: simple_decl = some_call(X);
+any: (x, y);
 
 ---
 
@@ -53,7 +54,8 @@ array[X, 1..23] of var int: simple_decl = some_call(X);
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier))
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier))
-  item: (declaration type: (array_type dimension: (type_base domain: (identifier)) dimension: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) type: (type_base domain: (primitive_type))) name: (identifier) definition: (call function: (identifier) argument: (identifier))))
+  item: (declaration type: (array_type dimension: (type_base domain: (identifier)) dimension: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) type: (type_base domain: (primitive_type))) name: (identifier) definition: (call function: (identifier) argument: (identifier)))
+  item: (declaration type: (type_base) name: (pattern_tuple field: (identifier) field: (identifier))))
 
 ===========
 Enumeration
@@ -90,6 +92,7 @@ function X: with_args(int, float);
 function X: with_named_args(X: x, bool: b) = something(b, x);
 function X: with_annotation(int, float) ::func_ann;
 function X: with_annotated_param(int, bool: x :: foo);
+function X: with_pattern(T: (x, y));
 
 ---
 
@@ -99,7 +102,8 @@ function X: with_annotated_param(int, bool: x :: foo);
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (identifier)) name: (identifier)) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier)) body: (call function: (identifier) argument: (identifier) argument: (identifier)))
   item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type))) annotation: (identifier))
-  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (primitive_type))) parameter: (parameter type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier)))
+  item: (function_item type: (type_base domain: (identifier)) name: (identifier) parameter: (parameter type: (type_base domain: (identifier)) name: (pattern_tuple field: (identifier) field: (identifier)))))
 
 ====
 Goal

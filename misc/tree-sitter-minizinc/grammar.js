@@ -111,7 +111,7 @@ module.exports = grammar({
       seq(
         field("type", $._type),
         ":",
-        field("name", $._identifier),
+        field("name", $._pattern),
         optional($._annotation_list),
         optional(seq("=", field("definition", $._expression)))
       ),
@@ -181,7 +181,7 @@ module.exports = grammar({
     parameter: ($) =>
       seq(
         field("type", $._type),
-        optional(seq(":", field("name", $._identifier))),
+        optional(seq(":", field("name", $._pattern))),
         optional($._annotation_list)
       ),
 
@@ -227,6 +227,7 @@ module.exports = grammar({
         $.tuple_access,
         $.record_access,
         $.infix_operator,
+        $.case_expression,
         $.let_expression,
         $.prefix_operator,
         $.postfix_operator,
@@ -386,6 +387,17 @@ module.exports = grammar({
           )
         )
       ),
+
+    case_expression: ($) =>
+      seq(
+        "case",
+        field("expression", $._expression),
+        "of",
+        sepBy1(",", field("case", $.case_expression_case)),
+        "endcase"
+      ),
+    case_expression_case: ($) =>
+      seq(field("pattern", $._pattern), "=>", field("value", $._expression)),
 
     let_expression: ($) =>
       seq(
@@ -620,6 +632,43 @@ module.exports = grammar({
     },
     quoted_identifier: ($) => /'[^']*'/,
     _identifier: ($) => choice($.identifier, $.quoted_identifier),
+
+    _pattern: ($) =>
+      choice(
+        $._identifier,
+        $.anonymous,
+        $.absent,
+        $.boolean_literal,
+        $.string_literal,
+        $.pattern_numeric_literal,
+        $.pattern_call,
+        $.pattern_tuple,
+        $.pattern_record
+      ),
+    pattern_numeric_literal: ($) =>
+      seq(
+        optional(field("negative", "-")),
+        field("value", choice($.integer_literal, $.float_literal, $.infinity))
+      ),
+    pattern_call: ($) =>
+      seq(
+        field("identifier", $._identifier),
+        "(",
+        sepBy(",", field("argument", $._pattern)),
+        ")"
+      ),
+    pattern_tuple: ($) =>
+      seq(
+        "(",
+        field("field", $._pattern),
+        ",",
+        sepBy1(",", field("field", $._pattern)),
+        ")"
+      ),
+    pattern_record: ($) =>
+      seq("(", sepBy1(",", field("field", $.pattern_record_field)), ")"),
+    pattern_record_field: ($) =>
+      seq(field("name", $._identifier), ":", field("value", $._pattern)),
 
     line_comment: ($) => token(seq("%", /.*/)),
     block_comment: ($) => token(seq("/*", /([^*]|\*[^\/]|\n)*?\*?/, "*/")),

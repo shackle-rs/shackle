@@ -401,3 +401,38 @@ call = my_record.foo(3).bar;
   (assignment (identifier) (record_access (identifier) (quoted_identifier)))
   (assignment (identifier) (record_access (record_access (identifier) (identifier)) (identifier)))
   (assignment (identifier) (record_access (call (record_access (identifier) (identifier)) (integer_literal)) (identifier))))
+
+====
+Case
+====
+
+simple =
+  case x of
+    id => 1,
+    Fn(a, 1) => 2,
+    (a, "b") => 3,
+    (one: a, two: b) => 4,
+    _ => 5
+  endcase;
+nested =
+  case x of
+    Foo(Bar(_), (a, (-1, c)), (a: b, c: (d: e))) => true
+  endcase;
+
+---
+
+(source_file
+  (assignment (identifier) (case_expression (identifier)
+    (case_expression_case (identifier) (integer_literal))
+    (case_expression_case (pattern_call (identifier) (identifier) (pattern_numeric_literal (integer_literal))) (integer_literal))
+    (case_expression_case (pattern_tuple (identifier) (string_literal (string_characters))) (integer_literal))
+    (case_expression_case (pattern_record (pattern_record_field (identifier) (identifier)) (pattern_record_field (identifier) (identifier))) (integer_literal))
+    (case_expression_case (anonymous) (integer_literal))))
+  (assignment (identifier) (case_expression (identifier)
+    (case_expression_case
+      (pattern_call
+        (identifier)
+        (pattern_call (identifier) (anonymous))
+        (pattern_tuple (identifier) (pattern_tuple (pattern_numeric_literal (integer_literal)) (identifier)))
+        (pattern_record (pattern_record_field (identifier) (identifier)) (pattern_record_field (identifier) (pattern_record (pattern_record_field (identifier) (identifier))))))
+      (boolean_literal)))))
