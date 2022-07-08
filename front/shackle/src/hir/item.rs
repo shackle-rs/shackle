@@ -268,12 +268,23 @@ pub struct Function {
 	pub return_type: ArenaIndex<Type>,
 	/// Pattern (always an identifier)
 	pub pattern: ArenaIndex<Pattern>,
+	/// Type-inst vars
+	pub type_inst_vars: Box<[TypeInstIdentifierDeclaration]>,
 	/// Function parameters
 	pub parameters: Box<[Parameter]>,
 	/// The body of this function
 	pub body: Option<ArenaIndex<Expression>>,
 	/// Annotations
 	pub annotations: Box<[ArenaIndex<Expression>]>,
+}
+
+/// Declaration of a type-inst identifier
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct TypeInstIdentifierDeclaration {
+	/// The name of this identifier
+	pub name: ArenaIndex<Pattern>,
+	/// Whether this is an enum ID
+	pub is_enum: bool,
 }
 
 /// Function parameter
@@ -324,4 +335,15 @@ pub enum Goal {
 		/// Objective value
 		objective: ArenaIndex<Expression>,
 	},
+}
+
+/// Type alias item
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct TypeAlias {
+	/// Name of this type alias
+	pub name: ArenaIndex<Pattern>,
+	/// The aliased type
+	pub aliased_type: ArenaIndex<Type>,
+	/// Annotations
+	pub annotations: Box<[ArenaIndex<Expression>]>,
 }

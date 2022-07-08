@@ -3,7 +3,10 @@
 
 use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
-use super::{BoolLiteral, Expression, FloatLiteral, Identifier, IntegerLiteral, StringLiteral};
+use super::{
+	db::{Hir, HirString, HirStringData},
+	BooleanLiteral, Expression, FloatLiteral, IntegerLiteral, StringLiteral,
+};
 
 /// A pattern for destructuring
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -15,7 +18,7 @@ pub enum Pattern {
 	/// Absent literal
 	Absent,
 	/// Boolean literal
-	Boolean(BoolLiteral),
+	Boolean(BooleanLiteral),
 	/// Float literal
 	Float {
 		/// Whether this has been negated
@@ -59,5 +62,21 @@ pub enum Pattern {
 }
 
 impl_enum_from!(Pattern::Identifier);
-impl_enum_from!(Pattern::Boolean(BoolLiteral));
+impl_enum_from!(Pattern::Boolean(BooleanLiteral));
 impl_enum_from!(Pattern::String(StringLiteral));
+
+/// Identifier
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Identifier(pub HirString);
+
+impl Identifier {
+	/// Create a new identifier with the given value
+	pub fn new<T: Into<HirStringData>>(v: T, db: &dyn Hir) -> Self {
+		Self(db.intern_string(v.into()))
+	}
+
+	/// Get the name of this identifier
+	pub fn lookup(&self, db: &dyn Hir) -> String {
+		db.lookup_intern_string(self.0).0
+	}
+}

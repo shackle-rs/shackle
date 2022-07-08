@@ -60,8 +60,11 @@ module.exports = grammar({
   word: ($) => $.identifier,
 
   conflicts: ($) => [
-    [$._unannotated_expression, $.generator],
-    [$._unannotated_expression, $.assignment],
+    [$._callable, $.assignment],
+    [$._callable, $._pattern],
+    [$._callable, $.pattern_call],
+    [$._literal, $._pattern],
+    [$._literal, $.pattern_numeric_literal],
     [$.array_literal_2d, $.array_literal_2d_row],
   ],
 
@@ -216,16 +219,10 @@ module.exports = grammar({
       choice($._unannotated_expression, $.annotated_expression),
     _unannotated_expression: ($) =>
       choice(
-        $._identifier,
         $._literal,
 
         $.array_comprehension,
-        $.call,
-        $.generator_call,
         $.if_then_else,
-        $.indexed_access,
-        $.tuple_access,
-        $.record_access,
         $.infix_operator,
         $.case_expression,
         $.let_expression,
@@ -233,6 +230,16 @@ module.exports = grammar({
         $.postfix_operator,
         $.set_comprehension,
         $.string_interpolation,
+        $._callable
+      ),
+    _callable: ($) =>
+      choice(
+        $._identifier,
+        $.call,
+        $.generator_call,
+        $.indexed_access,
+        $.tuple_access,
+        $.record_access,
         $.parenthesised_expression
       ),
 
@@ -253,7 +260,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("function", $._unannotated_expression),
+          field("function", $._callable),
           "(",
           sepBy(",", field("argument", $._expression)),
           ")"
@@ -264,7 +271,7 @@ module.exports = grammar({
       prec(
         PREC.call,
         seq(
-          field("function", $._unannotated_expression),
+          field("function", $._callable),
           "(",
           sepBy1(",", field("generator", $.generator)),
           ")",
@@ -276,7 +283,7 @@ module.exports = grammar({
 
     generator: ($) =>
       seq(
-        sepBy1(",", field("name", $._identifier)),
+        sepBy1(",", field("name", $._pattern)),
         "in",
         field("collection", $._expression),
         optional(seq("where", field("where", $._expression)))
@@ -472,10 +479,12 @@ module.exports = grammar({
     _type: ($) =>
       choice(
         $.array_type,
+        $.set_type,
         $.tuple_type,
         $.record_type,
         $.operation_type,
-        $.type_base
+        $.type_base,
+        $.any_type
       ),
     array_type: ($) =>
       seq(
@@ -483,6 +492,14 @@ module.exports = grammar({
         "[",
         sepBy1(",", field("dimension", $.type_base)),
         "]",
+        "of",
+        field("type", $._type)
+      ),
+    set_type: ($) =>
+      seq(
+        optional(field("var_par", choice("var", "par"))),
+        optional(field("opt", "opt")),
+        "set",
         "of",
         field("type", $._type)
       ),
@@ -515,7 +532,6 @@ module.exports = grammar({
         seq(
           optional(field("var_par", choice("var", "par"))),
           optional(field("opt", "opt")),
-          optional(field("set", seq("set", "of"))),
           field(
             "domain",
             choice(
@@ -526,11 +542,12 @@ module.exports = grammar({
             )
           )
         ),
-        seq(field("any", "any"), optional(field("domain", $.type_inst_id)))
+        seq(field("any", "any"), field("domain", $.type_inst_id))
       ),
     primitive_type: ($) => choice(...primitive_types),
     type_inst_id: ($) => /\$[A-Za-z][A-Za-z0-9_]*/,
     type_inst_enum_id: ($) => /\$\$[A-Za-z][A-Za-z0-9_]*/,
+    any_type: ($) => "any",
 
     _literal: ($) =>
       choice(
@@ -636,8 +653,8 @@ module.exports = grammar({
     _pattern: ($) =>
       choice(
         $._identifier,
-        $.anonymous,
         $.absent,
+        $.anonymous,
         $.boolean_literal,
         $.string_literal,
         $.pattern_numeric_literal,

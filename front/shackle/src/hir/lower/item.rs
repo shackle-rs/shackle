@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use rustc_hash::FxHashMap;
+
 use crate::file::ModelRef;
 use crate::hir::db::Hir;
 use crate::hir::ids::ItemRef;
@@ -57,6 +59,7 @@ impl ItemCollector<'_> {
 			ast::Item::Output(i) => self.collect_output(i),
 			ast::Item::Predicate(p) => self.collect_predicate(p),
 			ast::Item::Solve(s) => self.collect_solve(s),
+			ast::Item::TypeAlias(t) => self.collect_type_alias(t),
 		};
 		self.source_map.insert(it.into(), item.into());
 		self.source_map.add_from_item_data(self.db, it, &sm);
@@ -70,10 +73,11 @@ impl ItemCollector<'_> {
 	fn collect_annotation(&mut self, a: ast::Annotation) -> (ItemRef, ItemDataSourceMap) {
 		// Desugar annotation into either a function declaration or a variable declaration
 		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut tiids = FxHashMap::default();
 		let parameters = a
 			.parameters()
 			.map(|p| {
-				let ty = ctx.collect_type(p.declared_type());
+				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids);
 				let annotations = p
 					.annotations()
 					.map(|ann| ctx.collect_expression(ann))
@@ -88,13 +92,13 @@ impl ItemCollector<'_> {
 			.collect::<Vec<_>>();
 		let ty = ctx.alloc_type(
 			ast::Item::from(a.clone()).into(),
-			Type::Base(TypeBase::NonAny {
-				domain: Domain::Unbounded(PrimitiveType::Ann),
-				is_var: false,
-				is_opt: false,
-				set_type: false,
-			}),
+			Type::Primitive {
+				inst: VarType::Par,
+				opt: OptType::NonOpt,
+				primitive_type: PrimitiveType::Ann,
+			},
 		);
+		let type_inst_vars = tiids.into_values().collect();
 		let body = a.body().map(|e| ctx.collect_expression(e));
 		if body.is_none() && parameters.is_empty() {
 			let pattern = ctx.collect_pattern(a.id().into());
@@ -116,6 +120,7 @@ impl ItemCollector<'_> {
 			let index = self.model.functions.insert(Item::new(
 				Function {
 					annotations: Box::new([]),
+					type_inst_vars,
 					body,
 					pattern,
 					return_type: ty,
@@ -213,12 +218,11 @@ impl ItemCollector<'_> {
 							let argument = ctx.collect_expression(arg.clone());
 							ctx.alloc_type(
 								arg.into(),
-								Type::Base(TypeBase::NonAny {
-									is_var: false,
-									is_opt: false,
-									set_type: false,
-									domain: Domain::Bounded(argument),
-								}),
+								Type::Bounded {
+									inst: Some(VarType::Par),
+									opt: Some(OptType::NonOpt),
+									domain: argument,
+								},
 							)
 						})
 						.collect();
@@ -236,12 +240,11 @@ impl ItemCollector<'_> {
 							let argument = ctx.collect_expression(arg.clone());
 							ctx.alloc_type(
 								arg.into(),
-								Type::Base(TypeBase::NonAny {
-									is_var: false,
-									is_opt: false,
-									set_type: false,
-									domain: Domain::Bounded(argument),
-								}),
+								Type::Bounded {
+									inst: Some(VarType::Par),
+									opt: Some(OptType::NonOpt),
+									domain: argument,
+								},
 							)
 						})
 						.collect();
@@ -282,10 +285,11 @@ impl ItemCollector<'_> {
 		let body = f.body().map(|e| ctx.collect_expression(e));
 		let pattern = ctx.collect_pattern(f.id().into());
 		let return_type = ctx.collect_type(f.return_type());
+		let mut tiids = FxHashMap::default();
 		let parameters = f
 			.parameters()
 			.map(|p| {
-				let ty = ctx.collect_type(p.declared_type());
+				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids);
 				let annotations = p
 					.annotations()
 					.map(|ann| ctx.collect_expression(ann))
@@ -298,10 +302,12 @@ impl ItemCollector<'_> {
 				}
 			})
 			.collect();
+		let type_inst_vars = tiids.into_values().collect();
 		let (data, source_map) = ctx.finish();
 		let index = self.model.functions.insert(Item::new(
 			Function {
 				annotations,
+				type_inst_vars,
 				body,
 				pattern,
 				return_type,
@@ -340,17 +346,20 @@ impl ItemCollector<'_> {
 		let pattern = ctx.collect_pattern(f.id().into());
 		let return_type = ctx.alloc_type(
 			ast::Item::from(f.clone()).into(),
-			Type::Base(TypeBase::NonAny {
-				is_var: f.declared_type() == ast::PredicateType::Predicate,
-				is_opt: false,
-				set_type: false,
-				domain: Domain::Unbounded(PrimitiveType::Bool),
-			}),
+			Type::Primitive {
+				inst: match f.declared_type() {
+					ast::PredicateType::Predicate => VarType::Var,
+					ast::PredicateType::Test => VarType::Par,
+				},
+				opt: OptType::NonOpt,
+				primitive_type: PrimitiveType::Bool,
+			},
 		);
+		let mut tiids = FxHashMap::default();
 		let parameters = f
 			.parameters()
 			.map(|p| {
-				let ty = ctx.collect_type(p.declared_type());
+				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids);
 				let annotations = p
 					.annotations()
 					.map(|ann| ctx.collect_expression(ann))
@@ -363,10 +372,12 @@ impl ItemCollector<'_> {
 				}
 			})
 			.collect();
+		let type_inst_vars = tiids.into_values().collect();
 		let (data, source_map) = ctx.finish();
 		let index = self.model.functions.insert(Item::new(
 			Function {
 				annotations,
+				type_inst_vars,
 				body,
 				parameters,
 				pattern,
@@ -406,6 +417,27 @@ impl ItemCollector<'_> {
 			.model
 			.solves
 			.insert(Item::new(Solve { annotations, goal }, data));
+		self.model.items.push(index.into());
+		(ItemRef::new(self.db, self.owner, index), source_map)
+	}
+
+	fn collect_type_alias(&mut self, t: ast::TypeAlias) -> (ItemRef, ItemDataSourceMap) {
+		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let annotations = t
+			.annotations()
+			.map(|ann| ctx.collect_expression(ann))
+			.collect();
+		let name = ctx.collect_pattern(t.name().into());
+		let aliased_type = ctx.collect_type(t.aliased_type());
+		let (data, source_map) = ctx.finish();
+		let index = self.model.type_aliases.insert(Item::new(
+			TypeAlias {
+				name,
+				aliased_type,
+				annotations,
+			},
+			data,
+		));
 		self.model.items.push(index.into());
 		(ItemRef::new(self.db, self.owner, index), source_map)
 	}

@@ -7,9 +7,8 @@ use std::fmt;
 use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
 use super::{
-	db::{Hir, HirString, HirStringData},
-	ArrayAccess, ArrayComprehension, ArrayLiteral, BoolLiteral, Constraint, Declaration,
-	FloatLiteral, IntegerLiteral, Pattern, RecordLiteral, SetComprehension, SetLiteral,
+	ArrayAccess, ArrayComprehension, ArrayLiteral, BooleanLiteral, Constraint, Declaration,
+	FloatLiteral, Identifier, IntegerLiteral, Pattern, RecordLiteral, SetComprehension, SetLiteral,
 	StringLiteral, TupleLiteral,
 };
 
@@ -23,7 +22,7 @@ pub enum Expression {
 	/// Set literal
 	SetLiteral(SetLiteral),
 	/// Bool literal
-	BoolLiteral(BoolLiteral),
+	BooleanLiteral(BooleanLiteral),
 	/// String literal
 	StringLiteral(StringLiteral),
 	/// Identifier
@@ -32,8 +31,6 @@ pub enum Expression {
 	Absent,
 	/// Infinity
 	Infinity,
-	/// Anonymous variable `_`
-	Anonymous,
 	/// Tuple literal
 	TupleLiteral(TupleLiteral),
 	/// Record literal
@@ -69,12 +66,11 @@ impl fmt::Debug for Expression {
 			Expression::IntegerLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::FloatLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::SetLiteral(x) => fmt::Debug::fmt(x, f),
-			Expression::BoolLiteral(x) => fmt::Debug::fmt(x, f),
+			Expression::BooleanLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::StringLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::Identifier(x) => fmt::Debug::fmt(x, f),
 			Expression::Absent => f.write_str("Absent"),
 			Expression::Infinity => f.write_str("Infinity"),
-			Expression::Anonymous => f.write_str("Anonymous"),
 			Expression::TupleLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::RecordLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::ArrayLiteral(x) => fmt::Debug::fmt(x, f),
@@ -92,12 +88,12 @@ impl fmt::Debug for Expression {
 	}
 }
 
+impl_enum_from!(Expression::Identifier);
 impl_enum_from!(Expression::IntegerLiteral);
 impl_enum_from!(Expression::FloatLiteral);
 impl_enum_from!(Expression::SetLiteral);
-impl_enum_from!(Expression::BoolLiteral);
+impl_enum_from!(Expression::BooleanLiteral);
 impl_enum_from!(Expression::StringLiteral);
-impl_enum_from!(Expression::Identifier);
 impl_enum_from!(Expression::ArrayLiteral);
 impl_enum_from!(Expression::ArrayAccess);
 impl_enum_from!(Expression::ArrayComprehension);
@@ -110,22 +106,6 @@ impl_enum_from!(Expression::TupleLiteral);
 impl_enum_from!(Expression::RecordLiteral);
 impl_enum_from!(Expression::TupleAccess);
 impl_enum_from!(Expression::RecordAccess);
-
-/// Identifier
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Identifier(pub HirString);
-
-impl Identifier {
-	/// Create a new identifier with the given value
-	pub fn new<T: Into<HirStringData>>(v: T, db: &dyn Hir) -> Self {
-		Self(db.intern_string(v.into()))
-	}
-
-	/// Get the name of this identifier
-	pub fn lookup(&self, db: &dyn Hir) -> String {
-		db.lookup_intern_string(self.0).0
-	}
-}
 
 /// Anonymous variable `_`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

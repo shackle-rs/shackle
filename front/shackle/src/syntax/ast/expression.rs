@@ -4,7 +4,7 @@ use crate::syntax::cst::CstNode;
 
 use super::helpers::*;
 use super::{
-	Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, AstNode, BoolLiteral,
+	Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, AstNode, BooleanLiteral,
 	Children, Constraint, Declaration, FloatLiteral, Generator, Infinity, IntegerLiteral, Pattern,
 	RecordLiteral, SetComprehension, SetLiteral, StringLiteral, TupleLiteral,
 };
@@ -17,7 +17,7 @@ ast_enum!(
 	"tuple_literal" => TupleLiteral,
 	"record_literal" => RecordLiteral,
 	"set_literal" => SetLiteral,
-	"boolean_literal" => BoolLiteral,
+	"boolean_literal" => BooleanLiteral,
 	"string_literal" => StringLiteral,
 	"identifier" | "quoted_identifier" => Identifier,
 	"absent" => Absent,
@@ -750,7 +750,7 @@ mod test {
 			assert_eq!(g1ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
 			assert_eq!(gs[0].collection().cast::<Identifier>().unwrap().name(), "s");
 			assert!(gs[0].where_clause().is_none());
-			assert!(call.template().cast::<BoolLiteral>().unwrap().value());
+			assert!(call.template().cast::<BooleanLiteral>().unwrap().value());
 		}
 		{
 			let call = items[1]
@@ -784,7 +784,7 @@ mod test {
 					.name(),
 				"p"
 			);
-			assert!(call.template().cast::<BoolLiteral>().unwrap().value());
+			assert!(call.template().cast::<BooleanLiteral>().unwrap().value());
 		}
 	}
 
@@ -840,8 +840,8 @@ mod test {
 			let d = is[0].cast_ref::<Declaration>().unwrap();
 			assert_eq!(d.pattern().cast::<Identifier>().unwrap().name(), "x");
 			let c = is[1].cast_ref::<Constraint>().unwrap();
-			assert!(!c.expression().cast::<BoolLiteral>().unwrap().value());
-			assert!(l.in_expression().cast::<BoolLiteral>().unwrap().value());
+			assert!(!c.expression().cast::<BooleanLiteral>().unwrap().value());
+			assert!(l.in_expression().cast::<BooleanLiteral>().unwrap().value());
 		}
 	}
 
@@ -872,9 +872,9 @@ mod test {
 			let p1as: Vec<_> = p1.arguments().collect();
 			assert_eq!(p1as.len(), 1);
 			assert_eq!(p1as[0].cast_ref::<Identifier>().unwrap().name(), "b");
-			assert!(cs[0].value().cast::<BoolLiteral>().unwrap().value());
+			assert!(cs[0].value().cast::<BooleanLiteral>().unwrap().value());
 			assert!(cs[1].pattern().cast::<Anonymous>().is_some());
-			assert!(!cs[1].value().cast::<BoolLiteral>().unwrap().value());
+			assert!(!cs[1].value().cast::<BooleanLiteral>().unwrap().value());
 		}
 	}
 

@@ -18,7 +18,7 @@ use crate::{
 use super::{
 	db::Hir,
 	ids::{EntityRef, ExpressionRef, ItemRef, LocalEntityRef, NodeRef},
-	Domain, ItemDataSourceMap, Type, TypeBase,
+	ItemDataSourceMap, Type,
 };
 
 /// Source mapping between HIR and AST nodes.
@@ -96,11 +96,8 @@ pub fn find_expression(
 				LocalEntityRef::Expression(e) => Some(ExpressionRef::new(item, e)),
 				LocalEntityRef::Type(t) => {
 					let model = db.lookup_model(file.into());
-					match &item.item(db).data(model.as_ref())[t] {
-						Type::Base(TypeBase::NonAny {
-							domain: Domain::Bounded(e),
-							..
-						}) => Some(ExpressionRef::new(item, *e)),
+					match &item.local_item_ref(db).data(model.as_ref())[t] {
+						Type::Bounded { domain, .. } => Some(ExpressionRef::new(item, *domain)),
 						_ => None,
 					}
 				}
@@ -228,6 +225,22 @@ impl From<ast::IndexSlice> for Origin {
 }
 impl From<ast::EnumerationCase> for Origin {
 	fn from(v: ast::EnumerationCase) -> Self {
+		Origin {
+			desugar_kind: None,
+			ast_node: v.into(),
+		}
+	}
+}
+impl From<ast::TypeInstIdentifier> for Origin {
+	fn from(v: ast::TypeInstIdentifier) -> Self {
+		Origin {
+			desugar_kind: None,
+			ast_node: v.into(),
+		}
+	}
+}
+impl From<ast::TypeInstEnumIdentifier> for Origin {
+	fn from(v: ast::TypeInstEnumIdentifier) -> Self {
 		Origin {
 			desugar_kind: None,
 			ast_node: v.into(),
