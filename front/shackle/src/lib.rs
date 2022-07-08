@@ -4,87 +4,68 @@
 #![warn(unused_crate_dependencies, unused_extern_crates)]
 #![warn(variant_size_differences)]
 
+pub mod arena;
+pub mod db;
 pub mod error;
+pub mod file;
+pub mod syntax;
+pub mod utils;
 
-use error::{NamedSource, ShackleError, SyntaxError};
-use tree_sitter::{Parser, TreeCursor};
+use db::Inputs;
+use error::{MultipleErrors, ShackleError};
+use file::InputFile;
 
-use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::Path;
+use std::{
+	env,
+	path::{Path, PathBuf},
+	sync::Arc,
+	time::Instant,
+};
+
+use crate::{db::FileReader, syntax::db::SourceParser};
+
+/// Shackle error type
+pub type Error = ShackleError;
+/// Result type for Shackle operations
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Parses a list of MiniZinc files given located using the Paths in the vector
-pub fn parse_files(paths: Vec<&Path>) -> Result<(), ShackleError> {
-	let mut parser = Parser::new();
-	parser
-		.set_language(tree_sitter_minizinc::language())
-		.unwrap();
+pub fn parse_files(paths: Vec<&Path>) -> Result<()> {
+	let now = Instant::now();
+	let mut db = db::CompilerDatabase::new();
+	db.set_input_files(Arc::new(
+		paths
+			.into_iter()
+			.map(|p| InputFile::Path(p.to_owned()))
+			.collect(),
+	));
 
-	for i in paths {
-		let file = File::open(Path::new(i)).map_err(|err| ShackleError::FileError {
-			file: i.to_path_buf(),
-			source: err,
-		})?;
-		let mut reader = BufReader::new(file);
-		let mut buffer = String::new();
-		reader
-			.read_to_string(&mut buffer)
-			.map_err(|err| ShackleError::FileError {
-				file: i.to_path_buf(),
-				source: err,
-			})?;
-
-		let tree = parser
-			.parse(&buffer, None)
-			.expect("MiniZinc Tree Sitter parser did not return tree object");
-
-		// Find and return syntax errors
-		if tree.root_node().has_error() {
-			// This would be ideal, but (MISSING) is currently not allowed.
-			// let q =
-			// 	Query::new(tree_sitter_minizinc::language(), "[(ERROR) (MISSING)] @err").unwrap();
-			let mut errors = Vec::new();
-			let mut cursor = tree.walk();
-			let next_node = |c: &mut TreeCursor| {
-				c.goto_next_sibling() || (c.goto_parent() && c.goto_next_sibling())
-			};
-			loop {
-				let node = cursor.node();
-				if node.is_error() || node.is_missing() {
-					errors.push(SyntaxError {
-						src: NamedSource::new(
-							i.to_str().expect("Unable to convert path to str"),
-							buffer.clone(),
-						),
-						span: node.byte_range().into(),
-						msg: if node.is_missing() {
-							format!("Missing {}", node.kind())
-						} else {
-							format!(
-								"Unexpected {}",
-								node.child(0)
-									.expect("ERROR node must always have a child")
-									.kind()
-							)
-						},
-						other: Vec::new(),
-					});
-					if !next_node(&mut cursor) {
-						break;
-					}
-				} else if node.has_error() && cursor.goto_first_child() {
-					continue;
-				} else if !next_node(&mut cursor) {
-					break;
+	let mut search_dirs = Vec::new();
+	let stdlib_dir = env::var("MZN_STDLIB_DIR");
+	match stdlib_dir {
+		Ok(v) => search_dirs.push(PathBuf::from(v)),
+		_ => {}
+	}
+	db.set_search_directories(Arc::new(search_dirs));
+	let mut errors = Vec::new();
+	for model in db.input_models().iter() {
+		match db.cst(**model) {
+			Ok(cst) => {
+				if let Some(e) = cst.error(&db) {
+					errors.push(e.into());
 				}
 			}
-			let mut first = errors.remove(0);
-			first.other = errors;
-			return Err(ShackleError::SyntaxError(first));
+			Err(e) => errors.push(e),
 		}
 	}
-
-	Ok(())
+	println!("Done in {}ms", now.elapsed().as_millis());
+	if errors.is_empty() {
+		Ok(())
+	} else if errors.len() == 1 {
+		Err(errors.pop().unwrap())
+	} else {
+		Err(MultipleErrors { errors }.into())
+	}
 }
 
 #[cfg(test)]
