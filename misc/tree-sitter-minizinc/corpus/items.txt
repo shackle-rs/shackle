@@ -55,7 +55,7 @@ any: (x, y);
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier))
   item: (declaration type: (type_base domain: (primitive_type)) name: (identifier) annotation: (identifier) annotation: (identifier) annotation: (identifier))
   item: (declaration type: (array_type dimension: (type_base domain: (identifier)) dimension: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) type: (type_base domain: (primitive_type))) name: (identifier) definition: (call function: (identifier) argument: (identifier)))
-  item: (declaration type: (type_base) name: (pattern_tuple field: (identifier) field: (identifier))))
+  item: (declaration type: (any_type) name: (pattern_tuple field: (identifier) field: (identifier))))
 
 ===========
 Enumeration
@@ -170,6 +170,6 @@ type qux = foo;
 ---
 
 (source_file
-  (type_alias (identifier) (type_base (primitive_type)))
+  (type_alias (identifier) (set_type (type_base (primitive_type))))
   (type_alias (identifier) (array_type (type_base (primitive_type)) (type_base (primitive_type))))
   (type_alias (identifier) (type_base (identifier))))

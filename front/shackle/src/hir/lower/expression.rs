@@ -1,7 +1,12 @@
+use rustc_hash::FxHashMap;
+
 use crate::{
 	arena::ArenaIndex,
 	error::SyntaxError,
-	hir::source::{DesugarKind, Origin},
+	hir::{
+		db::HirStringData,
+		source::{DesugarKind, Origin},
+	},
 	syntax::ast::{self, AstNode},
 	Error,
 };
@@ -36,11 +41,24 @@ impl ExpressionCollector<'_> {
 		let collected: Expression = match expression {
 			ast::Expression::IntegerLiteral(i) => IntegerLiteral(i.value()).into(),
 			ast::Expression::FloatLiteral(f) => FloatLiteral::new(f.value()).into(),
-			ast::Expression::BoolLiteral(b) => BoolLiteral(b.value()).into(),
+			ast::Expression::BooleanLiteral(b) => BooleanLiteral(b.value()).into(),
 			ast::Expression::StringLiteral(s) => StringLiteral::new(s.value(), self.db).into(),
 			ast::Expression::Absent(_) => Expression::Absent,
 			ast::Expression::Infinity(_) => Expression::Infinity,
-			ast::Expression::Anonymous(_) => Expression::Anonymous,
+			ast::Expression::Anonymous(a) => {
+				// No longer support anonymous variables, instead use
+				let (src, span) = a.cst_node().source_span(self.db.upcast());
+				self.diagnostics.push(
+					SyntaxError {
+						src,
+						span,
+						msg: "Anonymous variables in expressions are not supported".to_string(),
+						other: Vec::new(),
+					}
+					.into(),
+				);
+				Expression::Missing
+			}
 			ast::Expression::Identifier(i) => Identifier::new(i.name(), self.db).into(),
 			ast::Expression::TupleLiteral(t) => self.collect_tuple_literal(t).into(),
 			ast::Expression::RecordLiteral(r) => self.collect_record_literal(r).into(),
@@ -68,36 +86,67 @@ impl ExpressionCollector<'_> {
 
 	/// Lower an AST type into HIR
 	pub fn collect_type(&mut self, t: ast::Type) -> ArenaIndex<Type> {
+		let mut tiids = FxHashMap::default();
+		self.collect_type_with_tiids(t, &mut tiids)
+	}
+
+	/// Lower an AST type into HIR and collect implicit type inst ID declarations
+	pub fn collect_type_with_tiids(
+		&mut self,
+		t: ast::Type,
+		tiids: &mut FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+	) -> ArenaIndex<Type> {
 		let origin = t.clone().into();
 		if t.is_missing() {
 			return self.alloc_type(origin, Type::Missing);
 		}
 		let ty = match t {
 			ast::Type::ArrayType(a) => Type::Array {
-				dimensions: a
-					.dimensions()
-					.map(|dim| self.collect_array_dimension(dim))
-					.collect(),
+				opt: OptType::NonOpt,
+				dimensions: {
+					let dims: Box<[_]> = a.dimensions().map(|dim| self.collect_type(dim)).collect();
+					if dims.len() == 1 {
+						dims[0]
+					} else {
+						self.alloc_type(
+							origin.clone(),
+							Type::Tuple {
+								opt: OptType::NonOpt,
+								fields: dims,
+							},
+						)
+					}
+				},
 				element: self.collect_type(a.element_type()),
 			},
-			ast::Type::TupleType(t) => {
-				Type::Tuple(t.fields().map(|f| self.collect_type(f)).collect())
-			}
-			ast::Type::RecordType(r) => Type::Record(
-				r.fields()
+			ast::Type::SetType(s) => Type::Set {
+				inst: s.var_type(),
+				opt: s.opt_type(),
+				element: self.collect_type(s.element_type()),
+			},
+			ast::Type::TupleType(t) => Type::Tuple {
+				opt: OptType::NonOpt,
+				fields: t.fields().map(|f| self.collect_type(f)).collect(),
+			},
+			ast::Type::RecordType(r) => Type::Record {
+				opt: OptType::NonOpt,
+				fields: r
+					.fields()
 					.map(|f| {
 						(
-							Identifier::new(f.name().name(), self.db),
+							self.collect_pattern(f.name().into()),
 							self.collect_type(f.field_type()),
 						)
 					})
 					.collect(),
-			),
+			},
 			ast::Type::OperationType(o) => Type::Operation {
+				opt: OptType::NonOpt,
 				return_type: self.collect_type(o.return_type()),
 				parameter_types: o.parameter_types().map(|p| self.collect_type(p)).collect(),
 			},
-			ast::Type::TypeBase(b) => Type::Base(self.collect_type_base(b)),
+			ast::Type::TypeBase(b) => self.collect_type_base(b, tiids),
+			ast::Type::AnyType(_) => Type::Any,
 		};
 		self.alloc_type(origin, ty)
 	}
@@ -115,8 +164,8 @@ impl ExpressionCollector<'_> {
 			}
 			ast::Pattern::Anonymous(_) => self.alloc_pattern(origin, Pattern::Anonymous),
 			ast::Pattern::Absent(_) => self.alloc_pattern(origin, Pattern::Absent),
-			ast::Pattern::BoolLiteral(b) => {
-				self.alloc_pattern(origin, Pattern::Boolean(BoolLiteral(b.value())))
+			ast::Pattern::BooleanLiteral(b) => {
+				self.alloc_pattern(origin, Pattern::Boolean(BooleanLiteral(b.value())))
 			}
 			ast::Pattern::StringLiteral(s) => self.alloc_pattern(
 				origin,
@@ -179,76 +228,64 @@ impl ExpressionCollector<'_> {
 		(self.data, self.source_map)
 	}
 
-	fn collect_type_base(&mut self, b: ast::TypeBase) -> TypeBase {
-		match b.any_type() {
-			ast::AnyType::Any => match b.domain() {
-				Some(d) => TypeBase::AnyTi(TypeInstIdentifier::new(
-					d.cast::<ast::TypeInstIdentifier>().unwrap().name(),
-					self.db,
-				)),
-				None => TypeBase::Any,
+	fn collect_type_base(
+		&mut self,
+		b: ast::TypeBase,
+		tiids: &mut FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+	) -> Type {
+		match b.domain() {
+			ast::Domain::Bounded(e) => Type::Bounded {
+				inst: b.var_type(),
+				opt: b.opt_type(),
+				domain: self.collect_expression(e),
 			},
-			ast::AnyType::NonAny => {
-				let domain = match b.domain().unwrap() {
-					ast::Domain::Bounded(e) => Domain::Bounded(self.collect_expression(e)),
-					ast::Domain::Unbounded(u) => Domain::Unbounded(match u.primitive_type() {
-						ast::PrimitiveType::Ann => PrimitiveType::Ann,
-						ast::PrimitiveType::Bool => PrimitiveType::Bool,
-						ast::PrimitiveType::Float => PrimitiveType::Float,
-						ast::PrimitiveType::Int => PrimitiveType::Int,
-						ast::PrimitiveType::String => PrimitiveType::String,
-					}),
-					ast::Domain::TypeInstIdentifier(tiid) => {
-						Domain::TypeInstIdentifier(TypeInstIdentifier::new(tiid.name(), self.db))
-					}
-					ast::Domain::TypeInstEnumIdentifier(tiid) => Domain::TypeInstEnumIdentifier(
-						TypeInstEnumIdentifier::new(tiid.name(), self.db),
-					),
+			ast::Domain::Unbounded(u) => Type::Primitive {
+				inst: b.var_type().unwrap_or(VarType::Par),
+				opt: b.opt_type().unwrap_or(OptType::NonOpt),
+				primitive_type: u.primitive_type(),
+			},
+			ast::Domain::TypeInstIdentifier(tiid) => {
+				let ident = Identifier::new(tiid.name(), self.db);
+				let origin: Origin = tiid.clone().into();
+				tiids.entry(ident).or_insert(TypeInstIdentifierDeclaration {
+					name: self.alloc_pattern(origin.clone(), ident),
+					is_enum: false,
+				});
+				let (inst, opt) = match (b.any_type(), b.var_type(), b.opt_type()) {
+					(true, _, _) => (None, None), // Unrestricted
+					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
+					(_, None, o) => (Some(VarType::Par), o), // opt prefix means par opt
+					(_, i, None) => (i, Some(OptType::NonOpt)), // var prefix means var non-opt
+					(_, i, o) => (i, o),          // var opt means var opt
 				};
-				TypeBase::NonAny {
-					is_var: b.var_type() == ast::VarType::Var,
-					is_opt: b.opt_type() == ast::OptType::Opt,
-					set_type: b.set_type() == ast::SetType::Set,
-					domain,
+				Type::Bounded {
+					inst,
+					opt,
+					domain: self.alloc_expression(origin.clone(), ident),
 				}
 			}
-		}
-	}
-
-	fn collect_array_dimension(&mut self, dim: ast::TypeBase) -> ArrayDimension {
-		match (
-			dim.var_type(),
-			dim.opt_type(),
-			dim.set_type(),
-			dim.any_type(),
-		) {
-			(
-				ast::VarType::Par,
-				ast::OptType::NonOpt,
-				ast::SetType::NonSet,
-				ast::AnyType::NonAny,
-			) => match dim.domain().unwrap() {
-				ast::Domain::Unbounded(p) => match p.primitive_type() {
-					ast::PrimitiveType::Int => ArrayDimension::Integer,
-					_ => {
-						// self.diagnostics.push()
-						ArrayDimension::Missing
-					}
-				},
-				ast::Domain::Bounded(is) => ArrayDimension::Expression(self.collect_expression(is)),
-				ast::Domain::TypeInstEnumIdentifier(tiid) => {
-					ArrayDimension::TypeInstEnumIdentifier(TypeInstEnumIdentifier::new(
-						tiid.name(),
-						self.db,
-					))
+			ast::Domain::TypeInstEnumIdentifier(tiid) => {
+				let ident = Identifier::new(tiid.name(), self.db);
+				let origin: Origin = tiid.clone().into();
+				tiids
+					.entry(ident)
+					.or_insert(TypeInstIdentifierDeclaration {
+						name: self.alloc_pattern(origin.clone(), ident),
+						is_enum: true,
+					})
+					.is_enum = true;
+				let (inst, opt) = match (b.any_type(), b.var_type(), b.opt_type()) {
+					(true, _, _) => (None, None), // Unrestricted
+					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
+					(_, None, o) => (Some(VarType::Par), o), // opt prefix means par opt
+					(_, i, None) => (i, Some(OptType::NonOpt)), // var prefix means var non-opt
+					(_, i, o) => (i, o),          // var opt means var opt
+				};
+				Type::Bounded {
+					inst,
+					opt,
+					domain: self.alloc_expression(origin.clone(), ident),
 				}
-				ast::Domain::TypeInstIdentifier(tiid) => ArrayDimension::TypeInstIdentifier(
-					TypeInstIdentifier::new(tiid.name(), self.db),
-				),
-			},
-			_ => {
-				// only plain par allowed
-				ArrayDimension::Missing
 			}
 		}
 	}
@@ -288,8 +325,7 @@ impl ExpressionCollector<'_> {
 		} else if indices[0].len() == 1 && indices[1..].iter().all(|is| is.is_empty()) {
 			// Start indexed, so desugar into arrayNd call
 			let origin = Origin::new(expr, Some(DesugarKind::IndexedArrayLiteral));
-			let function =
-				self.alloc_expression(origin.clone(), Identifier::new("arrayNd", self.db));
+			let function = self.ident_exp(origin.clone(), "arrayNd");
 			let arguments = Box::new([indices[0][0], self.alloc_expression(origin.clone(), array)]);
 			self.alloc_expression(
 				origin.clone(),
@@ -323,8 +359,7 @@ impl ExpressionCollector<'_> {
 					dims[idx].push(*is);
 				}
 			}
-			let function =
-				self.alloc_expression(origin.clone(), Identifier::new("arrayNd", self.db));
+			let function = self.ident_exp(origin.clone(), "arrayNd");
 			let mut arguments = dims
 				.into_iter()
 				.map(|d| {
@@ -427,7 +462,7 @@ impl ExpressionCollector<'_> {
 				self.alloc_expression(origin.clone(), IntegerLiteral(1)),
 				self.alloc_expression(origin.clone(), IntegerLiteral(col_count as i64)),
 			];
-			let range_fn = self.alloc_expression(origin.clone(), Identifier::new("..", self.db));
+			let range_fn = self.ident_exp(origin.clone(), "..");
 			self.alloc_expression(
 				origin.clone(),
 				Call {
@@ -449,7 +484,7 @@ impl ExpressionCollector<'_> {
 				self.alloc_expression(origin.clone(), IntegerLiteral(1)),
 				self.alloc_expression(origin.clone(), IntegerLiteral(row_count as i64)),
 			];
-			let range_fn = self.alloc_expression(origin.clone(), Identifier::new("..", self.db));
+			let range_fn = self.ident_exp(origin.clone(), "..");
 			self.alloc_expression(
 				origin.clone(),
 				Call {
@@ -473,7 +508,7 @@ impl ExpressionCollector<'_> {
 			},
 		);
 
-		let function = self.alloc_expression(origin.clone(), Identifier::new("array2d", self.db));
+		let function = self.ident_exp(origin.clone(), "array2d");
 		let arguments = Box::new([row_index_set, column_index_set, flat_array]);
 		self.alloc_expression(
 			origin,
@@ -492,10 +527,7 @@ impl ExpressionCollector<'_> {
 				.map(|i| match i {
 					ast::ArrayIndex::Expression(e) => self.collect_expression(e),
 					ast::ArrayIndex::IndexSlice(s) => {
-						let function = self.alloc_expression(
-							s.clone().into(),
-							Identifier::new(s.operator(), self.db),
-						);
+						let function = self.ident_exp(s.clone().into(), s.operator());
 						self.alloc_expression(
 							s.clone().into(),
 							Call {
@@ -561,10 +593,7 @@ impl ExpressionCollector<'_> {
 			.into_iter()
 			.map(|a| self.collect_expression(a))
 			.collect();
-		let function = self.alloc_expression(
-			ast::Expression::from(o.clone()).into(),
-			Identifier::new(o.operator(), self.db),
-		);
+		let function = self.ident_exp(ast::Expression::from(o.clone()).into(), o.operator());
 		self.alloc_expression(
 			Origin::new(ast::Expression::from(o), Some(DesugarKind::InfixOperator)),
 			Call {
@@ -576,10 +605,7 @@ impl ExpressionCollector<'_> {
 
 	fn collect_prefix_operator(&mut self, o: ast::PrefixOperator) -> ArenaIndex<Expression> {
 		let arguments = Box::new([self.collect_expression(o.operand())]);
-		let function = self.alloc_expression(
-			ast::Expression::from(o.clone()).into(),
-			Identifier::new(o.operator(), self.db),
-		);
+		let function = self.ident_exp(ast::Expression::from(o.clone()).into(), o.operator());
 		self.alloc_expression(
 			Origin::new(ast::Expression::from(o), Some(DesugarKind::PrefixOperator)),
 			Call {
@@ -591,10 +617,10 @@ impl ExpressionCollector<'_> {
 
 	fn collect_postfix_operator(&mut self, o: ast::PostfixOperator) -> ArenaIndex<Expression> {
 		let arguments = Box::new([self.collect_expression(o.operand())]);
-		let function = self.alloc_expression(
+
+		let function = self.ident_exp(
 			ast::Expression::from(o.clone()).into(),
-			// Add o suffix to postfix operators to avoid conflict with prefix version
-			Identifier::new(format!("{}o", o.operator()), self.db),
+			format!("{}o", o.operator()),
 		);
 		self.alloc_expression(
 			Origin::new(ast::Expression::from(o), Some(DesugarKind::PostfixOperator)),
@@ -644,8 +670,7 @@ impl ExpressionCollector<'_> {
 				}
 				ast::InterpolationItem::Expression(e) => {
 					let arguments = Box::new([self.collect_expression(e.clone())]);
-					let function =
-						self.alloc_expression(e.clone().into(), Identifier::new("show", self.db));
+					let function = self.ident_exp(e.clone().into(), "show");
 					self.alloc_expression(
 						e.into(),
 						Call {
@@ -656,7 +681,7 @@ impl ExpressionCollector<'_> {
 				}
 			})
 			.collect();
-		let function = self.alloc_expression(origin.clone(), Identifier::new("concat", self.db));
+		let function = self.ident_exp(origin.clone(), "concat");
 
 		self.alloc_expression(
 			origin.clone(),
@@ -736,8 +761,8 @@ impl ExpressionCollector<'_> {
 
 	fn collect_tuple_access(&mut self, t: ast::TupleAccess) -> TupleAccess {
 		TupleAccess {
-			tuple: self.collect_expression(t.tuple()),
 			field: IntegerLiteral(t.field().value()),
+			tuple: self.collect_expression(t.tuple()),
 		}
 	}
 
@@ -759,6 +784,14 @@ impl ExpressionCollector<'_> {
 		let idx = self.collect_expression(e.expression());
 		self.data.annotations.insert(idx, annotations);
 		idx
+	}
+
+	fn ident_exp<T: Into<HirStringData>>(
+		&mut self,
+		origin: Origin,
+		id: T,
+	) -> ArenaIndex<Expression> {
+		self.alloc_expression(origin, Identifier::new(id, self.db))
 	}
 
 	pub(super) fn alloc_expression<V: Into<Expression>>(

@@ -16,7 +16,8 @@ ast_enum!(
 	"output" => Output,
 	"function_item" => Function,
 	"predicate" => Predicate,
-	"annotation" => Annotation
+	"annotation" => Annotation,
+	"type_alias" => TypeAlias,
 );
 
 ast_node!(
@@ -443,6 +444,31 @@ impl Parameter {
 	}
 }
 
+ast_node!(
+	/// Type alias item
+	TypeAlias,
+	name,
+	aliased_type,
+	annotations
+);
+
+impl TypeAlias {
+	/// The name of this type alias
+	pub fn name(&self) -> Identifier {
+		child_with_field_name(self, "name")
+	}
+
+	/// The type this is an alias for
+	pub fn aliased_type(&self) -> Type {
+		child_with_field_name(self, "type")
+	}
+
+	/// The annotations
+	pub fn annotations(&self) -> Children<'_, Expression> {
+		children_with_field_name(self, "annotation")
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
@@ -469,10 +495,9 @@ mod test {
 			"x"
 		);
 		let base = declaration.declared_type().cast::<TypeBase>().unwrap();
-		assert_eq!(base.var_type(), VarType::Par);
+		assert!(base.var_type().is_none());
 		let pt = base
 			.domain()
-			.unwrap()
 			.cast_ref::<UnboundedDomain>()
 			.unwrap()
 			.primitive_type();
@@ -586,12 +611,8 @@ mod test {
 			"x"
 		);
 		let param_type = param.declared_type().cast::<TypeBase>().unwrap();
-		assert_eq!(param_type.var_type(), VarType::Par);
-		let domain = param_type
-			.domain()
-			.unwrap()
-			.cast::<UnboundedDomain>()
-			.unwrap();
+		assert!(param_type.var_type().is_none());
+		let domain = param_type.domain().cast::<UnboundedDomain>().unwrap();
 		assert!(domain.primitive_type().is_int());
 
 		let body = function.body().unwrap().cast::<InfixOperator>().unwrap();
@@ -600,5 +621,22 @@ mod test {
 		assert_eq!(lhs.name(), "x");
 		let rhs = body.right().cast::<IntegerLiteral>().unwrap();
 		assert_eq!(rhs.value(), 1);
+	}
+
+	#[test]
+	fn test_type_alias() {
+		let model = parse_model("type Foo = set of int");
+		let items: Vec<_> = model.items().collect();
+		assert_eq!(items.len(), 1);
+		let alias = items.first().unwrap().cast_ref::<TypeAlias>().unwrap();
+		assert_eq!("Foo", alias.name().name());
+		let st = alias.aliased_type().cast::<SetType>().unwrap();
+		assert_eq!(st.var_type(), VarType::Par);
+		assert_eq!(st.opt_type(), OptType::NonOpt);
+		let et = st.element_type().cast::<TypeBase>().unwrap();
+		assert!(et.var_type().is_none());
+		assert!(et.opt_type().is_none());
+		let d = et.domain().cast::<UnboundedDomain>().unwrap();
+		assert_eq!(d.primitive_type(), PrimitiveType::Int);
 	}
 }

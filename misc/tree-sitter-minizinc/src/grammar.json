@@ -1000,10 +1000,6 @@
       "members": [
         {
           "type": "SYMBOL",
-          "name": "_identifier"
-        },
-        {
-          "type": "SYMBOL",
           "name": "_literal"
         },
         {
@@ -1012,27 +1008,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "call"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "generator_call"
-        },
-        {
-          "type": "SYMBOL",
           "name": "if_then_else"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "indexed_access"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "tuple_access"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "record_access"
         },
         {
           "type": "SYMBOL",
@@ -1061,6 +1037,39 @@
         {
           "type": "SYMBOL",
           "name": "string_interpolation"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_callable"
+        }
+      ]
+    },
+    "_callable": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "call"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "generator_call"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "indexed_access"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "tuple_access"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "record_access"
         },
         {
           "type": "SYMBOL",
@@ -1195,7 +1204,7 @@
             "name": "function",
             "content": {
               "type": "SYMBOL",
-              "name": "_unannotated_expression"
+              "name": "_callable"
             }
           },
           {
@@ -1261,7 +1270,7 @@
             "name": "function",
             "content": {
               "type": "SYMBOL",
-              "name": "_unannotated_expression"
+              "name": "_callable"
             }
           },
           {
@@ -1347,7 +1356,7 @@
               "name": "name",
               "content": {
                 "type": "SYMBOL",
-                "name": "_identifier"
+                "name": "_pattern"
               }
             },
             {
@@ -1364,7 +1373,7 @@
                     "name": "name",
                     "content": {
                       "type": "SYMBOL",
-                      "name": "_identifier"
+                      "name": "_pattern"
                     }
                   }
                 ]
@@ -2919,6 +2928,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "set_type"
+        },
+        {
+          "type": "SYMBOL",
           "name": "tuple_type"
         },
         {
@@ -2932,6 +2945,10 @@
         {
           "type": "SYMBOL",
           "name": "type_base"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "any_type"
         }
       ]
     },
@@ -2994,6 +3011,68 @@
         {
           "type": "STRING",
           "value": "]"
+        },
+        {
+          "type": "STRING",
+          "value": "of"
+        },
+        {
+          "type": "FIELD",
+          "name": "type",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_type"
+          }
+        }
+      ]
+    },
+    "set_type": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "var_par",
+              "content": {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "var"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "par"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "FIELD",
+              "name": "opt",
+              "content": {
+                "type": "STRING",
+                "value": "opt"
+              }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": "set"
         },
         {
           "type": "STRING",
@@ -3296,31 +3375,6 @@
               ]
             },
             {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "FIELD",
-                  "name": "set",
-                  "content": {
-                    "type": "SEQ",
-                    "members": [
-                      {
-                        "type": "STRING",
-                        "value": "set"
-                      },
-                      {
-                        "type": "STRING",
-                        "value": "of"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "type": "BLANK"
-                }
-              ]
-            },
-            {
               "type": "FIELD",
               "name": "domain",
               "content": {
@@ -3359,20 +3413,12 @@
               }
             },
             {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "FIELD",
-                  "name": "domain",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "type_inst_id"
-                  }
-                },
-                {
-                  "type": "BLANK"
-                }
-              ]
+              "type": "FIELD",
+              "name": "domain",
+              "content": {
+                "type": "SYMBOL",
+                "name": "type_inst_id"
+              }
             }
           ]
         }
@@ -3410,6 +3456,10 @@
     "type_inst_enum_id": {
       "type": "PATTERN",
       "value": "\\$\\$[A-Za-z][A-Za-z0-9_]*"
+    },
+    "any_type": {
+      "type": "STRING",
+      "value": "any"
     },
     "_literal": {
       "type": "CHOICE",
@@ -4254,11 +4304,11 @@
         },
         {
           "type": "SYMBOL",
-          "name": "anonymous"
+          "name": "absent"
         },
         {
           "type": "SYMBOL",
-          "name": "absent"
+          "name": "anonymous"
         },
         {
           "type": "SYMBOL",
@@ -4596,12 +4646,24 @@
   ],
   "conflicts": [
     [
-      "_unannotated_expression",
-      "generator"
+      "_callable",
+      "assignment"
     ],
     [
-      "_unannotated_expression",
-      "assignment"
+      "_callable",
+      "_pattern"
+    ],
+    [
+      "_callable",
+      "pattern_call"
+    ],
+    [
+      "_literal",
+      "_pattern"
+    ],
+    [
+      "_literal",
+      "pattern_numeric_literal"
     ],
     [
       "array_literal_2d",

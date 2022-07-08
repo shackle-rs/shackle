@@ -9,7 +9,7 @@ pub struct IntegerLiteral(pub i64);
 
 /// A boolean literal
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq)]
-pub struct BoolLiteral(pub bool);
+pub struct BooleanLiteral(pub bool);
 
 /// A float literal
 ///

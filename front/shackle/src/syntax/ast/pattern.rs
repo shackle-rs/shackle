@@ -1,7 +1,7 @@
 //! AST representation of destructuring patterns
 
 use super::{
-	helpers::*, Absent, Anonymous, AstNode, BoolLiteral, Children, FloatLiteral, Identifier,
+	helpers::*, Absent, Anonymous, AstNode, BooleanLiteral, Children, FloatLiteral, Identifier,
 	Infinity, IntegerLiteral, StringLiteral,
 };
 
@@ -11,7 +11,7 @@ ast_enum!(
 	"identifier" | "quoted_identifier" => Identifier,
 	"anonymous" => Anonymous,
 	"absent" => Absent,
-	"boolean_literal" => BoolLiteral,
+	"boolean_literal" => BooleanLiteral,
 	"string_literal" => StringLiteral,
 	"pattern_numeric_literal" => PatternNumericLiteral,
 	"pattern_call" => Call(PatternCall),

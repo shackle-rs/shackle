@@ -51,6 +51,8 @@ pub struct Model {
 	/// Solve items (only one should be present across entire program, but we
 	/// allow for many to allow typechecking to occur)
 	pub solves: Arena<Item<Solve>>,
+	/// Type alias items
+	pub type_aliases: Arena<Item<TypeAlias>>,
 }
 
 impl Index<ArenaIndex<Item<Assignment>>> for Model {
@@ -99,5 +101,12 @@ impl Index<ArenaIndex<Item<Solve>>> for Model {
 	type Output = Item<Solve>;
 	fn index(&self, index: ArenaIndex<Item<Solve>>) -> &Self::Output {
 		&self.solves[index]
+	}
+}
+
+impl Index<ArenaIndex<Item<TypeAlias>>> for Model {
+	type Output = Item<TypeAlias>;
+	fn index(&self, index: ArenaIndex<Item<TypeAlias>>) -> &Self::Output {
+		&self.type_aliases[index]
 	}
 }

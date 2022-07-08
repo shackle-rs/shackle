@@ -159,6 +159,10 @@ pub enum AstNodeRef {
 	IndexSlice(IndexSlice),
 	/// Enumeration case
 	EnumerationCase(EnumerationCase),
+	/// Type-inst ID
+	TypeInstIdentifier(TypeInstIdentifier),
+	/// Type-inst enum ID
+	TypeInstEnumIdentifier(TypeInstEnumIdentifier),
 }
 
 impl Deref for AstNodeRef {
@@ -174,19 +178,23 @@ impl Deref for AstNodeRef {
 			AstNodeRef::Generator(g) => g,
 			AstNodeRef::IndexSlice(i) => i,
 			AstNodeRef::EnumerationCase(e) => e,
+			AstNodeRef::TypeInstIdentifier(i) => i,
+			AstNodeRef::TypeInstEnumIdentifier(e) => e,
 		}
 	}
 }
 
-impl_enum_from!(AstNodeRef::Expression(Expression));
-impl_enum_from!(AstNodeRef::Item(Item));
-impl_enum_from!(AstNodeRef::Type(Type));
-impl_enum_from!(AstNodeRef::Pattern(Pattern));
-impl_enum_from!(AstNodeRef::LetItem(LetItem));
-impl_enum_from!(AstNodeRef::Parameter(Parameter));
-impl_enum_from!(AstNodeRef::Generator(Generator));
-impl_enum_from!(AstNodeRef::IndexSlice(IndexSlice));
-impl_enum_from!(AstNodeRef::EnumerationCase(EnumerationCase));
+impl_enum_from!(AstNodeRef::Expression);
+impl_enum_from!(AstNodeRef::Item);
+impl_enum_from!(AstNodeRef::Type);
+impl_enum_from!(AstNodeRef::Pattern);
+impl_enum_from!(AstNodeRef::LetItem);
+impl_enum_from!(AstNodeRef::Parameter);
+impl_enum_from!(AstNodeRef::Generator);
+impl_enum_from!(AstNodeRef::IndexSlice);
+impl_enum_from!(AstNodeRef::EnumerationCase);
+impl_enum_from!(AstNodeRef::TypeInstIdentifier);
+impl_enum_from!(AstNodeRef::TypeInstEnumIdentifier);
 
 #[cfg(test)]
 mod test {

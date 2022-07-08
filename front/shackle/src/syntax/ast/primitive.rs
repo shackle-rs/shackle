@@ -32,11 +32,11 @@ impl FloatLiteral {
 
 ast_node!(
 	/// Boolean literal
-	BoolLiteral,
+	BooleanLiteral,
 	value
 );
 
-impl BoolLiteral {
+impl BooleanLiteral {
 	/// Get the value of this boolean literal
 	pub fn value(&self) -> bool {
 		match self.cst_text() {

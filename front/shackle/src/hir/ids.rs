@@ -1,14 +1,18 @@
 //! IDs for referencing HIR nodes.
 
+use std::sync::Arc;
+
+use miette::SourceSpan;
+
 use crate::{
 	arena::ArenaIndex,
-	file::ModelRef,
+	file::{ModelRef, SourceFile},
 	utils::{impl_enum_from, DebugPrint},
 };
 
 use super::{
 	db::Hir, Assignment, Constraint, Declaration, Enumeration, Expression, Function, Item,
-	ItemData, Model, Output, Pattern, Solve, Type,
+	ItemData, Model, Output, Pattern, Solve, Type, TypeAlias,
 };
 
 /// Reference to an item local to a model.
@@ -28,6 +32,8 @@ pub enum LocalItemRef {
 	Output(ArenaIndex<Item<Output>>),
 	/// Solve item ID
 	Solve(ArenaIndex<Item<Solve>>),
+	/// Type alias item ID
+	TypeAlias(ArenaIndex<Item<TypeAlias>>),
 }
 
 impl LocalItemRef {
@@ -41,6 +47,7 @@ impl LocalItemRef {
 			LocalItemRef::Function(i) => &model[i].data,
 			LocalItemRef::Output(i) => &model[i].data,
 			LocalItemRef::Solve(i) => &model[i].data,
+			LocalItemRef::TypeAlias(i) => &model[i].data,
 		}
 	}
 }
@@ -52,6 +59,7 @@ impl_enum_from!(LocalItemRef::Enumeration(ArenaIndex<Item<Enumeration>>));
 impl_enum_from!(LocalItemRef::Function(ArenaIndex<Item<Function>>));
 impl_enum_from!(LocalItemRef::Output(ArenaIndex<Item<Output>>));
 impl_enum_from!(LocalItemRef::Solve(ArenaIndex<Item<Solve>>));
+impl_enum_from!(LocalItemRef::TypeAlias(ArenaIndex<Item<TypeAlias>>));
 
 /// Global reference to an item.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -64,13 +72,18 @@ impl ItemRef {
 	}
 
 	/// Get the model this item is in
-	pub fn model(&self, db: &dyn Hir) -> ModelRef {
+	pub fn model_ref(&self, db: &dyn Hir) -> ModelRef {
 		db.lookup_intern_item_ref(*self).0
 	}
 
-	/// The the local reference to this item
-	pub fn item(&self, db: &dyn Hir) -> LocalItemRef {
+	/// Get the local reference to this item
+	pub fn local_item_ref(&self, db: &dyn Hir) -> LocalItemRef {
 		db.lookup_intern_item_ref(*self).1
+	}
+
+	/// Get the lowered model which contains this item
+	pub fn model(&self, db: &dyn Hir) -> Arc<Model> {
+		db.lookup_model(self.model_ref(db))
 	}
 }
 
@@ -87,6 +100,7 @@ impl<'a> DebugPrint<'a> for ItemRef {
 			LocalItemRef::Function(i) => model[i].debug_print(db),
 			LocalItemRef::Output(i) => model[i].debug_print(db),
 			LocalItemRef::Solve(i) => model[i].debug_print(db),
+			LocalItemRef::TypeAlias(i) => model[i].debug_print(db),
 		}
 	}
 }
@@ -247,3 +261,19 @@ pub enum NodeRef {
 impl_enum_from!(NodeRef::Model(ModelRef));
 impl_enum_from!(NodeRef::Item(ItemRef));
 impl_enum_from!(NodeRef::Entity(EntityRef));
+
+impl NodeRef {
+	/// Get the source and span for emitting a diagnostic
+	pub fn source_span(&self, db: &dyn Hir) -> (SourceFile, SourceSpan) {
+		let model = match *self {
+			NodeRef::Model(m) => m,
+			NodeRef::Item(i) => i.model_ref(db),
+			NodeRef::Entity(e) => e.item(db).model_ref(db),
+		};
+		let sm = db.lookup_source_map(model);
+		let origin = sm.get_origin(*self).expect("No origin for this node!");
+		let src = SourceFile::new(origin.cst_node().cst().file(), db.upcast());
+		let span = origin.cst_node().as_ref().byte_range().into();
+		(src, span)
+	}
+}

@@ -7,10 +7,12 @@ ast_enum!(
 	/// Type from a declaration
 	Type,
 	"array_type" => ArrayType,
+	"set_type" => SetType,
 	"tuple_type" => TupleType,
 	"record_type" => RecordType,
 	"operation_type" => OperationType,
-	"type_base" => TypeBase
+	"type_base" => TypeBase,
+	"any_type" => AnyType,
 );
 
 ast_node!(
@@ -22,8 +24,47 @@ ast_node!(
 
 impl ArrayType {
 	/// The ranges of the array.
-	pub fn dimensions(&self) -> Children<'_, TypeBase> {
+	pub fn dimensions(&self) -> Children<'_, Type> {
 		children_with_field_name(self, "dimension")
+	}
+
+	/// The type contained in the array
+	pub fn element_type(&self) -> Type {
+		child_with_field_name(self, "type")
+	}
+}
+
+ast_node!(
+	/// Type of a set
+	SetType,
+	var_type,
+	opt_type,
+	element_type
+);
+
+impl SetType {
+	/// Get whether this type is var or par
+	pub fn var_type(&self) -> VarType {
+		let node = self.cst_node().as_ref();
+		node.child_by_field_name("var_par")
+			.map(|c| match c.kind() {
+				"var" => VarType::Var,
+				"par" => VarType::Par,
+				_ => unreachable!(),
+			})
+			.unwrap_or(VarType::Par)
+	}
+
+	/// Get optionality of type
+	pub fn opt_type(&self) -> OptType {
+		let node = self.cst_node().as_ref();
+		node.child_by_field_name("opt")
+			.map(|c| match c.kind() {
+				"opt" => OptType::Opt,
+				"nonopt" => OptType::NonOpt,
+				_ => unreachable!(),
+			})
+			.unwrap_or(OptType::NonOpt)
 	}
 
 	/// The type contained in the array
@@ -101,56 +142,55 @@ ast_node!(
 	TypeBase,
 	var_type,
 	opt_type,
-	set_type,
 	any_type,
 	domain
 );
 
 impl TypeBase {
-	/// Get whether this type is var or par
-	pub fn var_type(&self) -> VarType {
+	/// Get whether this type is var or par.
+	///
+	/// Gives `None` when omitted rather than `Par` since omitting the inst
+	/// when referring to a type-inst alias does not make it par.
+	pub fn var_type(&self) -> Option<VarType> {
 		let node = self.cst_node().as_ref();
-		node.child_by_field_name("var_par")
-			.map(|c| match c.kind() {
-				"var" => VarType::Var,
-				"par" => VarType::Par,
-				_ => unreachable!(),
-			})
-			.unwrap_or(VarType::Par)
+		node.child_by_field_name("var_par").map(|c| match c.kind() {
+			"var" => VarType::Var,
+			"par" => VarType::Par,
+			_ => unreachable!(),
+		})
 	}
 
-	/// Get optionality of type
-	pub fn opt_type(&self) -> OptType {
+	/// Get optionality of type.
+	///
+	/// Gives `None` when omitted rather than `NonOpt` since omitting optionality
+	/// when referring to a type-inst alias does not make it non-optional.
+	pub fn opt_type(&self) -> Option<OptType> {
 		let node = self.cst_node().as_ref();
-		match node.child_by_field_name("opt") {
-			Some(_) => OptType::Opt,
-			None => OptType::NonOpt,
-		}
+		node.child_by_field_name("opt").map(|c| match c.kind() {
+			"opt" => OptType::Opt,
+			"nonopt" => OptType::NonOpt,
+			_ => unreachable!(),
+		})
 	}
 
-	/// Get whether this is a set type
-	pub fn set_type(&self) -> SetType {
-		let node = self.cst_node().as_ref();
-		match node.child_by_field_name("set") {
-			Some(_) => SetType::Set,
-			None => SetType::NonSet,
-		}
-	}
-
-	/// Get whether this is an any type
-	pub fn any_type(&self) -> AnyType {
-		let node = self.cst_node().as_ref();
-		match node.child_by_field_name("any") {
-			Some(_) => AnyType::Any,
-			None => AnyType::NonAny,
-		}
+	/// Get whether this type is any $T
+	pub fn any_type(&self) -> bool {
+		self.cst_node()
+			.as_ref()
+			.child_by_field_name("any")
+			.is_some()
 	}
 
 	/// Get the domain of this type (can be `None` if type is `any`)
-	pub fn domain(&self) -> Option<Domain> {
-		optional_child_with_field_name(self, "domain")
+	pub fn domain(&self) -> Domain {
+		child_with_field_name(self, "domain")
 	}
 }
+
+ast_node!(
+	/// Type is inferred for RHS
+	AnyType
+);
 
 /// Whether a type is var or par
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -168,24 +208,6 @@ pub enum OptType {
 	NonOpt,
 	/// Optional variable
 	Opt,
-}
-
-/// Whether a type is a set or not
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum SetType {
-	/// Non-set variable
-	NonSet,
-	/// Set variable
-	Set,
-}
-
-/// Whether a type is any or not
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum AnyType {
-	/// Non-any variable
-	NonAny,
-	/// Any variable
-	Any,
 }
 
 ast_enum!(
@@ -286,10 +308,9 @@ ast_node!(
 );
 
 impl TypeInstIdentifier {
-	/// Name of identifier without the leading $
+	/// Name of identifier
 	pub fn name(&self) -> &str {
-		let text = self.cst_text();
-		&text[1..]
+		self.cst_text()
 	}
 }
 
@@ -300,10 +321,9 @@ ast_node!(
 );
 
 impl TypeInstEnumIdentifier {
-	/// Name of identifier without the leading $
+	/// Name of identifier
 	pub fn name(&self) -> &str {
-		let text = self.cst_text();
-		&text[2..]
+		self.cst_text()
 	}
 }
 
@@ -330,8 +350,9 @@ mod test {
 			let x_dims: Vec<_> = x_t.dimensions().collect();
 			assert_eq!(x_dims.len(), 1);
 			x_dims[0]
-				.domain()
+				.cast_ref::<TypeBase>()
 				.unwrap()
+				.domain()
 				.cast::<Expression>()
 				.unwrap()
 				.cast::<Anonymous>()
@@ -341,7 +362,6 @@ mod test {
 				.cast::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -355,8 +375,9 @@ mod test {
 			assert_eq!(y_dims.len(), 2);
 			assert_eq!(
 				y_dims[0]
-					.domain()
+					.cast_ref::<TypeBase>()
 					.unwrap()
+					.domain()
 					.cast::<Expression>()
 					.unwrap()
 					.cast::<Identifier>()
@@ -366,8 +387,9 @@ mod test {
 			);
 			assert_eq!(
 				y_dims[1]
-					.domain()
+					.cast_ref::<TypeBase>()
 					.unwrap()
+					.domain()
 					.cast::<Expression>()
 					.unwrap()
 					.cast::<Identifier>()
@@ -380,7 +402,6 @@ mod test {
 				.cast::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -409,7 +430,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -418,7 +438,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -434,7 +453,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -449,7 +467,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -458,7 +475,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -489,7 +505,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -500,7 +515,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -518,7 +532,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -537,7 +550,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -548,7 +560,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -574,7 +585,6 @@ mod test {
 				.cast::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -585,7 +595,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -594,7 +603,6 @@ mod test {
 				.cast_ref::<TypeBase>()
 				.unwrap()
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -613,7 +621,7 @@ mod test {
 			par opt set of Foo: e;
 			any: f;
 			$T: g;
-			any $T: h;
+			opt $T: h;
 			var $$E: i;
 		"#,
 		);
@@ -623,13 +631,10 @@ mod test {
 			let a = items[0].cast_ref::<Declaration>().unwrap();
 			assert_eq!(a.pattern().cast::<Identifier>().unwrap().name(), "a");
 			let t = a.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Par);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::NonAny);
+			assert!(t.var_type().is_none());
+			assert!(t.opt_type().is_none());
 			assert!(t
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -639,13 +644,10 @@ mod test {
 			let b = items[1].cast_ref::<Declaration>().unwrap();
 			assert_eq!(b.pattern().cast::<Identifier>().unwrap().name(), "b");
 			let t = b.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Var);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::NonAny);
+			assert_eq!(t.var_type(), Some(VarType::Var));
+			assert!(t.opt_type().is_none());
 			assert!(t
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -655,13 +657,10 @@ mod test {
 			let c = items[2].cast_ref::<Declaration>().unwrap();
 			assert_eq!(c.pattern().cast::<Identifier>().unwrap().name(), "c");
 			let t = c.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Var);
-			assert_eq!(t.opt_type(), OptType::Opt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::NonAny);
+			assert_eq!(t.var_type(), Some(VarType::Var));
+			assert_eq!(t.opt_type(), Some(OptType::Opt));
 			assert!(t
 				.domain()
-				.unwrap()
 				.cast::<UnboundedDomain>()
 				.unwrap()
 				.primitive_type()
@@ -670,14 +669,14 @@ mod test {
 		{
 			let d = items[3].cast_ref::<Declaration>().unwrap();
 			assert_eq!(d.pattern().cast::<Identifier>().unwrap().name(), "d");
-			let t = d.declared_type().cast::<TypeBase>().unwrap();
+			let t = d.declared_type().cast::<SetType>().unwrap();
 			assert_eq!(t.var_type(), VarType::Var);
 			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::Set);
-			assert_eq!(t.any_type(), AnyType::NonAny);
-			let dom = t
+			let e = t.element_type().cast::<TypeBase>().unwrap();
+			assert!(e.var_type().is_none());
+			assert!(e.opt_type().is_none());
+			let dom = e
 				.domain()
-				.unwrap()
 				.cast::<Expression>()
 				.unwrap()
 				.cast::<InfixOperator>()
@@ -689,14 +688,14 @@ mod test {
 		{
 			let e = items[4].cast_ref::<Declaration>().unwrap();
 			assert_eq!(e.pattern().cast::<Identifier>().unwrap().name(), "e");
-			let t = e.declared_type().cast::<TypeBase>().unwrap();
+			let t = e.declared_type().cast::<SetType>().unwrap();
 			assert_eq!(t.var_type(), VarType::Par);
-			assert_eq!(t.set_type(), SetType::Set);
 			assert_eq!(t.opt_type(), OptType::Opt);
-			assert_eq!(t.any_type(), AnyType::NonAny);
+			let u = t.element_type().cast::<TypeBase>().unwrap();
+			assert!(u.var_type().is_none());
+			assert!(u.opt_type().is_none());
 			assert_eq!(
-				t.domain()
-					.unwrap()
+				u.domain()
 					.cast::<Expression>()
 					.unwrap()
 					.cast::<Identifier>()
@@ -708,62 +707,39 @@ mod test {
 		{
 			let f = items[5].cast_ref::<Declaration>().unwrap();
 			assert_eq!(f.pattern().cast::<Identifier>().unwrap().name(), "f");
-			let t = f.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Par);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::Any);
-			assert!(t.domain().is_none());
+			assert!(f.declared_type().cast::<AnyType>().is_some());
 		}
 		{
 			let g = items[6].cast_ref::<Declaration>().unwrap();
 			assert_eq!(g.pattern().cast::<Identifier>().unwrap().name(), "g");
 			let t = g.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Par);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::NonAny);
+			assert!(t.var_type().is_none());
+			assert!(t.opt_type().is_none());
 			assert_eq!(
-				t.domain()
-					.unwrap()
-					.cast::<TypeInstIdentifier>()
-					.unwrap()
-					.name(),
-				"T"
+				t.domain().cast::<TypeInstIdentifier>().unwrap().name(),
+				"$T"
 			);
 		}
 		{
 			let h = items[7].cast_ref::<Declaration>().unwrap();
 			assert_eq!(h.pattern().cast::<Identifier>().unwrap().name(), "h");
 			let t = h.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Par);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::Any);
+			assert!(t.var_type().is_none());
+			assert_eq!(t.opt_type(), Some(OptType::Opt));
 			assert_eq!(
-				t.domain()
-					.unwrap()
-					.cast::<TypeInstIdentifier>()
-					.unwrap()
-					.name(),
-				"T"
+				t.domain().cast::<TypeInstIdentifier>().unwrap().name(),
+				"$T"
 			);
 		}
 		{
 			let i = items[8].cast_ref::<Declaration>().unwrap();
 			assert_eq!(i.pattern().cast::<Identifier>().unwrap().name(), "i");
 			let t = i.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), VarType::Var);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			assert_eq!(t.set_type(), SetType::NonSet);
-			assert_eq!(t.any_type(), AnyType::NonAny);
+			assert_eq!(t.var_type(), Some(VarType::Var));
+			assert!(t.opt_type().is_none());
 			assert_eq!(
-				t.domain()
-					.unwrap()
-					.cast::<TypeInstEnumIdentifier>()
-					.unwrap()
-					.name(),
-				"E"
+				t.domain().cast::<TypeInstEnumIdentifier>().unwrap().name(),
+				"$$E"
 			);
 		}
 	}

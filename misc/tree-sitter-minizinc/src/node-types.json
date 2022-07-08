@@ -180,6 +180,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "any_type",
+        "named": true
+      },
+      {
         "type": "array_type",
         "named": true
       },
@@ -189,6 +193,10 @@
       },
       {
         "type": "record_type",
+        "named": true
+      },
+      {
+        "type": "set_type",
         "named": true
       },
       {
@@ -518,6 +526,11 @@
     }
   },
   {
+    "type": "any_type",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "array_comprehension",
     "named": true,
     "fields": {
@@ -727,39 +740,7 @@
         "required": true,
         "types": [
           {
-            "type": "absent",
-            "named": true
-          },
-          {
-            "type": "anonymous",
-            "named": true
-          },
-          {
-            "type": "array_comprehension",
-            "named": true
-          },
-          {
-            "type": "array_literal",
-            "named": true
-          },
-          {
-            "type": "array_literal_2d",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
             "type": "call",
-            "named": true
-          },
-          {
-            "type": "case_expression",
-            "named": true
-          },
-          {
-            "type": "float_literal",
             "named": true
           },
           {
@@ -771,39 +752,11 @@
             "named": true
           },
           {
-            "type": "if_then_else",
-            "named": true
-          },
-          {
             "type": "indexed_access",
             "named": true
           },
           {
-            "type": "infinity",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "let_expression",
-            "named": true
-          },
-          {
             "type": "parenthesised_expression",
-            "named": true
-          },
-          {
-            "type": "postfix_operator",
-            "named": true
-          },
-          {
-            "type": "prefix_operator",
             "named": true
           },
           {
@@ -815,31 +768,7 @@
             "named": true
           },
           {
-            "type": "record_literal",
-            "named": true
-          },
-          {
-            "type": "set_comprehension",
-            "named": true
-          },
-          {
-            "type": "set_literal",
-            "named": true
-          },
-          {
-            "type": "string_interpolation",
-            "named": true
-          },
-          {
-            "type": "string_literal",
-            "named": true
-          },
-          {
             "type": "tuple_access",
-            "named": true
-          },
-          {
-            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -1711,11 +1640,43 @@
         "required": true,
         "types": [
           {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
           {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
             "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1741,39 +1702,7 @@
         "required": true,
         "types": [
           {
-            "type": "absent",
-            "named": true
-          },
-          {
-            "type": "anonymous",
-            "named": true
-          },
-          {
-            "type": "array_comprehension",
-            "named": true
-          },
-          {
-            "type": "array_literal",
-            "named": true
-          },
-          {
-            "type": "array_literal_2d",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
             "type": "call",
-            "named": true
-          },
-          {
-            "type": "case_expression",
-            "named": true
-          },
-          {
-            "type": "float_literal",
             "named": true
           },
           {
@@ -1785,39 +1714,11 @@
             "named": true
           },
           {
-            "type": "if_then_else",
-            "named": true
-          },
-          {
             "type": "indexed_access",
             "named": true
           },
           {
-            "type": "infinity",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "let_expression",
-            "named": true
-          },
-          {
             "type": "parenthesised_expression",
-            "named": true
-          },
-          {
-            "type": "postfix_operator",
-            "named": true
-          },
-          {
-            "type": "prefix_operator",
             "named": true
           },
           {
@@ -1829,31 +1730,7 @@
             "named": true
           },
           {
-            "type": "record_literal",
-            "named": true
-          },
-          {
-            "type": "set_comprehension",
-            "named": true
-          },
-          {
-            "type": "set_literal",
-            "named": true
-          },
-          {
-            "type": "string_interpolation",
-            "named": true
-          },
-          {
-            "type": "string_literal",
-            "named": true
-          },
-          {
             "type": "tuple_access",
-            "named": true
-          },
-          {
-            "type": "tuple_literal",
             "named": true
           }
         ]
@@ -3567,6 +3444,46 @@
     }
   },
   {
+    "type": "set_type",
+    "named": true,
+    "fields": {
+      "opt": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "opt",
+            "named": false
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      },
+      "var_par": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "par",
+            "named": false
+          },
+          {
+            "type": "var",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "source_file",
     "named": true,
     "fields": {
@@ -3858,7 +3775,7 @@
       },
       "domain": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "_expression",
@@ -3884,20 +3801,6 @@
         "types": [
           {
             "type": "opt",
-            "named": false
-          }
-        ]
-      },
-      "set": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "of",
-            "named": false
-          },
-          {
-            "type": "set",
             "named": false
           }
         ]
