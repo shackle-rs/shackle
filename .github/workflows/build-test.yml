@@ -1,0 +1,42 @@
+name: Build and test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+      - name: Build shackle-cli
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: --root dist/ --path front/shackle-cli
+      - name: Build shackle-ls
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: --root dist/ --path front/shackle-ls
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: shackle-${{ matrix.os }}
+          path: dist/
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
