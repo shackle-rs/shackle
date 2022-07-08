@@ -7,7 +7,8 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-miette = { version = "4.2.1" }
-thiserror = "1.0.3"
+miette = { version = "4.7.1" }
+thiserror = "1.0.31"
 tree-sitter = "0.20.6"
 tree-sitter-minizinc = { path = "../../misc/tree-sitter-minizinc" }
+salsa = {git = "https://github.com/salsa-rs/salsa"}

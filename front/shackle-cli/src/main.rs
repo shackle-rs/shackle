@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 mod compile;
 
-/// The main function is the entry point for the `schackle` executable.
+/// The main function is the entry point for the `shackle` executable.
 ///
 /// It parses the command-line arguments using a Clap parser, processes the arguments, and then
 /// dispatches to called operation.
@@ -48,14 +48,14 @@ fn main() -> Result<()> {
 	};
 	logger.init();
 
-	log::warn!("Shackle is an unfinished product ready to be used for any purpose apart from its own development.");
+	log::warn!("Shackle is an unfinished product not ready to be used for any purpose apart from its own development.");
 
 	// Dispatch to the correct subcommand
 	match panic::catch_unwind(|| match opts.subcmd {
 		SubCommand::Compile(s) => s.dispatch(),
 		_ => unimplemented!(),
 	}) {
-		Err(_) => Err(InternalError::new("Panic occurred during execution".into()).into()),
+		Err(_) => Err(InternalError::new("Panic occurred during execution").into()),
 		Ok(res) => res,
 	}
 }
