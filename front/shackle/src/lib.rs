@@ -8,6 +8,7 @@ pub mod arena;
 pub mod db;
 pub mod error;
 pub mod file;
+pub mod hir;
 pub mod syntax;
 pub mod utils;
 
@@ -22,7 +23,7 @@ use std::{
 	time::Instant,
 };
 
-use crate::{db::FileReader, syntax::db::SourceParser};
+use crate::hir::db::Hir;
 
 /// Shackle error type
 pub type Error = ShackleError;
@@ -47,17 +48,7 @@ pub fn parse_files(paths: Vec<&Path>) -> Result<()> {
 		_ => {}
 	}
 	db.set_search_directories(Arc::new(search_dirs));
-	let mut errors = Vec::new();
-	for model in db.input_models().iter() {
-		match db.cst(**model) {
-			Ok(cst) => {
-				if let Some(e) = cst.error(&db) {
-					errors.push(e.into());
-				}
-			}
-			Err(e) => errors.push(e),
-		}
-	}
+	let mut errors = (*db.all_diagnostics()).clone();
 	println!("Done in {}ms", now.elapsed().as_millis());
 	if errors.is_empty() {
 		Ok(())

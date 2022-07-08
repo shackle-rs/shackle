@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 miette = { version = "4.7.1" }
+rustc-hash = "1.1.0"
 thiserror = "1.0.31"
 tree-sitter = "0.20.6"
 tree-sitter-minizinc = { path = "../../misc/tree-sitter-minizinc" }

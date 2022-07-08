@@ -3,6 +3,7 @@
 //! Compiler query database
 //!
 
+use super::hir::db::{Hir, HirStorage};
 use super::syntax::db::{SourceParser, SourceParserStorage};
 use crate::error::FileError;
 use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
@@ -60,7 +61,7 @@ macro_rules! impl_upcast {
 }
 
 /// Compiler database implementation
-#[salsa::database(InputsStorage, FileReaderStorage, SourceParserStorage)]
+#[salsa::database(InputsStorage, FileReaderStorage, SourceParserStorage, HirStorage)]
 pub struct CompilerDatabase {
 	storage: salsa::Storage<CompilerDatabase>,
 	file_handler: Box<dyn FileHandler>,
@@ -125,3 +126,4 @@ impl HasFileHandler for CompilerDatabase {
 impl_upcast!(CompilerDatabase, Inputs);
 impl_upcast!(CompilerDatabase, FileReader);
 impl_upcast!(CompilerDatabase, SourceParser);
+impl_upcast!(CompilerDatabase, Hir);
