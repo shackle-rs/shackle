@@ -17,7 +17,8 @@
   },
   "activationEvents": [
     "onLanguage:minizinc",
-    "onCommand:shackleLanguageServer.viewHir"
+    "onCommand:shackleLanguageServer.viewHir",
+    "onCommand:shackleLanguageServer.viewScope"
   ],
   "main": "./out/main",
   "contributes": {
@@ -45,6 +46,10 @@
       {
         "command": "shackleLanguageServer.viewHir",
         "title": "MiniZinc: View HIR"
+      },
+      {
+        "command": "shackleLanguageServer.viewScope",
+        "title": "MiniZinc: View Scope"
       }
     ],
     "languages": [

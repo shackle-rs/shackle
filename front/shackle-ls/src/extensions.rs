@@ -26,3 +26,12 @@ impl Request for ViewHir {
 	type Result = String;
 	const METHOD: &'static str = "shackle-ls/viewHir";
 }
+
+/// Request to view identifiers in scope for an expression
+pub enum ViewScope {}
+
+impl Request for ViewScope {
+	type Params = TextDocumentPositionParams;
+	type Result = String;
+	const METHOD: &'static str = "shackle-ls/viewScope";
+}

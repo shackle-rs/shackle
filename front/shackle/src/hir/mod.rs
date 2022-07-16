@@ -14,6 +14,7 @@ pub mod item;
 pub mod lower;
 pub mod pattern;
 pub mod primitive;
+pub mod scope;
 pub mod source;
 pub mod types;
 
@@ -24,6 +25,7 @@ pub use expression::*;
 pub use item::*;
 pub use pattern::*;
 pub use primitive::*;
+pub use scope::*;
 pub use types::*;
 
 use crate::arena::{Arena, ArenaIndex};
