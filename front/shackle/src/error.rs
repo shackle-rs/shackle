@@ -99,35 +99,10 @@ pub struct IncludeError {
 	pub span: SourceSpan,
 }
 
-/// Cyclic include error
-#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
-#[error("Cyclic include error:\n{msg}")]
-#[diagnostic(code(shackle::cyclic_include_error))]
-pub struct CyclicIncludeError {
-	/// The error message
-	pub msg: String,
-	/// The includes which form the cycle
-	#[related]
-	pub related: Vec<CyclicIncludeParticipant>,
-}
-
-/// Used to indicate an include item that is part of a cycle
-#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
-#[error("Cyclic include participant")]
-#[diagnostic()]
-pub struct CyclicIncludeParticipant {
-	/// The source code
-	#[source_code]
-	pub src: SourceFile,
-	/// The span of the include item
-	#[label]
-	pub span: SourceSpan,
-}
-
 /// Multiple solve items error
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Multiple solve items not allowed")]
-#[diagnostic(code(shackle::multiple_solve_items))]
+#[diagnostic(code(shackle::multiple_solve_items), severity(advice))]
 pub struct MultipleSolveItems {
 	/// The source code
 	#[source_code]
@@ -186,6 +161,21 @@ pub struct IdentifierAlreadyDefined {
 	pub identifier: String,
 }
 
+/// An invalid pattern error
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid pattern used")]
+#[diagnostic(code(shackle::invalid_pattern))]
+pub struct InvalidPattern {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum ShackleError {
@@ -209,23 +199,22 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	IncludeError(#[from] IncludeError),
-	/// Cyclic include error
-	#[error(transparent)]
-	#[diagnostic(transparent)]
-	CyclicIncludeError(#[from] CyclicIncludeError),
 	/// Multiple solve items
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	MultipleSolveItems(#[from] MultipleSolveItems),
-	/// Identifier already declaraed
+	/// Identifier already declared
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	IdentifierAlreadyDefined(#[from] IdentifierAlreadyDefined),
-	/// A type error
 	/// Undefined identifier
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	UndefinedIdentifier(#[from] UndefinedIdentifier),
+	/// Invalid pattern
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidPattern(#[from] InvalidPattern),
 	/// A type error
 	#[error("Something did not match up")]
 	#[diagnostic(code(shackle::type_mismatch))]

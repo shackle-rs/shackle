@@ -76,14 +76,14 @@ fn main_loop(
 				eprintln!("got response: {:?}", resp);
 			}
 			Message::Notification(not) => {
-				let result = DispatchNotification::new(not, (&mut db, &fs))
-					.on::<DidOpenTextDocument, _>(|(db, fs), params| {
-						handlers::on_document_open(db, fs, params)
+				let result = DispatchNotification::new(not, (&mut db, &fs, &connection))
+					.on::<DidOpenTextDocument, _>(|(db, fs, c), params| {
+						handlers::on_document_open(db, fs, c, params)
 					})
-					.on::<DidChangeTextDocument, _>(|(db, fs), params| {
-						handlers::on_document_changed(db, fs, params)
+					.on::<DidChangeTextDocument, _>(|(db, fs, c), params| {
+						handlers::on_document_changed(db, fs, c, params)
 					})
-					.on::<DidCloseTextDocument, _>(|(db, fs), params| {
+					.on::<DidCloseTextDocument, _>(|(db, fs, _), params| {
 						handlers::on_document_closed(db, fs, params)
 					})
 					.finish();
