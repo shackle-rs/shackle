@@ -40,7 +40,7 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 	/// Get the source map for the given model
 	fn lookup_source_map(&self, model: ModelRef) -> Arc<SourceMap>;
 	/// Get the lowering diagnostics for the given model
-	fn lookup_diagnostics(&self, model: ModelRef) -> Arc<Vec<Error>>;
+	fn lookup_lowering_diagnostics(&self, model: ModelRef) -> Arc<Vec<Error>>;
 	/// Get the items for the given model
 	fn lookup_items(&self, model: ModelRef) -> Arc<Vec<ItemRef>>;
 
@@ -157,7 +157,7 @@ fn lookup_source_map(db: &dyn Hir, model: ModelRef) -> Arc<SourceMap> {
 	db.lower_items(model).1
 }
 
-fn lookup_diagnostics(db: &dyn Hir, model: ModelRef) -> Arc<Vec<Error>> {
+fn lookup_lowering_diagnostics(db: &dyn Hir, model: ModelRef) -> Arc<Vec<Error>> {
 	db.lower_items(model).2
 }
 
@@ -182,7 +182,7 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 				.collect();
 			// Collect lowering errors
 			for m in r.iter() {
-				errors.extend(db.lookup_diagnostics(*m).iter().cloned());
+				errors.extend(db.lookup_lowering_diagnostics(*m).iter().cloned());
 			}
 			// TODO: Collect type errors
 

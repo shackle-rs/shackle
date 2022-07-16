@@ -26,7 +26,7 @@ pub enum InputFile {
 /// Source file/text for error reporting
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SourceFile {
-	name: Option<String>,
+	name: Option<PathBuf>,
 	source: Arc<String>,
 }
 
@@ -43,29 +43,26 @@ impl SourceFile {
 	/// Create a new source file from a `FileRef`
 	pub fn new(file: FileRef, db: &dyn FileReader) -> Self {
 		Self {
-			name: file.path(db).map(|p| {
-				p.canonicalize()
-					.ok()
-					.and_then(|p| {
-						std::env::current_dir()
-							.ok()
-							.and_then(|c| c.canonicalize().ok())
-							.and_then(move |c| p.strip_prefix(c).ok().map(|p| p.to_owned()))
-					})
-					.unwrap_or(p)
-					.to_string_lossy()
-					.to_string()
-			}),
+			name: file.path(db).and_then(|p| p.canonicalize().ok()),
 			source: file.contents(db).unwrap_or_default(),
 		}
 	}
 
-	/// Get the name of this source file
-	pub fn name(&self) -> &str {
-		match self.name {
-			Some(ref n) => n,
-			None => "<unnamed file>",
-		}
+	/// Get the path for this source file if any
+	pub fn path(&self) -> Option<&Path> {
+		self.name.as_ref().map(|p| p.as_path())
+	}
+
+	/// Get the pretty name of this source file if any
+	pub fn name(&self) -> Option<String> {
+		self.path()
+			.and_then(|p| {
+				std::env::current_dir()
+					.ok()
+					.and_then(|c| c.canonicalize().ok())
+					.and_then(move |c| p.strip_prefix(c).ok().map(|p| p.to_owned()))
+			})
+			.map(|p| p.to_string_lossy().to_string())
 	}
 
 	/// Get the contents of this source file
@@ -93,9 +90,9 @@ impl SourceCode for SourceFile {
 			.source
 			.read_span(span, context_lines_before, context_lines_after)?;
 
-		Ok(Box::new(match self.name {
-			Some(ref p) => MietteSpanContents::new_named(
-				p.clone(),
+		Ok(Box::new(match self.name() {
+			Some(name) => MietteSpanContents::new_named(
+				name,
 				contents.data(),
 				contents.span().clone(),
 				contents.line(),

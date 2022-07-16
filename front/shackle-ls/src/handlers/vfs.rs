@@ -1,11 +1,18 @@
+use crate::vfs::Vfs;
+use lsp_server::Connection;
 use lsp_types::{
 	DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
 };
-use shackle::db::FileReader;
+use shackle::{db::FileReader, hir::db::Hir};
 
-use crate::vfs::Vfs;
+use super::publish_diagnostics;
 
-pub fn on_document_open(db: &mut dyn FileReader, vfs: &Vfs, params: DidOpenTextDocumentParams) {
+pub fn on_document_open(
+	db: &mut dyn Hir,
+	vfs: &Vfs,
+	sender: &Connection,
+	params: DidOpenTextDocumentParams,
+) {
 	let file = params
 		.text_document
 		.uri
@@ -15,11 +22,13 @@ pub fn on_document_open(db: &mut dyn FileReader, vfs: &Vfs, params: DidOpenTextD
 		.expect("Failed to canonicalize path");
 	vfs.manage_file(&file, &params.text_document.text);
 	db.on_file_change(&file);
+	let _ = publish_diagnostics(db, file.as_ref(), sender);
 }
 
 pub fn on_document_changed(
-	db: &mut dyn FileReader,
+	db: &mut dyn Hir,
 	vfs: &Vfs,
+	sender: &Connection,
 	params: DidChangeTextDocumentParams,
 ) {
 	let file = params
@@ -38,6 +47,7 @@ pub fn on_document_changed(
 			.collect::<String>(),
 	);
 	db.on_file_change(&file);
+	let _ = publish_diagnostics(db, file.as_ref(), sender);
 }
 
 pub fn on_document_closed(db: &mut dyn FileReader, vfs: &Vfs, params: DidCloseTextDocumentParams) {
