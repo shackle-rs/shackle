@@ -9,6 +9,7 @@ import {
 import { handleAstViewCommand } from "./view-ast";
 import { handleCstViewCommand } from "./view-cst";
 import { handleHirViewCommand } from "./view-hir";
+import { handleScopeViewCommand } from "./view-scope";
 
 let client: LanguageClient;
 
@@ -52,6 +53,11 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(
       commands.registerCommand("shackleLanguageServer.viewHir", () =>
         handleHirViewCommand(client)
+      )
+    );
+    context.subscriptions.push(
+      commands.registerCommand("shackleLanguageServer.viewScope", () =>
+        handleScopeViewCommand(client)
       )
     );
   });

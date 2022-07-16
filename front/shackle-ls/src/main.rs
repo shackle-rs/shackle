@@ -66,6 +66,7 @@ fn main_loop(
 					.on::<ViewCst, _>(|ctx, params| handlers::view_cst(ctx, params))
 					.on::<ViewAst, _>(|ctx, params| handlers::view_ast(ctx, params))
 					.on::<ViewHir, _>(|ctx, params| handlers::view_hir(ctx, params))
+					.on::<ViewScope, _>(|ctx, params| handlers::view_scope(ctx, params))
 					.finish();
 
 				match result {

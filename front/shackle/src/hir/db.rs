@@ -15,9 +15,10 @@ use crate::syntax::ast::{self, AstNode};
 use crate::syntax::db::SourceParser;
 use crate::{Error, Result};
 
-use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData};
+use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
+use super::scope::{Scope, ScopeResult};
 use super::source::SourceMap;
-use super::Model;
+use super::{Identifier, Model};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]
@@ -44,7 +45,43 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 	/// Get the items for the given model
 	fn lookup_items(&self, model: ModelRef) -> Arc<Vec<ItemRef>>;
 
-	/// Get all diagnostics
+	/// Collect the identifiers in global scope.
+	///
+	/// Avoid using this query directly, and instead use `lookup_global_variable` or
+	/// `lookup_global_function` which is more likely to stay up to date and prevent extra
+	/// recomputation.
+	#[salsa::invoke(super::scope::collect_global_scope)]
+	fn collect_global_scope(&self) -> (Arc<Scope>, Arc<Vec<Error>>);
+
+	/// Get the identifiers in global scope.
+	///
+	/// Avoid using this query directly, and instead use `lookup_global_variable` or
+	/// `lookup_global_function` which is more likely to stay up to date and prevent extra
+	/// recomputation.
+	fn lookup_global_scope(&self) -> Arc<Scope>;
+
+	/// Get the errors from collecting global scope
+	fn lookup_global_scope_diagnostics(&self) -> Arc<Vec<Error>>;
+
+	/// Resolve this variable identifier in global scope.
+	fn lookup_global_variable(&self, identifier: Identifier) -> Option<PatternRef>;
+
+	/// Resolve this function identifier in global scope to retrieve the possible overloads.
+	fn lookup_global_function(&self, identifier: Identifier) -> Option<Arc<Vec<PatternRef>>>;
+
+	/// Collect the identifiers in scope for all expressions in an item.
+	///
+	/// Avoid using this query directly, and instead use the `lookup_item_scope` query to remain
+	/// diagnostic independent.
+	#[salsa::invoke(super::scope::collect_item_scope)]
+	fn collect_item_scope(&self, item: ItemRef) -> (Arc<ScopeResult>, Arc<Vec<Error>>);
+
+	/// Get the identifiers in scope for all expression in this item.
+	fn lookup_item_scope(&self, item: ItemRef) -> Arc<ScopeResult>;
+
+	/// Get the diagnostics produced when assigning scopes to all expressions in this item.
+	fn lookup_item_scope_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+	/// Get all diagnostics for this module.
 	fn all_diagnostics(&self) -> Arc<Vec<Error>>;
 
 	#[salsa::interned]
@@ -55,6 +92,9 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 
 	#[salsa::interned]
 	fn intern_entity_ref(&self, item: EntityRefData) -> EntityRef;
+
+	// #[salsa::interned]
+	// fn intern_ty(&self, item: TyData) -> Ty;
 }
 
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
@@ -171,6 +211,35 @@ fn lookup_items(db: &dyn Hir, model: ModelRef) -> Arc<Vec<ItemRef>> {
 	)
 }
 
+fn lookup_global_scope(db: &dyn Hir) -> Arc<Scope> {
+	db.collect_global_scope().0
+}
+
+fn lookup_global_scope_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
+	db.collect_global_scope().1
+}
+
+fn lookup_global_variable(db: &dyn Hir, identifier: Identifier) -> Option<PatternRef> {
+	db.lookup_global_scope().find_variable(identifier, 0)
+}
+
+fn lookup_global_function(db: &dyn Hir, identifier: Identifier) -> Option<Arc<Vec<PatternRef>>> {
+	let fns = db.lookup_global_scope().find_function(identifier, 0);
+	if fns.is_empty() {
+		None
+	} else {
+		Some(Arc::new(fns))
+	}
+}
+
+fn lookup_item_scope(db: &dyn Hir, item: ItemRef) -> Arc<ScopeResult> {
+	db.collect_item_scope(item).0
+}
+
+fn lookup_item_scope_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+	db.collect_item_scope(item).1
+}
+
 fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 	match db.resolve_includes() {
 		Ok(r) => {
@@ -180,12 +249,17 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 				.filter_map(|m| db.cst(**m).unwrap().error(db.upcast()))
 				.map(|e| e.into())
 				.collect();
-			// Collect lowering errors
 			for m in r.iter() {
+				// Collect lowering errors
 				errors.extend(db.lookup_lowering_diagnostics(*m).iter().cloned());
+				for i in db.lookup_items(*m).iter() {
+					// Collect scoping errors
+					errors.extend(db.lookup_item_scope_diagnostics(*i).iter().cloned());
+				}
 			}
 			// TODO: Collect type errors
-
+			// Collect global scope errors
+			errors.extend(db.lookup_global_scope_diagnostics().iter().cloned());
 			Arc::new(errors)
 		}
 		Err(e) => Arc::new(vec![e]),
