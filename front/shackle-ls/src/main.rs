@@ -14,7 +14,7 @@ use shackle::db::{CompilerDatabase, Inputs};
 
 use crate::{
 	dispatch::{DispatchNotification, DispatchRequest},
-	extensions::ViewHir,
+	extensions::*,
 };
 
 mod dispatch;
@@ -63,6 +63,8 @@ fn main_loop(
 				}
 
 				let result = DispatchRequest::new(req, &mut db)
+					.on::<ViewCst, _>(|ctx, params| handlers::view_cst(ctx, params))
+					.on::<ViewAst, _>(|ctx, params| handlers::view_ast(ctx, params))
 					.on::<ViewHir, _>(|ctx, params| handlers::view_hir(ctx, params))
 					.finish();
 

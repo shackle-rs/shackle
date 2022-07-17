@@ -35,6 +35,14 @@
     },
     "commands": [
       {
+        "command": "shackleLanguageServer.viewCst",
+        "title": "MiniZinc: View CST"
+      },
+      {
+        "command": "shackleLanguageServer.viewAst",
+        "title": "MiniZinc: View AST"
+      },
+      {
         "command": "shackleLanguageServer.viewHir",
         "title": "MiniZinc: View HIR"
       }
