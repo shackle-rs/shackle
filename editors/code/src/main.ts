@@ -1,27 +1,13 @@
-import {
-  ExtensionContext,
-  workspace,
-  commands,
-  TextDocumentContentProvider,
-  Uri,
-  EventEmitter,
-  CancellationToken,
-  ProviderResult,
-  window,
-  TextEditor,
-  TextDocumentChangeEvent,
-  Event,
-  ViewColumn,
-} from "vscode";
+import { ExtensionContext, workspace, commands } from "vscode";
 
 import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
   TransportKind,
-  RequestType,
-  TextDocumentPositionParams,
 } from "vscode-languageclient/node";
+import { handleAstViewCommand } from "./view-ast";
+import { handleCstViewCommand } from "./view-cst";
 import { handleHirViewCommand } from "./view-hir";
 
 let client: LanguageClient;
@@ -53,6 +39,16 @@ export function activate(context: ExtensionContext) {
 
   client.start();
   client.onReady().then(() => {
+    context.subscriptions.push(
+      commands.registerCommand("shackleLanguageServer.viewCst", () =>
+        handleCstViewCommand(client)
+      )
+    );
+    context.subscriptions.push(
+      commands.registerCommand("shackleLanguageServer.viewAst", () =>
+        handleAstViewCommand(client)
+      )
+    );
     context.subscriptions.push(
       commands.registerCommand("shackleLanguageServer.viewHir", () =>
         handleHirViewCommand(client)

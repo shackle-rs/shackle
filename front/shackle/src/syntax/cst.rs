@@ -116,8 +116,8 @@ impl Cst {
 	}
 
 	/// Print this tree for debugging purposes.
-	pub fn debug_print(&self) {
-		self.node(self.root_node()).debug_print()
+	pub fn debug_print<W: std::fmt::Write>(&self, buf: &mut W) {
+		self.node(self.root_node()).debug_print(buf)
 	}
 }
 
@@ -211,12 +211,13 @@ impl CstNode {
 	}
 
 	/// Print this concrete syntax node and its descendants for debugging purposes.
-	pub fn debug_print(&self) {
+	pub fn debug_print<W: std::fmt::Write>(&self, buf: &mut W) {
 		let mut level = 0;
 		let mut cursor = self.as_ref().walk();
 		loop {
 			let node = cursor.node();
-			println!(
+			writeln!(
+				buf,
 				"{:i$}kind={:?}, named={:?}, error={:?}, missing={:?}, extra={:?}, field={:?}",
 				"",
 				node.kind(),
@@ -226,7 +227,8 @@ impl CstNode {
 				node.is_extra(),
 				cursor.field_name(),
 				i = level * 2
-			);
+			)
+			.unwrap();
 
 			if cursor.goto_first_child() {
 				level += 1;
