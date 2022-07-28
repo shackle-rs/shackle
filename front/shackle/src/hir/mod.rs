@@ -5,6 +5,13 @@
 //! This is also the final representation used by the language server, and as
 //! such is the final representation which needs to be continue as far as
 //! possible in the presence of errors.
+//!
+//! The steps which occur using this representation are
+//! - Lowering of AST to HIR (see the `lower` module)
+//! - Scope collection (see the `scope` module)
+//! - Computing types of expressions and declarations, identifier resolution
+//!   (see the `ty` and `typecheck` modules)
+//! - Validation of whole program (see the `validate` module)
 
 pub mod container;
 pub mod db;
@@ -16,7 +23,10 @@ pub mod pattern;
 pub mod primitive;
 pub mod scope;
 pub mod source;
+pub mod ty;
+pub mod typecheck;
 pub mod types;
+pub mod validate;
 
 use std::ops::Index;
 
@@ -26,6 +36,8 @@ pub use item::*;
 pub use pattern::*;
 pub use primitive::*;
 pub use scope::*;
+pub use ty::*;
+pub use typecheck::*;
 pub use types::*;
 
 use crate::arena::{Arena, ArenaIndex};

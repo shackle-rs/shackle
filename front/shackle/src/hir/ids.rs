@@ -119,6 +119,59 @@ impl salsa::InternKey for ItemRef {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ItemRefData(ModelRef, LocalItemRef);
 
+/// Reference to a top-level item of known type.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct TypedItemRef<T>(ModelRef, ArenaIndex<Item<T>>);
+
+impl<T> TypedItemRef<T> {
+	/// Create a new expression reference
+	pub fn new(model: ModelRef, item: ArenaIndex<Item<T>>) -> Self {
+		Self(model, item)
+	}
+
+	/// The model this item is in
+	pub fn model_ref(&self) -> ModelRef {
+		self.0
+	}
+
+	/// The model this item is in
+	pub fn model(&self, db: &dyn Hir) -> Arc<Model> {
+		db.lookup_model(self.model_ref())
+	}
+
+	/// The item local to the model
+	pub fn item(&self) -> ArenaIndex<Item<T>> {
+		self.1
+	}
+}
+
+/// Reference to an assignment item
+pub type AssignmentRef = TypedItemRef<Assignment>;
+/// Reference to a constraint item
+pub type ConstraintRef = TypedItemRef<Constraint>;
+/// Reference to a declaration item
+pub type DeclarationRef = TypedItemRef<Declaration>;
+/// Reference to an enumeration item
+pub type EnumerationRef = TypedItemRef<Enumeration>;
+/// Reference to a function item
+pub type FunctionRef = TypedItemRef<Function>;
+/// Reference to an output item
+pub type OutputRef = TypedItemRef<Output>;
+/// Reference to a solve item
+pub type SolveRef = TypedItemRef<Solve>;
+/// Reference to a type alias item
+pub type TypeAliasRef = TypedItemRef<TypeAlias>;
+
+impl<T> TypedItemRef<T>
+where
+	ArenaIndex<Item<T>>: Into<LocalItemRef>,
+{
+	/// Convert into an `ItemRef`
+	pub fn into_item_ref(self, db: &dyn Hir) -> ItemRef {
+		ItemRef::new(db, self.0, self.1)
+	}
+}
+
 /// Global reference to an expression.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ExpressionRef(ItemRef, ArenaIndex<Expression>);

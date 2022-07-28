@@ -112,6 +112,14 @@ impl ItemData {
 			.flat_map(|v| v.iter())
 			.copied()
 	}
+
+	/// Resize arenas to be as small as possible
+	pub fn shrink_to_fit(&mut self) {
+		self.expressions.shrink_to_fit();
+		self.types.shrink_to_fit();
+		self.patterns.shrink_to_fit();
+		self.annotations.shrink_to_fit();
+	}
 }
 
 impl Index<ArenaIndex<Expression>> for ItemData {
@@ -285,6 +293,10 @@ pub struct TypeInstIdentifierDeclaration {
 	pub name: ArenaIndex<Pattern>,
 	/// Whether this is an enum ID
 	pub is_enum: bool,
+	/// Whether this is varifiable
+	pub is_varifiable: bool,
+	/// Whether this is indexable
+	pub is_indexable: bool,
 }
 
 /// Function parameter

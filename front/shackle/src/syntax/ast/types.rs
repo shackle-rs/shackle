@@ -193,7 +193,7 @@ ast_node!(
 );
 
 /// Whether a type is var or par
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum VarType {
 	/// Fixed parameter
 	Par,
@@ -201,13 +201,33 @@ pub enum VarType {
 	Var,
 }
 
+impl VarType {
+	/// `var` if this is var, otherwise `None`
+	pub fn pretty_print(&self) -> Option<String> {
+		match *self {
+			VarType::Var => Some("var".to_owned()),
+			_ => None,
+		}
+	}
+}
+
 /// Whether a type is opt or non-opt
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum OptType {
 	/// Non-optional variable
 	NonOpt,
 	/// Optional variable
 	Opt,
+}
+
+impl OptType {
+	/// `opt` if this is opt, otherwise `None`
+	pub fn pretty_print(&self) -> Option<String> {
+		match *self {
+			OptType::Opt => Some("opt".to_owned()),
+			_ => None,
+		}
+	}
 }
 
 ast_enum!(

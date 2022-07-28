@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	arena::ArenaIndex,
-	error::SyntaxError,
+	error::{InvalidArrayLiteral, SyntaxError},
 	hir::{
 		db::HirStringData,
 		source::{DesugarKind, Origin},
@@ -46,7 +46,7 @@ impl ExpressionCollector<'_> {
 			ast::Expression::Absent(_) => Expression::Absent,
 			ast::Expression::Infinity(_) => Expression::Infinity,
 			ast::Expression::Anonymous(a) => {
-				// No longer support anonymous variables, instead use
+				// No longer support anonymous variables, instead use opt
 				let (src, span) = a.cst_node().source_span(self.db.upcast());
 				self.diagnostics.push(
 					SyntaxError {
@@ -87,7 +87,7 @@ impl ExpressionCollector<'_> {
 	/// Lower an AST type into HIR
 	pub fn collect_type(&mut self, t: ast::Type) -> ArenaIndex<Type> {
 		let mut tiids = FxHashMap::default();
-		self.collect_type_with_tiids(t, &mut tiids)
+		self.collect_type_with_tiids(t, &mut tiids, false, false)
 	}
 
 	/// Lower an AST type into HIR and collect implicit type inst ID declarations
@@ -95,6 +95,8 @@ impl ExpressionCollector<'_> {
 		&mut self,
 		t: ast::Type,
 		tiids: &mut FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+		is_array_dim: bool,
+		is_fn_parameter: bool,
 	) -> ArenaIndex<Type> {
 		let origin = t.clone().into();
 		if t.is_missing() {
@@ -104,7 +106,10 @@ impl ExpressionCollector<'_> {
 			ast::Type::ArrayType(a) => Type::Array {
 				opt: OptType::NonOpt,
 				dimensions: {
-					let dims: Box<[_]> = a.dimensions().map(|dim| self.collect_type(dim)).collect();
+					let dims: Box<[_]> = a
+						.dimensions()
+						.map(|dim| self.collect_type_with_tiids(dim, tiids, true, is_fn_parameter))
+						.collect();
 					if dims.len() == 1 {
 						dims[0]
 					} else {
@@ -117,16 +122,29 @@ impl ExpressionCollector<'_> {
 						)
 					}
 				},
-				element: self.collect_type(a.element_type()),
+				element: self.collect_type_with_tiids(
+					a.element_type(),
+					tiids,
+					false,
+					is_fn_parameter,
+				),
 			},
 			ast::Type::SetType(s) => Type::Set {
 				inst: s.var_type(),
 				opt: s.opt_type(),
-				element: self.collect_type(s.element_type()),
+				element: self.collect_type_with_tiids(
+					s.element_type(),
+					tiids,
+					false,
+					is_fn_parameter,
+				),
 			},
 			ast::Type::TupleType(t) => Type::Tuple {
 				opt: OptType::NonOpt,
-				fields: t.fields().map(|f| self.collect_type(f)).collect(),
+				fields: t
+					.fields()
+					.map(|f| self.collect_type_with_tiids(f, tiids, false, is_fn_parameter))
+					.collect(),
 			},
 			ast::Type::RecordType(r) => Type::Record {
 				opt: OptType::NonOpt,
@@ -135,17 +153,32 @@ impl ExpressionCollector<'_> {
 					.map(|f| {
 						(
 							self.collect_pattern(f.name().into()),
-							self.collect_type(f.field_type()),
+							self.collect_type_with_tiids(
+								f.field_type(),
+								tiids,
+								false,
+								is_fn_parameter,
+							),
 						)
 					})
 					.collect(),
 			},
 			ast::Type::OperationType(o) => Type::Operation {
 				opt: OptType::NonOpt,
-				return_type: self.collect_type(o.return_type()),
-				parameter_types: o.parameter_types().map(|p| self.collect_type(p)).collect(),
+				return_type: self.collect_type_with_tiids(
+					o.return_type(),
+					tiids,
+					false,
+					is_fn_parameter,
+				),
+				parameter_types: o
+					.parameter_types()
+					.map(|p| self.collect_type_with_tiids(p, tiids, false, is_fn_parameter))
+					.collect(),
 			},
-			ast::Type::TypeBase(b) => self.collect_type_base(b, tiids),
+			ast::Type::TypeBase(b) => {
+				self.collect_type_base(b, tiids, is_array_dim, is_fn_parameter)
+			}
 			ast::Type::AnyType(_) => Type::Any,
 		};
 		self.alloc_type(origin, ty)
@@ -224,7 +257,8 @@ impl ExpressionCollector<'_> {
 	}
 
 	/// Get the collected expressions
-	pub fn finish(self) -> (ItemData, ItemDataSourceMap) {
+	pub fn finish(mut self) -> (ItemData, ItemDataSourceMap) {
+		self.data.shrink_to_fit();
 		(self.data, self.source_map)
 	}
 
@@ -232,13 +266,34 @@ impl ExpressionCollector<'_> {
 		&mut self,
 		b: ast::TypeBase,
 		tiids: &mut FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+		is_array_dim: bool,
+		is_fn_parameter: bool,
 	) -> Type {
 		match b.domain() {
-			ast::Domain::Bounded(e) => Type::Bounded {
-				inst: b.var_type(),
-				opt: b.opt_type(),
-				domain: self.collect_expression(e),
-			},
+			ast::Domain::Bounded(e) => {
+				if is_array_dim && b.var_type().is_none() && b.opt_type().is_none() {
+					if let ast::Expression::Anonymous(_) = e {
+						if is_fn_parameter {
+							return Type::AnonymousTypeInstVar {
+								inst: Some(VarType::Par),
+								opt: Some(OptType::NonOpt),
+								pattern: self
+									.alloc_pattern(e.clone().into(), Identifier::new("_", self.db)),
+								enumerable: true,
+								varifiable: true,
+								indexable: false,
+							};
+						} else {
+							return Type::Any;
+						}
+					}
+				}
+				Type::Bounded {
+					inst: b.var_type(),
+					opt: b.opt_type(),
+					domain: self.collect_expression(e),
+				}
+			}
 			ast::Domain::Unbounded(u) => Type::Primitive {
 				inst: b.var_type().unwrap_or(VarType::Par),
 				opt: b.opt_type().unwrap_or(OptType::NonOpt),
@@ -247,10 +302,6 @@ impl ExpressionCollector<'_> {
 			ast::Domain::TypeInstIdentifier(tiid) => {
 				let ident = Identifier::new(tiid.name(), self.db);
 				let origin: Origin = tiid.clone().into();
-				tiids.entry(ident).or_insert(TypeInstIdentifierDeclaration {
-					name: self.alloc_pattern(origin.clone(), ident),
-					is_enum: false,
-				});
 				let (inst, opt) = match (b.any_type(), b.var_type(), b.opt_type()) {
 					(true, _, _) => (None, None), // Unrestricted
 					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
@@ -258,6 +309,19 @@ impl ExpressionCollector<'_> {
 					(_, i, None) => (i, Some(OptType::NonOpt)), // var prefix means var non-opt
 					(_, i, o) => (i, o),          // var opt means var opt
 				};
+				tiids
+					.entry(ident)
+					.and_modify(|tiid| {
+						tiid.is_varifiable =
+							tiid.is_varifiable || inst == Some(VarType::Var) || is_array_dim;
+						tiid.is_indexable = tiid.is_indexable || is_array_dim;
+					})
+					.or_insert(TypeInstIdentifierDeclaration {
+						name: self.alloc_pattern(origin.clone(), ident),
+						is_enum: false,
+						is_varifiable: inst == Some(VarType::Var) || is_array_dim,
+						is_indexable: is_array_dim,
+					});
 				Type::Bounded {
 					inst,
 					opt,
@@ -272,6 +336,8 @@ impl ExpressionCollector<'_> {
 					.or_insert(TypeInstIdentifierDeclaration {
 						name: self.alloc_pattern(origin.clone(), ident),
 						is_enum: true,
+						is_varifiable: true,
+						is_indexable: false,
 					})
 					.is_enum = true;
 				let (inst, opt) = match (b.any_type(), b.var_type(), b.opt_type()) {
@@ -345,11 +411,10 @@ impl ExpressionCollector<'_> {
 				if it.len() != num_dims {
 					let (src, span) = al.cst_node().source_span(self.db.upcast());
 					self.diagnostics.push(
-						SyntaxError {
+						InvalidArrayLiteral {
 							src,
 							span,
 							msg: "Non-uniform indexed array literal".to_string(),
-							other: Vec::new(),
 						}
 						.into(),
 					);
@@ -414,12 +479,11 @@ impl ExpressionCollector<'_> {
 				if !col_indices.is_empty() && col_count != col_indices.len() {
 					let (src, span) = al.cst_node().source_span(self.db.upcast());
 					self.diagnostics.push(
-						SyntaxError {
+						InvalidArrayLiteral {
 							src,
 							span,
 							msg: "2D array literal has different row length to index row"
 								.to_string(),
-							other: Vec::new(),
 						}
 						.into(),
 					);
@@ -428,11 +492,10 @@ impl ExpressionCollector<'_> {
 			} else if members.len() != col_count {
 				let (src, span) = al.cst_node().source_span(self.db.upcast());
 				self.diagnostics.push(
-					SyntaxError {
+					InvalidArrayLiteral {
 						src,
 						span,
 						msg: "Non-uniform 2D array literal row length".to_string(),
-						other: Vec::new(),
 					}
 					.into(),
 				);
@@ -442,11 +505,10 @@ impl ExpressionCollector<'_> {
 			if index.is_none() != row_indices.is_empty() {
 				let (src, span) = al.cst_node().source_span(self.db.upcast());
 				self.diagnostics.push(
-					SyntaxError {
+					InvalidArrayLiteral {
 						src,
 						span,
 						msg: "Mixing indexed and non-indexed rows not allowed".to_string(),
-						other: Vec::new(),
 					}
 					.into(),
 				);
@@ -520,24 +582,26 @@ impl ExpressionCollector<'_> {
 	}
 
 	fn collect_array_access(&mut self, aa: ast::ArrayAccess) -> ArrayAccess {
+		let indices = aa
+			.indices()
+			.map(|i| match i {
+				ast::ArrayIndex::Expression(e) => self.collect_expression(e),
+				ast::ArrayIndex::IndexSlice(s) => self.alloc_expression(
+					s.clone().into(),
+					Expression::Slice(Identifier::new(s.operator(), self.db)),
+				),
+			})
+			.collect::<Box<[_]>>();
 		ArrayAccess {
 			collection: self.collect_expression(aa.collection()),
-			indices: aa
-				.indices()
-				.map(|i| match i {
-					ast::ArrayIndex::Expression(e) => self.collect_expression(e),
-					ast::ArrayIndex::IndexSlice(s) => {
-						let function = self.ident_exp(s.clone().into(), s.operator());
-						self.alloc_expression(
-							s.clone().into(),
-							Call {
-								function,
-								arguments: Box::new([]),
-							},
-						)
-					}
-				})
-				.collect(),
+			indices: if indices.len() == 1 {
+				indices[0]
+			} else {
+				self.alloc_expression(
+					Origin::new(ast::Expression::from(aa), None),
+					TupleLiteral { fields: indices },
+				)
+			},
 		}
 	}
 
@@ -593,7 +657,15 @@ impl ExpressionCollector<'_> {
 			.into_iter()
 			.map(|a| self.collect_expression(a))
 			.collect();
-		let function = self.ident_exp(ast::Expression::from(o.clone()).into(), o.operator());
+		let function = self.ident_exp(
+			ast::Expression::from(o.clone()).into(),
+			if o.operator() == "==" {
+				// Desugar == into =
+				"="
+			} else {
+				o.operator()
+			},
+		);
 		self.alloc_expression(
 			Origin::new(ast::Expression::from(o), Some(DesugarKind::InfixOperator)),
 			Call {

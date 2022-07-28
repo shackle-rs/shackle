@@ -23,7 +23,7 @@ pub struct ArrayAccess {
 	/// The array being indexed into
 	pub collection: ArenaIndex<Expression>,
 	/// The indices
-	pub indices: Box<[ArenaIndex<Expression>]>,
+	pub indices: ArenaIndex<Expression>,
 }
 
 /// Array comprehension

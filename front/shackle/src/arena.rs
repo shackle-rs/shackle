@@ -366,3 +366,13 @@ impl<K, V> IndexMut<ArenaIndex<K>> for ArenaMap<K, V> {
 			.expect(&format!("No entry for {:?} in ArenaMap", idx))
 	}
 }
+
+impl<K, V> FromIterator<(ArenaIndex<K>, V)> for ArenaMap<K, V> {
+	fn from_iter<T: IntoIterator<Item = (ArenaIndex<K>, V)>>(iter: T) -> Self {
+		let mut result = Self::new();
+		for (k, v) in iter {
+			result.insert(k, v);
+		}
+		result
+	}
+}
