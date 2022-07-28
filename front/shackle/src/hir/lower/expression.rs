@@ -662,7 +662,7 @@ impl ExpressionCollector<'_> {
 			ast::Expression::from(s.clone()),
 			Some(DesugarKind::StringInterpolation),
 		);
-		let arguments = s
+		let strings = s
 			.contents()
 			.map(|c| match c {
 				ast::InterpolationItem::String(v) => {
@@ -681,6 +681,8 @@ impl ExpressionCollector<'_> {
 				}
 			})
 			.collect();
+		let arguments =
+			Box::new([self.alloc_expression(origin.clone(), ArrayLiteral { members: strings })]);
 		let function = self.ident_exp(origin.clone(), "concat");
 
 		self.alloc_expression(
