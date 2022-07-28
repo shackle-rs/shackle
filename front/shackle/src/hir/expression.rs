@@ -55,6 +55,8 @@ pub enum Expression {
 	TupleAccess(TupleAccess),
 	/// Record access
 	RecordAccess(RecordAccess),
+	/// Slice from array access
+	Slice(Identifier),
 
 	/// Sentinel for errors during lowering
 	Missing,
@@ -83,6 +85,7 @@ impl fmt::Debug for Expression {
 			Expression::Let(x) => fmt::Debug::fmt(x, f),
 			Expression::TupleAccess(x) => fmt::Debug::fmt(x, f),
 			Expression::RecordAccess(x) => fmt::Debug::fmt(x, f),
+			Expression::Slice(x) => fmt::Debug::fmt(x, f),
 			Expression::Missing => f.write_str("Missing"),
 		}
 	}

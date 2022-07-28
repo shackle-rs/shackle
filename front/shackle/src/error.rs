@@ -176,6 +176,126 @@ pub struct InvalidPattern {
 	pub span: SourceSpan,
 }
 
+/// Illegal type
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Illegal type")]
+#[diagnostic(code(shackle::illegal_type))]
+pub struct IllegalType {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label("The type '{ty}' is not allowed.")]
+	pub span: SourceSpan,
+	/// The illegal type
+	pub ty: String,
+}
+
+/// A type mismatch error
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Type mismatch")]
+#[diagnostic(code(shackle::type_mismatch))]
+pub struct TypeMismatch {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
+/// Invalid array literal
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid array literal")]
+#[diagnostic(code(shackle::invalid_array_literal))]
+pub struct InvalidArrayLiteral {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
+/// No matching function found
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("No matching function")]
+#[diagnostic(code(shackle::no_matching_fn))]
+pub struct NoMatchingFunction {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
+/// Ambiguous call
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Ambiguous call")]
+#[diagnostic(code(shackle::ambiguous_call))]
+pub struct AmbiguousCall {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
+/// Illegal overloading
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Illegal overloading")]
+#[diagnostic(code(shackle::illegal_overload))]
+pub struct IllegalOverload {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
+/// Type inference failure
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Type cannot be determined")]
+#[diagnostic(code(shackle::type_inference_failure))]
+pub struct TypeInferenceFailure {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
+/// Invalid field access
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid field access")]
+#[diagnostic(code(shackle::invalid_field_access))]
+pub struct InvalidFieldAccess {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum ShackleError {
@@ -215,10 +335,38 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	InvalidPattern(#[from] InvalidPattern),
-	/// A type error
-	#[error("Something did not match up")]
-	#[diagnostic(code(shackle::type_mismatch))]
-	TypeError,
+	/// Illegal type
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	IllegalType(#[from] IllegalType),
+	/// Type mismatch
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	TypeMismatch(#[from] TypeMismatch),
+	/// Invalid array literal
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidArrayLiteral(#[from] InvalidArrayLiteral),
+	/// No matching function found
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	NoMatchingFunction(#[from] NoMatchingFunction),
+	/// Ambiguous call
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	AmbiguousCall(#[from] AmbiguousCall),
+	/// Illegal overloading
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	IllegalOverload(#[from] IllegalOverload),
+	/// Type inference failure
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	TypeInferenceFailure(#[from] TypeInferenceFailure),
+	/// Invalid field access
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidFieldAccess(#[from] InvalidFieldAccess),
 	/// An internal error
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),

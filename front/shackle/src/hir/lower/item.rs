@@ -77,7 +77,7 @@ impl ItemCollector<'_> {
 		let parameters = a
 			.parameters()
 			.map(|p| {
-				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids);
+				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids, false, true);
 				let annotations = p
 					.annotations()
 					.map(|ann| ctx.collect_expression(ann))
@@ -284,12 +284,12 @@ impl ItemCollector<'_> {
 			.collect();
 		let body = f.body().map(|e| ctx.collect_expression(e));
 		let pattern = ctx.collect_pattern(f.id().into());
-		let return_type = ctx.collect_type(f.return_type());
 		let mut tiids = FxHashMap::default();
+		let return_type = ctx.collect_type_with_tiids(f.return_type(), &mut tiids, false, false);
 		let parameters = f
 			.parameters()
 			.map(|p| {
-				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids);
+				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids, false, true);
 				let annotations = p
 					.annotations()
 					.map(|ann| ctx.collect_expression(ann))
@@ -359,7 +359,7 @@ impl ItemCollector<'_> {
 		let parameters = f
 			.parameters()
 			.map(|p| {
-				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids);
+				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids, false, true);
 				let annotations = p
 					.annotations()
 					.map(|ann| ctx.collect_expression(ann))

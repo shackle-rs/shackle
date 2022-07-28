@@ -16,8 +16,10 @@ use crate::syntax::db::SourceParser;
 use crate::{Error, Result};
 
 use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
-use super::scope::{Scope, ScopeResult};
+use super::scope::{ScopeData, ScopeResult};
 use super::source::SourceMap;
+use super::ty::{Ty, TyData};
+use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
 use super::{Identifier, Model};
 
 /// HIR queries
@@ -51,23 +53,26 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 	/// `lookup_global_function` which is more likely to stay up to date and prevent extra
 	/// recomputation.
 	#[salsa::invoke(super::scope::collect_global_scope)]
-	fn collect_global_scope(&self) -> (Arc<Scope>, Arc<Vec<Error>>);
+	fn collect_global_scope(&self) -> (Arc<ScopeData>, Arc<Vec<Error>>);
 
 	/// Get the identifiers in global scope.
 	///
 	/// Avoid using this query directly, and instead use `lookup_global_variable` or
 	/// `lookup_global_function` which is more likely to stay up to date and prevent extra
 	/// recomputation.
-	fn lookup_global_scope(&self) -> Arc<Scope>;
+	fn lookup_global_scope(&self) -> Arc<ScopeData>;
 
 	/// Get the errors from collecting global scope
 	fn lookup_global_scope_diagnostics(&self) -> Arc<Vec<Error>>;
+
+	/// Get whether there is an enum atom with the given name in global scope
+	fn lookup_global_enum_atom(&self, identifier: Identifier) -> bool;
 
 	/// Resolve this variable identifier in global scope.
 	fn lookup_global_variable(&self, identifier: Identifier) -> Option<PatternRef>;
 
 	/// Resolve this function identifier in global scope to retrieve the possible overloads.
-	fn lookup_global_function(&self, identifier: Identifier) -> Option<Arc<Vec<PatternRef>>>;
+	fn lookup_global_function(&self, identifier: Identifier) -> Arc<Vec<PatternRef>>;
 
 	/// Collect the identifiers in scope for all expressions in an item.
 	///
@@ -81,6 +86,49 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 
 	/// Get the diagnostics produced when assigning scopes to all expressions in this item.
 	fn lookup_item_scope_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+
+	/// Compute the signature for this `item`.
+	/// Panics if item does not have a signature.
+	///
+	/// Use `lookup_item_types` to get the result of typing the entire item.
+	#[salsa::invoke(super::typecheck::collect_item_signature)]
+	fn collect_item_signature(&self, item: ItemRef) -> (Arc<SignatureTypes>, Arc<Vec<Error>>);
+
+	/// Get the signature for this item.
+	///
+	/// Use `lookup_item_types` to get the result of typing the entire item.
+	fn lookup_item_signature(&self, item: ItemRef) -> Arc<SignatureTypes>;
+
+	/// Get the diagnostics produced when computing the signature of this item.
+	fn lookup_item_signature_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+
+	/// Compute the types of RHS expressions in this item.
+	/// Panics if item does not have a body.
+	///
+	/// Use `lookup_item_types` to get the result of typing the entire item.
+	#[salsa::invoke(super::typecheck::collect_item_body)]
+	fn collect_item_body(&self, item: ItemRef) -> (Arc<BodyTypes>, Arc<Vec<Error>>);
+
+	/// Get the types of expressions and declarations in this item.
+	///
+	/// Use `lookup_item_types` to get the result of typing the entire item.
+	fn lookup_item_body(&self, item: ItemRef) -> Arc<BodyTypes>;
+
+	/// Get the diagnostics produced when computing types of expressions and declarations in this item.
+	fn lookup_item_body_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+
+	/// Get the result of typing this item.
+	#[salsa::invoke(super::typecheck::TypeResult::new)]
+	fn lookup_item_types(&self, item: ItemRef) -> TypeResult;
+
+	/// Get the diagnostics produced when computing the types for this item.
+	#[salsa::invoke(super::typecheck::TypeDiagnostics::new)]
+	fn lookup_item_type_diagnostics(&self, item: ItemRef) -> TypeDiagnostics;
+
+	/// Validate HIR
+	#[salsa::invoke(super::validate::validate_hir)]
+	fn validate_hir(&self) -> Arc<Vec<Error>>;
+
 	/// Get all diagnostics for this module.
 	fn all_diagnostics(&self) -> Arc<Vec<Error>>;
 
@@ -93,8 +141,8 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 	#[salsa::interned]
 	fn intern_entity_ref(&self, item: EntityRefData) -> EntityRef;
 
-	// #[salsa::interned]
-	// fn intern_ty(&self, item: TyData) -> Ty;
+	#[salsa::interned]
+	fn intern_ty(&self, item: TyData) -> Ty;
 }
 
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
@@ -211,7 +259,7 @@ fn lookup_items(db: &dyn Hir, model: ModelRef) -> Arc<Vec<ItemRef>> {
 	)
 }
 
-fn lookup_global_scope(db: &dyn Hir) -> Arc<Scope> {
+fn lookup_global_scope(db: &dyn Hir) -> Arc<ScopeData> {
 	db.collect_global_scope().0
 }
 
@@ -219,17 +267,17 @@ fn lookup_global_scope_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 	db.collect_global_scope().1
 }
 
+fn lookup_global_enum_atom(db: &dyn Hir, identifier: Identifier) -> bool {
+	db.lookup_global_scope().is_enum_atom(identifier, 0)
+}
+
 fn lookup_global_variable(db: &dyn Hir, identifier: Identifier) -> Option<PatternRef> {
 	db.lookup_global_scope().find_variable(identifier, 0)
 }
 
-fn lookup_global_function(db: &dyn Hir, identifier: Identifier) -> Option<Arc<Vec<PatternRef>>> {
+fn lookup_global_function(db: &dyn Hir, identifier: Identifier) -> Arc<Vec<PatternRef>> {
 	let fns = db.lookup_global_scope().find_function(identifier, 0);
-	if fns.is_empty() {
-		None
-	} else {
-		Some(Arc::new(fns))
-	}
+	Arc::new(fns)
 }
 
 fn lookup_item_scope(db: &dyn Hir, item: ItemRef) -> Arc<ScopeResult> {
@@ -238,6 +286,22 @@ fn lookup_item_scope(db: &dyn Hir, item: ItemRef) -> Arc<ScopeResult> {
 
 fn lookup_item_scope_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
 	db.collect_item_scope(item).1
+}
+
+fn lookup_item_signature(db: &dyn Hir, item: ItemRef) -> Arc<SignatureTypes> {
+	db.collect_item_signature(item).0
+}
+
+fn lookup_item_signature_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+	db.collect_item_signature(item).1
+}
+
+fn lookup_item_body(db: &dyn Hir, item: ItemRef) -> Arc<BodyTypes> {
+	db.collect_item_body(item).0
+}
+
+fn lookup_item_body_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+	db.collect_item_body(item).1
 }
 
 fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
@@ -255,11 +319,14 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 				for i in db.lookup_items(*m).iter() {
 					// Collect scoping errors
 					errors.extend(db.lookup_item_scope_diagnostics(*i).iter().cloned());
+					// Collect type errors
+					errors.extend(db.lookup_item_type_diagnostics(*i).iter().cloned());
 				}
 			}
-			// TODO: Collect type errors
 			// Collect global scope errors
 			errors.extend(db.lookup_global_scope_diagnostics().iter().cloned());
+			// Collect final validation errors
+			errors.extend(db.validate_hir().iter().cloned());
 			Arc::new(errors)
 		}
 		Err(e) => Arc::new(vec![e]),

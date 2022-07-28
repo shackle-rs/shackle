@@ -44,7 +44,11 @@ pub fn view_hir(
 			NodeRef::Item(i) => i,
 			_ => return Ok("".to_owned()),
 		};
-		Ok(item.debug_print(db))
+		let item_info = item.debug_print(db);
+		let types = db.lookup_item_types(item);
+		let type_info = types.debug_print(db);
+
+		Ok(format!("{}\n{}", item_info, type_info))
 	} else {
 		Ok("Not an item.".to_owned())
 	}
