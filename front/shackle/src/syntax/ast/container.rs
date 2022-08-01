@@ -726,7 +726,7 @@ mod test {
 				.cast_ref::<PostfixOperator>()
 				.unwrap();
 			assert_eq!(z_op.operand().cast::<IntegerLiteral>().unwrap().value(), 3);
-			assert_eq!(z_op.operator(), "..");
+			assert_eq!(z_op.operator().name(), "..");
 		}
 	}
 
@@ -775,7 +775,7 @@ mod test {
 			assert_eq!(y_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
 			let y_g0_c = y_gs[0].collection().cast::<InfixOperator>().unwrap();
 			assert_eq!(y_g0_c.left().cast::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(y_g0_c.operator(), "..");
+			assert_eq!(y_g0_c.operator().name(), "..");
 			assert_eq!(y_g0_c.right().cast::<IntegerLiteral>().unwrap().value(), 3);
 			assert!(y_gs[0].where_clause().is_none());
 			let y_g1_ps: Vec<_> = y_gs[1].patterns().collect();
@@ -791,7 +791,7 @@ mod test {
 				.cast::<InfixOperator>()
 				.unwrap();
 			assert_eq!(y_g1_w.left().cast::<Identifier>().unwrap().name(), "i");
-			assert_eq!(y_g1_w.operator(), "<");
+			assert_eq!(y_g1_w.operator().name(), "<");
 			assert_eq!(y_g1_w.right().cast::<Identifier>().unwrap().name(), "j");
 		}
 		{
@@ -864,7 +864,7 @@ mod test {
 			assert_eq!(y_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
 			let y_g0_c = y_gs[0].collection().cast::<InfixOperator>().unwrap();
 			assert_eq!(y_g0_c.left().cast::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(y_g0_c.operator(), "..");
+			assert_eq!(y_g0_c.operator().name(), "..");
 			assert_eq!(y_g0_c.right().cast::<IntegerLiteral>().unwrap().value(), 3);
 			assert!(y_gs[0].where_clause().is_none());
 			let y_g1_ps: Vec<_> = y_gs[1].patterns().collect();
@@ -880,7 +880,7 @@ mod test {
 				.cast::<InfixOperator>()
 				.unwrap();
 			assert_eq!(y_g1_w.left().cast::<Identifier>().unwrap().name(), "i");
-			assert_eq!(y_g1_w.operator(), "<");
+			assert_eq!(y_g1_w.operator().name(), "<");
 			assert_eq!(y_g1_w.right().cast::<Identifier>().unwrap().name(), "j");
 		}
 		{

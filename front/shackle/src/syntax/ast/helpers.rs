@@ -275,6 +275,6 @@ pub mod test {
 			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
-		Model::new(cst.node(cst.root_node()))
+		Model::new(cst)
 	}
 }

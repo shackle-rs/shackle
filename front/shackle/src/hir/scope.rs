@@ -62,8 +62,8 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 									PatternRef::new(item_ref, c.pattern),
 								)
 							} else {
-								// Enum constructor (treated as variable with operation type)
-								scope.add_variable(
+								// Enum constructor (overloads handled later in type checker)
+								scope.add_function(
 									db,
 									*identifier,
 									0,
@@ -430,7 +430,6 @@ impl ScopeCollector<'_> {
 				arguments,
 			} => {
 				refutable_pattern();
-				self.collect_expression(*function);
 				for argument in arguments.iter() {
 					self.collect_pattern_inner(*argument, irrefutable);
 				}

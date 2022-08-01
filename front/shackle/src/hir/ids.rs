@@ -325,8 +325,6 @@ impl NodeRef {
 		};
 		let sm = db.lookup_source_map(model);
 		let origin = sm.get_origin(*self).expect("No origin for this node!");
-		let src = SourceFile::new(origin.cst_node().cst().file(), db.upcast());
-		let span = origin.cst_node().as_ref().byte_range().into();
-		(src, span)
+		origin.source_span()
 	}
 }

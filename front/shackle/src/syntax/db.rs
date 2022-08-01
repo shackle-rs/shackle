@@ -43,5 +43,5 @@ fn cst(db: &dyn SourceParser, file: FileRef) -> Result<Cst> {
 
 fn ast(db: &dyn SourceParser, file: FileRef) -> Result<Model> {
 	let cst = db.cst(file)?;
-	Ok(Model::new(cst.node(cst.root_node())))
+	Ok(Model::new(cst))
 }

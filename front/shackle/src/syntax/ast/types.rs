@@ -702,7 +702,7 @@ mod test {
 				.cast::<InfixOperator>()
 				.unwrap();
 			assert_eq!(dom.left().cast::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(dom.operator(), "..");
+			assert_eq!(dom.operator().name(), "..");
 			assert_eq!(dom.right().cast::<IntegerLiteral>().unwrap().value(), 3);
 		}
 		{

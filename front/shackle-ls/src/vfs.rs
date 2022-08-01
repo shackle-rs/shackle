@@ -54,6 +54,10 @@ impl FileHandler for Vfs {
 				other: Vec::new(),
 			})
 	}
+
+	fn snapshot(&self) -> Box<dyn FileHandler> {
+		Box::new(self.clone())
+	}
 }
 
 impl Clone for Vfs {

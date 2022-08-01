@@ -125,76 +125,40 @@ pub trait TryCastFrom<T>: Sized {
 	fn from(value: T) -> Option<Self>;
 }
 
-ast_node!(
-	/// A model (the root node of the AST is always a model)
-	Model,
-	items
-);
+/// Model (wrapper for a CST).
+///
+/// A model is a single `.mzn` file.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Model {
+	cst: Cst,
+}
 
 impl Model {
+	/// Create a model from a CST
+	pub fn new(cst: Cst) -> Self {
+		Self { cst }
+	}
+
+	/// Get the CST
+	pub fn cst(&self) -> &Cst {
+		&self.cst
+	}
+
 	/// Get the top level items in the model
 	pub fn items(&self) -> Children<'_, Item> {
-		children_with_field_name(self, "item")
-	}
-}
-
-/// Points to an AST node
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum AstNodeRef {
-	/// Expression
-	Expression(Expression),
-	/// Item
-	Item(Item),
-	/// Type
-	Type(Type),
-	/// Pattern
-	Pattern(Pattern),
-	/// Let item
-	LetItem(LetItem),
-	/// Function parameter
-	Parameter(Parameter),
-	/// Generator
-	Generator(Generator),
-	/// Infinite index slice
-	IndexSlice(IndexSlice),
-	/// Enumeration case
-	EnumerationCase(EnumerationCase),
-	/// Type-inst ID
-	TypeInstIdentifier(TypeInstIdentifier),
-	/// Type-inst enum ID
-	TypeInstEnumIdentifier(TypeInstEnumIdentifier),
-}
-
-impl Deref for AstNodeRef {
-	type Target = dyn AstNode;
-	fn deref(&self) -> &Self::Target {
-		match self {
-			AstNodeRef::Expression(e) => e,
-			AstNodeRef::Item(i) => i,
-			AstNodeRef::Type(t) => t,
-			AstNodeRef::Pattern(p) => p,
-			AstNodeRef::LetItem(l) => l,
-			AstNodeRef::Parameter(p) => p,
-			AstNodeRef::Generator(g) => g,
-			AstNodeRef::IndexSlice(i) => i,
-			AstNodeRef::EnumerationCase(e) => e,
-			AstNodeRef::TypeInstIdentifier(i) => i,
-			AstNodeRef::TypeInstEnumIdentifier(e) => e,
+		let tree = &self.cst;
+		let id = tree.language().field_id_for_name("item").unwrap();
+		let mut cursor = tree.root_node().walk();
+		let done = !cursor.goto_first_child();
+		Children {
+			field: id,
+			tree,
+			cursor,
+			done,
+			phantom: PhantomData,
 		}
 	}
 }
-
-impl_enum_from!(AstNodeRef::Expression);
-impl_enum_from!(AstNodeRef::Item);
-impl_enum_from!(AstNodeRef::Type);
-impl_enum_from!(AstNodeRef::Pattern);
-impl_enum_from!(AstNodeRef::LetItem);
-impl_enum_from!(AstNodeRef::Parameter);
-impl_enum_from!(AstNodeRef::Generator);
-impl_enum_from!(AstNodeRef::IndexSlice);
-impl_enum_from!(AstNodeRef::EnumerationCase);
-impl_enum_from!(AstNodeRef::TypeInstIdentifier);
-impl_enum_from!(AstNodeRef::TypeInstEnumIdentifier);
 
 #[cfg(test)]
 mod test {

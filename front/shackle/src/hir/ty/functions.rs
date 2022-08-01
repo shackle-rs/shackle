@@ -238,6 +238,14 @@ pub enum OverloadedFunction {
 }
 
 impl OverloadedFunction {
+	/// Get the inner non-polymorphic function
+	pub fn into_function(self) -> Option<FunctionType> {
+		match self {
+			OverloadedFunction::Function(f) => Some(f),
+			OverloadedFunction::PolymorphicFunction(p) => None,
+		}
+	}
+
 	/// Get the return type of the function
 	pub fn return_type(&self) -> Ty {
 		match self {

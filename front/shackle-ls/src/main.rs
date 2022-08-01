@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-	InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
+	request::{GotoDefinition, HoverRequest},
+	HoverProviderCapability, InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
 };
 
 use lsp_server::{Connection, ExtractError, Message};
@@ -20,6 +21,7 @@ use crate::{
 mod dispatch;
 mod extensions;
 mod handlers;
+mod utils;
 mod vfs;
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
@@ -29,6 +31,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 	let server_capabilities = serde_json::to_value(&ServerCapabilities {
 		definition_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
+		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		..Default::default()
 	})
 	.unwrap();
@@ -43,6 +46,7 @@ fn main_loop(
 	connection: Connection,
 	params: serde_json::Value,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+	let pool = threadpool::Builder::new().build();
 	let fs = vfs::Vfs::new();
 	let mut db = CompilerDatabase::with_file_handler(Box::new(fs.clone()));
 	let mut search_dirs = Vec::new();
@@ -67,6 +71,8 @@ fn main_loop(
 					.on::<ViewAst, _>(|ctx, params| handlers::view_ast(ctx, params))
 					.on::<ViewHir, _>(|ctx, params| handlers::view_hir(ctx, params))
 					.on::<ViewScope, _>(|ctx, params| handlers::view_scope(ctx, params))
+					.on::<GotoDefinition, _>(|ctx, params| handlers::goto_definition(ctx, params))
+					.on::<HoverRequest, _>(|ctx, params| handlers::hover(ctx, params))
 					.finish();
 
 				match result {
@@ -79,14 +85,14 @@ fn main_loop(
 				eprintln!("got response: {:?}", resp);
 			}
 			Message::Notification(not) => {
-				let result = DispatchNotification::new(not, (&mut db, &fs, &connection))
-					.on::<DidOpenTextDocument, _>(|(db, fs, c), params| {
-						handlers::on_document_open(db, fs, c, params)
+				let result = DispatchNotification::new(not, (&mut db, &fs, &pool, &connection))
+					.on::<DidOpenTextDocument, _>(|(db, fs, pool, c), params| {
+						handlers::on_document_open(db, fs, pool, c, params)
 					})
-					.on::<DidChangeTextDocument, _>(|(db, fs, c), params| {
-						handlers::on_document_changed(db, fs, c, params)
+					.on::<DidChangeTextDocument, _>(|(db, fs, pool, c), params| {
+						handlers::on_document_changed(db, fs, pool, c, params)
 					})
-					.on::<DidCloseTextDocument, _>(|(db, fs, _), params| {
+					.on::<DidCloseTextDocument, _>(|(db, fs, _, _), params| {
 						handlers::on_document_closed(db, fs, params)
 					})
 					.finish();

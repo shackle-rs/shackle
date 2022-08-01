@@ -192,7 +192,6 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 					} else {
 						// Resolve relative to search directories, then current file
 						let file_dir = model
-							.cst_node()
 							.cst()
 							.file()
 							.path(db.upcast())

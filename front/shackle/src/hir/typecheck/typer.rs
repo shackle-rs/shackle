@@ -19,7 +19,7 @@ use crate::{
 	Error,
 };
 
-use super::{DeclarationType, TypeContext};
+use super::{PatternTy, TypeContext};
 
 /// Computes types of expressions and patterns in an item
 pub struct Typer<'a, T> {
@@ -117,11 +117,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			let expression = ExpressionRef::new(self.item, expr);
 			self.ctx.add_identifier_resolution(expression, p);
 			match self.ctx.type_pattern(db, self.types, p) {
-				DeclarationType::Variable(ty)
-				| DeclarationType::EnumAtom(ty)
-				| DeclarationType::TypeAlias(ty) => return ty,
-				DeclarationType::EnumConstructor(_) => (),
-				DeclarationType::Computing => {
+				PatternTy::Variable(ty) | PatternTy::EnumAtom(ty) | PatternTy::TypeAlias(ty) => {
+					return ty
+				}
+				PatternTy::EnumConstructor(_) => (),
+				PatternTy::Computing => {
 					let (src, span) = NodeRef::from(expression.into_entity(db)).source_span(db);
 					self.ctx.add_diagnostic(
 						self.item,
@@ -1117,7 +1117,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	pub fn collect_declaration(&mut self, d: &Declaration) -> Ty {
 		for p in Pattern::identifiers(d.pattern, self.data) {
 			self.ctx
-				.add_declaration(PatternRef::new(self.item, p), DeclarationType::Computing);
+				.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
 		}
 		let ty = if let Some(e) = d.definition {
 			let actual = self.collect_expression(e);
@@ -1163,15 +1163,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		if let Some(p) = self.find_variable(expr, i) {
 			let d = self.ctx.type_pattern(db, self.types, p);
 			let f = match d {
-				DeclarationType::Variable(t) => {
+				PatternTy::Variable(t) => {
 					if let TyData::Function(OptType::NonOpt, f) = t.lookup(db) {
 						Some(f)
 					} else {
 						None
 					}
-				}
-				DeclarationType::EnumConstructor(cs) => {
-					cs.iter().find(|c| c.matches(db, args).is_ok()).cloned()
 				}
 				_ => None,
 			};
@@ -1241,14 +1238,18 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			return self.types.error;
 		}
 
-		let overloads = patterns
-			.iter()
-			.filter_map(|p| match self.ctx.type_pattern(db, self.types, *p) {
-				DeclarationType::Function(function) => Some((*p, *function.clone())),
-				DeclarationType::Computing => None,
+		let mut overloads = Vec::new();
+		for p in patterns.iter() {
+			match self.ctx.type_pattern(db, self.types, *p) {
+				PatternTy::Function(function) => overloads.push((*p, *function.clone())),
+				PatternTy::EnumConstructor(functions) => {
+					overloads.extend(functions.iter().map(|function| (*p, function.clone())))
+				}
+				PatternTy::Computing => (),
 				_ => unreachable!(),
-			})
-			.collect::<Vec<_>>();
+			}
+		}
+
 		if overloads.is_empty() {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 			self.ctx.add_diagnostic(
@@ -1400,7 +1401,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		scope: Option<ArenaIndex<Expression>>,
 		pat: ArenaIndex<Pattern>,
 		expected: Ty,
-	) {
+	) -> Ty {
 		let db = self.db;
 		let actual = match &self.data[pat] {
 			Pattern::Absent => self.types.opt_bottom,
@@ -1408,245 +1409,177 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Pattern::Infinity { .. } | Pattern::Integer { .. } => self.types.par_int,
 			Pattern::Float { .. } => self.types.par_float,
 			Pattern::String(_) => self.types.string,
-			Pattern::Anonymous | Pattern::Missing => {
-				return;
-			}
+			Pattern::Anonymous => expected,
+			Pattern::Missing => self.types.error,
 			Pattern::Identifier(i) => {
-				if let Some(e) = scope {
-					if let Some(p) = self.find_variable(e, *i) {
-						if let DeclarationType::EnumAtom(ty) =
-							self.ctx.type_pattern(db, self.types, p)
-						{
-							ty
-						} else {
-							self.ctx.add_declaration(
-								PatternRef::new(self.item, pat),
-								DeclarationType::Variable(expected),
-							);
-							return;
-						}
-					} else {
-						self.ctx.add_declaration(
-							PatternRef::new(self.item, pat),
-							DeclarationType::Variable(expected),
-						);
-						return;
+				// If this is an enum atom, then add a resolution to it
+				let res = (|| {
+					let p = self.find_variable(scope?, *i)?;
+					if let PatternTy::EnumAtom(ty) = self.ctx.type_pattern(db, self.types, p) {
+						self.ctx
+							.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+						return Some(ty);
 					}
+					None
+				})();
+				if let Some(ty) = res {
+					ty
 				} else {
+					// This pattern is irrefutable and declares a new variable
 					self.ctx.add_declaration(
 						PatternRef::new(self.item, pat),
-						DeclarationType::Variable(expected),
+						PatternTy::Variable(expected),
 					);
-					return;
+					return expected;
 				}
 			}
 			Pattern::Call {
 				function,
 				arguments,
 			} => {
-				let i = match &self.data[*function] {
-					Expression::Identifier(i) => *i,
-					_ => unreachable!("Pattern callee name not an identifier"),
-				};
-				if let Some(s) = scope {
-					if let Some(v) = self.find_variable(s, i) {
-						match self.ctx.type_pattern(db, self.types, v) {
-							DeclarationType::EnumConstructor(cs) => {
-								if let Some(c) = cs
-									.iter()
-									.find(|c| expected.is_subtype_of(db, c.return_type))
-								{
-									if c.params.len() != arguments.len() {
-										let (src, span) =
-											NodeRef::from(EntityRef::new(db, self.item, pat))
-												.source_span(db);
-										self.ctx.add_diagnostic(
-											self.item,
-											NoMatchingFunction {
-												src,
-												span,
-												msg:
-													"Wrong number of arguments for enum constructor"
-														.to_owned(),
-											},
-										);
-										// Continue collection
-										for p in arguments.iter() {
-											self.collect_pattern(scope, *p, self.types.error);
-										}
-										return;
-									}
-									if !c.return_type.is_subtype_of(db, expected) {
-										let (src, span) =
-											NodeRef::from(EntityRef::new(db, self.item, pat))
-												.source_span(db);
-										self.ctx.add_diagnostic(
-											self.item,
-											TypeMismatch {
-												src,
-												span,
-												msg: format!(
-													"Expected '{}' but got '{}'",
-													expected.pretty_print(db),
-													c.return_type.pretty_print(db)
-												),
-											},
-										);
-										// Continue collection
-										for p in arguments.iter() {
-											self.collect_pattern(scope, *p, self.types.error);
-										}
-										return;
-									}
+				let res = (|| {
+					let name = self.data[*function].identifier().unwrap();
+					let fns = self.find_function(scope?, name);
+					let cs = fns
+						.iter()
+						.find_map(|f| {
+							if let PatternTy::EnumConstructor(cs) =
+								self.ctx.type_pattern(db, self.types, *f)
+							{
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
+								Some(cs)
+							} else {
+								None
+							}
+						})
+						.or_else(|| {
+							let (src, span) =
+								NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
+							self.ctx.add_diagnostic(
+								self.item,
+								TypeMismatch {
+									src,
+									span,
+									msg: "Expected enum constructor in pattern call".to_owned(),
+								},
+							);
+							None
+						})?;
 
-									for (p, t) in arguments.iter().zip(c.params.iter()) {
-										self.collect_pattern(scope, *p, *t);
-									}
-									return;
-								}
-								// Continue collection
-								for p in arguments.iter() {
-									self.collect_pattern(scope, *p, self.types.error);
-								}
-								return;
-							}
-							_ => {
-								let (src, span) = NodeRef::from(EntityRef::new(db, self.item, pat))
-									.source_span(db);
-								self.ctx.add_diagnostic(
-									self.item,
-									TypeMismatch {
-										src,
-										span,
-										msg: "Expected enum constructor in pattern call".to_owned(),
-									},
-								);
-								// Continue collection
-								for p in arguments.iter() {
-									self.collect_pattern(scope, *p, self.types.error);
-								}
-								return;
-							}
-						}
-					} else {
+					// Find the enum constructor via its return type
+					let c = cs
+						.iter()
+						.find(|c| expected.is_subtype_of(db, c.overload.return_type()))
+						.or_else(|| {
+							let (src, span) =
+								NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
+							self.ctx.add_diagnostic(
+								self.item,
+								NoMatchingFunction {
+									src,
+									span,
+									msg: format!(
+										"No enum constructor '{}' found for type '{}'",
+										name.lookup(db),
+										expected.pretty_print(db)
+									),
+								},
+							);
+							None
+						})?;
+
+					if c.overload.params().len() != arguments.len() {
 						let (src, span) =
 							NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
 						self.ctx.add_diagnostic(
 							self.item,
-							UndefinedIdentifier {
+							NoMatchingFunction {
 								src,
 								span,
-								identifier: i.lookup(db),
+								msg: "Wrong number of arguments for enum constructor".to_owned(),
 							},
 						);
-						// Continue collection
-						for p in arguments.iter() {
-							self.collect_pattern(scope, *p, self.types.error);
-						}
-						return;
 					}
+
+					for (p, t) in arguments.iter().zip(
+						c.overload
+							.params()
+							.iter()
+							.copied()
+							.chain(std::iter::repeat(self.types.error)),
+					) {
+						self.collect_pattern(scope, *p, t);
+					}
+					let fn_type = c.overload.clone().into_function().unwrap();
+					self.ctx.add_declaration(
+						PatternRef::new(self.item, *function),
+						PatternTy::Destructuring(Ty::function(db, fn_type)),
+					);
+					Some(c.overload.return_type())
+				})();
+
+				if let Some(ty) = res {
+					ty
 				} else {
 					// Continue collection
 					for p in arguments.iter() {
 						self.collect_pattern(scope, *p, self.types.error);
 					}
-					return;
+					self.types.error
 				}
 			}
-			Pattern::Tuple { fields } => {
-				match expected.lookup(db) {
-					TyData::Tuple(_, fs) if fs.len() == fields.len() => {
-						for (p, e) in fields.iter().zip(fs.iter()) {
-							self.collect_pattern(scope, *p, *e);
-						}
-						return;
+			Pattern::Tuple { fields } => match expected.lookup(db) {
+				TyData::Tuple(_, fs) => Ty::tuple(
+					db,
+					fields
+						.iter()
+						.zip(
+							fs.iter()
+								.copied()
+								.chain(std::iter::repeat(self.types.error)),
+						)
+						.map(|(p, e)| self.collect_pattern(scope, *p, e)),
+				),
+				_ => Ty::tuple(
+					db,
+					fields
+						.iter()
+						.map(|p| self.collect_pattern(scope, *p, self.types.error)),
+				),
+			},
+			Pattern::Record { fields } => match expected.lookup(db) {
+				TyData::Record(_, fs) => {
+					let mut map = FxHashMap::default();
+					for (i, f) in fs.iter() {
+						map.insert(*i, *f);
 					}
-					TyData::Error => (),
-					_ => {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
-						self.ctx.add_diagnostic(
-							self.item,
-							TypeMismatch {
-								src,
-								span,
-								msg: format!(
-									"Expected '{}' but got tuple with {} elements",
-									expected.pretty_print(db),
-									fields.len()
+					Ty::record(
+						db,
+						fields.iter().map(|(i, p)| {
+							(
+								*i,
+								self.collect_pattern(
+									scope,
+									*p,
+									map.get(i).copied().unwrap_or(self.types.error),
 								),
-							},
-						);
-					}
+							)
+						}),
+					)
 				}
-				// Continue collection
-				for p in fields.iter() {
-					self.collect_pattern(scope, *p, self.types.error);
-				}
-				return;
-			}
-			Pattern::Record { fields } => {
-				match expected.lookup(db) {
-					TyData::Record(_, fs) => {
-						let mut map = FxHashMap::default();
-						for (i, f) in fs.iter() {
-							map.insert(*i, *f);
-						}
-						let mut had_error = false;
-						for (e, p) in fields.iter() {
-							let i = match &self.data[*e] {
-								Expression::Identifier(i) => *i,
-								_ => unreachable!("Record field name not an identifier"),
-							};
-							if let Some(ty) = map.get(&i) {
-								self.collect_pattern(scope, *p, *ty);
-							} else {
-								if !had_error {
-									had_error = true;
-									let (src, span) =
-										NodeRef::from(EntityRef::new(db, self.item, pat))
-											.source_span(db);
-									self.ctx.add_diagnostic(
-										self.item,
-										TypeMismatch {
-											src,
-											span,
-											msg: format!(
-											"Expected '{}' but got record with unknown field '{}'",
-											expected.pretty_print(db),
-											i.lookup(db)
-										),
-										},
-									);
-								}
-								self.collect_pattern(scope, *p, self.types.error);
-							}
-						}
-					}
-					TyData::Error => (),
-					_ => {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
-						self.ctx.add_diagnostic(
-							self.item,
-							TypeMismatch {
-								src,
-								span,
-								msg: format!(
-									"Expected '{}' but got 'record(..)'",
-									expected.pretty_print(db)
-								),
-							},
-						);
-						// Continue collection
-						for (_, p) in fields.iter() {
-							self.collect_pattern(scope, *p, self.types.error);
-						}
-					}
-				}
-				return;
-			}
+				_ => Ty::record(
+					db,
+					fields
+						.iter()
+						.map(|(i, p)| (*i, self.collect_pattern(scope, *p, self.types.error))),
+				),
+			},
 		};
+		self.ctx.add_declaration(
+			PatternRef::new(self.item, pat),
+			PatternTy::Destructuring(actual),
+		);
 		if !actual.is_subtype_of(db, expected) {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
 			self.ctx.add_diagnostic(
@@ -1661,7 +1594,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					),
 				},
 			);
+			return self.types.error;
 		}
+		actual
 	}
 
 	/// Collect an ascribed type `t`, filling in `Any` types with using `ty` if present.
@@ -1705,9 +1640,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let mut ty = match &self.data[*domain] {
 					Expression::Identifier(i) => {
 						if let Some(p) = self.find_variable(*domain, *i) {
+							self.ctx.add_identifier_resolution(
+								ExpressionRef::new(self.item, *domain),
+								p,
+							);
 							match self.ctx.type_pattern(db, self.types, p) {
-								DeclarationType::TypeAlias(ty) => ty,
-								DeclarationType::Variable(ty) => match ty.lookup(db) {
+								PatternTy::TypeAlias(ty) => ty,
+								PatternTy::Variable(ty) => match ty.lookup(db) {
 									TyData::Set(VarType::Par, OptType::NonOpt, inner) => inner,
 									TyData::Error => self.types.error,
 									_ => {
@@ -1728,8 +1667,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 										return self.types.error;
 									}
 								},
-								DeclarationType::TyVar(t) => Ty::type_inst_var(db, t),
-								DeclarationType::Computing => {
+								PatternTy::TyVar(t) => Ty::type_inst_var(db, t),
+								PatternTy::Computing => {
 									let (src, span) =
 										NodeRef::from(p.into_entity(db)).source_span(db);
 									self.ctx.add_diagnostic(

@@ -43,7 +43,7 @@ pub enum Pattern {
 	/// Enum constructor pattern
 	Call {
 		/// Callee identifier
-		function: ArenaIndex<Expression>,
+		function: ArenaIndex<Pattern>,
 		/// Call arguments
 		arguments: Box<[ArenaIndex<Pattern>]>,
 	},
@@ -55,7 +55,7 @@ pub enum Pattern {
 	/// Record pattern
 	Record {
 		/// Record fields (pairs of field name, field value pattern)
-		fields: Box<[(ArenaIndex<Expression>, ArenaIndex<Pattern>)]>,
+		fields: Box<[(Identifier, ArenaIndex<Pattern>)]>,
 	},
 	/// Indicates an error
 	Missing,

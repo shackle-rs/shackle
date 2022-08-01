@@ -34,7 +34,7 @@ impl ExpressionCollector<'_> {
 
 	/// Lower an AST expression into HIR
 	pub fn collect_expression(&mut self, expression: ast::Expression) -> ArenaIndex<Expression> {
-		let origin = expression.clone().into();
+		let origin = Origin::new(self.db, &expression, None);
 		if expression.is_missing() {
 			return self.alloc_expression(origin, Expression::Missing);
 		}
@@ -98,7 +98,7 @@ impl ExpressionCollector<'_> {
 		is_array_dim: bool,
 		is_fn_parameter: bool,
 	) -> ArenaIndex<Type> {
-		let origin = t.clone().into();
+		let origin = Origin::new(self.db, &t, None);
 		if t.is_missing() {
 			return self.alloc_type(origin, Type::Missing);
 		}
@@ -186,7 +186,7 @@ impl ExpressionCollector<'_> {
 
 	/// Lower an AST pattern into HIR
 	pub fn collect_pattern(&mut self, p: ast::Pattern) -> ArenaIndex<Pattern> {
-		let origin = p.clone().into();
+		let origin = Origin::new(self.db, &p, None);
 		if p.is_missing() {
 			return self.alloc_pattern(origin, Pattern::Missing);
 		}
@@ -227,8 +227,12 @@ impl ExpressionCollector<'_> {
 				),
 			},
 			ast::Pattern::Call(c) => {
+				let ident = c.identifier();
 				let pattern = Pattern::Call {
-					function: self.collect_expression(c.identifier().into()),
+					function: self.alloc_pattern(
+						Origin::new(self.db, &ident, None),
+						Identifier::new(ident.name(), self.db),
+					),
 					arguments: c.arguments().map(|a| self.collect_pattern(a)).collect(),
 				};
 				self.alloc_pattern(origin, pattern)
@@ -245,7 +249,7 @@ impl ExpressionCollector<'_> {
 						.fields()
 						.map(|f| {
 							(
-								self.collect_expression(f.name().into()),
+								Identifier::new(f.name().name(), self.db),
 								self.collect_pattern(f.value()),
 							)
 						})
@@ -277,8 +281,10 @@ impl ExpressionCollector<'_> {
 							return Type::AnonymousTypeInstVar {
 								inst: Some(VarType::Par),
 								opt: Some(OptType::NonOpt),
-								pattern: self
-									.alloc_pattern(e.clone().into(), Identifier::new("_", self.db)),
+								pattern: self.alloc_pattern(
+									Origin::new(self.db, &e, None),
+									Identifier::new("_", self.db),
+								),
 								enumerable: true,
 								varifiable: true,
 								indexable: false,
@@ -301,7 +307,7 @@ impl ExpressionCollector<'_> {
 			},
 			ast::Domain::TypeInstIdentifier(tiid) => {
 				let ident = Identifier::new(tiid.name(), self.db);
-				let origin: Origin = tiid.clone().into();
+				let origin = Origin::new(self.db, &tiid, None);
 				let (inst, opt) = match (b.any_type(), b.var_type(), b.opt_type()) {
 					(true, _, _) => (None, None), // Unrestricted
 					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
@@ -330,7 +336,7 @@ impl ExpressionCollector<'_> {
 			}
 			ast::Domain::TypeInstEnumIdentifier(tiid) => {
 				let ident = Identifier::new(tiid.name(), self.db);
-				let origin: Origin = tiid.clone().into();
+				let origin = Origin::new(self.db, &tiid, None);
 				tiids
 					.entry(ident)
 					.or_insert(TypeInstIdentifierDeclaration {
@@ -387,10 +393,10 @@ impl ExpressionCollector<'_> {
 		};
 		if indices.iter().all(|is| is.is_empty()) {
 			// Non-indexed
-			self.alloc_expression(expr.into(), array)
+			self.alloc_expression(Origin::new(self.db, &expr, None), array)
 		} else if indices[0].len() == 1 && indices[1..].iter().all(|is| is.is_empty()) {
 			// Start indexed, so desugar into arrayNd call
-			let origin = Origin::new(expr, Some(DesugarKind::IndexedArrayLiteral));
+			let origin = Origin::new(self.db, &expr, Some(DesugarKind::IndexedArrayLiteral));
 			let function = self.ident_exp(origin.clone(), "arrayNd");
 			let arguments = Box::new([indices[0][0], self.alloc_expression(origin.clone(), array)]);
 			self.alloc_expression(
@@ -402,7 +408,7 @@ impl ExpressionCollector<'_> {
 			)
 		} else {
 			// Fully indexed, so desugar into arrayNd call
-			let origin = Origin::new(expr, Some(DesugarKind::IndexedArrayLiteral));
+			let origin = Origin::new(self.db, &expr, Some(DesugarKind::IndexedArrayLiteral));
 			let num_dims = indices[0].len();
 			let mut dims = std::iter::repeat(Vec::new())
 				.take(num_dims)
@@ -449,10 +455,7 @@ impl ExpressionCollector<'_> {
 
 	fn collect_2d_array_literal(&mut self, al: ast::ArrayLiteral2D) -> ArenaIndex<Expression> {
 		// Desugar into array2d call
-		let origin = Origin::new(
-			ast::Expression::from(al.clone()),
-			Some(DesugarKind::ArrayLiteral2D),
-		);
+		let origin = Origin::new(self.db, &al, Some(DesugarKind::ArrayLiteral2D));
 		let col_indices = al
 			.column_indices()
 			.map(|i| self.collect_expression(i))
@@ -587,7 +590,7 @@ impl ExpressionCollector<'_> {
 			.map(|i| match i {
 				ast::ArrayIndex::Expression(e) => self.collect_expression(e),
 				ast::ArrayIndex::IndexSlice(s) => self.alloc_expression(
-					s.clone().into(),
+					Origin::new(self.db, &s, None),
 					Expression::Slice(Identifier::new(s.operator(), self.db)),
 				),
 			})
@@ -598,7 +601,7 @@ impl ExpressionCollector<'_> {
 				indices[0]
 			} else {
 				self.alloc_expression(
-					Origin::new(ast::Expression::from(aa), None),
+					Origin::new(self.db, &aa, None),
 					TupleLiteral { fields: indices },
 				)
 			},
@@ -657,17 +660,18 @@ impl ExpressionCollector<'_> {
 			.into_iter()
 			.map(|a| self.collect_expression(a))
 			.collect();
+		let operator = o.operator();
 		let function = self.ident_exp(
-			ast::Expression::from(o.clone()).into(),
-			if o.operator() == "==" {
+			Origin::new(self.db, &operator, None),
+			if operator.name() == "==" {
 				// Desugar == into =
 				"="
 			} else {
-				o.operator()
+				operator.name()
 			},
 		);
 		self.alloc_expression(
-			Origin::new(ast::Expression::from(o), Some(DesugarKind::InfixOperator)),
+			Origin::new(self.db, &o, Some(DesugarKind::InfixOperator)),
 			Call {
 				function,
 				arguments,
@@ -677,9 +681,10 @@ impl ExpressionCollector<'_> {
 
 	fn collect_prefix_operator(&mut self, o: ast::PrefixOperator) -> ArenaIndex<Expression> {
 		let arguments = Box::new([self.collect_expression(o.operand())]);
-		let function = self.ident_exp(ast::Expression::from(o.clone()).into(), o.operator());
+		let operator = o.operator();
+		let function = self.ident_exp(Origin::new(self.db, &operator, None), operator.name());
 		self.alloc_expression(
-			Origin::new(ast::Expression::from(o), Some(DesugarKind::PrefixOperator)),
+			Origin::new(self.db, &o, Some(DesugarKind::PrefixOperator)),
 			Call {
 				function,
 				arguments,
@@ -689,13 +694,13 @@ impl ExpressionCollector<'_> {
 
 	fn collect_postfix_operator(&mut self, o: ast::PostfixOperator) -> ArenaIndex<Expression> {
 		let arguments = Box::new([self.collect_expression(o.operand())]);
-
+		let operator = o.operator();
 		let function = self.ident_exp(
-			ast::Expression::from(o.clone()).into(),
-			format!("{}o", o.operator()),
+			Origin::new(self.db, &operator, None),
+			format!("{}o", operator.name()),
 		);
 		self.alloc_expression(
-			Origin::new(ast::Expression::from(o), Some(DesugarKind::PostfixOperator)),
+			Origin::new(self.db, &o, Some(DesugarKind::PostfixOperator)),
 			Call {
 				function,
 				arguments,
@@ -705,10 +710,7 @@ impl ExpressionCollector<'_> {
 
 	fn collect_generator_call(&mut self, c: ast::GeneratorCall) -> ArenaIndex<Expression> {
 		// Desugar into call with comprehension as argument
-		let origin = Origin::new(
-			ast::Expression::from(c.clone()),
-			Some(DesugarKind::GeneratorCall),
-		);
+		let origin = Origin::new(self.db, &c, Some(DesugarKind::GeneratorCall));
 		let comp = ArrayComprehension {
 			generators: c.generators().map(|g| self.collect_generator(g)).collect(),
 			indices: None,
@@ -730,10 +732,7 @@ impl ExpressionCollector<'_> {
 		s: ast::StringInterpolation,
 	) -> ArenaIndex<Expression> {
 		// Desugar into concat() of show() calls
-		let origin = Origin::new(
-			ast::Expression::from(s.clone()),
-			Some(DesugarKind::StringInterpolation),
-		);
+		let origin = Origin::new(self.db, &s, Some(DesugarKind::StringInterpolation));
 		let strings = s
 			.contents()
 			.map(|c| match c {
@@ -742,9 +741,9 @@ impl ExpressionCollector<'_> {
 				}
 				ast::InterpolationItem::Expression(e) => {
 					let arguments = Box::new([self.collect_expression(e.clone())]);
-					let function = self.ident_exp(e.clone().into(), "show");
+					let function = self.ident_exp(Origin::new(self.db, &e, None), "show");
 					self.alloc_expression(
-						e.into(),
+						Origin::new(self.db, &e, None),
 						Call {
 							function,
 							arguments,

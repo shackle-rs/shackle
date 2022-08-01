@@ -181,6 +181,18 @@ impl Call {
 }
 
 ast_node!(
+	/// An operator node
+	Operator,
+	name,
+);
+
+impl Operator {
+	/// The name of the operator
+	pub fn name(&self) -> &str {
+		self.cst_kind()
+	}
+}
+ast_node!(
 	/// Prefix (unary) operator
 	PrefixOperator,
 	operator,
@@ -189,9 +201,8 @@ ast_node!(
 
 impl PrefixOperator {
 	/// Get the operator
-	pub fn operator(&self) -> &str {
-		let node = self.cst_node().as_ref();
-		node.child_by_field_name("operator").unwrap().kind()
+	pub fn operator(&self) -> Operator {
+		child_with_field_name(self, "operator")
 	}
 
 	/// Get the operand
@@ -210,9 +221,8 @@ ast_node!(
 
 impl InfixOperator {
 	/// Get the left hand side
-	pub fn operator(&self) -> &str {
-		let node = self.cst_node().as_ref();
-		node.child_by_field_name("operator").unwrap().kind()
+	pub fn operator(&self) -> Operator {
+		child_with_field_name(self, "operator")
 	}
 
 	/// Get the left hand side
@@ -235,9 +245,8 @@ ast_node!(
 
 impl PostfixOperator {
 	/// Get the operator
-	pub fn operator(&self) -> &str {
-		let node = self.cst_node().as_ref();
-		node.child_by_field_name("operator").unwrap().kind()
+	pub fn operator(&self) -> Operator {
+		child_with_field_name(self, "operator")
 	}
 
 	/// Get the operand
@@ -663,7 +672,7 @@ mod test {
 				.definition()
 				.cast::<PrefixOperator>()
 				.unwrap();
-			assert_eq!(op.operator(), "-");
+			assert_eq!(op.operator().name(), "-");
 			assert_eq!(op.operand().cast::<Identifier>().unwrap().name(), "a");
 		}
 	}
@@ -686,7 +695,7 @@ mod test {
 				.cast::<InfixOperator>()
 				.unwrap();
 			assert_eq!(op.left().cast::<Identifier>().unwrap().name(), "a");
-			assert_eq!(op.operator(), "+");
+			assert_eq!(op.operator().name(), "+");
 			assert_eq!(op.right().cast::<Identifier>().unwrap().name(), "b");
 		}
 		{
@@ -697,10 +706,10 @@ mod test {
 				.cast::<InfixOperator>()
 				.unwrap();
 			assert_eq!(sum.left().cast::<Identifier>().unwrap().name(), "a");
-			assert_eq!(sum.operator(), "+");
+			assert_eq!(sum.operator().name(), "+");
 			let product = sum.right().cast::<InfixOperator>().unwrap();
 			assert_eq!(product.left().cast::<Identifier>().unwrap().name(), "b");
-			assert_eq!(product.operator(), "*");
+			assert_eq!(product.operator().name(), "*");
 			assert_eq!(product.right().cast::<Identifier>().unwrap().name(), "c");
 		}
 	}
@@ -718,7 +727,7 @@ mod test {
 				.cast::<PostfixOperator>()
 				.unwrap();
 			assert_eq!(op.operand().cast::<Identifier>().unwrap().name(), "a");
-			assert_eq!(op.operator(), "..");
+			assert_eq!(op.operator().name(), "..");
 		}
 	}
 

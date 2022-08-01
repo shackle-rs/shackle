@@ -16,13 +16,13 @@ use crate::{
 	Error,
 };
 
-use super::{DeclarationType, TypeContext, Typer};
+use super::{PatternTy, TypeContext, Typer};
 
 /// Collected types for an item body
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BodyTypes {
 	/// Types of declarations
-	pub patterns: ArenaMap<Pattern, DeclarationType>,
+	pub patterns: ArenaMap<Pattern, PatternTy>,
 	/// Types of expressions
 	pub expressions: ArenaMap<Expression, Ty>,
 	/// Identifier resolution
@@ -70,7 +70,7 @@ impl BodyTypeContext {
 				if let Some(e) = it.body {
 					let signature = db.lookup_item_signature(item);
 					match &signature.patterns[&PatternRef::new(item, it.pattern)] {
-						DeclarationType::Function(function) => {
+						PatternTy::Function(function) => {
 							typer.typecheck_expression(e, function.overload.return_type());
 						}
 						_ => unreachable!(),
@@ -87,7 +87,7 @@ impl BodyTypeContext {
 				} else if let Some(e) = it.definition {
 					let signature = db.lookup_item_signature(item);
 					let expected = match &signature.patterns[&PatternRef::new(item, it.pattern)] {
-						DeclarationType::Variable(t) => *t,
+						PatternTy::Variable(t) => *t,
 						_ => unreachable!(),
 					};
 					typer.typecheck_expression(e, expected);
@@ -143,7 +143,7 @@ impl BodyTypeContext {
 }
 
 impl TypeContext for BodyTypeContext {
-	fn add_declaration(&mut self, pattern: PatternRef, declaration: DeclarationType) {
+	fn add_declaration(&mut self, pattern: PatternRef, declaration: PatternTy) {
 		assert_eq!(pattern.item(), self.item);
 		self.data.patterns.insert(pattern.pattern(), declaration);
 	}
@@ -174,7 +174,7 @@ impl TypeContext for BodyTypeContext {
 		db: &dyn Hir,
 		_types: &TypeRegistry,
 		pattern: PatternRef,
-	) -> DeclarationType {
+	) -> PatternTy {
 		if pattern.item() == self.item {
 			if let Some(d) = self.data.patterns.get(pattern.pattern()) {
 				return d.clone();

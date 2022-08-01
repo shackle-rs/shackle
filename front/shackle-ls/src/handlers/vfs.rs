@@ -3,13 +3,15 @@ use lsp_server::Connection;
 use lsp_types::{
 	DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
 };
-use shackle::{db::FileReader, hir::db::Hir};
+use shackle::db::*;
+use threadpool::ThreadPool;
 
 use super::publish_diagnostics;
 
 pub fn on_document_open(
-	db: &mut dyn Hir,
+	db: &mut CompilerDatabase,
 	vfs: &Vfs,
+	pool: &ThreadPool,
 	sender: &Connection,
 	params: DidOpenTextDocumentParams,
 ) {
@@ -22,12 +24,13 @@ pub fn on_document_open(
 		.expect("Failed to canonicalize path");
 	vfs.manage_file(&file, &params.text_document.text);
 	db.on_file_change(&file);
-	let _ = publish_diagnostics(db, file.as_ref(), sender);
+	publish_diagnostics(db, file.as_ref(), pool, sender);
 }
 
 pub fn on_document_changed(
-	db: &mut dyn Hir,
+	db: &mut CompilerDatabase,
 	vfs: &Vfs,
+	pool: &ThreadPool,
 	sender: &Connection,
 	params: DidChangeTextDocumentParams,
 ) {
@@ -47,7 +50,7 @@ pub fn on_document_changed(
 			.collect::<String>(),
 	);
 	db.on_file_change(&file);
-	let _ = publish_diagnostics(db, file.as_ref(), sender);
+	publish_diagnostics(db, file.as_ref(), pool, sender);
 }
 
 pub fn on_document_closed(db: &mut dyn FileReader, vfs: &Vfs, params: DidCloseTextDocumentParams) {
