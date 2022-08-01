@@ -241,7 +241,7 @@ pub fn input_models(db: &dyn FileReader) -> Arc<Vec<ModelRef>> {
 /// Trait for handling filesystem queries.
 ///
 /// The `DefaultFileHandler` provides a default implementation which reads directly from the filesystem.
-pub trait FileHandler {
+pub trait FileHandler: Send {
 	/// Whether the results are durable (return false if file contents may change)
 	fn durable(&self) -> bool {
 		return true;
@@ -249,9 +249,13 @@ pub trait FileHandler {
 
 	/// Read a file and return its contents.
 	fn read_file(&self, path: &PathBuf) -> Result<Arc<String>, FileError>;
+
+	/// Create a snapshot of the file handler
+	fn snapshot(&self) -> Box<dyn FileHandler>;
 }
 
 /// Default file handler which reads from filesystem
+#[derive(Clone, Debug)]
 pub struct DefaultFileHandler;
 
 impl FileHandler for DefaultFileHandler {
@@ -263,5 +267,9 @@ impl FileHandler for DefaultFileHandler {
 				message: err.to_string(),
 				other: Vec::new(),
 			})
+	}
+
+	fn snapshot(&self) -> Box<dyn FileHandler> {
+		Box::new(self.clone())
 	}
 }

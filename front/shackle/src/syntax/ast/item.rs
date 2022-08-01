@@ -552,7 +552,7 @@ mod test {
 		assert_eq!(items.len(), 1);
 		let constraint = items.first().unwrap().cast_ref::<Constraint>().unwrap();
 		let op = constraint.expression().cast::<InfixOperator>().unwrap();
-		assert_eq!(op.operator(), ">");
+		assert_eq!(op.operator().name(), ">");
 		let lhs = op.left().cast::<Identifier>().unwrap();
 		assert_eq!(lhs.name(), "x");
 		let rhs = op.right().cast::<IntegerLiteral>().unwrap();
@@ -616,7 +616,7 @@ mod test {
 		assert!(domain.primitive_type().is_int());
 
 		let body = function.body().unwrap().cast::<InfixOperator>().unwrap();
-		assert_eq!(body.operator(), "+");
+		assert_eq!(body.operator().name(), "+");
 		let lhs = body.left().cast::<Identifier>().unwrap();
 		assert_eq!(lhs.name(), "x");
 		let rhs = body.right().cast::<IntegerLiteral>().unwrap();

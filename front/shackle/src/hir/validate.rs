@@ -16,7 +16,7 @@ use crate::{
 	Error,
 };
 
-use super::{db::Hir, DeclarationType};
+use super::{db::Hir, PatternTy};
 
 /// Validate HIR
 pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
@@ -24,16 +24,17 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 	// Validate overloading
 	let global_scope = db.lookup_global_scope();
 	for (_, ps) in global_scope.functions(0) {
-		let mut overloads = ps
-			.iter()
-			.map(|p| {
-				let signature = db.lookup_item_signature(p.item());
-				match &signature.patterns[p] {
-					DeclarationType::Function(f) => *f.clone(),
-					_ => unreachable!(),
-				}
-			})
-			.collect::<Vec<_>>();
+		// let mut overloads = ps
+		// 	.iter()
+		// 	.map(|p| {
+		// 		let signature = db.lookup_item_signature(p.item());
+		// 		match &signature.patterns[p] {
+		// 			PatternTy::Function(f) => *f.clone(),
+		// 			PatternTy::EnumConstructor(fs) =>
+		// 			_ => unreachable!(),
+		// 		}
+		// 	})
+		// 	.collect::<Vec<_>>();
 	}
 	// Check for multiple assignments to variables
 

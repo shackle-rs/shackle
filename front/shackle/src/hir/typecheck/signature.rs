@@ -16,13 +16,13 @@ use crate::{
 	Error,
 };
 
-use super::{DeclarationType, TypeContext, Typer};
+use super::{PatternTy, TypeContext, Typer};
 
 /// Collected types for an item signature
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignatureTypes {
 	/// Types of declarations
-	pub patterns: FxHashMap<PatternRef, DeclarationType>,
+	pub patterns: FxHashMap<PatternRef, PatternTy>,
 	/// Types of expressions
 	pub expressions: FxHashMap<ExpressionRef, Ty>,
 	/// Identifier resolution
@@ -63,10 +63,7 @@ impl SignatureTypeContext {
 				let it = &model[f];
 				// Set as computing so if there's a call to a function with this name we can break the cycle
 				// (since if the call is actually not referring to this overload, it should work)
-				self.add_declaration(
-					PatternRef::new(item, it.pattern),
-					DeclarationType::Computing,
-				);
+				self.add_declaration(PatternRef::new(item, it.pattern), PatternTy::Computing);
 				let ty_params = it
 					.type_inst_vars
 					.iter()
@@ -80,7 +77,7 @@ impl SignatureTypeContext {
 						};
 						self.add_declaration(
 							PatternRef::new(item, tv.name),
-							DeclarationType::TyVar(type_var),
+							PatternTy::TyVar(type_var),
 						);
 						ty_var
 					})
@@ -123,7 +120,7 @@ impl SignatureTypeContext {
 						if let Some(pat) = p.pattern {
 							self.add_declaration(
 								PatternRef::new(item, pat),
-								DeclarationType::Variable(ty),
+								PatternTy::Variable(ty),
 							);
 						}
 						ty
@@ -137,7 +134,7 @@ impl SignatureTypeContext {
 					};
 					self.add_declaration(
 						pattern,
-						DeclarationType::Function(Box::new(FunctionEntry {
+						PatternTy::Function(Box::new(FunctionEntry {
 							computed_return: false,
 							has_body: it.body.is_some(),
 							overload: OverloadedFunction::Function(f),
@@ -151,7 +148,7 @@ impl SignatureTypeContext {
 					};
 					self.add_declaration(
 						pattern,
-						DeclarationType::Function(Box::new(FunctionEntry {
+						PatternTy::Function(Box::new(FunctionEntry {
 							computed_return: false,
 							has_body: it.body.is_some(),
 							overload: OverloadedFunction::PolymorphicFunction(p),
@@ -182,7 +179,7 @@ impl SignatureTypeContext {
 
 				let d = self.data.patterns.get_mut(&pattern).unwrap();
 				match d {
-					DeclarationType::Function(function) => match function.as_mut() {
+					PatternTy::Function(function) => match function.as_mut() {
 						FunctionEntry {
 							computed_return,
 							overload: OverloadedFunction::Function(f),
@@ -206,7 +203,7 @@ impl SignatureTypeContext {
 			LocalItemRef::Declaration(d) => {
 				let it = &model[d];
 				for p in Pattern::identifiers(it.pattern, data) {
-					self.add_declaration(PatternRef::new(self.item, p), DeclarationType::Computing);
+					self.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
 				}
 				let mut typer = Typer::new(db, types, self, item, data);
 				if data[it.declared_type].is_complete(data) {
@@ -217,7 +214,7 @@ impl SignatureTypeContext {
 					// Add a declaration for the entire type so that the body definition can be checked against this
 					self.add_declaration(
 						PatternRef::new(self.item, it.pattern),
-						DeclarationType::Variable(expected),
+						PatternTy::Variable(expected),
 					);
 				} else {
 					typer.collect_declaration(it);
@@ -228,14 +225,14 @@ impl SignatureTypeContext {
 				let ty = Ty::par_enum(db, EnumRef(PatternRef::new(item, it.pattern)));
 				self.add_declaration(
 					PatternRef::new(item, it.pattern),
-					DeclarationType::Variable(Ty::par_set(db, ty).unwrap()),
+					PatternTy::Variable(Ty::par_set(db, ty).unwrap()),
 				);
 				if let Some(cases) = &it.definition {
 					for case in cases.iter() {
 						if case.parameters.is_empty() {
 							self.add_declaration(
 								PatternRef::new(item, case.pattern),
-								DeclarationType::EnumAtom(ty),
+								PatternTy::EnumAtom(ty),
 							);
 						} else {
 							let param_types = {
@@ -328,7 +325,16 @@ impl SignatureTypeContext {
 
 							self.add_declaration(
 								PatternRef::new(item, case.pattern),
-								DeclarationType::EnumConstructor(constructors.into_boxed_slice()),
+								PatternTy::EnumConstructor(
+									constructors
+										.into_iter()
+										.map(|f| FunctionEntry {
+											computed_return: false,
+											has_body: true,
+											overload: OverloadedFunction::Function(f),
+										})
+										.collect(),
+								),
 							);
 						}
 					}
@@ -339,10 +345,7 @@ impl SignatureTypeContext {
 				match &it.goal {
 					Goal::Maximize { pattern, objective }
 					| Goal::Minimize { pattern, objective } => {
-						self.add_declaration(
-							PatternRef::new(item, *pattern),
-							DeclarationType::Computing,
-						);
+						self.add_declaration(PatternRef::new(item, *pattern), PatternTy::Computing);
 						let actual =
 							Typer::new(db, types, self, item, data).collect_expression(*objective);
 						if !actual.is_subtype_of(db, types.var_float) {
@@ -362,7 +365,7 @@ impl SignatureTypeContext {
 						}
 						self.add_declaration(
 							PatternRef::new(item, *pattern),
-							DeclarationType::Variable(actual),
+							PatternTy::Variable(actual),
 						);
 					}
 					_ => (),
@@ -371,10 +374,10 @@ impl SignatureTypeContext {
 			LocalItemRef::TypeAlias(t) => {
 				let it = &model[t];
 				let pat = PatternRef::new(item, it.name);
-				self.add_declaration(pat, DeclarationType::Computing);
+				self.add_declaration(pat, PatternTy::Computing);
 				let ty =
 					Typer::new(db, types, self, item, data).complete_type(it.aliased_type, None);
-				self.add_declaration(pat, DeclarationType::TypeAlias(ty));
+				self.add_declaration(pat, PatternTy::TypeAlias(ty));
 			}
 			_ => unreachable!("Item {:?} does not have signature", it),
 		}
@@ -387,7 +390,7 @@ impl SignatureTypeContext {
 }
 
 impl TypeContext for SignatureTypeContext {
-	fn add_declaration(&mut self, pattern: PatternRef, declaration: DeclarationType) {
+	fn add_declaration(&mut self, pattern: PatternRef, declaration: PatternTy) {
 		self.data.patterns.insert(pattern, declaration);
 	}
 	fn add_expression(&mut self, expression: ExpressionRef, ty: Ty) {
@@ -413,7 +416,7 @@ impl TypeContext for SignatureTypeContext {
 		db: &dyn Hir,
 		types: &TypeRegistry,
 		pattern: PatternRef,
-	) -> DeclarationType {
+	) -> PatternTy {
 		// When computing signatures, we always type everything required
 		// So other signatures get typed as well
 		if let Some(d) = self.data.patterns.get(&pattern).cloned() {

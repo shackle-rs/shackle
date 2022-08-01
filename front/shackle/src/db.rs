@@ -83,6 +83,11 @@ impl CompilerDatabase {
 			file_handler,
 		}
 	}
+
+	/// Snapshot the database
+	pub fn snapshot(&self) -> salsa::Snapshot<Self> {
+		salsa::ParallelDatabase::snapshot(&self)
+	}
 }
 
 impl salsa::Database for CompilerDatabase {
@@ -96,6 +101,15 @@ impl salsa::Database for CompilerDatabase {
 			}
 			_ => (),
 		}
+	}
+}
+
+impl salsa::ParallelDatabase for CompilerDatabase {
+	fn snapshot(&self) -> salsa::Snapshot<Self> {
+		salsa::Snapshot::new(Self {
+			storage: self.storage.snapshot(),
+			file_handler: self.file_handler.snapshot(),
+		})
 	}
 }
 
