@@ -9,7 +9,7 @@ pub use tree_sitter::Point;
 
 use crate::{
 	file::{FileRef, SourceFile},
-	syntax::{ast::*, cst::CstNode},
+	syntax::ast::*,
 	utils::{debug_print_strings, DebugPrint},
 };
 

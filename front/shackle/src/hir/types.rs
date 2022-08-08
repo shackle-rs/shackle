@@ -196,4 +196,40 @@ impl Type {
 			None
 		})
 	}
+
+	/// Get the expressions (bounds) contained in this type
+	pub fn expressions(
+		t: ArenaIndex<Type>,
+		data: &ItemData,
+	) -> impl '_ + Iterator<Item = ArenaIndex<Expression>> {
+		let mut todo = vec![t];
+		std::iter::from_fn(move || {
+			while let Some(t) = todo.pop() {
+				match &data[t] {
+					Type::Bounded { domain, .. } => return Some(*domain),
+					Type::Array {
+						dimensions,
+						element,
+						..
+					} => {
+						todo.push(*dimensions);
+						todo.push(*element)
+					}
+					Type::Set { element, .. } => todo.push(*element),
+					Type::Tuple { fields, .. } => todo.extend(fields.iter().copied()),
+					Type::Record { fields, .. } => todo.extend(fields.iter().map(|(_, f)| *f)),
+					Type::Operation {
+						return_type,
+						parameter_types,
+						..
+					} => {
+						todo.push(*return_type);
+						todo.extend(parameter_types.iter().copied());
+					}
+					_ => (),
+				}
+			}
+			None
+		})
+	}
 }

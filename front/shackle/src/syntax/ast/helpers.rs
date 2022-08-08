@@ -263,7 +263,7 @@ pub(crate) use ast_enum;
 
 #[cfg(test)]
 pub mod test {
-	use crate::syntax::ast::{AstNode, Model};
+	use crate::syntax::ast::Model;
 	use crate::syntax::cst::Cst;
 	use tree_sitter::Parser;
 

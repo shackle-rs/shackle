@@ -3,7 +3,7 @@
 
 use tree_sitter::Parser;
 
-use super::ast::{AstNode, Model};
+use super::ast::Model;
 use super::cst::Cst;
 
 use crate::db::{FileReader, Upcast};

@@ -18,15 +18,17 @@ use crate::{
 use super::{
 	db::Hir,
 	ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-	Expression, FunctionEntry, FunctionType, ItemData, Pattern, Ty, TyData, TyVar, TypeRegistry,
+	Expression, FunctionEntry, ItemData, Pattern, Ty, TyData, TyVar, TypeRegistry,
 };
 
 mod body;
 mod signature;
+mod toposort;
 mod typer;
 
 pub use self::body::*;
 pub use self::signature::*;
+pub use self::toposort::*;
 pub use self::typer::*;
 
 /// Collected types for an item

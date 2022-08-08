@@ -4,9 +4,9 @@
 //! methods. No desugaring is performed at this stage, so all language constructs
 //! are available other than parentheses which are implicit in the tree structure.
 
-use std::{fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{fmt::Debug, marker::PhantomData};
 
-use crate::{syntax::cst::CstNode, utils::impl_enum_from};
+use crate::syntax::cst::CstNode;
 
 pub mod container;
 pub mod expression;
@@ -23,8 +23,6 @@ pub use pattern::*;
 pub use primitive::*;
 use tree_sitter::TreeCursor;
 pub use types::*;
-
-use helpers::*;
 
 use super::cst::Cst;
 

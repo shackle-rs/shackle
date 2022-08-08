@@ -125,6 +125,18 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 	#[salsa::invoke(super::typecheck::TypeDiagnostics::new)]
 	fn lookup_item_type_diagnostics(&self, item: ItemRef) -> TypeDiagnostics;
 
+	/// Topologically sort items
+	///
+	/// Use `lookup_topological_sorted_items` to remain diagnostics independent.
+	#[salsa::invoke(super::typecheck::topological_sort)]
+	fn topological_sort_items(&self) -> (Arc<Vec<ItemRef>>, Arc<Vec<Error>>);
+
+	/// Lookup the topologically sorted item order
+	fn lookup_topological_sorted_items(&self) -> Arc<Vec<ItemRef>>;
+
+	/// Lookup errors from topologically sorting items
+	fn lookup_topological_sorted_items_diagnostics(&self) -> Arc<Vec<Error>>;
+
 	/// Validate HIR
 	#[salsa::invoke(super::validate::validate_hir)]
 	fn validate_hir(&self) -> Arc<Vec<Error>>;
@@ -303,6 +315,14 @@ fn lookup_item_body_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> 
 	db.collect_item_body(item).1
 }
 
+fn lookup_topological_sorted_items(db: &dyn Hir) -> Arc<Vec<ItemRef>> {
+	db.topological_sort_items().0
+}
+
+fn lookup_topological_sorted_items_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
+	db.topological_sort_items().1
+}
+
 fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 	match db.resolve_includes() {
 		Ok(r) => {
@@ -324,6 +344,12 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 			}
 			// Collect global scope errors
 			errors.extend(db.lookup_global_scope_diagnostics().iter().cloned());
+			// Collect topological sort errors
+			errors.extend(
+				db.lookup_topological_sorted_items_diagnostics()
+					.iter()
+					.cloned(),
+			);
 			// Collect final validation errors
 			errors.extend(db.validate_hir().iter().cloned());
 			Arc::new(errors)
