@@ -5,7 +5,7 @@ use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
 use super::{
 	db::{Hir, HirString, HirStringData},
-	BooleanLiteral, Expression, FloatLiteral, IntegerLiteral, ItemData, StringLiteral,
+	BooleanLiteral, FloatLiteral, IntegerLiteral, ItemData, StringLiteral,
 };
 
 /// A pattern for destructuring

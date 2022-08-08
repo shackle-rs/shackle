@@ -135,7 +135,6 @@ impl SignatureTypeContext {
 					self.add_declaration(
 						pattern,
 						PatternTy::Function(Box::new(FunctionEntry {
-							computed_return: false,
 							has_body: it.body.is_some(),
 							overload: OverloadedFunction::Function(f),
 						})),
@@ -149,7 +148,6 @@ impl SignatureTypeContext {
 					self.add_declaration(
 						pattern,
 						PatternTy::Function(Box::new(FunctionEntry {
-							computed_return: false,
 							has_body: it.body.is_some(),
 							overload: OverloadedFunction::PolymorphicFunction(p),
 						})),
@@ -181,20 +179,16 @@ impl SignatureTypeContext {
 				match d {
 					PatternTy::Function(function) => match function.as_mut() {
 						FunctionEntry {
-							computed_return,
 							overload: OverloadedFunction::Function(f),
 							..
 						} => {
 							f.return_type = return_type;
-							*computed_return = true;
 						}
 						FunctionEntry {
-							computed_return,
 							overload: OverloadedFunction::PolymorphicFunction(p),
 							..
 						} => {
 							p.return_type = return_type;
-							*computed_return = true;
 						}
 					},
 					_ => unreachable!(),
@@ -329,7 +323,6 @@ impl SignatureTypeContext {
 									constructors
 										.into_iter()
 										.map(|f| FunctionEntry {
-											computed_return: false,
 											has_body: true,
 											overload: OverloadedFunction::Function(f),
 										})

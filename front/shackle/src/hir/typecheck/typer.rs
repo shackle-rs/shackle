@@ -122,15 +122,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				PatternTy::EnumConstructor(_) => (),
 				PatternTy::Computing => {
-					let (src, span) = NodeRef::from(expression.into_entity(db)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeInferenceFailure {
-							src,
-							span,
-							msg: "Cyclic definition not supported".to_owned(),
-						},
-					);
+					// Error will be emitted during topological sorting
 					return self.types.error;
 				}
 				_ => {
@@ -1251,33 +1243,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 
 		if overloads.is_empty() {
-			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
-			self.ctx.add_diagnostic(
-				self.item,
-				TypeInferenceFailure {
-					src,
-					span,
-					msg: "Cyclic function declaration not supported".to_string(),
-				},
-			);
 			self.ctx
 				.add_expression(ExpressionRef::new(self.item, expr), self.types.error);
 			return self.types.error;
 		}
 
 		match FunctionEntry::match_fn(db, overloads, args) {
-			Ok((pattern, entry, instantiation)) => {
-				if !entry.computed_return {
-					let (src, span) = NodeRef::from(pattern.into_entity(db)).source_span(db);
-					self.ctx.add_diagnostic(
-						pattern.item(),
-						TypeInferenceFailure {
-							src,
-							span,
-							msg: "Cyclic function declaration not supported".to_string(),
-						},
-					);
-				}
+			Ok((pattern, _, instantiation)) => {
 				let ret = instantiation.return_type;
 				let ty = Ty::function(db, instantiation);
 				self.ctx
@@ -1669,16 +1641,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								},
 								PatternTy::TyVar(t) => Ty::type_inst_var(db, t),
 								PatternTy::Computing => {
-									let (src, span) =
-										NodeRef::from(p.into_entity(db)).source_span(db);
-									self.ctx.add_diagnostic(
-										p.item(),
-										TypeInferenceFailure {
-											src,
-											span,
-											msg: "Cyclic type not supported".to_owned(),
-										},
-									);
+									// Error will be emitted during topological sorting
 									return self.types.error;
 								}
 								_ => {

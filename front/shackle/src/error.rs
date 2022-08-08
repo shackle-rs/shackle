@@ -131,6 +131,55 @@ pub struct AdditionalSolveItem {
 	pub span: SourceSpan,
 }
 
+/// Multiple assignments to same variable error
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("The variable '{variable}' is already assigned")]
+#[diagnostic(code(shackle::multiple_assignments), severity(advice))]
+pub struct MultipleAssignments {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label("The first assignment was here")]
+	pub span: SourceSpan,
+	/// The variable being assigned
+	pub variable: String,
+	/// The additional assignment item errors
+	#[related]
+	pub others: Vec<DuplicateAssignment>,
+}
+
+/// Indicates an extraneous solve item
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Multiple assignments to the same variable not allowed")]
+#[diagnostic(
+	code(shackle::multiple_assignments),
+	help("Try removing this assignment.")
+)]
+pub struct DuplicateAssignment {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label]
+	pub span: SourceSpan,
+}
+
+/// Cyclic variable definition
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Cyclic definition of {variable}")]
+#[diagnostic(code(shackle::cyclic_definition))]
+pub struct CyclicDefinition {
+	/// The cyclic variable definition
+	pub variable: String,
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label("Cyclic definition not allowed.")]
+	pub span: SourceSpan,
+}
+
 /// An undefined identifier error
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Undefined identifier")]
@@ -266,6 +315,40 @@ pub struct IllegalOverload {
 	pub span: SourceSpan,
 }
 
+/// Function with same signature already defined
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Function with the signature '{signature}' already defined")]
+#[diagnostic(code(shackle::function_already_defined))]
+pub struct FunctionAlreadyDefined {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The signature
+	pub signature: String,
+	/// The span associated with the error
+	#[label("The function was first defined here")]
+	pub span: SourceSpan,
+	/// The duplicate functions
+	#[related]
+	pub others: Vec<DuplicateFunction>,
+}
+
+/// Function with same signature already defined
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Function already defined")]
+#[diagnostic(
+	code(shackle::function_already_defined),
+	help("Try removing this function.")
+)]
+pub struct DuplicateFunction {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label]
+	pub span: SourceSpan,
+}
+
 /// Type inference failure
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Type cannot be determined")]
@@ -323,6 +406,14 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	MultipleSolveItems(#[from] MultipleSolveItems),
+	/// Multiple assignments to same variable
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	MultipleAssignments(#[from] MultipleAssignments),
+	/// Cyclic definition of variable
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	CyclicDefinition(#[from] CyclicDefinition),
 	/// Identifier already declared
 	#[error(transparent)]
 	#[diagnostic(transparent)]
@@ -359,6 +450,10 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	IllegalOverload(#[from] IllegalOverload),
+	/// Function already defined
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	FunctionAlreadyDefined(#[from] FunctionAlreadyDefined),
 	/// Type inference failure
 	#[error(transparent)]
 	#[diagnostic(transparent)]

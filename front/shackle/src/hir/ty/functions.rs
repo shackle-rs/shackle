@@ -66,8 +66,6 @@ struct Candidate<T> {
 /// An overloaded function entry
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionEntry {
-	/// Whether this function's return type has been computed yet
-	pub computed_return: bool,
 	/// Whether this function has a body
 	pub has_body: bool,
 	/// The overloaded function
@@ -224,7 +222,47 @@ impl FunctionEntry {
 	pub fn check_overloading<T>(
 		db: &dyn Hir,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
-	) {
+	) -> Vec<OverloadingError<T>> {
+		let mut diagnostics = Vec::new();
+		let overloads = overloads.into_iter().collect::<Vec<_>>();
+		let mut same_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
+		// TODO: Make less horrible
+		for (i, (_, a)) in overloads.iter().enumerate() {
+			if same_fns[i].is_some() {
+				continue;
+			}
+			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
+				if a.has_body
+					&& b.has_body && a.overload.instantiate(db, b.overload.params()).is_ok()
+					&& b.overload.instantiate(db, a.overload.params()).is_ok()
+				{
+					// Same function with multiple definitions
+					same_fns[i + j + 1] = Some(i);
+				}
+			}
+		}
+		let mut drain = overloads.into_iter().map(|x| Some(x)).collect::<Vec<_>>();
+		for i in 0..same_fns.len() {
+			let others = same_fns
+				.iter()
+				.enumerate()
+				.filter_map(|(j, dup)| {
+					if let Some(x) = dup {
+						if *x == i {
+							return Some(drain[j].take().unwrap());
+						}
+					}
+					None
+				})
+				.collect::<Vec<_>>();
+			if !others.is_empty() {
+				diagnostics.push(OverloadingError::FunctionAlreadyDefined {
+					first: drain[i].take().unwrap(),
+					others,
+				});
+			}
+		}
+		diagnostics
 	}
 }
 
@@ -242,7 +280,7 @@ impl OverloadedFunction {
 	pub fn into_function(self) -> Option<FunctionType> {
 		match self {
 			OverloadedFunction::Function(f) => Some(f),
-			OverloadedFunction::PolymorphicFunction(p) => None,
+			OverloadedFunction::PolymorphicFunction(_) => None,
 		}
 	}
 

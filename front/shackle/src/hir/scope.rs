@@ -425,10 +425,7 @@ impl ScopeCollector<'_> {
 					}
 				}
 			}
-			Pattern::Call {
-				function,
-				arguments,
-			} => {
+			Pattern::Call { arguments, .. } => {
 				refutable_pattern();
 				for argument in arguments.iter() {
 					self.collect_pattern_inner(*argument, irrefutable);
