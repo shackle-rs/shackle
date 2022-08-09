@@ -325,6 +325,6 @@ impl NodeRef {
 		};
 		let sm = db.lookup_source_map(model);
 		let origin = sm.get_origin(*self).expect("No origin for this node!");
-		origin.source_span()
+		origin.source_span(db)
 	}
 }
