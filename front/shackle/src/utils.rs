@@ -49,3 +49,21 @@ pub fn debug_print_strings(db: &dyn Hir, s: &str) -> String {
 	}
 	o
 }
+
+/// Get levenshtein distance between two strings
+pub fn levenshtein_distance(s: &str, t: &str) -> usize {
+	let n = t.len();
+	let mut dp0 = (0..=n).collect::<Vec<_>>();
+	let mut dp1 = vec![0usize; n + 1];
+	for (i, s_i) in s.chars().enumerate() {
+		dp1[0] = i + 1;
+		for (j, t_j) in t.chars().enumerate() {
+			let del = dp0[j + 1] + 1;
+			let ins = dp1[j] + 1;
+			let sub = if s_i == t_j { dp0[j] } else { dp0[j] + 1 };
+			dp1[j + 1] = del.min(ins.min(sub));
+		}
+		std::mem::swap(&mut dp0, &mut dp1);
+	}
+	*dp0.last().unwrap()
+}
