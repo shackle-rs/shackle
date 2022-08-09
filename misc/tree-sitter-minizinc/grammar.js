@@ -201,14 +201,14 @@ module.exports = grammar({
       seq(
         field("name", $.anonymous),
         "(",
-        sepBy1(",", field("argument", $._expression)),
+        sepBy1(",", field("parameter", $._type)),
         ")"
       ),
     enumeration_constructor: ($) =>
       seq(
         field("name", $._identifier),
         "(",
-        sepBy1(",", field("argument", $._expression)),
+        sepBy1(",", field("parameter", $._type)),
         ")"
       ),
 

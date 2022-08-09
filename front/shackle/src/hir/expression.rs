@@ -70,81 +70,78 @@ impl Expression {
 	) -> impl '_ + Iterator<Item = ArenaIndex<Expression>> {
 		let mut todo = vec![e];
 		std::iter::from_fn(move || {
-			if let Some(e) = todo.pop() {
-				if let Some(anns) = data.annotations.get(e) {
-					todo.extend(anns.iter().copied());
+			let e = todo.pop()?;
+			if let Some(anns) = data.annotations.get(e) {
+				todo.extend(anns.iter().copied());
+			}
+			match &data[e] {
+				Expression::ArrayAccess(aa) => {
+					todo.push(aa.collection);
+					todo.push(aa.indices);
 				}
-				match &data[e] {
-					Expression::ArrayAccess(aa) => {
-						todo.push(aa.collection);
-						todo.push(aa.indices);
+				Expression::ArrayComprehension(c) => {
+					for g in c.generators.iter() {
+						todo.push(g.collection);
+						todo.extend(g.where_clause);
 					}
-					Expression::ArrayComprehension(c) => {
-						for g in c.generators.iter() {
-							todo.push(g.collection);
-							todo.extend(g.where_clause);
-						}
-						todo.extend(c.indices);
-						todo.push(c.template);
-					}
-					Expression::ArrayLiteral(al) => {
-						todo.extend(al.members.iter().copied());
-					}
-					Expression::Call(c) => {
-						todo.push(c.function);
-						todo.extend(c.arguments.iter().copied());
-					}
-					Expression::Case(c) => {
-						todo.push(c.expression);
-						todo.extend(c.cases.iter().map(|c| c.value));
-					}
-					Expression::IfThenElse(ite) => {
-						todo.extend(ite.branches.iter().flat_map(|b| [b.condition, b.result]));
-						todo.extend(ite.else_result);
-					}
-					Expression::Let(l) => {
-						for i in l.items.iter() {
-							match i {
-								LetItem::Constraint(c) => {
-									todo.extend(c.annotations.iter().copied());
-								}
-								LetItem::Declaration(d) => {
-									todo.extend(Type::expressions(d.declared_type, data));
-									todo.extend(d.annotations.iter().copied());
-									todo.extend(d.definition);
-								}
+					todo.extend(c.indices);
+					todo.push(c.template);
+				}
+				Expression::ArrayLiteral(al) => {
+					todo.extend(al.members.iter().copied());
+				}
+				Expression::Call(c) => {
+					todo.push(c.function);
+					todo.extend(c.arguments.iter().copied());
+				}
+				Expression::Case(c) => {
+					todo.push(c.expression);
+					todo.extend(c.cases.iter().map(|c| c.value));
+				}
+				Expression::IfThenElse(ite) => {
+					todo.extend(ite.branches.iter().flat_map(|b| [b.condition, b.result]));
+					todo.extend(ite.else_result);
+				}
+				Expression::Let(l) => {
+					for i in l.items.iter() {
+						match i {
+							LetItem::Constraint(c) => {
+								todo.extend(c.annotations.iter().copied());
+							}
+							LetItem::Declaration(d) => {
+								todo.extend(Type::expressions(d.declared_type, data));
+								todo.extend(d.annotations.iter().copied());
+								todo.extend(d.definition);
 							}
 						}
-						todo.push(l.in_expression);
 					}
-					Expression::RecordAccess(ra) => {
-						todo.push(ra.record);
-					}
-					Expression::RecordLiteral(rl) => {
-						todo.extend(rl.fields.iter().map(|(_, e)| *e));
-					}
-					Expression::SetComprehension(c) => {
-						for g in c.generators.iter() {
-							todo.push(g.collection);
-							todo.extend(g.where_clause);
-						}
-						todo.push(c.template);
-					}
-					Expression::SetLiteral(sl) => {
-						todo.extend(sl.members.iter().copied());
-					}
-					Expression::TupleAccess(ta) => {
-						todo.push(ta.tuple);
-					}
-					Expression::TupleLiteral(tl) => {
-						todo.extend(tl.fields.iter().copied());
-					}
-					_ => (),
+					todo.push(l.in_expression);
 				}
-				Some(e)
-			} else {
-				None
+				Expression::RecordAccess(ra) => {
+					todo.push(ra.record);
+				}
+				Expression::RecordLiteral(rl) => {
+					todo.extend(rl.fields.iter().map(|(_, e)| *e));
+				}
+				Expression::SetComprehension(c) => {
+					for g in c.generators.iter() {
+						todo.push(g.collection);
+						todo.extend(g.where_clause);
+					}
+					todo.push(c.template);
+				}
+				Expression::SetLiteral(sl) => {
+					todo.extend(sl.members.iter().copied());
+				}
+				Expression::TupleAccess(ta) => {
+					todo.push(ta.tuple);
+				}
+				Expression::TupleLiteral(tl) => {
+					todo.extend(tl.fields.iter().copied());
+				}
+				_ => (),
 			}
+			Some(e)
 		})
 	}
 }
