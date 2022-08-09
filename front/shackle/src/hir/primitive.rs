@@ -1,6 +1,8 @@
 //! HIR representation of primitive values
 //!
-use super::db::{Hir, HirString, HirStringData};
+use crate::db::{InternedString, InternedStringData};
+
+use super::db::Hir;
 use std::fmt;
 
 /// An integer literal
@@ -38,11 +40,11 @@ impl fmt::Debug for FloatLiteral {
 
 /// A string literal
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct StringLiteral(HirString);
+pub struct StringLiteral(InternedString);
 
 impl StringLiteral {
 	/// Create a new string literal
-	pub fn new<T: Into<HirStringData>>(v: T, db: &dyn Hir) -> Self {
+	pub fn new<T: Into<InternedStringData>>(v: T, db: &dyn Hir) -> Self {
 		Self(db.intern_string(v.into()))
 	}
 

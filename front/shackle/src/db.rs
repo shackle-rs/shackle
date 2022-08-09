@@ -3,11 +3,13 @@
 //! Compiler query database
 //!
 
-use super::hir::db::{Hir, HirStorage};
-use super::syntax::db::{SourceParser, SourceParserStorage};
+use super::hir::db::HirStorage;
+use super::syntax::db::SourceParserStorage;
 use crate::error::FileError;
 use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
+use crate::ty::{NewType, NewTypeData, Ty, TyData};
 
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -43,25 +45,67 @@ pub trait FileReader: HasFileHandler + Inputs {
 	fn intern_file_ref(&self, item: FileRefData) -> FileRef;
 }
 
-/// Trait for upcasting the database
-pub trait Upcast<T: ?Sized> {
-	/// Perform upcast
-	fn upcast(&self) -> &T;
+/// Queries for interning
+#[salsa::query_group(InternerStorage)]
+pub trait Interner {
+	#[salsa::interned]
+	fn intern_string(&self, string: InternedStringData) -> InternedString;
+
+	#[salsa::interned]
+	fn intern_ty(&self, item: TyData) -> Ty;
+
+	#[salsa::interned]
+	fn intern_newtype(&self, item: NewTypeData) -> NewType;
 }
 
-/// Implement upcasts to the database traits
-macro_rules! impl_upcast {
-	($name:ident, $upcast:ident) => {
-		impl $crate::db::Upcast<dyn $upcast> for $name {
-			fn upcast(&self) -> &(dyn $upcast + 'static) {
-				&*self
-			}
-		}
-	};
+/// An interned string
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InternedString(salsa::InternId);
+
+impl InternedString {
+	/// Get the value of the string
+	pub fn value(&self, db: &(impl Interner + ?Sized)) -> String {
+		db.lookup_intern_string(*self).0
+	}
+}
+
+impl salsa::InternKey for InternedString {
+	fn from_intern_id(id: salsa::InternId) -> Self {
+		Self(id)
+	}
+
+	fn as_intern_id(&self) -> salsa::InternId {
+		self.0
+	}
+}
+
+/// String data
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct InternedStringData(pub String);
+
+impl<T> From<T> for InternedStringData
+where
+	T: Display,
+{
+	fn from(v: T) -> Self {
+		Self(v.to_string())
+	}
+}
+
+impl From<InternedStringData> for String {
+	fn from(v: InternedStringData) -> Self {
+		v.0
+	}
 }
 
 /// Compiler database implementation
-#[salsa::database(InputsStorage, FileReaderStorage, SourceParserStorage, HirStorage)]
+#[salsa::database(
+	InputsStorage,
+	FileReaderStorage,
+	SourceParserStorage,
+	HirStorage,
+	InternerStorage
+)]
 pub struct CompilerDatabase {
 	storage: salsa::Storage<CompilerDatabase>,
 	file_handler: Box<dyn FileHandler>,
@@ -91,17 +135,17 @@ impl CompilerDatabase {
 }
 
 impl salsa::Database for CompilerDatabase {
-	fn salsa_event(&self, event_fn: salsa::Event) {
-		match event_fn.kind {
-			salsa::EventKind::WillExecute { database_key } => {
-				eprintln!("  Executing {:?}", database_key.debug(self));
-			}
-			salsa::EventKind::DidValidateMemoizedValue { database_key } => {
-				eprintln!("  Using cached {:?}", database_key.debug(self));
-			}
-			_ => (),
-		}
-	}
+	// fn salsa_event(&self, event_fn: salsa::Event) {
+	// 	match event_fn.kind {
+	// 		salsa::EventKind::WillExecute { database_key } => {
+	// 			eprintln!("  Executing {:?}", database_key.debug(self));
+	// 		}
+	// 		salsa::EventKind::DidValidateMemoizedValue { database_key } => {
+	// 			eprintln!("  Using cached {:?}", database_key.debug(self));
+	// 		}
+	// 		_ => (),
+	// 	}
+	// }
 }
 
 impl salsa::ParallelDatabase for CompilerDatabase {
@@ -136,8 +180,3 @@ impl HasFileHandler for CompilerDatabase {
 		FileContentsQuery.in_db_mut(self).invalidate(&f);
 	}
 }
-
-impl_upcast!(CompilerDatabase, Inputs);
-impl_upcast!(CompilerDatabase, FileReader);
-impl_upcast!(CompilerDatabase, SourceParser);
-impl_upcast!(CompilerDatabase, Hir);

@@ -23,7 +23,6 @@ pub mod pattern;
 pub mod primitive;
 pub mod scope;
 pub mod source;
-pub mod ty;
 pub mod typecheck;
 pub mod types;
 pub mod validate;
@@ -36,7 +35,6 @@ pub use item::*;
 pub use pattern::*;
 pub use primitive::*;
 pub use scope::*;
-pub use ty::*;
 pub use typecheck::*;
 pub use types::*;
 

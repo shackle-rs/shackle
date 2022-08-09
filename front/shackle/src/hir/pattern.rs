@@ -1,12 +1,9 @@
 //! Destructuring/case matching patterns
 //!
 
+use super::{db::Hir, BooleanLiteral, FloatLiteral, IntegerLiteral, ItemData, StringLiteral};
+use crate::db::{InternedString, InternedStringData};
 use crate::{arena::ArenaIndex, utils::impl_enum_from};
-
-use super::{
-	db::{Hir, HirString, HirStringData},
-	BooleanLiteral, FloatLiteral, IntegerLiteral, ItemData, StringLiteral,
-};
 
 /// A pattern for destructuring
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -96,12 +93,12 @@ impl Pattern {
 }
 
 /// Identifier
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Identifier(pub HirString);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Identifier(pub InternedString);
 
 impl Identifier {
 	/// Create a new identifier with the given value
-	pub fn new<T: Into<HirStringData>>(v: T, db: &dyn Hir) -> Self {
+	pub fn new<T: Into<InternedStringData>>(v: T, db: &dyn Hir) -> Self {
 		Self(db.intern_string(v.into()))
 	}
 
@@ -166,5 +163,11 @@ impl Identifier {
 			}
 		}
 		ident
+	}
+}
+
+impl Into<InternedString> for Identifier {
+	fn into(self) -> InternedString {
+		self.0
 	}
 }

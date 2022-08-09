@@ -1,20 +1,9 @@
-use crate::vfs::Vfs;
-use lsp_server::Connection;
+use crate::LanguageServerDatabase;
 use lsp_types::{
 	DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
 };
-use shackle::db::*;
-use threadpool::ThreadPool;
 
-use super::publish_diagnostics;
-
-pub fn on_document_open(
-	db: &mut CompilerDatabase,
-	vfs: &Vfs,
-	pool: &ThreadPool,
-	sender: &Connection,
-	params: DidOpenTextDocumentParams,
-) {
+pub fn on_document_open(db: &mut LanguageServerDatabase, params: DidOpenTextDocumentParams) {
 	let file = params
 		.text_document
 		.uri
@@ -22,18 +11,10 @@ pub fn on_document_open(
 		.expect("Failed to convert URI to file path")
 		.canonicalize()
 		.expect("Failed to canonicalize path");
-	vfs.manage_file(&file, &params.text_document.text);
-	db.on_file_change(&file);
-	publish_diagnostics(db, file.as_ref(), pool, sender);
+	db.manage_file(file.as_path(), &params.text_document.text);
 }
 
-pub fn on_document_changed(
-	db: &mut CompilerDatabase,
-	vfs: &Vfs,
-	pool: &ThreadPool,
-	sender: &Connection,
-	params: DidChangeTextDocumentParams,
-) {
+pub fn on_document_changed(db: &mut LanguageServerDatabase, params: DidChangeTextDocumentParams) {
 	let file = params
 		.text_document
 		.uri
@@ -41,19 +22,17 @@ pub fn on_document_changed(
 		.expect("Failed to convert URI to file path")
 		.canonicalize()
 		.expect("Failed to canonicalize path");
-	vfs.manage_file(
-		&file,
+	db.manage_file(
+		file.as_path(),
 		&params
 			.content_changes
 			.iter()
 			.map(|c| c.text.clone())
 			.collect::<String>(),
 	);
-	db.on_file_change(&file);
-	publish_diagnostics(db, file.as_ref(), pool, sender);
 }
 
-pub fn on_document_closed(db: &mut dyn FileReader, vfs: &Vfs, params: DidCloseTextDocumentParams) {
+pub fn on_document_closed(db: &mut LanguageServerDatabase, params: DidCloseTextDocumentParams) {
 	let file = params
 		.text_document
 		.uri
@@ -61,6 +40,5 @@ pub fn on_document_closed(db: &mut dyn FileReader, vfs: &Vfs, params: DidCloseTe
 		.expect("Failed to convert URI to file path")
 		.canonicalize()
 		.expect("Failed to canonicalize path");
-	vfs.unmanage_file(&file);
-	db.on_file_change(&file);
+	db.unmanage_file(file.as_path());
 }

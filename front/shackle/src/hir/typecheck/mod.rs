@@ -6,11 +6,31 @@
 //! - Field access resolution
 //! - Computation of types of items and expressions
 //! - Type correctness check
+//!
+//! There are two entities which are typed: `signatures`, and `bodies`.
+//!
+//! Signatures are for any top-level items which can be referred to by an
+//! identifier (e.g. functions, variable declarations). They only contain the
+//! types relevant for computing the type of an identifier which refers to them.
+//! That is, we don't care about the type of the RHS (unless it's an `any`
+//! declaration).
+//!
+//! Bodies are for expressions in top-level items which need to be type-checked,
+//! but cannot be referred to by an identifier. So computing types for bodies
+//! may require signatures to be typed, and these in turn may require other
+//! signatures to be typed, but never bodies.
+//!
+//! Typing signatures does not cause types of signatures it depends on to be
+//! queried from the database, as this can create cycles, which cannot be
+//! recovered from in a useful way. The types of dependent signatures are
+//! always computed, so there is some redundant recomputation, but the effect
+//! is minimal.
 
 use std::{fmt::Write, ops::Index, sync::Arc};
 
 use crate::{
 	arena::{ArenaIndex, ArenaMap},
+	ty::{FunctionEntry, Ty, TyData, TyVar, TypeRegistry},
 	utils::{debug_print_strings, DebugPrint},
 	Error,
 };
@@ -18,7 +38,7 @@ use crate::{
 use super::{
 	db::Hir,
 	ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-	Expression, FunctionEntry, ItemData, Pattern, Ty, TyData, TyVar, TypeRegistry,
+	Expression, ItemData, Pattern,
 };
 
 mod body;
@@ -32,6 +52,10 @@ pub use self::toposort::*;
 pub use self::typer::*;
 
 /// Collected types for an item
+///
+/// This allows us to get the results of type computation in a particular item
+/// by combining the computed types for the body along with its signature (if
+/// it has one).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeResult {
 	item: ItemRef,
@@ -162,14 +186,14 @@ impl TypeResult {
 								.join(" "),
 						);
 					}
-					return Some(format!("{}: {}", ty.pretty_print(db), i.lookup(db)));
+					return Some(format!("{}: {}", ty.pretty_print(db), i.pretty_print(db)));
 				}
 				Some(ty.pretty_print(db))
 			}
 			PatternTy::EnumAtom(ty) => Some(format!(
 				"{}: {}",
 				ty.pretty_print(db),
-				data[pattern].identifier()?.lookup(db)
+				data[pattern].identifier()?.pretty_print(db)
 			)),
 			PatternTy::Function(f) => Some(
 				f.overload
@@ -180,10 +204,10 @@ impl TypeResult {
 					.overload
 					.pretty_print_item(db, data[pattern].identifier()?),
 			),
-			PatternTy::TyVar(t) => Some(t.ty_var.name(db)),
+			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(db)),
 			PatternTy::TypeAlias(ty) => Some(format!(
 				"type {} = {}",
-				data[pattern].identifier()?.lookup(db),
+				data[pattern].identifier()?.pretty_print(db),
 				ty.pretty_print(db)
 			)),
 			_ => None,
@@ -399,7 +423,7 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			PatternTy::Function(function) => {
 				format!("Function({})", function.overload.pretty_print(db))
 			}
-			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.name(db)),
+			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db)),
 			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db)),
 			PatternTy::EnumConstructor(fs) => {
 				format!(

@@ -17,13 +17,14 @@ use crate::{
 		MultipleAssignments, MultipleSolveItems,
 	},
 	hir::ids::{ItemRef, NodeRef},
+	ty::{FunctionEntry, OverloadingError},
 	Error,
 };
 
 use super::{
 	db::Hir,
 	ids::{EntityRef, LocalItemRef},
-	FunctionEntry, OverloadingError, PatternTy,
+	PatternTy,
 };
 
 /// Validate HIR
@@ -115,7 +116,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 			let variable = p.item().local_item_ref(db).data(&*model)[p.pattern()]
 				.identifier()
 				.unwrap()
-				.lookup(db);
+				.pretty_print(db);
 			let mut asgs = asgs.into_iter();
 			let (src, span) = asgs.next().unwrap().source_span(db);
 			let others = asgs

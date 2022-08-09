@@ -1,27 +1,42 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{fmt::Write, sync::Arc};
 
 use crate::{
 	arena::ArenaIndex,
 	error::{
 		AmbiguousCall, IllegalType, InvalidArrayLiteral, InvalidFieldAccess, NoMatchingFunction,
-		TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
+		SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
 	},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, NodeRef, PatternRef},
 		ArrayAccess, ArrayComprehension, ArrayLiteral, Call, Case, Declaration, Expression,
-		FunctionEntry, FunctionResolutionError, FunctionType, Identifier, IfThenElse,
-		InstantiationError, ItemData, Let, LetItem, OptType, Pattern, PrimitiveType, RecordAccess,
-		RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Ty, TyData, TyVar,
-		TyVarRef, Type, TypeRegistry, VarType,
+		Identifier, IfThenElse, ItemData, Let, LetItem, Pattern, PrimitiveType, RecordAccess,
+		RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
+	},
+	ty::{
+		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
+		TyData, TyVar, TyVarRef, TypeRegistry, VarType,
 	},
 	Error,
 };
 
 use super::{PatternTy, TypeContext};
 
-/// Computes types of expressions and patterns in an item
+/// Computes types of expressions and patterns in an item.
+///
+/// The typer walks an expression tree and computes types of child nodes to
+/// determine the types of parent nodes. The exception to this is when computing
+/// the type of a `Call`, in which case we need to perform overloading
+/// resolution (so we type the identifier being called at this point since we
+/// have the arguments).
+///
+/// Errors have to be handled in a way so as to not require aborting compilation
+/// entirely. To achieve this, the `TyData::Error` type is used to signal that
+/// a type could not be computed. When creating an error type
+/// (`self.types.error`) a diagnostic must be emitted. This sentinel then
+/// bubbles up during type checking, but allows us to suppress further errors
+/// which are just caused by the original error we already reported.
 pub struct Typer<'a, T> {
 	db: &'a dyn Hir,
 	types: &'a TypeRegistry,
@@ -134,7 +149,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		self.ctx.add_diagnostic(
 			self.item,
 			UndefinedIdentifier {
-				identifier: i.lookup(db),
+				identifier: i.pretty_print(db),
 				src,
 				span,
 			},
@@ -196,7 +211,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	fn collect_array_literal(&mut self, expr: ArenaIndex<Expression>, al: &ArrayLiteral) -> Ty {
 		let db = self.db;
 		if al.members.is_empty() {
-			return Ty::array(db, self.types.par_int, self.types.bottom).unwrap();
+			return self.types.array_of_bottom;
 		}
 		let ty =
 			Ty::most_specific_supertype(db, al.members.iter().map(|e| self.collect_expression(*e)))
@@ -302,17 +317,37 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_record_literal(&mut self, rl: &RecordLiteral) -> Ty {
 		let db = self.db;
-		Ty::record(
-			db,
-			rl.fields.iter().map(|(i, f)| {
-				(
-					self.data[*i]
-						.identifier()
-						.expect("Record field name not an identifier"),
-					self.collect_expression(*f),
-				)
-			}),
-		)
+		let mut seen = FxHashSet::default();
+		let mut fields = rl
+			.fields
+			.iter()
+			.map(|(i, f)| {
+				let ident = self.data[*i]
+					.identifier()
+					.expect("Record field name not an identifier");
+				if seen.contains(&ident) {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, *i)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						SyntaxError {
+							src,
+							span,
+							msg: format!(
+								"Record literal contains duplicate field '{}'",
+								ident.pretty_print(db)
+							),
+							other: Vec::new(),
+						},
+					);
+				}
+				seen.insert(ident);
+				(ident, self.collect_expression(*f))
+			})
+			.collect::<Vec<_>>();
+		fields.sort_by_key(|(i, _)| i.lookup(db));
+		fields.dedup_by_key(|(i, _)| *i);
+		Ty::record(db, fields)
 	}
 
 	fn collect_array_comprehension(
@@ -892,7 +927,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			TyData::Record(opt, fields) => {
 				let ty = fields
 					.iter()
-					.find(|(i, _)| *i == ra.field)
+					.find(|(i, _)| *i == ra.field.0)
 					.map(|(_, ty)| *ty)
 					.unwrap_or_else(|| {
 						let (src, span) =
@@ -904,7 +939,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								span,
 								msg: format!(
 									"No such field {} for '{}'",
-									ra.field.lookup(db),
+									ra.field.pretty_print(db),
 									record.pretty_print(db)
 								),
 							},
@@ -925,7 +960,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				TyData::Record(o2, fields) => {
 					let el = fields
 						.iter()
-						.find(|(i, _)| *i == ra.field)
+						.find(|(i, _)| *i == ra.field.0)
 						.map(|(_, ty)| *ty)
 						.unwrap_or_else(|| {
 							let (src, span) =
@@ -937,7 +972,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									span,
 									msg: format!(
 										"No such field {} for '{}'",
-										ra.field.lookup(db),
+										ra.field.pretty_print(db),
 										element.pretty_print(db)
 									),
 								},
@@ -1002,48 +1037,77 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.map(|b| self.collect_expression(b.condition))
 			.collect::<Vec<_>>();
+		for (t, b) in condition_types.iter().zip(ite.branches.iter()) {
+			if !t.is_subtype_of(db, self.types.var_bool) {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, b.condition)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: format!(
+							"Expected boolean condition, but got '{}'",
+							t.pretty_print(db)
+						),
+					},
+				);
+			}
+		}
 		let result_types = ite
 			.branches
 			.iter()
 			.map(|b| b.result)
 			.chain(ite.else_result)
 			.map(|e| self.collect_expression(e));
-		let super_type = Ty::most_specific_supertype(db, result_types);
-		if !condition_types
-			.iter()
-			.all(|t| t.is_subtype_of(db, self.types.var_bool))
-		{
-			return self.types.error;
+		let ty = Ty::most_specific_supertype(db, result_types).unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeMismatch {
+					src,
+					span,
+					msg: "Mismatch in if-then-else branch types.".to_owned(),
+				},
+			);
+			self.types.error
+		});
+		if ite.else_result.is_none() && !ty.has_default_value(db) {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeMismatch {
+					src,
+					span,
+					msg: format!(
+						"If-then expression with branch type '{}' must have an else",
+						ty.pretty_print(db)
+					),
+				},
+			);
 		}
-		match super_type {
-			Some(ty) => {
-				if let VarType::Var = condition_types
-					.iter()
-					.map(|t| t.inst(db).unwrap())
-					.max()
-					.unwrap()
-				{
-					// Var condition means var result
-					ty.with_inst(db, VarType::Var).unwrap_or_else(|| {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
-						self.ctx.add_diagnostic(
-							self.item,
-							IllegalType {
-								src,
-								span,
-								ty: format!("var {}", ty.pretty_print(db)),
-							},
-						);
-						self.types.error
-					})
-				} else {
-					ty
-				}
-			}
-			None => {
-				return self.types.error;
-			}
+		if let VarType::Var = condition_types
+			.iter()
+			.map(|t| t.inst(db).unwrap())
+			.max()
+			.unwrap()
+		{
+			// Var condition means var result
+			ty.with_inst(db, VarType::Var).unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					IllegalType {
+						src,
+						span,
+						ty: format!("var {}", ty.pretty_print(db)),
+					},
+				);
+				self.types.error
+			})
+		} else {
+			ty
 		}
 	}
 
@@ -1222,7 +1286,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				NoMatchingFunction {
 					src,
 					span,
-					msg: format!("No function with name '{}' could be found.", i.lookup(db)),
+					msg: format!(
+						"No function with name '{}' could be found.",
+						i.pretty_print(db)
+					),
 				},
 			);
 			self.ctx
@@ -1288,14 +1355,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					writeln!(
 						&mut msg,
 						"No function '{}' could be found taking no arguments.",
-						i.lookup(db)
+						i.pretty_print(db)
 					)
 					.unwrap();
 				} else {
 					writeln!(
 						&mut msg,
 						"No function '{}' matching argument types {} could be found.",
-						i.lookup(db),
+						i.pretty_print(db),
 						args.iter()
 							.map(|t| format!("'{}'", t.pretty_print(db)))
 							.collect::<Vec<_>>()
@@ -1335,7 +1402,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								writeln!(
 									&mut msg,
 									"    Type-inst parameter '{}' not instantiated",
-									ty_var.name(db)
+									ty_var.pretty_print(db)
 								)
 								.unwrap();
 							} else {
@@ -1347,7 +1414,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								writeln!(
                                     &mut msg,
                                     "    Type-inst parameter '{}' instantiated with incompatible types {}",
-                                    ty_var.name(db),
+                                    ty_var.pretty_print(db),
                                     tys
                                 )
                                 .unwrap();
@@ -1453,7 +1520,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									span,
 									msg: format!(
 										"No enum constructor '{}' found for type '{}'",
-										name.lookup(db),
+										name.pretty_print(db),
 										expected.pretty_print(db)
 									),
 								},
@@ -1534,7 +1601,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								self.collect_pattern(
 									scope,
 									*p,
-									map.get(i).copied().unwrap_or(self.types.error),
+									map.get(&i.0).copied().unwrap_or(self.types.error),
 								),
 							)
 						}),
@@ -1665,7 +1732,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							self.ctx.add_diagnostic(
 								self.item,
 								UndefinedIdentifier {
-									identifier: i.lookup(db),
+									identifier: i.pretty_print(db),
 									src,
 									span,
 								},
@@ -1805,27 +1872,55 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				_ => Ty::tuple(db, fields.iter().map(|f| self.complete_type(*f, None)))
 					.with_opt(db, *opt),
 			},
-			Type::Record { opt, fields } => match ty.map(|ty| ty.lookup(db)) {
-				Some(TyData::Record(_, fs)) => Ty::record(
+			Type::Record { opt, fields } => {
+				let mut seen = FxHashSet::default();
+				let mut fields = fields
+					.iter()
+					.map(|(p, t)| {
+						let i = self.data[*p]
+							.identifier()
+							.expect("Record field not an identifier");
+						if seen.contains(&i) {
+							let (src, span) =
+								NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
+							self.ctx.add_diagnostic(
+								self.item,
+								SyntaxError {
+									src,
+									span,
+									msg: format!(
+										"Record type contains duplicate field '{}'",
+										i.pretty_print(db)
+									),
+									other: Vec::new(),
+								},
+							);
+						}
+						seen.insert(i);
+						(i, *t)
+					})
+					.collect::<Vec<_>>();
+				fields.sort_by_key(|(i, _)| i.lookup(db));
+				fields.dedup_by_key(|(i, _)| *i);
+				Ty::record(
 					db,
-					fields.iter().map(|(i1, t)| {
-						let i = self.data[*i1].identifier().unwrap();
-						let ty = fs.iter().find(|(i2, _)| i == *i2).map(|(_, t)| *t);
-						(i, self.complete_type(*t, ty))
-					}),
-				)
-				.with_opt(db, *opt),
-				_ => Ty::record(
-					db,
-					fields.iter().map(|(i, f)| {
+					fields.into_iter().map(|(i, f)| {
 						(
-							self.data[*i].identifier().unwrap(),
-							self.complete_type(*f, None),
+							i,
+							self.complete_type(
+								f,
+								ty.and_then(|ty| match ty.lookup(db) {
+									TyData::Record(_, fs) => {
+										fs.iter().find(|(i2, _)| i.0 == *i2).map(|(_, t)| *t)
+									}
+									_ => None,
+								}),
+							),
 						)
 					}),
 				)
-				.with_opt(db, *opt),
-			},
+				.with_opt(db, *opt)
+			}
 			Type::Operation {
 				opt,
 				return_type,
@@ -1872,7 +1967,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let mut ty = Ty::type_inst_var(
 					db,
 					TyVar {
-						ty_var: TyVarRef(PatternRef::new(self.item, *pattern)),
+						ty_var: TyVarRef::new(db, PatternRef::new(self.item, *pattern)),
 						varifiable: *varifiable,
 						enumerable: *enumerable,
 						indexable: *indexable,

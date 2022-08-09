@@ -1,26 +1,23 @@
-use std::sync::Arc;
-
-use lsp_server::{ErrorCode, ResponseError};
+use lsp_server::ResponseError;
 use lsp_types::TextDocumentPositionParams;
-use shackle::{file::InputFile, hir::db::Hir};
+use shackle::{file::ModelRef, hir::db::Hir};
 
-pub fn view_ast(
-	db: &mut dyn Hir,
-	params: TextDocumentPositionParams,
-) -> Result<String, ResponseError> {
-	let path = params
-		.text_document
-		.uri
-		.to_file_path()
-		.map_err(|_| ResponseError {
-			code: ErrorCode::InvalidParams as i32,
-			data: None,
-			message: "Failed to convert to file path".to_owned(),
-		})?;
-	db.set_input_files(Arc::new(vec![InputFile::Path(path)]));
-	let model_ref = db.input_models()[0];
-	match db.ast(*model_ref) {
-		Ok(ast) => Ok(format!("{:#?}", ast)),
-		Err(e) => Ok(e.to_string()),
+use crate::{dispatch::RequestHandler, extensions::ViewAst, LanguageServerDatabase};
+
+#[derive(Debug)]
+pub struct ViewAstHandler;
+
+impl RequestHandler<ViewAst, ModelRef> for ViewAstHandler {
+	fn prepare(
+		db: &mut LanguageServerDatabase,
+		params: TextDocumentPositionParams,
+	) -> Result<ModelRef, ResponseError> {
+		db.set_active_file_from_document(&params.text_document)
+	}
+	fn execute(db: &dyn Hir, model_ref: ModelRef) -> Result<String, ResponseError> {
+		match db.ast(*model_ref) {
+			Ok(ast) => Ok(format!("{:#?}", ast)),
+			Err(e) => Ok(e.to_string()),
+		}
 	}
 }
