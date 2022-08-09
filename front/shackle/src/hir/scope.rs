@@ -91,7 +91,7 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 							NodeRef::from(EntityRef::new(db, item_ref, f.pattern)).source_span(db);
 						diagnostics.push(
 							IdentifierAlreadyDefined {
-								identifier: identifier.lookup(db),
+								identifier: identifier.pretty_print(db),
 								src,
 								span,
 							}
@@ -200,7 +200,7 @@ impl ScopeData {
 			Entry::Occupied(_) => {
 				let (src, span) = NodeRef::from(pattern.into_entity(db)).source_span(db);
 				Err(IdentifierAlreadyDefined {
-					identifier: identifier.lookup(db),
+					identifier: identifier.pretty_print(db),
 					src,
 					span,
 				}

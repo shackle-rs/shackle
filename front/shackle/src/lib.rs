@@ -10,6 +10,7 @@ pub mod error;
 pub mod file;
 pub mod hir;
 pub mod syntax;
+pub mod ty;
 pub mod utils;
 
 use db::Inputs;

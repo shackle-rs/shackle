@@ -2,13 +2,12 @@
 
 //! Salsa database for HIR operations
 
-use std::fmt::Display;
 use std::path::Path;
 use std::sync::Arc;
 
 use rustc_hash::FxHashSet;
 
-use crate::db::{FileReader, Upcast};
+use crate::db::{FileReader, Interner};
 use crate::error::{IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
@@ -18,13 +17,12 @@ use crate::{Error, Result};
 use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
 use super::scope::{ScopeData, ScopeResult};
 use super::source::SourceMap;
-use super::ty::{Ty, TyData};
 use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
 use super::{Identifier, Model};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]
-pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
+pub trait Hir: Interner + SourceParser + FileReader {
 	/// Resolve input files and include items (only visits each model once).
 	/// The result gives a list of models which need to be lowered into HIR.
 	///
@@ -145,16 +143,10 @@ pub trait Hir: SourceParser + FileReader + Upcast<dyn SourceParser> {
 	fn all_diagnostics(&self) -> Arc<Vec<Error>>;
 
 	#[salsa::interned]
-	fn intern_string(&self, string: HirStringData) -> HirString;
-
-	#[salsa::interned]
 	fn intern_item_ref(&self, item: ItemRefData) -> ItemRef;
 
 	#[salsa::interned]
 	fn intern_entity_ref(&self, item: EntityRefData) -> EntityRef;
-
-	#[salsa::interned]
-	fn intern_ty(&self, item: TyData) -> Ty;
 }
 
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
@@ -173,7 +165,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 			.filter(|p| p.exists())
 			.next();
 		match resolved_path {
-			Some(ref p) => todo.push(FileRef::new(p, db.upcast()).into()),
+			Some(ref p) => todo.push(FileRef::new(p, db).into()),
 			None => errors.push(Error::StandardLibraryNotFound),
 		}
 	}
@@ -206,7 +198,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 						let file_dir = model
 							.cst()
 							.file()
-							.path(db.upcast())
+							.path(db)
 							.and_then(|p| p.parent().map(|p| p.to_owned()));
 
 						let resolved = search_dirs
@@ -219,7 +211,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 						match resolved {
 							Some(r) => r,
 							None => {
-								let (src, span) = i.cst_node().source_span(db.upcast());
+								let (src, span) = i.cst_node().source_span(db);
 								errors.push(
 									IncludeError {
 										src,
@@ -232,7 +224,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 							}
 						}
 					};
-					todo.push(FileRef::new(&resolved_file, db.upcast()).into());
+					todo.push(FileRef::new(&resolved_file, db).into());
 				}
 				_ => (),
 			}
@@ -329,7 +321,7 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 			// Collect syntax errors
 			let mut errors: Vec<Error> = r
 				.iter()
-				.filter_map(|m| db.cst(**m).unwrap().error(db.upcast()))
+				.filter_map(|m| db.cst(**m).unwrap().error(db))
 				.map(|e| e.into())
 				.collect();
 			for m in r.iter() {
@@ -355,45 +347,5 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 			Arc::new(errors)
 		}
 		Err(e) => Arc::new(vec![e]),
-	}
-}
-
-/// An interned string
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct HirString(salsa::InternId);
-
-impl HirString {
-	/// Get the value of the string
-	pub fn value(&self, db: &dyn Hir) -> String {
-		db.lookup_intern_string(*self).0
-	}
-}
-
-impl salsa::InternKey for HirString {
-	fn from_intern_id(id: salsa::InternId) -> Self {
-		Self(id)
-	}
-
-	fn as_intern_id(&self) -> salsa::InternId {
-		self.0
-	}
-}
-
-/// String data
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct HirStringData(pub String);
-
-impl<T> From<T> for HirStringData
-where
-	T: Display,
-{
-	fn from(v: T) -> Self {
-		Self(v.to_string())
-	}
-}
-
-impl From<HirStringData> for String {
-	fn from(v: HirStringData) -> Self {
-		v.0
 	}
 }

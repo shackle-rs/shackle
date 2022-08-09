@@ -10,8 +10,11 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
-		EnumRef, FunctionEntry, FunctionType, Goal, OptType, OverloadedFunction, Pattern,
-		PolymorphicFunctionType, Ty, TyVar, TyVarRef, Type, TypeRegistry, VarType,
+		Goal, Pattern, Type,
+	},
+	ty::{
+		EnumRef, FunctionEntry, FunctionType, OptType, OverloadedFunction, PolymorphicFunctionType,
+		Ty, TyVar, TyVarRef, TypeRegistry, VarType,
 	},
 	Error,
 };
@@ -33,7 +36,7 @@ pub struct SignatureTypes {
 
 /// Context for typing an item signature
 pub struct SignatureTypeContext {
-	item: ItemRef,
+	starting_item: ItemRef,
 	data: SignatureTypes,
 	diagnostics: Vec<Error>,
 }
@@ -42,7 +45,7 @@ impl SignatureTypeContext {
 	/// Create a new signature type context
 	pub fn new(item: ItemRef) -> Self {
 		Self {
-			item,
+			starting_item: item,
 			data: SignatureTypes {
 				patterns: FxHashMap::default(),
 				expressions: FxHashMap::default(),
@@ -68,7 +71,7 @@ impl SignatureTypeContext {
 					.type_inst_vars
 					.iter()
 					.map(|tv| {
-						let ty_var = TyVarRef(PatternRef::new(item, tv.name));
+						let ty_var = TyVarRef::new(db, PatternRef::new(item, tv.name));
 						let type_var = TyVar {
 							ty_var,
 							varifiable: tv.is_varifiable,
@@ -87,7 +90,7 @@ impl SignatureTypeContext {
 							.flat_map(|p| Type::anonymous_ty_vars(p.declared_type, &it.data))
 							.map(|t| match &it.data[t] {
 								Type::AnonymousTypeInstVar { pattern, .. } => {
-									TyVarRef(PatternRef::new(item, *pattern))
+									TyVarRef::new(db, PatternRef::new(item, *pattern))
 								}
 								_ => unreachable!(),
 							}),
@@ -197,7 +200,7 @@ impl SignatureTypeContext {
 			LocalItemRef::Declaration(d) => {
 				let it = &model[d];
 				for p in Pattern::identifiers(it.pattern, data) {
-					self.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
+					self.add_declaration(PatternRef::new(item, p), PatternTy::Computing);
 				}
 				let mut typer = Typer::new(db, types, self, item, data);
 				if data[it.declared_type].is_complete(data) {
@@ -205,18 +208,13 @@ impl SignatureTypeContext {
 					let expected = typer.complete_type(it.declared_type, None);
 					typer.collect_pattern(None, it.pattern, expected);
 					drop(typer);
-					// Add a declaration for the entire type so that the body definition can be checked against this
-					self.add_declaration(
-						PatternRef::new(self.item, it.pattern),
-						PatternTy::Variable(expected),
-					);
 				} else {
 					typer.collect_declaration(it);
 				}
 			}
 			LocalItemRef::Enumeration(e) => {
 				let it = &model[e];
-				let ty = Ty::par_enum(db, EnumRef(PatternRef::new(item, it.pattern)));
+				let ty = Ty::par_enum(db, EnumRef::new(db, PatternRef::new(item, it.pattern)));
 				self.add_declaration(
 					PatternRef::new(item, it.pattern),
 					PatternTy::Variable(Ty::par_set(db, ty).unwrap()),
@@ -405,22 +403,43 @@ impl SignatureTypeContext {
 
 impl TypeContext for SignatureTypeContext {
 	fn add_declaration(&mut self, pattern: PatternRef, declaration: PatternTy) {
-		self.data.patterns.insert(pattern, declaration);
+		let old = self.data.patterns.insert(pattern, declaration);
+		assert!(
+			matches!(old, None | Some(PatternTy::Computing)),
+			"Tried to add declaration for {:?} twice",
+			pattern
+		);
 	}
 	fn add_expression(&mut self, expression: ExpressionRef, ty: Ty) {
-		self.data.expressions.insert(expression, ty);
+		let old = self.data.expressions.insert(expression, ty);
+		assert!(
+			old.is_none(),
+			"Tried to add type for expression {:?} twice",
+			expression
+		);
 	}
 	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: PatternRef) {
-		self.data
+		let old = self
+			.data
 			.identifier_resolution
 			.insert(expression, resolution);
+		assert!(
+			old.is_none(),
+			"Tried to add identifier resolution for {:?} twice",
+			expression
+		);
 	}
 	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: PatternRef) {
-		self.data.pattern_resolution.insert(pattern, resolution);
+		let old = self.data.pattern_resolution.insert(pattern, resolution);
+		assert!(
+			old.is_none(),
+			"Tried to add pattern resolution for {:?} twice",
+			pattern
+		);
 	}
 	fn add_diagnostic(&mut self, item: ItemRef, e: impl Into<Error>) {
 		// Suppress errors from other items
-		if item == self.item {
+		if item == self.starting_item {
 			self.diagnostics.push(e.into());
 		}
 	}

@@ -19,7 +19,8 @@ use std::fmt::Write;
 pub(crate) use impl_enum_from;
 use salsa::InternKey;
 
-use crate::hir::db::{Hir, HirString};
+use crate::db::InternedString;
+use crate::hir::db::Hir;
 
 /// Trait for pretty printing for debugging with a Salsa database
 pub trait DebugPrint<'a> {
@@ -29,15 +30,15 @@ pub trait DebugPrint<'a> {
 	fn debug_print(&self, db: &Self::Database) -> String;
 }
 
-/// Replace debug printed HirStrings with their values
+/// Replace debug printed `InternedString`s with their values
 pub fn debug_print_strings(db: &dyn Hir, s: &str) -> String {
 	// Replace interned strings with values
 	let mut o = String::new();
-	for (i, x) in s.split("HirString(").enumerate() {
+	for (i, x) in s.split("InternedString(").enumerate() {
 		if i > 0 {
 			if let Some(idx) = x.find(')') {
-				let s =
-					HirString::from_intern_id((&x[..idx]).parse::<u32>().unwrap().into()).value(db);
+				let s = InternedString::from_intern_id((&x[..idx]).parse::<u32>().unwrap().into())
+					.value(db);
 				write!(&mut o, "{:?}", s).unwrap();
 				o.push_str(&x[idx + 1..]);
 			} else {

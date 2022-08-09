@@ -2,11 +2,9 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	arena::ArenaIndex,
+	db::InternedStringData,
 	error::{InvalidArrayLiteral, SyntaxError},
-	hir::{
-		db::HirStringData,
-		source::{DesugarKind, Origin},
-	},
+	hir::source::{DesugarKind, Origin},
 	syntax::ast::{self, AstNode},
 	Error,
 };
@@ -47,7 +45,7 @@ impl ExpressionCollector<'_> {
 			ast::Expression::Infinity(_) => Expression::Infinity,
 			ast::Expression::Anonymous(a) => {
 				// No longer support anonymous variables, instead use opt
-				let (src, span) = a.cst_node().source_span(self.db.upcast());
+				let (src, span) = a.cst_node().source_span(self.db);
 				self.diagnostics.push(
 					SyntaxError {
 						src,
@@ -415,7 +413,7 @@ impl ExpressionCollector<'_> {
 				.collect::<Vec<Vec<ArenaIndex<Expression>>>>();
 			for it in indices {
 				if it.len() != num_dims {
-					let (src, span) = al.cst_node().source_span(self.db.upcast());
+					let (src, span) = al.cst_node().source_span(self.db);
 					self.diagnostics.push(
 						InvalidArrayLiteral {
 							src,
@@ -480,7 +478,7 @@ impl ExpressionCollector<'_> {
 				first = false;
 
 				if !col_indices.is_empty() && col_count != col_indices.len() {
-					let (src, span) = al.cst_node().source_span(self.db.upcast());
+					let (src, span) = al.cst_node().source_span(self.db);
 					self.diagnostics.push(
 						InvalidArrayLiteral {
 							src,
@@ -493,7 +491,7 @@ impl ExpressionCollector<'_> {
 					return self.alloc_expression(origin, Expression::Missing);
 				}
 			} else if members.len() != col_count {
-				let (src, span) = al.cst_node().source_span(self.db.upcast());
+				let (src, span) = al.cst_node().source_span(self.db);
 				self.diagnostics.push(
 					InvalidArrayLiteral {
 						src,
@@ -506,7 +504,7 @@ impl ExpressionCollector<'_> {
 			}
 
 			if index.is_none() != row_indices.is_empty() {
-				let (src, span) = al.cst_node().source_span(self.db.upcast());
+				let (src, span) = al.cst_node().source_span(self.db);
 				self.diagnostics.push(
 					InvalidArrayLiteral {
 						src,
@@ -856,7 +854,7 @@ impl ExpressionCollector<'_> {
 		idx
 	}
 
-	fn ident_exp<T: Into<HirStringData>>(
+	fn ident_exp<T: Into<InternedStringData>>(
 		&mut self,
 		origin: Origin,
 		id: T,

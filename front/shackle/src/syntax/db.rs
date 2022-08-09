@@ -6,13 +6,13 @@ use tree_sitter::Parser;
 use super::ast::Model;
 use super::cst::Cst;
 
-use crate::db::{FileReader, Upcast};
+use crate::db::FileReader;
 use crate::file::FileRef;
 use crate::Result;
 
 /// Syntax parsing queries
 #[salsa::query_group(SourceParserStorage)]
-pub trait SourceParser: FileReader + Upcast<dyn FileReader> {
+pub trait SourceParser: FileReader {
 	/// Produce a CST for the given file.
 	///
 	/// Only gives an `Err` result if getting the file contents failed.
@@ -27,7 +27,7 @@ pub trait SourceParser: FileReader + Upcast<dyn FileReader> {
 }
 
 fn cst(db: &dyn SourceParser, file: FileRef) -> Result<Cst> {
-	let contents = file.contents(db.upcast())?;
+	let contents = file.contents(db)?;
 
 	// TODO: Don't create new parser for every file (hard since parsing requires mutable reference to Parser)
 	let mut parser = Parser::new();

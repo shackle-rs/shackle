@@ -366,13 +366,13 @@ fn test_bottom() {
 	assert!(types.bottom.known_par(db));
 	assert!(!types.bottom.known_varifiable(db));
 	assert!(types.bottom.known_enumerable(db));
-	assert_eq!(types.bottom.pretty_print(db), "bot");
+	assert_eq!(types.bottom.pretty_print(db), "..");
 
 	assert_eq!(types.opt_bottom.lookup(db), TyData::Bottom(OptType::Opt));
 	assert!(types.opt_bottom.known_par(db));
 	assert!(!types.opt_bottom.known_varifiable(db));
 	assert!(types.opt_bottom.known_enumerable(db));
-	assert_eq!(types.opt_bottom.pretty_print(db), "opt bot");
+	assert_eq!(types.opt_bottom.pretty_print(db), "opt ..");
 }
 
 #[test]

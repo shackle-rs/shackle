@@ -171,7 +171,7 @@ impl<'a> TopoSorter<'a> {
 						// Cyclic definition, emit error
 						let (src, span) =
 							NodeRef::from(expression.into_entity(self.db)).source_span(self.db);
-						let variable = i.lookup(self.db);
+						let variable = i.pretty_print(self.db);
 						self.diagnostics.push(
 							CyclicDefinition {
 								src,

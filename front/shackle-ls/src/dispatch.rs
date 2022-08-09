@@ -1,119 +1,152 @@
-use lsp_server::{ExtractError, Notification, Request, Response, ResponseError};
+use lsp_server::{ExtractError, Message, Notification, Request, Response, ResponseError};
+use shackle::hir::db::Hir;
 
-#[derive(Debug)]
-enum State<U, T, H> {
-	Unhandled(U, T),
-	Handled(H),
+use crate::LanguageServerDatabase;
+
+enum RequestState<'a> {
+	Unhandled {
+		request: Request,
+		db: &'a mut LanguageServerDatabase,
+	},
+	Handled(Result<(), ExtractError<Request>>),
 }
 
-#[derive(Debug)]
-pub struct DispatchRequest<T> {
-	state: State<Request, T, Result<Response, ExtractError<Request>>>,
+pub trait RequestHandler<R: lsp_types::request::Request, T> {
+	/// Run on the main thread to prepare the argument passed to the `execute` function.
+	/// Usually needs to call `set_input_files` on the database.
+	fn prepare(db: &mut LanguageServerDatabase, params: R::Params) -> Result<T, ResponseError>;
+	/// Run in the thread pool. Can panic without crashing the language server.
+	fn execute(db: &dyn Hir, data: T) -> Result<R::Result, ResponseError>;
 }
 
-impl<T> DispatchRequest<T> {
-	pub fn new(r: Request, context: T) -> Self {
-		eprintln!("got {} request #{}", r.method, r.id);
-		Self {
-			state: State::Unhandled(r, context),
-		}
+pub struct DispatchRequest<'a>(RequestState<'a>);
+
+impl<'a> DispatchRequest<'a> {
+	pub fn new(request: Request, db: &'a mut LanguageServerDatabase) -> Self {
+		eprintln!("got {} request #{}", request.method, request.id);
+		Self(RequestState::Unhandled { request, db })
 	}
-
-	pub fn on<R, F>(self, mut f: F) -> Self
+	pub fn on<H, R, T>(self) -> Self
 	where
 		R: lsp_types::request::Request,
-		F: FnMut(T, R::Params) -> Result<R::Result, ResponseError>,
+		H: RequestHandler<R, T>,
+		T: Send + 'static,
 	{
-		match self.state {
-			State::Unhandled(request, context) => {
+		match self.0 {
+			RequestState::Unhandled { request, db } => {
 				if request.method == R::METHOD {
 					let id = request.id.clone();
-					let result = serde_json::from_value(request.params)
-						.map_err(|error| ExtractError::JsonError {
+					match serde_json::from_value(request.params) {
+						Ok(params) => {
+							let value = match H::prepare(db, params) {
+								Ok(v) => v,
+								Err(e) => {
+									db.send(Message::Response(Response {
+										id,
+										result: None,
+										error: Some(e),
+									}))
+									.unwrap_or_else(|e| {
+										eprintln!("failed to send response: {:?}", e)
+									});
+									return Self(RequestState::Handled(Ok(())));
+								}
+							};
+							db.execute_async(move |db, sender| {
+								let response = match H::execute(db, value) {
+									Ok(value) => Response {
+										id,
+										result: Some(
+											serde_json::to_value(&value)
+												.expect("Failed to serialize response"),
+										),
+										error: None,
+									},
+									Err(err) => Response {
+										id,
+										result: None,
+										error: Some(err),
+									},
+								};
+								sender
+									.send(Message::Response(response))
+									.unwrap_or_else(|e| {
+										eprintln!("failed to send response: {:?}", e)
+									});
+							});
+							Self(RequestState::Handled(Ok(())))
+						}
+						Err(error) => Self(RequestState::Handled(Err(ExtractError::JsonError {
 							method: request.method.clone(),
 							error,
-						})
-						.map(|params| f(context, params))
-						.map(|result| match result {
-							Ok(value) => Response {
-								id,
-								result: Some(
-									serde_json::to_value(&value)
-										.expect("Failed to serialize response"),
-								),
-								error: None,
-							},
-							Err(err) => Response {
-								id,
-								result: None,
-								error: Some(err),
-							},
-						});
-					Self {
-						state: State::Handled(result),
+						}))),
 					}
 				} else {
-					Self {
-						state: State::Unhandled(request, context),
-					}
+					Self(RequestState::Unhandled { request, db })
 				}
 			}
-			State::Handled(_) => self,
+			_ => self,
 		}
 	}
 
-	pub fn finish(self) -> Result<Response, ExtractError<Request>> {
-		match self.state {
-			State::Handled(result) => result,
-			State::Unhandled(request, _) => Err(ExtractError::MethodMismatch(request)),
+	pub fn finish(self) -> Result<(), ExtractError<Request>> {
+		match self.0 {
+			RequestState::Handled(result) => result,
+			RequestState::Unhandled { request, .. } => Err(ExtractError::MethodMismatch(request)),
 		}
 	}
 }
 
-#[derive(Debug)]
-pub struct DispatchNotification<T> {
-	state: State<Notification, T, Result<(), ExtractError<Notification>>>,
+enum NotificationState<'a> {
+	Unhandled {
+		notification: Notification,
+		db: &'a mut LanguageServerDatabase,
+	},
+	Handled(Result<(), ExtractError<Notification>>),
 }
 
-impl<T> DispatchNotification<T> {
-	pub fn new(n: Notification, context: T) -> Self {
-		eprintln!("got {} notification", n.method);
-		Self {
-			state: State::Unhandled(n, context),
-		}
+pub struct DispatchNotification<'a>(NotificationState<'a>);
+
+impl<'a> DispatchNotification<'a> {
+	pub fn new(notification: Notification, db: &'a mut LanguageServerDatabase) -> Self {
+		eprintln!("got {} notification", notification.method);
+		Self(NotificationState::Unhandled { notification, db })
 	}
 
 	pub fn on<N, F>(self, mut f: F) -> Self
 	where
 		N: lsp_types::notification::Notification,
-		F: FnMut(T, N::Params),
+		F: FnMut(&mut LanguageServerDatabase, N::Params),
 	{
-		match self.state {
-			State::Unhandled(notification, context) => {
+		match self.0 {
+			NotificationState::Unhandled { notification, db } => {
 				if notification.method == N::METHOD {
-					let result = serde_json::from_value(notification.params)
-						.map_err(|error| ExtractError::JsonError {
-							method: notification.method.clone(),
-							error,
-						})
-						.map(|params| f(context, params));
-					Self {
-						state: State::Handled(result),
+					match serde_json::from_value(notification.params) {
+						Ok(params) => {
+							f(db, params);
+							Self(NotificationState::Handled(Ok(())))
+						}
+						Err(error) => {
+							Self(NotificationState::Handled(Err(ExtractError::JsonError {
+								method: notification.method.clone(),
+								error,
+							})))
+						}
 					}
 				} else {
-					Self {
-						state: State::Unhandled(notification, context),
-					}
+					Self(NotificationState::Unhandled { notification, db })
 				}
 			}
-			State::Handled(_) => self,
+			_ => self,
 		}
 	}
 
 	pub fn finish(self) -> Result<(), ExtractError<Notification>> {
-		match self.state {
-			State::Handled(result) => result,
-			State::Unhandled(notification, _) => Err(ExtractError::MethodMismatch(notification)),
+		match self.0 {
+			NotificationState::Handled(result) => result,
+			NotificationState::Unhandled { notification, .. } => {
+				Err(ExtractError::MethodMismatch(notification))
+			}
 		}
 	}
 }

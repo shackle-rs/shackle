@@ -1,47 +1,27 @@
-use lsp_server::Connection;
 use lsp_types::notification::Notification;
 use lsp_types::Url;
 use miette::{Diagnostic, Severity};
-use shackle::db::*;
-use shackle::file::InputFile;
 use shackle::hir::db::Hir;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
-use threadpool::ThreadPool;
 
 use crate::utils::span_contents_to_range;
 
-pub fn publish_diagnostics(
-	db: &mut CompilerDatabase,
-	path: &Path,
-	pool: &ThreadPool,
-	sender: &Connection,
-) {
-	db.set_input_files(Arc::new(vec![InputFile::Path(path.to_owned())]));
-	let path = path.to_owned();
-	let sender = sender.sender.clone();
-	let snapshot = db.snapshot();
-	pool.execute(move || {
-		let all_diagnostics = snapshot.all_diagnostics();
-		let mut diagnostics = Vec::new();
-		for d in all_diagnostics.iter() {
-			collect_diagnostic(&path, d, &mut diagnostics);
-		}
-		sender
-			.send(lsp_server::Message::Notification(
-				lsp_server::Notification {
-					method: lsp_types::notification::PublishDiagnostics::METHOD.to_owned(),
-					params: serde_json::to_value(lsp_types::PublishDiagnosticsParams {
-						uri: Url::from_file_path(path).unwrap(),
-						diagnostics,
-						version: None,
-					})
-					.unwrap(),
-				},
-			))
-			.unwrap();
-	});
+pub fn diagnostics_notification(db: &dyn Hir, path: &Path) -> lsp_server::Notification {
+	let all_diagnostics = db.all_diagnostics();
+	let mut diagnostics = Vec::new();
+	for d in all_diagnostics.iter() {
+		collect_diagnostic(&path, d, &mut diagnostics);
+	}
+	lsp_server::Notification {
+		method: lsp_types::notification::PublishDiagnostics::METHOD.to_owned(),
+		params: serde_json::to_value(lsp_types::PublishDiagnosticsParams {
+			uri: Url::from_file_path(path).unwrap(),
+			diagnostics,
+			version: None,
+		})
+		.unwrap(),
+	}
 }
 
 fn collect_diagnostic(

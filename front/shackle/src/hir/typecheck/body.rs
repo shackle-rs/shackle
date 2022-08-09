@@ -11,8 +11,9 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-		Expression, Pattern, Ty, Type, TypeRegistry,
+		Expression, Pattern, Type,
 	},
+	ty::{Ty, TypeRegistry},
 	Error,
 };
 
@@ -87,7 +88,7 @@ impl BodyTypeContext {
 				} else if let Some(e) = it.definition {
 					let signature = db.lookup_item_signature(item);
 					let expected = match &signature.patterns[&PatternRef::new(item, it.pattern)] {
-						PatternTy::Variable(t) => *t,
+						PatternTy::Variable(t) | PatternTy::Destructuring(t) => *t,
 						_ => unreachable!(),
 					};
 					typer.typecheck_expression(e, expected);
@@ -145,23 +146,48 @@ impl BodyTypeContext {
 impl TypeContext for BodyTypeContext {
 	fn add_declaration(&mut self, pattern: PatternRef, declaration: PatternTy) {
 		assert_eq!(pattern.item(), self.item);
+		assert!(
+			matches!(
+				self.data.patterns.get(pattern.pattern()),
+				None | Some(PatternTy::Computing)
+			),
+			"Tried to add declaration for {:?} twice",
+			pattern
+		);
 		self.data.patterns.insert(pattern.pattern(), declaration);
 	}
 	fn add_expression(&mut self, expression: ExpressionRef, ty: Ty) {
 		assert_eq!(expression.item(), self.item);
+		assert!(
+			self.data.expressions.get(expression.expression()).is_none(),
+			"Tried to add type for expression {:?} twice",
+			expression
+		);
 		self.data.expressions.insert(expression.expression(), ty);
 	}
 	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: PatternRef) {
 		assert_eq!(expression.item(), self.item);
-		self.data
+		let old = self
+			.data
 			.identifier_resolution
 			.insert(expression.expression(), resolution);
+		assert!(
+			old.is_none(),
+			"Tried to add identifier resolution for {:?} twice",
+			expression
+		);
 	}
 	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: PatternRef) {
 		assert_eq!(pattern.item(), self.item);
-		self.data
+		let old = self
+			.data
 			.pattern_resolution
 			.insert(pattern.pattern(), resolution);
+		assert!(
+			old.is_none(),
+			"Tried to add pattern resolution for {:?} twice",
+			pattern
+		);
 	}
 	fn add_diagnostic(&mut self, item: ItemRef, e: impl Into<Error>) {
 		let error = e.into();

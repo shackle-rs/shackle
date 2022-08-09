@@ -41,7 +41,7 @@ impl std::fmt::Debug for SourceFile {
 
 impl SourceFile {
 	/// Create a new source file from a `FileRef`
-	pub fn new(file: FileRef, db: &dyn FileReader) -> Self {
+	pub fn new(file: FileRef, db: &(impl FileReader + ?Sized)) -> Self {
 		Self {
 			name: file.path(db).and_then(|p| p.canonicalize().ok()),
 			source: file.contents(db).unwrap_or_default(),
@@ -126,14 +126,14 @@ impl salsa::InternKey for FileRef {
 
 impl FileRef {
 	/// Create a new file reference for an external (included) file
-	pub fn new(path: &Path, db: &dyn FileReader) -> Self {
+	pub fn new(path: &Path, db: &(impl FileReader + ?Sized)) -> Self {
 		db.intern_file_ref(FileRefData::ExternalFile(
 			path.canonicalize().unwrap_or_else(|_| path.to_owned()),
 		))
 	}
 
 	/// Get the file path if any
-	pub fn path(&self, db: &dyn FileReader) -> Option<PathBuf> {
+	pub fn path(&self, db: &(impl FileReader + ?Sized)) -> Option<PathBuf> {
 		match db.lookup_intern_file_ref(*self) {
 			FileRefData::InputFile(i) => match db.input_files()[i] {
 				InputFile::Path(ref p) => Some(p.clone()),
@@ -144,7 +144,7 @@ impl FileRef {
 	}
 
 	/// Get the contents of this file
-	pub fn contents(&self, db: &dyn FileReader) -> Result<Arc<String>, FileError> {
+	pub fn contents(&self, db: &(impl FileReader + ?Sized)) -> Result<Arc<String>, FileError> {
 		db.file_contents(*self)
 	}
 }
