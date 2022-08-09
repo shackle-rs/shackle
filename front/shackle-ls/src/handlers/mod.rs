@@ -1,3 +1,4 @@
+mod completions;
 mod diagnostics;
 mod goto_definition;
 mod hover;
@@ -7,6 +8,7 @@ mod view_cst;
 mod view_hir;
 mod view_scope;
 
+pub use self::completions::*;
 pub use self::diagnostics::*;
 pub use self::goto_definition::*;
 pub use self::hover::*;

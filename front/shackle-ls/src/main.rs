@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-	request::{GotoDefinition, HoverRequest},
-	HoverProviderCapability, InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
+	request::{Completion, GotoDefinition, HoverRequest},
+	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, ServerCapabilities,
+	TextDocumentSyncKind,
 };
 
 use lsp_server::{Connection, ExtractError, Message};
@@ -32,6 +33,10 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		definition_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
+		completion_provider: Some(CompletionOptions {
+			trigger_characters: Some(vec![".".to_owned()]),
+			..Default::default()
+		}),
 		..Default::default()
 	})
 	.unwrap();
@@ -73,6 +78,7 @@ fn main_loop(
 					.on::<ViewScope, _>(|ctx, params| handlers::view_scope(ctx, params))
 					.on::<GotoDefinition, _>(|ctx, params| handlers::goto_definition(ctx, params))
 					.on::<HoverRequest, _>(|ctx, params| handlers::hover(ctx, params))
+					.on::<Completion, _>(|ctx, params| handlers::completions(ctx, params))
 					.finish();
 
 				match result {
