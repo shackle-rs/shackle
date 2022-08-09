@@ -61,8 +61,7 @@ impl ItemCollector<'_> {
 			ast::Item::Solve(s) => self.collect_solve(s),
 			ast::Item::TypeAlias(t) => self.collect_type_alias(t),
 		};
-		self.source_map
-			.insert(it.into(), Origin::new(self.db, &item, None));
+		self.source_map.insert(it.into(), Origin::new(&item, None));
 		self.source_map.add_from_item_data(self.db, it, &sm);
 	}
 
@@ -92,7 +91,7 @@ impl ItemCollector<'_> {
 			})
 			.collect::<Vec<_>>();
 		let ty = ctx.alloc_type(
-			Origin::new(self.db, &a, None),
+			Origin::new(&a, None),
 			Type::Primitive {
 				inst: VarType::Par,
 				opt: OptType::NonOpt,
@@ -218,7 +217,7 @@ impl ItemCollector<'_> {
 						.map(|arg| {
 							let argument = ctx.collect_expression(arg.clone());
 							ctx.alloc_type(
-								Origin::new(self.db, &arg, None),
+								Origin::new(&arg, None),
 								Type::Bounded {
 									inst: Some(VarType::Par),
 									opt: Some(OptType::NonOpt),
@@ -240,7 +239,7 @@ impl ItemCollector<'_> {
 						.map(|arg| {
 							let argument = ctx.collect_expression(arg.clone());
 							ctx.alloc_type(
-								Origin::new(self.db, &arg, None),
+								Origin::new(&arg, None),
 								Type::Bounded {
 									inst: Some(VarType::Par),
 									opt: Some(OptType::NonOpt),
@@ -346,7 +345,7 @@ impl ItemCollector<'_> {
 		let body = f.body().map(|e| ctx.collect_expression(e));
 		let pattern = ctx.collect_pattern(f.id().into());
 		let return_type = ctx.alloc_type(
-			Origin::new(self.db, &f, None),
+			Origin::new(&f, None),
 			Type::Primitive {
 				inst: match f.declared_type() {
 					ast::PredicateType::Predicate => VarType::Var,
@@ -399,14 +398,14 @@ impl ItemCollector<'_> {
 		let goal = match s.goal() {
 			ast::Goal::Maximize(objective) => Goal::Maximize {
 				pattern: ctx.alloc_pattern(
-					Origin::new(self.db, &objective, None),
+					Origin::new(&objective, None),
 					Pattern::Identifier(Identifier::new("_objective", self.db)),
 				),
 				objective: ctx.collect_expression(objective),
 			},
 			ast::Goal::Minimize(objective) => Goal::Minimize {
 				pattern: ctx.alloc_pattern(
-					Origin::new(self.db, &objective, None),
+					Origin::new(&objective, None),
 					Pattern::Identifier(Identifier::new("_objective", self.db)),
 				),
 				objective: ctx.collect_expression(objective),

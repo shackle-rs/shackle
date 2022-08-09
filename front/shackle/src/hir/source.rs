@@ -128,17 +128,19 @@ pub enum DesugarKind {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Origin {
 	desugar_kind: Option<DesugarKind>,
-	location: (SourceFile, SourceSpan),
+	file: FileRef,
+	range: std::ops::Range<usize>,
 	node_id: usize,
 }
 
 impl Origin {
 	/// Create an origin.
-	pub fn new<T: AstNode>(db: &dyn Hir, node: &T, kind: Option<DesugarKind>) -> Self {
+	pub fn new<T: AstNode>(node: &T, kind: Option<DesugarKind>) -> Self {
 		let node = node.cst_node();
 		Self {
 			desugar_kind: kind,
-			location: node.source_span(db.upcast()),
+			file: node.cst().file(),
+			range: node.as_ref().byte_range(),
 			node_id: node.as_ref().id(),
 		}
 	}
@@ -147,13 +149,17 @@ impl Origin {
 	pub fn with_desugaring(&self, kind: DesugarKind) -> Self {
 		Self {
 			desugar_kind: Some(kind),
-			location: self.location.clone(),
+			file: self.file,
+			range: self.range.clone(),
 			node_id: self.node_id,
 		}
 	}
 
 	/// Get the source and span
-	pub fn source_span(&self) -> (SourceFile, SourceSpan) {
-		self.location.clone()
+	pub fn source_span(&self, db: &dyn Hir) -> (SourceFile, SourceSpan) {
+		(
+			SourceFile::new(self.file, db.upcast()),
+			self.range.clone().into(),
+		)
 	}
 }
