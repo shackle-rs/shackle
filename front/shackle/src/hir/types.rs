@@ -127,38 +127,7 @@ impl Type {
 		t: ArenaIndex<Type>,
 		data: &ItemData,
 	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
-		let mut todo = vec![t];
-		std::iter::from_fn(move || {
-			while let Some(t) = todo.pop() {
-				match &data[t] {
-					Type::Any => return Some(t),
-					Type::Primitive { .. }
-					| Type::Bounded { .. }
-					| Type::AnonymousTypeInstVar { .. }
-					| Type::Missing => (),
-					Type::Array {
-						dimensions,
-						element,
-						..
-					} => {
-						todo.push(*dimensions);
-						todo.push(*element)
-					}
-					Type::Set { element, .. } => todo.push(*element),
-					Type::Tuple { fields, .. } => todo.extend(fields.iter().copied()),
-					Type::Record { fields, .. } => todo.extend(fields.iter().map(|(_, f)| *f)),
-					Type::Operation {
-						return_type,
-						parameter_types,
-						..
-					} => {
-						todo.push(*return_type);
-						todo.extend(parameter_types.iter().copied());
-					}
-				}
-			}
-			None
-		})
+		Type::walk(t, data).filter(|t| matches!(data[*t], Type::Any))
 	}
 
 	/// Return the anonymous type-inst variables in the given type.
@@ -166,35 +135,15 @@ impl Type {
 		t: ArenaIndex<Type>,
 		data: &ItemData,
 	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
-		let mut todo = vec![t];
-		std::iter::from_fn(move || {
-			while let Some(t) = todo.pop() {
-				match &data[t] {
-					Type::AnonymousTypeInstVar { .. } => return Some(t),
-					Type::Any | Type::Primitive { .. } | Type::Bounded { .. } | Type::Missing => (),
-					Type::Array {
-						dimensions,
-						element,
-						..
-					} => {
-						todo.push(*dimensions);
-						todo.push(*element)
-					}
-					Type::Set { element, .. } => todo.push(*element),
-					Type::Tuple { fields, .. } => todo.extend(fields.iter().copied()),
-					Type::Record { fields, .. } => todo.extend(fields.iter().map(|(_, f)| *f)),
-					Type::Operation {
-						return_type,
-						parameter_types,
-						..
-					} => {
-						todo.push(*return_type);
-						todo.extend(parameter_types.iter().copied());
-					}
-				}
-			}
-			None
-		})
+		Type::walk(t, data).filter(|t| matches!(data[*t], Type::AnonymousTypeInstVar { .. }))
+	}
+
+	/// Get the unbounded primitive types in this type
+	pub fn primitives(
+		t: ArenaIndex<Type>,
+		data: &ItemData,
+	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
+		Type::walk(t, data).filter(|t| matches!(data[*t], Type::Primitive { .. }))
 	}
 
 	/// Get the expressions (bounds) contained in this type
@@ -202,34 +151,46 @@ impl Type {
 		t: ArenaIndex<Type>,
 		data: &ItemData,
 	) -> impl '_ + Iterator<Item = ArenaIndex<Expression>> {
+		Type::walk(t, data).filter_map(|t| {
+			if let Type::Bounded { domain, .. } = data[t] {
+				Some(domain)
+			} else {
+				None
+			}
+		})
+	}
+
+	/// Walk over the types contained in this type
+	pub fn walk(
+		t: ArenaIndex<Type>,
+		data: &ItemData,
+	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
 		let mut todo = vec![t];
 		std::iter::from_fn(move || {
-			while let Some(t) = todo.pop() {
-				match &data[t] {
-					Type::Bounded { domain, .. } => return Some(*domain),
-					Type::Array {
-						dimensions,
-						element,
-						..
-					} => {
-						todo.push(*dimensions);
-						todo.push(*element)
-					}
-					Type::Set { element, .. } => todo.push(*element),
-					Type::Tuple { fields, .. } => todo.extend(fields.iter().copied()),
-					Type::Record { fields, .. } => todo.extend(fields.iter().map(|(_, f)| *f)),
-					Type::Operation {
-						return_type,
-						parameter_types,
-						..
-					} => {
-						todo.push(*return_type);
-						todo.extend(parameter_types.iter().copied());
-					}
-					_ => (),
+			let t = todo.pop()?;
+			match &data[t] {
+				Type::Array {
+					dimensions,
+					element,
+					..
+				} => {
+					todo.push(*dimensions);
+					todo.push(*element)
 				}
+				Type::Set { element, .. } => todo.push(*element),
+				Type::Tuple { fields, .. } => todo.extend(fields.iter().copied()),
+				Type::Record { fields, .. } => todo.extend(fields.iter().map(|(_, f)| *f)),
+				Type::Operation {
+					return_type,
+					parameter_types,
+					..
+				} => {
+					todo.push(*return_type);
+					todo.extend(parameter_types.iter().copied());
+				}
+				_ => (),
 			}
-			None
+			Some(t)
 		})
 	}
 }

@@ -113,7 +113,7 @@ impl EnumerationMembers {
 ast_node!(
 	/// Enum definition using anonymous enum
 	AnonymousEnumeration,
-	arguments
+	parameters
 );
 
 impl AnonymousEnumeration {
@@ -122,9 +122,9 @@ impl AnonymousEnumeration {
 		child_with_field_name(self, "name")
 	}
 
-	/// Get the argument expressions
-	pub fn arguments(&self) -> Children<'_, Expression> {
-		children_with_field_name(self, "argument")
+	/// Get the parameter types
+	pub fn parameters(&self) -> Children<'_, Type> {
+		children_with_field_name(self, "parameter")
 	}
 }
 
@@ -132,7 +132,7 @@ ast_node!(
 	/// Enum definition using enum constructor call
 	EnumerationConstructor,
 	id,
-	arguments
+	parameters
 );
 
 impl EnumerationConstructor {
@@ -141,9 +141,9 @@ impl EnumerationConstructor {
 		child_with_field_name(self, "name")
 	}
 
-	/// Get the argument expressions
-	pub fn arguments(&self) -> Children<'_, Expression> {
-		children_with_field_name(self, "argument")
+	/// Get the parameter types
+	pub fn parameters(&self) -> Children<'_, Type> {
+		children_with_field_name(self, "parameter")
 	}
 }
 

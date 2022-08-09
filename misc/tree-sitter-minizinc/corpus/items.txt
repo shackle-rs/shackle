@@ -77,10 +77,10 @@ enum enum_constructor_product = Foo(1..3, 1..2);
   item: (enumeration name: (identifier) annotation: (identifier))
   item: (enumeration name: (identifier) case: (enumeration_members))
   item: (enumeration name: (identifier) case: (enumeration_members member: (identifier) member: (identifier) member: (identifier)))
-  item: (enumeration name: (identifier) case: (anonymous_enumeration name: (anonymous) argument: (infix_operator left: (integer_literal) right: (integer_literal))))
-  item: (enumeration name: (identifier) case: (enumeration_members member: (identifier) member: (identifier)) case: (enumeration_constructor name: (identifier) argument: (identifier)))
-  item: (enumeration name: (identifier) case: (anonymous_enumeration name: (anonymous) argument: (infix_operator left: (integer_literal) right: (integer_literal)) argument: (infix_operator left: (integer_literal) right: (integer_literal))))
-  item: (enumeration name: (identifier) case: (enumeration_constructor name: (identifier) argument: (infix_operator left: (integer_literal) right: (integer_literal)) argument: (infix_operator left: (integer_literal) right: (integer_literal)))))
+  item: (enumeration name: (identifier) case: (anonymous_enumeration name: (anonymous) parameter: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal)))))
+  item: (enumeration name: (identifier) case: (enumeration_members member: (identifier) member: (identifier)) case: (enumeration_constructor name: (identifier) parameter: (type_base domain: (identifier))))
+  item: (enumeration name: (identifier) case: (anonymous_enumeration name: (anonymous) parameter: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) parameter: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal)))))
+  item: (enumeration name: (identifier) case: (enumeration_constructor name: (identifier) parameter: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))) parameter: (type_base domain: (infix_operator left: (integer_literal) right: (integer_literal))))))
 
 ========
 Function

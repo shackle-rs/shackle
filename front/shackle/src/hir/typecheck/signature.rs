@@ -237,7 +237,11 @@ impl SignatureTypeContext {
 									.collect::<Box<[_]>>()
 							};
 
+							let mut had_error = false;
 							for (p, t) in case.parameters.iter().zip(param_types.iter()) {
+								if t.contains_error(db) {
+									had_error = true;
+								}
 								if !t.known_par(db) || !t.known_enumerable(db) {
 									let (src, span) =
 										NodeRef::from(EntityRef::new(db, item, *p)).source_span(db);
@@ -252,6 +256,21 @@ impl SignatureTypeContext {
 										),
 										},
 									);
+									had_error = true;
+								}
+
+								for unbounded in Type::primitives(*p, data) {
+									let (src, span) =
+										NodeRef::from(EntityRef::new(db, item, unbounded))
+											.source_span(db);
+									self.add_diagnostic(
+										item,
+										TypeInferenceFailure {
+											src,
+											span,
+											msg: "Unbounded enum constructor parameters not supported".to_owned()
+										},
+									);
 								}
 							}
 
@@ -261,61 +280,63 @@ impl SignatureTypeContext {
 								return_type: ty,
 								params: param_types.clone(),
 							});
-							// C(opt a, opt b, ..) -> opt E
-							constructors.push(FunctionType {
-								return_type: ty.with_opt(db, OptType::Opt),
-								params: param_types
-									.iter()
-									.map(|t| t.with_opt(db, OptType::Opt))
-									.collect(),
-							});
-							// C(var a, var b, ..) -> var E
-							constructors.push(FunctionType {
-								return_type: ty.with_inst(db, VarType::Var).unwrap(),
-								params: param_types
-									.iter()
-									.map(|t| t.with_inst(db, VarType::Var).unwrap())
-									.collect(),
-							});
-							// C(var opt a, var opt b, ..) -> var opt E
-							constructors.push(FunctionType {
-								return_type: ty
-									.with_inst(db, VarType::Var)
-									.unwrap()
-									.with_opt(db, OptType::Opt),
-								params: param_types
-									.iter()
-									.map(|t| {
-										t.with_inst(db, VarType::Var)
-											.unwrap()
-											.with_opt(db, OptType::Opt)
-									})
-									.collect(),
-							});
-							// C(set of a, set of b, ..) -> set of E
-							constructors.push(FunctionType {
-								return_type: Ty::par_set(db, ty).unwrap(),
-								params: param_types
-									.iter()
-									.map(|t| Ty::par_set(db, *t).unwrap())
-									.collect(),
-							});
-							// C(var set of a, var set of b, ..) -> var set of E
-							constructors.push(FunctionType {
-								return_type: Ty::par_set(db, ty)
-									.unwrap()
-									.with_inst(db, VarType::Var)
-									.unwrap(),
-								params: param_types
-									.iter()
-									.map(|t| {
-										Ty::par_set(db, *t)
-											.unwrap()
-											.with_inst(db, VarType::Var)
-											.unwrap()
-									})
-									.collect(),
-							});
+							if !had_error {
+								// C(opt a, opt b, ..) -> opt E
+								constructors.push(FunctionType {
+									return_type: ty.with_opt(db, OptType::Opt),
+									params: param_types
+										.iter()
+										.map(|t| t.with_opt(db, OptType::Opt))
+										.collect(),
+								});
+								// C(var a, var b, ..) -> var E
+								constructors.push(FunctionType {
+									return_type: ty.with_inst(db, VarType::Var).unwrap(),
+									params: param_types
+										.iter()
+										.map(|t| t.with_inst(db, VarType::Var).unwrap())
+										.collect(),
+								});
+								// C(var opt a, var opt b, ..) -> var opt E
+								constructors.push(FunctionType {
+									return_type: ty
+										.with_inst(db, VarType::Var)
+										.unwrap()
+										.with_opt(db, OptType::Opt),
+									params: param_types
+										.iter()
+										.map(|t| {
+											t.with_inst(db, VarType::Var)
+												.unwrap()
+												.with_opt(db, OptType::Opt)
+										})
+										.collect(),
+								});
+								// C(set of a, set of b, ..) -> set of E
+								constructors.push(FunctionType {
+									return_type: Ty::par_set(db, ty).unwrap(),
+									params: param_types
+										.iter()
+										.map(|t| Ty::par_set(db, *t).unwrap())
+										.collect(),
+								});
+								// C(var set of a, var set of b, ..) -> var set of E
+								constructors.push(FunctionType {
+									return_type: Ty::par_set(db, ty)
+										.unwrap()
+										.with_inst(db, VarType::Var)
+										.unwrap(),
+									params: param_types
+										.iter()
+										.map(|t| {
+											Ty::par_set(db, *t)
+												.unwrap()
+												.with_inst(db, VarType::Var)
+												.unwrap()
+										})
+										.collect(),
+								});
+							}
 
 							self.add_declaration(
 								PatternRef::new(item, case.pattern),

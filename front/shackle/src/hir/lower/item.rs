@@ -213,18 +213,8 @@ impl ItemCollector<'_> {
 					has_rhs = true;
 					let pattern = ctx.collect_pattern(c.id().into());
 					let parameters = c
-						.arguments()
-						.map(|arg| {
-							let argument = ctx.collect_expression(arg.clone());
-							ctx.alloc_type(
-								Origin::new(&arg, None),
-								Type::Bounded {
-									inst: Some(VarType::Par),
-									opt: Some(OptType::NonOpt),
-									domain: argument,
-								},
-							)
-						})
+						.parameters()
+						.map(|param| ctx.collect_type(param))
 						.collect();
 					cases.push(EnumerationCase {
 						pattern,
@@ -235,18 +225,8 @@ impl ItemCollector<'_> {
 					has_rhs = true;
 					let pattern = ctx.collect_pattern(a.anonymous().into());
 					let parameters = a
-						.arguments()
-						.map(|arg| {
-							let argument = ctx.collect_expression(arg.clone());
-							ctx.alloc_type(
-								Origin::new(&arg, None),
-								Type::Bounded {
-									inst: Some(VarType::Par),
-									opt: Some(OptType::NonOpt),
-									domain: argument,
-								},
-							)
-						})
+						.parameters()
+						.map(|param| ctx.collect_type(param))
 						.collect();
 					cases.push(EnumerationCase {
 						pattern,
