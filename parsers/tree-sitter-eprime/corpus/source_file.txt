@@ -1,0 +1,148 @@
+==========
+Empty File
+==========
+
+---
+
+(source_file)
+
+================
+Language Version
+================
+
+language ESSENCE’ 1.0
+
+---
+
+(source_file (lang_version))
+
+=================
+Language Version'
+=================
+
+language ESSENCE' 5.55
+
+---
+
+(source_file (lang_version))
+
+=================
+Param Declaration
+=================
+
+given x: int(1..10)
+given y: int(1..10)
+  where y < x
+
+---
+
+(source_file
+  (param_decl name: (identifier)
+    domain: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
+  (param_decl name: (identifier)
+    domain: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
+    where: (infix_operator left: (identifier) right: (identifier))))
+
+====================
+Constrant Definition
+====================
+
+letting x = 10
+letting cmatrix: matrix indexed by [ int(1..2), int(1..4) ] of int(1..10) = [ [2,8,5,1], [3,7,9,4] ]
+
+---
+
+(source_file 
+  (const_def name: (identifier) definition: (integer_literal))
+  (const_def name: (identifier) 
+    domain: (matrix_domain 
+      index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
+      index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
+      base: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))        
+      definition: (matrix_literal
+        member: (matrix_literal member: (integer_literal) member: (integer_literal) member: (integer_literal) member: (integer_literal))
+        member: (matrix_literal member: (integer_literal) member: (integer_literal) member: (integer_literal) member: (integer_literal)))))
+
+============
+Domain Alias
+============
+
+letting INDEX be domain int(1..c*n)
+
+---
+
+(source_file (domain_alias name: (identifier)
+    definition: (integer_domain member: (range_literal
+        min: (integer_literal)
+        max: (infix_operator left: (identifier) right: (identifier))))))
+
+====================
+Decision Declaration
+====================
+
+find x : int(1..10)
+find x, y: int(1..10)
+
+---
+
+(source_file
+  (decision_decl name: (identifier) domain:
+    (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
+  (decision_decl name: (identifier) name: (identifier) domain:
+    (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))))
+
+=========
+Objective
+=========
+
+minimising x
+maximising y
+
+---
+
+(source_file
+  (objective expression: (identifier))
+  (objective expression: (identifier)))
+
+=========
+Branching
+=========
+
+branching on [x]
+branching on [x, y]
+
+---
+
+(source_file
+  (branching expression: (identifier))
+  (branching expression: (identifier) expression: (identifier)))
+
+==========
+Constraint
+==========
+
+such that true
+such that x, y
+
+---
+
+(source_file
+  (constraint expression: (boolean_literal))
+  (constraint expression: (identifier) expression: (identifier)))
+
+=============
+Line Comments
+=============
+
+$ Comment
+
+$---$
+
+$
+
+----
+
+(source_file
+  (line_comment)
+  (line_comment)
+  (line_comment))

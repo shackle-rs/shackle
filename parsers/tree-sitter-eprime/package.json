@@ -1,0 +1,30 @@
+{
+	"name": "tree-sitter-eprime",
+	"version": "0.1.0",
+	"description": "Essence Prime grammar for tree-sitter",
+	"main": "bindings/node",
+	"scripts": {
+		"build": "tree-sitter generate && node-gyp build",
+		"test": "tree-sitter test"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/shackle-rs/shackle.git"
+	},
+	"keywords": [
+		"parser",
+		"eprime"
+	],
+	"author": "Jip J. Dekker <jip.dekker@monash.edu>",
+	"license": "MPL-2.0",
+	"bugs": {
+		"url": "https://github.com/shackle-rs/shackle/issues"
+	},
+	"homepage": "https://github.com/shackle-rs/shackle#readme",
+	"dependencies": {
+		"nan": "^2.16.0"
+	},
+	"devDependencies": {
+		"tree-sitter-cli": "^0.20.6"
+	}
+}
