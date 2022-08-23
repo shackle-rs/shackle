@@ -5,8 +5,12 @@
 
 use super::hir::db::HirStorage;
 use super::syntax::db::SourceParserStorage;
+use super::thir::db::ThirStorage;
 use crate::error::FileError;
 use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
+use crate::hir::db::Hir;
+use crate::syntax::db::SourceParser;
+use crate::thir::db::Thir;
 use crate::ty::{NewType, NewTypeData, Ty, TyData};
 
 use std::fmt::Display;
@@ -27,7 +31,7 @@ pub trait Inputs {
 
 /// Queries for reading files
 #[salsa::query_group(FileReaderStorage)]
-pub trait FileReader: HasFileHandler + Inputs {
+pub trait FileReader: HasFileHandler + Inputs + Upcast<dyn Inputs> {
 	/// Get the input file `FileRef`s
 	#[salsa::invoke(crate::file::input_file_refs)]
 	fn input_file_refs(&self) -> Arc<Vec<FileRef>>;
@@ -63,8 +67,13 @@ pub trait Interner {
 pub struct InternedString(salsa::InternId);
 
 impl InternedString {
+	/// Create a new interned string
+	pub fn new<T: Into<InternedStringData>>(v: T, db: &dyn Interner) -> Self {
+		db.intern_string(v.into())
+	}
+
 	/// Get the value of the string
-	pub fn value(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn value(&self, db: &dyn Interner) -> String {
 		db.lookup_intern_string(*self).0
 	}
 }
@@ -104,7 +113,8 @@ impl From<InternedStringData> for String {
 	FileReaderStorage,
 	SourceParserStorage,
 	HirStorage,
-	InternerStorage
+	InternerStorage,
+	ThirStorage
 )]
 pub struct CompilerDatabase {
 	storage: salsa::Storage<CompilerDatabase>,
@@ -180,3 +190,27 @@ impl HasFileHandler for CompilerDatabase {
 		FileContentsQuery.in_db_mut(self).invalidate(&f);
 	}
 }
+
+/// Trait for upcasting the database
+pub trait Upcast<T: ?Sized> {
+	/// Perform upcast
+	fn upcast(&self) -> &T;
+}
+
+/// Implement upcasts to the database traits
+macro_rules! impl_upcast {
+	($name:ident, $upcast:ident) => {
+		impl $crate::db::Upcast<dyn $upcast> for $name {
+			fn upcast(&self) -> &(dyn $upcast + 'static) {
+				&*self
+			}
+		}
+	};
+}
+
+impl_upcast!(CompilerDatabase, Inputs);
+impl_upcast!(CompilerDatabase, FileReader);
+impl_upcast!(CompilerDatabase, SourceParser);
+impl_upcast!(CompilerDatabase, Interner);
+impl_upcast!(CompilerDatabase, Hir);
+impl_upcast!(CompilerDatabase, Thir);

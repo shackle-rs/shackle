@@ -82,6 +82,39 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				}
 			}
 		}
+		for (i, e) in model.enum_assignments.iter() {
+			let item_ref = ItemRef::new(db, *m, i);
+			for c in e.definition.iter() {
+				match &e.data[c.pattern] {
+					Pattern::Identifier(identifier) => {
+						let result = if c.parameters.is_empty() {
+							// Enum atom, so this is a variable
+							scope.add_variable(
+								db,
+								*identifier,
+								0,
+								PatternRef::new(item_ref, c.pattern),
+							)
+						} else {
+							// Enum constructor (overloads handled later in type checker)
+							scope.add_function(
+								db,
+								*identifier,
+								0,
+								PatternRef::new(item_ref, c.pattern),
+							)
+						};
+						if let Err(e) = result {
+							diagnostics.push(e);
+						} else {
+							scope.enum_atoms.insert(*identifier);
+						}
+					}
+					Pattern::Anonymous => (),
+					_ => unreachable!("Enumeration case must have identifier pattern"),
+				}
+			}
+		}
 		for (i, f) in model.functions.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
 			match &f.data[f.pattern] {
@@ -807,6 +840,17 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 					for p in c.parameters.iter() {
 						collector.collect_type(*p);
 					}
+				}
+			}
+			collector.finish()
+		}
+		LocalItemRef::EnumAssignment(e) => {
+			let assignment = &model[e];
+			let mut collector = ScopeCollector::new(db, item, assignment.data.as_ref());
+			collector.collect_expression(assignment.assignee);
+			for c in assignment.definition.iter() {
+				for p in c.parameters.iter() {
+					collector.collect_type(*p);
 				}
 			}
 			collector.finish()

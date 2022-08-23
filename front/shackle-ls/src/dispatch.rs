@@ -1,5 +1,5 @@
 use lsp_server::{ExtractError, Message, Notification, Request, Response, ResponseError};
-use shackle::hir::db::Hir;
+use shackle::db::CompilerDatabase;
 
 use crate::LanguageServerDatabase;
 
@@ -16,7 +16,7 @@ pub trait RequestHandler<R: lsp_types::request::Request, T> {
 	/// Usually needs to call `set_input_files` on the database.
 	fn prepare(db: &mut LanguageServerDatabase, params: R::Params) -> Result<T, ResponseError>;
 	/// Run in the thread pool. Can panic without crashing the language server.
-	fn execute(db: &dyn Hir, data: T) -> Result<R::Result, ResponseError>;
+	fn execute(db: &CompilerDatabase, data: T) -> Result<R::Result, ResponseError>;
 }
 
 pub struct DispatchRequest<'a>(RequestState<'a>);

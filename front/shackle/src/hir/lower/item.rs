@@ -2,12 +2,14 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
+use crate::error::SyntaxError;
 use crate::file::ModelRef;
 use crate::hir::db::Hir;
 use crate::hir::ids::ItemRef;
 use crate::hir::source::{Origin, SourceMap};
 use crate::hir::*;
-use crate::{syntax::ast, Error};
+use crate::syntax::ast::{self, AstNode};
+use crate::Error;
 
 use super::ExpressionCollector;
 
@@ -17,7 +19,8 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 		Ok(m) => m,
 		Err(e) => return (Default::default(), Default::default(), Arc::new(vec![e])),
 	};
-	let mut ctx = ItemCollector::new(db, model);
+	let identifiers = IdentifierRegistry::new(db);
+	let mut ctx = ItemCollector::new(db, &identifiers, model);
 	for item in ast.items() {
 		ctx.collect_item(item);
 	}
@@ -28,6 +31,7 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 /// Collects AST items into an HIR model
 pub struct ItemCollector<'a> {
 	db: &'a dyn Hir,
+	identifiers: &'a IdentifierRegistry,
 	model: Model,
 	source_map: SourceMap,
 	diagnostics: Vec<Error>,
@@ -36,9 +40,14 @@ pub struct ItemCollector<'a> {
 
 impl ItemCollector<'_> {
 	/// Create a new item collector
-	pub fn new<'a>(db: &'a dyn Hir, owner: ModelRef) -> ItemCollector<'a> {
+	pub fn new<'a>(
+		db: &'a dyn Hir,
+		identifiers: &'a IdentifierRegistry,
+		owner: ModelRef,
+	) -> ItemCollector<'a> {
 		ItemCollector {
 			db,
+			identifiers,
 			model: Model::default(),
 			source_map: SourceMap::default(),
 			diagnostics: Vec::new(),
@@ -72,7 +81,7 @@ impl ItemCollector<'_> {
 
 	fn collect_annotation(&mut self, a: ast::Annotation) -> (ItemRef, ItemDataSourceMap) {
 		// Desugar annotation into either a function declaration or a variable declaration
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let mut tiids = FxHashMap::default();
 		let parameters = a
 			.parameters()
@@ -134,8 +143,77 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_assignment(&mut self, a: ast::Assignment) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let assignee = ctx.collect_expression(a.assignee());
+
+		if let ast::Expression::Identifier(i) = a.assignee() {
+			if self.db.enumeration_names().contains(&i.name().to_owned()) {
+				// This is an assignment to an enum
+				let mut definition = Vec::new();
+				let mut todo = vec![a.definition()];
+				while let Some(e) = todo.pop() {
+					match e {
+						ast::Expression::Identifier(i) => {
+							definition.push(EnumerationCase {
+								pattern: ctx.collect_pattern(i.into()),
+								parameters: Box::new([]),
+							});
+						}
+						ast::Expression::SetLiteral(sl) => {
+							todo.extend(sl.members());
+						}
+						ast::Expression::Call(c) => match c.function() {
+							ast::Expression::Identifier(i) => {
+								definition.push(EnumerationCase {
+									pattern: ctx.collect_pattern(i.into()),
+									parameters: c
+										.arguments()
+										.map(|arg| {
+											let origin = Origin::new(&arg, None);
+											let domain = ctx.collect_expression(arg);
+											ctx.alloc_type(
+												origin,
+												Type::Bounded {
+													inst: None,
+													opt: None,
+													domain,
+												},
+											)
+										})
+										.collect(),
+								});
+							}
+							_ => {}
+						},
+						ast::Expression::InfixOperator(o) => {
+							todo.push(o.left());
+							todo.push(o.right());
+						}
+						_ => {
+							let (src, span) = e.cst_node().source_span(self.db.upcast());
+							ctx.add_diagnostic(SyntaxError {
+								src,
+								span,
+								msg: "Expression not valid in enumeration assignment".to_string(),
+								other: Vec::new(),
+							});
+						}
+					}
+				}
+				definition.reverse();
+				let (data, source_map) = ctx.finish();
+				let index = self.model.enum_assignments.insert(Item::new(
+					EnumAssignment {
+						assignee,
+						definition: definition.into_boxed_slice(),
+					},
+					data,
+				));
+				self.model.items.push(index.into());
+				return (ItemRef::new(self.db, self.owner, index), source_map);
+			}
+		}
+
 		let definition = ctx.collect_expression(a.definition());
 		let (data, source_map) = ctx.finish();
 		let index = self.model.assignments.insert(Item::new(
@@ -150,7 +228,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_constraint(&mut self, c: ast::Constraint) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let annotations = c
 			.annotations()
 			.map(|ann| ctx.collect_expression(ann))
@@ -169,7 +247,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_declaration(&mut self, d: ast::Declaration) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let pattern = ctx.collect_pattern(d.pattern());
 		let declared_type = ctx.collect_type(d.declared_type());
 		let annotations = d
@@ -192,7 +270,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_enumeration(&mut self, e: ast::Enumeration) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let pattern = ctx.collect_pattern(e.id().into());
 		// Flatten cases
 		let mut has_rhs = false;
@@ -257,7 +335,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_function(&mut self, f: ast::Function) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let annotations = f
 			.annotations()
 			.map(|ann| ctx.collect_expression(ann))
@@ -300,7 +378,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_output(&mut self, i: ast::Output) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let section = i.section().map(|s| ctx.collect_expression(s.into()));
 		let expression = ctx.collect_expression(i.expression());
 		let (data, source_map) = ctx.finish();
@@ -316,7 +394,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_predicate(&mut self, f: ast::Predicate) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 
 		let annotations = f
 			.annotations()
@@ -370,7 +448,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_solve(&mut self, s: ast::Solve) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let annotations = s
 			.annotations()
 			.map(|ann| ctx.collect_expression(ann))
@@ -379,14 +457,14 @@ impl ItemCollector<'_> {
 			ast::Goal::Maximize(objective) => Goal::Maximize {
 				pattern: ctx.alloc_pattern(
 					Origin::new(&objective, None),
-					Pattern::Identifier(Identifier::new("_objective", self.db)),
+					Pattern::Identifier(self.identifiers.objective),
 				),
 				objective: ctx.collect_expression(objective),
 			},
 			ast::Goal::Minimize(objective) => Goal::Minimize {
 				pattern: ctx.alloc_pattern(
 					Origin::new(&objective, None),
-					Pattern::Identifier(Identifier::new("_objective", self.db)),
+					Pattern::Identifier(self.identifiers.objective),
 				),
 				objective: ctx.collect_expression(objective),
 			},
@@ -402,7 +480,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_type_alias(&mut self, t: ast::TypeAlias) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let annotations = t
 			.annotations()
 			.map(|ann| ctx.collect_expression(ann))

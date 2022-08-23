@@ -1,6 +1,7 @@
 use lsp_server::ResponseError;
 use lsp_types::{request::GotoDefinition, GotoDefinitionParams, GotoDefinitionResponse};
 use shackle::{
+	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{db::Hir, ids::NodeRef},
 	hir::{
@@ -28,7 +29,7 @@ impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler
 		Ok((model, start))
 	}
 	fn execute(
-		db: &dyn Hir,
+		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<GotoDefinitionResponse>, ResponseError> {
 		let line = Point {

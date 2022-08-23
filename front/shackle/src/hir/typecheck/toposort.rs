@@ -106,6 +106,21 @@ impl<'a> TopoSorter<'a> {
 				}
 				self.current.remove(&p);
 			}
+			LocalItemRef::EnumAssignment(e) => {
+				let types = self.db.lookup_item_types(item);
+				if let Some(p) = types.name_resolution(model[e].assignee) {
+					self.current.insert(p);
+					let data = local_item.data(&*model);
+					for c in model[e].definition.iter() {
+						for param in c.parameters.iter() {
+							for e in Type::expressions(*param, data) {
+								self.visit_expression(ExpressionRef::new(item, e));
+							}
+						}
+					}
+					self.current.remove(&p);
+				}
+			}
 			LocalItemRef::Function(f) => {
 				let p = PatternRef::new(item, model[f].pattern);
 				self.current.insert(p);

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashSet;
 
-use crate::db::{FileReader, Interner};
+use crate::db::{FileReader, Interner, Upcast};
 use crate::error::{IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
@@ -22,12 +22,22 @@ use super::{Identifier, Model};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]
-pub trait Hir: Interner + SourceParser + FileReader {
+pub trait Hir:
+	Interner
+	+ SourceParser
+	+ FileReader
+	+ Upcast<dyn Interner>
+	+ Upcast<dyn SourceParser>
+	+ Upcast<dyn FileReader>
+{
 	/// Resolve input files and include items (only visits each model once).
 	/// The result gives a list of models which need to be lowered into HIR.
 	///
 	/// If resolving files fails, then abort (but collect as many errors as possible).
 	fn resolve_includes(&self) -> Result<Arc<Vec<ModelRef>>>;
+
+	/// Get the names of the enumeration items
+	fn enumeration_names(&self) -> Arc<Vec<String>>;
 
 	/// Lower the items of the given model to HIR.
 	///
@@ -165,7 +175,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 			.filter(|p| p.exists())
 			.next();
 		match resolved_path {
-			Some(ref p) => todo.push(FileRef::new(p, db).into()),
+			Some(ref p) => todo.push(FileRef::new(p, db.upcast()).into()),
 			None => errors.push(Error::StandardLibraryNotFound),
 		}
 	}
@@ -198,7 +208,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 						let file_dir = model
 							.cst()
 							.file()
-							.path(db)
+							.path(db.upcast())
 							.and_then(|p| p.parent().map(|p| p.to_owned()));
 
 						let resolved = search_dirs
@@ -211,7 +221,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 						match resolved {
 							Some(r) => r,
 							None => {
-								let (src, span) = i.cst_node().source_span(db);
+								let (src, span) = i.cst_node().source_span(db.upcast());
 								errors.push(
 									IncludeError {
 										src,
@@ -224,7 +234,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 							}
 						}
 					};
-					todo.push(FileRef::new(&resolved_file, db).into());
+					todo.push(FileRef::new(&resolved_file, db.upcast()).into());
 				}
 				_ => (),
 			}
@@ -238,6 +248,23 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 	} else {
 		Err(MultipleErrors { errors }.into())
 	}
+}
+
+fn enumeration_names(db: &dyn Hir) -> Arc<Vec<String>> {
+	// When lowering we need to know the enumeration item names so that we can
+	// correctly handle assignments to them
+	let mut result = Vec::new();
+	let models = db.resolve_includes().unwrap();
+	for model in models.iter() {
+		let ast = db.ast(**model).unwrap();
+		for item in ast.items() {
+			match item {
+				ast::Item::Enumeration(e) => result.push(e.id().name().to_owned()),
+				_ => (),
+			}
+		}
+	}
+	Arc::new(result)
 }
 
 fn lookup_model(db: &dyn Hir, model: ModelRef) -> Arc<Model> {
@@ -321,7 +348,7 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 			// Collect syntax errors
 			let mut errors: Vec<Error> = r
 				.iter()
-				.filter_map(|m| db.cst(**m).unwrap().error(db))
+				.filter_map(|m| db.cst(**m).unwrap().error(db.upcast()))
 				.map(|e| e.into())
 				.collect();
 			for m in r.iter() {

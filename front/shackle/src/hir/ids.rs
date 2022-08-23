@@ -11,8 +11,8 @@ use crate::{
 };
 
 use super::{
-	db::Hir, Assignment, Constraint, Declaration, Enumeration, Expression, Function, Item,
-	ItemData, Model, Output, Pattern, Solve, Type, TypeAlias,
+	db::Hir, Assignment, Constraint, Declaration, EnumAssignment, Enumeration, Expression,
+	Function, Item, ItemData, Model, Output, Pattern, Solve, Type, TypeAlias,
 };
 
 /// Reference to an item local to a model.
@@ -26,6 +26,8 @@ pub enum LocalItemRef {
 	Declaration(ArenaIndex<Item<Declaration>>),
 	/// Enumeration item ID
 	Enumeration(ArenaIndex<Item<Enumeration>>),
+	/// Enum assignment item ID
+	EnumAssignment(ArenaIndex<Item<EnumAssignment>>),
 	/// Function item ID
 	Function(ArenaIndex<Item<Function>>),
 	/// Function item ID
@@ -44,6 +46,7 @@ impl LocalItemRef {
 			LocalItemRef::Constraint(i) => &model[i].data,
 			LocalItemRef::Declaration(i) => &model[i].data,
 			LocalItemRef::Enumeration(i) => &model[i].data,
+			LocalItemRef::EnumAssignment(i) => &model[i].data,
 			LocalItemRef::Function(i) => &model[i].data,
 			LocalItemRef::Output(i) => &model[i].data,
 			LocalItemRef::Solve(i) => &model[i].data,
@@ -56,6 +59,7 @@ impl_enum_from!(LocalItemRef::Assignment(ArenaIndex<Item<Assignment>>));
 impl_enum_from!(LocalItemRef::Constraint(ArenaIndex<Item<Constraint>>));
 impl_enum_from!(LocalItemRef::Declaration(ArenaIndex<Item<Declaration>>));
 impl_enum_from!(LocalItemRef::Enumeration(ArenaIndex<Item<Enumeration>>));
+impl_enum_from!(LocalItemRef::EnumAssignment(ArenaIndex<Item<EnumAssignment>>));
 impl_enum_from!(LocalItemRef::Function(ArenaIndex<Item<Function>>));
 impl_enum_from!(LocalItemRef::Output(ArenaIndex<Item<Output>>));
 impl_enum_from!(LocalItemRef::Solve(ArenaIndex<Item<Solve>>));
@@ -97,6 +101,7 @@ impl<'a> DebugPrint<'a> for ItemRef {
 			LocalItemRef::Constraint(i) => model[i].debug_print(db),
 			LocalItemRef::Declaration(i) => model[i].debug_print(db),
 			LocalItemRef::Enumeration(i) => model[i].debug_print(db),
+			LocalItemRef::EnumAssignment(i) => model[i].debug_print(db),
 			LocalItemRef::Function(i) => model[i].debug_print(db),
 			LocalItemRef::Output(i) => model[i].debug_print(db),
 			LocalItemRef::Solve(i) => model[i].debug_print(db),
@@ -153,6 +158,8 @@ pub type ConstraintRef = TypedItemRef<Constraint>;
 pub type DeclarationRef = TypedItemRef<Declaration>;
 /// Reference to an enumeration item
 pub type EnumerationRef = TypedItemRef<Enumeration>;
+/// Reference to an enumeration item
+pub type EnumAssignmentRef = TypedItemRef<EnumAssignment>;
 /// Reference to a function item
 pub type FunctionRef = TypedItemRef<Function>;
 /// Reference to an output item

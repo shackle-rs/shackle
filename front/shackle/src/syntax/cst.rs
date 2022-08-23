@@ -64,7 +64,7 @@ impl Cst {
 	}
 
 	/// Get the syntax error(s) if any
-	pub fn error(&self, db: &(impl FileReader + ?Sized)) -> Option<SyntaxError> {
+	pub fn error(&self, db: &dyn FileReader) -> Option<SyntaxError> {
 		// This would be ideal, but (MISSING) is currently not allowed.
 		// let q =
 		// 	Query::new(tree_sitter_minizinc::language(), "[(ERROR) (MISSING)] @err").unwrap();
@@ -182,9 +182,9 @@ impl CstNode {
 	}
 
 	/// Get the source and span for this node (convenience function for producing errors)
-	pub fn source_span(&self, db: &(impl SourceParser + ?Sized)) -> (SourceFile, SourceSpan) {
+	pub fn source_span(&self, db: &dyn SourceParser) -> (SourceFile, SourceSpan) {
 		(
-			SourceFile::new(self.cst().file(), db),
+			SourceFile::new(self.cst().file(), db.upcast()),
 			self.as_ref().byte_range().into(),
 		)
 	}

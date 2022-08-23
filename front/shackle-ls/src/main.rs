@@ -14,7 +14,6 @@ use lsp_server::{Connection, ErrorCode, ExtractError, Message, ResponseError};
 use shackle::{
 	db::{CompilerDatabase, FileReader, HasFileHandler, Inputs},
 	file::{InputFile, ModelRef},
-	hir::db::Hir,
 };
 
 use crate::{
@@ -61,7 +60,7 @@ impl LanguageServerDatabase {
 
 	pub fn execute_async<F>(&self, f: F)
 	where
-		F: FnOnce(&dyn Hir, Sender<Message>) + Send + 'static,
+		F: FnOnce(&CompilerDatabase, Sender<Message>) + Send + 'static,
 	{
 		let db = self.db.snapshot();
 		let sender = self.sender.clone();
@@ -163,6 +162,7 @@ fn main_loop(
 					.on::<ViewAstHandler, _, _>()
 					.on::<ViewHirHandler, _, _>()
 					.on::<ViewScopeHandler, _, _>()
+					.on::<ViewPrettyPrintHandler, _, _>()
 					.on::<GotoDefinitionHandler, _, _>()
 					.on::<HoverHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()

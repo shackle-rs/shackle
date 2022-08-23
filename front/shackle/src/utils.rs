@@ -38,7 +38,7 @@ pub fn debug_print_strings(db: &dyn Hir, s: &str) -> String {
 		if i > 0 {
 			if let Some(idx) = x.find(')') {
 				let s = InternedString::from_intern_id((&x[..idx]).parse::<u32>().unwrap().into())
-					.value(db);
+					.value(db.upcast());
 				write!(&mut o, "{:?}", s).unwrap();
 				o.push_str(&x[idx + 1..]);
 			} else {

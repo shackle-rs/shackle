@@ -122,6 +122,8 @@ pub enum DesugarKind {
 	PostfixOperator,
 	/// Generator call
 	GeneratorCall,
+	/// Domain constraint
+	DomainConstraint,
 }
 
 /// Origin of an HIR node.
@@ -157,6 +159,9 @@ impl Origin {
 
 	/// Get the source and span
 	pub fn source_span(&self, db: &dyn Hir) -> (SourceFile, SourceSpan) {
-		(SourceFile::new(self.file, db), self.range.clone().into())
+		(
+			SourceFile::new(self.file, db.upcast()),
+			self.range.clone().into(),
+		)
 	}
 }

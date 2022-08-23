@@ -78,6 +78,12 @@ impl<T> ArenaIndex<T> {
 	}
 }
 
+impl<T> Into<u32> for ArenaIndex<T> {
+	fn into(self) -> u32 {
+		self.index.get()
+	}
+}
+
 /// A vector-based single-type arena
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Arena<T> {
@@ -134,6 +140,11 @@ impl<T> Arena<T> {
 	/// Get a mutable reference to a value in the arena by its index if it exists.
 	pub fn get_mut(&mut self, idx: ArenaIndex<T>) -> Option<&mut T> {
 		self.items.get_mut((idx.index.get() - 1) as usize)
+	}
+
+	/// Get an iterator over the keys in this arena.
+	pub fn keys(&self) -> impl Iterator<Item = ArenaIndex<T>> {
+		(1..=self.len()).map(ArenaIndex::new)
 	}
 
 	/// Get an iterator over the values allocated in this arena.
