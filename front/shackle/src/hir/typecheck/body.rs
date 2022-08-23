@@ -11,7 +11,7 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-		Expression, Pattern, Type,
+		Expression, IdentifierRegistry, Pattern, Type,
 	},
 	ty::{Ty, TypeRegistry},
 	Error,
@@ -55,24 +55,34 @@ impl BodyTypeContext {
 	}
 
 	/// Compute the type of the body of this item
-	pub fn type_item(&mut self, db: &dyn Hir, types: &TypeRegistry) {
+	pub fn type_item(
+		&mut self,
+		db: &dyn Hir,
+		types: &TypeRegistry,
+		identifiers: &IdentifierRegistry,
+	) {
 		let item = self.item;
 		let model = self.item.model(db);
 		let it = self.item.local_item_ref(db);
 		let data = it.data(&model);
-		let mut typer = Typer::new(db, types, self, item, data);
+		let mut typer = Typer::new(db, types, identifiers, self, item, data);
 		match it {
 			LocalItemRef::Function(f) => {
 				let it = &model[f];
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_expression(*ann, types.ann, None);
+				}
+				for param in it.parameters.iter() {
+					for ann in param.annotations.iter() {
+						typer.typecheck_expression(*ann, types.ann, None);
+					}
 				}
 
 				if let Some(e) = it.body {
 					let signature = db.lookup_item_signature(item);
 					match &signature.patterns[&PatternRef::new(item, it.pattern)] {
 						PatternTy::Function(function) => {
-							typer.typecheck_expression(e, function.overload.return_type());
+							typer.typecheck_expression(e, function.overload.return_type(), None);
 						}
 						_ => unreachable!(),
 					};
@@ -80,55 +90,64 @@ impl BodyTypeContext {
 			}
 			LocalItemRef::Declaration(d) => {
 				let it = &model[d];
-				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann);
-				}
+				let signature = db.lookup_item_signature(item);
+				let expected = match &signature.patterns[&PatternRef::new(item, it.pattern)] {
+					PatternTy::Variable(t) | PatternTy::Destructuring(t) => *t,
+					_ => unreachable!(),
+				};
 				if let Type::Any = data[it.declared_type] {
 					// Already done in signature
 				} else if let Some(e) = it.definition {
-					let signature = db.lookup_item_signature(item);
-					let expected = match &signature.patterns[&PatternRef::new(item, it.pattern)] {
-						PatternTy::Variable(t) | PatternTy::Destructuring(t) => *t,
-						_ => unreachable!(),
-					};
-					typer.typecheck_expression(e, expected);
+					typer.typecheck_expression(e, expected, None);
+				}
+				for ann in it.annotations.iter() {
+					typer.typecheck_expression(*ann, types.ann, Some(expected));
 				}
 			}
 			LocalItemRef::Output(o) => {
 				let it = &model[o];
 				if let Some(s) = &it.section {
-					typer.typecheck_expression(*s, types.string);
+					typer.typecheck_expression(*s, types.string, None);
 				}
-				typer.typecheck_expression(it.expression, types.array_of_string);
+				typer.typecheck_expression(it.expression, types.array_of_string, None);
 			}
 			LocalItemRef::Constraint(c) => {
 				let it = &model[c];
+				typer.typecheck_expression(it.expression, types.var_bool, None);
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_expression(*ann, types.ann, Some(types.var_bool));
 				}
-				typer.typecheck_expression(it.expression, types.var_bool);
 			}
 			LocalItemRef::Solve(s) => {
 				let it = &model[s];
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_expression(*ann, types.ann, None);
 				}
 			}
 			LocalItemRef::Assignment(a) => {
 				let it = &model[a];
-				let expected = typer.collect_expression(it.assignee);
-				typer.typecheck_expression(it.definition, expected);
+				let expected = typer.collect_expression(it.assignee, None);
+				typer.typecheck_expression(it.definition, expected, None);
 			}
 			LocalItemRef::Enumeration(e) => {
 				let it = &model[e];
+				let signature = db.lookup_item_signature(item);
+				let ty = match &signature.patterns[&PatternRef::new(item, it.pattern)] {
+					PatternTy::Variable(t) => *t,
+					_ => unreachable!(),
+				};
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_expression(*ann, types.ann, Some(ty));
 				}
+			}
+			LocalItemRef::EnumAssignment(e) => {
+				let it = &model[e];
+				typer.collect_expression(it.assignee, None);
 			}
 			LocalItemRef::TypeAlias(t) => {
 				let it = &model[t];
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_expression(*ann, types.ann, None);
 				}
 			}
 		}
@@ -199,6 +218,7 @@ impl TypeContext for BodyTypeContext {
 		&mut self,
 		db: &dyn Hir,
 		_types: &TypeRegistry,
+		_identifiers: &IdentifierRegistry,
 		pattern: PatternRef,
 	) -> PatternTy {
 		if pattern.item() == self.item {

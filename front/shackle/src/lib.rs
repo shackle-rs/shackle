@@ -10,6 +10,7 @@ pub mod error;
 pub mod file;
 pub mod hir;
 pub mod syntax;
+pub mod thir;
 pub mod ty;
 pub mod utils;
 
@@ -24,7 +25,10 @@ use std::{
 	time::Instant,
 };
 
-use crate::hir::db::Hir;
+use crate::{
+	hir::db::Hir,
+	thir::{db::Thir, pretty_print::PrettyPrinter},
+};
 
 /// Shackle error type
 pub type Error = ShackleError;
@@ -50,8 +54,13 @@ pub fn parse_files(paths: Vec<&Path>) -> Result<()> {
 	}
 	db.set_search_directories(Arc::new(search_dirs));
 	let mut errors = (*db.all_diagnostics()).clone();
-	println!("Done in {}ms", now.elapsed().as_millis());
+	eprintln!("Done in {}ms", now.elapsed().as_millis());
 	if errors.is_empty() {
+		// Can print THIR if there were no errors
+		println!(
+			"{}",
+			PrettyPrinter::new(&db, &db.model_thir()).pretty_print()
+		);
 		Ok(())
 	} else if errors.len() == 1 {
 		Err(errors.pop().unwrap())

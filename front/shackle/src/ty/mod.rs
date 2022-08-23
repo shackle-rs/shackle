@@ -41,52 +41,52 @@ impl salsa::InternKey for Ty {
 
 impl Ty {
 	/// Get the underlying type data
-	pub fn lookup(&self, db: &(impl Interner + ?Sized)) -> TyData {
+	pub fn lookup(&self, db: &dyn Interner) -> TyData {
 		db.lookup_intern_ty(*self)
 	}
 
 	/// Create an error type
-	pub fn error(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn error(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::Error)
 	}
 
 	/// Create a par bool
-	pub fn par_bool(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn par_bool(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::Boolean(VarType::Par, OptType::NonOpt))
 	}
 
 	/// Create a par int
-	pub fn par_int(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn par_int(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::Integer(VarType::Par, OptType::NonOpt))
 	}
 
 	/// Create a par float
-	pub fn par_float(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn par_float(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::Float(VarType::Par, OptType::NonOpt))
 	}
 
 	/// Create a par enum
-	pub fn par_enum(db: &(impl Interner + ?Sized), e: EnumRef) -> Self {
+	pub fn par_enum(db: &dyn Interner, e: EnumRef) -> Self {
 		db.intern_ty(TyData::Enum(VarType::Par, OptType::NonOpt, e))
 	}
 
 	/// Create a par string
-	pub fn string(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn string(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::String(OptType::NonOpt))
 	}
 
 	/// Create a par annotation type
-	pub fn ann(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn ann(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::Annotation(OptType::NonOpt))
 	}
 
 	/// Create a par bottom type
-	pub fn bottom(db: &(impl Interner + ?Sized)) -> Self {
+	pub fn bottom(db: &dyn Interner) -> Self {
 		db.intern_ty(TyData::Bottom(OptType::NonOpt))
 	}
 
 	/// Create an array type if possible
-	pub fn array(db: &(impl Interner + ?Sized), dim: Ty, element: Ty) -> Option<Self> {
+	pub fn array(db: &dyn Interner, dim: Ty, element: Ty) -> Option<Self> {
 		if !dim.known_par(db) || !dim.known_occurs(db) || !dim.known_indexable(db) {
 			// Invalid index type
 			return None;
@@ -99,7 +99,7 @@ impl Ty {
 	}
 
 	/// Create a par set type if possible
-	pub fn par_set(db: &(impl Interner + ?Sized), element: Ty) -> Option<Self> {
+	pub fn par_set(db: &dyn Interner, element: Ty) -> Option<Self> {
 		if element.known_par(db) && element.known_occurs(db) {
 			Some(db.intern_ty(TyData::Set(VarType::Par, OptType::NonOpt, element)))
 		} else {
@@ -108,13 +108,13 @@ impl Ty {
 	}
 
 	/// Create a tuple type
-	pub fn tuple(db: &(impl Interner + ?Sized), fields: impl IntoIterator<Item = Ty>) -> Self {
+	pub fn tuple(db: &dyn Interner, fields: impl IntoIterator<Item = Ty>) -> Self {
 		db.intern_ty(TyData::Tuple(OptType::NonOpt, fields.into_iter().collect()))
 	}
 
 	/// Create a record type
 	pub fn record(
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		fields: impl IntoIterator<Item = (impl Into<InternedString>, Ty)>,
 	) -> Self {
 		db.intern_ty(TyData::Record(
@@ -124,19 +124,19 @@ impl Ty {
 	}
 
 	/// Create a function type
-	pub fn function(db: &(impl Interner + ?Sized), f: FunctionType) -> Self {
+	pub fn function(db: &dyn Interner, f: FunctionType) -> Self {
 		db.intern_ty(TyData::Function(OptType::NonOpt, f))
 	}
 
 	/// Create a type-inst variable type
-	pub fn type_inst_var(db: &(impl Interner + ?Sized), t: TyVar) -> Self {
+	pub fn type_inst_var(db: &dyn Interner, t: TyVar) -> Self {
 		db.intern_ty(TyData::TyVar(None, None, t))
 	}
 
 	/// Sets the inst of this type if possible.
 	///
 	/// Some types e.g. var arrays are not possible.
-	pub fn with_inst(&self, db: &(impl Interner + ?Sized), inst: VarType) -> Option<Ty> {
+	pub fn with_inst(&self, db: &dyn Interner, inst: VarType) -> Option<Ty> {
 		let result = match self.lookup(db) {
 			TyData::Boolean(_, o) => TyData::Boolean(inst, o),
 			TyData::Integer(_, o) => TyData::Integer(inst, o),
@@ -173,14 +173,14 @@ impl Ty {
 				}
 				TyData::TyVar(Some(inst), o, t)
 			}
-			TyData::Error => return Some(*self),
+			TyData::Bottom(_) | TyData::Error => return Some(*self),
 			_ => return None,
 		};
 		Some(db.intern_ty(result))
 	}
 
 	/// Sets the optionality of this type if possible.
-	pub fn with_opt(&self, db: &(impl Interner + ?Sized), opt: OptType) -> Ty {
+	pub fn with_opt(&self, db: &dyn Interner, opt: OptType) -> Ty {
 		db.intern_ty(match self.lookup(db) {
 			TyData::Boolean(i, _) => TyData::Boolean(i, opt),
 			TyData::Integer(i, _) => TyData::Integer(i, opt),
@@ -200,7 +200,7 @@ impl Ty {
 	}
 
 	/// Whether this type-inst is known to be completely par.
-	pub fn known_par(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn known_par(&self, db: &dyn Interner) -> bool {
 		match self.lookup(db) {
 			TyData::Error
 			| TyData::Boolean(VarType::Par, _)
@@ -221,7 +221,7 @@ impl Ty {
 	}
 
 	/// Whether this type-inst is known to be non-optional.
-	pub fn known_occurs(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn known_occurs(&self, db: &dyn Interner) -> bool {
 		match self.lookup(db) {
 			TyData::Error
 			| TyData::Boolean(_, OptType::NonOpt)
@@ -245,12 +245,12 @@ impl Ty {
 	}
 
 	/// Whether this type-inst can definitely be made var
-	pub fn known_varifiable(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn known_varifiable(&self, db: &dyn Interner) -> bool {
 		self.with_inst(db, VarType::Var).is_some()
 	}
 
 	/// Whether this type-inst is enumerable ($$E)
-	pub fn known_enumerable(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn known_enumerable(&self, db: &dyn Interner) -> bool {
 		match self.lookup(db) {
 			TyData::Error
 			| TyData::Bottom(_)
@@ -263,7 +263,7 @@ impl Ty {
 	}
 
 	/// Whether this type-inst is indexable ($T used in an array dimension)
-	pub fn known_indexable(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn known_indexable(&self, db: &dyn Interner) -> bool {
 		self.known_enumerable(db)
 			|| match self.lookup(db) {
 				TyData::Tuple(_, fs) => fs.iter().all(|f| f.known_enumerable(db)),
@@ -273,7 +273,7 @@ impl Ty {
 	}
 
 	/// Whether this type-inst has a default value (allowing omission of else branch in ITE)
-	pub fn has_default_value(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn has_default_value(&self, db: &dyn Interner) -> bool {
 		match self.lookup(db) {
 			TyData::Boolean(_, _)
 			| TyData::Integer(_, OptType::Opt)
@@ -295,8 +295,37 @@ impl Ty {
 		}
 	}
 
+	/// Whether this type-inst contains a type-inst variable
+	pub fn contains_type_inst_var(&self, db: &dyn Interner) -> bool {
+		match self.lookup(db) {
+			TyData::TyVar(_, _, _) => true,
+			TyData::Array { dim, element, .. } => {
+				dim.contains_type_inst_var(db) || element.contains_type_inst_var(db)
+			}
+			TyData::Set(_, _, e) => e.contains_type_inst_var(db),
+			TyData::Tuple(_, fs) => fs.iter().any(|f| f.contains_type_inst_var(db)),
+			TyData::Record(_, fs) => fs.iter().any(|(_, f)| f.contains_type_inst_var(db)),
+			TyData::Function(_, f) => {
+				f.return_type.contains_type_inst_var(db)
+					|| f.params.iter().any(|p| p.contains_type_inst_var(db))
+			}
+			_ => false,
+		}
+	}
+
+	/// Whether this type inst contains something that is par
+	pub fn contains_par(&self, db: &dyn Interner) -> bool {
+		self.known_par(db)
+			|| match self.lookup(db) {
+				TyData::Array { element, .. } => element.contains_par(db),
+				TyData::Tuple(_, fs) => fs.iter().any(|f| f.contains_par(db)),
+				TyData::Record(_, fs) => fs.iter().any(|(_, f)| f.contains_par(db)),
+				_ => false,
+			}
+	}
+
 	/// Whether this type-inst contains an error.
-	pub fn contains_error(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn contains_error(&self, db: &dyn Interner) -> bool {
 		match self.lookup(db) {
 			TyData::Error => true,
 			TyData::Function(_, f) => f.contains_error(db),
@@ -311,7 +340,7 @@ impl Ty {
 	}
 
 	/// The inst of this type (or `None` if the optionality cannot be determined)
-	pub fn inst(&self, db: &(impl Interner + ?Sized)) -> Option<VarType> {
+	pub fn inst(&self, db: &dyn Interner) -> Option<VarType> {
 		match self.lookup(db) {
 			TyData::Boolean(inst, _)
 			| TyData::Integer(inst, _)
@@ -333,7 +362,7 @@ impl Ty {
 	}
 
 	/// The optionality of this type (or `None` if the optionality cannot be determined)
-	pub fn opt(&self, db: &(impl Interner + ?Sized)) -> Option<OptType> {
+	pub fn opt(&self, db: &dyn Interner) -> Option<OptType> {
 		match self.lookup(db) {
 			TyData::Boolean(_, opt)
 			| TyData::Integer(_, opt)
@@ -361,7 +390,7 @@ impl Ty {
 	/// Note that there is no supertype of e.g. `var int` and `any $T` since `$T` may be bound to an
 	/// incompatible type-inst (e.g. a set type).
 	pub fn most_specific_supertype(
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		ts: impl IntoIterator<Item = Ty>,
 	) -> Option<Ty> {
 		ts.into_iter()
@@ -397,6 +426,8 @@ impl Ty {
 					| (TyData::Integer(i, o2), TyData::Bottom(o1)) => TyData::Integer(i, o1.max(o2)),
 					(TyData::Bottom(o1), TyData::Float(i, o2))
 					| (TyData::Float(i, o2), TyData::Bottom(o1)) => TyData::Float(i, o1.max(o2)),
+					(TyData::Bottom(o1), TyData::Enum(i, o2, e))
+					| (TyData::Enum(i, o2, e), TyData::Bottom(o1)) => TyData::Enum(i, o1.max(o2), e),
 					(TyData::Bottom(o1), TyData::String(o2))
 					| (TyData::String(o2), TyData::Bottom(o1)) => TyData::String(o1.max(o2)),
 					(TyData::Bottom(o1), TyData::Annotation(o2))
@@ -433,7 +464,7 @@ impl Ty {
 					| (TyData::Function(o2, f), TyData::Bottom(o1)) => TyData::Function(o1.max(o2), f),
 					(TyData::Bottom(o1), TyData::TyVar(inst, o2, tv))
 					| (TyData::TyVar(inst, o2, tv), TyData::Bottom(o1)) => {
-						TyData::TyVar(inst, Some(o1).max(o2), tv)
+						TyData::TyVar(inst, o2.map(|o2| o1.max(o2)), tv)
 					}
 					(
 						TyData::Array {
@@ -533,10 +564,7 @@ impl Ty {
 	///
 	/// Note that there is no subtype of e.g. `var int` and `any $T` since `$T` may be bound to an
 	/// incompatible type-inst (e.g. a set type).
-	pub fn most_general_subtype(
-		db: &(impl Interner + ?Sized),
-		ts: impl IntoIterator<Item = Ty>,
-	) -> Option<Ty> {
+	pub fn most_general_subtype(db: &dyn Interner, ts: impl IntoIterator<Item = Ty>) -> Option<Ty> {
 		ts.into_iter()
 			.map(Some)
 			.reduce(|a, b| {
@@ -584,7 +612,9 @@ impl Ty {
 					| (TyData::Bottom(o1), TyData::Function(o2, _))
 					| (TyData::Function(o2, _), TyData::Bottom(o1)) => TyData::Bottom(o1.min(o2)),
 					(TyData::Bottom(o1), TyData::TyVar(_, o2, _))
-					| (TyData::TyVar(_, o2, _), TyData::Bottom(o1)) => TyData::Bottom(Some(o1).min(o2).unwrap()),
+					| (TyData::TyVar(_, o2, _), TyData::Bottom(o1)) => {
+						TyData::Bottom(Some(o1).min(o2).unwrap_or(OptType::NonOpt))
+					}
 					(
 						TyData::Array {
 							opt: o1,
@@ -682,7 +712,7 @@ impl Ty {
 	///
 	/// Note that e.g. `int` is not a subtype of `any $T` since $T may be bound to an incompatible
 	/// type-inst (e.g. a set type).
-	pub fn is_subtype_of(&self, db: &(impl Interner + ?Sized), other: Ty) -> bool {
+	pub fn is_subtype_of(&self, db: &dyn Interner, other: Ty) -> bool {
 		if *self == other {
 			return true;
 		}
@@ -770,7 +800,7 @@ impl Ty {
 	}
 
 	/// Get human readable type name
-	pub fn pretty_print(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn pretty_print(&self, db: &dyn Interner) -> String {
 		match self.lookup(db) {
 			TyData::Boolean(i, o) => i
 				.pretty_print()
@@ -823,17 +853,7 @@ impl Ty {
 				.into_iter()
 				.chain([
 					"array".to_owned(),
-					format!(
-						"[{}]",
-						if let TyData::Tuple(OptType::NonOpt, fs) = dim.lookup(db) {
-							fs.iter()
-								.map(|f| f.pretty_print(db))
-								.collect::<Vec<_>>()
-								.join(", ")
-						} else {
-							dim.pretty_print(db)
-						}
-					),
+					format!("[{}]", dim.pretty_print_as_dims(db)),
 					"of".to_owned(),
 					element.pretty_print(db),
 				])
@@ -889,6 +909,18 @@ impl Ty {
 				.collect::<Vec<_>>()
 				.join(" "),
 			TyData::Error => "error".to_owned(),
+		}
+	}
+
+	/// Pretty print as if type was in the dimension position in an array type
+	pub fn pretty_print_as_dims(&self, db: &dyn Interner) -> String {
+		match self.lookup(db) {
+			TyData::Tuple(OptType::NonOpt, fs) => fs
+				.iter()
+				.map(|f| f.pretty_print(db))
+				.collect::<Vec<_>>()
+				.join(", "),
+			_ => self.pretty_print(db),
 		}
 	}
 }
@@ -1009,7 +1041,7 @@ impl EnumRef {
 	}
 
 	/// Get the human readable name of this enum
-	pub fn pretty_print(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn pretty_print(&self, db: &dyn Interner) -> String {
 		db.lookup_intern_newtype(self.0).name.value(db)
 	}
 }
@@ -1033,7 +1065,7 @@ impl TyVarRef {
 	}
 
 	/// Get the human readable name of this type-inst variable
-	pub fn pretty_print(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn pretty_print(&self, db: &dyn Interner) -> String {
 		db.lookup_intern_newtype(self.0).name.value(db)
 	}
 }
@@ -1066,7 +1098,7 @@ macro_rules! type_registry {
 
 		impl $struct {
 			/// Create a new type registry
-			pub fn new(db: &(impl Interner + ?Sized)) -> Self {
+			pub fn new(db: &dyn Interner) -> Self {
 				let $db = db;
 				let mut all = Vec::new();
 				$(let $name = $value; all.push($name);)+

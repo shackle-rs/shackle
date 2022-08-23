@@ -78,7 +78,7 @@ impl FunctionEntry {
 	/// If the function to dispatch to is polymorphic then also instantiate the polymorphic function.
 	/// If there is no one specific function, this is an error.
 	pub fn match_fn<T>(
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
 		args: &[Ty],
 	) -> Result<(T, FunctionEntry, FunctionType), FunctionResolutionError<T>> {
@@ -220,7 +220,7 @@ impl FunctionEntry {
 
 	/// Validate that the given overloads are legal
 	pub fn check_overloading<T>(
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
 	) -> Vec<OverloadingError<T>> {
 		let mut diagnostics = Vec::new();
@@ -309,7 +309,7 @@ impl OverloadedFunction {
 	}
 
 	/// Return whether this function contains an error type
-	pub fn contains_error(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn contains_error(&self, db: &dyn Interner) -> bool {
 		match self {
 			OverloadedFunction::Function(f) => f.contains_error(db),
 			OverloadedFunction::PolymorphicFunction(p) => p.contains_error(db),
@@ -319,7 +319,7 @@ impl OverloadedFunction {
 	/// Instantiate this function with the given argument types
 	pub fn instantiate(
 		&self,
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		args: &[Ty],
 	) -> Result<FunctionType, InstantiationError> {
 		match self {
@@ -332,7 +332,7 @@ impl OverloadedFunction {
 	}
 
 	/// Get human readable representation of this signature
-	pub fn pretty_print(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn pretty_print(&self, db: &dyn Interner) -> String {
 		match self {
 			OverloadedFunction::Function(f) => f.pretty_print(db),
 			OverloadedFunction::PolymorphicFunction(p) => p.pretty_print(db),
@@ -340,11 +340,7 @@ impl OverloadedFunction {
 	}
 
 	/// Get human readable representation of this signature in item form
-	pub fn pretty_print_item(
-		&self,
-		db: &(impl Interner + ?Sized),
-		name: impl Into<InternedString>,
-	) -> String {
+	pub fn pretty_print_item(&self, db: &dyn Interner, name: impl Into<InternedString>) -> String {
 		match self {
 			OverloadedFunction::Function(f) => f.pretty_print_item(db, name),
 			OverloadedFunction::PolymorphicFunction(p) => p.pretty_print_item(db, name),
@@ -365,7 +361,7 @@ pub struct FunctionType {
 
 impl FunctionType {
 	/// Return whether this function is a subtype of another
-	pub fn is_subtype_of(&self, db: &(impl Interner + ?Sized), other: &FunctionType) -> bool {
+	pub fn is_subtype_of(&self, db: &dyn Interner, other: &FunctionType) -> bool {
 		// op(bool: (int, float)) is a subtype of op(int: (bool, int))
 		self.return_type.is_subtype_of(db, other.return_type)
 			&& self.params.len() == other.params.len()
@@ -377,16 +373,12 @@ impl FunctionType {
 	}
 
 	/// Return whether this function contains an error type in its parameters
-	pub fn contains_error(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn contains_error(&self, db: &dyn Interner) -> bool {
 		self.params.iter().any(|f| f.contains_error(db))
 	}
 
 	/// Whether or not the given parameter types are compatible with this function
-	pub fn matches(
-		&self,
-		db: &(impl Interner + ?Sized),
-		args: &[Ty],
-	) -> Result<(), InstantiationError> {
+	pub fn matches(&self, db: &dyn Interner, args: &[Ty]) -> Result<(), InstantiationError> {
 		if args.len() != self.params.len() {
 			return Err(InstantiationError::ArgumentCountMismatch {
 				expected: self.params.len(),
@@ -406,7 +398,7 @@ impl FunctionType {
 	}
 
 	/// Get human readable representation of type
-	pub fn pretty_print(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn pretty_print(&self, db: &dyn Interner) -> String {
 		format!(
 			"op({}: ({}))",
 			self.return_type.pretty_print(db),
@@ -419,11 +411,7 @@ impl FunctionType {
 	}
 
 	/// Get human readable representation of type as an item
-	pub fn pretty_print_item(
-		&self,
-		db: &(impl Interner + ?Sized),
-		name: impl Into<InternedString>,
-	) -> String {
+	pub fn pretty_print_item(&self, db: &dyn Interner, name: impl Into<InternedString>) -> String {
 		let prefix = if self.return_type == Ty::par_bool(db) {
 			"test".to_owned()
 		} else if self.return_type == Ty::par_bool(db).with_inst(db, VarType::Var).unwrap() {
@@ -457,14 +445,14 @@ pub struct PolymorphicFunctionType {
 
 impl PolymorphicFunctionType {
 	/// Return whether this function contains an error type in its parameters
-	pub fn contains_error(&self, db: &(impl Interner + ?Sized)) -> bool {
+	pub fn contains_error(&self, db: &dyn Interner) -> bool {
 		self.params.iter().any(|f| f.contains_error(db))
 	}
 
 	/// Instantiates this polymorphic function using the given parameter types if possible.
 	pub fn instantiate(
 		&self,
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		args: &[Ty],
 	) -> Result<FunctionType, InstantiationError> {
 		if args.len() != self.params.len() {
@@ -517,7 +505,7 @@ impl PolymorphicFunctionType {
 
 	/// Collects the types to instantiate unbound type-inst variables with.
 	fn collect_instantiations(
-		db: &(impl Interner + ?Sized),
+		db: &dyn Interner,
 		instantiations: &mut FxHashMap<TyVarRef, Vec<Ty>>,
 		arg: Ty,
 		param: Ty,
@@ -625,11 +613,7 @@ impl PolymorphicFunctionType {
 	}
 
 	/// Instantiate the given type-inst variables with the given types from `instantiations` in the type `t`.
-	fn instantiate_type(
-		db: &(impl Interner + ?Sized),
-		instantiations: &FxHashMap<TyVarRef, Ty>,
-		t: Ty,
-	) -> Ty {
+	fn instantiate_type(db: &dyn Interner, instantiations: &FxHashMap<TyVarRef, Ty>, t: Ty) -> Ty {
 		match t.lookup(db) {
 			TyData::TyVar(i, o, t) if instantiations.contains_key(&t.ty_var) => {
 				let mut ty = instantiations[&t.ty_var];
@@ -675,7 +659,7 @@ impl PolymorphicFunctionType {
 	}
 
 	/// Get human readable representation of type
-	pub fn pretty_print(&self, db: &(impl Interner + ?Sized)) -> String {
+	pub fn pretty_print(&self, db: &dyn Interner) -> String {
 		format!(
 			"op<{}>({}: ({}))",
 			self.ty_params
@@ -693,11 +677,7 @@ impl PolymorphicFunctionType {
 	}
 
 	/// Get human readable representation of type as an item
-	pub fn pretty_print_item(
-		&self,
-		db: &(impl Interner + ?Sized),
-		name: impl Into<InternedString>,
-	) -> String {
+	pub fn pretty_print_item(&self, db: &dyn Interner, name: impl Into<InternedString>) -> String {
 		// TODO: output the type-inst-var definitions as well when we have syntax for this
 		let prefix = if self.return_type == Ty::par_bool(db) {
 			"test".to_owned()

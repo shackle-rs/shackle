@@ -50,6 +50,8 @@ pub struct Model {
 
 	/// Assignment items
 	pub assignments: Arena<Item<Assignment>>,
+	/// Enum assignments
+	pub enum_assignments: Arena<Item<EnumAssignment>>,
 	/// Constraint items
 	pub constraints: Arena<Item<Constraint>>,
 	/// Declaration items
@@ -71,6 +73,13 @@ impl Index<ArenaIndex<Item<Assignment>>> for Model {
 	type Output = Item<Assignment>;
 	fn index(&self, index: ArenaIndex<Item<Assignment>>) -> &Self::Output {
 		&self.assignments[index]
+	}
+}
+
+impl Index<ArenaIndex<Item<EnumAssignment>>> for Model {
+	type Output = Item<EnumAssignment>;
+	fn index(&self, index: ArenaIndex<Item<EnumAssignment>>) -> &Self::Output {
+		&self.enum_assignments[index]
 	}
 }
 

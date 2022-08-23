@@ -35,3 +35,12 @@ impl Request for ViewScope {
 	type Result = String;
 	const METHOD: &'static str = "shackle-ls/viewScope";
 }
+
+/// Request to view pretty printed MiniZinc for a file
+pub enum ViewPrettyPrint {}
+
+impl Request for ViewPrettyPrint {
+	type Params = TextDocumentPositionParams;
+	type Result = String;
+	const METHOD: &'static str = "shackle-ls/viewPrettyPrint";
+}

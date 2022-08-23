@@ -38,7 +38,7 @@ use crate::{
 use super::{
 	db::Hir,
 	ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-	Expression, ItemData, Pattern,
+	Expression, IdentifierRegistry, ItemData, Pattern,
 };
 
 mod body;
@@ -68,14 +68,13 @@ impl TypeResult {
 	pub fn new(db: &dyn Hir, item: ItemRef) -> Self {
 		let it = item.local_item_ref(db);
 		match it {
-			LocalItemRef::Assignment(_)
-			| LocalItemRef::Constraint(_)
-			| LocalItemRef::Output(_)
-			| LocalItemRef::Solve(_) => TypeResult {
-				item,
-				body: db.lookup_item_body(item),
-				signature: None,
-			},
+			LocalItemRef::Assignment(_) | LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => {
+				TypeResult {
+					item,
+					body: db.lookup_item_body(item),
+					signature: None,
+				}
+			}
 			_ => TypeResult {
 				item,
 				body: db.lookup_item_body(item),
@@ -151,18 +150,18 @@ impl TypeResult {
 	) -> Option<String> {
 		let ty = self.get_expression(expression)?;
 		if let Expression::Identifier(i) = data[expression] {
-			if let TyData::Function(opt, function) = ty.lookup(db) {
+			if let TyData::Function(opt, function) = ty.lookup(db.upcast()) {
 				// Pretty print functions using item-like syntax if possible
 				return Some(
 					opt.pretty_print()
 						.into_iter()
-						.chain([function.pretty_print_item(db, i)])
+						.chain([function.pretty_print_item(db.upcast(), i)])
 						.collect::<Vec<_>>()
 						.join(" "),
 				);
 			}
 		}
-		Some(ty.pretty_print(db))
+		Some(ty.pretty_print(db.upcast()))
 	}
 
 	/// Pretty print the type of a pattern
@@ -176,39 +175,43 @@ impl TypeResult {
 		match decl {
 			PatternTy::Variable(ty) | PatternTy::Destructuring(ty) => {
 				if let Pattern::Identifier(i) = data[pattern] {
-					if let TyData::Function(opt, function) = ty.lookup(db) {
+					if let TyData::Function(opt, function) = ty.lookup(db.upcast()) {
 						// Pretty print functions using item-like syntax if possible
 						return Some(
 							opt.pretty_print()
 								.into_iter()
-								.chain([function.pretty_print_item(db, i)])
+								.chain([function.pretty_print_item(db.upcast(), i)])
 								.collect::<Vec<_>>()
 								.join(" "),
 						);
 					}
-					return Some(format!("{}: {}", ty.pretty_print(db), i.pretty_print(db)));
+					return Some(format!(
+						"{}: {}",
+						ty.pretty_print(db.upcast()),
+						i.pretty_print(db)
+					));
 				}
-				Some(ty.pretty_print(db))
+				Some(ty.pretty_print(db.upcast()))
 			}
 			PatternTy::EnumAtom(ty) => Some(format!(
 				"{}: {}",
-				ty.pretty_print(db),
+				ty.pretty_print(db.upcast()),
 				data[pattern].identifier()?.pretty_print(db)
 			)),
 			PatternTy::Function(f) => Some(
 				f.overload
-					.pretty_print_item(db, data[pattern].identifier()?),
+					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
 			PatternTy::EnumConstructor(e) => Some(
 				e.first()?
 					.overload
-					.pretty_print_item(db, data[pattern].identifier()?),
+					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
-			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(db)),
+			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(db.upcast())),
 			PatternTy::TypeAlias(ty) => Some(format!(
 				"type {} = {}",
 				data[pattern].identifier()?.pretty_print(db),
-				ty.pretty_print(db)
+				ty.pretty_print(db.upcast())
 			)),
 			_ => None,
 		}
@@ -233,7 +236,7 @@ impl Index<ArenaIndex<Expression>> for TypeResult {
 				return t;
 			}
 		}
-		unreachable!("No type for expression")
+		unreachable!("No type for expression {:?}", index)
 	}
 }
 
@@ -279,7 +282,7 @@ impl<'a> DebugPrint<'a> for TypeResult {
 			.collect::<ArenaMap<_, _>>()
 			.into_iter()
 		{
-			writeln!(&mut w, "    {:?}: {}", i, e.pretty_print(db)).unwrap();
+			writeln!(&mut w, "    {:?}: {}", i, e.pretty_print(db.upcast())).unwrap();
 		}
 		writeln!(&mut w, "  Name resolution:").unwrap();
 		for (i, p) in self
@@ -333,10 +336,9 @@ impl TypeDiagnostics {
 	pub fn new(db: &dyn Hir, item: ItemRef) -> Self {
 		let it = item.local_item_ref(db);
 		match it {
-			LocalItemRef::Assignment(_)
-			| LocalItemRef::Constraint(_)
-			| LocalItemRef::Output(_)
-			| LocalItemRef::Solve(_) => TypeDiagnostics(db.lookup_item_body_diagnostics(item), None),
+			LocalItemRef::Assignment(_) | LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => {
+				TypeDiagnostics(db.lookup_item_body_diagnostics(item), None)
+			}
 			_ => TypeDiagnostics(
 				db.lookup_item_signature_diagnostics(item),
 				Some(db.lookup_item_body_diagnostics(item)),
@@ -368,6 +370,7 @@ pub trait TypeContext {
 		&mut self,
 		db: &dyn Hir,
 		types: &TypeRegistry,
+		identifiers: &IdentifierRegistry,
 		pattern: PatternRef,
 	) -> PatternTy;
 }
@@ -377,18 +380,20 @@ pub fn collect_item_signature(
 	db: &dyn Hir,
 	item: ItemRef,
 ) -> (Arc<SignatureTypes>, Arc<Vec<Error>>) {
-	let types = TypeRegistry::new(db);
+	let types = TypeRegistry::new(db.upcast());
+	let identifiers = IdentifierRegistry::new(db);
 	let mut ctx = SignatureTypeContext::new(item);
-	ctx.type_item(db, &types, item);
+	ctx.type_item(db, &types, &identifiers, item);
 	let (s, e) = ctx.finish();
 	(Arc::new(s), Arc::new(e))
 }
 
 /// Type-check expressions in an item (other than those used in the signature)
 pub fn collect_item_body(db: &dyn Hir, item: ItemRef) -> (Arc<BodyTypes>, Arc<Vec<Error>>) {
-	let types = TypeRegistry::new(db);
+	let types = TypeRegistry::new(db.upcast());
+	let identifiers = IdentifierRegistry::new(db);
 	let mut ctx = BodyTypeContext::new(item);
-	ctx.type_item(db, &types);
+	ctx.type_item(db, &types, &identifiers);
 	let (s, e) = ctx.finish();
 	(Arc::new(s), Arc::new(e))
 }
@@ -419,23 +424,25 @@ impl<'a> DebugPrint<'a> for PatternTy {
 
 	fn debug_print(&self, db: &Self::Database) -> String {
 		match self {
-			PatternTy::Variable(ty) => format!("Variable({})", ty.pretty_print(db)),
+			PatternTy::Variable(ty) => format!("Variable({})", ty.pretty_print(db.upcast())),
 			PatternTy::Function(function) => {
-				format!("Function({})", function.overload.pretty_print(db))
+				format!("Function({})", function.overload.pretty_print(db.upcast()))
 			}
-			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db)),
-			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db)),
+			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db.upcast())),
+			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db.upcast())),
 			PatternTy::EnumConstructor(fs) => {
 				format!(
 					"EnumConstructor({})",
 					fs.iter()
-						.map(|f| f.overload.pretty_print(db))
+						.map(|f| f.overload.pretty_print(db.upcast()))
 						.collect::<Vec<_>>()
 						.join(", ")
 				)
 			}
-			PatternTy::EnumAtom(ty) => format!("EnumAtom({})", ty.pretty_print(db)),
-			PatternTy::Destructuring(ty) => format!("Destructuring({})", ty.pretty_print(db)),
+			PatternTy::EnumAtom(ty) => format!("EnumAtom({})", ty.pretty_print(db.upcast())),
+			PatternTy::Destructuring(ty) => {
+				format!("Destructuring({})", ty.pretty_print(db.upcast()))
+			}
 			PatternTy::Computing => "{computing}".to_owned(),
 		}
 	}

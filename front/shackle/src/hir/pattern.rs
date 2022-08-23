@@ -119,11 +119,12 @@ impl Identifier {
 				| "annotation" | "any"
 				| "array" | "bool"
 				| "case" | "constraint"
-				| "diff" | "div" | "else"
-				| "elseif" | "endif"
-				| "enum" | "false"
-				| "float" | "function"
-				| "if" | "in" | "include"
+				| "default" | "diff"
+				| "div" | "else" | "elseif"
+				| "endif" | "enum"
+				| "false" | "float"
+				| "function" | "if"
+				| "in" | "include"
 				| "int" | "intersect"
 				| "let" | "list" | "maximize"
 				| "minimize" | "mod"
@@ -156,7 +157,7 @@ impl Identifier {
 					| '∧' | '=' | '!' | '≠'
 					| '≤' | '≥' | '∈' | '⊆'
 					| '⊇' | '∪' | '∩' | '+'
-					| '*',
+					| '*' | '~'
 			) || c.is_whitespace()
 			{
 				return format!("'{}'", name);
@@ -171,3 +172,79 @@ impl Into<InternedString> for Identifier {
 		self.0
 	}
 }
+
+macro_rules! id_registry {
+	($struct:ident, $($tail:tt)*) => {
+		id_registry!(@def $struct ($($tail)*) ());
+		id_registry!(@imp $struct db ($($tail)*) ());
+	};
+
+	(@def $struct:ident ($($name:ident $(:$value:expr)?)?) ($($rest:tt)*)) => {
+		/// Registry for common identifiers
+		#[derive(Clone, Debug, PartialEq, Eq)]
+		pub struct $struct {
+			$($rest)*
+			$(
+				#[allow(missing_docs)]
+				pub $name: Identifier,
+			)?
+		}
+	};
+	(@def $struct:ident ($name:ident $(:$value:expr)?, $($todo:tt)*) ($($rest:tt)*)) => {
+		id_registry!(@def $struct ($($todo)*) (
+			$($rest)*
+			#[allow(missing_docs)]
+			pub $name: Identifier,
+		));
+	};
+
+	(@imp $struct:ident $db:ident ($($name:ident)?) ($($rest:tt)*)) => {
+		impl $struct {
+			/// Create a new identifier registry
+			pub fn new($db: &dyn Hir) -> Self {
+				Self {
+					$($rest)*
+					$(
+						$name: Identifier::new(stringify!($name), $db),
+					)?
+				}
+			}
+		}
+	};
+	(@imp $struct:ident $db:ident ($name:ident, $($todo:tt)*) ($($rest:tt)*)) => {
+		id_registry!(@imp $struct $db ($($todo)*) (
+			$($rest)*
+			$name: Identifier::new(stringify!($name), $db),
+		));
+	};
+
+
+	(@imp $struct:ident $db:ident ($name:ident: $value:expr) ($($rest:tt)*)) => {
+		impl $struct {
+			/// Create a new identifier registry
+			pub fn new($db: &dyn Hir) -> Self {
+				Self {
+					$($rest)*
+					$name: Identifier::new($value, $db)
+				}
+			}
+		}
+	};
+	(@imp $struct:ident $db:ident ($name:ident: $value:expr, $($todo:tt)*) ($($rest:tt)*)) => {
+		id_registry!(@imp $struct $db ($($todo)*) (
+			$($rest)*
+			$name: Identifier::new($value, $db),
+		));
+	};
+}
+
+id_registry!(
+	IdentifierRegistry,
+	annotated_expression,
+	array_nd: "arrayNd",
+	array2d,
+	concat,
+	dot_dot: "..",
+	objective: "_objective",
+	show,
+);

@@ -3,6 +3,7 @@ use lsp_types::{
 	request::HoverRequest, Hover, HoverContents, HoverParams, LanguageString, MarkedString,
 };
 use shackle::{
+	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{db::Hir, ids::NodeRef},
 	hir::{
@@ -31,7 +32,7 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 	}
 
 	fn execute(
-		db: &dyn Hir,
+		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<Hover>, ResponseError> {
 		let line = Point {

@@ -260,6 +260,15 @@ pub struct Enumeration {
 	pub annotations: Box<[ArenaIndex<Expression>]>,
 }
 
+/// An assignment item for an enum
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct EnumAssignment {
+	/// Expression being assigned (an identifier)
+	pub assignee: ArenaIndex<Expression>,
+	/// Enum definition
+	pub definition: Box<[EnumerationCase]>,
+}
+
 /// An enumeration case definition
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EnumerationCase {

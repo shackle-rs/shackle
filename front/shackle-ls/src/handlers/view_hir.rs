@@ -1,6 +1,7 @@
 use lsp_server::ResponseError;
 use lsp_types::TextDocumentPositionParams;
 use shackle::{
+	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{
 		db::Hir,
@@ -29,7 +30,7 @@ impl RequestHandler<ViewHir, (ModelRef, Point)> for ViewHirHandler {
 	}
 
 	fn execute(
-		db: &dyn Hir,
+		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<String, ResponseError> {
 		let line = Point {

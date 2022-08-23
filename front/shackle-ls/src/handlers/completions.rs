@@ -2,6 +2,7 @@ use lsp_server::ResponseError;
 use lsp_types::{
 	request::Completion, CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse,
 };
+use shackle::db::CompilerDatabase;
 use shackle::file::ModelRef;
 use shackle::hir::{
 	db::Hir,
@@ -33,7 +34,7 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 	}
 
 	fn execute(
-		db: &dyn Hir,
+		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<CompletionResponse>, ResponseError> {
 		let found = find_expression(db, *model_ref, start, start);

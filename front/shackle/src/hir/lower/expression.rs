@@ -14,6 +14,7 @@ use crate::hir::{db::Hir, *};
 /// Collects AST expressions for owned by an item and lowers them into HIR recursively.
 pub struct ExpressionCollector<'a> {
 	db: &'a dyn Hir,
+	identifiers: &'a IdentifierRegistry,
 	data: ItemData,
 	source_map: ItemDataSourceMap,
 	diagnostics: &'a mut Vec<Error>,
@@ -21,13 +22,23 @@ pub struct ExpressionCollector<'a> {
 
 impl ExpressionCollector<'_> {
 	/// Create a new expression collector
-	pub fn new<'a>(db: &'a dyn Hir, diagnostics: &'a mut Vec<Error>) -> ExpressionCollector<'a> {
+	pub fn new<'a>(
+		db: &'a dyn Hir,
+		identifiers: &'a IdentifierRegistry,
+		diagnostics: &'a mut Vec<Error>,
+	) -> ExpressionCollector<'a> {
 		ExpressionCollector {
 			db,
+			identifiers,
 			data: ItemData::new(),
 			source_map: ItemDataSourceMap::new(),
 			diagnostics,
 		}
+	}
+
+	/// Add a diagnostic
+	pub fn add_diagnostic<E: Into<Error>>(&mut self, error: E) {
+		self.diagnostics.push(error.into());
 	}
 
 	/// Lower an AST expression into HIR
@@ -45,16 +56,13 @@ impl ExpressionCollector<'_> {
 			ast::Expression::Infinity(_) => Expression::Infinity,
 			ast::Expression::Anonymous(a) => {
 				// No longer support anonymous variables, instead use opt
-				let (src, span) = a.cst_node().source_span(self.db);
-				self.diagnostics.push(
-					SyntaxError {
-						src,
-						span,
-						msg: "Anonymous variables in expressions are not supported".to_string(),
-						other: Vec::new(),
-					}
-					.into(),
-				);
+				let (src, span) = a.cst_node().source_span(self.db.upcast());
+				self.add_diagnostic(SyntaxError {
+					src,
+					span,
+					msg: "Anonymous variables in expressions are not supported".to_string(),
+					other: Vec::new(),
+				});
 				Expression::Missing
 			}
 			ast::Expression::Identifier(i) => Identifier::new(i.name(), self.db).into(),
@@ -395,7 +403,7 @@ impl ExpressionCollector<'_> {
 		} else if indices[0].len() == 1 && indices[1..].iter().all(|is| is.is_empty()) {
 			// Start indexed, so desugar into arrayNd call
 			let origin = Origin::new(&expr, Some(DesugarKind::IndexedArrayLiteral));
-			let function = self.ident_exp(origin.clone(), "arrayNd");
+			let function = self.alloc_expression(origin.clone(), self.identifiers.array_nd);
 			let arguments = Box::new([indices[0][0], self.alloc_expression(origin.clone(), array)]);
 			self.alloc_expression(
 				origin.clone(),
@@ -413,22 +421,19 @@ impl ExpressionCollector<'_> {
 				.collect::<Vec<Vec<ArenaIndex<Expression>>>>();
 			for it in indices {
 				if it.len() != num_dims {
-					let (src, span) = al.cst_node().source_span(self.db);
-					self.diagnostics.push(
-						InvalidArrayLiteral {
-							src,
-							span,
-							msg: "Non-uniform indexed array literal".to_string(),
-						}
-						.into(),
-					);
+					let (src, span) = al.cst_node().source_span(self.db.upcast());
+					self.add_diagnostic(InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform indexed array literal".to_string(),
+					});
 					return self.alloc_expression(origin, Expression::Missing);
 				}
 				for (idx, is) in it.iter().enumerate() {
 					dims[idx].push(*is);
 				}
 			}
-			let function = self.ident_exp(origin.clone(), "arrayNd");
+			let function = self.alloc_expression(origin.clone(), self.identifiers.array_nd);
 			let mut arguments = dims
 				.into_iter()
 				.map(|d| {
@@ -478,41 +483,31 @@ impl ExpressionCollector<'_> {
 				first = false;
 
 				if !col_indices.is_empty() && col_count != col_indices.len() {
-					let (src, span) = al.cst_node().source_span(self.db);
-					self.diagnostics.push(
-						InvalidArrayLiteral {
-							src,
-							span,
-							msg: "2D array literal has different row length to index row"
-								.to_string(),
-						}
-						.into(),
-					);
+					let (src, span) = al.cst_node().source_span(self.db.upcast());
+					self.add_diagnostic(InvalidArrayLiteral {
+						src,
+						span,
+						msg: "2D array literal has different row length to index row".to_string(),
+					});
 					return self.alloc_expression(origin, Expression::Missing);
 				}
 			} else if members.len() != col_count {
-				let (src, span) = al.cst_node().source_span(self.db);
-				self.diagnostics.push(
-					InvalidArrayLiteral {
-						src,
-						span,
-						msg: "Non-uniform 2D array literal row length".to_string(),
-					}
-					.into(),
-				);
+				let (src, span) = al.cst_node().source_span(self.db.upcast());
+				self.add_diagnostic(InvalidArrayLiteral {
+					src,
+					span,
+					msg: "Non-uniform 2D array literal row length".to_string(),
+				});
 				return self.alloc_expression(origin, Expression::Missing);
 			}
 
 			if index.is_none() != row_indices.is_empty() {
-				let (src, span) = al.cst_node().source_span(self.db);
-				self.diagnostics.push(
-					InvalidArrayLiteral {
-						src,
-						span,
-						msg: "Mixing indexed and non-indexed rows not allowed".to_string(),
-					}
-					.into(),
-				);
+				let (src, span) = al.cst_node().source_span(self.db.upcast());
+				self.add_diagnostic(InvalidArrayLiteral {
+					src,
+					span,
+					msg: "Mixing indexed and non-indexed rows not allowed".to_string(),
+				});
 				return self.alloc_expression(origin, Expression::Missing);
 			}
 
@@ -525,7 +520,7 @@ impl ExpressionCollector<'_> {
 				self.alloc_expression(origin.clone(), IntegerLiteral(1)),
 				self.alloc_expression(origin.clone(), IntegerLiteral(col_count as i64)),
 			];
-			let range_fn = self.ident_exp(origin.clone(), "..");
+			let range_fn = self.alloc_expression(origin.clone(), self.identifiers.dot_dot);
 			self.alloc_expression(
 				origin.clone(),
 				Call {
@@ -547,7 +542,7 @@ impl ExpressionCollector<'_> {
 				self.alloc_expression(origin.clone(), IntegerLiteral(1)),
 				self.alloc_expression(origin.clone(), IntegerLiteral(row_count as i64)),
 			];
-			let range_fn = self.ident_exp(origin.clone(), "..");
+			let range_fn = self.alloc_expression(origin.clone(), self.identifiers.dot_dot);
 			self.alloc_expression(
 				origin.clone(),
 				Call {
@@ -571,7 +566,7 @@ impl ExpressionCollector<'_> {
 			},
 		);
 
-		let function = self.ident_exp(origin.clone(), "array2d");
+		let function = self.alloc_expression(origin.clone(), self.identifiers.array2d);
 		let arguments = Box::new([row_index_set, column_index_set, flat_array]);
 		self.alloc_expression(
 			origin,
@@ -736,7 +731,8 @@ impl ExpressionCollector<'_> {
 				}
 				ast::InterpolationItem::Expression(e) => {
 					let arguments = Box::new([self.collect_expression(e.clone())]);
-					let function = self.ident_exp(Origin::new(&e, None), "show");
+					let function =
+						self.alloc_expression(Origin::new(&e, None), self.identifiers.show);
 					self.alloc_expression(
 						Origin::new(&e, None),
 						Call {
@@ -749,7 +745,7 @@ impl ExpressionCollector<'_> {
 			.collect();
 		let arguments =
 			Box::new([self.alloc_expression(origin.clone(), ArrayLiteral { members: strings })]);
-		let function = self.ident_exp(origin.clone(), "concat");
+		let function = self.alloc_expression(origin.clone(), self.identifiers.concat);
 
 		self.alloc_expression(
 			origin.clone(),
@@ -786,16 +782,19 @@ impl ExpressionCollector<'_> {
 
 	fn collect_let_item(&mut self, i: ast::LetItem) -> LetItem {
 		match i {
-			ast::LetItem::Declaration(d) => Declaration {
-				pattern: self.collect_pattern(d.pattern()),
-				definition: d.definition().map(|def| self.collect_expression(def)),
-				declared_type: self.collect_type(d.declared_type()),
-				annotations: d
-					.annotations()
-					.map(|ann| self.collect_expression(ann))
-					.collect(),
+			ast::LetItem::Declaration(d) => {
+				let declared_type = self.collect_type(d.declared_type());
+				Declaration {
+					pattern: self.collect_pattern(d.pattern()),
+					definition: d.definition().map(|def| self.collect_expression(def)),
+					declared_type,
+					annotations: d
+						.annotations()
+						.map(|ann| self.collect_expression(ann))
+						.collect(),
+				}
+				.into()
 			}
-			.into(),
 			ast::LetItem::Constraint(c) => Constraint {
 				expression: self.collect_expression(c.expression()),
 				annotations: c

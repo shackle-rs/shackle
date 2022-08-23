@@ -50,6 +50,10 @@
       {
         "command": "shackleLanguageServer.viewScope",
         "title": "MiniZinc: View Scope"
+      },
+      {
+        "command": "shackleLanguageServer.viewPrettyPrint",
+        "title": "MiniZinc: View Pretty Printed MiniZinc"
       }
     ],
     "languages": [

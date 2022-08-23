@@ -28,6 +28,18 @@ type_registry!(
 	opt_bottom: bottom.with_opt(db, OptType::Opt),
 	array_int_of_par_int: Ty::array(db, par_int, par_int).unwrap(),
 	array_int_of_var_int: Ty::array(db, par_int, var_int).unwrap(),
+	tuple_of_int: Ty::tuple(db, vec![par_int, par_int]),
+	par_enum: Ty::par_enum(db, EnumRef::introduce(db, InternedString::new("Foo", db))),
+	var_enum: par_enum.with_inst(db, VarType::Var).unwrap(),
+	par_opt_enum: par_enum.with_opt(db, OptType::Opt),
+	var_opt_enum: var_enum.with_opt(db, OptType::Opt),
+	ty_var: Ty::type_inst_var(db, TyVar {
+		ty_var: TyVarRef::introduce(db, InternedString::new("$T", db)),
+		enumerable: false,
+		indexable: false,
+		varifiable: false
+	}),
+
 );
 
 struct Types {
@@ -68,8 +80,30 @@ fn check_coercions(types: &Types, coercions: impl IntoIterator<Item = (Ty, Ty)>)
 					src.pretty_print(db),
 					dst.pretty_print(db)
 				);
-				assert_eq!(Ty::most_specific_supertype(db, [src, *dst]), Some(*dst));
-				assert_eq!(Ty::most_general_subtype(db, [src, *dst]), Some(src));
+				let supertype = Ty::most_specific_supertype(db, [src, *dst]);
+				assert_eq!(
+					supertype,
+					Some(*dst),
+					"Expected most specific supertype of {} and {} to be {}, but got {}",
+					src.pretty_print(db),
+					dst.pretty_print(db),
+					dst.pretty_print(db),
+					supertype
+						.map(|s| s.pretty_print(db))
+						.unwrap_or("none".to_owned())
+				);
+				let subtype = Ty::most_general_subtype(db, [src, *dst]);
+				assert_eq!(
+					subtype,
+					Some(src),
+					"Expected most general subtype of {} and {} to be {}, but got {}",
+					src.pretty_print(db),
+					dst.pretty_print(db),
+					src.pretty_print(db),
+					subtype
+						.map(|s| s.pretty_print(db))
+						.unwrap_or("none".to_owned())
+				);
 			} else {
 				assert!(
 					!src.is_subtype_of(&types.db, *dst),
@@ -364,13 +398,13 @@ fn test_bottom() {
 
 	assert_eq!(types.bottom.lookup(db), TyData::Bottom(OptType::NonOpt));
 	assert!(types.bottom.known_par(db));
-	assert!(!types.bottom.known_varifiable(db));
+	assert!(types.bottom.known_varifiable(db));
 	assert!(types.bottom.known_enumerable(db));
 	assert_eq!(types.bottom.pretty_print(db), "..");
 
 	assert_eq!(types.opt_bottom.lookup(db), TyData::Bottom(OptType::Opt));
 	assert!(types.opt_bottom.known_par(db));
-	assert!(!types.opt_bottom.known_varifiable(db));
+	assert!(types.opt_bottom.known_varifiable(db));
 	assert!(types.opt_bottom.known_enumerable(db));
 	assert_eq!(types.opt_bottom.pretty_print(db), "opt ..");
 }
@@ -407,12 +441,12 @@ fn test_bottom_coercions() {
 			(types.opt_bottom, types.par_opt_float),
 			(types.opt_bottom, types.var_opt_float),
 			// // Bottom to enum
-			// (types.bottom, types.par_enum),
-			// (types.bottom, types.var_enum),
-			// (types.bottom, types.par_opt_enum),
-			// (types.bottom, types.var_opt_enum),
-			// (types.opt_bottom, types.par_opt_enum),
-			// (types.opt_bottom, types.var_opt_enum),
+			(types.bottom, types.par_enum),
+			(types.bottom, types.var_enum),
+			(types.bottom, types.par_opt_enum),
+			(types.bottom, types.var_opt_enum),
+			(types.opt_bottom, types.par_opt_enum),
+			(types.opt_bottom, types.var_opt_enum),
 			// Bottom to string
 			(types.bottom, types.string),
 			(types.bottom, types.opt_string),
@@ -424,6 +458,10 @@ fn test_bottom_coercions() {
 			// Bottom to array
 			(types.bottom, types.array_int_of_par_int),
 			(types.bottom, types.array_int_of_var_int),
+			// Bottom to tuple
+			(types.bottom, types.tuple_of_int),
+			// Bottom to tyvar
+			(types.bottom, types.ty_var),
 		],
 	);
 }

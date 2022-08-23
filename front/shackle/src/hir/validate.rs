@@ -44,7 +44,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 				_ => unreachable!(),
 			}
 		}
-		let errors = FunctionEntry::check_overloading(db, overloads);
+		let errors = FunctionEntry::check_overloading(db.upcast(), overloads);
 		diagnostics.extend(errors.iter().map(|e| match e {
 			OverloadingError::FunctionAlreadyDefined {
 				first: (first_pat, first_fn),
@@ -54,7 +54,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 				let model = item.model(db);
 				let data = item.local_item_ref(db).data(&*model);
 				let name = data[first_pat.pattern()].identifier().unwrap();
-				let signature = first_fn.overload.pretty_print_item(db, name);
+				let signature = first_fn.overload.pretty_print_item(db.upcast(), name);
 				let (src, span) = NodeRef::from(first_pat.into_entity(db)).source_span(db);
 				FunctionAlreadyDefined {
 					src,
@@ -95,6 +95,26 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 									v.push(EntityRef::new(db, resolved_item, def).into());
 								}
 							}
+							_ => (),
+						}
+						v.push(item_ref.into());
+						e.insert(v);
+					}
+				}
+			}
+		}
+		for (i, a) in model.enum_assignments.iter() {
+			let item_ref = ItemRef::new(db, *m, i);
+			let types = db.lookup_item_types(item_ref);
+			if let Some(p) = types.name_resolution(a.assignee) {
+				match assignments.entry(p) {
+					Entry::Occupied(mut e) => {
+						e.get_mut().push(item_ref.into());
+					}
+					Entry::Vacant(e) => {
+						let mut v = Vec::new();
+						let resolved_item = p.item();
+						match resolved_item.local_item_ref(db) {
 							LocalItemRef::Enumeration(e) => {
 								let model = resolved_item.model(db);
 								if model[e].definition.is_some() {
