@@ -11,5 +11,7 @@
   - [Compilation to MicroZinc](./compilation/microzinc-gen.md)
   - [Bytecode generation](./compilation/bytecode-gen.md)
   - [Bytecode interpretation](./compilation/interpreter.md)
+- [MicroZinc specification](./microzinc.md)
+- [The MicroZinc Interpreter](./interpreter.md)
 - [MiniZinc Syntax Changes](./mzn-syntax.md)
 - [Error handling](./error-handling.md)
