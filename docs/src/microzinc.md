@@ -15,10 +15,7 @@ variables introduced in the same let expression.
 
 ### TODO: Remaining questions
 
-- How many bits will we need to steal for efficient value storage?
-- Named identifiers seems rather overkill. For a single assignment form it
-  seems that we could instead use some "nameless" representation.
-  (e.g., relative position of the assignment, to the current expression).
+- How many bits will we need to steal for efficient value storage?).
 - What annotation operations should be allowed in MicroZinc?
 - The operational semantics for array access definition only works for 1-dimensional arrays. How can we generalise them for multiple dimensions?
 - Add list of built-in functions
@@ -32,33 +29,37 @@ MicroZinc is defined using the following syntax,
 	\mathit{program} &::=&
 		\mathit{func}\* \\\\
 	\mathit{func} &::=&
-		\mathsf{function}~\mathit{typeinst}~\mathsf{:}~\mathit{ident}~\mathsf{(}~\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathit{letExpr}]~\mathsf{;} \\\\
+		\mathsf{function}~\mathit{typeinst}~\mathsf{:}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathit{letExpr}]\mathsf{;}\\\\&|&
+		\mathsf{predicate}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathsf{true}]\mathsf{;} \\\\
 	\mathit{typing} &::=&
 		\mathit{typeinst}~\mathsf{:}~\mathit{ident} \\\\
 	\\\\
 	\mathit{letExpr} &::=&
 		\mathit{val} \\\\&|&
-		\mathsf{let}~\mathsf{\\\{}~\mathit{item}\*~\mathsf{\\\}}~\mathsf{in}~\mathit{val} \\\\
+		\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathit{val} \\\\
 	\mathit{item} &::=&
 		\mathit{typing}~\mathsf{;} \\\\&|&
 		\mathit{typing}~\mathsf{=}~\mathit{expr}~\mathsf{;} \\\\&|&
-		\mathsf{constraint}~\mathit{letExpr}~\mathsf{;} \\\\
+		\mathsf{constraint}~\mathit{ident}~\mathsf{(}~\mathit{val} [ \mathsf{,}~ \mathit{val}]\*~\mathsf{)}~\mathsf{;} \\\\
 	\mathit{expr} &::=&
 		\mathit{letExpr} \\\\&|&
 		\mathit{ident}~\mathsf{(}~\mathit{val} [ \mathsf{,}~ \mathit{val}]\*~\mathsf{)} \\\\&|&
 		\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letExpr}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letExpr}]\*~\mathsf{else}~\mathit{letExpr}~\mathsf{endif} \\\\&|&
-		\mathsf{[}~\mathit{letExpr}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*~\mathsf{]} \\\\
+		\mathsf{[}[\mathit{tuple}\mathsf{:}]~\mathit{letExpr}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]} \\\\
 	\mathit{genExpr} &::=&
 		\mathit{ident}~\mathsf{in}~\mathit{letExpr}~[\mathsf{where}~\mathit{letExpr}] \\\\&|&
 		\mathit{ident}~\mathsf{=}~\mathit{letExpr} \\\\
 	\mathit{val} &::=&
-		\mathit{lit} \\\\&|&
-		\mathsf{(}~\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*~\mathsf{)} \\\\&|&
-		\mathsf{[}~\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*~\mathsf{]} \\\\&|&
-		\mathsf{\\{}~\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*~\mathsf{\\}} \\\\&|&
-		\mathit{lit}~\mathsf{..}~\mathit{lit} \\\\&|&
+		\mathit{lit}~|~\mathit{range}~|~\mathit{tuple} \\\\&|&
+		\mathsf{\\{}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{\\}} \\\\&|&
+		\mathsf{array}\mathit{i62}\mathsf{d(}\mathit{range}~\mathsf{,}~[\mathit{range}~\mathsf{,}]\*~\mathsf{[}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{])} \\\\&|&
 		\mathit{ident}~\mathsf{.}~\mathit{i62} \\\\&|&
-		\mathit{ident}~\mathsf{[}~\mathit{lit}~\mathsf{]} \\\\
+		\mathit{ident}~\mathsf{[}\mathit{lit}\mathsf{]} \\\\
+	\mathit{tuple} &::=& 
+		\mathsf{(}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{)} \\\\
+	\mathit{range} &::=&
+		\mathit{lit}\mathsf{..}\mathit{lit} \\\\&|&
+		\mathit{ident} \\\\
 	\mathit{lit} &::=&
 		\mathit{bool} \\\\&|&
 		\mathit{i62} \\\\&|&
@@ -87,10 +88,10 @@ The following syntax describes the types available in MicroZinc. The type syntax
 \\[
 \begin{array}{lcl}
 	\mathit{typeinst} &::=&
-		\mathsf{array}~\mathsf{[}\mathit{i62}~\mathsf{..}~\mathit{i62} [ \mathsf{,}~ \mathit{i62}~\mathsf{..}~\mathit{i62}]\*~\mathsf{]}~\mathsf{of}~\mathit{baseType} \\\\&|&
+		\mathsf{array}~\mathsf{[}\mathit{i62}\mathsf{..}\mathit{i62} [ \mathsf{,}~ \mathit{i62}\mathsf{..}\mathit{i62}]\*\mathsf{]}~\mathsf{of}~\mathit{baseType} \\\\&|&
 		\mathit{baseType} \\\\
 	\mathit{baseType} &::=&
-		\mathsf{tuple}~\mathsf{(}~\mathit{typeinst} [ \mathsf{,}~ \mathit{typeinst}]\*~\mathsf{)} \\\\&|&
+		\mathsf{tuple}~\mathsf{(}\mathit{typeinst} [ \mathsf{,}~ \mathit{typeinst}]\*\mathsf{)} \\\\&|&
 		\mathit{domType} \\\\&|&
 		\mathit{primType} \\\\
 	\mathit{domType} &::=&
@@ -105,7 +106,11 @@ The following syntax describes the types available in MicroZinc. The type syntax
 \end{array}
 \\]
 
-The following rules describe the conditions under which a MicroZinc program is correctly typed. In these rules the variable \\( \Gamma \\) will denote the typing context. This context contains known types for identifiers. 
+Importantly, MicroZinc includes two types of sub-typing. When type \\( T_1 \\) is a sub-type of type \\( T_2 \\) then \\( T_1 \\) can be used anywhere where the type \\( T_2 \\) is required.
+ - In MicroZinc, \\( \mathsf{par}~T \\) is a sub-type of \\( \mathsf{var}~T \\).
+ - MicroZinc also has numeric subtyping (i.e., \\( \mathsf{par~bool} \\) is a subtype of \\( \mathsf{par~int} \\), which is a sub-type of \\( \mathsf{par~float} \\), and similarly \\( \mathsf{var~bool} \\) is a sub-type of \\( \mathsf{var~int} \\), which is a sub-type of \\( \mathsf{var~float} \\))
+
+The following rules describe the conditions under which a MicroZinc program is correctly typed. In these rules the variable \\( \Gamma \\) will denote the typing context. This context contains known types for identifiers.
 
 ### Functions and calls
 
@@ -115,7 +120,7 @@ At the top level of the MicroZinc program we find different functions. The progr
 \begin{prooftree}
 	\AxiomC{$ \Gamma \vdash{} T : T^r$}
 	\AxiomC{$ \Gamma, f^{id} : (T'_1 \equiv )\langle T^p_1, \dots, T^p_n \rangle \rightarrow T^{r}\vdash{} funcs : \langle T'_2, \dots, T'_m \rangle $}
-	\RightLabel{(T-Pred)}
+	\RightLabel{(T-Builtin)}
 	\BinaryInfC{$ \vdash{} \mathsf{function}~T~\mathsf{:}~f^{id}~\mathsf{(} T^p_1 : x_1\mathsf{,}\dots\mathsf{,}T^p_n : x_n\mathsf{)}~\mathsf{;} funcs : \langle T'_1, \dots, T'_m \rangle $}
 \end{prooftree}
 \\]
@@ -130,6 +135,26 @@ At the top level of the MicroZinc program we find different functions. The progr
 	\UnaryInfC{$ \Gamma \vdash{} \mathsf{function}~T~\mathsf{:}~f^{id}_1~\mathsf{(}~x_1: T^p_1, \dots, x_n: T^p_n \mathsf{)}~\mathsf{=}~E~\mathsf{;} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_1, \dots, T'_m \rangle $}
 \end{prooftree}
 \\]
+
+\\[
+\begin{prooftree}
+	\AxiomC{$ \Gamma, f^{id} : (T'_1 \equiv )\langle T^p_1, \dots, T^p_n \rangle \rightarrow \mathsf{pred}\vdash{} funcs : \langle T'_2, \dots, T'_m \rangle $}
+	\RightLabel{(T-Slv-Native)}
+	\UnaryInfC{$ \vdash{} \mathsf{predicate}~f^{id}~\mathsf{(} T^p_1 : x_1\mathsf{,}\dots\mathsf{,}T^p_n : x_n\mathsf{)}~\mathsf{;} funcs : \langle T'_1, \dots, T'_m \rangle $}
+\end{prooftree}
+\\]
+
+\\[
+\begin{prooftree}
+	\AxiomC{$ \Gamma, f^{id}_1 : (T'_1 \equiv) \langle T^p_1, \dots, T^p_n \rangle \rightarrow \mathsf{pred} \vdash{} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_2, \dots, T'_m \rangle $}
+	\noLine{}
+	\UnaryInfC{$\Gamma, f^{id}_1 : T'_1, \dots, f^{id}_m : T'_m, x_1 : T^p_1, \dots, x_n : T^p_n \vdash{} E : \mathsf{par~bool}$}
+	\RightLabel{(T-Pred)}
+	\UnaryInfC{$ \Gamma \vdash{} \mathsf{function}~T~\mathsf{:}~f^{id}_1~\mathsf{(}~x_1: T^p_1, \dots, x_n: T^p_n \mathsf{)}~\mathsf{=}~E~\mathsf{;} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_1, \dots, T'_m \rangle $}
+\end{prooftree}
+\\]
+
+Calls are defined in both the context of a constraint and on the right hand side of an assignment of a let-expression. In both cases the typing of call is described by the following rule.
 
 \\[
 \begin{prooftree}
@@ -181,7 +206,7 @@ Identifiers are typed simply using a lookup in the typing context. The typing of
 
 \\[
 \begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} E : \mathsf{var}~\mathsf{bool}$}
+	\AxiomC{$ \Gamma \vdash{} E : \mathsf{pred}$}
 	\AxiomC{$ \Gamma, x : T \vdash{} \mathsf{let}~\mathsf{\\\{}~items~\mathsf{\\\}}~\mathsf{in}~y : T'$}
 	\RightLabel{(T-Let-Con)}
 	\BinaryInfC{$ \Gamma \vdash{} \mathsf{let}~\mathsf{\\\{}~\mathsf{constraint}~E~\mathsf{;}~items~\mathsf{\\\}}~\mathsf{in}~y : T'$}
@@ -190,20 +215,20 @@ Identifiers are typed simply using a lookup in the typing context. The typing of
 
 ### Comprehensions and Generators
 
-As shown in the following rules, the \\( \mathit{genExpr} \\) rules will must have either type \\( \mathsf{set~of~int} \\) or \\( \mathsf{array~of}~T \\). The \\( \text{T_Comp} \\) rule, to type array comprehensions, will use the \\( elem \\) function which maps the former type to \\( \mathsf{int} \\) and the latter to \\( T \\).
+As shown in the following rules, the \\( \mathit{genExpr} \\) rules will must have either type \\( \mathsf{set~of~int} \\) or \\( \mathsf{array1d~of}~T \\). The \\( \text{T_Comp} \\) rule, to type array comprehensions, will use the \\( elem \\) function which maps the former type to \\( \mathsf{int} \\) and the latter to \\( T \\).
 
 \\[
 \begin{prooftree}
 	\AxiomC{$ \Gamma, \vdash{} E : T$}
 	\RightLabel{(T-Comp-Expr)}
-	\UnaryInfC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}~\mathsf{]} : \mathsf{array~of~} T $}
+	\UnaryInfC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}~\mathsf{]} : \mathsf{array1d~of~} T $}
 \end{prooftree}
 \\]
 
 \\[
 \begin{prooftree}
 	\AxiomC{$ \Gamma \vdash{} I : T$}
-	\AxiomC{$ T \in \\{ \mathsf{set~of~int}, \mathsf{array~of}~V \\}$}
+	\AxiomC{$ T \in \\{ \mathsf{set~of~int}, \mathsf{array1d~of}~V \\}$}
 	\AxiomC{$ \Gamma, x : T \vdash{} \mathsf{[} E~\mathsf{|}~gens~\mathsf{]} : T' $}
 	\RightLabel{(T-Comp-In)}
 	\TrinaryInfC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}~x~\mathsf{in}~I, gens~\mathsf{]} : T' $}
@@ -228,45 +253,42 @@ As shown in the following rules, the \\( \mathit{genExpr} \\) rules will must ha
 \end{prooftree}
 \\]
 
-### Tuples, Arrays, and Sets
-
 \\[
 \begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} x_1 : T_1 ~~ \dots ~~ \Gamma \vdash{} x_n : T_n$}
-	\RightLabel{(T-Tup)}
-	\UnaryInfC{$ \Gamma \vdash{} \mathsf{(} x_1\mathsf{,} \dots\mathsf{,} x_n \mathsf{)} : \mathsf{tuple(} T_1 \mathsf{,} \dots \mathsf{,} T_n \mathsf{)}$}
-\end{prooftree}
-\\]
-\\[
-\begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} x : \mathsf{tuple(} T_1 \mathsf{,} \dots \mathsf{,} T_i \mathsf{,} \dots \mathsf{,} T_n \mathsf{)}$}
-	\AxiomC{$ i \in 1 \mathsf{..} n $}
-	\RightLabel{(T-Acc)}
-	\BinaryInfC{$ \Gamma \vdash{} x \mathsf{.} i : T_i $}
+	\AxiomC{$ \Gamma\vdash{} \mathsf{[} I_i~\mathsf{|}~gens~\mathsf{]} : \mathsf{array1d~of~int}, \forall{} 1 \leq{} i \leq{} X$}
+	\AxiomC{$ \Gamma\vdash{} \mathsf{[} E~\mathsf{|}~gens~\mathsf{]} : \mathsf{array1d~of}~T $}
+	\RightLabel{(T-Comp-Ind)}
+	\BinaryInfC{$ \Gamma \vdash{} \mathsf{[(}I_1, \dots, I_X \mathsf{):} E~\mathsf{|}gens~\mathsf{]} : \mathsf{array}X\mathsf{d~of}~T $}
 \end{prooftree}
 \\]
 
+### Arrays, Sets, and Tuples
+
+MicroZinc has three different container types. Arrays can contain multiple, possibly duplicate, elements of the same type, each associated with a unique index with which the element can be retrieved.
+
 \\[
 \begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} x_1 : T ~~ \dots ~~ \Gamma \vdash{} x_n : T$}
+	\AxiomC{$ \Gamma \vdash{} r_i : \mathsf{par~set~of~int}, \forall{} 1 \leq{} i \leq{} X$}
+	\AxiomC{$ \Gamma \vdash{} x_i : T, \forall{} 1 \leq{} i \leq{} n$}
 	\RightLabel{(T-Arr)}
-	\UnaryInfC{$ \Gamma \vdash{} \mathsf{[} x_1\mathsf{,} \dots\mathsf{,} x_n \mathsf{]} : \mathsf{array~of}~T $}
+	\BinaryInfC{$ \Gamma \vdash{} \mathsf{array}X\mathsf{d(}~r_1 \mathsf{,} \dots \mathsf{,} r_X \mathsf{,} \mathsf{[} x_1 \mathsf{,} \dots \mathsf{,} x_n \mathsf{])} : \mathsf{array}X\mathsf{d~of}~T $}
 \end{prooftree}
 \\]
 
 \\[
 \begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} v_1 : \mathsf{par}~\mathsf{int} ~~ \dots ~~ \Gamma \vdash{} v_n : \mathsf{par}~\mathsf{int}$}
-	\AxiomC{$ \Gamma \vdash{} x : \mathsf{array~of}~T$}
+	\AxiomC{$ \Gamma \vdash{} v_i : \mathsf{par}~\mathsf{int}, \forall{} 1 \leq{} i \leq{} X$}
+	\AxiomC{$ \Gamma \vdash{} x : \mathsf{array}X\mathsf{d~of}~T$}
 	\RightLabel{(T-Ind)}
-	\BinaryInfC{$ \Gamma \vdash{} x \mathsf{[} v_1 \mathsf{,} \dots \mathsf{,} v_n \mathsf{]} : T $}
+	\BinaryInfC{$ \Gamma \vdash{} x \mathsf{[} v_1 \mathsf{,} \dots \mathsf{,} v_X \mathsf{]} : T $}
 \end{prooftree}
 \\]
 
+Sets contain a certain number of unique elements of the same type. Ranges of elements are also typed as sets.
 
 \\[
 \begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} x_1 : T ~~ \dots ~~ \Gamma \vdash{} x_n : T$}
+	\AxiomC{$ \Gamma \vdash{} x_1 : T, \forall{} 1 \leq{} i \leq{} n$}
 	\AxiomC{$ T \in {\mathsf{par~int}, \mathsf{par~float}}$}
 	\RightLabel{(T-Set)}
 	\BinaryInfC{$ \Gamma \vdash{} \mathsf{\\{} x_1 \mathsf{,} \dots \mathsf{,} x_n \mathsf{\\}} : \mathsf{par~set~of}~T $}
@@ -280,6 +302,24 @@ As shown in the following rules, the \\( \mathit{genExpr} \\) rules will must ha
 	\AxiomC{$ T \in {\mathsf{par~int}, \mathsf{par~float}}$}
 	\RightLabel{(T-Range)}
 	\TrinaryInfC{$ \Gamma \vdash{} x_1 \mathsf{..} x_2 : \mathsf{par~set~of}~T $}
+\end{prooftree}
+\\]
+
+Finally, tuples are collections of elements with possibly different types. The number of elements in a tuple is known during type checking
+
+\\[
+\begin{prooftree}
+	\AxiomC{$ \Gamma \vdash{} x_i : T_i, \forall{} 1 \leq{} i \leq{} n$}
+	\RightLabel{(T-Tup)}
+	\UnaryInfC{$ \Gamma \vdash{} \mathsf{(} x_1\mathsf{,} \dots\mathsf{,} x_n \mathsf{)} : \mathsf{tuple(} T_1 \mathsf{,} \dots \mathsf{,} T_n \mathsf{)}$}
+\end{prooftree}
+\\]
+\\[
+\begin{prooftree}
+	\AxiomC{$ \Gamma \vdash{} x : \mathsf{tuple(} T_1 \mathsf{,} \dots \mathsf{,} T_i \mathsf{,} \dots \mathsf{,} T_n \mathsf{)}$}
+	\AxiomC{$ i \in 1 \mathsf{..} n $}
+	\RightLabel{(T-Acc)}
+	\BinaryInfC{$ \Gamma \vdash{} x \mathsf{.} i : T_i $}
 \end{prooftree}
 \\]
 
@@ -332,7 +372,7 @@ The remaining parts of the MicroZinc laguage are simple literals that have an in
 	\AxiomC{}
 	\RightLabel{(T-Str)}
 	\UnaryInfC{$\vdash{} /\texttt{"[\^\"]\*"}/ : \mathsf{string}$}
-\end{prooftree} 
+\end{prooftree}
 \\]
 \\[
 \begin{prooftree}
@@ -351,10 +391,10 @@ The remaining parts of the MicroZinc laguage are simple literals that have an in
 
 \\[
 \begin{prooftree}
-	\AxiomC{$ \Gamma \vdash{} x_1 : \mathsf{par}~\mathsf{set}~\mathsf{of}~\mathsf{int} ~~ \dots ~~ \Gamma \vdash{} x_n : \mathsf{par}~\mathsf{set}~\mathsf{of}~\mathsf{int}$}
+	\AxiomC{$ \Gamma \vdash{} I_i : \mathsf{par}~\mathsf{set}~\mathsf{of}~\mathsf{int}, \forall{} 1 \leq{} i \leq{} X$}
 	\AxiomC{$ \Gamma \vdash{} T : T'$}
 	\RightLabel{(T-Type-Arr)}
-	\BinaryInfC{$ \Gamma \vdash{} \mathsf{array}~\mathsf{[}x_1 \mathsf{,} \dots, x_n\mathsf{]}~\mathsf{of}~\mathit{T} : \mathsf{array~of}~T' $}
+	\BinaryInfC{$ \Gamma \vdash{} \mathsf{array}~\mathsf{[}I_1 \mathsf{,} \dots, I_X\mathsf{]}~\mathsf{of}~\mathit{T} : \mathsf{array}X\mathsf{d~of}~T' $}
 \end{prooftree}
 \\]
 
