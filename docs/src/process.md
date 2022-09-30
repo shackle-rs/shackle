@@ -83,7 +83,7 @@ These steps need to be fit into the phases.
 - Need to think about what should actually go into MicroZinc (e.g. need `case`?, what level of nesting is supported?)
 - For tools which suggest changes to user models, it would be useful to have AST
   to CST transformation, so that we can leave the rest of the user model alone
-  and insert the suggested transformations in place. 
+  and insert the suggested transformations in place.
 - Need to think about what AST levels we need. Potentially some or all of:
   - MiniZinc CST
   - MiniZinc AST

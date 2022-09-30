@@ -1,9 +1,11 @@
-node/
-docs/book
+# General build artefacts
 build/
+docs/book
 node_modules/
-docs/src/
-front/src/
-misc/tree-sitter-minizinc/src
-target/
+node/
+out/
 package-lock.json
+target/
+
+# Shackle specific
+misc/tree-sitter-*/src

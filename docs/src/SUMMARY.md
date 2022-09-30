@@ -1,6 +1,7 @@
 # Summary
 
 [The Shackle Almanac](./foreword.md)
+
 - [The Compilation Process](./process.md)
   - [Parsing](./compilation/parsing.md)
   - [MiniZinc AST generation](./compilation/ast-gen.md)

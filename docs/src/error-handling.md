@@ -3,7 +3,7 @@
 Good error reporting should be integral to the compiler.
 
 We need to think about what errors could be encountered and what information is
-needed to generate a useful message. 
+needed to generate a useful message.
 
 ## MiniZinc <-> MicroZinc
 
