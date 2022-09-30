@@ -9,3 +9,4 @@ target/
 
 # Shackle specific
 misc/tree-sitter-*/src
+share/minizinc/
