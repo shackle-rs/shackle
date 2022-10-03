@@ -17,7 +17,8 @@ impl Compile {
 	pub fn dispatch(&self) -> Result<()> {
 		for i in &self.input {
 			match i.extension().and_then(OsStr::to_str) {
-				Some("mzn") => {}
+				Some("mzn") => {},
+				Some("eprime") => {},
 				_ => {
 					return Err(Report::msg(format!(
 						"File {:?} has an unsupported file type",

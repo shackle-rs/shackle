@@ -6,13 +6,13 @@
 
 use clap::{crate_version, Args, Parser, Subcommand};
 use env_logger::{fmt::TimestampPrecision, Builder};
-use miette::Result;
+use miette::{Report, Result};
 use shackle::error::InternalError;
+use shackle::{Message, Model, Solver, Status};
 
+use std::ffi::OsStr;
 use std::panic;
 use std::path::PathBuf;
-
-mod compile;
 
 /// The main function is the entry point for the `shackle` executable.
 ///
@@ -52,7 +52,8 @@ fn main() -> Result<()> {
 
 	// Dispatch to the correct subcommand
 	match panic::catch_unwind(|| match opts.subcmd {
-		SubCommand::Compile(s) => s.dispatch(),
+		SubCommand::Compile(c) => c.dispatch(),
+		SubCommand::Solve(s) => s.dispatch(),
 		_ => unimplemented!(),
 	}) {
 		Err(_) => Err(InternalError::new("Panic occurred during execution").into()),
@@ -76,7 +77,7 @@ struct Opts {
 
 #[derive(Subcommand, Debug)]
 enum SubCommand {
-	Compile(compile::Compile),
+	Compile(Compile),
 	Solve(Solve),
 	Check(Check),
 }
@@ -84,12 +85,69 @@ enum SubCommand {
 /// Solve the given model instance using the given solver
 #[derive(Args, Debug)]
 struct Solve {
+	#[clap(long, default_value = "gecode")]
 	solver: String,
-	input: Vec<PathBuf>,
+	input: PathBuf,
+}
+
+impl Solve {
+	/// The dispatch method checks the validity of the user input and then call the corresponding
+	/// functions in the modelling libraries.
+	pub fn dispatch(&self) -> Result<()> {
+		match self.input.extension().and_then(OsStr::to_str) {
+			Some("mzn") => {}
+			Some("eprime") => {}
+			_ => {
+				return Err(Report::msg(format!(
+					"File {:?} has an unsupported file type",
+					self.input
+				)));
+			}
+		}
+
+		// Lookup Solver definition
+		let slv = Solver::lookup(self.solver.as_str()).unwrap();
+
+		// Construct model, typecheck, and compile into program
+		let model = Model::from_file(self.input.clone());
+		let mut program = model.compile(&slv)?;
+
+		// Run resulting program and show results
+		let display_fn = |x: &Message| {
+			print!("{}", x);
+			true
+		};
+		let status = program.run(&display_fn);
+		match status {
+			Status::Infeasible => println!("=====UNSATISFIABLE====="),
+			Status::Satisfied => {}
+			Status::Optimal | Status::AllSolutions => println!("=========="),
+			Status::Unknown => println!("=====UNKNOWN====="),
+			Status::Err(err) => return Err(err.into()),
+		}
+
+		// Compilation succeeded
+		Ok(())
+	}
 }
 
 /// Check model files for correctness
 #[derive(Args, Debug)]
 struct Check {
-	input: Vec<PathBuf>,
+	input: PathBuf,
+}
+
+/// Compile the given model to a shackle intermediate format
+#[derive(Args, Debug)]
+pub struct Compile {
+	#[clap(required = true)]
+	input: PathBuf,
+}
+
+impl Compile {
+	/// The dispatch method checks the validity of the user input and then call the corresponding
+	/// functions in the modelling libraries.
+	pub fn dispatch(&self) -> Result<()> {
+		Ok(())
+	}
 }
