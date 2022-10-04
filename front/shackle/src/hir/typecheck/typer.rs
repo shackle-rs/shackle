@@ -705,12 +705,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 			if !index.is_subtype_of(
 				db.upcast(),
-				dim.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
-					panic!(
-						"Array dimension {} should be varifiable",
-						dim.pretty_print(db.upcast()),
-					)
-				}),
+				dim.with_opt(db.upcast(), OptType::Opt)
+					.with_inst(db.upcast(), VarType::Var)
+					.unwrap_or_else(|| {
+						panic!(
+							"Array dimension {} should be varifiable",
+							dim.pretty_print(db.upcast()),
+						)
+					}),
 			) {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(db, self.item, aa.indices)).source_span(db);
