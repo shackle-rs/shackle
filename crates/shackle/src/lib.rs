@@ -17,7 +17,7 @@ pub mod utils;
 use db::{FileReader, Inputs};
 use error::{FileError, InternalError, MultipleErrors, ShackleError};
 use file::{FileRefData, InputFile};
-use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
+use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::Map;
 use tempfile::{Builder, NamedTempFile};
 
@@ -254,6 +254,46 @@ pub enum Value {
 	Record(BTreeMap<String, Value>),
 }
 
+impl Value {
+	fn same_type(&self, other: &Value) -> bool {
+		match self {
+			Value::Absent => matches!(other, Value::Absent),
+			Value::Boolean(_) => matches!(other, Value::Boolean(_)),
+			Value::Integer(_) => matches!(other, Value::Integer(_)),
+			Value::Float(_) => matches!(other, Value::Float(_)),
+			Value::String(_) => matches!(other, Value::String(_)),
+			Value::Enum(_) => matches!(other, Value::Enum(_)),
+			Value::Array(x) => match other {
+				Value::Array(y) => {
+					x.is_empty() || y.is_empty() || x.first().unwrap().same_type(y.first().unwrap())
+				}
+				_ => false,
+			},
+			Value::Set(x) => match other {
+				Value::Set(y) => {
+					x.is_empty() || y.is_empty() || x.first().unwrap().same_type(y.first().unwrap())
+				}
+				_ => false,
+			},
+			Value::Tuple(x) => match other {
+				Value::Tuple(y) => {
+					x.len() == y.len() && x.iter().zip(y).all(|(a, b)| a.same_type(b))
+				}
+				_ => false,
+			},
+			Value::Record(x) => match other {
+				Value::Record(y) => {
+					x.len() == y.len()
+						&& x.iter()
+							.zip(y)
+							.all(|(a, b)| a.0 == b.0 && a.1.same_type(b.1))
+				}
+				_ => false,
+			},
+		}
+	}
+}
+
 impl<'a> Display for Value {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
@@ -344,47 +384,87 @@ impl<'de> Visitor<'de> for ValueVisitor {
 		Ok(Value::String(String::from(v)))
 	}
 	fn visit_seq<V: SeqAccess<'de>>(self, mut seq: V) -> Result<Self::Value, V::Error> {
-		let mut vec = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-		while let Ok(Some(el)) = seq.next_element() {
+		let mut vec: Vec<Value> = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+		let mut is_arr = true; // TODO: Get MiniZinc to create non-ambiguous JSON values
+		while let Some(el) = seq.next_element()? {
+			if let Some(fst) = vec.first() {
+				is_arr = is_arr && fst.same_type(&el);
+			}
 			vec.push(el)
 		}
-		// TODO Detect array
-		Ok(Value::Tuple(vec))
+		Ok(if is_arr {
+			Value::Array(vec)
+		} else {
+			Value::Tuple(vec)
+		})
 	}
 
-	// fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
-	// where
-	// 	V: MapAccess<'de>,
-	// {
-	// 	let mut secs = None;
-	// 	let mut nanos = None;
-	// 	while let Some(key) = map.next_key()? {
-	// 		match key {
-	// 			Field::Secs => {
-	// 				if secs.is_some() {
-	// 					return Err(de::Error::duplicate_field("secs"));
-	// 				}
-	// 				secs = Some(map.next_value()?);
-	// 			}
-	// 			Field::Nanos => {
-	// 				if nanos.is_some() {
-	// 					return Err(de::Error::duplicate_field("nanos"));
-	// 				}
-	// 				nanos = Some(map.next_value()?);
-	// 			}
-	// 		}
-	// 	}
-	// 	let secs = secs.ok_or_else(|| de::Error::missing_field("secs"))?;
-	// 	let nanos = nanos.ok_or_else(|| de::Error::missing_field("nanos"))?;
-	// 	Ok(Duration::new(secs, nanos))
-	// }
+	fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
+		let mut obj = BTreeMap::new();
+		while let Some((k, v)) = map.next_entry::<&str, Value>()? {
+			if obj.insert(String::from(k), v).is_some() {
+				// TODO: Is there any way to not leak this memory?
+				let key = String::from(k).into_boxed_str();
+				return Err(serde::de::Error::duplicate_field(Box::leak(key)));
+			}
+		}
+		Ok(match obj.len() {
+			1 => {
+				if obj.contains_key("set") {
+					if let Value::Array(obj) = obj.remove("set").unwrap() {
+						let mut members = Vec::with_capacity(obj.len());
+						for i in obj {
+							if let Value::Array(x) = i {
+								match &x[..] {
+									[Value::Integer(from), Value::Integer(to)] => {
+										for m in *from..=*to {
+											members.push(Value::Integer(m))
+										}
+									}
+									_ => members.push(Value::Array(x)),
+								}
+							} else {
+								members.push(i)
+							}
+						}
+						Value::Set(members)
+					} else {
+						Value::Record(obj)
+					}
+				} else if obj.contains_key("e") {
+					if let Value::String(ident) = obj.remove("e").unwrap() {
+						Value::Enum(ident)
+					} else {
+						Value::Record(obj)
+					}
+				} else {
+					Value::Record(obj)
+				}
+			}
+			2 => {
+				if let Some(Value::String(c)) = obj.get("c") {
+					if let Some(e) = obj.get("e") {
+						Value::Enum(format!("{}({})", c, e))
+					} else {
+						Value::Record(obj)
+					}
+				} else if let Some(Value::Integer(i)) = obj.get("i") {
+					if let Some(Value::String(e)) = obj.get("e") {
+						Value::Enum(format!("to_enum({}, {})", e, i))
+					} else {
+						Value::Record(obj)
+					}
+				} else {
+					Value::Record(obj)
+				}
+			}
+			_ => Value::Record(obj),
+		})
+	}
 }
 
 impl<'de> Deserialize<'de> for Value {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		deserializer.deserialize_option(ValueVisitor)
 	}
 }
@@ -422,111 +502,89 @@ impl Program {
 						InternalError::new(format!("minizinc output error: {}", err)).into(),
 					);
 				}
-				Ok(line) => match serde_json::from_str::<Map<String, serde_json::Value>>(&line) {
-					Ok(obj) => {
-						let ty = obj["type"].as_str().expect("bad type field in mzn json");
-						match ty {
-							"statistics" => {
-								if let serde_json::Value::Object(map) = &obj["statistics"] {
-									msg_callback(&Message::Statistic(map));
-								} else {
-									return Status::Err(
-										InternalError::new(format!(
-											"minizinc invalid statistics message: {}",
-											obj["statistics"]
-										))
-										.into(),
-									);
-								}
-							}
-							"solution" => {
-								if let serde_json::Value::Object(map) = &obj["output"]["json"] {
-									let mut sol = BTreeMap::new();
-									for (k, v) in map {
-										let val = v.deserialize_any(ValueVisitor);
-										match val {
-											Ok(val) => {
-												sol.insert(k.clone(), val);
-											}
-											Err(err) => {
-												return Status::Err(
-													InternalError::new(format!(
-														"invalid minizinc json value: {}",
-														err
-													))
-													.into(),
-												);
-											}
-										}
-									}
-									msg_callback(&Message::Solution(sol));
-									if let Status::Unknown = status {
-										status = Status::Satisfied;
-									}
-								} else {
-									return Status::Err(
-										InternalError::new(format!(
-											"minizinc invalid statistics message: {}",
-											obj["statistics"]
-										))
-										.into(),
-									);
-								}
-							}
-							"status" => match obj["status"]
-								.as_str()
-								.expect("bad status field in mzn json")
-							{
-								"ALL_SOLUTIONS" => status = Status::AllSolutions,
-								"OPTIMAL_SOLUTION" => status = Status::Optimal,
-								"UNSATISFIABLE" => status = Status::Infeasible,
-								"UNBOUNDED" => todo!(),
-								"UNSAT_OR_UNBOUNDED" => todo!(),
-								"UNKNOWN" => status = Status::Unknown,
-								"ERROR" => {
-									status = Status::Err(
-										InternalError::new(
-											"Error occurred, but no message was provided",
-										)
-										.into(),
-									)
-								}
-								s => {
-									return Status::Err(
-										InternalError::new(format!(
-											"minizinc unknown status type: {}",
-											s
-										))
-										.into(),
-									);
-								}
-							},
-							"error" => {
+				Ok(line) => {
+					let obj = serde_json::from_str::<Map<String, serde_json::Value>>(&line)
+						.expect("bad message in mzn json");
+					let ty = obj["type"].as_str().expect("bad type field in mzn json");
+					match ty {
+						"statistics" => {
+							if let serde_json::Value::Object(map) = &obj["statistics"] {
+								msg_callback(&Message::Statistic(map));
+							} else {
 								return Status::Err(
 									InternalError::new(format!(
-										"minizinc error: {}",
-										obj["message"]
-									))
-									.into(),
-								);
-							}
-							s @ _ => {
-								return Status::Err(
-									InternalError::new(format!(
-										"minizinc unknown message type: {}",
-										s
+										"minizinc invalid statistics message: {}",
+										obj["statistics"]
 									))
 									.into(),
 								);
 							}
 						}
+						"solution" => {
+							let mut sol = BTreeMap::new();
+							for (k, v) in obj["output"]["json"]
+								.as_object()
+								.expect("invalid output.json field in mzn json")
+							{
+								let val = v.deserialize_any(ValueVisitor).unwrap_or_else(|_| {
+									panic!("invalid minizinc json value: {:?}", v)
+								});
+								sol.insert(k.clone(), val);
+							}
+							msg_callback(&Message::Solution(sol));
+							if let Status::Unknown = status {
+								status = Status::Satisfied;
+							}
+						}
+						"status" => match obj["status"]
+							.as_str()
+							.expect("bad status field in mzn json")
+						{
+							"ALL_SOLUTIONS" => status = Status::AllSolutions,
+							"OPTIMAL_SOLUTION" => status = Status::Optimal,
+							"UNSATISFIABLE" => status = Status::Infeasible,
+							"UNBOUNDED" => todo!(),
+							"UNSAT_OR_UNBOUNDED" => todo!(),
+							"UNKNOWN" => status = Status::Unknown,
+							"ERROR" => {
+								status = Status::Err(
+									InternalError::new(
+										"Error occurred, but no message was provided",
+									)
+									.into(),
+								)
+							}
+							s => {
+								return Status::Err(
+									InternalError::new(format!(
+										"minizinc unknown status type: {}",
+										s
+									))
+									.into(),
+								);
+							}
+						},
+						"error" => {
+							return Status::Err(
+								InternalError::new(format!("minizinc error: {}", obj["message"]))
+									.into(),
+							);
+						}
+						"warning" => {
+							msg_callback(&Message::Warning(
+								obj["message"]
+									.as_str()
+									.expect("invalid message field in mzn json object"),
+							));
+						}
+						s => {
+							return Status::Err(
+								InternalError::new(format!("minizinc unknown message type: {}", s))
+									.into(),
+							);
+						}
 					}
-					Err(err) => {
-						return Status::Err(
-							InternalError::new(format!("minizinc invalid json: {}", err)).into(),
-						);
-					}
-				},
+				}
 			}
 		}
 		match child.wait() {
