@@ -2013,6 +2013,14 @@
                     {
                       "type": "STRING",
                       "value": "⊇"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~="
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~!="
                     }
                   ]
                 }
@@ -2268,6 +2276,14 @@
                     {
                       "type": "STRING",
                       "value": "++"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~+"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~-"
                     }
                   ]
                 }
@@ -2318,6 +2334,18 @@
                     {
                       "type": "STRING",
                       "value": "mod"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~*"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~div"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "~/"
                     }
                   ]
                 }
@@ -4276,7 +4304,7 @@
     },
     "identifier": {
       "type": "PATTERN",
-      "value": "[^\"'\\s\\.\\-\\[\\]\\^,;:(){}&|$.∞%<>⟷⇔>→⇒<←⇐/∨⊻/∧===!=≠<<=≤>>=≥∈⊆⊇∪∖∩+++*/]+"
+      "value": "[^\"'\\s\\.\\-\\[\\]\\^,;:(){}&|$.∞%<>⟷⇔>→⇒<←⇐/∨⊻/∧===!=≠<<=≤>>=≥∈⊆⊇~=~!=∪∖∩+++~+~*/~*~~/]+"
     },
     "quoted_identifier": {
       "type": "PATTERN",

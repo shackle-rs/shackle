@@ -2275,6 +2275,34 @@
             "named": false
           },
           {
+            "type": "~!=",
+            "named": false
+          },
+          {
+            "type": "~*",
+            "named": false
+          },
+          {
+            "type": "~+",
+            "named": false
+          },
+          {
+            "type": "~-",
+            "named": false
+          },
+          {
+            "type": "~/",
+            "named": false
+          },
+          {
+            "type": "~=",
+            "named": false
+          },
+          {
+            "type": "~div",
+            "named": false
+          },
+          {
             "type": "←",
             "named": false
           },
@@ -4267,6 +4295,34 @@
   },
   {
     "type": "}",
+    "named": false
+  },
+  {
+    "type": "~!=",
+    "named": false
+  },
+  {
+    "type": "~*",
+    "named": false
+  },
+  {
+    "type": "~+",
+    "named": false
+  },
+  {
+    "type": "~-",
+    "named": false
+  },
+  {
+    "type": "~/",
+    "named": false
+  },
+  {
+    "type": "~=",
+    "named": false
+  },
+  {
+    "type": "~div",
     "named": false
   },
   {
