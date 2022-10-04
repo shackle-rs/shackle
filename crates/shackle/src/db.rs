@@ -206,10 +206,10 @@ impl salsa::Database for CompilerDatabase {
 	// fn salsa_event(&self, event_fn: salsa::Event) {
 	// 	match event_fn.kind {
 	// 		salsa::EventKind::WillExecute { database_key } => {
-	// 			eprintln!("  Executing {:?}", database_key.debug(self));
+	// 			log::trace!("  Executing {:?}", database_key.debug(self));
 	// 		}
 	// 		salsa::EventKind::DidValidateMemoizedValue { database_key } => {
-	// 			eprintln!("  Using cached {:?}", database_key.debug(self));
+	// 			log::trace!("  Using cached {:?}", database_key.debug(self));
 	// 		}
 	// 		_ => (),
 	// 	}
