@@ -30,13 +30,14 @@ const CONJUNCTION_OPERATORS = ["/\\", "∧"];
 const COMPARISON_OPERATORS = [
   "=", "==", "!=", "≠", "<", "<=", "≤", ">", ">=",
   "≥", "in", "∈", "subset", "⊆", "superset", "⊇",
+  "~=", "~!=",  
 ];
 const UNION_OPERATORS = ["union", "∪"];
 const SET_DIFF_OPERATORS = ["diff", "∖"];
 const INTERSECTION_OPERATORS = ["intersect", "∩"];
 const RANGE_OPERATORS = ["..", "<..", "..<", "<..<"];
-const ADDITIVE_OPERATORS = ["+", "-", "++"];
-const MULTIPLICATIVE_OPERATORS = ["*", "/", "div", "mod"];
+const ADDITIVE_OPERATORS = ["+", "-", "++", "~+", "~-"];
+const MULTIPLICATIVE_OPERATORS = ["*", "/", "div", "mod", "~*", "~div", "~/"];
 
 const OPERATOR_CHARACTERS = `,;:(){}&|$.∞%`.concat(
   getOpChars(EQUIVALENCE_OPERATORS),
