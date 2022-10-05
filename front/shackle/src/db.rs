@@ -24,9 +24,61 @@ pub trait Inputs {
 	#[salsa::input]
 	fn input_files(&self) -> Arc<Vec<InputFile>>;
 
-	/// Set stdlib search directories
+	/// Set include search directories
 	#[salsa::input]
 	fn search_directories(&self) -> Arc<Vec<PathBuf>>;
+
+	/// Set stdlib search directory
+	#[salsa::input]
+	fn stdlib_directory(&self) -> Option<Arc<PathBuf>>;
+
+	/// Set globals library directory
+	#[salsa::input]
+	fn globals_directory(&self) -> Option<Arc<PathBuf>>;
+}
+
+/// Queries for compiler settings
+#[salsa::query_group(CompilerSettingsStorage)]
+pub trait CompilerSettings: Inputs {
+	/// Get the `share/minizinc` directory which contains `std`
+	fn share_directory(&self) -> crate::Result<Arc<PathBuf>>;
+
+	/// Get all of the directories to search for includes
+	fn include_search_dirs(&self) -> Arc<Vec<PathBuf>>;
+}
+
+fn share_directory(db: &dyn CompilerSettings) -> crate::Result<Arc<PathBuf>> {
+	if let Some(p) = db.stdlib_directory() {
+		// If set with MZN_STDLIB_DIR then just use it
+		return Ok(p);
+	} else if let Ok(mut p) = std::env::current_exe() {
+		// Otherwise find /share/minizinc/std from this executable
+		while let Some(path) = p.parent() {
+			if path.join("share/minizinc/std/stdlib.mzn").exists() {
+				return Ok(Arc::new(path.join("share/minizinc")));
+			}
+			p = path.to_owned();
+		}
+	}
+	Err(crate::Error::StandardLibraryNotFound)
+}
+
+fn include_search_dirs(db: &dyn CompilerSettings) -> Arc<Vec<PathBuf>> {
+	let mut include_dirs = (*db.search_directories()).clone();
+	if let Some(globals) = db.globals_directory() {
+		if globals.is_absolute() || globals.exists() {
+			include_dirs.push((*globals).clone());
+		} else if let Ok(share) = db.share_directory() {
+			let path = share.join(globals.as_ref());
+			if path.exists() {
+				include_dirs.push(path);
+			}
+		}
+	}
+	if let Ok(share) = db.share_directory() {
+		include_dirs.push(share.join("std"));
+	}
+	Arc::new(include_dirs)
 }
 
 /// Queries for reading files
@@ -110,6 +162,7 @@ impl From<InternedStringData> for String {
 /// Compiler database implementation
 #[salsa::database(
 	InputsStorage,
+	CompilerSettingsStorage,
 	FileReaderStorage,
 	SourceParserStorage,
 	HirStorage,
@@ -124,10 +177,18 @@ pub struct CompilerDatabase {
 impl CompilerDatabase {
 	/// Create new new compiler database.
 	pub fn new() -> Self {
-		Self {
+		let mut db = Self {
 			storage: Default::default(),
 			file_handler: Box::new(DefaultFileHandler),
-		}
+		};
+		let stdlib_dir = std::env::var("MZN_STDLIB_DIR")
+			.ok()
+			.map(PathBuf::from)
+			.map(Arc::new);
+		db.set_stdlib_directory(stdlib_dir);
+		db.set_globals_directory(None);
+		db.set_search_directories(Arc::new(Vec::new()));
+		db
 	}
 
 	/// Create a new compiler database with the given file handler
@@ -209,6 +270,7 @@ macro_rules! impl_upcast {
 }
 
 impl_upcast!(CompilerDatabase, Inputs);
+impl_upcast!(CompilerDatabase, CompilerSettings);
 impl_upcast!(CompilerDatabase, FileReader);
 impl_upcast!(CompilerDatabase, SourceParser);
 impl_upcast!(CompilerDatabase, Interner);
