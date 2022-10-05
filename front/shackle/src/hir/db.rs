@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashSet;
 
-use crate::db::{FileReader, Interner, Upcast};
+use crate::db::{CompilerSettings, FileReader, Interner, Upcast};
 use crate::error::{IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
@@ -24,9 +24,11 @@ use super::{Identifier, Model};
 #[salsa::query_group(HirStorage)]
 pub trait Hir:
 	Interner
+	+ CompilerSettings
 	+ SourceParser
 	+ FileReader
 	+ Upcast<dyn Interner>
+	+ Upcast<dyn CompilerSettings>
 	+ Upcast<dyn SourceParser>
 	+ Upcast<dyn FileReader>
 {
@@ -162,23 +164,35 @@ pub trait Hir:
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 	let mut errors: Vec<Error> = Vec::new();
 	let mut todo = (*db.input_models()).clone();
-	let mut models = Vec::new();
 
-	// Add stdlib
-	let search_dirs = db.search_directories();
+	let search_dirs = db.include_search_dirs();
 	let auto_includes = ["solver_redefinitions.mzn", "stdlib.mzn"];
-	for include in auto_includes {
-		let path = Path::new(include);
-		let resolved_path = search_dirs
-			.iter()
-			.map(|p| p.join(path))
-			.filter(|p| p.exists())
-			.next();
-		match resolved_path {
-			Some(ref p) => todo.push(FileRef::new(p, db.upcast()).into()),
-			None => errors.push(Error::StandardLibraryNotFound),
+
+	if let Err(e) = db.share_directory() {
+		// share/minizinc directory does not exist
+		errors.push(e);
+	} else {
+		let mut found_stdlib = false;
+		for dir in search_dirs.iter() {
+			let found = auto_includes
+				.iter()
+				.map(|i| dir.join(*i))
+				.filter(|p| p.exists())
+				.collect::<Vec<_>>();
+			if found.len() == auto_includes.len() {
+				for f in found {
+					todo.push(FileRef::new(&f, db.upcast()).into());
+				}
+				found_stdlib = true;
+				break;
+			}
+		}
+		if !found_stdlib {
+			// Could not find the files even though there was a share/minizinc directory
+			errors.push(Error::StandardLibraryNotFound);
 		}
 	}
+	let mut models = Vec::new();
 
 	// Resolve includes
 	let mut seen = FxHashSet::default();

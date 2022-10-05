@@ -18,12 +18,7 @@ use db::Inputs;
 use error::{MultipleErrors, ShackleError};
 use file::InputFile;
 
-use std::{
-	env,
-	path::{Path, PathBuf},
-	sync::Arc,
-	time::Instant,
-};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use crate::{
 	hir::db::Hir,
@@ -45,14 +40,6 @@ pub fn parse_files(paths: Vec<&Path>) -> Result<()> {
 			.map(|p| InputFile::Path(p.to_owned()))
 			.collect(),
 	));
-
-	let mut search_dirs = Vec::new();
-	let stdlib_dir = env::var("MZN_STDLIB_DIR");
-	match stdlib_dir {
-		Ok(v) => search_dirs.push(PathBuf::from(v)),
-		_ => {}
-	}
-	db.set_search_directories(Arc::new(search_dirs));
 	let mut errors = (*db.all_diagnostics()).clone();
 	eprintln!("Done in {}ms", now.elapsed().as_millis());
 	if errors.is_empty() {

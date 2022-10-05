@@ -4,9 +4,8 @@ use lsp_types::{
 	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, ServerCapabilities,
 	TextDocumentIdentifier, TextDocumentSyncKind,
 };
-use std::path::PathBuf;
+use std::ops::Deref;
 use std::sync::Arc;
-use std::{env, ops::Deref};
 use std::{error::Error, path::Path};
 
 use lsp_server::{Connection, ErrorCode, ExtractError, Message, ResponseError};
@@ -38,14 +37,7 @@ pub struct LanguageServerDatabase {
 impl LanguageServerDatabase {
 	pub fn new(connection: &Connection) -> Self {
 		let fs = vfs::Vfs::new();
-		let mut db = CompilerDatabase::with_file_handler(Box::new(fs.clone()));
-		let mut search_dirs = Vec::new();
-		let stdlib_dir = env::var("MZN_STDLIB_DIR");
-		match stdlib_dir {
-			Ok(v) => search_dirs.push(PathBuf::from(v)),
-			_ => {}
-		}
-		db.set_search_directories(Arc::new(search_dirs));
+		let db = CompilerDatabase::with_file_handler(Box::new(fs.clone()));
 		Self {
 			vfs: fs,
 			pool: threadpool::Builder::new().build(),
