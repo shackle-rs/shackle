@@ -177,9 +177,14 @@ pub struct CompilerDatabase {
 impl CompilerDatabase {
 	/// Create new new compiler database.
 	pub fn new() -> Self {
+		Self::with_file_handler(Box::new(DefaultFileHandler))
+	}
+
+	/// Create a new compiler database with the given file handler
+	pub fn with_file_handler(file_handler: Box<dyn FileHandler>) -> Self {
 		let mut db = Self {
 			storage: Default::default(),
-			file_handler: Box::new(DefaultFileHandler),
+			file_handler,
 		};
 		let stdlib_dir = std::env::var("MZN_STDLIB_DIR")
 			.ok()
@@ -189,14 +194,6 @@ impl CompilerDatabase {
 		db.set_globals_directory(None);
 		db.set_search_directories(Arc::new(Vec::new()));
 		db
-	}
-
-	/// Create a new compiler database with the given file handler
-	pub fn with_file_handler(file_handler: Box<dyn FileHandler>) -> Self {
-		Self {
-			storage: Default::default(),
-			file_handler,
-		}
 	}
 
 	/// Snapshot the database
