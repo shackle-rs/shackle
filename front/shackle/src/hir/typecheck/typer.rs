@@ -4,8 +4,8 @@ use std::{fmt::Write, sync::Arc};
 use crate::{
 	arena::ArenaIndex,
 	error::{
-		AmbiguousCall, IllegalType, InvalidArrayLiteral, InvalidFieldAccess, NoMatchingFunction,
-		SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
+		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
+		NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
 	},
 	hir::{
 		db::Hir,
@@ -1147,19 +1147,35 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.map(|b| b.result)
 			.chain(ite.else_result)
-			.map(|e| self.collect_expression(e, None));
-		let ty = Ty::most_specific_supertype(db.upcast(), result_types).unwrap_or_else(|| {
-			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
-			self.ctx.add_diagnostic(
-				self.item,
-				TypeMismatch {
-					src,
-					span,
-					msg: "Mismatch in if-then-else branch types.".to_owned(),
-				},
-			);
-			self.types.error
-		});
+			.map(|e| (e, self.collect_expression(e, None)))
+			.collect::<Vec<_>>();
+		let ty = Ty::most_specific_supertype(db.upcast(), result_types.iter().map(|(_, ty)| *ty))
+			.unwrap_or_else(|| {
+				let mut expr_tys = result_types.into_iter();
+				let (first_expr, first_ty) = expr_tys.next().unwrap();
+				let (_, first_span) =
+					NodeRef::from(EntityRef::new(db, self.item, first_expr)).source_span(db);
+				for (expr, ty) in expr_tys {
+					if Ty::most_specific_supertype(db.upcast(), [first_ty, ty]).is_none() {
+						let (src, span) =
+							NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+						self.ctx.add_diagnostic(
+							self.item,
+							BranchMismatch {
+								msg: format!(
+									"Mismatch in if-then-else branch types. Expected type compatible with '{}' but got '{}'",
+									first_ty.pretty_print(db.upcast()),
+									ty.pretty_print(db.upcast())
+								),
+								src,
+								span,
+								original_span: first_span.clone(),
+							},
+						);
+					}
+				}
+				self.types.error
+			});
 		if ite.else_result.is_none() && !ty.has_default_value(db.upcast()) {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 			self.ctx.add_diagnostic(
@@ -1200,29 +1216,44 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	}
 
 	fn collect_case(&mut self, expr: ArenaIndex<Expression>, c: &Case) -> Ty {
+		let db = self.db;
 		let scrutinee = self.collect_expression(c.expression, None);
 		for case in c.cases.iter() {
 			self.collect_pattern(Some(expr), case.pattern, scrutinee);
 		}
-		Ty::most_specific_supertype(
-			self.db.upcast(),
-			c.cases
-				.iter()
-				.map(|case| self.collect_expression(case.value, None)),
+		let cases = c
+			.cases
+			.iter()
+			.map(|case| (case.value, self.collect_expression(case.value, None)))
+			.collect::<Vec<_>>();
+		Ty::most_specific_supertype(db.upcast(), cases.iter().map(|(_, ty)| *ty)).unwrap_or_else(
+			|| {
+				let mut expr_tys = cases.into_iter();
+				let (first_expr, first_ty) = expr_tys.next().unwrap();
+				let (_, first_span) =
+					NodeRef::from(EntityRef::new(db, self.item, first_expr)).source_span(db);
+				for (expr, ty) in expr_tys {
+					if Ty::most_specific_supertype(db.upcast(), [first_ty, ty]).is_none() {
+						let (src, span) =
+							NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+						self.ctx.add_diagnostic(
+							self.item,
+							BranchMismatch {
+								msg: format!(
+									"Mismatch in case arm types. Expected type compatible with '{}' but got '{}'",
+									first_ty.pretty_print(db.upcast()),
+									ty.pretty_print(db.upcast())
+								),
+								src,
+								span,
+								original_span: first_span.clone(),
+							},
+						);
+					}
+				}
+				self.types.error
+			},
 		)
-		.unwrap_or_else(|| {
-			let (src, span) =
-				NodeRef::from(EntityRef::new(self.db, self.item, expr)).source_span(self.db);
-			self.ctx.add_diagnostic(
-				self.item,
-				TypeMismatch {
-					src,
-					span,
-					msg: "Case expression has incompatible arm types.".to_owned(),
-				},
-			);
-			self.types.error
-		})
 	}
 
 	fn collect_let(&mut self, l: &Let) -> Ty {
