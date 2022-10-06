@@ -255,6 +255,24 @@ pub struct TypeMismatch {
 	pub span: SourceSpan,
 }
 
+/// A mismatch in branch/arm types
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Type mismatch")]
+#[diagnostic(code(shackle::type_mismatch))]
+pub struct BranchMismatch {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+	/// The expected branch type
+	#[label("Expected because of this")]
+	pub original_span: SourceSpan,
+}
+
 /// Invalid array literal
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Invalid array literal")]
@@ -395,7 +413,7 @@ pub enum ShackleError {
 	#[diagnostic(transparent)]
 	SyntaxError(#[from] SyntaxError),
 	/// Failed to find standard library
-	#[error("Failed to located standard library.")]
+	#[error("Failed to locate the standard library.")]
 	#[diagnostic(code(shackle::stdlib_not_found))]
 	StandardLibraryNotFound,
 	/// Include error
@@ -434,6 +452,10 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	TypeMismatch(#[from] TypeMismatch),
+	/// Branch mismatch
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	BranchMismatch(#[from] BranchMismatch),
 	/// Invalid array literal
 	#[error(transparent)]
 	#[diagnostic(transparent)]
