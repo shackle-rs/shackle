@@ -29,7 +29,7 @@ use std::{
 	path::{Path, PathBuf},
 	process::{Command, Stdio},
 	sync::Arc,
-	time::Instant,
+	time::{Duration, Instant},
 };
 
 use crate::{
@@ -104,12 +104,17 @@ impl Model {
 			search_dirs.push(PathBuf::from(pathstr).join("std"))
 		}
 		db.set_search_directories(Arc::new(search_dirs));
-		let mut errors = (*db.all_diagnostics()).clone();
-		if errors.len() == 1 {
-			return Err(errors.pop().unwrap());
-		}
-		if errors.len() > 1 {
-			return Err(MultipleErrors { errors }.into());
+		let errors = db.all_diagnostics();
+		if !errors.is_empty() {
+			if errors.len() == 1 {
+				return Err(errors.last().unwrap().clone());
+			}
+			if errors.len() > 1 {
+				return Err(MultipleErrors {
+					errors: (*errors).clone(),
+				}
+				.into());
+			}
 		}
 		let output = Builder::new()
 			.suffix(".mzn")
@@ -152,6 +157,8 @@ impl Model {
 		Ok(Program {
 			slv: slv.clone(),
 			code: output,
+			enable_stats: false,
+			time_limit: None,
 		})
 	}
 }
@@ -177,6 +184,8 @@ impl Solver {
 pub struct Program {
 	slv: Solver,
 	code: NamedTempFile,
+	enable_stats: bool,
+	time_limit: Option<Duration>,
 }
 
 /// Status of running and solving a Program
@@ -470,11 +479,25 @@ impl<'de> Deserialize<'de> for Value {
 }
 
 impl Program {
+	/// Set whether messages containing statistical information regarding running the program should be sent
+	pub fn with_statistics(mut self, stats: bool) -> Self {
+		self.enable_stats = stats;
+		self
+	}
+	/// Add the maximum duration that the run method is allowed to take before it will be canceled
+	pub fn with_time_limit(mut self, dur: Duration) -> Self {
+		self.time_limit = Some(dur);
+		self
+	}
+
 	/// Run the program in the current state
 	/// Solutions are emitted to the callback, and the resulting status is returned.
 	pub fn run<F: Fn(&Message) -> bool>(&mut self, msg_callback: F) -> Status {
-		let mut status = Status::Unknown;
-		let mut child = Command::new("minizinc")
+		let mut cmd = Command::new("minizinc");
+		cmd.stdin(Stdio::null())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::null())
+			.arg(self.code.path())
 			.args([
 				"--output-mode",
 				"json",
@@ -483,18 +506,20 @@ impl Program {
 				"--output-objective",
 				"--output-output-item",
 				"--intermediate-solutions",
-				"--statistics",
 				"--solver",
 				self.slv.ident.as_str(),
-				self.code.path().to_str().unwrap(), // TODO: fix unwrap
-			])
-			.stdin(Stdio::null())
-			.stdout(Stdio::piped())
-			.stderr(Stdio::null())
-			.spawn()
-			.unwrap(); // TODO: fix unwrap
+			]);
+		if let Some(time_limit) = self.time_limit {
+			cmd.args(["--time-limit", time_limit.as_millis().to_string().as_str()]);
+		}
+		if self.enable_stats {
+			cmd.arg("--statistics");
+		}
+
+		let mut child = cmd.spawn().unwrap(); // TODO: fix unwrap
 		let stdout = child.stdout.take().unwrap();
 
+		let mut status = Status::Unknown;
 		for line in BufReader::new(stdout).lines() {
 			match line {
 				Err(err) => {

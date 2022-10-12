@@ -6,6 +6,7 @@
 
 use clap::{crate_version, Args, Parser, Subcommand};
 use env_logger::{fmt::TimestampPrecision, Builder};
+use humantime::Duration;
 use miette::{Report, Result};
 use shackle::error::InternalError;
 use shackle::{Message, Model, Solver, Status};
@@ -88,6 +89,10 @@ struct Solve {
 	#[clap(long, default_value = "gecode")]
 	solver: String,
 	input: PathBuf,
+	#[clap(long)]
+	statistics: bool,
+	#[clap(long)]
+	time_limit: Option<Duration>,
 }
 
 impl Solve {
@@ -111,6 +116,12 @@ impl Solve {
 		// Construct model, typecheck, and compile into program
 		let model = Model::from_file(self.input.clone());
 		let mut program = model.compile(&slv)?;
+
+		// Set program options
+		if let Some(time_limit) = self.time_limit {
+			program = program.with_time_limit(time_limit.into());
+		}
+		program = program.with_statistics(self.statistics);
 
 		// Run resulting program and show results
 		let display_fn = |x: &Message| {

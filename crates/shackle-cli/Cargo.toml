@@ -16,3 +16,4 @@ env_logger = "0.9.0"
 log = "0.4.14"
 miette = { version = "5.4.1", features = ["fancy"] }
 shackle = { path = "../shackle" }
+humantime = "2.1.0"
