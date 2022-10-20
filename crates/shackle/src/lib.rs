@@ -26,6 +26,7 @@ use std::{
 	env,
 	fmt::{self, Display},
 	io::{BufRead, BufReader, Write},
+	ops::Range,
 	path::{Path, PathBuf},
 	process::{Command, Stdio},
 	sync::Arc,
@@ -98,6 +99,7 @@ impl Model {
 		db.set_input_files(Arc::new(self.files.clone()));
 
 		let mut search_dirs = Vec::new();
+		// TODO: New STDLIB behaviour
 		if let Some(path) = &self.stdlib {
 			search_dirs.push(path.clone())
 		} else if let Ok(pathstr) = env::var("MZN_STDLIB_DIR") {
@@ -132,16 +134,14 @@ impl Model {
 				InputFile::Path(p) => match p.extension() {
 					Some(e) => {
 						if e.to_str() == Some("mzn") {
-							Some(db.intern_file_ref(FileRefData::InputFile(idx)).into())
+							Some(db.intern_file_ref(FileRefData::InputFile(idx)))
 						} else {
 							None
 						}
 					}
 					None => None,
 				},
-				InputFile::ModelString(_) => {
-					Some(db.intern_file_ref(FileRefData::InputFile(idx)).into())
-				}
+				InputFile::ModelString(_) => Some(db.intern_file_ref(FileRefData::InputFile(idx))),
 				_ => None,
 			}) {
 			let contents = db.file_contents(file)?;
@@ -253,7 +253,7 @@ pub enum Value {
 	Enum(String),
 	/// An array of values
 	/// All values are of the same type
-	Array(Vec<Value>),
+	Array(Vec<Range<i64>>, Vec<Value>),
 	/// A set of values
 	/// All values are of the same type and only occur once
 	Set(Vec<Value>),
@@ -263,47 +263,7 @@ pub enum Value {
 	Record(BTreeMap<String, Value>),
 }
 
-impl Value {
-	fn same_type(&self, other: &Value) -> bool {
-		match self {
-			Value::Absent => matches!(other, Value::Absent),
-			Value::Boolean(_) => matches!(other, Value::Boolean(_)),
-			Value::Integer(_) => matches!(other, Value::Integer(_)),
-			Value::Float(_) => matches!(other, Value::Float(_)),
-			Value::String(_) => matches!(other, Value::String(_)),
-			Value::Enum(_) => matches!(other, Value::Enum(_)),
-			Value::Array(x) => match other {
-				Value::Array(y) => {
-					x.is_empty() || y.is_empty() || x.first().unwrap().same_type(y.first().unwrap())
-				}
-				_ => false,
-			},
-			Value::Set(x) => match other {
-				Value::Set(y) => {
-					x.is_empty() || y.is_empty() || x.first().unwrap().same_type(y.first().unwrap())
-				}
-				_ => false,
-			},
-			Value::Tuple(x) => match other {
-				Value::Tuple(y) => {
-					x.len() == y.len() && x.iter().zip(y).all(|(a, b)| a.same_type(b))
-				}
-				_ => false,
-			},
-			Value::Record(x) => match other {
-				Value::Record(y) => {
-					x.len() == y.len()
-						&& x.iter()
-							.zip(y)
-							.all(|(a, b)| a.0 == b.0 && a.1.same_type(b.1))
-				}
-				_ => false,
-			},
-		}
-	}
-}
-
-impl<'a> Display for Value {
+impl Display for Value {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Value::Absent => write!(f, "<>"),
@@ -312,15 +272,41 @@ impl<'a> Display for Value {
 			Value::Float(v) => write!(f, "{}", v),
 			Value::String(v) => write!(f, "{:?}", v),
 			Value::Enum(v) => write!(f, "{}", v),
-			Value::Array(v) => {
+			Value::Array(idx, v) => {
+				let mut ii: Vec<i64> = idx.iter().map(|r| r.start).collect();
+				let incr = |ii: &mut Vec<i64>| {
+					let mut i = ii.len() - 1;
+					ii[i] += 1;
+					while !idx[i].contains(&ii[i]) && i > 0 {
+						ii[i] = idx[i].start;
+						i = i.wrapping_sub(1);
+						ii[i] += 1;
+					}
+				};
 				let mut first = true;
 				write!(f, "[")?;
 				for x in v {
 					if !first {
 						write!(f, ", ")?;
 					}
-					write!(f, "{}", x)?;
+					match &ii[..] {
+						[i] => write!(f, "{i}: "),
+						ii => {
+							write!(f, "(")?;
+							let mut tup_first = true;
+							for i in ii {
+								if !tup_first {
+									write!(f, ",")?;
+								}
+								write!(f, "{i}")?;
+								tup_first = false;
+							}
+							write!(f, "): ")
+						}
+					}?;
+					write!(f, "{x}")?;
 					first = false;
+					incr(&mut ii);
 				}
 				write!(f, "]")
 			}
@@ -394,81 +380,107 @@ impl<'de> Visitor<'de> for ValueVisitor {
 	}
 	fn visit_seq<V: SeqAccess<'de>>(self, mut seq: V) -> Result<Self::Value, V::Error> {
 		let mut vec: Vec<Value> = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-		let mut is_arr = true; // TODO: Get MiniZinc to create non-ambiguous JSON values
 		while let Some(el) = seq.next_element()? {
-			if let Some(fst) = vec.first() {
-				is_arr = is_arr && fst.same_type(&el);
-			}
-			vec.push(el)
+			vec.push(el);
 		}
-		Ok(if is_arr {
-			Value::Array(vec)
-		} else {
-			Value::Tuple(vec)
-		})
+		Ok(Value::Tuple(vec))
 	}
 
 	fn visit_map<V: MapAccess<'de>>(self, mut map: V) -> Result<Self::Value, V::Error> {
-		let mut obj = BTreeMap::new();
-		while let Some((k, v)) = map.next_entry::<&str, Value>()? {
-			if obj.insert(String::from(k), v).is_some() {
-				// TODO: Is there any way to not leak this memory?
-				let key = String::from(k).into_boxed_str();
-				return Err(serde::de::Error::duplicate_field(Box::leak(key)));
+		let ret = match map.next_key()? {
+			Some("c") => {
+				let func: &str = map.next_value()?;
+				match map.next_key()? {
+					Some("e") => {
+						let val: Value = map.next_value()?;
+						Ok(Value::Enum(format!("{func}({val})")))
+					}
+					Some(key) => Err(serde::de::Error::unknown_field(key, &["e"])),
+					None => Err(serde::de::Error::missing_field("e")),
+				}
 			}
-		}
-		Ok(match obj.len() {
-			1 => {
-				if obj.contains_key("set") {
-					if let Value::Array(obj) = obj.remove("set").unwrap() {
-						let mut members = Vec::with_capacity(obj.len());
-						for i in obj {
-							if let Value::Array(x) = i {
-								match &x[..] {
-									[Value::Integer(from), Value::Integer(to)] => {
-										for m in *from..=*to {
-											members.push(Value::Integer(m))
-										}
-									}
-									_ => members.push(Value::Array(x)),
-								}
-							} else {
-								members.push(i)
-							}
+			Some("i") => {
+				let val: i64 = map.next_value()?;
+				match map.next_key()? {
+					Some("e") => {
+						let name: &str = map.next_value()?;
+						Ok(Value::Enum(format!("to_enum({name}, {val})")))
+					}
+					Some(key) => Err(serde::de::Error::unknown_field(key, &["e"])),
+					None => Err(serde::de::Error::missing_field("e")),
+				}
+			}
+			Some("e") => {
+				let val = map.next_value()?;
+				match map.next_key()? {
+					Some("i") => {
+						if let Value::String(val) = val {
+							let ival: i64 = map.next_value()?;
+							Ok(Value::Enum(format!("to_enum({val}, {ival})")))
+						} else {
+							Err(serde::de::Error::custom("non-string enum identifier"))
 						}
-						Value::Set(members)
-					} else {
-						Value::Record(obj)
 					}
-				} else if obj.contains_key("e") {
-					if let Value::String(ident) = obj.remove("e").unwrap() {
-						Value::Enum(ident)
-					} else {
-						Value::Record(obj)
+					Some("c") => {
+						let func: &str = map.next_value()?;
+						Ok(Value::Enum(format!("{func}({val})")))
 					}
-				} else {
-					Value::Record(obj)
+					Some(field) => Err(serde::de::Error::unknown_field(field, &["i", "c"])),
+					None => {
+						if let Value::String(e) = val {
+							Ok(Value::Enum(e))
+						} else {
+							Err(serde::de::Error::custom("non-string enum identifier"))
+						}
+					}
 				}
 			}
-			2 => {
-				if let Some(Value::String(c)) = obj.get("c") {
-					if let Some(e) = obj.get("e") {
-						Value::Enum(format!("{}({})", c, e))
-					} else {
-						Value::Record(obj)
+			Some("indices") => {
+				let idx: Vec<(i64, i64)> = map.next_value()?;
+				match map.next_key()? {
+					Some("members") => {
+						let members = map.next_value()?;
+						Ok(Value::Array(
+							idx.iter().map(|r| r.0..(r.1 + 1)).collect(),
+							members,
+						))
 					}
-				} else if let Some(Value::Integer(i)) = obj.get("i") {
-					if let Some(Value::String(e)) = obj.get("e") {
-						Value::Enum(format!("to_enum({}, {})", e, i))
-					} else {
-						Value::Record(obj)
-					}
-				} else {
-					Value::Record(obj)
+					Some(field) => Err(serde::de::Error::unknown_field(field, &["members"])),
+					None => Err(serde::de::Error::missing_field("members")),
 				}
 			}
-			_ => Value::Record(obj),
-		})
+			Some("members") => {
+				let members = map.next_value()?;
+				match map.next_key()? {
+					Some("indices") => {
+						let idx = map.next_value()?;
+						Ok(Value::Array(idx, members))
+					}
+					Some(field) => Err(serde::de::Error::unknown_field(field, &["indices"])),
+					None => Err(serde::de::Error::missing_field("indices")),
+				}
+			}
+			Some("set") => {
+				// FIXME: Only works for integer sets
+				let ranges: Vec<(i64, i64)> = map.next_value()?;
+				let members = ranges
+					.iter()
+					.flat_map(|range| (range.0..=range.1))
+					.map(Value::Integer)
+					.collect();
+				Ok(Value::Set(members))
+			}
+			Some("record") => Ok(Value::Record(map.next_value()?)),
+			_ => Err(serde::de::Error::invalid_length(
+				0,
+				&"object of size 1 or 2",
+			)),
+		};
+		if let Some(key) = map.next_key()? {
+			Err(serde::de::Error::unknown_field(key, &[]))
+		} else {
+			ret
+		}
 	}
 }
 
@@ -500,7 +512,7 @@ impl Program {
 			.arg(self.code.path())
 			.args([
 				"--output-mode",
-				"json",
+				"typed-json",
 				"--json-stream",
 				"--output-time",
 				"--output-objective",

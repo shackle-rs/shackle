@@ -79,7 +79,7 @@ struct Opts {
 #[derive(Subcommand, Debug)]
 enum SubCommand {
 	Compile(Compile),
-	Solve(Solve),
+	Solve(Box<Solve>),
 	Check(Check),
 }
 
