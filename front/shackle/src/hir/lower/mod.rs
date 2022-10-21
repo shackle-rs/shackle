@@ -2,7 +2,7 @@
 //!
 //! The AST is lowered to HIR by performing the following syntactic desugarings:
 //!
-//! - predicate/test/annotation rewritten as functions
+//! - predicate/test rewritten as functions
 //! - prefix/infix/postfix operators rewritten as calls
 //! - generator calls rewritten as calls using array comprehensions
 //! - string interpolation rewritten into `concat` of `show` calls

@@ -13,8 +13,8 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	error::{
-		AdditionalSolveItem, DuplicateAssignment, DuplicateFunction, FunctionAlreadyDefined,
-		MultipleAssignments, MultipleSolveItems,
+		AdditionalSolveItem, ConstructorAlreadyDefined, DuplicateAssignment, DuplicateConstructor,
+		DuplicateFunction, FunctionAlreadyDefined, MultipleAssignments, MultipleSolveItems,
 	},
 	hir::ids::{ItemRef, NodeRef},
 	ty::{FunctionEntry, OverloadingError},
@@ -34,15 +34,61 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 	let global_scope = db.lookup_global_scope();
 	for (_, ps) in global_scope.functions(0) {
 		let mut overloads = Vec::new();
+		let mut annotation_constructors = Vec::new();
+		let mut enum_constructors = Vec::new();
 		for p in ps.iter() {
 			let signature = db.lookup_item_signature(p.item());
 			match &signature.patterns[p] {
-				PatternTy::Function(f) => overloads.push((*p, *f.clone())),
+				PatternTy::Function(f) => {
+					overloads.push((*p, *f.clone()));
+				}
+				PatternTy::AnnotationConstructor(f) => {
+					if annotation_constructors.is_empty() {
+						overloads.push((*p, *f.clone()));
+					}
+					annotation_constructors.push(*p);
+				}
 				PatternTy::EnumConstructor(fs) => {
-					overloads.extend(fs.iter().map(|f| (*p, f.clone())))
+					if enum_constructors.is_empty() {
+						overloads.extend(fs.iter().map(|f| (*p, f.clone())));
+					}
+					enum_constructors.push(*p);
 				}
 				_ => unreachable!(),
 			}
+		}
+		if annotation_constructors.len() > 1 {
+			let mut iter = annotation_constructors.into_iter();
+			let first = iter.next().unwrap();
+			let item = first.item();
+			let model = item.model(db);
+			let data = item.local_item_ref(db).data(&*model);
+			let name = data[first.pattern()].identifier().unwrap();
+			let (src, span) = NodeRef::from(first.into_entity(db)).source_span(db);
+			let others = iter
+				.map(|c| {
+					let (src, span) = NodeRef::from(c.into_entity(db)).source_span(db);
+					let help = format!(
+						"Try removing this item or use the functional syntax 'function ann: {}(..) = ..'.",
+						name.pretty_print(db)
+					);
+					DuplicateConstructor { help, src, span }
+				})
+				.collect();
+			diagnostics.push(ConstructorAlreadyDefined { src, span, others }.into());
+		}
+		if enum_constructors.len() > 1 {
+			let mut iter = enum_constructors.into_iter();
+			let first = iter.next().unwrap();
+			let (src, span) = NodeRef::from(first.into_entity(db)).source_span(db);
+			let others = iter
+				.map(|c| {
+					let (src, span) = NodeRef::from(c.into_entity(db)).source_span(db);
+					let help = "Try removing this enum constructor.".to_owned();
+					DuplicateConstructor { help, src, span }
+				})
+				.collect();
+			diagnostics.push(ConstructorAlreadyDefined { src, span, others }.into());
 		}
 		let errors = FunctionEntry::check_overloading(db.upcast(), overloads);
 		diagnostics.extend(errors.iter().map(|e| match e {
@@ -54,7 +100,9 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 				let model = item.model(db);
 				let data = item.local_item_ref(db).data(&*model);
 				let name = data[first_pat.pattern()].identifier().unwrap();
-				let signature = first_fn.overload.pretty_print_item(db.upcast(), name);
+				let signature = first_fn
+					.overload
+					.pretty_print_call_signature(db.upcast(), name);
 				let (src, span) = NodeRef::from(first_pat.into_entity(db)).source_span(db);
 				FunctionAlreadyDefined {
 					src,

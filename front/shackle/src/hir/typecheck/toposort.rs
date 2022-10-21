@@ -97,8 +97,8 @@ impl<'a> TopoSorter<'a> {
 				if let Some(def) = &model[e].definition {
 					let data = local_item.data(&*model);
 					for c in def.iter() {
-						for param in c.parameters.iter() {
-							for e in Type::expressions(*param, data) {
+						for param in c.parameters() {
+							for e in Type::expressions(param.declared_type, data) {
 								self.visit_expression(ExpressionRef::new(item, e));
 							}
 						}
@@ -112,8 +112,8 @@ impl<'a> TopoSorter<'a> {
 					self.current.insert(p);
 					let data = local_item.data(&*model);
 					for c in model[e].definition.iter() {
-						for param in c.parameters.iter() {
-							for e in Type::expressions(*param, data) {
+						for param in c.parameters() {
+							for e in Type::expressions(param.declared_type, data) {
 								self.visit_expression(ExpressionRef::new(item, e));
 							}
 						}
@@ -169,7 +169,9 @@ impl<'a> TopoSorter<'a> {
 				}
 				self.current.remove(&p);
 			}
-			LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => (), // Never cyclic, so skip check
+			LocalItemRef::Annotation(_) | LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => {
+				// Never cyclic, so skip check
+			}
 		}
 		self.sorted.push(item);
 	}

@@ -3,17 +3,15 @@ Annotation
 ==========
 
 annotation simple;
-annotation redirect = simple;
 annotation funclike(int, int);
-annotation funcdef(int: x, int: y) = other(x, y);
+annotation funcnames(int: x, int: y);
 
 ---
 
 (source_file
   (annotation (identifier))
-  (annotation (identifier) (identifier))
-  (annotation (identifier) (parameter (type_base (primitive_type))) (parameter (type_base (primitive_type))))
-  (annotation (identifier) (parameter (type_base (primitive_type)) (identifier)) (parameter (type_base (primitive_type)) (identifier)) (call (identifier) (identifier) (identifier))))
+  (annotation (identifier) (annotation_parameters (parameter (type_base (primitive_type))) (parameter (type_base (primitive_type)))))
+  (annotation (identifier) (annotation_parameters (parameter (type_base (primitive_type)) (identifier)) (parameter (type_base (primitive_type)) (identifier)))))
 
 ==========
 Assignment

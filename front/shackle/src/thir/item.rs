@@ -56,6 +56,41 @@ pub struct ItemData {
 	pub origins: Arena<Origin>,
 }
 
+/// Annotation item
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Annotation {
+	/// The constructor for this annotation
+	pub constructor: Constructor,
+}
+
+impl Deref for Annotation {
+	type Target = Constructor;
+	fn deref(&self) -> &Self::Target {
+		&self.constructor
+	}
+}
+
+impl DerefMut for Annotation {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.constructor
+	}
+}
+
+impl Item<Annotation> {
+	/// Create a new annotation item with the given name
+	pub fn new(name: Identifier) -> Self {
+		Item {
+			item: Annotation {
+				constructor: Constructor {
+					name: Some(name),
+					parameters: None,
+				},
+			},
+			data: Box::new(ItemData::default()),
+		}
+	}
+}
+
 /// Constraint item
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Constraint {
@@ -142,7 +177,7 @@ pub struct Enumeration {
 	/// Enum type
 	pub enum_type: EnumRef,
 	/// Right-hand-side definition
-	pub definition: Option<Vec<EnumerationCase>>,
+	pub definition: Option<Vec<Constructor>>,
 	/// Annotations
 	pub annotations: Vec<ArenaIndex<Expression>>,
 }
@@ -167,13 +202,13 @@ impl Item<Enumeration> {
 	}
 }
 
-/// An enumeration case definition
+/// A constructor (either atomic or a constructor function)
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EnumerationCase {
-	/// The name of this case
+pub struct Constructor {
+	/// The name of this constructor
 	pub name: Option<Identifier>,
-	/// The types this case contains
-	pub parameters: Vec<ArenaIndex<Item<Declaration>>>,
+	/// The constructor function parameters, or `None` if this is atomic
+	pub parameters: Option<Vec<ArenaIndex<Item<Declaration>>>>,
 }
 
 /// Function item
@@ -375,6 +410,8 @@ pub enum Goal {
 /// ID of an item
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ItemId {
+	/// Annotation item
+	Annotation(ArenaIndex<Item<Annotation>>),
 	/// Constraint item
 	Constraint(ArenaIndex<Item<Constraint>>),
 	/// Declaration item
@@ -387,6 +424,7 @@ pub enum ItemId {
 	Output(ArenaIndex<Item<Output>>),
 }
 
+impl_enum_from!(ItemId::Annotation(ArenaIndex<Item<Annotation>>));
 impl_enum_from!(ItemId::Constraint(ArenaIndex<Item<Constraint>>));
 impl_enum_from!(ItemId::Declaration(ArenaIndex<Item<Declaration>>));
 impl_enum_from!(ItemId::Enumeration(ArenaIndex<Item<Enumeration>>));

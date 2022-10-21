@@ -67,6 +67,7 @@ impl BodyTypeContext {
 		let data = it.data(&model);
 		let mut typer = Typer::new(db, types, identifiers, self, item, data);
 		match it {
+			LocalItemRef::Annotation(_) => {}
 			LocalItemRef::Function(f) => {
 				let it = &model[f];
 				for ann in it.annotations.iter() {

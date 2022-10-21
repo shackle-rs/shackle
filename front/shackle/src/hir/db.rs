@@ -75,8 +75,8 @@ pub trait Hir:
 	/// Get the errors from collecting global scope
 	fn lookup_global_scope_diagnostics(&self) -> Arc<Vec<Error>>;
 
-	/// Get whether there is an enum atom with the given name in global scope
-	fn lookup_global_enum_atom(&self, identifier: Identifier) -> bool;
+	/// Get whether there is an atom with the given name in global scope
+	fn lookup_global_atom(&self, identifier: Identifier) -> bool;
 
 	/// Resolve this variable identifier in global scope.
 	fn lookup_global_variable(&self, identifier: Identifier) -> Option<PatternRef>;
@@ -311,8 +311,8 @@ fn lookup_global_scope_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 	db.collect_global_scope().1
 }
 
-fn lookup_global_enum_atom(db: &dyn Hir, identifier: Identifier) -> bool {
-	db.lookup_global_scope().is_enum_atom(identifier, 0)
+fn lookup_global_atom(db: &dyn Hir, identifier: Identifier) -> bool {
+	db.lookup_global_scope().is_atom(identifier, 0)
 }
 
 fn lookup_global_variable(db: &dyn Hir, identifier: Identifier) -> Option<PatternRef> {

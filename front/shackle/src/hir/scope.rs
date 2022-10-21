@@ -27,6 +27,25 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 	let mut had_solve_item = false;
 	for m in db.resolve_includes().unwrap().iter() {
 		let model = db.lookup_model(*m);
+		for (i, a) in model.annotations.iter() {
+			let item_ref = ItemRef::new(db, *m, i);
+			let identifier = a.data[a.pattern]
+				.identifier()
+				.expect("Annotation item must have identifier pattern");
+			if a.is_atomic() {
+				if let Err(e) =
+					scope.add_variable(db, identifier, 0, PatternRef::new(item_ref, a.pattern))
+				{
+					diagnostics.push(e);
+				} else {
+					scope.atoms.insert(identifier);
+				}
+			} else if let Err(e) =
+				scope.add_function(db, identifier, 0, PatternRef::new(item_ref, a.pattern))
+			{
+				diagnostics.push(e);
+			}
+		}
 		for (i, d) in model.declarations.iter() {
 			scope.add_irrefutable_pattern(
 				db,
@@ -53,27 +72,27 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				for c in d.iter() {
 					match &e.data[c.pattern] {
 						Pattern::Identifier(identifier) => {
-							let result = if c.parameters.is_empty() {
+							if c.is_atomic() {
 								// Enum atom, so this is a variable
-								scope.add_variable(
+								if let Err(e) = scope.add_variable(
 									db,
 									*identifier,
 									0,
 									PatternRef::new(item_ref, c.pattern),
-								)
-							} else {
-								// Enum constructor (overloads handled later in type checker)
-								scope.add_function(
-									db,
-									*identifier,
-									0,
-									PatternRef::new(item_ref, c.pattern),
-								)
-							};
-							if let Err(e) = result {
+								) {
+									diagnostics.push(e);
+								} else {
+									scope.atoms.insert(*identifier);
+								}
+							}
+							// Enum constructor (overloads handled later in type checker)
+							else if let Err(e) = scope.add_function(
+								db,
+								*identifier,
+								0,
+								PatternRef::new(item_ref, c.pattern),
+							) {
 								diagnostics.push(e);
-							} else {
-								scope.enum_atoms.insert(*identifier);
 							}
 						}
 						Pattern::Anonymous => (),
@@ -87,27 +106,27 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 			for c in e.definition.iter() {
 				match &e.data[c.pattern] {
 					Pattern::Identifier(identifier) => {
-						let result = if c.parameters.is_empty() {
+						if c.is_atomic() {
 							// Enum atom, so this is a variable
-							scope.add_variable(
+							if let Err(e) = scope.add_variable(
 								db,
 								*identifier,
 								0,
 								PatternRef::new(item_ref, c.pattern),
-							)
-						} else {
-							// Enum constructor (overloads handled later in type checker)
-							scope.add_function(
-								db,
-								*identifier,
-								0,
-								PatternRef::new(item_ref, c.pattern),
-							)
-						};
-						if let Err(e) = result {
+							) {
+								diagnostics.push(e);
+							} else {
+								scope.atoms.insert(*identifier);
+							}
+						}
+						// Enum constructor (overloads handled later in type checker)
+						else if let Err(e) = scope.add_function(
+							db,
+							*identifier,
+							0,
+							PatternRef::new(item_ref, c.pattern),
+						) {
 							diagnostics.push(e);
-						} else {
-							scope.enum_atoms.insert(*identifier);
 						}
 					}
 					Pattern::Anonymous => (),
@@ -117,26 +136,13 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 		}
 		for (i, f) in model.functions.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
-			match &f.data[f.pattern] {
-				Pattern::Identifier(identifier) => {
-					if scope.enum_atoms.contains(identifier) {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, item_ref, f.pattern)).source_span(db);
-						diagnostics.push(
-							IdentifierAlreadyDefined {
-								identifier: identifier.pretty_print(db),
-								src,
-								span,
-							}
-							.into(),
-						);
-					} else if let Err(e) =
-						scope.add_function(db, *identifier, 0, PatternRef::new(item_ref, f.pattern))
-					{
-						diagnostics.push(e);
-					}
-				}
-				_ => unreachable!("Function must have identifier pattern"),
+			let identifier = &f.data[f.pattern]
+				.identifier()
+				.expect("Function must have identifier pattern");
+			if let Err(e) =
+				scope.add_function(db, *identifier, 0, PatternRef::new(item_ref, f.pattern))
+			{
+				diagnostics.push(e);
 			}
 		}
 		for (i, s) in model.solves.iter() {
@@ -188,7 +194,8 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 pub struct ScopeData {
 	functions: FxHashMap<Identifier, Vec<(PatternRef, u32)>>,
 	variables: FxHashMap<Identifier, (PatternRef, u32)>,
-	enum_atoms: FxHashSet<Identifier>,
+	/// Identifiers which do not cause pattern matching to add new variable bindings
+	atoms: FxHashSet<Identifier>,
 }
 
 impl ScopeData {
@@ -197,7 +204,7 @@ impl ScopeData {
 		Self {
 			functions: FxHashMap::default(),
 			variables: FxHashMap::default(),
-			enum_atoms: FxHashSet::default(),
+			atoms: FxHashSet::default(),
 		}
 	}
 
@@ -284,10 +291,9 @@ impl ScopeData {
 		}
 	}
 
-	/// Return whether this identifier is an enum atom in this scope
-	pub fn is_enum_atom(&self, identifier: Identifier, generation: u32) -> bool {
-		self.find_variable(identifier, generation).is_some()
-			&& self.enum_atoms.contains(&identifier)
+	/// Return whether this identifier is an atom in this scope
+	pub fn is_atom(&self, identifier: Identifier, generation: u32) -> bool {
+		self.find_variable(identifier, generation).is_some() && self.atoms.contains(&identifier)
 	}
 
 	/// Find the given variable identifier in this scope.
@@ -430,14 +436,14 @@ impl ScopeCollector<'_> {
 								current = *parent;
 								continue;
 							}
-							if scope.is_enum_atom(*i, generation) {
+							if scope.is_atom(*i, generation) {
 								refutable_pattern();
 								break;
 							}
 							current = *parent;
 						}
 						Scope::Global => {
-							if self.db.lookup_global_enum_atom(*i) {
+							if self.db.lookup_global_atom(*i) {
 								refutable_pattern();
 								break;
 							}
@@ -801,6 +807,14 @@ impl ScopeResult {
 pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc<Vec<Error>>) {
 	let model = db.lookup_model(item.model_ref(db));
 	let (scopes, expression_scopes, diagnostics) = match item.local_item_ref(db) {
+		LocalItemRef::Annotation(a) => {
+			let annotation = &model[a];
+			let mut collector = ScopeCollector::new(db, item, annotation.data.as_ref());
+			for p in annotation.parameters() {
+				collector.collect_type(p.declared_type);
+			}
+			collector.finish()
+		}
 		LocalItemRef::Assignment(a) => {
 			let assignment = &model[a];
 			let mut collector = ScopeCollector::new(db, item, assignment.data.as_ref());
@@ -837,8 +851,8 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			}
 			if let Some(ref d) = enumeration.definition {
 				for c in d.iter() {
-					for p in c.parameters.iter() {
-						collector.collect_type(*p);
+					for p in c.parameters() {
+						collector.collect_type(p.declared_type);
 					}
 				}
 			}
@@ -849,8 +863,8 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			let mut collector = ScopeCollector::new(db, item, assignment.data.as_ref());
 			collector.collect_expression(assignment.assignee);
 			for c in assignment.definition.iter() {
-				for p in c.parameters.iter() {
-					collector.collect_type(*p);
+				for p in c.parameters() {
+					collector.collect_type(p.declared_type);
 				}
 			}
 			collector.finish()

@@ -228,16 +228,14 @@ impl FunctionEntry {
 		let mut same_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
 		// TODO: Make less horrible
 		for (i, (_, a)) in overloads.iter().enumerate() {
-			if same_fns[i].is_some() {
-				continue;
-			}
 			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
-				if a.has_body
-					&& b.has_body && a.overload.instantiate(db, b.overload.params()).is_ok()
-					&& b.overload.instantiate(db, a.overload.params()).is_ok()
-				{
-					// Same function with multiple definitions
-					same_fns[i + j + 1] = Some(i);
+				if let Ok(fa) = a.overload.instantiate(db, b.overload.params()) {
+					if b.overload.instantiate(db, a.overload.params()).is_ok() {
+						if a.has_body && b.has_body || fa.return_type != b.overload.return_type() {
+							// Same function with multiple definitions
+							same_fns[i + j + 1] = Some(i);
+						}
+					}
 				}
 			}
 		}
@@ -346,6 +344,18 @@ impl OverloadedFunction {
 			OverloadedFunction::PolymorphicFunction(p) => p.pretty_print_item(db, name),
 		}
 	}
+
+	/// Get human readable representation of this signature in item form without the return type
+	pub fn pretty_print_call_signature(
+		&self,
+		db: &dyn Interner,
+		name: impl Into<InternedString>,
+	) -> String {
+		match self {
+			OverloadedFunction::Function(f) => f.pretty_print_call_signature(db, name),
+			OverloadedFunction::PolymorphicFunction(p) => p.pretty_print_call_signature(db, name),
+		}
+	}
 }
 
 /// Type of a function expression.
@@ -419,9 +429,17 @@ impl FunctionType {
 		} else {
 			format!("function {}:", self.return_type.pretty_print(db))
 		};
+		format!("{} {}", prefix, self.pretty_print_call_signature(db, name))
+	}
+
+	/// Get human readable representation of type as an item without the return type
+	pub fn pretty_print_call_signature(
+		&self,
+		db: &dyn Interner,
+		name: impl Into<InternedString>,
+	) -> String {
 		format!(
-			"{} {}({})",
-			prefix,
+			"{}({})",
 			name.into().value(db),
 			self.params
 				.iter()
@@ -686,9 +704,17 @@ impl PolymorphicFunctionType {
 		} else {
 			format!("function {}:", self.return_type.pretty_print(db))
 		};
+		format!("{} {}", prefix, self.pretty_print_call_signature(db, name))
+	}
+
+	/// Get human readable representation of type as an item without the return type
+	pub fn pretty_print_call_signature(
+		&self,
+		db: &dyn Interner,
+		name: impl Into<InternedString>,
+	) -> String {
 		format!(
-			"{} {}({})",
-			prefix,
+			"{}({})",
 			name.into().value(db),
 			self.params
 				.iter()

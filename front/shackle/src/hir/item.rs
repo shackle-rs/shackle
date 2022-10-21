@@ -249,13 +249,63 @@ pub struct Declaration {
 	pub annotations: Box<[ArenaIndex<Expression>]>,
 }
 
+/// A constructor atom or function for an enum or annotations
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Constructor {
+	/// Pattern being declared (always an identifier)
+	pub pattern: ArenaIndex<Pattern>,
+	/// Constructor parameters (none for an atomic constructor)
+	pub parameters: Option<Box<[ConstructorParameter]>>,
+}
+
+impl Constructor {
+	/// Whether this is an atomic constructor
+	pub fn is_atomic(&self) -> bool {
+		self.parameters.is_none()
+	}
+
+	/// Get the parameters (if any) for this constructor
+	pub fn parameters(&self) -> impl '_ + Iterator<Item = &ConstructorParameter> {
+		self.parameters.iter().flat_map(|ps| ps.iter())
+	}
+}
+
+/// A constructor function parameter
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct ConstructorParameter {
+	/// Type of declaration
+	pub declared_type: ArenaIndex<Type>,
+	/// Pattern of the parameter (usually just an identifier)
+	pub pattern: Option<ArenaIndex<Pattern>>,
+}
+
+/// An annotation item
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Annotation {
+	/// The constructor this annotation item declares
+	pub constructor: Constructor,
+}
+
+impl Deref for Annotation {
+	type Target = Constructor;
+	fn deref(&self) -> &Self::Target {
+		&self.constructor
+	}
+}
+
+impl DerefMut for Annotation {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.constructor
+	}
+}
+
 /// A enum item
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Enumeration {
 	/// Pattern being declared (an identifier)
 	pub pattern: ArenaIndex<Pattern>,
 	/// Right-hand-side definition
-	pub definition: Option<Box<[EnumerationCase]>>,
+	pub definition: Option<Box<[Constructor]>>,
 	/// Annotations
 	pub annotations: Box<[ArenaIndex<Expression>]>,
 }
@@ -266,16 +316,7 @@ pub struct EnumAssignment {
 	/// Expression being assigned (an identifier)
 	pub assignee: ArenaIndex<Expression>,
 	/// Enum definition
-	pub definition: Box<[EnumerationCase]>,
-}
-
-/// An enumeration case definition
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EnumerationCase {
-	/// The name of this case (an identifier)
-	pub pattern: ArenaIndex<Pattern>,
-	/// The types this case contains
-	pub parameters: Box<[ArenaIndex<Type>]>,
+	pub definition: Box<[Constructor]>,
 }
 
 /// Function item

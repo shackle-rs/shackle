@@ -413,6 +413,10 @@ pub enum PatternTy {
 	EnumConstructor(Box<[FunctionEntry]>),
 	/// Enum atom
 	EnumAtom(Ty),
+	/// Annotation constructor
+	AnnotationConstructor(Box<FunctionEntry>),
+	/// Annotation atom
+	AnnotationAtom,
 	/// Destructuring pattern
 	Destructuring(Ty),
 	/// Currently computing
@@ -440,6 +444,11 @@ impl<'a> DebugPrint<'a> for PatternTy {
 				)
 			}
 			PatternTy::EnumAtom(ty) => format!("EnumAtom({})", ty.pretty_print(db.upcast())),
+			PatternTy::AnnotationConstructor(f) => format!(
+				"AnnotationConstructor({})",
+				f.overload.pretty_print(db.upcast())
+			),
+			PatternTy::AnnotationAtom => format!("AnnotationAtom"),
 			PatternTy::Destructuring(ty) => {
 				format!("Destructuring({})", ty.pretty_print(db.upcast()))
 			}

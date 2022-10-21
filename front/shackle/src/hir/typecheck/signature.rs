@@ -10,7 +10,7 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
-		EnumerationCase, Goal, IdentifierRegistry, ItemData, Pattern, Type,
+		Constructor, Goal, IdentifierRegistry, ItemData, Pattern, Type,
 	},
 	ty::{
 		EnumRef, FunctionEntry, FunctionType, OptType, OverloadedFunction, PolymorphicFunctionType,
@@ -68,6 +68,60 @@ impl SignatureTypeContext {
 		let it = item.local_item_ref(db);
 		let data = it.data(model);
 		match it {
+			LocalItemRef::Annotation(a) => {
+				let it = &model[a];
+				if it.is_atomic() {
+					self.add_declaration(
+						PatternRef::new(item, it.pattern),
+						PatternTy::AnnotationAtom,
+					);
+				} else {
+					let pattern = PatternRef::new(item, it.pattern);
+					let params = it
+						.parameters()
+						.map(|p| {
+							let mut had_error = false;
+							for t in Type::any_types(p.declared_type, &it.data) {
+								let (src, span) =
+									NodeRef::from(EntityRef::new(db, item, t)).source_span(db);
+								self.add_diagnostic(
+									item,
+									TypeInferenceFailure {
+										src,
+										span,
+										msg: "Incomplete parameter types are not allowed"
+											.to_owned(),
+									},
+								);
+								had_error = true;
+							}
+							let ty = if had_error {
+								types.error
+							} else {
+								Typer::new(db, types, identifiers, self, item, data)
+									.complete_type(p.declared_type, None)
+							};
+							if let Some(pat) = p.pattern {
+								self.add_declaration(
+									PatternRef::new(item, pat),
+									PatternTy::Variable(ty),
+								);
+							}
+							ty
+						})
+						.collect();
+					self.add_declaration(
+						pattern,
+						PatternTy::AnnotationConstructor(Box::new(FunctionEntry {
+							has_body: false,
+							overload: OverloadedFunction::Function(FunctionType {
+								return_type: types.ann,
+								params,
+							}),
+						})),
+					);
+				}
+			}
 			LocalItemRef::Function(f) => {
 				let it = &model[f];
 				// Set as computing so if there's a call to a function with this name we can break the cycle
@@ -320,28 +374,27 @@ impl SignatureTypeContext {
 		item: ItemRef,
 		data: &ItemData,
 		ty: Ty,
-		cases: &[EnumerationCase],
+		cases: &[Constructor],
 	) {
 		for case in cases.iter() {
-			if case.parameters.is_empty() {
+			if case.is_atomic() {
 				self.add_declaration(PatternRef::new(item, case.pattern), PatternTy::EnumAtom(ty));
 			} else {
 				let param_types = {
 					let mut typer = Typer::new(db, types, identifiers, self, item, data);
-					case.parameters
-						.iter()
-						.map(|p| typer.complete_type(*p, None))
+					case.parameters()
+						.map(|p| typer.complete_type(p.declared_type, None))
 						.collect::<Box<[_]>>()
 				};
 
 				let mut had_error = false;
-				for (p, t) in case.parameters.iter().zip(param_types.iter()) {
+				for (p, t) in case.parameters().zip(param_types.iter()) {
 					if t.contains_error(db.upcast()) {
 						had_error = true;
 					}
 					if !t.known_par(db.upcast()) || !t.known_enumerable(db.upcast()) {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, item, *p)).source_span(db);
+						let (src, span) = NodeRef::from(EntityRef::new(db, item, p.declared_type))
+							.source_span(db);
 						self.add_diagnostic(
 							item,
 							TypeMismatch {
@@ -356,7 +409,7 @@ impl SignatureTypeContext {
 						had_error = true;
 					}
 
-					for unbounded in Type::primitives(*p, data) {
+					for unbounded in Type::primitives(p.declared_type, data) {
 						let (src, span) =
 							NodeRef::from(EntityRef::new(db, item, unbounded)).source_span(db);
 						self.add_diagnostic(

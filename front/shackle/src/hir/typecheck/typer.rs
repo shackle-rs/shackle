@@ -150,6 +150,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			self.ctx.add_identifier_resolution(expression, p);
 			match self.ctx.type_pattern(db, self.types, self.identifiers, p) {
 				PatternTy::Variable(ty) | PatternTy::EnumAtom(ty) => return ty,
+				PatternTy::AnnotationAtom => return self.types.ann,
 				PatternTy::TypeAlias(_) => {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -163,7 +164,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					);
 					return self.types.error;
 				}
-				PatternTy::EnumConstructor(_) => (),
+				PatternTy::EnumConstructor(_) | PatternTy::AnnotationConstructor(_) => (),
 				PatternTy::Computing => {
 					// Error will be emitted during topological sorting
 					return self.types.error;
@@ -1318,6 +1319,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			self.complete_type(d.declared_type, None)
 		};
 		self.collect_pattern(None, d.pattern, ty);
+		for ann in d.annotations.iter() {
+			self.typecheck_expression(*ann, self.types.ann, Some(ty));
+		}
 		ty
 	}
 
@@ -1422,7 +1426,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let mut overloads = Vec::with_capacity(patterns.len());
 		for p in patterns.iter() {
 			match self.ctx.type_pattern(db, self.types, self.identifiers, *p) {
-				PatternTy::Function(function) => overloads.push((*p, *function.clone())),
+				PatternTy::Function(function) | PatternTy::AnnotationConstructor(function) => {
+					overloads.push((*p, *function.clone()))
+				}
 				PatternTy::EnumConstructor(functions) => {
 					overloads.extend(functions.iter().map(|function| (*p, function.clone())))
 				}
@@ -1622,14 +1628,19 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				// If this is an enum atom, then add a resolution to it
 				let res = (|| {
 					let p = self.find_variable(scope?, *i)?;
-					if let PatternTy::EnumAtom(ty) =
-						self.ctx.type_pattern(db, self.types, self.identifiers, p)
-					{
-						self.ctx
-							.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-						return Some(ty);
+					match self.ctx.type_pattern(db, self.types, self.identifiers, p) {
+						PatternTy::EnumAtom(ty) => {
+							self.ctx
+								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+							return Some(ty);
+						}
+						PatternTy::AnnotationAtom => {
+							self.ctx
+								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+							return Some(self.types.ann);
+						}
+						_ => None,
 					}
-					None
 				})();
 				if let Some(ty) = res {
 					ty
@@ -1649,32 +1660,40 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let res = (|| {
 					let name = self.data[*function].identifier().unwrap();
 					let fns = self.find_function(scope?, name);
-					let cs = fns
-						.iter()
-						.find_map(|f| {
-							if let PatternTy::EnumConstructor(cs) =
-								self.ctx.type_pattern(db, self.types, self.identifiers, *f)
-							{
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
-								Some(cs)
-							} else {
-								None
-							}
-						})
-						.or_else(|| {
-							let (src, span) =
-								NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
-							self.ctx.add_diagnostic(
+					let cs =
+						fns.iter()
+							.find_map(|f| {
+								match self.ctx.type_pattern(db, self.types, self.identifiers, *f) {
+									PatternTy::EnumConstructor(cs) => {
+										self.ctx.add_pattern_resolution(
+											PatternRef::new(self.item, pat),
+											*f,
+										);
+										Some(cs)
+									}
+									PatternTy::AnnotationConstructor(fe) => {
+										self.ctx.add_pattern_resolution(
+											PatternRef::new(self.item, pat),
+											*f,
+										);
+										Some(Box::new([(*fe).clone()]))
+									}
+									_ => None,
+								}
+							})
+							.or_else(|| {
+								let (src, span) = NodeRef::from(EntityRef::new(db, self.item, pat))
+									.source_span(db);
+								self.ctx.add_diagnostic(
 								self.item,
 								TypeMismatch {
 									src,
 									span,
-									msg: "Expected enum constructor in pattern call".to_owned(),
+									msg: "Expected enum or annotation constructor in pattern call".to_owned(),
 								},
 							);
-							None
-						})?;
+								None
+							})?;
 
 					// Find the enum constructor via its return type
 					let c = cs
@@ -1689,7 +1708,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									src,
 									span,
 									msg: format!(
-										"No enum constructor '{}' found for type '{}'",
+										"No constructor '{}' found for type '{}'",
 										name.pretty_print(db),
 										expected.pretty_print(db.upcast())
 									),
@@ -1706,7 +1725,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							NoMatchingFunction {
 								src,
 								span,
-								msg: "Wrong number of arguments for enum constructor".to_owned(),
+								msg: format!(
+									"Constructor expected {} arguments, but got {}",
+									c.overload.params().len(),
+									arguments.len()
+								),
 							},
 						);
 					}

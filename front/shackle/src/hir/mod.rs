@@ -48,6 +48,8 @@ pub struct Model {
 	/// Items in original order
 	pub items: Vec<LocalItemRef>,
 
+	/// Annotation items
+	pub annotations: Arena<Item<Annotation>>,
 	/// Assignment items
 	pub assignments: Arena<Item<Assignment>>,
 	/// Enum assignments
@@ -67,6 +69,13 @@ pub struct Model {
 	pub solves: Arena<Item<Solve>>,
 	/// Type alias items
 	pub type_aliases: Arena<Item<TypeAlias>>,
+}
+
+impl Index<ArenaIndex<Item<Annotation>>> for Model {
+	type Output = Item<Annotation>;
+	fn index(&self, index: ArenaIndex<Item<Annotation>>) -> &Self::Output {
+		&self.annotations[index]
+	}
 }
 
 impl Index<ArenaIndex<Item<Assignment>>> for Model {
