@@ -28,6 +28,7 @@ pub use crate::hir::Identifier;
 /// A model
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Model {
+	annotations: Arena<Item<Annotation>>,
 	constraints: Arena<Item<Constraint>>,
 	declarations: Arena<Item<Declaration>>,
 	enumerations: Arena<Item<Enumeration>>,
@@ -44,6 +45,11 @@ impl Model {
 		&self,
 	) -> impl Iterator<Item = (ArenaIndex<Item<Constraint>>, &Item<Constraint>)> {
 		self.constraints.iter()
+	}
+
+	/// Add an annotation item
+	pub fn add_annotation(&mut self, item: Item<Annotation>) -> ArenaIndex<Item<Annotation>> {
+		self.annotations.insert(item)
 	}
 
 	/// Add a constraint item
@@ -98,6 +104,13 @@ impl Model {
 	/// Get the solve item
 	pub fn solve(&self) -> &Item<Solve> {
 		&self.solve
+	}
+}
+
+impl Index<ArenaIndex<Item<Annotation>>> for Model {
+	type Output = Item<Annotation>;
+	fn index(&self, index: ArenaIndex<Item<Annotation>>) -> &Self::Output {
+		&self.annotations[index]
 	}
 }
 

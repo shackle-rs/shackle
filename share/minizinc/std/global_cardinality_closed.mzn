@@ -65,9 +65,8 @@ predicate global_cardinality_closed(array[$X] of var int: x,
             "lbound and ubound must allow a count of 0 when x is empty, or also be empty",
             true)
    elseif length(cover) == 0 then
-     assert(false,"global_cardinality_low_up_closed: " ++
-            "cover must be empty when x is empty",
-            false)
+     abort("global_cardinality_low_up_closed: " ++
+            "cover must be empty when x is empty")
    else
      fzn_global_cardinality_low_up_closed(array1d(x), array1d(cover), array1d(lbound), array1d(ubound))
    endif
@@ -94,9 +93,8 @@ predicate global_cardinality_closed(array[$X] of var opt int: x,
             "lbound and ubound must allow a count of 0 when x is empty, or also be empty",
             true)
    elseif length(cover) == 0 then
-     assert(false,"global_cardinality_low_up_closed: " ++
-            "cover must be empty when x is empty",
-            false)
+     abort("global_cardinality_low_up_closed: " ++
+            "cover must be empty when x is empty")
    else
      fzn_global_cardinality_low_up_closed_opt(array1d(x), array1d(cover), array1d(lbound), array1d(ubound))
    endif
@@ -141,9 +139,8 @@ predicate global_cardinality_closed(array[$X] of var set of int: x,
             "lbound and ubound must allow a count of 0 when x is empty, or also be empty",
             true)
    elseif length(cover) == 0 then
-     assert(false,"global_cardinality_low_up_closed: " ++
-            "cover must be empty when x is empty",
-            false)
+     abort("global_cardinality_low_up_closed: " ++
+            "cover must be empty when x is empty")
    else
      fzn_global_cardinality_low_up_closed_set(array1d(x), array1d(cover), array1d(lbound), array1d(ubound))
    endif

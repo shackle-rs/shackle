@@ -25,10 +25,10 @@ annotation add_to_output;
 
 /** @group stdlib.annotations.general Declare that the annotated variable \a x should be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
-annotation 'output'(any $T: x :: annotated_expression);
+function ann: 'output'(any $T: x :: annotated_expression);
 /** @group stdlib.annotations.general Declare that the annotated variable \a x should be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
-annotation 'output'(array[$U] of any $T: x :: annotated_expression);
+function ann: 'output'(array [$U] of any $T: x :: annotated_expression);
 
 /** @group stdlib.annotations.general Declare that the annotated variable should not be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
@@ -68,14 +68,42 @@ annotation is_defined_var;
 annotation var_is_introduced;
 /** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
   by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-annotation defines_var(var $t: c);
+function ann: defines_var(var bool: c) = defines_var_bool(c);
 /** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
   by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-annotation defines_var(var opt $t: c);
+function ann: defines_var(var $$E: c) = defines_var_int(erase_enum(c));
+/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
+  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
+function ann: defines_var(var float: c) = defines_var_float(c);
+/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
+  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
+function ann: defines_var(var set of $$E: c) = defines_var_set_of_int(erase_enum(c));
+/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
+  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
+function ann: defines_var(array [$X] of var bool: c) = defines_array_of_var_bool(array1d(c));
+/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
+  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
+function ann: defines_var(array [$X] of var $$E: c) = defines_array_of_var_int(erase_enum(array1d(c)));
+/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
+  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
+function ann: defines_var(array [$X] of var float: c) = defines_array_of_var_float(array1d(c));
+/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
+  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
+function ann: defines_var(array [$X] of var set of $$E: c) = defines_array_of_var_set_of_int(erase_enum(array1d(c)));
+
+annotation defines_var_bool(var bool: x);
+annotation defines_var_int(var int: x);
+annotation defines_var_float(var float: x);
+annotation defines_var_set_of_int(var set of int: x);
+annotation defines_array_of_var_bool(array [int] of var bool: x);
+annotation defines_array_of_var_int(array [int] of var int: x);
+annotation defines_array_of_var_float(array [int] of var float: x);
+annotation defines_array_of_var_set_of_int(array [int] of var set of int: x);
+
 /** @group stdlib.annotations.general Declare that the annotated array should be printed by
   the solver with the given index sets \a a. This annotation is introduced into FlatZinc code by
   the compiler. */
-annotation output_array(array[$u] of set of int:a);
+annotation output_array(array[int] of set of int:a);
 /** @group stdlib.annotations.general Declare that the annotated variable should be printed by
   the solver. This annotation is introduced into FlatZinc code by
   the compiler. */
@@ -156,6 +184,8 @@ annotation bounds;
 
 /** @group stdlib.annotations.search Sequentially perform the searches specified in array \a s */
 annotation seq_search(array[int] of ann: s);
+/** @group stdlib.annotations.search Sequentially perform the searches specified in array \a s */
+function ann: seq_search(array[$X] of ann: s) = seq_search(erase_enum(array1d(s)));
 
 /** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
   strategy \a select, value choice strategy \a choice, and exploration strategy
@@ -163,19 +193,31 @@ annotation seq_search(array[int] of ann: s);
   in row-major order (as with the array1d function).
 */
 annotation int_search(
-    array[$X] of var int: x,
+    array[int] of var int: x,
     ann: select,
     ann: choice,
     ann: explore,
 );
 
 /** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
+  strategy \a select, value choice strategy \a choice, and exploration strategy
+  \a explore. If \a x is a multi-dimensional array, it is coerced to one-dimensional
+  in row-major order (as with the array1d function).
+*/
+function ann: int_search(
+    array[$X] of var $$E: x,
+    ann: select,
+    ann: choice,
+    ann: explore,
+) = int_search(erase_enum(array1d(x)),select,choice,explore);
+
+/** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
   strategy \a select, and value choice strategy \a choice.
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation int_search(
-    array[$X] of var int: x,
+function ann: int_search(
+    array[$X] of var $$E: x,
     ann: select,
     ann: choice
 ) = int_search(x,select,choice,complete);
@@ -186,8 +228,9 @@ annotation int_search(
   \a explore. If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation int_search(array[int] of var opt int: x, ann: select, ann: choice, ann: explore) =
-  int_search([if occurs(x[i]) then deopt(x[i]) else 0 endif | i in index_set(x)],select,choice,explore);
+function ann: int_search(array[$X] of var opt $$E: x, ann: select, ann: choice, ann: explore) =
+  let { array [int] of var opt int: xx = erase_enum(array1d(x)); }
+  in int_search([if occurs(xx[i]) then deopt(xx[i]) else 0 endif | i in index_set(xx)],select,choice,explore);
 
 /** @group stdlib.annotations.search Search annotation for optional integer variables.
   Specify search on variables \a x, with variable selection
@@ -195,8 +238,8 @@ annotation int_search(array[int] of var opt int: x, ann: select, ann: choice, an
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation int_search(array[int] of var opt int: x, ann: select, ann: choice) =
-  int_search([if occurs(x[i]) then deopt(x[i]) else 0 endif | i in index_set(x)],select,choice);
+function ann: int_search(array[$X] of var opt $$E: x, ann: select, ann: choice) =
+  int_search(x, select, choice, complete);
 
 /** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
   strategy \a select, value choice strategy \a choice, and exploration strategy
@@ -205,7 +248,7 @@ annotation int_search(array[int] of var opt int: x, ann: select, ann: choice) =
   in row-major order (as with the array1d function).
 */
 annotation bool_search(
-    array[$X] of var bool: x,
+    array[int] of var bool: x,
     ann: select,
     ann: choice,
     ann: explore
@@ -216,7 +259,19 @@ annotation bool_search(
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation bool_search(
+function ann: bool_search(
+    array[$X] of var bool: x,
+    ann: select,
+    ann: choice,
+    ann: explore
+) = bool_search(array1d(x),select,choice,explore);
+
+/** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
+  strategy \a select, and value choice strategy \a choice.
+  If \a x is a multi-dimensional array, it is coerced to one-dimensional
+  in row-major order (as with the array1d function).
+*/
+function ann: bool_search(
     array[$X] of var bool: x,
     ann: select,
     ann: choice
@@ -229,8 +284,9 @@ annotation bool_search(
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
  */
-annotation bool_search(array[int] of var opt bool: x, ann: select, ann: choice, ann: explore) =
-  bool_search([if occurs(x[i]) then deopt(x[i]) else false endif | i in index_set(x)],select,choice,explore);
+function ann: bool_search(array[$X] of var opt bool: x, ann: select, ann: choice, ann: explore) =
+  let { array [int] of var opt bool: xx = array1d(x); }
+  in bool_search([if occurs(xx[i]) then deopt(xx[i]) else false endif | i in index_set(xx)],select,choice,explore);
 
 /** @group stdlib.annotations.search Search annotation for optional Boolean variables.
   Specify search on variables \a x, with variable selection
@@ -238,8 +294,8 @@ annotation bool_search(array[int] of var opt bool: x, ann: select, ann: choice, 
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
  */
-annotation bool_search(array[int] of var opt bool: x, ann: select, ann: choice) =
-  bool_search([if occurs(x[i]) then deopt(x[i]) else false endif | i in index_set(x)],select,choice);
+function ann: bool_search(array[$X] of var opt bool: x, ann: select, ann: choice) =
+  bool_search(x, select, choice, complete);
 
 /** @group stdlib.annotations.search Specify search on variables \a x, 
   with precision \a prec, variable selection
@@ -249,7 +305,7 @@ annotation bool_search(array[int] of var opt bool: x, ann: select, ann: choice) 
   in row-major order (as with the array1d function).
 */
 annotation float_search(
-    array[$X] of var float: x,
+    array[int] of var float: x,
     float: prec,
     ann: select,
     ann: choice,
@@ -258,16 +314,31 @@ annotation float_search(
 
 /** @group stdlib.annotations.search Specify search on variables \a x, 
   with precision \a prec, variable selection
+  strategy \a select, value choice strategy \a choice, and exploration strategy
+  \a explore.
+  If \a x is a multi-dimensional array, it is coerced to one-dimensional
+  in row-major order (as with the array1d function).
+*/
+function ann: float_search(
+    array[$X] of var float: x,
+    float: prec,
+    ann: select,
+    ann: choice,
+    ann: explore
+) = float_search(array1d(x), prec, select, choice, explore);
+
+/** @group stdlib.annotations.search Specify search on variables \a x, 
+  with precision \a prec, variable selection
   strategy \a select, and value choice strategy \a choice.
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation float_search(
+function ann: float_search(
     array[$X] of var float: x,
     float: prec,
     ann: select,
     ann: choice
-) = float_search(x,prec,select,choice,complete);
+) = float_search(x, prec, select, choice, complete);
 
 /** @group stdlib.annotations.search Search annotation for optional float variables.
   Specify search on variables \a x, 
@@ -277,8 +348,9 @@ annotation float_search(
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation float_search(array[int] of var opt float: x, float: prec, ann: select, ann: choice, ann: explore) =
-  float_search([if occurs(x[i]) then deopt(x[i]) else 0 endif | i in index_set(x)],prec,select,choice,explore);
+function ann: float_search(array[$X] of var opt float: x, float: prec, ann: select, ann: choice, ann: explore) =
+  let { array [int] of var opt float: xx = array1d(x); }
+  in float_search([if occurs(xx[i]) then deopt(xx[i]) else 0 endif | i in index_set(xx)],prec,select,choice,explore);
 
 /** @group stdlib.annotations.search Search annotation for optional float variables.
   Specify search on variables \a x, 
@@ -287,8 +359,8 @@ annotation float_search(array[int] of var opt float: x, float: prec, ann: select
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation float_search(array[int] of var opt float: x, float: prec, ann: select, ann: choice) =
-  float_search([if occurs(x[i]) then deopt(x[i]) else 0 endif | i in index_set(x)],prec,select,choice);
+function ann: float_search(array[$X] of var opt float: x, float: prec, ann: select, ann: choice) =
+  float_search(x, prec, select, choice, complete);
 
 /** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
   strategy \a select, value choice strategy \a choice, and exploration strategy
@@ -297,7 +369,7 @@ annotation float_search(array[int] of var opt float: x, float: prec, ann: select
   in row-major order (as with the array1d function).
 */
 annotation set_search(
-    array[$X] of var set of int: x,
+    array[int] of var set of int: x,
     ann: select,
     ann: choice,
     ann: explore
@@ -308,11 +380,23 @@ annotation set_search(
   If \a x is a multi-dimensional array, it is coerced to one-dimensional
   in row-major order (as with the array1d function).
 */
-annotation set_search(
-    array[$X] of var set of int: x,
+function ann: set_search(
+    array[$X] of var set of $$E: x,
+    ann: select,
+    ann: choice,
+    ann: explore
+) = set_search(erase_enum(array1d(x)), select, choice, explore);
+
+/** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
+  strategy \a select, and value choice strategy \a choice.
+  If \a x is a multi-dimensional array, it is coerced to one-dimensional
+  in row-major order (as with the array1d function).
+*/
+function ann: set_search(
+    array[$X] of var set of $$E: x,
     ann: select,
     ann: choice
-) = set_search(x,select,choice,complete);
+) = set_search(x, select, choice, complete);
 
 /***
  @groupdef stdlib.annotations.search.varsel Variable selection annotations
@@ -420,14 +504,43 @@ annotation restart_none;
 */
 annotation warm_start_array( array[int] of ann: w );
 
+/** @group stdlib.annotations.warmstart Specify warm start values \a v for an array \a x */
+function ann: warm_start(array[$X] of var bool: x, array[$X] of bool: v) = let {
+  constraint assert(
+    index_sets_agree(x, v),
+    "warm_start: variable and value arrays must have identical index sets"
+  );
+} in warm_start_bool(erase_enum(array1d(x)), erase_enum(array1d(v)));
+/** @group stdlib.annotations.warmstart Specify warm start values \a v for an array \a x */
+function ann: warm_start(array[$X] of var $$E: x, array[$X] of $$E: v) = let {
+  constraint assert(
+    index_sets_agree(x, v),
+    "warm_start: variable and value arrays must have identical index sets"
+  );
+} in warm_start_int(erase_enum(array1d(x)), erase_enum(array1d(v)));
+/** @group stdlib.annotations.warmstart Specify warm start values \a v for an array \a x */
+function ann: warm_start(array[$X] of var float: x, array[$X] of float: v) = let {
+  constraint assert(
+    index_sets_agree(x, v),
+    "warm_start: variable and value arrays must have identical index sets"
+  );
+} in warm_start_float(erase_enum(array1d(x)), erase_enum(array1d(v)));
+/** @group stdlib.annotations.warmstart Specify warm start values \a v for an array \a x */
+function ann: warm_start(array[$X] of var set of $$E: x, array[$X] of set of $$E: v) = let {
+  constraint assert(
+    index_sets_agree(x, v),
+    "warm_start: variable and value arrays must have identical index sets"
+  );
+} in warm_start_set_of_int(erase_enum(array1d(x)), erase_enum(array1d(v)));
+
 /** @group stdlib.annotations.warmstart Specify warm start values \a v for an array of booleans \a x */
-annotation warm_start( array[int] of var bool: x, array[int] of bool: v );
+annotation warm_start_bool( array[int] of var bool: x, array[int] of bool: v );
 /** @group stdlib.annotations.warmstart Specify warm start values \a v for an array of integers \a x */
-annotation warm_start( array[int] of var int: x, array[int] of int: v );
+annotation warm_start_int( array[int] of var int: x, array[int] of int: v );
 /** @group stdlib.annotations.warmstart Specify warm start values \a v for an array of floats \a x */
-annotation warm_start( array[int] of var float: x, array[int] of float: v );
+annotation warm_start_float( array[int] of var float: x, array[int] of float: v );
 /** @group stdlib.annotations.warmstart Specify warm start values \a v for an array of sets \a x */
-annotation warm_start( array[int] of var set of int: x, array[int] of set of int: v );
+annotation warm_start_set_of_int( array[int] of var set of int: x, array[int] of set of int: v );
 
 /***
  @groupdef stdlib.annotations.warmstart.optvals Warm start annotations with optional values
@@ -438,7 +551,7 @@ annotation warm_start( array[int] of var set of int: x, array[int] of set of int
 */
 
 /** @group stdlib.annotations.warmstart.optvals Specify warm start values \a v for an array of booleans \a x */
-annotation warm_start( array[int] of var bool: x, array[int] of opt bool: v ) =
+function ann: warm_start( array[int] of var bool: x, array[int] of opt bool: v ) =
     if 0==length(x) \/ 0==length(v) then
         warm_start( x, [] )
     else
@@ -448,7 +561,7 @@ annotation warm_start( array[int] of var bool: x, array[int] of opt bool: v ) =
             [ deopt(v[i]) | i in index_set(v) where occurs(v[i]) ] )
     endif;
 /** @group stdlib.annotations.warmstart.optvals Specify warm start values \a v for an array of integers \a x */
-annotation warm_start( array[int] of var int: x, array[int] of opt int: v ) =
+function ann: warm_start( array[int] of var int: x, array[int] of opt int: v ) =
     if 0==length(x) \/ 0==length(v) then
         warm_start( x, [] )
     else
@@ -458,7 +571,7 @@ annotation warm_start( array[int] of var int: x, array[int] of opt int: v ) =
             [ deopt(v[i]) | i in index_set(v) where occurs(v[i]) ] )
     endif;
 /** @group stdlib.annotations.warmstart.optvals Specify warm start values \a v for an array of floats \a x */
-annotation warm_start( array[int] of var float: x, array[int] of opt float: v ) =
+function ann: warm_start( array[int] of var float: x, array[int] of opt float: v ) =
     if 0==length(x) \/ 0==length(v) then
         warm_start( x, [] )
     else
@@ -468,7 +581,7 @@ annotation warm_start( array[int] of var float: x, array[int] of opt float: v ) 
             [ deopt(v[i]) | i in index_set(v) where occurs(v[i]) ] )
     endif;
 /** @group stdlib.annotations.warmstart.optvals Specify warm start values \a v for an array of sets \a x */
-annotation warm_start( array[int] of var set of int: x, array[int] of opt set of int: v ) =
+function ann: warm_start( array[int] of var set of int: x, array[int] of opt set of int: v ) =
     if 0==length(x) \/ 0==length(v) then
         warm_start( x, [] )
     else

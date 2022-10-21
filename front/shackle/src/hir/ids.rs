@@ -11,13 +11,15 @@ use crate::{
 };
 
 use super::{
-	db::Hir, Assignment, Constraint, Declaration, EnumAssignment, Enumeration, Expression,
-	Function, Item, ItemData, Model, Output, Pattern, Solve, Type, TypeAlias,
+	db::Hir, Annotation, Assignment, Constraint, Declaration, EnumAssignment, Enumeration,
+	Expression, Function, Item, ItemData, Model, Output, Pattern, Solve, Type, TypeAlias,
 };
 
 /// Reference to an item local to a model.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum LocalItemRef {
+	/// Annotation item ID
+	Annotation(ArenaIndex<Item<Annotation>>),
 	/// Assignment item ID
 	Assignment(ArenaIndex<Item<Assignment>>),
 	/// Constraint item ID
@@ -42,6 +44,7 @@ impl LocalItemRef {
 	/// Get the item data for this item
 	pub fn data<'a>(&self, model: &'a Model) -> &'a ItemData {
 		match *self {
+			LocalItemRef::Annotation(i) => &model[i].data,
 			LocalItemRef::Assignment(i) => &model[i].data,
 			LocalItemRef::Constraint(i) => &model[i].data,
 			LocalItemRef::Declaration(i) => &model[i].data,
@@ -55,6 +58,7 @@ impl LocalItemRef {
 	}
 }
 
+impl_enum_from!(LocalItemRef::Annotation(ArenaIndex<Item<Annotation>>));
 impl_enum_from!(LocalItemRef::Assignment(ArenaIndex<Item<Assignment>>));
 impl_enum_from!(LocalItemRef::Constraint(ArenaIndex<Item<Constraint>>));
 impl_enum_from!(LocalItemRef::Declaration(ArenaIndex<Item<Declaration>>));
@@ -97,6 +101,7 @@ impl<'a> DebugPrint<'a> for ItemRef {
 		let ItemRefData(model, item) = db.lookup_intern_item_ref(*self);
 		let model = db.lookup_model(model);
 		match item {
+			LocalItemRef::Annotation(i) => model[i].debug_print(db),
 			LocalItemRef::Assignment(i) => model[i].debug_print(db),
 			LocalItemRef::Constraint(i) => model[i].debug_print(db),
 			LocalItemRef::Declaration(i) => model[i].debug_print(db),
@@ -150,6 +155,8 @@ impl<T> TypedItemRef<T> {
 	}
 }
 
+/// Reference to an annotation item
+pub type AnnotationRef = TypedItemRef<Annotation>;
 /// Reference to an assignment item
 pub type AssignmentRef = TypedItemRef<Assignment>;
 /// Reference to a constraint item

@@ -16,7 +16,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	hir::{
-		ids::{EntityRef, ItemRef, LocalItemRef, PatternRef, TypeRef},
+		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, PatternRef, TypeRef},
 		source::{Origin, SourceMap},
 		PatternTy, TypeResult,
 	},
@@ -30,6 +30,7 @@ pub struct ItemCollector<'a> {
 	db: &'a dyn Thir,
 	tys: &'a TypeRegistry,
 	resolutions: FxHashMap<PatternRef, ResolvedIdentifier>,
+	annotations: Arena<Item<Annotation>>,
 	constraints: Arena<Item<Constraint>>,
 	declarations: Arena<Item<Declaration>>,
 	enumerations: Arena<Item<Enumeration>>,
@@ -48,6 +49,7 @@ impl<'a> ItemCollector<'a> {
 			db,
 			tys,
 			resolutions: FxHashMap::default(),
+			annotations: Arena::new(),
 			constraints: Arena::new(),
 			declarations: Arena::new(),
 			enumerations: Arena::new(),
@@ -68,6 +70,10 @@ impl<'a> ItemCollector<'a> {
 		let model = item.model(self.db.upcast());
 		let local_item = item.local_item_ref(self.db.upcast());
 		match local_item {
+			LocalItemRef::Annotation(a) => {
+				let idx = self.collect_annotation(item, &model[a]);
+				self.top_level.push(idx.into());
+			}
 			LocalItemRef::Assignment(a) => self.collect_assignment(item, &model[a]),
 			LocalItemRef::Constraint(c) => {
 				let idx = self.collect_constraint(item, &model[c]);
@@ -93,6 +99,64 @@ impl<'a> ItemCollector<'a> {
 			}
 			LocalItemRef::Solve(s) => self.collect_solve(item, &model[s]),
 			LocalItemRef::TypeAlias(t) => self.collect_type_alias(item, &model[t]),
+		}
+	}
+
+	/// Collect an annotation item
+	pub fn collect_annotation(
+		&mut self,
+		item: ItemRef,
+		a: &crate::hir::Item<crate::hir::Annotation>,
+	) -> ArenaIndex<Item<Annotation>> {
+		let types = self.db.lookup_item_types(item);
+		let mut collector = ExpressionCollector::new(self, &a.data, item, types.clone());
+		let ty = &types[a.pattern];
+		match ty {
+			PatternTy::AnnotationAtom => {
+				let annotation = <Item<Annotation>>::new(
+					a.data[a.pattern]
+						.identifier()
+						.expect("Annotation must have identifier pattern"),
+				);
+				let idx = self.annotations.insert(annotation);
+				self.resolutions.insert(
+					PatternRef::new(item, a.pattern),
+					ResolvedIdentifier::Annotation(idx),
+				);
+				idx
+			}
+			PatternTy::AnnotationConstructor(fn_entry) => {
+				let mut parameters = Vec::with_capacity(fn_entry.overload.params().len());
+				for (param, ty) in a
+					.parameters
+					.as_ref()
+					.unwrap()
+					.iter()
+					.zip(fn_entry.overload.params())
+				{
+					let domain = collector.collect_domain(param.declared_type, *ty, false);
+					let mut declaration = <Item<Declaration>>::new(&domain);
+					// Ignore destructuring and recording resolution for now since these can't have bodies which refer
+					// to parameters anyway
+					if let Some(p) = param.pattern {
+						declaration.name = a.data[p].identifier();
+					}
+					parameters.push(collector.declarations.insert(declaration));
+				}
+				let mut annotation = <Item<Annotation>>::new(
+					a.data[a.pattern]
+						.identifier()
+						.expect("Annotation must have identifier pattern"),
+				);
+				annotation.parameters = Some(parameters);
+				let idx = self.annotations.insert(annotation);
+				self.resolutions.insert(
+					PatternRef::new(item, a.pattern),
+					ResolvedIdentifier::Annotation(idx),
+				);
+				idx
+			}
+			_ => unreachable!(),
 		}
 	}
 
@@ -361,7 +425,55 @@ impl<'a> ItemCollector<'a> {
 			ResolvedIdentifier::Function(i) => {
 				if let Some(b) = f.body {
 					let body = collector.collect_expression(b);
-					collector.functions[i].set_body(&*body);
+
+					let origins = collector
+						.db
+						.lookup_source_map(item.model_ref(collector.db.upcast()));
+					let mut decls = Vec::new();
+					for (param, idx) in f
+						.parameters
+						.iter()
+						.zip(collector.functions[i].parameters.clone())
+					{
+						if let Some(p) = param.pattern {
+							if f.data[p].identifier().is_none() {
+								let decl = &collector.declarations[idx];
+								let ident = IdentifierBuilder::new(
+									decl.domain.ty(),
+									ResolvedIdentifier::Declaration(idx),
+									origins
+										.get_origin(
+											PatternRef::new(item, p)
+												.into_entity(collector.db.upcast())
+												.into(),
+										)
+										.unwrap()
+										.clone(),
+								);
+								collector.collect_destructuring(
+									&mut decls, ident, p, item, &f.data, &types, &origins,
+								);
+							}
+						}
+					}
+					if decls.is_empty() {
+						collector.functions[i].set_body(&*body);
+					} else {
+						let builder = LetBuilder::new(
+							types[b],
+							origins
+								.get_origin(
+									ExpressionRef::new(item, b)
+										.into_entity(collector.db.upcast())
+										.into(),
+								)
+								.unwrap()
+								.clone(),
+						)
+						.with_items(decls.into_iter().map(LetItem::Declaration))
+						.with_in(body);
+						collector.functions[i].set_body(&*builder);
+					}
 				}
 				i
 			}
@@ -391,6 +503,9 @@ impl<'a> ItemCollector<'a> {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &s.data, item, types.clone());
 		let mut solve = <Item<Solve>>::new();
+		for ann in s.annotations.iter() {
+			solve.add_annotation(&*collector.collect_expression(*ann));
+		}
 		match &s.goal {
 			crate::hir::Goal::Maximize { pattern, objective } => match &types[*pattern] {
 				PatternTy::Variable(ty) => {
@@ -446,6 +561,7 @@ impl<'a> ItemCollector<'a> {
 	/// Finish lowering
 	pub fn finish(self) -> Model {
 		Model {
+			annotations: self.annotations,
 			constraints: self.constraints,
 			declarations: self.declarations,
 			enumerations: self.enumerations,
@@ -931,28 +1047,29 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		}
 	}
 
-	fn collect_enum_case(&mut self, c: &crate::hir::EnumerationCase) -> EnumerationCase {
+	fn collect_enum_case(&mut self, c: &crate::hir::Constructor) -> Constructor {
 		let tys = match &self.types[c.pattern] {
 			PatternTy::EnumAtom(_) => {
-				return EnumerationCase {
+				return Constructor {
 					name: self.data[c.pattern].identifier(),
-					parameters: vec![],
+					parameters: None,
 				}
 			}
 			PatternTy::EnumConstructor(fs) => fs[0].overload.params().to_owned(),
 			_ => unreachable!(),
 		};
-		EnumerationCase {
+		Constructor {
 			name: self.data[c.pattern].identifier(),
-			parameters: tys
-				.iter()
-				.zip(c.parameters.iter())
-				.map(|(ty, t)| {
-					let domain = self.collect_domain(*t, *ty, false);
-					let declaration = <Item<Declaration>>::new(&domain);
-					self.declarations.insert(declaration)
-				})
-				.collect(),
+			parameters: Some(
+				tys.iter()
+					.zip(c.parameters())
+					.map(|(ty, t)| {
+						let domain = self.collect_domain(t.declared_type, *ty, false);
+						let declaration = <Item<Declaration>>::new(&domain);
+						self.declarations.insert(declaration)
+					})
+					.collect(),
+			),
 		}
 	}
 }

@@ -84,13 +84,13 @@ function set of $$E: 'o<..'($$E: a) = enum_next(min(enum_of(a)))..a;
 /** @group stdlib.builtins.set Return the set \(\{\a a+1,\ldots,\a b-1\}\) */
 function set of $$E: 'o<..<'($$E: a) = enum_next(min(enum_of(a)))..enum_prev(a);
 
-function set of int: '..'() = assert(false, "internal function '..'() called", {0});
+function set of int: '..'() = abort("internal function '..'() called");
 function set of $$E: '..'(set of $$E: s) = min(s)..max(s);
-function set of int: '<..<'() = assert(false, "internal function '<..<'() called", {0});
+function set of int: '<..<'() = abort("internal function '<..<'() called");
 function set of $$E: '<..<'(set of $$E: s) = enum_next(min(s))..enum_prev(max(s));
-function set of int: '..<'() = assert(false, "internal function '..<'() called", {0});
+function set of int: '..<'() = abort("internal function '..<'() called");
 function set of $$E: '..<'(set of $$E: s) = min(s)..enum_prev(max(s));
-function set of int: '<..'() = assert(false, "internal function '<..'() called", {0});
+function set of int: '<..'() = abort("internal function '<..'() called");
 function set of $$E: '<..'(set of $$E: s) = enum_next(min(s))..max(s);
 
 function var set of $$E: '..'(var $$E: a, var $$E: b) ::promise_total =

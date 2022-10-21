@@ -80,66 +80,32 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_annotation(&mut self, a: ast::Annotation) -> (ItemRef, ItemDataSourceMap) {
-		// Desugar annotation into either a function declaration or a variable declaration
 		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
-		let mut tiids = FxHashMap::default();
-		let parameters = a
-			.parameters()
-			.map(|p| {
-				let ty = ctx.collect_type_with_tiids(p.declared_type(), &mut tiids, false, true);
-				let annotations = p
-					.annotations()
-					.map(|ann| ctx.collect_expression(ann))
-					.collect();
-				let pattern = p.pattern().map(|pat| ctx.collect_pattern(pat));
-				Parameter {
-					declared_type: ty,
+		let pattern = ctx.collect_pattern(a.id().into());
+		let parameters = a.parameters().map(|ps| {
+			ps.iter()
+				.map(|p| {
+					let pattern = p.pattern().map(|pat| ctx.collect_pattern(pat));
+					let declared_type = ctx.collect_type(p.declared_type());
+					ConstructorParameter {
+						declared_type,
+						pattern,
+					}
+				})
+				.collect()
+		});
+		let (data, source_map) = ctx.finish();
+		let index = self.model.annotations.insert(Item::new(
+			Annotation {
+				constructor: Constructor {
 					pattern,
-					annotations,
-				}
-			})
-			.collect::<Vec<_>>();
-		let ty = ctx.alloc_type(
-			Origin::new(&a, None),
-			Type::Primitive {
-				inst: VarType::Par,
-				opt: OptType::NonOpt,
-				primitive_type: PrimitiveType::Ann,
+					parameters,
+				},
 			},
-		);
-		let type_inst_vars = tiids.into_values().collect();
-		let body = a.body().map(|e| ctx.collect_expression(e));
-		if body.is_none() && parameters.is_empty() {
-			let pattern = ctx.collect_pattern(a.id().into());
-			let (data, source_map) = ctx.finish();
-			let index = self.model.declarations.insert(Item::new(
-				Declaration {
-					annotations: Box::new([]),
-					declared_type: ty,
-					definition: None,
-					pattern,
-				},
-				data,
-			));
-			self.model.items.push(index.into());
-			(ItemRef::new(self.db, self.owner, index), source_map)
-		} else {
-			let pattern = ctx.collect_pattern(a.id().into());
-			let (data, source_map) = ctx.finish();
-			let index = self.model.functions.insert(Item::new(
-				Function {
-					annotations: Box::new([]),
-					type_inst_vars,
-					body,
-					pattern,
-					return_type: ty,
-					parameters: parameters.into_boxed_slice(),
-				},
-				data,
-			));
-			self.model.items.push(index.into());
-			(ItemRef::new(self.db, self.owner, index), source_map)
-		}
+			data,
+		));
+		self.model.items.push(index.into());
+		(ItemRef::new(self.db, self.owner, index), source_map)
 	}
 
 	fn collect_assignment(&mut self, a: ast::Assignment) -> (ItemRef, ItemDataSourceMap) {
@@ -154,9 +120,9 @@ impl ItemCollector<'_> {
 				while let Some(e) = todo.pop() {
 					match e {
 						ast::Expression::Identifier(i) => {
-							definition.push(EnumerationCase {
+							definition.push(Constructor {
 								pattern: ctx.collect_pattern(i.into()),
-								parameters: Box::new([]),
+								parameters: None,
 							});
 						}
 						ast::Expression::SetLiteral(sl) => {
@@ -164,23 +130,27 @@ impl ItemCollector<'_> {
 						}
 						ast::Expression::Call(c) => match c.function() {
 							ast::Expression::Identifier(i) => {
-								definition.push(EnumerationCase {
+								definition.push(Constructor {
 									pattern: ctx.collect_pattern(i.into()),
-									parameters: c
-										.arguments()
-										.map(|arg| {
-											let origin = Origin::new(&arg, None);
-											let domain = ctx.collect_expression(arg);
-											ctx.alloc_type(
-												origin,
-												Type::Bounded {
-													inst: None,
-													opt: None,
-													domain,
-												},
-											)
-										})
-										.collect(),
+									parameters: Some(
+										c.arguments()
+											.map(|arg| {
+												let origin = Origin::new(&arg, None);
+												let domain = ctx.collect_expression(arg);
+												ConstructorParameter {
+													declared_type: ctx.alloc_type(
+														origin,
+														Type::Bounded {
+															inst: None,
+															opt: None,
+															domain,
+														},
+													),
+													pattern: None,
+												}
+											})
+											.collect(),
+									),
 								});
 							}
 							_ => {}
@@ -281,9 +251,9 @@ impl ItemCollector<'_> {
 					has_rhs = true;
 					for i in m.members() {
 						let p = ctx.collect_pattern(i.into());
-						cases.push(EnumerationCase {
+						cases.push(Constructor {
 							pattern: p,
-							parameters: Box::new([]),
+							parameters: None,
 						});
 					}
 				}
@@ -292,11 +262,14 @@ impl ItemCollector<'_> {
 					let pattern = ctx.collect_pattern(c.id().into());
 					let parameters = c
 						.parameters()
-						.map(|param| ctx.collect_type(param))
+						.map(|param| ConstructorParameter {
+							declared_type: ctx.collect_type(param),
+							pattern: None,
+						})
 						.collect();
-					cases.push(EnumerationCase {
+					cases.push(Constructor {
 						pattern,
-						parameters,
+						parameters: Some(parameters),
 					});
 				}
 				ast::EnumerationCase::Anonymous(a) => {
@@ -304,11 +277,14 @@ impl ItemCollector<'_> {
 					let pattern = ctx.collect_pattern(a.anonymous().into());
 					let parameters = a
 						.parameters()
-						.map(|param| ctx.collect_type(param))
+						.map(|param| ConstructorParameter {
+							declared_type: ctx.collect_type(param),
+							pattern: None,
+						})
 						.collect();
-					cases.push(EnumerationCase {
+					cases.push(Constructor {
 						pattern,
-						parameters,
+						parameters: Some(parameters),
 					});
 				}
 			}

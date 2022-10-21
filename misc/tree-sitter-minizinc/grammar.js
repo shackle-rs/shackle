@@ -93,9 +93,10 @@ module.exports = grammar({
       seq(
         "annotation",
         field("name", $._identifier),
-        optional($._parameters),
-        optional(seq("=", field("body", $._expression)))
+        optional(field("parameters", $.annotation_parameters))
       ),
+
+    annotation_parameters: ($) => $._parameters,
 
     assignment: ($) =>
       seq(

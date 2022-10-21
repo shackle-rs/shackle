@@ -4,7 +4,9 @@ use std::{fmt::Debug, ops::Deref};
 
 use rustc_hash::FxHashMap;
 
-use super::{Constraint, Declaration, Enumeration, Function, Identifier, Item, ItemData};
+use super::{
+	Annotation, Constraint, Declaration, Enumeration, Function, Identifier, Item, ItemData,
+};
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
 	arena::ArenaIndex,
@@ -1535,6 +1537,8 @@ pub enum ExpressionData {
 /// An identifier which resolves to a declaration
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ResolvedIdentifier {
+	/// Identifier resolves to an annotation
+	Annotation(ArenaIndex<Item<Annotation>>),
 	/// Identifier resolves to a declaration
 	Declaration(ArenaIndex<Item<Declaration>>),
 	/// Identifier resolves to an enumeration

@@ -331,6 +331,9 @@ pub struct IllegalOverload {
 	/// The span associated with the error
 	#[label("{msg}")]
 	pub span: SourceSpan,
+	/// The related errors
+	#[related]
+	pub others: Vec<IllegalOverload>,
 }
 
 /// Function with same signature already defined
@@ -362,6 +365,37 @@ pub struct DuplicateFunction {
 	/// The source code
 	#[source_code]
 	pub src: SourceFile,
+	/// The span associated with the error
+	#[label]
+	pub span: SourceSpan,
+}
+
+/// Constructor already defined
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Constructor function already defined")]
+#[diagnostic(code(shackle::constructor_already_defined))]
+pub struct ConstructorAlreadyDefined {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label("The constructor function was first defined here")]
+	pub span: SourceSpan,
+	/// The duplicate constructors
+	#[related]
+	pub others: Vec<DuplicateConstructor>,
+}
+
+/// Constructor already defined
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Constructor function already defined")]
+#[diagnostic(code(shackle::constructor_already_defined), help("{help}"))]
+pub struct DuplicateConstructor {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The help string
+	pub help: String,
 	/// The span associated with the error
 	#[label]
 	pub span: SourceSpan,
@@ -476,6 +510,10 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	FunctionAlreadyDefined(#[from] FunctionAlreadyDefined),
+	/// Constructor already defined
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	ConstructorAlreadyDefined(#[from] ConstructorAlreadyDefined),
 	/// Type inference failure
 	#[error(transparent)]
 	#[diagnostic(transparent)]

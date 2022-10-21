@@ -179,6 +179,28 @@ impl Ty {
 		Some(db.intern_ty(result))
 	}
 
+	/// Returns the fixed version of this type
+	pub fn make_fixed(&self, db: &dyn Interner) -> Ty {
+		db.intern_ty(match self.lookup(db) {
+			TyData::Boolean(_, o) => TyData::Boolean(VarType::Par, o),
+			TyData::Integer(_, o) => TyData::Integer(VarType::Par, o),
+			TyData::Float(_, o) => TyData::Float(VarType::Par, o),
+			TyData::Enum(_, o, e) => TyData::Enum(VarType::Par, o, e),
+			TyData::Array { opt, dim, element } => TyData::Array {
+				opt,
+				dim,
+				element: element.make_fixed(db),
+			},
+			TyData::Set(_, o, e) => TyData::Set(VarType::Par, o, e),
+			TyData::Tuple(o, fs) => TyData::Tuple(o, fs.iter().map(|f| f.make_fixed(db)).collect()),
+			TyData::Record(o, fs) => {
+				TyData::Record(o, fs.iter().map(|(i, f)| (*i, f.make_fixed(db))).collect())
+			}
+			TyData::TyVar(_, o, t) => TyData::TyVar(Some(VarType::Par), o, t),
+			_ => return *self,
+		})
+	}
+
 	/// Sets the optionality of this type if possible.
 	pub fn with_opt(&self, db: &dyn Interner, opt: OptType) -> Ty {
 		db.intern_ty(match self.lookup(db) {
@@ -339,7 +361,7 @@ impl Ty {
 		}
 	}
 
-	/// The inst of this type (or `None` if the optionality cannot be determined)
+	/// The inst of this type (or `None` if the inst cannot be determined)
 	pub fn inst(&self, db: &dyn Interner) -> Option<VarType> {
 		match self.lookup(db) {
 			TyData::Boolean(inst, _)

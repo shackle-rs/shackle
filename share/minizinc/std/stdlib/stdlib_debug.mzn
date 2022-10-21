@@ -60,10 +60,10 @@ function string: logstream_to_string();
 annotation mzn_break_here;
 
 /** @group stdlib.debug Used to attach a ``expression_name`` annotation with name \a s to an expression when --debug is enabled. */
-annotation expression_name_dbg(string: s) = expression_name(s);
+function ann: expression_name_dbg(string: s) = expression_name(s);
 
 /** @group stdlib.debug Abort evaluation and print message \a msg. */
-function bool: abort(string: msg);
+function {}: abort(string: msg);
 
 /** @group stdlib.debug Set to true iff ``--debug`` flag is set. */
 bool: debug_mode = mzn_internal_check_debug_mode();

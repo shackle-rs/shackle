@@ -5,8 +5,8 @@ use crate::arena::ArenaIndex;
 
 use super::db::Thir;
 use super::{
-	Constraint, Declaration, Domain, Enumeration, Expression, ExpressionData, Function, Goal, Item,
-	ItemData, ItemId, LetItem, Model, Output, ResolvedIdentifier,
+	Annotation, Constraint, Declaration, Domain, Enumeration, Expression, ExpressionData, Function,
+	Goal, Item, ItemData, ItemId, LetItem, Model, Output, ResolvedIdentifier,
 };
 use std::fmt::Write;
 
@@ -35,12 +35,35 @@ impl<'a> PrettyPrinter<'a> {
 	/// Pretty print an item from a model
 	pub fn pretty_print_item(&self, item: ItemId) -> String {
 		match item {
+			ItemId::Annotation(i) => self.pretty_print_annotation(i),
 			ItemId::Constraint(i) => self.pretty_print_constraint(i),
 			ItemId::Declaration(i) => self.pretty_print_declaration(i, false),
 			ItemId::Enumeration(i) => self.pretty_print_enumeration(i),
 			ItemId::Function(i) => self.pretty_print_function(i),
 			ItemId::Output(i) => self.pretty_print_output(i),
 		}
+	}
+
+	fn pretty_print_annotation(&self, idx: ArenaIndex<Item<Annotation>>) -> String {
+		let annotation = &self.model[idx];
+		let name = annotation
+			.name
+			.expect("Annotation has no name")
+			.pretty_print(self.db.upcast());
+		let mut buf = format!("annotation {}", name);
+		if let Some(params) = &annotation.parameters {
+			write!(
+				*&mut buf,
+				"({})",
+				params
+					.iter()
+					.map(|p| self.pretty_print_declaration(*p, false))
+					.collect::<Vec<_>>()
+					.join(", ")
+			)
+			.unwrap();
+		}
+		buf
 	}
 
 	fn pretty_print_constraint(&self, idx: ArenaIndex<Item<Constraint>>) -> String {
@@ -136,21 +159,22 @@ impl<'a> PrettyPrinter<'a> {
 							.name
 							.map(|n| n.pretty_print(self.db.upcast()))
 							.unwrap_or("_".to_owned());
-						if c.parameters.is_empty() {
-							format!("{{ {} }}", name)
-						} else {
-							let params = c
-								.parameters
-								.iter()
-								.map(|d| {
-									self.pretty_print_domain(
-										&self.model[*d].domain,
-										&self.model[*d].data,
-									)
-								})
-								.collect::<Vec<_>>()
-								.join(", ");
-							format!("{}({})", name, params)
+
+						match &c.parameters {
+							Some(ps) => {
+								let params = ps
+									.iter()
+									.map(|d| {
+										self.pretty_print_domain(
+											&self.model[*d].domain,
+											&self.model[*d].data,
+										)
+									})
+									.collect::<Vec<_>>()
+									.join(", ");
+								format!("{}({})", name, params)
+							}
+							None => format!("{{ {} }}", name),
 						}
 					})
 					.collect::<Vec<_>>()
@@ -176,7 +200,6 @@ impl<'a> PrettyPrinter<'a> {
 				.join(", ")
 		)
 		.unwrap();
-
 		for ann in function.annotations.iter() {
 			write!(
 				&mut buf,
@@ -186,12 +209,23 @@ impl<'a> PrettyPrinter<'a> {
 			.unwrap();
 		}
 		if let Some(body) = function.body {
-			write!(
-				&mut buf,
-				" = {}",
-				self.pretty_print_expression(body, &function.data)
-			)
-			.unwrap();
+			if function.name.lookup(self.db.upcast()) != "defines_var" {
+				// Ignore body of defines_var for compatibility with old minizinc
+				write!(
+					&mut buf,
+					" = {}",
+					self.pretty_print_expression(body, &function.data)
+				)
+				.unwrap();
+			}
+		} else if function.name.lookup(self.db.upcast()) == "erase_enum" {
+			// For compatibility with old minizinc, we can just directly coerce
+			let d = function.parameters[0];
+			let ident = self.model[d]
+				.name
+				.map(|n| n.pretty_print(self.db.upcast()))
+				.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)));
+			write!(&mut buf, " = {}", ident).unwrap();
 		}
 		buf
 	}
@@ -430,6 +464,10 @@ impl<'a> PrettyPrinter<'a> {
 			ExpressionData::Identifier(i) => {
 				let model = self.db.model_thir();
 				match i {
+					ResolvedIdentifier::Annotation(a) => model[*a]
+						.name
+						.map(|n| n.pretty_print(self.db.upcast()))
+						.expect("Identifier refers to annotation without name"),
 					ResolvedIdentifier::Declaration(d) => model[*d]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))

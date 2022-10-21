@@ -398,8 +398,7 @@ ast_node!(
 	/// Annotation item
 	Annotation,
 	id,
-	parameters,
-	body
+	parameters
 );
 
 impl Annotation {
@@ -408,14 +407,23 @@ impl Annotation {
 		child_with_field_name(self, "name")
 	}
 
-	/// Get the parameters of this annotation
-	pub fn parameters(&self) -> Children<'_, Parameter> {
-		children_with_field_name(self, "parameter")
+	/// Get the parameters if this is an annotation constructor, or return `None`
+	/// if this is an atomic annotation.
+	pub fn parameters(&self) -> Option<AnnotationParameters> {
+		optional_child_with_field_name(self, "parameters")
 	}
+}
 
-	/// Get the body of this annotation if there is one
-	pub fn body(&self) -> Option<Expression> {
-		optional_child_with_field_name(self, "body")
+ast_node!(
+	/// Annotation constructor function parameters
+	AnnotationParameters,
+	iter
+);
+
+impl AnnotationParameters {
+	/// Get the parameters
+	pub fn iter(&self) -> Children<'_, Parameter> {
+		children_with_field_name(self, "parameter")
 	}
 }
 
