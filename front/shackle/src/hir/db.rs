@@ -5,20 +5,21 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::db::{CompilerSettings, FileReader, Interner, Upcast};
 use crate::error::{IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::db::SourceParser;
+use crate::ty::Ty;
 use crate::{Error, Result};
 
 use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
 use super::scope::{ScopeData, ScopeResult};
 use super::source::SourceMap;
 use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
-use super::{Identifier, Model};
+use super::{Identifier, Model, Pattern, PatternTy};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]
@@ -159,6 +160,28 @@ pub trait Hir:
 
 	#[salsa::interned]
 	fn intern_entity_ref(&self, item: EntityRefData) -> EntityRef;
+
+	/// Get a mapping from variable identifiers to their computed types
+	fn variable_type_map(&self) -> Arc<FxHashMap<Identifier, Ty>>;
+}
+
+fn variable_type_map(db: &dyn Hir) -> Arc<FxHashMap<Identifier, Ty>> {
+	let mut result = FxHashMap::default();
+	for m in db.resolve_includes().unwrap().iter() {
+		let model = db.lookup_model(*m);
+		for (idx, declaration) in model.declarations.iter() {
+			let types = db.lookup_item_types(ItemRef::new(db, *m, idx));
+			for ident in Pattern::identifiers(declaration.pattern, &declaration.data) {
+				let pattern_ty = types.get_pattern(ident).unwrap();
+				let ty = match &pattern_ty {
+					PatternTy::Variable(ty) => *ty,
+					_ => unreachable!(),
+				};
+				result.insert(declaration.data[ident].identifier().unwrap(), ty);
+			}
+		}
+	}
+	Arc::new(result)
 }
 
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
