@@ -1088,7 +1088,17 @@ impl TyVarRef {
 
 	/// Get the human readable name of this type-inst variable
 	pub fn pretty_print(&self, db: &dyn Interner) -> String {
-		db.lookup_intern_newtype(self.0).name.value(db)
+		let nt = db.lookup_intern_newtype(self.0);
+		let name = nt.name.value(db);
+		if name == "_" {
+			// TODO: Remove this when old compiler supports anonymous TIIDs
+			return match nt.kind {
+				// Pattern index will be unique in the scope of the item this type-inst variable belongs to
+				NewTypeKind::Pattern(p) => format!("$$T_ANON_{}", Into::<u32>::into(p.pattern())),
+				NewTypeKind::Introduced(i) => format!("$$T_INTRODUCED_{}", i),
+			};
+		}
+		name
 	}
 }
 
