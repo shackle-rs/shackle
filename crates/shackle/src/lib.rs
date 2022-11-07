@@ -15,9 +15,9 @@ pub mod thir;
 pub mod ty;
 pub mod utils;
 
-use db::{CompilerDatabase, FileReader, Inputs};
+use db::{CompilerDatabase, Inputs};
 use error::{FileError, MultipleErrors, ShackleError};
-use file::{FileRefData, InputFile};
+use file::InputFile;
 use serde_json::Map;
 use tempfile::{Builder, NamedTempFile};
 
@@ -125,34 +125,16 @@ impl Model {
 				message: err.to_string(),
 				other: Vec::new(),
 			})?;
-		for file in db
-			.input_files()
-			.iter()
-			.enumerate()
-			.filter_map(|(idx, f)| match f {
-				InputFile::Path(p) => match p.extension() {
-					Some(e) => {
-						if e.to_str() == Some("mzn") {
-							Some(db.intern_file_ref(FileRefData::InputFile(idx)))
-						} else {
-							None
-						}
-					}
-					None => None,
-				},
-				InputFile::ModelString(_) => Some(db.intern_file_ref(FileRefData::InputFile(idx))),
-				_ => None,
-			}) {
-			let contents = db.file_contents(file)?;
-			output
-				.as_file()
-				.write_all(contents.as_bytes())
-				.map_err(|e| FileError {
-					file: PathBuf::from(output.path()),
-					message: format!("{}", e),
-					other: vec![],
-				})?;
-		}
+		let thir = db.model_thir();
+		let printer = PrettyPrinter::new(&db, &thir);
+		output
+			.as_file()
+			.write_all(printer.pretty_print().as_bytes())
+			.map_err(|e| FileError {
+				file: PathBuf::from(output.path()),
+				message: format!("{}", e),
+				other: vec![],
+			})?;
 		Ok(Program {
 			db,
 			slv: slv.clone(),

@@ -236,6 +236,7 @@ impl Program {
 				"--output-mode",
 				"json",
 				"--json-stream",
+				"--ignore-stdlib",
 				"--output-time",
 				"--output-objective",
 				"--output-output-item",
