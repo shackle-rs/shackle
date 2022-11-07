@@ -209,8 +209,34 @@ impl<'a> PrettyPrinter<'a> {
 			.unwrap();
 		}
 		if let Some(body) = function.body {
-			if function.name.lookup(self.db.upcast()) != "defines_var" {
-				// Ignore body of defines_var for compatibility with old minizinc
+			if function.name.lookup(self.db.upcast()) == "deopt"
+				&& function.type_inst_vars.len() > 0
+				&& function.parameters.len() == 1
+				&& {
+					let ty = self.model[function.parameters[0]].domain.ty();
+					!ty.known_par(self.db.upcast()) && !ty.known_occurs(self.db.upcast())
+				} {
+				// For compatibility with old minizinc, we can just directly coerce
+				match &*function.data.expressions[body] {
+					ExpressionData::Call {
+						function: f,
+						arguments: args,
+					} => match &*function.data.expressions[*f] {
+						ExpressionData::Identifier(ResolvedIdentifier::Function(idx)) => {
+							assert_eq!(self.model[*idx].name.lookup(self.db.upcast()), "to_enum");
+							assert_eq!(args.len(), 2);
+							write!(
+								&mut buf,
+								" = {}",
+								self.pretty_print_expression(args[1], &function.data)
+							)
+							.unwrap();
+						}
+						_ => unreachable!(),
+					},
+					_ => unreachable!(),
+				}
+			} else {
 				write!(
 					&mut buf,
 					" = {}",
@@ -408,11 +434,20 @@ impl<'a> PrettyPrinter<'a> {
 							})
 							.collect::<Vec<_>>()
 							.join(", ");
-						format!(
+						let mut gen = format!(
 							"{} in {}",
 							decls,
 							self.pretty_print_expression(g.collection, data)
-						)
+						);
+						if let Some(where_clause) = g.where_clause {
+							write!(
+								&mut gen,
+								" where {}",
+								self.pretty_print_expression(where_clause, data)
+							)
+							.unwrap();
+						}
+						gen
 					})
 					.collect::<Vec<_>>()
 					.join(", ");
@@ -589,11 +624,20 @@ impl<'a> PrettyPrinter<'a> {
 							})
 							.collect::<Vec<_>>()
 							.join(", ");
-						format!(
+						let mut gen = format!(
 							"{} in {}",
 							decls,
 							self.pretty_print_expression(g.collection, data)
-						)
+						);
+						if let Some(where_clause) = g.where_clause {
+							write!(
+								&mut gen,
+								" where {}",
+								self.pretty_print_expression(where_clause, data)
+							)
+							.unwrap();
+						}
+						gen
 					})
 					.collect::<Vec<_>>()
 					.join(", ");

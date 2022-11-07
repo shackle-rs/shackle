@@ -208,6 +208,9 @@ impl<'a> ItemCollector<'a> {
 			PatternTy::Variable(ty) => {
 				let domain = collector.collect_domain(d.declared_type, *ty, false);
 				let mut declaration = <Item<Declaration>>::new(&domain);
+				for ann in d.annotations.iter() {
+					declaration.add_annotation(&*collector.collect_expression(*ann));
+				}
 				if let Some(def) = d.definition {
 					declaration.set_definition(&*collector.collect_expression(def));
 				}
@@ -222,6 +225,9 @@ impl<'a> ItemCollector<'a> {
 			PatternTy::Destructuring(ty) => {
 				let domain = collector.collect_domain(d.declared_type, *ty, false);
 				let mut declaration = <Item<Declaration>>::new(&domain);
+				for ann in d.annotations.iter() {
+					declaration.add_annotation(&*collector.collect_expression(*ann));
+				}
 				if let Some(def) = d.definition {
 					declaration.set_definition(&*collector.collect_expression(def));
 				}
