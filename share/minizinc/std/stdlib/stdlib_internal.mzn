@@ -23,6 +23,12 @@ predicate var_dom(array[$T] of var opt int: x, set of int: d) =
     let { array[int] of var opt int: xx = array1d(x) }
     in forall (i in index_set(xx)) (var_dom(xx[i],d));
 
+test var_dom(opt int:x, set of int: s) =
+  absent(x) \/ deopt(x) in s;
+test var_dom(array[$T] of opt int: x, set of int: d) =
+  forall (xx in array1d(x)) (var_dom(xx,d));
+
+
 predicate var_dom(var set of int: x, set of int: s) =
   if has_ub_set(x) /\ ub(x) subset s then true
   else set_subset(x,s)
@@ -1298,3 +1304,11 @@ predicate mzn_set_in_internal(var int: x, set of int: s) =
         exists (i in 2..max_range-1) (x in ranges[i,1]..ranges[i,2])
       endif
   endif;
+
+/* Functions used for the type erasure of enumerated types */
+
+function int: mzn_min_or_0(set of int: X) =
+  if card(X)=0 then 0 else min(X) endif;
+
+test mzn_set_is_contiguous(set of int: X) =
+  card(X) = 0 \/ card(X)=(max(X)-min(X)+1);

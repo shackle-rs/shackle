@@ -68,38 +68,14 @@ annotation is_defined_var;
 annotation var_is_introduced;
 /** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
   by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(var bool: c) = defines_var_bool(c);
+function ann: defines_var(var $t: c);
 /** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
   by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(var $$E: c) = defines_var_int(erase_enum(c));
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(var float: c) = defines_var_float(c);
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(var set of $$E: c) = defines_var_set_of_int(erase_enum(c));
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(array [$X] of var bool: c) = defines_array_of_var_bool(array1d(c));
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(array [$X] of var $$E: c) = defines_array_of_var_int(erase_enum(array1d(c)));
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(array [$X] of var float: c) = defines_array_of_var_float(array1d(c));
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(array [$X] of var set of $$E: c) = defines_array_of_var_set_of_int(erase_enum(array1d(c)));
-
-annotation defines_var_bool(var bool: x);
-annotation defines_var_int(var int: x);
-annotation defines_var_float(var float: x);
-annotation defines_var_set_of_int(var set of int: x);
-annotation defines_array_of_var_bool(array [int] of var bool: x);
-annotation defines_array_of_var_int(array [int] of var int: x);
-annotation defines_array_of_var_float(array [int] of var float: x);
-annotation defines_array_of_var_set_of_int(array [int] of var set of int: x);
-
+function ann: defines_var(var opt $t: c);
+/** @group stdlib.annotations.general Declare an array of variables \a arr as being
+  functionally defined by the annotated constraint. This annotation is introduced into FlatZinc
+  code by the compiler. */
+function ann: defines_var(array[$u] of var opt $t: arr);
 /** @group stdlib.annotations.general Declare that the annotated array should be printed by
   the solver with the given index sets \a a. This annotation is introduced into FlatZinc code by
   the compiler. */
