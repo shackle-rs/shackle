@@ -112,14 +112,14 @@ predicate mzn_reverse_map_var(var opt bool: x) =
 */
 
 /** @group stdlib.optiontypes.int True iff \a x is not absent */
-function var bool : occurs(var opt $$E : x) ::promise_total = occurs_int(x);
+function var bool : occurs(var opt $$E : x) ::promise_total = occurs_int(erase_enum(x));
 
-function bool : occurs_int(opt $$E : x) ::promise_total = occurs(x);
-function bool : occurs_int(var $$E : x) ::promise_total = true;
-function var bool : occurs_int(var opt $$E : x) ::promise_total =
+function bool : occurs_int(opt int : x) ::promise_total = occurs(x);
+function bool : occurs_int(var int : x) ::promise_total = true;
+function var bool : occurs_int(var opt int : x) ::promise_total =
   let {
     var bool : b = occurs_internal_int(x);
-    var $$E  : dx = deopt_internal_int(x, b);
+    var int  : dx = deopt_internal_int(x, b);
     constraint (x = reverse_map_var_opt_int(b,dx)) :: is_reverse_map;
   } in b;
 function var bool : occurs_int(var opt bool : x) ::promise_total = occurs(x);
@@ -127,14 +127,14 @@ function bool : occurs_int(opt bool : x) ::promise_total = occurs(x);
 function bool : occurs_int(var bool : x) ::promise_total = true;
 
 /** @group stdlib.optiontypes.int Return value of \a x (assumes that \a x is not absent) */
-function var $$E : deopt(var opt $$E : x) ::promise_total = deopt_int(x);
+function var $$E : deopt(var opt $$E : x) ::promise_total = to_enum(enum_of(x), deopt_int(erase_enum(x)));
 
-function $$E : deopt_int(opt $$E : x) ::promise_total = deopt(x);
-function var $$E : deopt_int(var $$E : x) ::promise_total = x;
-function var $$E : deopt_int(var opt $$E : x) ::promise_total =
+function int : deopt_int(opt int : x) ::promise_total = deopt(x);
+function var int : deopt_int(var int : x) ::promise_total = x;
+function var int : deopt_int(var opt int : x) ::promise_total =
   let {
     var bool : b = occurs_internal_int(x);
-    var $$E  : dx = deopt_internal_int(x, b);
+    var int  : dx = deopt_internal_int(x, b);
     constraint (x = reverse_map_var_opt_int(b,dx)) :: is_reverse_map;
   } in dx;
 function var bool : deopt_int(var opt bool : x) ::promise_total = deopt(x);
@@ -161,24 +161,28 @@ function bool: had_zero(opt int: x) = not mzn_check_absent_zero() \/ (x = 0);
     that \( \text{occurs}(x) \wedge \text{deopt}(x) = 0 \) */
 function bool: had_zero(array [int] of var opt int: x) = exists (xi in x) (had_zero(xi));
 
-function var bool: occurs_internal_int(var opt $$E: x) ::promise_total =
+function var bool: occurs_internal_int(var opt int: x) ::promise_total =
   let { var bool : b; } in b;
-function var $$E : deopt_internal_int(var opt $$E : x, var bool: b) ::promise_total =
-  let {
-    var erase_enum(dom(x)) union if mzn_check_absent_zero() then {0} else {} endif: y;
-    constraint if mzn_check_absent_zero() then
-      if had_zero(erase_enum(x)) then b \/ y = 0 else b <-> y != 0 endif
-    endif;
-  } in to_enum(enum_of(x), y);
+function var int : deopt_internal_int(var opt int : x, var bool: b) ::promise_total =
+  if dom(x) = {} then
+    let { constraint not b; } in 0
+  else 
+    let {
+      var dom(x) union if mzn_check_absent_zero() then {0} else {} endif: y;
+      constraint if mzn_check_absent_zero() then
+        if had_zero(x) then b \/ y = 0 else b <-> y != 0 endif
+      endif;
+    } in y
+  endif;
 
 function var opt $$E: reverse_map_var_opt_int(var bool: occ, var $$E: d) ::output_only;
 function opt $$E: reverse_map_var_opt_int(bool: occ, $$E: d) ::promise_total =
   if occ then d else <> endif;
 
-predicate mzn_reverse_map_var(var opt $$E: x) =
+predicate mzn_reverse_map_var(var opt int: x) =
   let {
     var bool : b = occurs_internal_int(x);
-    var $$E : dx = deopt_internal_int(x, b);
+    var int  : dx = deopt_internal_int(x, b);
     constraint (x = reverse_map_var_opt_int(b,dx)) :: is_reverse_map;
   } in true;
 
