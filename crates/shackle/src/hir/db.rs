@@ -180,6 +180,28 @@ fn variable_type_map(db: &dyn Hir) -> Arc<FxHashMap<Identifier, Ty>> {
 				result.insert(declaration.data[ident].identifier().unwrap(), ty);
 			}
 		}
+		for (idx, solve) in model.solves.iter() {
+			let types = db.lookup_item_types(ItemRef::new(db, *m, idx));
+			let ident = Identifier::new("_objective", db);
+			let pattern_ty = match solve.goal {
+				super::Goal::Satisfy => None,
+				super::Goal::Maximize {
+					pattern,
+					objective: _,
+				} => Some(types.get_pattern(pattern).unwrap()),
+				super::Goal::Minimize {
+					pattern,
+					objective: _,
+				} => Some(types.get_pattern(pattern).unwrap()),
+			};
+			match &pattern_ty {
+				Some(PatternTy::Variable(ty)) => {
+					result.insert(ident, *ty);
+				}
+				Some(_) => unreachable!(),
+				None => {}
+			};
+		}
 	}
 	Arc::new(result)
 }
