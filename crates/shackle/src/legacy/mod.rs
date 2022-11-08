@@ -40,7 +40,7 @@ fn flatten_array(
 	}
 }
 
-pub fn deserialize_legacy_value(
+fn deserialize_legacy_value(
 	db: &CompilerDatabase,
 	ty: Ty,
 	val: serde_json::Value,
@@ -77,13 +77,13 @@ pub fn deserialize_legacy_value(
 				}
 			} else {
 				assert!(v.is_i64());
-				if let TyData::Integer(_, _) = ty.lookup(db) {
-					Ok(Value::Integer(v.as_i64().unwrap()))
-				} else {
-					Err(InternalError::new(format!(
+				match ty.lookup(db) {
+					TyData::Integer(_, _) => Ok(Value::Integer(v.as_i64().unwrap())),
+					TyData::Float(_, _) => Ok(Value::Float(v.as_i64().unwrap() as f64)),
+					_ => Err(InternalError::new(format!(
 						"legacy interpreter returned a integer value for variable of type `{}'",
 						ty.pretty_print(db)
-					)))
+					))),
 				}
 			}
 		}
