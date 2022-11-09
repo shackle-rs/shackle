@@ -16,12 +16,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --root dist/ --path front/shackle-cli
+          args: --root dist/ --path crates/shackle-cli
       - name: Build shackle-ls
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --root dist/ --path front/shackle-ls
+          args: --root dist/ --path crates/shackle-ls
       - name: Upload build artifact
         uses: actions/upload-artifact@v2
         with:

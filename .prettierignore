@@ -8,5 +8,5 @@ package-lock.json
 target/
 
 # Shackle specific
-misc/tree-sitter-*/src
+parsers/tree-sitter-*/src
 share/minizinc/

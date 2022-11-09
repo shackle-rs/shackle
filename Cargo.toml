@@ -1,5 +1,2 @@
 [workspace]
-members = [
-	"front/*",
-	"misc/*",
-]
+members = ["crates/*", "parsers/*"]
