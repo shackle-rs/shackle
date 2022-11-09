@@ -68,8 +68,8 @@ fn main() -> Result<()> {
 )]
 struct Opts {
 	/// A level of verbosity, and can be used multiple times
-	#[clap(short, long, parse(from_occurrences))]
-	verbose: i32,
+	#[clap(short, long, action = clap::ArgAction::Count)]
+	verbose: u8,
 	#[clap(subcommand)]
 	subcmd: SubCommand,
 }
