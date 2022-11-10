@@ -526,3 +526,21 @@ pub enum ShackleError {
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),
 }
+
+/// Unable to convert an empty vector into a ShackleError
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Unable to convert empty vector to a ShackleError")]
+#[diagnostic(code(shackle::empty_error_vec))]
+pub struct EmptyErrorVec;
+
+impl TryFrom<Vec<ShackleError>> for ShackleError {
+	type Error = EmptyErrorVec;
+
+	fn try_from(value: Vec<ShackleError>) -> Result<Self, Self::Error> {
+		match value.len() {
+			0 => Err(EmptyErrorVec),
+			1 => Ok(value.last().unwrap().clone()),
+			_ => Ok(MultipleErrors { errors: value }.into()),
+		}
+	}
+}

@@ -2,14 +2,16 @@ use std::{
 	collections::BTreeMap,
 	io::{BufRead, BufReader},
 	ops::Range,
+	path::PathBuf,
 	process::{Command, Stdio},
 };
 
 use serde_json::Map;
+use tempfile::Builder;
 
 use crate::{
 	db::CompilerDatabase,
-	error::InternalError,
+	error::{FileError, InternalError},
 	hir::{db::Hir, Identifier},
 	ty::{Ty, TyData},
 	Message, Program, Status, Value,
@@ -227,11 +229,36 @@ impl Program {
 	/// Run the program in the current state
 	/// Solutions are emitted to the callback, and the resulting status is returned.
 	pub fn run<F: Fn(&Message) -> bool>(&mut self, msg_callback: F) -> Status {
+		let tmpfile = Builder::new().suffix(".shackle.mzn").tempfile();
+		let mut tmpfile = match tmpfile {
+			Err(err) => {
+				return Status::Err(
+					FileError {
+						file: PathBuf::from("tempfile"),
+						message: err.to_string(),
+						other: Vec::new(),
+					}
+					.into(),
+				);
+			}
+			Ok(file) => file,
+		};
+		if let Err(err) = self.write(tmpfile.as_file_mut()) {
+			return Status::Err(
+				FileError {
+					file: PathBuf::from(tmpfile.path()),
+					message: format!("unable to write model to temporary file: {}", err),
+					other: vec![],
+				}
+				.into(),
+			);
+		}
+
 		let mut cmd = Command::new("minizinc");
 		cmd.stdin(Stdio::null())
 			.stdout(Stdio::piped())
 			.stderr(Stdio::null())
-			.arg(self.code.path())
+			.arg(tmpfile.path())
 			.args([
 				"--output-mode",
 				"json",

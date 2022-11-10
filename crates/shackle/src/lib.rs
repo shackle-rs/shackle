@@ -16,14 +16,12 @@ pub mod ty;
 pub mod utils;
 
 use db::{CompilerDatabase, Inputs};
-use error::{FileError, MultipleErrors, ShackleError};
+use error::{MultipleErrors, ShackleError};
 use file::InputFile;
 use serde_json::Map;
-use tempfile::{Builder, NamedTempFile};
 
 use std::{
 	collections::BTreeMap,
-	env,
 	fmt::{self, Display},
 	io::Write,
 	ops::Range,
@@ -69,76 +67,45 @@ pub fn parse_files(paths: Vec<&Path>) -> Result<()> {
 }
 
 /// Structure used to build a shackle model
-#[derive(Default)]
 pub struct Model {
-	files: Vec<InputFile>,
-	stdlib: Option<PathBuf>,
+	db: CompilerDatabase,
 }
 
 impl Model {
 	/// Create a Model from the file at the given path
 	pub fn from_file(path: PathBuf) -> Model {
-		Model {
-			files: vec![InputFile::Path(path)],
-			stdlib: None,
-		}
+		let mut db = db::CompilerDatabase::new();
+		db.set_input_files(Arc::new(vec![InputFile::Path(path)]));
+		Model { db }
 	}
 
 	/// Create a Model from the given string
 	pub fn from_string(m: String) -> Model {
-		Model {
-			files: vec![InputFile::ModelString(m)],
-			stdlib: None,
-		}
+		let mut db = db::CompilerDatabase::new();
+		db.set_input_files(Arc::new(vec![InputFile::ModelString(m)]));
+		Model { db }
+	}
+
+	/// Check whether a model contains any (non-runtime) errors
+	pub fn check(&self, _slv: &Solver, _data: &[PathBuf], _complete: bool) -> Vec<Error> {
+		// self.db.set_globals_directory()
+		let errors = (*self.db.all_diagnostics()).clone();
+		// TODO: Check data files
+
+		errors
 	}
 
 	/// Compile current model into a Program that can be used by the Shackle interpreter
-	pub fn compile(&self, slv: &Solver) -> Result<Program> {
-		let mut db = db::CompilerDatabase::new();
-		db.set_input_files(Arc::new(self.files.clone()));
-
-		let mut search_dirs = Vec::new();
-		// TODO: New STDLIB behaviour
-		if let Some(path) = &self.stdlib {
-			search_dirs.push(path.clone())
-		} else if let Ok(pathstr) = env::var("MZN_STDLIB_DIR") {
-			search_dirs.push(PathBuf::from(pathstr).join("std"))
-		}
-		db.set_search_directories(Arc::new(search_dirs));
-		let errors = db.all_diagnostics();
+	pub fn compile(self, slv: &Solver) -> Result<Program> {
+		let errors = self.check(slv, &[], false);
 		if !errors.is_empty() {
-			if errors.len() == 1 {
-				return Err(errors.last().unwrap().clone());
-			}
-			if errors.len() > 1 {
-				return Err(MultipleErrors {
-					errors: (*errors).clone(),
-				}
-				.into());
-			}
+			return Err(ShackleError::try_from(errors).unwrap());
 		}
-		let output = Builder::new()
-			.suffix(".mzn")
-			.tempfile()
-			.map_err(|err| FileError {
-				file: PathBuf::from("tempfile"),
-				message: err.to_string(),
-				other: Vec::new(),
-			})?;
-		let thir = db.model_thir();
-		let printer = PrettyPrinter::new(&db, &thir);
-		output
-			.as_file()
-			.write_all(printer.pretty_print().as_bytes())
-			.map_err(|e| FileError {
-				file: PathBuf::from(output.path()),
-				message: format!("{}", e),
-				other: vec![],
-			})?;
+		let prg_model = self.db.model_thir();
 		Ok(Program {
-			db,
+			db: self.db,
 			slv: slv.clone(),
-			code: output,
+			code: prg_model,
 			enable_stats: false,
 			time_limit: None,
 		})
@@ -164,14 +131,17 @@ impl Solver {
 
 /// Structure to capture the result of succesful compilation of a Model object
 pub struct Program {
+	// FIXME: CompilerDatabase should not be part of Program anymore
 	db: CompilerDatabase,
 	slv: Solver,
-	code: NamedTempFile,
+	code: Arc<thir::Model>,
+	// run() options
 	enable_stats: bool,
 	time_limit: Option<Duration>,
 }
 
 /// Status of running and solving a Program
+#[derive(Debug, Clone)]
 pub enum Status {
 	/// No solutions exist
 	Infeasible,
@@ -188,6 +158,7 @@ pub enum Status {
 }
 
 /// Value types that can be part of a Solution
+#[derive(Debug, Clone)]
 pub enum Value {
 	/// Absence of an optional value
 	Absent,
@@ -302,6 +273,7 @@ impl Display for Value {
 }
 
 /// Intermediate messages emitted by shackle in processing and solving a program
+#[derive(Debug)]
 pub enum Message<'a> {
 	/// (Intermediate) solution emitted in the process
 	Solution(BTreeMap<String, Value>),
@@ -344,6 +316,11 @@ impl Program {
 	pub fn with_time_limit(mut self, dur: Duration) -> Self {
 		self.time_limit = Some(dur);
 		self
+	}
+	/// Output the [`Pogram`] using the given output interface, using the [`Write`] trait
+	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
+		let printer = PrettyPrinter::new(&self.db, &self.code);
+		out.write_all(printer.pretty_print().as_bytes())
 	}
 }
 
