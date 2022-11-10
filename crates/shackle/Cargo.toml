@@ -11,7 +11,6 @@ log = "0.4.14"
 miette = { version = "5.4.1" }
 rustc-hash = "1.1.0"
 salsa = { git = "https://github.com/salsa-rs/salsa" }
-serde = "1.0"
 serde_json = "1.0"
 tempfile = "3.3.0"
 thiserror = "1.0.31"
