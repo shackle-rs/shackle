@@ -182,7 +182,7 @@ impl FunctionEntry {
 								c2.is_candidate = false;
 							} else if c2.entry.has_body && !c1.entry.has_body {
 								// They have a body but we don't, so use them
-								c2.is_candidate = false;
+								c1.is_candidate = false;
 							} else {
 								// Both have or don't have a body, so just choose one
 								c2.is_candidate = false;
@@ -194,7 +194,7 @@ impl FunctionEntry {
 								c2.is_candidate = false;
 							} else if c2.entry.has_body && !c1.entry.has_body {
 								// They have a body but we don't, so use them
-								c2.is_candidate = false;
+								c1.is_candidate = false;
 							} else {
 								// Both have or don't have a body, so just choose one
 								c2.is_candidate = false;
