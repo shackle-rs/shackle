@@ -16,7 +16,7 @@ pub mod ty;
 pub mod utils;
 
 use db::{CompilerDatabase, Inputs};
-use error::{MultipleErrors, ShackleError};
+use error::ShackleError;
 use file::InputFile;
 use serde_json::Map;
 
@@ -25,9 +25,9 @@ use std::{
 	fmt::{self, Display},
 	io::Write,
 	ops::Range,
-	path::{Path, PathBuf},
+	path::PathBuf,
 	sync::Arc,
-	time::{Duration, Instant},
+	time::Duration,
 };
 
 use crate::{
@@ -39,32 +39,6 @@ use crate::{
 pub type Error = ShackleError;
 /// Result type for Shackle operations
 pub type Result<T, E = Error> = std::result::Result<T, E>;
-
-/// Parses a list of MiniZinc files given located using the Paths in the vector
-pub fn parse_files(paths: Vec<&Path>) -> Result<()> {
-	let now = Instant::now();
-	let mut db = db::CompilerDatabase::new();
-	db.set_input_files(Arc::new(
-		paths
-			.into_iter()
-			.map(|p| InputFile::Path(p.to_owned()))
-			.collect(),
-	));
-	let mut errors = (*db.all_diagnostics()).clone();
-	eprintln!("Done in {}ms", now.elapsed().as_millis());
-	if errors.is_empty() {
-		// Can print THIR if there were no errors
-		println!(
-			"{}",
-			PrettyPrinter::new(&db, &db.model_thir()).pretty_print()
-		);
-		Ok(())
-	} else if errors.len() == 1 {
-		Err(errors.pop().unwrap())
-	} else {
-		Err(MultipleErrors { errors }.into())
-	}
-}
 
 /// Structure used to build a shackle model
 pub struct Model {
