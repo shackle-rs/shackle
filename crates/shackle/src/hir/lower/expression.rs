@@ -337,7 +337,7 @@ impl ExpressionCollector<'_> {
 				Type::Bounded {
 					inst,
 					opt,
-					domain: self.alloc_expression(origin.clone(), ident),
+					domain: self.alloc_expression(origin, ident),
 				}
 			}
 			ast::Domain::TypeInstEnumIdentifier(tiid) => {
@@ -362,7 +362,7 @@ impl ExpressionCollector<'_> {
 				Type::Bounded {
 					inst,
 					opt,
-					domain: self.alloc_expression(origin.clone(), ident),
+					domain: self.alloc_expression(origin, ident),
 				}
 			}
 		}
@@ -406,7 +406,7 @@ impl ExpressionCollector<'_> {
 			let function = self.alloc_expression(origin.clone(), self.identifiers.array_nd);
 			let arguments = Box::new([indices[0][0], self.alloc_expression(origin.clone(), array)]);
 			self.alloc_expression(
-				origin.clone(),
+				origin,
 				Call {
 					function,
 					arguments,
@@ -447,7 +447,7 @@ impl ExpressionCollector<'_> {
 				.collect::<Vec<_>>();
 			arguments.push(self.alloc_expression(origin.clone(), array));
 			self.alloc_expression(
-				origin.clone(),
+				origin,
 				Call {
 					function,
 					arguments: arguments.into_boxed_slice(),
@@ -709,7 +709,7 @@ impl ExpressionCollector<'_> {
 		let arguments = Box::new([self.alloc_expression(origin.clone(), comp)]);
 		let function = self.collect_expression(c.function());
 		self.alloc_expression(
-			origin.clone(),
+			origin,
 			Call {
 				arguments,
 				function,
@@ -748,7 +748,7 @@ impl ExpressionCollector<'_> {
 		let function = self.alloc_expression(origin.clone(), self.identifiers.concat);
 
 		self.alloc_expression(
-			origin.clone(),
+			origin,
 			Call {
 				function,
 				arguments,
@@ -769,10 +769,7 @@ impl ExpressionCollector<'_> {
 	}
 
 	fn collect_let(&mut self, l: ast::Let) -> Let {
-		let items = l
-			.items()
-			.map(|i| self.collect_let_item(i.clone()))
-			.collect();
+		let items = l.items().map(|i| self.collect_let_item(i)).collect();
 		let in_expression = self.collect_expression(l.in_expression());
 		Let {
 			items,

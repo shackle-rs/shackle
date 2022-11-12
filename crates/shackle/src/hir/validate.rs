@@ -62,7 +62,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 			let first = iter.next().unwrap();
 			let item = first.item();
 			let model = item.model(db);
-			let data = item.local_item_ref(db).data(&*model);
+			let data = item.local_item_ref(db).data(&model);
 			let name = data[first.pattern()].identifier().unwrap();
 			let (src, span) = NodeRef::from(first.into_entity(db)).source_span(db);
 			let others = iter
@@ -98,7 +98,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 			} => {
 				let item = first_pat.item();
 				let model = item.model(db);
-				let data = item.local_item_ref(db).data(&*model);
+				let data = item.local_item_ref(db).data(&model);
 				let name = data[first_pat.pattern()].identifier().unwrap();
 				let signature = first_fn
 					.overload
@@ -136,14 +136,11 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 					Entry::Vacant(e) => {
 						let mut v = Vec::new();
 						let resolved_item = p.item();
-						match resolved_item.local_item_ref(db) {
-							LocalItemRef::Declaration(d) => {
-								let model = resolved_item.model(db);
-								if let Some(def) = model[d].definition {
-									v.push(EntityRef::new(db, resolved_item, def).into());
-								}
+						if let LocalItemRef::Declaration(d) = resolved_item.local_item_ref(db) {
+							let model = resolved_item.model(db);
+							if let Some(def) = model[d].definition {
+								v.push(EntityRef::new(db, resolved_item, def).into());
 							}
-							_ => (),
 						}
 						v.push(item_ref.into());
 						e.insert(v);
@@ -162,14 +159,11 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 					Entry::Vacant(e) => {
 						let mut v = Vec::new();
 						let resolved_item = p.item();
-						match resolved_item.local_item_ref(db) {
-							LocalItemRef::Enumeration(e) => {
-								let model = resolved_item.model(db);
-								if model[e].definition.is_some() {
-									v.push(p.into_entity(db).into());
-								}
+						if let LocalItemRef::Enumeration(e) = resolved_item.local_item_ref(db) {
+							let model = resolved_item.model(db);
+							if model[e].definition.is_some() {
+								v.push(p.into_entity(db).into());
 							}
-							_ => (),
 						}
 						v.push(item_ref.into());
 						e.insert(v);
@@ -181,7 +175,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 	for (p, asgs) in assignments {
 		if asgs.len() > 1 {
 			let model = p.item().model(db);
-			let variable = p.item().local_item_ref(db).data(&*model)[p.pattern()]
+			let variable = p.item().local_item_ref(db).data(&model)[p.pattern()]
 				.identifier()
 				.unwrap()
 				.pretty_print(db);

@@ -167,9 +167,9 @@ impl Identifier {
 	}
 }
 
-impl Into<InternedString> for Identifier {
-	fn into(self) -> InternedString {
-		self.0
+impl From<Identifier> for InternedString {
+	fn from(ident: Identifier) -> Self {
+		ident.0
 	}
 }
 

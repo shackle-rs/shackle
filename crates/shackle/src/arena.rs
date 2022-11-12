@@ -78,9 +78,9 @@ impl<T> ArenaIndex<T> {
 	}
 }
 
-impl<T> Into<u32> for ArenaIndex<T> {
-	fn into(self) -> u32 {
-		self.index.get()
+impl<T> From<ArenaIndex<T>> for u32 {
+	fn from(i: ArenaIndex<T>) -> Self {
+		i.index.get()
 	}
 }
 
@@ -350,6 +350,7 @@ impl<K, V> ArenaMap<K, V> {
 	}
 
 	/// Consume and iterate
+	#[allow(clippy::should_implement_trait)] // TODO: How can we implement this as IntoIter? Somehow the resulting type is almost impossible to express.
 	pub fn into_iter(self) -> impl Iterator<Item = (ArenaIndex<K>, V)> {
 		self.items
 			.into_iter()
@@ -367,14 +368,14 @@ impl<K, V> Index<ArenaIndex<K>> for ArenaMap<K, V> {
 	type Output = V;
 	fn index(&self, idx: ArenaIndex<K>) -> &V {
 		self.get(idx)
-			.expect(&format!("No entry for {:?} in ArenaMap", idx))
+			.unwrap_or_else(|| panic!("No entry for {:?} in ArenaMap", idx))
 	}
 }
 
 impl<K, V> IndexMut<ArenaIndex<K>> for ArenaMap<K, V> {
 	fn index_mut(&mut self, idx: ArenaIndex<K>) -> &mut V {
 		self.get_mut(idx)
-			.expect(&format!("No entry for {:?} in ArenaMap", idx))
+			.unwrap_or_else(|| panic!("No entry for {:?} in ArenaMap", idx))
 	}
 }
 

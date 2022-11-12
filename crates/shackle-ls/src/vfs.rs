@@ -40,16 +40,16 @@ impl FileHandler for Vfs {
 		false
 	}
 
-	fn read_file(&self, path: &PathBuf) -> Result<Arc<String>, FileError> {
+	fn read_file(&self, path: &Path) -> Result<Arc<String>, FileError> {
 		let guard = self.files.lock().unwrap();
 		if let Some(s) = guard.get(path) {
 			return Ok(Arc::new(s.clone()));
 		}
 
-		std::fs::read_to_string(&path)
+		std::fs::read_to_string(path)
 			.map(Arc::new)
 			.map_err(|err| FileError {
-				file: path.clone(),
+				file: path.to_path_buf(),
 				message: err.to_string(),
 				other: Vec::new(),
 			})

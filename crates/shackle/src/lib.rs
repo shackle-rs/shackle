@@ -48,14 +48,14 @@ pub struct Model {
 impl Model {
 	/// Create a Model from the file at the given path
 	pub fn from_file(path: PathBuf) -> Model {
-		let mut db = db::CompilerDatabase::new();
+		let mut db = db::CompilerDatabase::default();
 		db.set_input_files(Arc::new(vec![InputFile::Path(path)]));
 		Model { db }
 	}
 
 	/// Create a Model from the given string
 	pub fn from_string(m: String) -> Model {
-		let mut db = db::CompilerDatabase::new();
+		let mut db = db::CompilerDatabase::default();
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(m)]));
 		Model { db }
 	}
@@ -63,10 +63,9 @@ impl Model {
 	/// Check whether a model contains any (non-runtime) errors
 	pub fn check(&self, _slv: &Solver, _data: &[PathBuf], _complete: bool) -> Vec<Error> {
 		// self.db.set_globals_directory()
-		let errors = (*self.db.all_diagnostics()).clone();
+		// let errors = (*self.db.all_diagnostics()).clone();
 		// TODO: Check data files
-
-		errors
+		(*self.db.all_diagnostics()).clone()
 	}
 
 	/// Compile current model into a Program that can be used by the Shackle interpreter

@@ -42,7 +42,7 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 			let expression = found?;
 			let model = expression.item().model(db);
 			let types = db.lookup_item_types(expression.item());
-			let data = expression.item().local_item_ref(db).data(&*model);
+			let data = expression.item().local_item_ref(db).data(&model);
 			let structure = match &data[expression.expression()] {
 				Expression::TupleAccess(ta) => Some(ta.tuple),
 				Expression::RecordAccess(ra) => Some(ra.record),

@@ -77,7 +77,7 @@ impl<'a> DispatchRequest<'a> {
 							Self(RequestState::Handled(Ok(())))
 						}
 						Err(error) => Self(RequestState::Handled(Err(ExtractError::JsonError {
-							method: request.method.clone(),
+							method: request.method,
 							error,
 						}))),
 					}
@@ -128,7 +128,7 @@ impl<'a> DispatchNotification<'a> {
 						}
 						Err(error) => {
 							Self(NotificationState::Handled(Err(ExtractError::JsonError {
-								method: notification.method.clone(),
+								method: notification.method,
 								error,
 							})))
 						}

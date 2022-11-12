@@ -177,15 +177,15 @@ impl FunctionEntry {
 							} else if m2 && !m1 {
 								// They accept our args, but we don't accept theirs, so we're more specific
 								c2.is_candidate = false;
-							} else if c1.entry.has_body && !c2.entry.has_body {
-								// We have a body but they don't, so use us
-								c2.is_candidate = false;
 							} else if c2.entry.has_body && !c1.entry.has_body {
 								// They have a body but we don't, so use them
 								c1.is_candidate = false;
+							} else if c1.entry.has_body && !c2.entry.has_body {
+								// We have a body but they don't, so use us
+								c2.is_candidate = false;
 							} else {
 								// Both have or don't have a body, so just choose one
-								c2.is_candidate = false;
+								c1.is_candidate = false;
 							}
 						}
 						_ => {
@@ -230,16 +230,16 @@ impl FunctionEntry {
 		for (i, (_, a)) in overloads.iter().enumerate() {
 			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
 				if let Ok(fa) = a.overload.instantiate(db, b.overload.params()) {
-					if b.overload.instantiate(db, a.overload.params()).is_ok() {
-						if a.has_body && b.has_body || fa.return_type != b.overload.return_type() {
-							// Same function with multiple definitions
-							same_fns[i + j + 1] = Some(i);
-						}
+					if b.overload.instantiate(db, a.overload.params()).is_ok()
+						&& (a.has_body && b.has_body || fa.return_type != b.overload.return_type())
+					{
+						// Same function with multiple definitions
+						same_fns[i + j + 1] = Some(i);
 					}
 				}
 			}
 		}
-		let mut drain = overloads.into_iter().map(|x| Some(x)).collect::<Vec<_>>();
+		let mut drain = overloads.into_iter().map(Some).collect::<Vec<_>>();
 		for i in 0..same_fns.len() {
 			let others = same_fns
 				.iter()
@@ -565,17 +565,15 @@ impl PolymorphicFunctionType {
 			(TyData::Record(o1, f1), TyData::Record(o2, f2)) => {
 				(o1 == o2 || o1 == OptType::NonOpt)
 					&& f2.iter().all(|(i2, t2)| {
-						f1.iter()
-							.find(|(i1, t1)| {
-								i1 == i2
-									&& PolymorphicFunctionType::collect_instantiations(
-										db,
-										instantiations,
-										*t1,
-										*t2,
-									)
-							})
-							.is_some()
+						f1.iter().any(|(i1, t1)| {
+							i1 == i2
+								&& PolymorphicFunctionType::collect_instantiations(
+									db,
+									instantiations,
+									*t1,
+									*t2,
+								)
+						})
 					})
 			}
 			(TyData::Function(o1, f1), TyData::Function(o2, f2)) => {

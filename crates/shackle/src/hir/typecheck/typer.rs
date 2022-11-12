@@ -181,7 +181,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			let fn_match = patterns.iter().find_map(|p| {
 				match self.ctx.type_pattern(db, self.types, self.identifiers, *p) {
 					PatternTy::Function(function) => {
-						FunctionEntry::match_fn(db.upcast(), [(*p, *function.clone())], &[ty]).ok()
+						FunctionEntry::match_fn(db.upcast(), [(*p, *function)], &[ty]).ok()
 					}
 					_ => None,
 				}
@@ -244,7 +244,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			_ => {
 				let ty = self.collect_expression(c.function, None);
 				if let TyData::Function(OptType::NonOpt, f) = ty.lookup(db.upcast()) {
-					if let Err(_) = f.matches(db.upcast(), &args) {
+					if f.matches(db.upcast(), &args).is_err() {
 						let (src, span) =
 							NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 						self.ctx.add_diagnostic(
@@ -382,7 +382,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						msg: "Cannot determine inst for set literal".to_owned(),
 					},
 				);
-				return self.types.error;
+				self.types.error
 			}
 		}
 	}
@@ -799,8 +799,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						for (i, d) in f1.iter().zip(f2.iter()) {
 							match process_index(*i, *d) {
 								Ok((v, o, s)) => {
-									make_var = make_var | v;
-									make_opt = make_opt | o;
+									make_var |= v;
+									make_opt |= o;
 									if s {
 										slices.push(*d);
 									}
@@ -814,8 +814,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					_ => match process_index(indices, dim) {
 						Ok((v, o, s)) => {
-							make_var = make_var | v;
-							make_opt = make_opt | o;
+							make_var |= v;
+							make_opt |= o;
 							if s {
 								slices.push(dim);
 							}
@@ -986,7 +986,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							),
 						},
 					);
-					return self.types.error;
+					self.types.error
 				}
 			},
 			TyData::Error => self.types.error,
@@ -1096,7 +1096,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							),
 						},
 					);
-					return self.types.error;
+					self.types.error
 				}
 			},
 			TyData::Error => self.types.error,
@@ -1170,7 +1170,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								),
 								src,
 								span,
-								original_span: first_span.clone(),
+								original_span: first_span,
 							},
 						);
 					}
@@ -1247,7 +1247,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								),
 								src,
 								span,
-								original_span: first_span.clone(),
+								original_span: first_span,
 							},
 						);
 					}
@@ -1452,26 +1452,26 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 				let mut new_overloads = Vec::new();
 				for p in patterns.iter() {
-					match self.ctx.type_pattern(db, self.types, self.identifiers, *p) {
-						PatternTy::Function(function) => match &p.item().local_item_ref(db) {
-							crate::hir::ids::LocalItemRef::Function(f) => {
-								let fi = &p.item().model(db)[*f];
-								if let Some(param) = fi.parameters.first() {
-									let has_annotated_expression =
-										param.annotations.iter().any(|ann| match &fi.data[*ann] {
-											Expression::Identifier(i) => {
-												*i == self.identifiers.annotated_expression
-											}
-											_ => false,
-										});
-									if has_annotated_expression {
-										new_overloads.push((*p, *function.clone()));
-									}
+					if let PatternTy::Function(function) =
+						self.ctx.type_pattern(db, self.types, self.identifiers, *p)
+					{
+						if let crate::hir::ids::LocalItemRef::Function(f) =
+							&p.item().local_item_ref(db)
+						{
+							let fi = &p.item().model(db)[*f];
+							if let Some(param) = fi.parameters.first() {
+								let has_annotated_expression =
+									param.annotations.iter().any(|ann| match &fi.data[*ann] {
+										Expression::Identifier(i) => {
+											*i == self.identifiers.annotated_expression
+										}
+										_ => false,
+									});
+								if has_annotated_expression {
+									new_overloads.push((*p, *function.clone()));
 								}
 							}
-							_ => (),
-						},
-						_ => (),
+						}
 					}
 				}
 				return FunctionEntry::match_fn(db.upcast(), new_overloads, &new_args);
@@ -1571,7 +1571,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							.unwrap();
 						}
 						InstantiationError::IncompatibleTypeInstVariable { ty_var, types } => {
-							if types.len() == 0 {
+							if types.is_empty() {
 								// Should not be possible currently
 								writeln!(
 									&mut msg,
@@ -1632,12 +1632,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						PatternTy::EnumAtom(ty) => {
 							self.ctx
 								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-							return Some(ty);
+							Some(ty)
 						}
 						PatternTy::AnnotationAtom => {
 							self.ctx
 								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-							return Some(self.types.ann);
+							Some(self.types.ann)
 						}
 						_ => None,
 					}

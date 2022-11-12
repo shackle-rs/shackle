@@ -125,7 +125,7 @@ impl Solve {
 			print!("{}", x);
 			true
 		};
-		let status = program.run(&display_fn);
+		let status = program.run(display_fn);
 		match status {
 			Status::Infeasible => println!("=====UNSATISFIABLE====="),
 			Status::Satisfied => {}

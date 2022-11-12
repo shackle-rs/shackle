@@ -128,8 +128,8 @@ impl ItemCollector<'_> {
 						ast::Expression::SetLiteral(sl) => {
 							todo.extend(sl.members());
 						}
-						ast::Expression::Call(c) => match c.function() {
-							ast::Expression::Identifier(i) => {
+						ast::Expression::Call(c) => {
+							if let ast::Expression::Identifier(i) = c.function() {
 								definition.push(Constructor {
 									pattern: ctx.collect_pattern(i.into()),
 									parameters: Some(
@@ -153,8 +153,7 @@ impl ItemCollector<'_> {
 									),
 								});
 							}
-							_ => {}
-						},
+						}
 						ast::Expression::InfixOperator(o) => {
 							todo.push(o.left());
 							todo.push(o.right());

@@ -825,7 +825,7 @@ impl ExpressionBuilder for ArrayComprehensionBuilder {
 			.map(|g| g.finish(owner))
 			.collect::<Vec<_>>();
 		assert!(
-			generators.len() > 0,
+			!generators.is_empty(),
 			"Cannot create array comprehension without generator"
 		);
 		owner.expressions.insert(Expression {
@@ -921,7 +921,7 @@ impl ExpressionBuilder for SetComprehensionBuilder {
 			.map(|g| g.finish(owner))
 			.collect::<Vec<_>>();
 		assert!(
-			generators.len() > 0,
+			!generators.is_empty(),
 			"Cannot create set comprehension without generator"
 		);
 		owner.expressions.insert(Expression {
@@ -1259,7 +1259,7 @@ impl ExpressionBuilder for IfThenElseBuilder {
 			})
 			.collect::<Vec<_>>();
 		assert!(
-			branches.len() > 0,
+			!branches.is_empty(),
 			"Cannot create if-then-else with no branches"
 		);
 		let else_result = self

@@ -255,47 +255,43 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 		};
 		models.push(file);
 		for item in model.items() {
-			match item {
-				ast::Item::Include(i) => {
-					let value = i.file().value();
-					let included = Path::new(&value);
+			if let ast::Item::Include(i) = item {
+				let value = i.file().value();
+				let included = Path::new(&value);
 
-					let resolved_file = if included.is_absolute() {
-						included.to_owned()
-					} else {
-						// Resolve relative to search directories, then current file
-						let file_dir = model
-							.cst()
-							.file()
-							.path(db.upcast())
-							.and_then(|p| p.parent().map(|p| p.to_owned()));
+				let resolved_file = if included.is_absolute() {
+					included.to_owned()
+				} else {
+					// Resolve relative to search directories, then current file
+					let file_dir = model
+						.cst()
+						.file()
+						.path(db.upcast())
+						.and_then(|p| p.parent().map(|p| p.to_owned()));
 
-						let resolved = search_dirs
-							.iter()
-							.chain(file_dir.iter())
-							.map(|p| p.join(included))
-							.filter(|p| p.exists())
-							.next();
+					let resolved = search_dirs
+						.iter()
+						.chain(file_dir.iter())
+						.map(|p| p.join(included))
+						.find(|p| p.exists());
 
-						match resolved {
-							Some(r) => r,
-							None => {
-								let (src, span) = i.cst_node().source_span(db.upcast());
-								errors.push(
-									IncludeError {
-										src,
-										span,
-										include: value,
-									}
-									.into(),
-								);
-								continue;
-							}
+					match resolved {
+						Some(r) => r,
+						None => {
+							let (src, span) = i.cst_node().source_span(db.upcast());
+							errors.push(
+								IncludeError {
+									src,
+									span,
+									include: value,
+								}
+								.into(),
+							);
+							continue;
 						}
-					};
-					todo.push(FileRef::new(&resolved_file, db.upcast()).into());
-				}
-				_ => (),
+					}
+				};
+				todo.push(FileRef::new(&resolved_file, db.upcast()).into());
 			}
 		}
 	}
@@ -317,9 +313,8 @@ fn enumeration_names(db: &dyn Hir) -> Arc<Vec<String>> {
 	for model in models.iter() {
 		let ast = db.ast(**model).unwrap();
 		for item in ast.items() {
-			match item {
-				ast::Item::Enumeration(e) => result.push(e.id().name().to_owned()),
-				_ => (),
+			if let ast::Item::Enumeration(e) = item {
+				result.push(e.id().name().to_owned())
 			}
 		}
 	}

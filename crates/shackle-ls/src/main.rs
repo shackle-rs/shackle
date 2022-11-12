@@ -57,19 +57,19 @@ impl LanguageServerDatabase {
 		let db = self.db.snapshot();
 		let sender = self.sender.clone();
 		self.pool.execute(move || {
-			f(&*db, sender);
+			f(&db, sender);
 		})
 	}
 
 	pub fn manage_file(&mut self, file: &Path, contents: &str) {
 		self.vfs.manage_file(file, contents);
-		self.db.on_file_change(&file.to_owned());
+		self.db.on_file_change(file);
 		self.set_active_file(file);
 	}
 
 	pub fn unmanage_file(&mut self, file: &Path) {
-		self.vfs.unmanage_file(&file);
-		self.db.on_file_change(&file.to_owned());
+		self.vfs.unmanage_file(file);
+		self.db.on_file_change(file);
 	}
 
 	pub fn set_active_file(&mut self, path: &Path) {
@@ -77,7 +77,7 @@ impl LanguageServerDatabase {
 			.set_input_files(Arc::new(vec![InputFile::Path(path.to_owned())]));
 		let path_filter = path.to_owned();
 		self.execute_async(move |db, sender| {
-			let notification = diagnostics::diagnostics_notification(&*db, path_filter.as_path());
+			let notification = diagnostics::diagnostics_notification(db, path_filter.as_path());
 			sender
 				.send(Message::Notification(notification))
 				.expect("Failed to send diagnostics");

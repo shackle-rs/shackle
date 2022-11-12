@@ -50,7 +50,7 @@ impl SourceFile {
 
 	/// Get the path for this source file if any
 	pub fn path(&self) -> Option<&Path> {
-		self.name.as_ref().map(|p| p.as_path())
+		self.name.as_deref()
 	}
 
 	/// Get the pretty name of this source file if any
@@ -61,7 +61,7 @@ impl SourceFile {
 					.ok()
 					.and_then(|c| c.canonicalize().ok())
 					.and_then(move |c| p.strip_prefix(c).ok().map(|p| p.to_owned()))
-					.unwrap_or(p.to_owned())
+					.unwrap_or_else(|| p.to_owned())
 			})
 			.map(|p| p.to_string_lossy().to_string())
 	}
@@ -95,14 +95,14 @@ impl SourceCode for SourceFile {
 			Some(name) => MietteSpanContents::new_named(
 				name,
 				contents.data(),
-				contents.span().clone(),
+				*contents.span(),
 				contents.line(),
 				contents.column(),
 				contents.line_count(),
 			),
 			None => MietteSpanContents::new(
 				contents.data(),
-				contents.span().clone(),
+				*contents.span(),
 				contents.line(),
 				contents.column(),
 				contents.line_count(),
@@ -179,7 +179,7 @@ pub fn file_contents(db: &dyn FileReader, file: FileRef) -> Result<Arc<String>, 
 					db.salsa_runtime()
 						.report_synthetic_read(salsa::Durability::LOW);
 				}
-				h.read_file(p.canonicalize().as_ref().unwrap_or_else(|_| p))
+				h.read_file(p.canonicalize().as_ref().unwrap_or(p))
 			}
 			InputFile::ModelString(ref s) => Ok(Arc::new(s.clone())),
 			InputFile::DznString(ref s) => Ok(Arc::new(s.clone())),
@@ -245,11 +245,11 @@ pub fn input_models(db: &dyn FileReader) -> Arc<Vec<ModelRef>> {
 pub trait FileHandler: Send {
 	/// Whether the results are durable (return false if file contents may change)
 	fn durable(&self) -> bool {
-		return true;
+		true
 	}
 
 	/// Read a file and return its contents.
-	fn read_file(&self, path: &PathBuf) -> Result<Arc<String>, FileError>;
+	fn read_file(&self, path: &Path) -> Result<Arc<String>, FileError>;
 
 	/// Create a snapshot of the file handler
 	fn snapshot(&self) -> Box<dyn FileHandler>;
@@ -260,11 +260,11 @@ pub trait FileHandler: Send {
 pub struct DefaultFileHandler;
 
 impl FileHandler for DefaultFileHandler {
-	fn read_file(&self, path: &PathBuf) -> Result<Arc<String>, FileError> {
-		std::fs::read_to_string(&path)
+	fn read_file(&self, path: &Path) -> Result<Arc<String>, FileError> {
+		std::fs::read_to_string(path)
 			.map(Arc::new)
 			.map_err(|err| FileError {
-				file: path.clone(),
+				file: path.to_path_buf(),
 				message: err.to_string(),
 				other: Vec::new(),
 			})

@@ -11,7 +11,7 @@ pub fn diagnostics_notification(db: &dyn Hir, path: &Path) -> lsp_server::Notifi
 	let all_diagnostics = db.all_diagnostics();
 	let mut diagnostics = Vec::new();
 	for d in all_diagnostics.iter() {
-		collect_diagnostic(&path, d, &mut diagnostics);
+		collect_diagnostic(path, d, &mut diagnostics);
 	}
 	lsp_server::Notification {
 		method: lsp_types::notification::PublishDiagnostics::METHOD.to_owned(),

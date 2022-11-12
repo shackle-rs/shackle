@@ -50,7 +50,7 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 						LocalEntityRef::Expression(e) => {
 							let types = db.lookup_item_types(item);
 							let model = item.model(db);
-							let data = item.local_item_ref(db).data(&*model);
+							let data = item.local_item_ref(db).data(&model);
 							Some(Hover {
 								contents: HoverContents::Scalar(MarkedString::LanguageString(
 									LanguageString {
@@ -64,7 +64,7 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 						LocalEntityRef::Pattern(p) => {
 							let types = db.lookup_item_types(item);
 							let model = item.model(db);
-							let data = item.local_item_ref(db).data(&*model);
+							let data = item.local_item_ref(db).data(&model);
 							Some(Hover {
 								contents: HoverContents::Scalar(MarkedString::LanguageString(
 									LanguageString {

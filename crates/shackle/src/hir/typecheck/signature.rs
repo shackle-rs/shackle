@@ -294,7 +294,6 @@ impl SignatureTypeContext {
 					// Use LHS type only
 					let expected = typer.complete_type(it.declared_type, None);
 					typer.collect_pattern(None, it.pattern, expected);
-					drop(typer);
 				} else {
 					typer.collect_declaration(it);
 				}
@@ -366,6 +365,7 @@ impl SignatureTypeContext {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)] // FIXME: Refactor to have less arguments
 	fn add_enum_cases(
 		&mut self,
 		db: &dyn Hir,

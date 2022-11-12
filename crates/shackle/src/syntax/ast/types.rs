@@ -277,47 +277,27 @@ pub enum PrimitiveType {
 impl PrimitiveType {
 	/// Return whether this is an `ann`.
 	pub fn is_ann(&self) -> bool {
-		if let PrimitiveType::Ann = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PrimitiveType::Ann)
 	}
 
 	/// Return whether this is an `ann`.
 	pub fn is_bool(&self) -> bool {
-		if let PrimitiveType::Bool = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PrimitiveType::Bool)
 	}
 
 	/// Return whether this is an `ann`.
 	pub fn is_float(&self) -> bool {
-		if let PrimitiveType::Float = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PrimitiveType::Float)
 	}
 
 	/// Return whether this is an `ann`.
 	pub fn is_int(&self) -> bool {
-		if let PrimitiveType::Int = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PrimitiveType::Int)
 	}
 
 	/// Return whether this is an `ann`.
 	pub fn is_string(&self) -> bool {
-		if let PrimitiveType::String = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PrimitiveType::String)
 	}
 }
 

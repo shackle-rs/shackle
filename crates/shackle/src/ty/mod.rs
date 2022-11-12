@@ -244,26 +244,25 @@ impl Ty {
 
 	/// Whether this type-inst is known to be non-optional.
 	pub fn known_occurs(&self, db: &dyn Interner) -> bool {
-		match self.lookup(db) {
+		matches!(
+			self.lookup(db),
 			TyData::Error
-			| TyData::Boolean(_, OptType::NonOpt)
-			| TyData::Integer(_, OptType::NonOpt)
-			| TyData::Float(_, OptType::NonOpt)
-			| TyData::Enum(_, OptType::NonOpt, _)
-			| TyData::String(OptType::NonOpt)
-			| TyData::Annotation(OptType::NonOpt)
-			| TyData::Bottom(OptType::NonOpt)
-			| TyData::Function(OptType::NonOpt, _)
-			| TyData::Set(_, OptType::NonOpt, _)
-			| TyData::TyVar(_, Some(OptType::NonOpt), _)
-			| TyData::Array {
-				opt: OptType::NonOpt,
-				..
-			}
-			| TyData::Tuple(OptType::NonOpt, _)
-			| TyData::Record(OptType::NonOpt, _) => true,
-			_ => false,
-		}
+				| TyData::Boolean(_, OptType::NonOpt)
+				| TyData::Integer(_, OptType::NonOpt)
+				| TyData::Float(_, OptType::NonOpt)
+				| TyData::Enum(_, OptType::NonOpt, _)
+				| TyData::String(OptType::NonOpt)
+				| TyData::Annotation(OptType::NonOpt)
+				| TyData::Bottom(OptType::NonOpt)
+				| TyData::Function(OptType::NonOpt, _)
+				| TyData::Set(_, OptType::NonOpt, _)
+				| TyData::TyVar(_, Some(OptType::NonOpt), _)
+				| TyData::Array {
+					opt: OptType::NonOpt,
+					..
+				} | TyData::Tuple(OptType::NonOpt, _)
+				| TyData::Record(OptType::NonOpt, _)
+		)
 	}
 
 	/// Whether this type-inst can definitely be made var
@@ -800,8 +799,7 @@ impl Ty {
 				(o1 == OptType::NonOpt || o1 == o2)
 					&& f2.iter().all(|(i2, t2)| {
 						f1.iter()
-							.find(|(i1, t1)| i1 == i2 && t1.is_subtype_of(db, *t2))
-							.is_some()
+							.any(|(i1, t1)| i1 == i2 && t1.is_subtype_of(db, *t2))
 					})
 			}
 			// Function coercion
@@ -921,11 +919,11 @@ impl Ty {
 			TyData::TyVar(None, None, t) => format!("any {}", t.ty_var.pretty_print(db)),
 			TyData::TyVar(i, o, t) => i
 				.map(|i| i.pretty_print())
-				.unwrap_or(Some("anyvar".to_owned()))
+				.unwrap_or_else(|| Some("anyvar".to_owned()))
 				.into_iter()
 				.chain(
 					o.map(|o| o.pretty_print())
-						.unwrap_or(Some("anyopt".to_string())),
+						.unwrap_or_else(|| Some("anyopt".to_string())),
 				)
 				.chain([t.ty_var.pretty_print(db)])
 				.collect::<Vec<_>>()
@@ -1010,7 +1008,7 @@ impl NewType {
 	fn from_pattern(db: &dyn Hir, pattern: PatternRef) -> Self {
 		let item = pattern.item();
 		let model = item.model(db);
-		let name = item.local_item_ref(db).data(&*model)[pattern.pattern()]
+		let name = item.local_item_ref(db).data(&model)[pattern.pattern()]
 			.identifier()
 			.unwrap()
 			.0;

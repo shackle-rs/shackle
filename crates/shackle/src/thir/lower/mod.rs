@@ -186,7 +186,7 @@ impl<'a> ItemCollector<'a> {
 		c: &crate::hir::Item<crate::hir::Constraint>,
 	) -> ArenaIndex<Item<Constraint>> {
 		let types = self.db.lookup_item_types(item);
-		let mut collector = ExpressionCollector::new(self, &c.data, item, types.clone());
+		let mut collector = ExpressionCollector::new(self, &c.data, item, types);
 		let mut constraint = <Item<Constraint>>::new(&*collector.collect_expression(c.expression));
 		for ann in c.annotations.iter() {
 			constraint.add_annotation(&*collector.collect_expression(*ann));
@@ -253,6 +253,8 @@ impl<'a> ItemCollector<'a> {
 		}
 	}
 
+	// FIXME: Refactor so this method has less arguments
+	#[allow(clippy::too_many_arguments)]
 	fn collect_destructuring(
 		&mut self,
 		decls: &mut Vec<ArenaIndex<Item<Declaration>>>,
@@ -357,7 +359,7 @@ impl<'a> ItemCollector<'a> {
 		if !self.resolutions.contains_key(&res) {
 			self.collect_item(res.item());
 		}
-		let mut collector = ExpressionCollector::new(self, &a.data, item, types.clone());
+		let mut collector = ExpressionCollector::new(self, &a.data, item, types);
 		let e = match &collector.resolutions[&res] {
 			ResolvedIdentifier::Enumeration(e) => *e,
 			_ => unreachable!(),
@@ -494,7 +496,7 @@ impl<'a> ItemCollector<'a> {
 		o: &crate::hir::Item<crate::hir::Output>,
 	) -> ArenaIndex<Item<Output>> {
 		let types = self.db.lookup_item_types(item);
-		let mut collector = ExpressionCollector::new(self, &o.data, item, types.clone());
+		let mut collector = ExpressionCollector::new(self, &o.data, item, types);
 		let e = collector.collect_expression(o.expression);
 		let mut output = <Item<Output>>::new(&*e);
 		if let Some(s) = o.section {
@@ -508,7 +510,7 @@ impl<'a> ItemCollector<'a> {
 	pub fn collect_solve(&mut self, item: ItemRef, s: &crate::hir::Item<crate::hir::Solve>) {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &s.data, item, types.clone());
-		let mut solve = <Item<Solve>>::new();
+		let mut solve = <Item<Solve>>::default();
 		for ann in s.annotations.iter() {
 			solve.add_annotation(&*collector.collect_expression(*ann));
 		}
@@ -573,7 +575,7 @@ impl<'a> ItemCollector<'a> {
 			enumerations: self.enumerations,
 			functions: self.functions,
 			outputs: self.outputs,
-			solve: self.solve.unwrap_or(<Item<Solve>>::new()),
+			solve: self.solve.unwrap_or_default(),
 			top_level: self.top_level,
 		}
 	}
@@ -590,13 +592,13 @@ pub struct ExpressionCollector<'a, 'b> {
 impl<'a, 'b> Deref for ExpressionCollector<'a, 'b> {
 	type Target = ItemCollector<'b>;
 	fn deref(&self) -> &Self::Target {
-		&self.parent
+		self.parent
 	}
 }
 
 impl<'a, 'b> DerefMut for ExpressionCollector<'a, 'b> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.parent
+		self.parent
 	}
 }
 
@@ -662,13 +664,12 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
 				),
-			crate::hir::Expression::BooleanLiteral(b) => {
-				BooleanLiteralBuilder::new(ty, b.clone(), origin).with_annotations(
+			crate::hir::Expression::BooleanLiteral(b) => BooleanLiteralBuilder::new(ty, *b, origin)
+				.with_annotations(
 					self.data
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
-				)
-			}
+				),
 			crate::hir::Expression::Call(c) => {
 				CallBuilder::new(ty, self.collect_expression(c.function), origin)
 					.with_args(c.arguments.iter().map(|arg| self.collect_expression(*arg)))
@@ -681,13 +682,12 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			crate::hir::Expression::Case(_c) => {
 				unimplemented!()
 			}
-			crate::hir::Expression::FloatLiteral(f) => {
-				FloatLiteralBuilder::new(ty, f.clone(), origin).with_annotations(
+			crate::hir::Expression::FloatLiteral(f) => FloatLiteralBuilder::new(ty, *f, origin)
+				.with_annotations(
 					self.data
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
-				)
-			}
+				),
 			crate::hir::Expression::Identifier(i) => {
 				let res = self.types.name_resolution(idx).unwrap();
 				if !self.resolutions.contains_key(&res) {
@@ -716,7 +716,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				.with_else(if let Some(e) = ite.else_result {
 					self.collect_expression(e)
 				} else {
-					self.collect_default_else(ty, origin.clone()).1
+					self.collect_default_else(ty, origin).1
 				})
 				.with_annotations(
 					self.data
@@ -728,13 +728,12 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					.annotations(idx)
 					.map(|ann| self.collect_expression(ann)),
 			),
-			crate::hir::Expression::IntegerLiteral(i) => {
-				IntegerLiteralBuilder::new(ty, i.clone(), origin).with_annotations(
+			crate::hir::Expression::IntegerLiteral(i) => IntegerLiteralBuilder::new(ty, *i, origin)
+				.with_annotations(
 					self.data
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
-				)
-			}
+				),
 			crate::hir::Expression::Let(l) => LetBuilder::new(ty, origin)
 				.with_items(l.items.iter().flat_map(|i| match i {
 					crate::hir::LetItem::Constraint(c) => {
@@ -746,7 +745,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						let data = self.data;
 						self.collect_declaration(item, d, data)
 							.into_iter()
-							.map(|idx| LetItem::Declaration(idx))
+							.map(LetItem::Declaration)
 							.collect::<Vec<_>>()
 					}
 				}))
@@ -976,6 +975,8 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.get_origin(EntityRef::new(self.db.upcast(), self.item, *domain).into())
 						.unwrap()
 						.clone();
+					// Note: unable to keep Entry until insert, since "self" is mutably borrowed to create the value
+					#[allow(clippy::map_entry)]
 					if !self.type_alias_domains.contains_key(&tr) {
 						let mut declaration =
 							<Item<Declaration>>::new(&DomainBuilder::unbounded(dom_ty));

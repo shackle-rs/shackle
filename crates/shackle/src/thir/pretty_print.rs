@@ -53,7 +53,7 @@ impl<'a> PrettyPrinter<'a> {
 		let mut buf = format!("annotation {}", name);
 		if let Some(params) = &annotation.parameters {
 			write!(
-				*&mut buf,
+				&mut buf,
 				"({})",
 				params
 					.iter()
@@ -158,7 +158,7 @@ impl<'a> PrettyPrinter<'a> {
 						let name = c
 							.name
 							.map(|n| n.pretty_print(self.db.upcast()))
-							.unwrap_or("_".to_owned());
+							.unwrap_or_else(|| "_".to_owned());
 
 						match &c.parameters {
 							Some(ps) => {
@@ -210,7 +210,7 @@ impl<'a> PrettyPrinter<'a> {
 		}
 		if let Some(body) = function.body {
 			if function.name.lookup(self.db.upcast()) == "deopt"
-				&& function.type_inst_vars.len() > 0
+				&& !function.type_inst_vars.is_empty()
 				&& function.parameters.len() == 1
 				&& {
 					let ty = self.model[function.parameters[0]].domain.ty();
@@ -306,7 +306,7 @@ impl<'a> PrettyPrinter<'a> {
 						.map(|d| self.pretty_print_domain(d, data))
 						.collect::<Vec<_>>()
 						.join(", "),
-					dom => self.pretty_print_domain(&*dom, data),
+					dom => self.pretty_print_domain(dom, data),
 				};
 				ty.opt(self.db.upcast())
 					.into_iter()
@@ -314,7 +314,7 @@ impl<'a> PrettyPrinter<'a> {
 					.chain([format!(
 						"array [{}] of {}",
 						dims,
-						self.pretty_print_domain(&*el, data)
+						self.pretty_print_domain(el, data)
 					)])
 					.collect::<Vec<_>>()
 					.join(" ")
@@ -430,7 +430,7 @@ impl<'a> PrettyPrinter<'a> {
 								model[*d]
 									.name
 									.map(|n| n.pretty_print(self.db.upcast()))
-									.unwrap_or("_".to_owned())
+									.unwrap_or_else(|| "_".to_owned())
 							})
 							.collect::<Vec<_>>()
 							.join(", ");
@@ -516,7 +516,7 @@ impl<'a> PrettyPrinter<'a> {
 						.expect("Identifier refers to non-existent enum member")[*i]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
-						.unwrap_or("_".to_owned()),
+						.unwrap_or_else(|| "_".to_owned()),
 					ResolvedIdentifier::Function(f) => {
 						model[*f].name.pretty_print(self.db.upcast())
 					}
@@ -620,7 +620,7 @@ impl<'a> PrettyPrinter<'a> {
 								model[*d]
 									.name
 									.map(|n| n.pretty_print(self.db.upcast()))
-									.unwrap_or("_".to_owned())
+									.unwrap_or_else(|| "_".to_owned())
 							})
 							.collect::<Vec<_>>()
 							.join(", ");

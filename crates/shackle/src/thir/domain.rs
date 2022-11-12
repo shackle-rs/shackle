@@ -88,7 +88,7 @@ impl DomainBuilder {
 				Domain::Set(*ty, Box::new(element.finish(owner)))
 			}
 			Self(ty, DomainBuilderInner::Tuple(fields)) => {
-				Domain::Tuple(*ty, fields.into_iter().map(|f| f.finish(owner)).collect())
+				Domain::Tuple(*ty, fields.iter().map(|f| f.finish(owner)).collect())
 			}
 			Self(ty, DomainBuilderInner::Record(fields)) => Domain::Record(
 				*ty,

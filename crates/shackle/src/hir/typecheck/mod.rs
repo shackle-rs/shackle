@@ -448,7 +448,7 @@ impl<'a> DebugPrint<'a> for PatternTy {
 				"AnnotationConstructor({})",
 				f.overload.pretty_print(db.upcast())
 			),
-			PatternTy::AnnotationAtom => format!("AnnotationAtom"),
+			PatternTy::AnnotationAtom => "AnnotationAtom".to_string(),
 			PatternTy::Destructuring(ty) => {
 				format!("Destructuring({})", ty.pretty_print(db.upcast()))
 			}

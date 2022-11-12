@@ -55,7 +55,7 @@ pub trait AstNode: Debug {
 	}
 
 	/// Convert to T if possible
-	fn cast_ref<'a, T: TryCastFrom<Self>>(&'a self) -> Option<&'a T>
+	fn cast_ref<T: TryCastFrom<Self>>(&self) -> Option<&T>
 	where
 		Self: Sized,
 	{

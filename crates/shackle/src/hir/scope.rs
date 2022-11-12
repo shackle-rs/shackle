@@ -22,7 +22,7 @@ use crate::{
 ///
 /// - Checks for multiply defined identifiers
 pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
-	let mut scope = ScopeData::new();
+	let mut scope = ScopeData::default();
 	let mut diagnostics = Vec::new();
 	let mut had_solve_item = false;
 	for m in db.resolve_includes().unwrap().iter() {
@@ -190,7 +190,7 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 }
 
 /// Variable scope
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ScopeData {
 	functions: FxHashMap<Identifier, Vec<(PatternRef, u32)>>,
 	variables: FxHashMap<Identifier, (PatternRef, u32)>,
@@ -199,15 +199,6 @@ pub struct ScopeData {
 }
 
 impl ScopeData {
-	/// Create a child scope
-	pub fn new() -> Self {
-		Self {
-			functions: FxHashMap::default(),
-			variables: FxHashMap::default(),
-			atoms: FxHashSet::default(),
-		}
-	}
-
 	/// Add a (possibly overloaded) function to the current scope
 	pub fn add_function(
 		&mut self,
@@ -503,13 +494,12 @@ impl ScopeCollector<'_> {
 					for p in generator.patterns.iter() {
 						self.collect_pattern(*p, false);
 					}
-					match generator.where_clause {
-						Some(e) => self.collect_expression(e),
-						None => (),
+					if let Some(e) = generator.where_clause {
+						self.collect_expression(e)
 					}
 				}
-				for i in c.indices.iter() {
-					self.collect_expression(*i);
+				if let Some(i) = c.indices {
+					self.collect_expression(i);
 				}
 				self.collect_expression(c.template);
 				self.pop();
@@ -549,9 +539,8 @@ impl ScopeCollector<'_> {
 								self.collect_expression(*e);
 							}
 							self.collect_type(d.declared_type);
-							match d.definition {
-								Some(def) => self.collect_expression(def),
-								_ => (),
+							if let Some(def) = d.definition {
+								self.collect_expression(def)
 							}
 							self.collect_pattern(d.pattern, true);
 						}
@@ -567,9 +556,8 @@ impl ScopeCollector<'_> {
 					for p in generator.patterns.iter() {
 						self.collect_pattern(*p, false);
 					}
-					match generator.where_clause {
-						Some(e) => self.collect_expression(e),
-						None => (),
+					if let Some(e) = generator.where_clause {
+						self.collect_expression(e)
 					}
 				}
 				self.collect_expression(c.template);
@@ -649,6 +637,7 @@ impl ScopeCollector<'_> {
 	}
 
 	/// Get results
+	#[allow(clippy::type_complexity)] // FIXME: Refactor return into simpler type
 	fn finish(
 		self,
 	) -> (
@@ -662,7 +651,7 @@ impl ScopeCollector<'_> {
 	fn push(&mut self) {
 		self.current = self.scopes.insert(Scope::Local {
 			parent: self.current,
-			scope: ScopeData::new(),
+			scope: ScopeData::default(),
 		});
 		self.generations.push(self.generation());
 	}
@@ -698,22 +687,22 @@ impl ScopeResult {
 			match &self.scopes[current] {
 				Scope::Local { parent, scope } => {
 					for (k, v) in scope.functions.iter() {
-						combined.entry(*k).or_insert(
+						combined.entry(*k).or_insert_with(|| {
 							v.iter()
 								.filter_map(|(p, g)| if generation >= *g { Some(*p) } else { None })
-								.collect(),
-						);
+								.collect()
+						});
 					}
 					current = *parent;
 				}
 				Scope::Global => {
 					let scope = db.lookup_global_scope();
 					for (k, v) in scope.functions.iter() {
-						combined.entry(*k).or_insert(
+						combined.entry(*k).or_insert_with(|| {
 							v.iter()
 								.filter_map(|(p, g)| if generation >= *g { Some(*p) } else { None })
-								.collect(),
-						);
+								.collect()
+						});
 					}
 					return combined.into_iter().collect();
 				}
@@ -768,7 +757,7 @@ impl ScopeResult {
 			match &self.scopes[current] {
 				Scope::Local { parent, scope } => {
 					let found = scope.find_function(i, generation);
-					if found.len() > 0 {
+					if !found.is_empty() {
 						return Arc::new(found);
 					}
 					current = *parent;

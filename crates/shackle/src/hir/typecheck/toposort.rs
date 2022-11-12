@@ -70,7 +70,7 @@ impl<'a> TopoSorter<'a> {
 				}
 			}
 			LocalItemRef::Declaration(d) => {
-				let data = local_item.data(&*model);
+				let data = local_item.data(&model);
 				let pats = Pattern::identifiers(model[d].pattern, data)
 					.map(|p| PatternRef::new(item, p))
 					.collect::<Vec<_>>();
@@ -95,7 +95,7 @@ impl<'a> TopoSorter<'a> {
 					self.visit_expression(ExpressionRef::new(item, *ann));
 				}
 				if let Some(def) = &model[e].definition {
-					let data = local_item.data(&*model);
+					let data = local_item.data(&model);
 					for c in def.iter() {
 						for param in c.parameters() {
 							for e in Type::expressions(param.declared_type, data) {
@@ -110,7 +110,7 @@ impl<'a> TopoSorter<'a> {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[e].assignee) {
 					self.current.insert(p);
-					let data = local_item.data(&*model);
+					let data = local_item.data(&model);
 					for c in model[e].definition.iter() {
 						for param in c.parameters() {
 							for e in Type::expressions(param.declared_type, data) {
@@ -124,7 +124,7 @@ impl<'a> TopoSorter<'a> {
 			LocalItemRef::Function(f) => {
 				let p = PatternRef::new(item, model[f].pattern);
 				self.current.insert(p);
-				let data = local_item.data(&*model);
+				let data = local_item.data(&model);
 				for p in model[f].parameters.iter() {
 					for e in Type::expressions(p.declared_type, data) {
 						self.visit_expression(ExpressionRef::new(item, e));
@@ -163,7 +163,7 @@ impl<'a> TopoSorter<'a> {
 				for ann in model[t].annotations.iter() {
 					self.visit_expression(ExpressionRef::new(item, *ann));
 				}
-				let data = local_item.data(&*model);
+				let data = local_item.data(&model);
 				for e in Type::expressions(model[t].aliased_type, data) {
 					self.visit_expression(ExpressionRef::new(item, e));
 				}
@@ -179,7 +179,7 @@ impl<'a> TopoSorter<'a> {
 	fn visit_expression(&mut self, expression: ExpressionRef) {
 		let item = expression.item();
 		let model = item.model(self.db);
-		let data = item.local_item_ref(self.db).data(&*model);
+		let data = item.local_item_ref(self.db).data(&model);
 		let types = self.db.lookup_item_types(item);
 		for e in Expression::walk(expression.expression(), data) {
 			if let Expression::Identifier(i) = data[e] {

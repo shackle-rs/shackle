@@ -295,6 +295,7 @@ impl Item<Function> {
 }
 
 /// Lookup a function by its signature
+#[allow(clippy::type_complexity)] // FIXME: fix the type complexity of the return type.
 pub fn lookup_function(
 	db: &dyn Thir,
 	name: Identifier,
@@ -307,7 +308,7 @@ pub fn lookup_function(
 > {
 	let overloads = functions.iter().filter_map(|(i, f)| {
 		if f.name == name {
-			Some((i, f.function_entry(&declarations)))
+			Some((i, f.function_entry(declarations)))
 		} else {
 			None
 		}
@@ -352,9 +353,8 @@ pub struct Solve {
 	pub annotations: Vec<ArenaIndex<Expression>>,
 }
 
-impl Item<Solve> {
-	/// Create a new solve item
-	pub fn new() -> Self {
+impl Default for Item<Solve> {
+	fn default() -> Self {
 		Item {
 			item: Solve {
 				goal: Goal::Satisfy,
@@ -363,7 +363,9 @@ impl Item<Solve> {
 			data: Box::new(ItemData::default()),
 		}
 	}
+}
 
+impl Item<Solve> {
 	/// Annotate this solve item
 	pub fn add_annotation(&mut self, annotation: &dyn ExpressionBuilder) {
 		let idx = annotation.finish(&mut self.data);

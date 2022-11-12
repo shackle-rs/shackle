@@ -49,7 +49,7 @@ struct Types {
 
 impl Types {
 	fn new() -> Self {
-		let db = CompilerDatabase::new();
+		let db = CompilerDatabase::default();
 		let registry = TypeRegistry::new(&db);
 		Self { db, registry }
 	}

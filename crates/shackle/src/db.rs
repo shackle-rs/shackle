@@ -14,7 +14,7 @@ use crate::thir::db::Thir;
 use crate::ty::{NewType, NewTypeData, Ty, TyData};
 
 use std::fmt::Display;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Queries for inputs
@@ -174,12 +174,13 @@ pub struct CompilerDatabase {
 	file_handler: Box<dyn FileHandler>,
 }
 
-impl CompilerDatabase {
-	/// Create new new compiler database.
-	pub fn new() -> Self {
+impl Default for CompilerDatabase {
+	fn default() -> Self {
 		Self::with_file_handler(Box::new(DefaultFileHandler))
 	}
+}
 
+impl CompilerDatabase {
 	/// Create a new compiler database with the given file handler
 	pub fn with_file_handler(file_handler: Box<dyn FileHandler>) -> Self {
 		let mut db = Self {
@@ -198,7 +199,7 @@ impl CompilerDatabase {
 
 	/// Snapshot the database
 	pub fn snapshot(&self) -> salsa::Snapshot<Self> {
-		salsa::ParallelDatabase::snapshot(&self)
+		salsa::ParallelDatabase::snapshot(self)
 	}
 }
 
@@ -231,7 +232,7 @@ pub trait HasFileHandler {
 	fn get_file_handler(&self) -> &dyn FileHandler;
 
 	/// Invalid file contents query for the given path
-	fn on_file_change(&mut self, file: &PathBuf);
+	fn on_file_change(&mut self, file: &Path);
 }
 
 impl HasFileHandler for CompilerDatabase {
@@ -239,12 +240,12 @@ impl HasFileHandler for CompilerDatabase {
 		&*self.file_handler
 	}
 
-	fn on_file_change(&mut self, file: &PathBuf) {
+	fn on_file_change(&mut self, file: &Path) {
 		assert!(
 			!self.get_file_handler().durable(),
 			"Cannot handle file change for durable file query"
 		);
-		let f = FileRef::new(&file, self);
+		let f = FileRef::new(file, self);
 		FileContentsQuery.in_db_mut(self).invalidate(&f);
 	}
 }

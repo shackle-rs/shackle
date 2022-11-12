@@ -23,12 +23,12 @@ pub struct FloatLiteral(u64);
 impl FloatLiteral {
 	/// Create a new float literal
 	pub fn new(v: f64) -> Self {
-		Self(unsafe { std::mem::transmute(v) })
+		Self(v.to_bits())
 	}
 
 	/// Get the value of this float literal
 	pub fn value(&self) -> f64 {
-		unsafe { std::mem::transmute(self.0) }
+		f64::from_bits(self.0)
 	}
 }
 

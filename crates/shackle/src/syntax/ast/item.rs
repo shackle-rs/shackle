@@ -228,29 +228,17 @@ pub enum Goal {
 impl Goal {
 	/// Return whether the solve goal is satisfaction
 	pub fn is_satisfy(&self) -> bool {
-		if let Goal::Satisfy = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, Goal::Satisfy)
 	}
 
 	/// Return whether the solve goal is maximization
 	pub fn is_maximize(&self) -> bool {
-		if let Goal::Maximize(_) = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, Goal::Maximize(_))
 	}
 
 	/// Return whether the solve goal is minimization
 	pub fn is_minimize(&self) -> bool {
-		if let Goal::Minimize(_) = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, Goal::Minimize(_))
 	}
 
 	/// Get the objective value if there is one
@@ -377,20 +365,12 @@ pub enum PredicateType {
 impl PredicateType {
 	/// Return whether this is a predicate
 	pub fn is_predicate(&self) -> bool {
-		if let PredicateType::Predicate = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PredicateType::Predicate)
 	}
 
 	/// Return whether this is a test
 	pub fn is_test(&self) -> bool {
-		if let PredicateType::Test = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, PredicateType::Test)
 	}
 }
 

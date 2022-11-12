@@ -41,7 +41,7 @@ impl<'a> DebugPrint<'a> for SourceMap {
 impl SourceMap {
 	/// Insert into the source map
 	pub fn insert(&mut self, node: NodeRef, origin: Origin) {
-		self.map.insert(node.clone(), origin.clone());
+		self.map.insert(node, origin.clone());
 		self.reverse.insert(origin.node_id, node);
 	}
 

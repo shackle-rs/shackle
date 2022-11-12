@@ -306,19 +306,11 @@ pub enum InterpolationItem {
 impl InterpolationItem {
 	/// Return whether this interpolation item is a string
 	pub fn is_string(&self) -> bool {
-		if let InterpolationItem::String(_) = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, InterpolationItem::String(_))
 	}
 	/// Return whether this interpolation item is an expression
 	pub fn is_expression(&self) -> bool {
-		if let InterpolationItem::Expression(_) = *self {
-			true
-		} else {
-			false
-		}
+		matches!(*self, InterpolationItem::Expression(_))
 	}
 
 	/// Get the string if this is one
