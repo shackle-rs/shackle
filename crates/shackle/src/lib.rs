@@ -8,6 +8,7 @@ pub mod arena;
 pub mod constants;
 pub mod db;
 pub mod diagnostics;
+pub mod dzn;
 pub mod file;
 pub mod hir;
 mod legacy;
@@ -137,10 +138,12 @@ pub enum Status {
 }
 
 /// Value types that can be part of a Solution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
 	/// Absence of an optional value
 	Absent,
+	/// Infinity
+	Infinity,
 	/// Boolean
 	Boolean(bool),
 	/// Signed integer
@@ -168,6 +171,7 @@ impl Display for Value {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Value::Absent => write!(f, "<>"),
+			Value::Infinity => write!(f, "∞"),
 			Value::Boolean(v) => write!(f, "{}", v),
 			Value::Integer(v) => write!(f, "{}", v),
 			Value::Float(v) => write!(f, "{}", v),

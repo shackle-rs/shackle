@@ -2,7 +2,7 @@
 //!
 //! `FileRef` is an interned data structure used to represent a pointer to a file (or inline string).
 
-use crate::{db::FileReader, diagnostics::FileError};
+use crate::{db::FileReader, diagnostics::FileError, dzn::Span};
 use miette::{MietteSpanContents, SourceCode};
 use std::{
 	ops::Deref,
@@ -93,6 +93,15 @@ impl SourceFile {
 		match &self.0 {
 			SourceFileInner::Text { source, .. } => source,
 			SourceFileInner::Introduced(_) => "",
+		}
+	}
+}
+
+impl<'a> From<Span<'a>> for SourceFile {
+	fn from(span: Span) -> Self {
+		Self {
+			name: span.extra.0,
+			source: span.extra.1,
 		}
 	}
 }
