@@ -30,7 +30,7 @@ const CONJUNCTION_OPERATORS = ["/\\", "∧"]
 const COMPARISON_OPERATORS = [
   "=", "==", "!=", "≠", "<", "<=", "≤", ">", ">=",
   "≥", "in", "∈", "subset", "⊆", "superset", "⊇",
-  "~=", "~!=",  
+  "~=", "~!=",
 ];
 const UNION_OPERATORS = ["union", "∪"]
 const SET_DIFF_OPERATORS = ["diff", "∖"]
