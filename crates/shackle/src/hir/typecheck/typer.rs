@@ -39,8 +39,8 @@ use super::{PatternTy, TypeContext};
 /// which are just caused by the original error we already reported.
 pub struct Typer<'a, T> {
 	db: &'a dyn Hir,
-	types: &'a TypeRegistry,
-	identifiers: &'a IdentifierRegistry,
+	types: Arc<TypeRegistry>,
+	identifiers: Arc<IdentifierRegistry>,
 	ctx: &'a mut T,
 	item: ItemRef,
 	data: &'a ItemData,
@@ -48,18 +48,11 @@ pub struct Typer<'a, T> {
 
 impl<'a, T: TypeContext> Typer<'a, T> {
 	/// Create a new typer
-	pub fn new(
-		db: &'a dyn Hir,
-		types: &'a TypeRegistry,
-		identifiers: &'a IdentifierRegistry,
-		ctx: &'a mut T,
-		item: ItemRef,
-		data: &'a ItemData,
-	) -> Self {
+	pub fn new(db: &'a dyn Hir, ctx: &'a mut T, item: ItemRef, data: &'a ItemData) -> Self {
 		Typer {
 			db,
-			types,
-			identifiers,
+			types: db.type_registry(),
+			identifiers: db.identifier_registry(),
 			ctx,
 			item,
 			data,
@@ -148,7 +141,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		if let Some(p) = self.find_variable(expr, *i) {
 			let expression = ExpressionRef::new(self.item, expr);
 			self.ctx.add_identifier_resolution(expression, p);
-			match self.ctx.type_pattern(db, self.types, self.identifiers, p) {
+			match self.ctx.type_pattern(db, p) {
 				PatternTy::Variable(ty) | PatternTy::EnumAtom(ty) => return ty,
 				PatternTy::AnnotationAtom => return self.types.ann,
 				PatternTy::TypeAlias(_) => {
@@ -178,14 +171,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		if let Some(ty) = is_annotation_for {
 			// This is an annotation, so look for any matching functions with ::annotated_expression
 			let patterns = self.find_function(expr, *i);
-			let fn_match = patterns.iter().find_map(|p| {
-				match self.ctx.type_pattern(db, self.types, self.identifiers, *p) {
+			let fn_match = patterns
+				.iter()
+				.find_map(|p| match self.ctx.type_pattern(db, *p) {
 					PatternTy::Function(function) => {
 						FunctionEntry::match_fn(db.upcast(), [(*p, *function)], &[ty]).ok()
 					}
 					_ => None,
-				}
-			});
+				});
 			if let Some((p, _, t)) = fn_match {
 				match p.item().local_item_ref(db) {
 					crate::hir::ids::LocalItemRef::Function(f) => {
@@ -1341,7 +1334,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 		// If there's a variable in scope which is a function, use it
 		if let Some(p) = self.find_variable(expr, i) {
-			let d = self.ctx.type_pattern(db, self.types, self.identifiers, p);
+			let d = self.ctx.type_pattern(db, p);
 			let f = match d {
 				PatternTy::Variable(t) => {
 					if let TyData::Function(OptType::NonOpt, f) = t.lookup(db.upcast()) {
@@ -1425,7 +1418,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 		let mut overloads = Vec::with_capacity(patterns.len());
 		for p in patterns.iter() {
-			match self.ctx.type_pattern(db, self.types, self.identifiers, *p) {
+			match self.ctx.type_pattern(db, *p) {
 				PatternTy::Function(function) | PatternTy::AnnotationConstructor(function) => {
 					overloads.push((*p, *function.clone()))
 				}
@@ -1452,9 +1445,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 				let mut new_overloads = Vec::new();
 				for p in patterns.iter() {
-					if let PatternTy::Function(function) =
-						self.ctx.type_pattern(db, self.types, self.identifiers, *p)
-					{
+					if let PatternTy::Function(function) = self.ctx.type_pattern(db, *p) {
 						if let crate::hir::ids::LocalItemRef::Function(f) =
 							&p.item().local_item_ref(db)
 						{
@@ -1628,7 +1619,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				// If this is an enum atom, then add a resolution to it
 				let res = (|| {
 					let p = self.find_variable(scope?, *i)?;
-					match self.ctx.type_pattern(db, self.types, self.identifiers, p) {
+					match self.ctx.type_pattern(db, p) {
 						PatternTy::EnumAtom(ty) => {
 							self.ctx
 								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
@@ -1660,40 +1651,35 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let res = (|| {
 					let name = self.data[*function].identifier().unwrap();
 					let fns = self.find_function(scope?, name);
-					let cs =
-						fns.iter()
-							.find_map(|f| {
-								match self.ctx.type_pattern(db, self.types, self.identifiers, *f) {
-									PatternTy::EnumConstructor(cs) => {
-										self.ctx.add_pattern_resolution(
-											PatternRef::new(self.item, pat),
-											*f,
-										);
-										Some(cs)
-									}
-									PatternTy::AnnotationConstructor(fe) => {
-										self.ctx.add_pattern_resolution(
-											PatternRef::new(self.item, pat),
-											*f,
-										);
-										Some(Box::new([(*fe).clone()]))
-									}
-									_ => None,
-								}
-							})
-							.or_else(|| {
-								let (src, span) = NodeRef::from(EntityRef::new(db, self.item, pat))
-									.source_span(db);
-								self.ctx.add_diagnostic(
+					let cs = fns
+						.iter()
+						.find_map(|f| match self.ctx.type_pattern(db, *f) {
+							PatternTy::EnumConstructor(cs) => {
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
+								Some(cs)
+							}
+							PatternTy::AnnotationConstructor(fe) => {
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
+								Some(Box::new([(*fe).clone()]))
+							}
+							_ => None,
+						})
+						.or_else(|| {
+							let (src, span) =
+								NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
+							self.ctx.add_diagnostic(
 								self.item,
 								TypeMismatch {
 									src,
 									span,
-									msg: "Expected enum or annotation constructor in pattern call".to_owned(),
+									msg: "Expected enum or annotation constructor in pattern call"
+										.to_owned(),
 								},
 							);
-								None
-							})?;
+							None
+						})?;
 
 					// Find the enum constructor via its return type
 					let c = cs
@@ -1874,7 +1860,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						if let Some(p) = self.find_variable(*domain, *i) {
 							let domain_ref = ExpressionRef::new(self.item, *domain);
 							self.ctx.add_identifier_resolution(domain_ref, p);
-							match self.ctx.type_pattern(db, self.types, self.identifiers, p) {
+							match self.ctx.type_pattern(db, p) {
 								PatternTy::TypeAlias(ty) => ty,
 								PatternTy::Variable(ty) => match ty.lookup(db.upcast()) {
 									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {

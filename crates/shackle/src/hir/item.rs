@@ -15,10 +15,10 @@
 //! again (but not ones in other files).
 
 use std::fmt::Write;
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::ops::{Deref, DerefMut};
 
 use crate::arena::{Arena, ArenaIndex, ArenaMap};
-use crate::utils::{debug_print_strings, DebugPrint};
+use crate::utils::{debug_print_strings, impl_index, DebugPrint};
 
 use super::db::Hir;
 use super::{source::Origin, Expression, Pattern, Type};
@@ -122,44 +122,9 @@ impl ItemData {
 	}
 }
 
-impl Index<ArenaIndex<Expression>> for ItemData {
-	type Output = Expression;
-	fn index(&self, index: ArenaIndex<Expression>) -> &Self::Output {
-		&self.expressions[index]
-	}
-}
-
-impl IndexMut<ArenaIndex<Expression>> for ItemData {
-	fn index_mut(&mut self, index: ArenaIndex<Expression>) -> &mut Self::Output {
-		&mut self.expressions[index]
-	}
-}
-
-impl Index<ArenaIndex<Type>> for ItemData {
-	type Output = Type;
-	fn index(&self, index: ArenaIndex<Type>) -> &Self::Output {
-		&self.types[index]
-	}
-}
-
-impl IndexMut<ArenaIndex<Type>> for ItemData {
-	fn index_mut(&mut self, index: ArenaIndex<Type>) -> &mut Self::Output {
-		&mut self.types[index]
-	}
-}
-
-impl Index<ArenaIndex<Pattern>> for ItemData {
-	type Output = Pattern;
-	fn index(&self, index: ArenaIndex<Pattern>) -> &Self::Output {
-		&self.patterns[index]
-	}
-}
-
-impl IndexMut<ArenaIndex<Pattern>> for ItemData {
-	fn index_mut(&mut self, index: ArenaIndex<Pattern>) -> &mut Self::Output {
-		&mut self.patterns[index]
-	}
-}
+impl_index!(ItemData[self, index: ArenaIndex<Expression>] -> Expression {self.expressions[index]});
+impl_index!(ItemData[self, index: ArenaIndex<Type>] -> Type {self.types[index]});
+impl_index!(ItemData[self, index: ArenaIndex<Pattern>] -> Pattern {self.patterns[index]});
 
 /// Maps expressions, types and sub-items back to AST nodes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -179,44 +144,9 @@ impl ItemDataSourceMap {
 	}
 }
 
-impl Index<ArenaIndex<Expression>> for ItemDataSourceMap {
-	type Output = Origin;
-	fn index(&self, index: ArenaIndex<Expression>) -> &Self::Output {
-		&self.expression_source[index]
-	}
-}
-
-impl IndexMut<ArenaIndex<Expression>> for ItemDataSourceMap {
-	fn index_mut(&mut self, index: ArenaIndex<Expression>) -> &mut Self::Output {
-		&mut self.expression_source[index]
-	}
-}
-
-impl Index<ArenaIndex<Type>> for ItemDataSourceMap {
-	type Output = Origin;
-	fn index(&self, index: ArenaIndex<Type>) -> &Self::Output {
-		&self.type_source[index]
-	}
-}
-
-impl IndexMut<ArenaIndex<Type>> for ItemDataSourceMap {
-	fn index_mut(&mut self, index: ArenaIndex<Type>) -> &mut Self::Output {
-		&mut self.type_source[index]
-	}
-}
-
-impl Index<ArenaIndex<Pattern>> for ItemDataSourceMap {
-	type Output = Origin;
-	fn index(&self, index: ArenaIndex<Pattern>) -> &Self::Output {
-		&self.pattern_source[index]
-	}
-}
-
-impl IndexMut<ArenaIndex<Pattern>> for ItemDataSourceMap {
-	fn index_mut(&mut self, index: ArenaIndex<Pattern>) -> &mut Self::Output {
-		&mut self.pattern_source[index]
-	}
-}
+impl_index!(ItemDataSourceMap[self, index: ArenaIndex<Expression>] -> Origin { self.expression_source[index]});
+impl_index!(ItemDataSourceMap[self, index: ArenaIndex<Type>] -> Origin { self.type_source[index]});
+impl_index!(ItemDataSourceMap[self, index: ArenaIndex<Pattern>] -> Origin { self.pattern_source[index]});
 
 /// An assignment item
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

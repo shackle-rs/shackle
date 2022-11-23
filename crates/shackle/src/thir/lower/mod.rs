@@ -16,7 +16,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	hir::{
-		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, PatternRef, TypeRef},
+		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef, TypeRef},
 		source::{Origin, SourceMap},
 		PatternTy, TypeResult,
 	},
@@ -30,15 +30,8 @@ pub struct ItemCollector<'a> {
 	db: &'a dyn Thir,
 	tys: &'a TypeRegistry,
 	resolutions: FxHashMap<PatternRef, ResolvedIdentifier>,
-	annotations: Arena<Item<Annotation>>,
-	constraints: Arena<Item<Constraint>>,
-	declarations: Arena<Item<Declaration>>,
-	enumerations: Arena<Item<Enumeration>>,
-	functions: Arena<Item<Function>>,
-	outputs: Arena<Item<Output>>,
-	solve: Option<Item<Solve>>,
-	type_alias_domains: FxHashMap<TypeRef, ArenaIndex<Item<Declaration>>>,
-	top_level: Vec<ItemId>,
+	model: Model,
+	type_alias_domains: FxHashMap<TypeRef, DeclarationId>,
 	visited: FxHashSet<ItemRef>,
 }
 
@@ -49,15 +42,8 @@ impl<'a> ItemCollector<'a> {
 			db,
 			tys,
 			resolutions: FxHashMap::default(),
-			annotations: Arena::new(),
-			constraints: Arena::new(),
-			declarations: Arena::new(),
-			enumerations: Arena::new(),
-			functions: Arena::new(),
-			outputs: Arena::new(),
-			solve: None,
+			model: Model::default(),
 			type_alias_domains: FxHashMap::default(),
-			top_level: Vec::new(),
 			visited: FxHashSet::default(),
 		}
 	}
@@ -71,31 +57,24 @@ impl<'a> ItemCollector<'a> {
 		let local_item = item.local_item_ref(self.db.upcast());
 		match local_item {
 			LocalItemRef::Annotation(a) => {
-				let idx = self.collect_annotation(item, &model[a]);
-				self.top_level.push(idx.into());
+				self.collect_annotation(item, &model[a]);
 			}
 			LocalItemRef::Assignment(a) => self.collect_assignment(item, &model[a]),
 			LocalItemRef::Constraint(c) => {
-				let idx = self.collect_constraint(item, &model[c]);
-				self.top_level.push(idx.into());
+				self.collect_constraint(item, &model[c], true);
 			}
 			LocalItemRef::Declaration(d) => {
-				for idx in self.collect_declaration(item, &model[d], &model[d].data) {
-					self.top_level.push(idx.into());
-				}
+				self.collect_declaration(item, &model[d], &model[d].data, true);
 			}
 			LocalItemRef::Enumeration(e) => {
-				let idx = self.collect_enumeration(item, &model[e]);
-				self.top_level.push(idx.into());
+				self.collect_enumeration(item, &model[e]);
 			}
 			LocalItemRef::EnumAssignment(a) => self.collect_enumeration_assignment(item, &model[a]),
 			LocalItemRef::Function(f) => {
-				let idx = self.collect_function(item, &model[f]);
-				self.top_level.push(idx.into());
+				self.collect_function(item, &model[f]);
 			}
 			LocalItemRef::Output(o) => {
-				let idx = self.collect_output(item, &model[o]);
-				self.top_level.push(idx.into());
+				self.collect_output(item, &model[o]);
 			}
 			LocalItemRef::Solve(s) => self.collect_solve(item, &model[s]),
 			LocalItemRef::TypeAlias(t) => self.collect_type_alias(item, &model[t]),
@@ -107,18 +86,18 @@ impl<'a> ItemCollector<'a> {
 		&mut self,
 		item: ItemRef,
 		a: &crate::hir::Item<crate::hir::Annotation>,
-	) -> ArenaIndex<Item<Annotation>> {
+	) -> AnnotationId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &a.data, item, types.clone());
 		let ty = &types[a.pattern];
 		match ty {
 			PatternTy::AnnotationAtom => {
-				let annotation = <Item<Annotation>>::new(
+				let annotation = AnnotationItem::new(
 					a.data[a.pattern]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
 				);
-				let idx = self.annotations.insert(annotation);
+				let idx = self.model.add_annotation(annotation);
 				self.resolutions.insert(
 					PatternRef::new(item, a.pattern),
 					ResolvedIdentifier::Annotation(idx),
@@ -135,21 +114,21 @@ impl<'a> ItemCollector<'a> {
 					.zip(fn_entry.overload.params())
 				{
 					let domain = collector.collect_domain(param.declared_type, *ty, false);
-					let mut declaration = <Item<Declaration>>::new(&domain);
+					let mut declaration = DeclarationItem::new(&domain, false);
 					// Ignore destructuring and recording resolution for now since these can't have bodies which refer
 					// to parameters anyway
 					if let Some(p) = param.pattern {
 						declaration.name = a.data[p].identifier();
 					}
-					parameters.push(collector.declarations.insert(declaration));
+					parameters.push(collector.model.add_declaration(declaration));
 				}
-				let mut annotation = <Item<Annotation>>::new(
+				let mut annotation = AnnotationItem::new(
 					a.data[a.pattern]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
 				);
 				annotation.parameters = Some(parameters);
-				let idx = self.annotations.insert(annotation);
+				let idx = self.model.add_annotation(annotation);
 				self.resolutions.insert(
 					PatternRef::new(item, a.pattern),
 					ResolvedIdentifier::Annotation(idx),
@@ -174,7 +153,34 @@ impl<'a> ItemCollector<'a> {
 			self.collect_item(res.item());
 		}
 		match &self.resolutions[&res] {
-			ResolvedIdentifier::Declaration(d) => self.declarations[*d].set_definition(&*def),
+			ResolvedIdentifier::Declaration(d) => {
+				if self.model[*d].definition.is_some() {
+					// Turn subsequent assignment items into equality constraints
+					let ids = self.db.identifier_registry();
+					let origins = self.db.lookup_source_map(item.model_ref(self.db.upcast()));
+					let origin = origins.get_origin(item.into()).unwrap().clone();
+					let (i, fe, ft) = lookup_function(
+						self.db,
+						&self.model,
+						ids.eq,
+						&[types[a.assignee], types[a.definition]],
+					)
+					.unwrap();
+					let call = CallBuilder::new(
+						fe.overload.return_type(),
+						IdentifierBuilder::new(
+							Ty::function(self.db.upcast(), ft),
+							ResolvedIdentifier::Function(i),
+							origin.clone(),
+						),
+						origin,
+					);
+					let constraint = ConstraintItem::new(&*call, true);
+					self.model.add_constraint(constraint);
+				} else {
+					self.model[*d].set_definition(&*def);
+				}
+			}
 			_ => unreachable!(),
 		}
 	}
@@ -184,14 +190,16 @@ impl<'a> ItemCollector<'a> {
 		&mut self,
 		item: ItemRef,
 		c: &crate::hir::Item<crate::hir::Constraint>,
-	) -> ArenaIndex<Item<Constraint>> {
+		top_level: bool,
+	) -> ConstraintId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &c.data, item, types);
-		let mut constraint = <Item<Constraint>>::new(&*collector.collect_expression(c.expression));
+		let mut constraint =
+			ConstraintItem::new(&*collector.collect_expression(c.expression), top_level);
 		for ann in c.annotations.iter() {
 			constraint.add_annotation(&*collector.collect_expression(*ann));
 		}
-		self.constraints.insert(constraint)
+		self.model.add_constraint(constraint)
 	}
 
 	/// Collect a declaration item
@@ -200,14 +208,15 @@ impl<'a> ItemCollector<'a> {
 		item: ItemRef,
 		d: &crate::hir::Declaration,
 		data: &crate::hir::ItemData,
-	) -> Vec<ArenaIndex<Item<Declaration>>> {
+		top_level: bool,
+	) -> Vec<DeclarationId> {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, data, item, types.clone());
 		let ty = &types[d.pattern];
 		match ty {
 			PatternTy::Variable(ty) => {
 				let domain = collector.collect_domain(d.declared_type, *ty, false);
-				let mut declaration = <Item<Declaration>>::new(&domain);
+				let mut declaration = DeclarationItem::new(&domain, top_level);
 				for ann in d.annotations.iter() {
 					declaration.add_annotation(&*collector.collect_expression(*ann));
 				}
@@ -215,7 +224,7 @@ impl<'a> ItemCollector<'a> {
 					declaration.set_definition(&*collector.collect_expression(def));
 				}
 				declaration.name = data[d.pattern].identifier();
-				let decl = self.declarations.insert(declaration);
+				let decl = self.model.add_declaration(declaration);
 				self.resolutions.insert(
 					PatternRef::new(item, d.pattern),
 					ResolvedIdentifier::Declaration(decl),
@@ -224,83 +233,33 @@ impl<'a> ItemCollector<'a> {
 			}
 			PatternTy::Destructuring(ty) => {
 				let domain = collector.collect_domain(d.declared_type, *ty, false);
-				let mut declaration = <Item<Declaration>>::new(&domain);
+				let mut declaration = DeclarationItem::new(&domain, top_level);
 				for ann in d.annotations.iter() {
 					declaration.add_annotation(&*collector.collect_expression(*ann));
 				}
 				if let Some(def) = d.definition {
 					declaration.set_definition(&*collector.collect_expression(def));
 				}
-				let decl = self.declarations.insert(declaration);
-				let origins = self.db.lookup_source_map(item.model_ref(self.db.upcast()));
+				let decl = collector.model.add_declaration(declaration);
+				let origins = collector
+					.db
+					.lookup_source_map(item.model_ref(collector.db.upcast()));
 				let origin = origins
-					.get_origin(EntityRef::new(self.db.upcast(), item, d.pattern).into())
+					.get_origin(EntityRef::new(collector.db.upcast(), item, d.pattern).into())
 					.unwrap()
 					.clone();
 				let mut decls = vec![decl];
-				self.collect_destructuring(
-					&mut decls,
+				let mut dc = DestructuringCollector {
+					parent: &mut collector,
+					decls: &mut decls,
+					origins: &origins,
+					top_level,
+				};
+				dc.collect_destructuring(
 					IdentifierBuilder::new(*ty, ResolvedIdentifier::Declaration(decl), origin),
 					d.pattern,
-					item,
-					data,
-					&types,
-					&origins,
 				);
 				decls
-			}
-			_ => unreachable!(),
-		}
-	}
-
-	// FIXME: Refactor so this method has less arguments
-	#[allow(clippy::too_many_arguments)]
-	fn collect_destructuring(
-		&mut self,
-		decls: &mut Vec<ArenaIndex<Item<Declaration>>>,
-		definition: Box<dyn ExpressionBuilder>,
-		pattern: ArenaIndex<crate::hir::Pattern>,
-		item: ItemRef,
-		data: &crate::hir::ItemData,
-		types: &TypeResult,
-		origins: &SourceMap,
-	) {
-		let ty = &types[pattern];
-		match (&data[pattern], ty) {
-			(crate::hir::Pattern::Identifier(i), PatternTy::Variable(ty)) => {
-				let mut declaration = <Item<Declaration>>::new(&DomainBuilder::unbounded(*ty));
-				declaration.set_definition(&*definition);
-				declaration.name = Some(*i);
-				let decl = self.declarations.insert(declaration);
-				decls.push(decl);
-			}
-			(crate::hir::Pattern::Tuple { fields }, PatternTy::Destructuring(ty)) => {
-				for (i, f) in fields.iter().enumerate() {
-					let def = TupleAccessBuilder::new(
-						*ty,
-						definition.clone(),
-						IntegerLiteral(i as i64),
-						origins
-							.get_origin(EntityRef::new(self.db.upcast(), item, *f).into())
-							.unwrap()
-							.clone(),
-					);
-					self.collect_destructuring(decls, def, *f, item, data, types, origins)
-				}
-			}
-			(crate::hir::Pattern::Record { fields }, PatternTy::Destructuring(ty)) => {
-				for (i, f) in fields.iter() {
-					let def = RecordAccessBuilder::new(
-						*ty,
-						definition.clone(),
-						*i,
-						origins
-							.get_origin(EntityRef::new(self.db.upcast(), item, *f).into())
-							.unwrap()
-							.clone(),
-					);
-					self.collect_destructuring(decls, def, *f, item, data, types, origins)
-				}
 			}
 			_ => unreachable!(),
 		}
@@ -311,7 +270,7 @@ impl<'a> ItemCollector<'a> {
 		&mut self,
 		item: ItemRef,
 		e: &crate::hir::Item<crate::hir::Enumeration>,
-	) -> ArenaIndex<Item<Enumeration>> {
+	) -> EnumerationId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &e.data, item, types.clone());
 		let ty = &types[e.pattern];
@@ -320,13 +279,13 @@ impl<'a> ItemCollector<'a> {
 				TyData::Set(VarType::Par, OptType::NonOpt, element) => {
 					match element.lookup(collector.db.upcast()) {
 						TyData::Enum(_, _, t) => {
-							let mut enumeration = <Item<Enumeration>>::new(t);
+							let mut enumeration = EnumerationItem::new(t);
 							if let Some(def) = &e.definition {
 								enumeration.definition = Some(
 									def.iter().map(|c| collector.collect_enum_case(c)).collect(),
 								)
 							}
-							let idx = self.enumerations.insert(enumeration);
+							let idx = self.model.add_enumeration(enumeration);
 							self.resolutions.insert(
 								PatternRef::new(item, e.pattern),
 								ResolvedIdentifier::Enumeration(idx),
@@ -364,7 +323,7 @@ impl<'a> ItemCollector<'a> {
 			ResolvedIdentifier::Enumeration(e) => *e,
 			_ => unreachable!(),
 		};
-		collector.enumerations[e].definition = Some(
+		collector.model[e].definition = Some(
 			a.definition
 				.iter()
 				.map(|c| collector.collect_enum_case(c))
@@ -378,112 +337,105 @@ impl<'a> ItemCollector<'a> {
 		}
 	}
 
-	/// Collect an function item
+	/// Collect a function item
 	pub fn collect_function(
 		&mut self,
 		item: ItemRef,
 		f: &crate::hir::Item<crate::hir::Function>,
-	) -> ArenaIndex<Item<Function>> {
+	) -> FunctionId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &f.data, item, types.clone());
 		let res = PatternRef::new(item, f.pattern);
-		if !collector.resolutions.contains_key(&res) {
-			match &types[f.pattern] {
-				PatternTy::Function(fn_entry) => {
-					let domain = collector.collect_domain(
-						f.return_type,
-						fn_entry.overload.return_type(),
-						false,
-					);
-					let mut func =
-						<Item<Function>>::new(f.data[f.pattern].identifier().unwrap(), &domain);
-					for ann in f.annotations.iter() {
-						func.add_annotation(&*collector.collect_expression(*ann));
-					}
-					if let OverloadedFunction::PolymorphicFunction(pf) = &fn_entry.overload {
-						func.type_inst_vars.extend(pf.ty_params.iter().copied());
-					}
-					for (param, ty) in f.parameters.iter().zip(fn_entry.overload.params()) {
-						let domain = collector.collect_domain(param.declared_type, *ty, false);
-						let mut declaration = <Item<Declaration>>::new(&domain);
-						if let Some(p) = param.pattern {
-							declaration.name = f.data[p].identifier();
-						}
-						for ann in param.annotations.iter() {
-							declaration.add_annotation(&*collector.collect_expression(*ann));
-						}
-						let idx = collector.declarations.insert(declaration);
-						func.parameters.push(idx);
-						if let Some(p) = param.pattern {
-							collector.resolutions.insert(
-								PatternRef::new(item, p),
-								ResolvedIdentifier::Declaration(idx),
-							);
-						}
-					}
-					let idx = collector.functions.insert(func);
-					collector
-						.resolutions
-						.insert(res, ResolvedIdentifier::Function(idx));
-				}
-				_ => unreachable!(),
-			}
-		}
-		match collector.resolutions[&res] {
-			ResolvedIdentifier::Function(i) => {
-				if let Some(b) = f.body {
-					let body = collector.collect_expression(b);
+		let origins = collector
+			.db
+			.lookup_source_map(item.model_ref(collector.db.upcast()));
+		match &types[f.pattern] {
+			PatternTy::Function(fn_entry) => {
+				let domain =
+					collector.collect_domain(f.return_type, fn_entry.overload.return_type(), false);
 
-					let origins = collector
-						.db
-						.lookup_source_map(item.model_ref(collector.db.upcast()));
-					let mut decls = Vec::new();
-					for (param, idx) in f
-						.parameters
-						.iter()
-						.zip(collector.functions[i].parameters.clone())
-					{
-						if let Some(p) = param.pattern {
-							if f.data[p].identifier().is_none() {
-								let decl = &collector.declarations[idx];
+				let func = FunctionItem::new(f.data[f.pattern].identifier().unwrap(), &domain);
+				let fn_idx = collector.model.add_function(func);
+				collector
+					.resolutions
+					.insert(res, ResolvedIdentifier::Function(fn_idx));
+				for ann in f.annotations.iter() {
+					let a = collector.collect_expression(*ann);
+					collector.model[fn_idx].add_annotation(&*a);
+				}
+				if let OverloadedFunction::PolymorphicFunction(pf) = &fn_entry.overload {
+					collector.model[fn_idx]
+						.type_inst_vars
+						.extend(pf.ty_params.iter().copied());
+				}
+				let mut decls = Vec::new();
+
+				let mut dc = DestructuringCollector {
+					parent: &mut collector,
+					decls: &mut decls,
+					origins: &origins,
+					top_level: false,
+				};
+				for (param, ty) in f.parameters.iter().zip(fn_entry.overload.params()) {
+					let domain = dc.collect_domain(param.declared_type, *ty, false);
+					let mut declaration = DeclarationItem::new(&domain, false);
+					if let Some(p) = param.pattern {
+						declaration.name = f.data[p].identifier();
+					}
+					for ann in param.annotations.iter() {
+						declaration.add_annotation(&*dc.collect_expression(*ann));
+					}
+					let idx = dc.model.add_declaration(declaration);
+					dc.model[fn_idx].parameters.push(idx);
+					if let Some(p) = param.pattern {
+						match &types[p] {
+							PatternTy::Variable(_) => {
+								dc.resolutions.insert(
+									PatternRef::new(item, p),
+									ResolvedIdentifier::Declaration(idx),
+								);
+							}
+							PatternTy::Destructuring(_) => {
 								let ident = IdentifierBuilder::new(
-									decl.domain.ty(),
+									*ty,
 									ResolvedIdentifier::Declaration(idx),
 									origins
 										.get_origin(
 											PatternRef::new(item, p)
-												.into_entity(collector.db.upcast())
+												.into_entity(dc.db.upcast())
 												.into(),
 										)
 										.unwrap()
 										.clone(),
 								);
-								collector.collect_destructuring(
-									&mut decls, ident, p, item, &f.data, &types, &origins,
-								);
+								dc.collect_destructuring(ident, p);
 							}
+							_ => unreachable!(),
 						}
 					}
-					if decls.is_empty() {
-						collector.functions[i].set_body(&*body);
+				}
+				if let Some(e) = f.body {
+					let body = dc.collect_expression(e);
+					if dc.decls.is_empty() {
+						dc.model[fn_idx].set_body(&*body);
 					} else {
 						let builder = LetBuilder::new(
-							types[b],
+							types[e],
 							origins
 								.get_origin(
-									ExpressionRef::new(item, b)
-										.into_entity(collector.db.upcast())
+									ExpressionRef::new(item, e)
+										.into_entity(dc.db.upcast())
 										.into(),
 								)
 								.unwrap()
 								.clone(),
 						)
-						.with_items(decls.into_iter().map(LetItem::Declaration))
+						.with_items(dc.decls.iter().copied().map(LetItem::Declaration))
 						.with_in(body);
-						collector.functions[i].set_body(&*builder);
+						dc.model[fn_idx].set_body(&*builder);
 					}
 				}
-				i
+				fn_idx
 			}
 			_ => unreachable!(),
 		}
@@ -494,60 +446,59 @@ impl<'a> ItemCollector<'a> {
 		&mut self,
 		item: ItemRef,
 		o: &crate::hir::Item<crate::hir::Output>,
-	) -> ArenaIndex<Item<Output>> {
+	) -> OutputId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &o.data, item, types);
 		let e = collector.collect_expression(o.expression);
-		let mut output = <Item<Output>>::new(&*e);
+		let mut output = OutputItem::new(&*e);
 		if let Some(s) = o.section {
 			let section = collector.collect_expression(s);
 			output.set_section(&*section);
 		}
-		self.outputs.insert(output)
+		self.model.add_output(output)
 	}
 
 	/// Collect solve item
 	pub fn collect_solve(&mut self, item: ItemRef, s: &crate::hir::Item<crate::hir::Solve>) {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &s.data, item, types.clone());
-		let mut solve = <Item<Solve>>::default();
 		for ann in s.annotations.iter() {
-			solve.add_annotation(&*collector.collect_expression(*ann));
+			let a = collector.collect_expression(*ann);
+			collector.model.solve_mut().add_annotation(&*a);
 		}
 		match &s.goal {
 			crate::hir::Goal::Maximize { pattern, objective } => match &types[*pattern] {
 				PatternTy::Variable(ty) => {
-					let mut declaration = <Item<Declaration>>::new(&DomainBuilder::unbounded(*ty));
+					let mut declaration =
+						DeclarationItem::new(&DomainBuilder::unbounded(*ty), true);
 					declaration.name = s.data[*pattern].identifier();
 					declaration.set_definition(&*collector.collect_expression(*objective));
-					let decl = self.declarations.insert(declaration);
-					self.resolutions.insert(
+					let decl = collector.model.add_declaration(declaration);
+					collector.resolutions.insert(
 						PatternRef::new(item, *pattern),
 						ResolvedIdentifier::Declaration(decl),
 					);
-					self.top_level.push(decl.into());
-					solve.set_maximize(decl);
+					collector.model.solve_mut().set_maximize(decl);
 				}
 				_ => unreachable!(),
 			},
 			crate::hir::Goal::Minimize { pattern, objective } => match &types[*pattern] {
 				PatternTy::Variable(ty) => {
-					let mut declaration = <Item<Declaration>>::new(&DomainBuilder::unbounded(*ty));
+					let mut declaration =
+						DeclarationItem::new(&DomainBuilder::unbounded(*ty), true);
 					declaration.name = s.data[*pattern].identifier();
 					declaration.set_definition(&*collector.collect_expression(*objective));
-					let decl = self.declarations.insert(declaration);
-					self.resolutions.insert(
+					let decl = collector.model.add_declaration(declaration);
+					collector.resolutions.insert(
 						PatternRef::new(item, *pattern),
 						ResolvedIdentifier::Declaration(decl),
 					);
-					self.top_level.push(decl.into());
-					solve.set_minimize(decl);
+					collector.model.solve_mut().set_minimize(decl);
 				}
 				_ => unreachable!(),
 			},
 			crate::hir::Goal::Satisfy => (),
 		}
-		self.solve = Some(solve);
 	}
 
 	/// Collect type alias item
@@ -568,16 +519,7 @@ impl<'a> ItemCollector<'a> {
 
 	/// Finish lowering
 	pub fn finish(self) -> Model {
-		Model {
-			annotations: self.annotations,
-			constraints: self.constraints,
-			declarations: self.declarations,
-			enumerations: self.enumerations,
-			functions: self.functions,
-			outputs: self.outputs,
-			solve: self.solve.unwrap_or_default(),
-			top_level: self.top_level,
-		}
+		self.model
 	}
 }
 
@@ -688,16 +630,15 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
 				),
-			crate::hir::Expression::Identifier(i) => {
+			crate::hir::Expression::Identifier(_) => {
 				let res = self.types.name_resolution(idx).unwrap();
 				if !self.resolutions.contains_key(&res) {
 					self.collect_item(res.item());
-				}
-				if !self.resolutions.contains_key(&res) {
-					eprintln!(
-						"{} ({:?})",
-						i.pretty_print(self.db.upcast()),
-						origin.source_span(self.db.upcast())
+					assert!(
+						self.resolutions.contains_key(&res),
+						"Collected item at {:?} but did not resolve identifier owned by item",
+						NodeRef::from(res.into_entity(self.db.upcast()))
+							.source_span(self.db.upcast())
 					);
 				}
 				IdentifierBuilder::new(ty, self.resolutions[&res], origin).with_annotations(
@@ -737,13 +678,13 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			crate::hir::Expression::Let(l) => LetBuilder::new(ty, origin)
 				.with_items(l.items.iter().flat_map(|i| match i {
 					crate::hir::LetItem::Constraint(c) => {
-						let e = <Item<Constraint>>::new(&*self.collect_expression(c.expression));
-						vec![LetItem::Constraint(self.constraints.insert(e))]
+						let e = ConstraintItem::new(&*self.collect_expression(c.expression), false);
+						vec![LetItem::Constraint(self.model.add_constraint(e))]
 					}
 					crate::hir::LetItem::Declaration(d) => {
 						let item = self.item;
 						let data = self.data;
-						self.collect_declaration(item, d, data)
+						self.collect_declaration(item, d, data, false)
 							.into_iter()
 							.map(LetItem::Declaration)
 							.collect::<Vec<_>>()
@@ -791,12 +732,14 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.map(|ann| self.collect_expression(ann)),
 				),
 			crate::hir::Expression::Slice(s) => {
-				let (i, _, _) =
-					lookup_function(self.db, *s, &[ty], &self.functions, &self.declarations)
-						.unwrap();
+				let (i, _, ft) = lookup_function(self.db, &self.model, *s, &[ty]).unwrap();
 				CallBuilder::new(
 					ty,
-					IdentifierBuilder::new(ty, ResolvedIdentifier::Function(i), origin.clone()),
+					IdentifierBuilder::new(
+						Ty::function(self.db.upcast(), ft),
+						ResolvedIdentifier::Function(i),
+						origin.clone(),
+					),
 					origin,
 				)
 				.with_annotations(
@@ -837,9 +780,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		for p in g.patterns.iter() {
 			let decl = match &self.types[*p] {
 				PatternTy::Variable(ty) => {
-					let mut declaration = <Item<Declaration>>::new(&DomainBuilder::unbounded(*ty));
+					let mut declaration =
+						DeclarationItem::new(&DomainBuilder::unbounded(*ty), false);
 					declaration.name = self.data[*p].identifier();
-					let decl = self.declarations.insert(declaration);
+					let decl = self.model.add_declaration(declaration);
 					let item = self.item;
 					self.resolutions.insert(
 						PatternRef::new(item, *p),
@@ -847,6 +791,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					);
 					decl
 				}
+				// TODO: Rewrite into where clause
 				PatternTy::Destructuring(_) => unimplemented!(),
 				_ => unreachable!(),
 			};
@@ -979,10 +924,9 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					#[allow(clippy::map_entry)]
 					if !self.type_alias_domains.contains_key(&tr) {
 						let mut declaration =
-							<Item<Declaration>>::new(&DomainBuilder::unbounded(dom_ty));
+							DeclarationItem::new(&DomainBuilder::unbounded(dom_ty), true);
 						declaration.set_definition(&*self.collect_expression(*domain));
-						let decl = self.declarations.insert(declaration);
-						self.top_level.push(ItemId::Declaration(decl));
+						let decl = self.model.add_declaration(declaration);
 						self.type_alias_domains.insert(tr, decl);
 					}
 					DomainBuilder::bounded(
@@ -1072,8 +1016,8 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					.zip(c.parameters())
 					.map(|(ty, t)| {
 						let domain = self.collect_domain(t.declared_type, *ty, false);
-						let declaration = <Item<Declaration>>::new(&domain);
-						self.declarations.insert(declaration)
+						let declaration = DeclarationItem::new(&domain, false);
+						self.model.add_declaration(declaration)
 					})
 					.collect(),
 			),
@@ -1081,9 +1025,80 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 	}
 }
 
+struct DestructuringCollector<'a, 'b, 'c> {
+	parent: &'a mut ExpressionCollector<'b, 'c>,
+	decls: &'a mut Vec<DeclarationId>,
+	origins: &'a SourceMap,
+	top_level: bool,
+}
+
+impl<'a, 'b, 'c> Deref for DestructuringCollector<'a, 'b, 'c> {
+	type Target = ExpressionCollector<'b, 'c>;
+	fn deref(&self) -> &Self::Target {
+		self.parent
+	}
+}
+
+impl<'a, 'b, 'c> DerefMut for DestructuringCollector<'a, 'b, 'c> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		self.parent
+	}
+}
+
+impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
+	fn collect_destructuring(
+		&mut self,
+		definition: Box<dyn ExpressionBuilder>,
+		pattern: ArenaIndex<crate::hir::Pattern>,
+	) {
+		match (&self.data[pattern], self.types[pattern].clone()) {
+			(crate::hir::Pattern::Identifier(i), PatternTy::Variable(ty)) => {
+				let mut declaration =
+					DeclarationItem::new(&DomainBuilder::unbounded(ty), self.top_level);
+				declaration.set_definition(&*definition);
+				declaration.name = Some(*i);
+				let decl = self.model.add_declaration(declaration);
+				let pat = PatternRef::new(self.item, pattern);
+				self.resolutions
+					.insert(pat, ResolvedIdentifier::Declaration(decl));
+				self.decls.push(decl);
+			}
+			(crate::hir::Pattern::Tuple { fields }, PatternTy::Destructuring(ty)) => {
+				for (i, f) in fields.iter().enumerate() {
+					let def = TupleAccessBuilder::new(
+						ty,
+						definition.clone(),
+						IntegerLiteral((i + 1) as i64),
+						self.origins
+							.get_origin(EntityRef::new(self.db.upcast(), self.item, *f).into())
+							.unwrap()
+							.clone(),
+					);
+					self.collect_destructuring(def, *f)
+				}
+			}
+			(crate::hir::Pattern::Record { fields }, PatternTy::Destructuring(ty)) => {
+				for (i, f) in fields.iter() {
+					let def = RecordAccessBuilder::new(
+						ty,
+						definition.clone(),
+						*i,
+						self.origins
+							.get_origin(EntityRef::new(self.db.upcast(), self.item, *f).into())
+							.unwrap()
+							.clone(),
+					);
+					self.collect_destructuring(def, *f)
+				}
+			}
+			_ => unreachable!(),
+		}
+	}
+}
+
 /// Lower a model to THIR
 pub fn lower_model(db: &dyn Thir) -> Arc<Model> {
-	let tys = TypeRegistry::new(db.upcast());
+	let tys = db.type_registry();
 	let mut collector = ItemCollector::new(db, &tys);
 	let items = db.lookup_topological_sorted_items();
 	for item in items.iter() {

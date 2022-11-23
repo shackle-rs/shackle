@@ -11,9 +11,9 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-		Expression, IdentifierRegistry, Pattern, Type,
+		Expression, Pattern, Type,
 	},
-	ty::{Ty, TypeRegistry},
+	ty::Ty,
 	Error,
 };
 
@@ -55,17 +55,13 @@ impl BodyTypeContext {
 	}
 
 	/// Compute the type of the body of this item
-	pub fn type_item(
-		&mut self,
-		db: &dyn Hir,
-		types: &TypeRegistry,
-		identifiers: &IdentifierRegistry,
-	) {
+	pub fn type_item(&mut self, db: &dyn Hir) {
 		let item = self.item;
 		let model = self.item.model(db);
 		let it = self.item.local_item_ref(db);
 		let data = it.data(&model);
-		let mut typer = Typer::new(db, types, identifiers, self, item, data);
+		let mut typer = Typer::new(db, self, item, data);
+		let types = db.type_registry();
 		match it {
 			LocalItemRef::Annotation(_) => {}
 			LocalItemRef::Function(f) => {
@@ -215,13 +211,7 @@ impl TypeContext for BodyTypeContext {
 		self.diagnostics.push(error);
 	}
 
-	fn type_pattern(
-		&mut self,
-		db: &dyn Hir,
-		_types: &TypeRegistry,
-		_identifiers: &IdentifierRegistry,
-		pattern: PatternRef,
-	) -> PatternTy {
+	fn type_pattern(&mut self, db: &dyn Hir, pattern: PatternRef) -> PatternTy {
 		if pattern.item() == self.item {
 			if let Some(d) = self.data.patterns.get(pattern.pattern()) {
 				return d.clone();

@@ -14,8 +14,11 @@ use crate::{
 		ids::{ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		Expression, Goal, Pattern, Type,
 	},
+	ty::FunctionEntry,
 	Error,
 };
+
+use super::PatternTy;
 
 /// Topologically sort items
 pub fn topological_sort(db: &dyn Hir) -> (Arc<Vec<ItemRef>>, Arc<Vec<Error>>) {
@@ -122,7 +125,41 @@ impl<'a> TopoSorter<'a> {
 				}
 			}
 			LocalItemRef::Function(f) => {
+				let name = model[f].data[model[f].pattern].identifier().unwrap();
+				let mut overloads = Vec::new();
+				let ps = self.db.lookup_global_function(name);
+				for p in ps.iter() {
+					let signature = self.db.lookup_item_signature(p.item());
+					match &signature.patterns[p] {
+						PatternTy::Function(f) => {
+							overloads.push((p.item() == item, *f.clone()));
+						}
+						PatternTy::AnnotationConstructor(f) => {
+							overloads.push((p.item() == item, *f.clone()));
+						}
+						PatternTy::EnumConstructor(fs) => {
+							overloads.extend(fs.iter().map(|f| (p.item() == item, f.clone())));
+						}
+						_ => unreachable!(),
+					}
+				}
 				let p = PatternRef::new(item, model[f].pattern);
+				let types = self.db.lookup_item_signature(item);
+				match &types.patterns[&p] {
+					PatternTy::Function(f) => {
+						let (is_self, _, _) = FunctionEntry::match_fn(
+							self.db.upcast(),
+							overloads,
+							f.overload.params(),
+						)
+						.unwrap();
+						if !is_self {
+							// Ignore this function since it has been subsumed by another
+							return;
+						}
+					}
+					_ => unreachable!(),
+				}
 				self.current.insert(p);
 				let data = local_item.data(&model);
 				for p in model[f].parameters.iter() {

@@ -19,7 +19,7 @@ use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
 use super::scope::{ScopeData, ScopeResult};
 use super::source::SourceMap;
 use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
-use super::{Identifier, Model, Pattern, PatternTy};
+use super::{Identifier, IdentifierRegistry, Model, Pattern, PatternTy};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]
@@ -161,8 +161,15 @@ pub trait Hir:
 	#[salsa::interned]
 	fn intern_entity_ref(&self, item: EntityRefData) -> EntityRef;
 
+	/// Get identifier constants
+	fn identifier_registry(&self) -> Arc<IdentifierRegistry>;
+
 	/// Get a mapping from variable identifiers to their computed types
 	fn variable_type_map(&self) -> Arc<FxHashMap<Identifier, Ty>>;
+}
+
+fn identifier_registry(db: &dyn Hir) -> Arc<IdentifierRegistry> {
+	Arc::new(IdentifierRegistry::new(db))
 }
 
 fn variable_type_map(db: &dyn Hir) -> Arc<FxHashMap<Identifier, Ty>> {

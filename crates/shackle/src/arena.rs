@@ -165,6 +165,14 @@ impl<T> Arena<T> {
 			.map(|(idx, o)| (ArenaIndex::new((idx + 1) as u32), o))
 	}
 
+	/// Get an iterator of pairs of `ArenaIndex` and values allocated in this arena.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = (ArenaIndex<T>, &mut T)> {
+		self.items
+			.iter_mut()
+			.enumerate()
+			.map(|(idx, o)| (ArenaIndex::new((idx + 1) as u32), o))
+	}
+
 	/// Shrink arena so capacity is minimized.
 	pub fn shrink_to_fit(&mut self) {
 		self.items.shrink_to_fit();

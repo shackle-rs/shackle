@@ -30,7 +30,7 @@ use std::{fmt::Write, ops::Index, sync::Arc};
 
 use crate::{
 	arena::{ArenaIndex, ArenaMap},
-	ty::{FunctionEntry, Ty, TyData, TyVar, TypeRegistry},
+	ty::{FunctionEntry, Ty, TyData, TyVar},
 	utils::{debug_print_strings, DebugPrint},
 	Error,
 };
@@ -38,7 +38,7 @@ use crate::{
 use super::{
 	db::Hir,
 	ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-	Expression, IdentifierRegistry, ItemData, Pattern,
+	Expression, ItemData, Pattern,
 };
 
 mod body;
@@ -366,13 +366,7 @@ pub trait TypeContext {
 	fn add_diagnostic(&mut self, item: ItemRef, e: impl Into<Error>);
 
 	/// Type a pattern (or lookup the type if already known)
-	fn type_pattern(
-		&mut self,
-		db: &dyn Hir,
-		types: &TypeRegistry,
-		identifiers: &IdentifierRegistry,
-		pattern: PatternRef,
-	) -> PatternTy;
+	fn type_pattern(&mut self, db: &dyn Hir, pattern: PatternRef) -> PatternTy;
 }
 
 /// Get the signature of an item (ignores RHS of items except for `any` declarations)
@@ -380,20 +374,16 @@ pub fn collect_item_signature(
 	db: &dyn Hir,
 	item: ItemRef,
 ) -> (Arc<SignatureTypes>, Arc<Vec<Error>>) {
-	let types = TypeRegistry::new(db.upcast());
-	let identifiers = IdentifierRegistry::new(db);
 	let mut ctx = SignatureTypeContext::new(item);
-	ctx.type_item(db, &types, &identifiers, item);
+	ctx.type_item(db, item);
 	let (s, e) = ctx.finish();
 	(Arc::new(s), Arc::new(e))
 }
 
 /// Type-check expressions in an item (other than those used in the signature)
 pub fn collect_item_body(db: &dyn Hir, item: ItemRef) -> (Arc<BodyTypes>, Arc<Vec<Error>>) {
-	let types = TypeRegistry::new(db.upcast());
-	let identifiers = IdentifierRegistry::new(db);
 	let mut ctx = BodyTypeContext::new(item);
-	ctx.type_item(db, &types, &identifiers);
+	ctx.type_item(db);
 	let (s, e) = ctx.finish();
 	(Arc::new(s), Arc::new(e))
 }

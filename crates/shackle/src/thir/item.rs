@@ -13,7 +13,8 @@ use crate::{
 };
 
 use super::{
-	db::Thir, Domain, DomainBuilder, Expression, ExpressionBuilder, Identifier, ResolvedIdentifier,
+	db::Thir, Domain, DomainBuilder, Expression, ExpressionBuilder, Identifier, Model,
+	ResolvedIdentifier,
 };
 
 /// An item of type `T`.
@@ -63,6 +64,12 @@ pub struct Annotation {
 	pub constructor: Constructor,
 }
 
+/// An annotation item and the data it owns
+pub type AnnotationItem = Item<Annotation>;
+
+/// ID of an annotation item
+pub type AnnotationId = ArenaIndex<AnnotationItem>;
+
 impl Deref for Annotation {
 	type Target = Constructor;
 	fn deref(&self) -> &Self::Target {
@@ -76,7 +83,7 @@ impl DerefMut for Annotation {
 	}
 }
 
-impl Item<Annotation> {
+impl AnnotationItem {
 	/// Create a new annotation item with the given name
 	pub fn new(name: Identifier) -> Self {
 		Item {
@@ -98,17 +105,26 @@ pub struct Constraint {
 	pub expression: ArenaIndex<Expression>,
 	/// Annotations
 	pub annotations: Vec<ArenaIndex<Expression>>,
+	/// Whether this is a top-level constraint (otherwise it inside a let)
+	pub top_level: bool,
 }
 
-impl Item<Constraint> {
+/// A constraint item and the data it owns
+pub type ConstraintItem = Item<Constraint>;
+
+/// ID of a constraint item
+pub type ConstraintId = ArenaIndex<ConstraintItem>;
+
+impl ConstraintItem {
 	/// Create a new constraint item with the given expression
-	pub fn new(expression: &dyn ExpressionBuilder) -> Self {
+	pub fn new(expression: &dyn ExpressionBuilder, top_level: bool) -> Self {
 		let mut data = ItemData::default();
 		let idx = expression.finish(&mut data);
 		Item {
 			item: Constraint {
 				expression: idx,
 				annotations: Vec::new(),
+				top_level,
 			},
 			data: Box::new(data),
 		}
@@ -132,11 +148,19 @@ pub struct Declaration {
 	pub definition: Option<ArenaIndex<Expression>>,
 	/// Annotations
 	pub annotations: Vec<ArenaIndex<Expression>>,
+	/// Whether this is a top-level constraint (otherwise it inside a let)
+	pub top_level: bool,
 }
 
-impl Item<Declaration> {
+/// A declaration item and the data it owns
+pub type DeclarationItem = Item<Declaration>;
+
+/// ID of a declaration item
+pub type DeclarationId = ArenaIndex<DeclarationItem>;
+
+impl DeclarationItem {
 	/// Create a new declaration item
-	pub fn new(domain: &DomainBuilder) -> Self {
+	pub fn new(domain: &DomainBuilder, top_level: bool) -> Self {
 		let mut data = Box::new(ItemData::default());
 		Item {
 			item: Declaration {
@@ -144,6 +168,7 @@ impl Item<Declaration> {
 				name: None,
 				definition: None,
 				annotations: Vec::new(),
+				top_level,
 			},
 			data,
 		}
@@ -171,6 +196,12 @@ impl Item<Declaration> {
 	}
 }
 
+/// An enumeration item and the data it owns
+pub type EnumerationItem = Item<Enumeration>;
+
+/// ID of an enumeration item
+pub type EnumerationId = ArenaIndex<EnumerationItem>;
+
 /// A enum item
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Enumeration {
@@ -182,7 +213,7 @@ pub struct Enumeration {
 	pub annotations: Vec<ArenaIndex<Expression>>,
 }
 
-impl Item<Enumeration> {
+impl EnumerationItem {
 	/// Create a new enumeration item
 	pub fn new(enum_type: EnumRef) -> Self {
 		Item {
@@ -228,7 +259,13 @@ pub struct Function {
 	pub annotations: Vec<ArenaIndex<Expression>>,
 }
 
-impl Item<Function> {
+/// A function item and the data it owns
+pub type FunctionItem = Item<Function>;
+
+/// ID of a function item
+pub type FunctionId = ArenaIndex<FunctionItem>;
+
+impl FunctionItem {
 	/// Create a new function item
 	pub fn new(name: Identifier, return_type: &DomainBuilder) -> Self {
 		let mut data = Box::new(ItemData::default());
@@ -267,7 +304,7 @@ impl Item<Function> {
 	}
 
 	/// Convert to a function entry
-	pub fn function_entry(&self, decls: &Arena<Item<Declaration>>) -> FunctionEntry {
+	pub fn function_entry(&self, model: &Model) -> FunctionEntry {
 		FunctionEntry {
 			has_body: self.body.is_some(),
 			overload: if self.type_inst_vars.is_empty() {
@@ -275,7 +312,7 @@ impl Item<Function> {
 					params: self
 						.parameters
 						.iter()
-						.map(|p| decls[*p].domain.ty())
+						.map(|p| model[*p].domain.ty())
 						.collect(),
 					return_type: self.domain.ty(),
 				})
@@ -285,7 +322,7 @@ impl Item<Function> {
 					params: self
 						.parameters
 						.iter()
-						.map(|p| decls[*p].domain.ty())
+						.map(|p| model[*p].domain.ty())
 						.collect(),
 					return_type: self.domain.ty(),
 				})
@@ -298,17 +335,16 @@ impl Item<Function> {
 #[allow(clippy::type_complexity)] // FIXME: fix the type complexity of the return type.
 pub fn lookup_function(
 	db: &dyn Thir,
+	model: &Model,
 	name: Identifier,
 	args: &[Ty],
-	functions: &Arena<Item<Function>>,
-	declarations: &Arena<Item<Declaration>>,
 ) -> Result<
 	(ArenaIndex<Item<Function>>, FunctionEntry, FunctionType),
 	FunctionResolutionError<ArenaIndex<Item<Function>>>,
 > {
-	let overloads = functions.iter().filter_map(|(i, f)| {
+	let overloads = model.functions().filter_map(|(i, f)| {
 		if f.name == name {
-			Some((i, f.function_entry(declarations)))
+			Some((i, f.function_entry(model)))
 		} else {
 			None
 		}
@@ -325,7 +361,13 @@ pub struct Output {
 	pub expression: ArenaIndex<Expression>,
 }
 
-impl Item<Output> {
+/// An output item and the data it owns
+pub type OutputItem = Item<Output>;
+
+/// ID of an output item
+pub type OutputId = ArenaIndex<OutputItem>;
+
+impl OutputItem {
 	/// Create a new output item
 	pub fn new(value: &dyn ExpressionBuilder) -> Self {
 		let mut data = ItemData::default();
@@ -353,7 +395,10 @@ pub struct Solve {
 	pub annotations: Vec<ArenaIndex<Expression>>,
 }
 
-impl Default for Item<Solve> {
+/// A solve item and the data it owns
+pub type SolveItem = Item<Solve>;
+
+impl Default for SolveItem {
 	fn default() -> Self {
 		Item {
 			item: Solve {
@@ -365,7 +410,7 @@ impl Default for Item<Solve> {
 	}
 }
 
-impl Item<Solve> {
+impl SolveItem {
 	/// Annotate this solve item
 	pub fn add_annotation(&mut self, annotation: &dyn ExpressionBuilder) {
 		let idx = annotation.finish(&mut self.data);
@@ -413,22 +458,22 @@ pub enum Goal {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ItemId {
 	/// Annotation item
-	Annotation(ArenaIndex<Item<Annotation>>),
+	Annotation(AnnotationId),
 	/// Constraint item
-	Constraint(ArenaIndex<Item<Constraint>>),
+	Constraint(ConstraintId),
 	/// Declaration item
-	Declaration(ArenaIndex<Item<Declaration>>),
+	Declaration(DeclarationId),
 	/// Enumeration item
-	Enumeration(ArenaIndex<Item<Enumeration>>),
+	Enumeration(EnumerationId),
 	/// Function item
-	Function(ArenaIndex<Item<Function>>),
+	Function(FunctionId),
 	/// Output item
-	Output(ArenaIndex<Item<Output>>),
+	Output(OutputId),
 }
 
-impl_enum_from!(ItemId::Annotation(ArenaIndex<Item<Annotation>>));
-impl_enum_from!(ItemId::Constraint(ArenaIndex<Item<Constraint>>));
-impl_enum_from!(ItemId::Declaration(ArenaIndex<Item<Declaration>>));
-impl_enum_from!(ItemId::Enumeration(ArenaIndex<Item<Enumeration>>));
-impl_enum_from!(ItemId::Function(ArenaIndex<Item<Function>>));
-impl_enum_from!(ItemId::Output(ArenaIndex<Item<Output>>));
+impl_enum_from!(ItemId::Annotation(AnnotationId));
+impl_enum_from!(ItemId::Constraint(ConstraintId));
+impl_enum_from!(ItemId::Declaration(DeclarationId));
+impl_enum_from!(ItemId::Enumeration(EnumerationId));
+impl_enum_from!(ItemId::Function(FunctionId));
+impl_enum_from!(ItemId::Output(OutputId));

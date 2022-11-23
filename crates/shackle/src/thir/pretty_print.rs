@@ -25,8 +25,8 @@ impl<'a> PrettyPrinter<'a> {
 	/// Pretty print the model
 	pub fn pretty_print(&self) -> String {
 		let mut buf = String::new();
-		for item in self.model.top_level.iter() {
-			writeln!(&mut buf, "{};", self.pretty_print_item(*item)).unwrap();
+		for item in self.model.top_level_items() {
+			writeln!(&mut buf, "{};", self.pretty_print_item(item)).unwrap();
 		}
 		writeln!(&mut buf, "{};", self.pretty_print_solve()).unwrap();
 		buf
