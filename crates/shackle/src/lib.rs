@@ -28,7 +28,7 @@ use std::{
 	collections::BTreeMap,
 	fmt::{self, Display},
 	io::Write,
-	ops::Range,
+	ops::{Index, RangeInclusive},
 	path::PathBuf,
 	sync::Arc,
 	time::Duration,
@@ -142,8 +142,8 @@ pub enum Status {
 pub enum Value {
 	/// Absence of an optional value
 	Absent,
-	/// Infinity
-	Infinity,
+	/// Infinity (+∞ or -∞)
+	Infinity(Polarity),
 	/// Boolean
 	Boolean(bool),
 	/// Signed integer
@@ -157,33 +157,47 @@ pub enum Value {
 	Enum(String),
 	/// An array of values
 	/// All values are of the same type
-	Array(Vec<Range<i64>>, Vec<Value>),
+	Array(Vec<RangeInclusive<i64>>, Vec<Value>),
 	/// A set of values
 	/// All values are of the same type and only occur once
-	Set(Vec<Value>),
+	Set(SetValue),
 	/// A tuple of values
 	Tuple(Vec<Value>),
 	/// A record of values
-	Record(BTreeMap<String, Value>),
+	Record(Record),
+}
+
+/// Whether an value is negative or positive
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Polarity {
+	/// Positive
+	Pos,
+	/// Negative
+	Neg,
 }
 
 impl Display for Value {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Value::Absent => write!(f, "<>"),
-			Value::Infinity => write!(f, "∞"),
+			Value::Infinity(p) => {
+				if p == &Polarity::Neg {
+					write!(f, "-")?;
+				};
+				write!(f, "∞")
+			}
 			Value::Boolean(v) => write!(f, "{}", v),
 			Value::Integer(v) => write!(f, "{}", v),
 			Value::Float(v) => write!(f, "{}", v),
 			Value::String(v) => write!(f, "{:?}", v),
 			Value::Enum(v) => write!(f, "{}", v),
 			Value::Array(idx, v) => {
-				let mut ii: Vec<i64> = idx.iter().map(|r| r.start).collect();
+				let mut ii: Vec<i64> = idx.iter().map(|r| *r.start()).collect();
 				let incr = |ii: &mut Vec<i64>| {
 					let mut i = ii.len() - 1;
 					ii[i] += 1;
 					while !idx[i].contains(&ii[i]) && i > 0 {
-						ii[i] = idx[i].start;
+						ii[i] = *idx[i].start();
 						i = i.wrapping_sub(1);
 						ii[i] += 1;
 					}
@@ -216,16 +230,7 @@ impl Display for Value {
 				write!(f, "]")
 			}
 			Value::Set(v) => {
-				let mut first = true;
-				write!(f, "{{")?;
-				for x in v {
-					if !first {
-						write!(f, ", ")?;
-					}
-					write!(f, "{}", x)?;
-					first = false;
-				}
-				write!(f, "}}")
+				write!(f, "{v}")
 			}
 			Value::Tuple(v) => {
 				let mut first = true;
@@ -240,18 +245,121 @@ impl Display for Value {
 				write!(f, ")")
 			}
 			Value::Record(rec) => {
+				write!(f, "{rec}")
+			}
+		}
+	}
+}
+
+/// Different representations used to represent sets in [`Value`]
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetValue {
+	/// List of (unique) Value elements
+	SetList(Vec<Value>),
+	/// Sorted list of non-overlapping inclusive integer ranges
+	IntRangeList(Vec<RangeInclusive<i64>>),
+	/// Sorted list of non-overlapping inclusive floating point ranges
+	FloatRangeList(Vec<RangeInclusive<f64>>),
+}
+
+impl Display for SetValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			SetValue::SetList(v) => {
+				if v.is_empty() {
+					return write!(f, "∅");
+				}
 				let mut first = true;
-				write!(f, "(")?;
-				for (k, v) in rec {
+				write!(f, "{{")?;
+				for x in v {
 					if !first {
 						write!(f, ", ")?;
 					}
-					write!(f, "{}: {}", k, v)?;
+					write!(f, "{}", x)?;
 					first = false;
 				}
-				write!(f, ")")
+				write!(f, "}}")
+			}
+			SetValue::IntRangeList(ranges) => {
+				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
+					return write!(f, "∅");
+				}
+				let mut first = true;
+				for range in ranges {
+					if !first {
+						write!(f, " union ")?;
+					}
+					write!(f, "{}..{}", range.start(), range.end())?;
+					first = false;
+				}
+				Ok(())
+			}
+			SetValue::FloatRangeList(ranges) => {
+				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
+					return write!(f, "∅");
+				}
+				let mut first = true;
+				for range in ranges {
+					if !first {
+						write!(f, " union ")?;
+					}
+					write!(f, "{}..{}", range.start(), range.end())?;
+					first = false;
+				}
+				Ok(())
 			}
 		}
+	}
+}
+
+/// A value of a record type
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct Record {
+	// fields are hidden to possibly replace inner implementation in the future
+	fields: Vec<(Arc<String>, Value)>,
+}
+
+impl FromIterator<(Arc<String>, Value)> for Record {
+	fn from_iter<T: IntoIterator<Item = (Arc<String>, Value)>>(iter: T) -> Self {
+		let mut fields: Vec<(Arc<String>, Value)> = iter.into_iter().collect();
+		fields.sort_by(|(k1, _), (k2, _)| k1.as_str().cmp(k2.as_str()));
+		Self { fields }
+	}
+}
+impl<'a> IntoIterator for &'a Record {
+	type Item = &'a (Arc<String>, Value);
+	type IntoIter = std::slice::Iter<'a, (Arc<String>, Value)>;
+
+	#[inline]
+	fn into_iter(self) -> Self::IntoIter {
+		self.fields.iter()
+	}
+}
+impl Index<&str> for Record {
+	type Output = Value;
+
+	fn index(&self, index: &str) -> &Self::Output {
+		for (k, v) in &self.fields {
+			if k.as_str() == index {
+				return v;
+			}
+		}
+		panic!("no entry found for key");
+	}
+}
+
+impl Display for Record {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let mut first = true;
+		write!(f, "(")?;
+		for (k, v) in &self.fields {
+			if !first {
+				write!(f, ", ")?;
+			}
+			write!(f, "{}: {}", *k, v)?;
+			first = false;
+		}
+		write!(f, ")")
 	}
 }
 

@@ -1,9 +1,9 @@
 use std::{
 	collections::BTreeMap,
 	io::{BufRead, BufReader},
-	ops::Range,
 	path::PathBuf,
 	process::{Command, Stdio},
+	sync::Arc,
 };
 
 use serde_json::Map;
@@ -14,7 +14,7 @@ use crate::{
 	diagnostics::{FileError, InternalError},
 	hir::{db::Hir, Identifier},
 	ty::{Ty, TyData},
-	Message, Program, Status, Value,
+	Message, Program, Record, SetValue, Status, Value,
 };
 
 fn flatten_array(
@@ -112,11 +112,12 @@ fn deserialize_legacy_value(
 					let arr = serde_json::Value::Array(v);
 					let mut ii = &arr;
 					while let serde_json::Value::Array(v) = ii {
-						ranges.push(1..(v.len() + 1) as i64);
+						ranges.push(1..=v.len() as i64);
 						if let Some(fst) = v.last() {
 							ii = fst;
 						} else {
-							ranges.push(1..1);
+							#[allow(clippy::reversed_empty_ranges)]
+							ranges.push(1..=0i64);
 						}
 					}
 					// Flatten content
@@ -125,7 +126,7 @@ fn deserialize_legacy_value(
 
 					Ok(Value::Array(ranges, content))
 				} else {
-					let range: Range<i64> = 1..(v.len() + 1) as i64;
+					let range = 1..=v.len() as i64;
 					let content = v
 						.into_iter()
 						.map(|val| deserialize_legacy_value(db, element, val))
@@ -176,13 +177,11 @@ fn deserialize_legacy_value(
 				if let serde_json::Value::Array(set) = set {
 					match elem.lookup(db) {
 						TyData::Integer(_, _) if matches!(set[0], serde_json::Value::Array(_)) => {
-							let mut content = Vec::new();
+							let mut content = Vec::with_capacity(set.len());
 							for mem in set {
 								if let serde_json::Value::Array(x) = mem {
 									assert_eq!(x.len(), 2);
-									for i in x[0].as_i64().unwrap()..=x[1].as_i64().unwrap() {
-										content.push(Value::Integer(i))
-									}
+									content.push(x[0].as_i64().unwrap()..=x[1].as_i64().unwrap());
 								} else {
 									return Err(InternalError::new(format!(
 										"legacy interpreter invalid range in set members `{}'",
@@ -190,14 +189,14 @@ fn deserialize_legacy_value(
 									)));
 								}
 							}
-							Ok(Value::Set(content))
+							Ok(Value::Set(SetValue::IntRangeList(content)))
 						}
 						_ => {
 							let content = set
 								.into_iter()
 								.map(|v| deserialize_legacy_value(db, elem, v))
 								.collect::<Result<Vec<_>, _>>()?;
-							Ok(Value::Set(content))
+							Ok(Value::Set(SetValue::SetList(content)))
 						}
 					}
 				} else {
@@ -209,12 +208,16 @@ fn deserialize_legacy_value(
 			}
 			TyData::Record(_, types) => {
 				assert_eq!(types.len(), obj.len());
-				let mut rec = BTreeMap::new();
-				for (name, tt) in types.iter() {
-					let name = name.value(db);
-					let val = deserialize_legacy_value(db, *tt, obj.remove(&name).unwrap())?;
-					rec.insert(name, val);
-				}
+				let rec = types
+					.iter()
+					.map(|(name, tt)| {
+						let name = name.value(db);
+						match deserialize_legacy_value(db, *tt, obj.remove(&name).unwrap()) {
+							Ok(val) => Ok((Arc::new(name), val)),
+							Err(err) => Err(err),
+						}
+					})
+					.collect::<Result<Record, _>>()?;
 				Ok(Value::Record(rec))
 			}
 			_ => Err(InternalError::new(format!(

@@ -6,6 +6,7 @@
 use std::{
 	fs::read_to_string,
 	path::{Path, PathBuf},
+	str::FromStr,
 	sync::Arc,
 };
 
@@ -14,7 +15,7 @@ use nom::{
 	branch::alt,
 	bytes::complete::{is_not, tag, take_until, take_while_m_n},
 	character::complete::{alpha1, alphanumeric1, char, multispace1, one_of},
-	combinator::{eof, iterator, map, map_opt, map_res, opt, recognize, value as replace, verify},
+	combinator::{eof, map, map_opt, map_res, opt, recognize, value as replace, verify},
 	error::{ErrorKind, ParseError},
 	multi::{fold_many0, many0, many0_count, many1},
 	number::complete::recognize_float,
@@ -26,10 +27,12 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	error::{FileError, ShackleError, SyntaxError},
-	Value,
+	Polarity, Record, SetValue, Value,
 };
 
 pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
+
+// TODO: Use FileError in all the different combinators
 
 /// Parses a DataZinc file, returning a mapping of the name of the left hand
 /// side of the assignment items to the values on the right hand side.
@@ -112,7 +115,7 @@ where
 /// Parse an identifier that is on the left hand side of an assignment item, or
 /// used to identify an enum element, or a enum constructor
 fn identifier(input: Span) -> IResult<Span, &str> {
-	// FIXME This is the basic rust identifier, but should probably be something better
+	// FIXME This is the basic rust identifier, but should match MiniZinc's identifiers
 	map(
 		recognize(pair(
 			alt((alpha1, tag("_"))),
@@ -127,10 +130,13 @@ fn identifier(input: Span) -> IResult<Span, &str> {
 fn value(input: Span) -> IResult<Span, Value> {
 	alt((
 		replace(Value::Absent, tag("<>")),
+		infinity,
 		map(boolean, Value::Boolean),
 		map(string, Value::String),
 		array,
 		map(set, Value::Set),
+		// WARNING: record should come before tuple
+		map(record, Value::Record),
 		map(tuple_value, Value::Tuple),
 		// WARNING: Float must come before integer
 		map(float, Value::Float),
@@ -138,6 +144,18 @@ fn value(input: Span) -> IResult<Span, Value> {
 		// WARNING: Should be after other usages of words (e.g., infinity, array1d, enum constructors)
 		map(identifier, |s| Value::Enum(s.to_string())),
 	))(input)
+}
+
+/// Parse an infinity literal
+fn infinity(input: Span) -> IResult<Span, Value> {
+	let (input, p) = opt(char('-'))(input)?;
+	let negate = matches!(p, Some('-'));
+	let (input, _) = ws(input)?;
+	let (input, _) = alt((tag("infinity"), tag("∞")))(input)?;
+	Ok((
+		input,
+		Value::Infinity(if negate { Polarity::Neg } else { Polarity::Pos }),
+	))
 }
 
 /// Parse an Boolean literal
@@ -152,6 +170,9 @@ fn boolean(input: Span) -> IResult<Span, bool> {
 /// Integer literals in DataZinc are allowed to be given in binary, octal,
 /// hexadecimal, and decimal notation
 fn integer(input: Span) -> IResult<Span, i64> {
+	let (input, p) = opt(char('-'))(input)?;
+	let negate = matches!(p, Some('-'));
+	let (input, _) = ws(input)?;
 	let binary = map_res(
 		preceded(
 			alt((tag("0b"), tag("0B"))),
@@ -180,10 +201,20 @@ fn integer(input: Span) -> IResult<Span, i64> {
 		recognize(many1(terminated(one_of("0123456789"), many0(char('_'))))),
 		|out: Span| str::replace(out.fragment(), "_", "").parse::<i64>(),
 	);
-	alt((binary, octal, hexadecimal, decimal))(input)
+	map(alt((binary, octal, hexadecimal, decimal)), move |i| {
+		if negate {
+			-i
+		} else {
+			i
+		}
+	})(input)
 }
 
 fn float(input: Span) -> IResult<Span, f64> {
+	let (input, p) = opt(char('-'))(input)?;
+	let negate = matches!(p, Some('-'));
+	let (input, _) = ws(input)?;
+	// FIXME: Should guarantee that it starts and ends with a number
 	// TODO: Add hexadecimal floating point numbers
 	map_res(
 		verify(recognize_float, |s: &Span| {
@@ -194,7 +225,10 @@ fn float(input: Span) -> IResult<Span, f64> {
 			}
 			false
 		}),
-		|s: Span| s.fragment().parse::<f64>(),
+		move |s: Span| {
+			let f = s.fragment().parse::<f64>()?;
+			Ok::<f64, <f64 as FromStr>::Err>(if negate { -f } else { f })
+		},
 	)(input)
 }
 
@@ -264,7 +298,7 @@ fn unicode(input: Span) -> IResult<Span, char> {
 		u32::from_str_radix(hex.fragment(), 16)
 	});
 	// Convert to corresponding character
-	map_opt(convert_u32, |value| std::char::from_u32(value))(input)
+	map_opt(convert_u32, std::char::from_u32)(input)
 }
 
 fn array(input: Span) -> IResult<Span, Value> {
@@ -274,20 +308,37 @@ fn array(input: Span) -> IResult<Span, Value> {
 	});
 
 	let simple_list = map(delimited(char('['), list, char(']')), |v| {
-		Value::Array(vec![1..v.len() as i64 + 1], v)
+		Value::Array(
+			if v.is_empty() {
+				Vec::new()
+			} else {
+				vec![1..=v.len() as i64]
+			},
+			v,
+		)
 	});
 
 	alt((simple_list,))(input)
 }
 
-fn set(input: Span) -> IResult<Span, Vec<Value>> {
+fn set(input: Span) -> IResult<Span, SetValue> {
 	let list = seperated_fold(value, sep(char(',')), Vec::new, |mut v, e| {
 		v.push(e);
 		v
 	});
-	let simple_list = delimited(char('{'), list, char('}'));
+	let simple_list = map(delimited(char('{'), list, char('}')), SetValue::SetList);
+	let empty_utf8 = map(tag("∅"), |_| SetValue::SetList(Vec::new()));
 
-	alt((simple_list,))(input)
+	let float_range = map(
+		separated_pair(float, sep(tag("..")), float),
+		|(from, to)| SetValue::FloatRangeList(vec![from..=to]),
+	);
+	let int_range = map(
+		separated_pair(integer, sep(tag("..")), integer),
+		|(from, to)| SetValue::IntRangeList(vec![from..=to]),
+	);
+
+	alt((empty_utf8, simple_list, float_range, int_range))(input)
 }
 
 fn tuple_value(input: Span) -> IResult<Span, Vec<Value>> {
@@ -307,18 +358,23 @@ fn tuple_value(input: Span) -> IResult<Span, Vec<Value>> {
 	Ok((input, v))
 }
 
-fn record(input: Span) -> IResult<Span, Vec<(&str, Value)>> {
-	// FIXME: Detect duplicates
-	// FIXME: Ensure at least 1 element
+fn record(input: Span) -> IResult<Span, Record> {
 	let named_value = separated_pair(identifier, sep(char(':')), value);
-	delimited(
+	let (input, pairs) = delimited(
 		char('('),
 		seperated_fold(named_value, sep(char(',')), Vec::new, |mut v, e| {
 			v.push(e);
 			v
 		}),
 		char(')'),
-	)(input)
+	)(input)?;
+	// FIXME: Detect duplicates
+	// FIXME: Ensure at least 1 element
+	let rec = pairs
+		.into_iter()
+		.map(|(k, v)| (Arc::new(k.to_string()), v))
+		.collect();
+	Ok((input, rec))
 }
 
 /// Helper function that works similar to [`nom::multi::fold_many0`], but instead
@@ -384,7 +440,7 @@ mod tests {
 	use std::sync::Arc;
 
 	use super::{identifier, value, Span};
-	use crate::Value;
+	use crate::{Polarity, Record, SetValue, Value};
 
 	fn span(s: &str) -> Span {
 		Span::new_extra(s, (Some("test.dzn".into()), Arc::new(s.to_string())))
@@ -404,6 +460,18 @@ mod tests {
 	}
 
 	#[test]
+	fn test_parse_inf() {
+		let (_, out) = value(span("infinity")).unwrap();
+		assert_eq!(out, Value::Infinity(Polarity::Pos));
+		let (_, out) = value(span("-infinity")).unwrap();
+		assert_eq!(out, Value::Infinity(Polarity::Neg));
+		let (_, out) = value(span("∞")).unwrap();
+		assert_eq!(out, Value::Infinity(Polarity::Pos));
+		let (_, out) = value(span("-∞")).unwrap();
+		assert_eq!(out, Value::Infinity(Polarity::Neg));
+	}
+
+	#[test]
 	fn test_parse_boolean() {
 		let (_, out) = value(span("true")).unwrap();
 		assert_eq!(out, Value::Boolean(true));
@@ -419,6 +487,8 @@ mod tests {
 		assert_eq!(out, Value::Integer(1));
 		let (_, out) = value(span("99")).unwrap();
 		assert_eq!(out, Value::Integer(99));
+		let (_, out) = value(span("-1")).unwrap();
+		assert_eq!(out, Value::Integer(-1));
 		let (_, out) = value(span("0b1010")).unwrap();
 		assert_eq!(out, Value::Integer(10));
 		let (_, out) = value(span("0o70")).unwrap();
@@ -433,6 +503,8 @@ mod tests {
 		assert_eq!(out, Value::Float(0.));
 		let (_, out) = value(span("3.65")).unwrap();
 		assert_eq!(out, Value::Float(3.65));
+		let (_, out) = value(span("-3.65")).unwrap();
+		assert_eq!(out, Value::Float(-3.65));
 		let (_, out) = value(span("4.5e10")).unwrap();
 		assert_eq!(out, Value::Float(4.5e10));
 		let (_, out) = value(span("5E-10")).unwrap();
@@ -469,8 +541,11 @@ mod tests {
 		assert_eq!(
 			out,
 			Value::Tuple(vec![
-				Value::Array(vec![1..3], vec![Value::Integer(1), Value::Integer(2)]),
-				Value::Set(vec![Value::Integer(3), Value::Integer(4)]),
+				Value::Array(vec![1..=2], vec![Value::Integer(1), Value::Integer(2)]),
+				Value::Set(SetValue::SetList(vec![
+					Value::Integer(3),
+					Value::Integer(4)
+				])),
 				Value::Integer(5)
 			])
 		);
@@ -485,6 +560,129 @@ mod tests {
 				]),
 				Value::Integer(6)
 			])
+		);
+	}
+
+	#[test]
+	fn test_parse_set() {
+		let (_, out) = value(span("{}")).unwrap();
+		assert_eq!(out, Value::Set(SetValue::SetList(vec![])));
+		let (_, out) = value(span("∅")).unwrap();
+		assert_eq!(out, Value::Set(SetValue::SetList(vec![])));
+		let (_, out) = value(span("{1.0}")).unwrap();
+		assert_eq!(out, Value::Set(SetValue::SetList(vec![Value::Float(1.0)])));
+		let (_, out) = value(span("{1,2.2}")).unwrap();
+		assert_eq!(
+			out,
+			Value::Set(SetValue::SetList(vec![
+				Value::Integer(1),
+				Value::Float(2.2)
+			]))
+		);
+		let (_, out) = value(span("1..3")).unwrap();
+		assert_eq!(out, Value::Set(SetValue::IntRangeList(vec![1..=3])));
+		let (_, out) = value(span("1.0..3.3")).unwrap();
+		assert_eq!(out, Value::Set(SetValue::FloatRangeList(vec![1.0..=3.3])));
+	}
+
+	#[test]
+	fn test_parse_record() {
+		let a = Arc::new("a".to_string());
+		let b = Arc::new("b".to_string());
+		let c = Arc::new("c".to_string());
+		let d = Arc::new("d".to_string());
+		let e = Arc::new("e".to_string());
+		let f = Arc::new("f".to_string());
+		// simple = (a: 1, b: 2.5);
+		let (_, out) = value(span("(a: 1, b: 2.5)")).unwrap();
+		assert_eq!(
+			out,
+			Value::Record(
+				vec![
+					(a.clone(), Value::Integer(1)),
+					(b.clone(), Value::Float(2.5))
+				]
+				.into_iter()
+				.collect::<Record>()
+			)
+		);
+		let (_, out) = value(span("(a: {1, 2}, b: (3.5, true), c: [<>])")).unwrap();
+		assert_eq!(
+			out,
+			Value::Record(
+				vec![
+					(
+						b.clone(),
+						Value::Tuple(vec![Value::Float(3.5), Value::Boolean(true)])
+					),
+					(
+						a.clone(),
+						Value::Set(SetValue::SetList(vec![
+							Value::Integer(1),
+							Value::Integer(2)
+						]))
+					),
+					(c.clone(), Value::Array(vec![1..=1], vec![Value::Absent]))
+				]
+				.into_iter()
+				.collect::<Record>()
+			)
+		);
+		let (_, out) = value(span("(a: 1, b: (c: 2, d: (e: 3, f: 4)))")).unwrap();
+		assert_eq!(
+			out,
+			Value::Record(
+				vec![
+					(
+						b,
+						Value::Record(
+							vec![
+								(c, Value::Integer(2)),
+								(
+									d,
+									Value::Record(
+										vec![(e, Value::Integer(3),), (f, Value::Integer(4),),]
+											.into_iter()
+											.collect::<Record>()
+									)
+								)
+							]
+							.into_iter()
+							.collect::<Record>()
+						)
+					),
+					(a, Value::Integer(1),),
+				]
+				.into_iter()
+				.collect::<Record>()
+			)
+		);
+	}
+
+	#[test]
+	fn test_parse_simple_array() {
+		// 		empty = [];
+		let (_, out) = value(span("[]")).unwrap();
+		assert_eq!(out, Value::Array(Vec::new(), Vec::new()));
+		let (_, out) = value(span("[1.0]")).unwrap();
+		assert_eq!(out, Value::Array(vec![1..=1], vec![Value::Float(1.0)]));
+		let (_, out) = value(span("[1, 2.2]")).unwrap();
+		assert_eq!(
+			out,
+			Value::Array(vec![1..=2], vec![Value::Integer(1), Value::Float(2.2)])
+		);
+		let (_, out) = value(span("[<>, <>, 1, <>,]")).unwrap();
+		assert_eq!(
+			out,
+			Value::Array(
+				vec![1..=4],
+				vec![
+					Value::Absent,
+					Value::Absent,
+					Value::Integer(1),
+					Value::Absent
+				]
+			)
 		);
 	}
 }
