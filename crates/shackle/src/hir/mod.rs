@@ -27,8 +27,6 @@ pub mod typecheck;
 pub mod types;
 pub mod validate;
 
-use std::ops::Index;
-
 pub use container::*;
 pub use expression::*;
 pub use item::*;
@@ -38,7 +36,10 @@ pub use scope::*;
 pub use typecheck::*;
 pub use types::*;
 
-use crate::arena::{Arena, ArenaIndex};
+use crate::{
+	arena::{Arena, ArenaIndex},
+	utils::impl_index,
+};
 
 use self::ids::LocalItemRef;
 
@@ -71,72 +72,13 @@ pub struct Model {
 	pub type_aliases: Arena<Item<TypeAlias>>,
 }
 
-impl Index<ArenaIndex<Item<Annotation>>> for Model {
-	type Output = Item<Annotation>;
-	fn index(&self, index: ArenaIndex<Item<Annotation>>) -> &Self::Output {
-		&self.annotations[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Assignment>>> for Model {
-	type Output = Item<Assignment>;
-	fn index(&self, index: ArenaIndex<Item<Assignment>>) -> &Self::Output {
-		&self.assignments[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<EnumAssignment>>> for Model {
-	type Output = Item<EnumAssignment>;
-	fn index(&self, index: ArenaIndex<Item<EnumAssignment>>) -> &Self::Output {
-		&self.enum_assignments[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Constraint>>> for Model {
-	type Output = Item<Constraint>;
-	fn index(&self, index: ArenaIndex<Item<Constraint>>) -> &Self::Output {
-		&self.constraints[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Declaration>>> for Model {
-	type Output = Item<Declaration>;
-	fn index(&self, index: ArenaIndex<Item<Declaration>>) -> &Self::Output {
-		&self.declarations[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Enumeration>>> for Model {
-	type Output = Item<Enumeration>;
-	fn index(&self, index: ArenaIndex<Item<Enumeration>>) -> &Self::Output {
-		&self.enumerations[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Function>>> for Model {
-	type Output = Item<Function>;
-	fn index(&self, index: ArenaIndex<Item<Function>>) -> &Self::Output {
-		&self.functions[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Output>>> for Model {
-	type Output = Item<Output>;
-	fn index(&self, index: ArenaIndex<Item<Output>>) -> &Self::Output {
-		&self.outputs[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<Solve>>> for Model {
-	type Output = Item<Solve>;
-	fn index(&self, index: ArenaIndex<Item<Solve>>) -> &Self::Output {
-		&self.solves[index]
-	}
-}
-
-impl Index<ArenaIndex<Item<TypeAlias>>> for Model {
-	type Output = Item<TypeAlias>;
-	fn index(&self, index: ArenaIndex<Item<TypeAlias>>) -> &Self::Output {
-		&self.type_aliases[index]
-	}
-}
+impl_index!(Model[self, index: ArenaIndex<Item<Annotation>>] -> Item<Annotation> { self.annotations[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Assignment>>] -> Item<Assignment> { self.assignments[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<EnumAssignment>>] -> Item<EnumAssignment> { self.enum_assignments[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Constraint>>] -> Item<Constraint> { self.constraints[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Declaration>>] -> Item<Declaration> { self.declarations[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Enumeration>>] -> Item<Enumeration> { self.enumerations[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Function>>] -> Item<Function> { self.functions[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Output>>] -> Item<Output> { self.outputs[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<Solve>>] -> Item<Solve> { self.solves[index] });
+impl_index!(Model[self, index: ArenaIndex<Item<TypeAlias>>] -> Item<TypeAlias> { self.type_aliases[index] });

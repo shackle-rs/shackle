@@ -14,9 +14,27 @@ macro_rules! impl_enum_from {
 	};
 }
 
+macro_rules! impl_index {
+	($type:ty[$self:ident, $index:ident: $index_type:ty] -> $output:ty {$value:expr}) => {
+		impl std::ops::Index<$index_type> for $type {
+			type Output = $output;
+			fn index(&$self, $index: $index_type) -> &Self::Output {
+				&$value
+			}
+		}
+
+		impl std::ops::IndexMut<$index_type> for $type {
+			fn index_mut(&mut $self, $index: $index_type) -> &mut Self::Output {
+				&mut $value
+			}
+		}
+	};
+}
+
 use std::fmt::Write;
 
 pub(crate) use impl_enum_from;
+pub(crate) use impl_index;
 use salsa::InternKey;
 
 use crate::db::InternedString;

@@ -10,11 +10,11 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
-		Constructor, Goal, IdentifierRegistry, ItemData, Pattern, Type,
+		Constructor, Goal, ItemData, Pattern, Type,
 	},
 	ty::{
 		EnumRef, FunctionEntry, FunctionType, OptType, OverloadedFunction, PolymorphicFunctionType,
-		Ty, TyData, TyVar, TyVarRef, TypeRegistry, VarType,
+		Ty, TyData, TyVar, TyVarRef, VarType,
 	},
 	Error,
 };
@@ -57,13 +57,7 @@ impl SignatureTypeContext {
 	}
 
 	/// Compute the signature of the given item
-	pub fn type_item(
-		&mut self,
-		db: &dyn Hir,
-		types: &TypeRegistry,
-		identifiers: &IdentifierRegistry,
-		item: ItemRef,
-	) {
+	pub fn type_item(&mut self, db: &dyn Hir, item: ItemRef) {
 		let model = &*item.model(db);
 		let it = item.local_item_ref(db);
 		let data = it.data(model);
@@ -96,9 +90,9 @@ impl SignatureTypeContext {
 								had_error = true;
 							}
 							let ty = if had_error {
-								types.error
+								db.type_registry().error
 							} else {
-								Typer::new(db, types, identifiers, self, item, data)
+								Typer::new(db, self, item, data)
 									.complete_type(p.declared_type, None)
 							};
 							if let Some(pat) = p.pattern {
@@ -115,7 +109,7 @@ impl SignatureTypeContext {
 						PatternTy::AnnotationConstructor(Box::new(FunctionEntry {
 							has_body: false,
 							overload: OverloadedFunction::Function(FunctionType {
-								return_type: types.ann,
+								return_type: db.type_registry().ann,
 								params,
 							}),
 						})),
@@ -200,17 +194,14 @@ impl SignatureTypeContext {
 							);
 							had_error = true;
 						}
+						let mut typer = Typer::new(db, self, item, data);
 						let ty = if had_error {
-							types.error
+							db.type_registry().error
 						} else {
-							Typer::new(db, types, identifiers, self, item, data)
-								.complete_type(p.declared_type, None)
+							typer.complete_type(p.declared_type, None)
 						};
 						if let Some(pat) = p.pattern {
-							self.add_declaration(
-								PatternRef::new(item, pat),
-								PatternTy::Variable(ty),
-							);
+							typer.collect_pattern(None, pat, ty);
 						}
 						ty
 					})
@@ -218,7 +209,7 @@ impl SignatureTypeContext {
 				let pattern = PatternRef::new(item, it.pattern);
 				if ty_params.is_empty() {
 					let f = FunctionType {
-						return_type: types.error,
+						return_type: db.type_registry().error,
 						params,
 					};
 					self.add_declaration(
@@ -230,7 +221,7 @@ impl SignatureTypeContext {
 					);
 				} else {
 					let p = PolymorphicFunctionType {
-						return_type: types.error,
+						return_type: db.type_registry().error,
 						ty_params,
 						params,
 					};
@@ -259,10 +250,9 @@ impl SignatureTypeContext {
 					had_error = true;
 				}
 				let return_type = if had_error {
-					types.error
+					db.type_registry().error
 				} else {
-					Typer::new(db, types, identifiers, self, item, data)
-						.complete_type(it.return_type, None)
+					Typer::new(db, self, item, data).complete_type(it.return_type, None)
 				};
 
 				let d = self.data.patterns.get_mut(&pattern).unwrap();
@@ -289,7 +279,7 @@ impl SignatureTypeContext {
 				for p in Pattern::identifiers(it.pattern, data) {
 					self.add_declaration(PatternRef::new(item, p), PatternTy::Computing);
 				}
-				let mut typer = Typer::new(db, types, identifiers, self, item, data);
+				let mut typer = Typer::new(db, self, item, data);
 				if data[it.declared_type].is_complete(data) {
 					// Use LHS type only
 					let expected = typer.complete_type(it.declared_type, None);
@@ -309,18 +299,17 @@ impl SignatureTypeContext {
 					PatternTy::Variable(Ty::par_set(db.upcast(), ty).unwrap()),
 				);
 				if let Some(cases) = &it.definition {
-					self.add_enum_cases(db, types, identifiers, item, data, ty, cases);
+					self.add_enum_cases(db, item, data, ty, cases);
 				}
 			}
 			LocalItemRef::EnumAssignment(e) => {
 				let it = &model[e];
-				let set_ty = Typer::new(db, types, identifiers, self, item, data)
-					.collect_expression(it.assignee, None);
+				let set_ty = Typer::new(db, self, item, data).collect_expression(it.assignee, None);
 				let ty = match set_ty.lookup(db.upcast()) {
 					TyData::Set(_, _, e) => e,
 					_ => unreachable!(),
 				};
-				self.add_enum_cases(db, types, identifiers, item, data, ty, &it.definition);
+				self.add_enum_cases(db, item, data, ty, &it.definition);
 			}
 			LocalItemRef::Solve(s) => {
 				let it = &model[s];
@@ -328,9 +317,9 @@ impl SignatureTypeContext {
 					Goal::Maximize { pattern, objective }
 					| Goal::Minimize { pattern, objective } => {
 						self.add_declaration(PatternRef::new(item, *pattern), PatternTy::Computing);
-						let actual = Typer::new(db, types, identifiers, self, item, data)
-							.collect_expression(*objective, None);
-						if !actual.is_subtype_of(db.upcast(), types.var_float) {
+						let actual =
+							Typer::new(db, self, item, data).collect_expression(*objective, None);
+						if !actual.is_subtype_of(db.upcast(), db.type_registry().var_float) {
 							let (src, span) =
 								NodeRef::from(EntityRef::new(db, item, *objective)).source_span(db);
 							self.add_diagnostic(
@@ -357,20 +346,16 @@ impl SignatureTypeContext {
 				let it = &model[t];
 				let pat = PatternRef::new(item, it.name);
 				self.add_declaration(pat, PatternTy::Computing);
-				let ty = Typer::new(db, types, identifiers, self, item, data)
-					.complete_type(it.aliased_type, None);
+				let ty = Typer::new(db, self, item, data).complete_type(it.aliased_type, None);
 				self.add_declaration(pat, PatternTy::TypeAlias(ty));
 			}
 			_ => unreachable!("Item {:?} does not have signature", it),
 		}
 	}
 
-	#[allow(clippy::too_many_arguments)] // FIXME: Refactor to have less arguments
 	fn add_enum_cases(
 		&mut self,
 		db: &dyn Hir,
-		types: &TypeRegistry,
-		identifiers: &IdentifierRegistry,
 		item: ItemRef,
 		data: &ItemData,
 		ty: Ty,
@@ -381,7 +366,7 @@ impl SignatureTypeContext {
 				self.add_declaration(PatternRef::new(item, case.pattern), PatternTy::EnumAtom(ty));
 			} else {
 				let param_types = {
-					let mut typer = Typer::new(db, types, identifiers, self, item, data);
+					let mut typer = Typer::new(db, self, item, data);
 					case.parameters()
 						.map(|p| typer.complete_type(p.declared_type, None))
 						.collect::<Box<[_]>>()
@@ -424,7 +409,7 @@ impl SignatureTypeContext {
 					}
 				}
 
-				let mut constructors = Vec::new();
+				let mut constructors = Vec::with_capacity(6);
 				// C(a, b, ..) -> E
 				constructors.push(FunctionType {
 					return_type: ty,
@@ -553,19 +538,13 @@ impl TypeContext for SignatureTypeContext {
 		}
 	}
 
-	fn type_pattern(
-		&mut self,
-		db: &dyn Hir,
-		types: &TypeRegistry,
-		identifiers: &IdentifierRegistry,
-		pattern: PatternRef,
-	) -> PatternTy {
+	fn type_pattern(&mut self, db: &dyn Hir, pattern: PatternRef) -> PatternTy {
 		// When computing signatures, we always type everything required
 		// So other signatures get typed as well
 		if let Some(d) = self.data.patterns.get(&pattern).cloned() {
 			return d;
 		}
-		self.type_item(db, types, identifiers, pattern.item());
+		self.type_item(db, pattern.item());
 		self.data.patterns[&pattern].clone()
 	}
 }

@@ -11,7 +11,7 @@ use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFi
 use crate::hir::db::Hir;
 use crate::syntax::db::SourceParser;
 use crate::thir::db::Thir;
-use crate::ty::{NewType, NewTypeData, Ty, TyData};
+use crate::ty::{NewType, NewTypeData, Ty, TyData, TypeRegistry};
 
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -112,6 +112,13 @@ pub trait Interner {
 
 	#[salsa::interned]
 	fn intern_newtype(&self, item: NewTypeData) -> NewType;
+
+	/// Constants for computed types
+	fn type_registry(&self) -> Arc<TypeRegistry>;
+}
+
+fn type_registry(db: &dyn Interner) -> Arc<TypeRegistry> {
+	Arc::new(TypeRegistry::new(db))
 }
 
 /// An interned string
