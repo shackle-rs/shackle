@@ -30,13 +30,13 @@ use crate::utils::impl_index;
 /// A model
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Model {
-	annotations: Arena<Item<Annotation>>,
-	constraints: Arena<Item<Constraint>>,
-	declarations: Arena<Item<Declaration>>,
-	enumerations: Arena<Item<Enumeration>>,
-	functions: Arena<Item<Function>>,
-	outputs: Arena<Item<Output>>,
-	solve: Item<Solve>,
+	annotations: Arena<AnnotationItem>,
+	constraints: Arena<ConstraintItem>,
+	declarations: Arena<DeclarationItem>,
+	enumerations: Arena<EnumerationItem>,
+	functions: Arena<FunctionItem>,
+	outputs: Arena<OutputItem>,
+	solve: SolveItem,
 	items: Vec<ItemId>,
 }
 
@@ -56,42 +56,36 @@ impl Model {
 	}
 
 	/// Get the top-level constraint items
-	pub fn constraints(
-		&self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Constraint>>, &Item<Constraint>)> {
+	pub fn constraints(&self) -> impl Iterator<Item = (ConstraintId, &ConstraintItem)> {
 		self.all_constraints().filter(|(_, c)| c.top_level)
 	}
 
 	/// Get the top-level constraint items
-	pub fn constraints_mut(
-		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Constraint>>, &mut Item<Constraint>)> {
+	pub fn constraints_mut(&mut self) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
 		self.all_constraints_mut().filter(|(_, c)| c.top_level)
 	}
 
 	/// Get all constraint items (including constraints inside let expressions)
-	pub fn all_constraints(
-		&self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Constraint>>, &Item<Constraint>)> {
+	pub fn all_constraints(&self) -> impl Iterator<Item = (ConstraintId, &ConstraintItem)> {
 		self.constraints.iter()
 	}
 
 	/// Get all constraint items (including constraints inside let expressions)
 	pub fn all_constraints_mut(
 		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Constraint>>, &mut Item<Constraint>)> {
+	) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
 		self.constraints.iter_mut()
 	}
 
 	/// Add an annotation item
-	pub fn add_annotation(&mut self, item: Item<Annotation>) -> ArenaIndex<Item<Annotation>> {
+	pub fn add_annotation(&mut self, item: AnnotationItem) -> AnnotationId {
 		let idx = self.annotations.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Add a constraint item
-	pub fn add_constraint(&mut self, item: Item<Constraint>) -> ArenaIndex<Item<Constraint>> {
+	pub fn add_constraint(&mut self, item: ConstraintItem) -> ConstraintId {
 		let idx = self.constraints.insert(item);
 		self.items.push(idx.into());
 		idx
@@ -100,114 +94,106 @@ impl Model {
 	/// Get the top-level declaration items
 	pub fn top_level_declarations(
 		&self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Declaration>>, &Item<Declaration>)> {
+	) -> impl Iterator<Item = (DeclarationId, &DeclarationItem)> {
 		self.all_declarations().filter(|(_, d)| d.top_level)
 	}
 
 	/// Get the top-level declaration items
 	pub fn top_level_declarations_mut(
 		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Declaration>>, &mut Item<Declaration>)> {
+	) -> impl Iterator<Item = (DeclarationId, &mut DeclarationItem)> {
 		self.all_declarations_mut().filter(|(_, d)| d.top_level)
 	}
 
 	/// Get all declaration items (including declarations inside let expressions)
-	pub fn all_declarations(
-		&self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Declaration>>, &Item<Declaration>)> {
+	pub fn all_declarations(&self) -> impl Iterator<Item = (DeclarationId, &DeclarationItem)> {
 		self.declarations.iter()
 	}
 
 	/// Get all declaration items (including declarations inside let expressions)
 	pub fn all_declarations_mut(
 		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Declaration>>, &mut Item<Declaration>)> {
+	) -> impl Iterator<Item = (DeclarationId, &mut DeclarationItem)> {
 		self.declarations.iter_mut()
 	}
 
 	/// Add a declaration item
-	pub fn add_declaration(&mut self, item: Item<Declaration>) -> ArenaIndex<Item<Declaration>> {
+	pub fn add_declaration(&mut self, item: DeclarationItem) -> DeclarationId {
 		let idx = self.declarations.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the enumeration items
-	pub fn enumerations(
-		&self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Enumeration>>, &Item<Enumeration>)> {
+	pub fn enumerations(&self) -> impl Iterator<Item = (EnumerationId, &EnumerationItem)> {
 		self.enumerations.iter()
 	}
 
 	/// Get the enumeration items
 	pub fn enumerations_mut(
 		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Enumeration>>, &mut Item<Enumeration>)> {
+	) -> impl Iterator<Item = (EnumerationId, &mut EnumerationItem)> {
 		self.enumerations.iter_mut()
 	}
 
 	/// Add an enumeration item
-	pub fn add_enumeration(&mut self, item: Item<Enumeration>) -> ArenaIndex<Item<Enumeration>> {
+	pub fn add_enumeration(&mut self, item: EnumerationItem) -> EnumerationId {
 		let idx = self.enumerations.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the function items
-	pub fn functions(&self) -> impl Iterator<Item = (ArenaIndex<Item<Function>>, &Item<Function>)> {
+	pub fn functions(&self) -> impl Iterator<Item = (FunctionId, &FunctionItem)> {
 		self.functions.iter()
 	}
 
 	/// Get the function items
-	pub fn functions_mut(
-		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Function>>, &mut Item<Function>)> {
+	pub fn functions_mut(&mut self) -> impl Iterator<Item = (FunctionId, &mut FunctionItem)> {
 		self.functions.iter_mut()
 	}
 
 	/// Add a function item
-	pub fn add_function(&mut self, item: Item<Function>) -> ArenaIndex<Item<Function>> {
+	pub fn add_function(&mut self, item: FunctionItem) -> FunctionId {
 		let idx = self.functions.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the output items
-	pub fn outputs(&self) -> impl Iterator<Item = (ArenaIndex<Item<Output>>, &Item<Output>)> {
+	pub fn outputs(&self) -> impl Iterator<Item = (OutputId, &OutputItem)> {
 		self.outputs.iter()
 	}
 
 	/// Get the output item
-	pub fn output_mut(
-		&mut self,
-	) -> impl Iterator<Item = (ArenaIndex<Item<Output>>, &mut Item<Output>)> {
+	pub fn output_mut(&mut self) -> impl Iterator<Item = (OutputId, &mut OutputItem)> {
 		self.outputs.iter_mut()
 	}
 
 	/// Add an output item
-	pub fn add_output(&mut self, item: Item<Output>) -> ArenaIndex<Item<Output>> {
+	pub fn add_output(&mut self, item: OutputItem) -> OutputId {
 		let idx = self.outputs.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the solve item
-	pub fn solve(&self) -> &Item<Solve> {
+	pub fn solve(&self) -> &SolveItem {
 		&self.solve
 	}
 
 	/// Get the solve item
-	pub fn solve_mut(&mut self) -> &mut Item<Solve> {
+	pub fn solve_mut(&mut self) -> &mut SolveItem {
 		&mut self.solve
 	}
 }
 
-impl_index!(Model[self, index: ArenaIndex<Item<Annotation>>] -> Item<Annotation> { self.annotations[index] });
-impl_index!(Model[self, index: ArenaIndex<Item<Constraint>>] -> Item<Constraint> { self.constraints[index] });
-impl_index!(Model[self, index: ArenaIndex<Item<Declaration>>] -> Item<Declaration> { self.declarations[index] });
-impl_index!(Model[self, index: ArenaIndex<Item<Enumeration>>] -> Item<Enumeration> { self.enumerations[index] });
-impl_index!(Model[self, index: ArenaIndex<Item<Function>>] -> Item<Function> { self.functions[index] });
-impl_index!(Model[self, index: ArenaIndex<Item<Output>>] -> Item<Output> { self.outputs[index] });
+impl_index!(Model[self, index: AnnotationId] -> AnnotationItem { self.annotations[index] });
+impl_index!(Model[self, index: ConstraintId] -> ConstraintItem { self.constraints[index] });
+impl_index!(Model[self, index: DeclarationId] -> DeclarationItem { self.declarations[index] });
+impl_index!(Model[self, index: EnumerationId] -> EnumerationItem { self.enumerations[index] });
+impl_index!(Model[self, index: FunctionId] -> FunctionItem { self.functions[index] });
+impl_index!(Model[self, index: OutputId] -> OutputItem { self.outputs[index] });
 
 impl Index<ItemId> for Model {
 	type Output = ItemData;

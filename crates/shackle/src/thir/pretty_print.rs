@@ -5,8 +5,8 @@ use crate::arena::ArenaIndex;
 
 use super::db::Thir;
 use super::{
-	Annotation, Constraint, Declaration, Domain, Enumeration, Expression, ExpressionData, Function,
-	Goal, Item, ItemData, ItemId, LetItem, Model, Output, ResolvedIdentifier,
+	AnnotationId, ConstraintId, DeclarationId, Domain, EnumerationId, Expression, ExpressionData,
+	FunctionId, Goal, ItemData, ItemId, LetItem, Model, OutputId, ResolvedIdentifier,
 };
 use std::fmt::Write;
 
@@ -44,7 +44,7 @@ impl<'a> PrettyPrinter<'a> {
 		}
 	}
 
-	fn pretty_print_annotation(&self, idx: ArenaIndex<Item<Annotation>>) -> String {
+	fn pretty_print_annotation(&self, idx: AnnotationId) -> String {
 		let annotation = &self.model[idx];
 		let name = annotation
 			.name
@@ -66,7 +66,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_constraint(&self, idx: ArenaIndex<Item<Constraint>>) -> String {
+	fn pretty_print_constraint(&self, idx: ConstraintId) -> String {
 		let constraint = &self.model[idx];
 		let mut buf = "constraint ".to_owned();
 		for ann in constraint.annotations.iter() {
@@ -86,11 +86,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_declaration(
-		&self,
-		idx: ArenaIndex<Item<Declaration>>,
-		is_let_item: bool,
-	) -> String {
+	fn pretty_print_declaration(&self, idx: DeclarationId, is_let_item: bool) -> String {
 		let declaration = &self.model[idx];
 		let ty = declaration.domain.ty();
 		let mut buf = if is_let_item
@@ -134,7 +130,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_enumeration(&self, idx: ArenaIndex<Item<Enumeration>>) -> String {
+	fn pretty_print_enumeration(&self, idx: EnumerationId) -> String {
 		let enumeration = &self.model[idx];
 		let mut buf = format!(
 			"enum {}",
@@ -184,7 +180,7 @@ impl<'a> PrettyPrinter<'a> {
 		}
 		buf
 	}
-	fn pretty_print_function(&self, idx: ArenaIndex<Item<Function>>) -> String {
+	fn pretty_print_function(&self, idx: FunctionId) -> String {
 		let function = &self.model[idx];
 		let mut buf = String::new();
 		write!(
@@ -256,7 +252,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_output(&self, idx: ArenaIndex<Item<Output>>) -> String {
+	fn pretty_print_output(&self, idx: OutputId) -> String {
 		let output = &self.model[idx];
 		let mut buf = "output ".to_owned();
 		if let Some(s) = output.section {
