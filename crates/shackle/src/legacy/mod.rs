@@ -257,7 +257,7 @@ impl Program {
 		let mut cmd = Command::new("minizinc");
 		cmd.stdin(Stdio::null())
 			.stdout(Stdio::piped())
-			.stderr(Stdio::null())
+			.stderr(Stdio::inherit())
 			.arg(tmpfile.path())
 			.args([
 				"--output-mode",
