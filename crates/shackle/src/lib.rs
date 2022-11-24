@@ -22,13 +22,14 @@ pub mod utils;
 use db::{CompilerDatabase, Inputs};
 use diagnostics::ShackleError;
 use file::InputFile;
+use itertools::Itertools;
 use serde_json::Map;
 
 use std::{
 	collections::BTreeMap,
 	fmt::{self, Display},
 	io::Write,
-	ops::{Index, RangeInclusive},
+	ops::RangeInclusive,
 	path::PathBuf,
 	sync::Arc,
 	time::Duration,
@@ -157,10 +158,10 @@ pub enum Value {
 	Enum(String),
 	/// An array of values
 	/// All values are of the same type
-	Array(Vec<RangeInclusive<i64>>, Vec<Value>),
+	Array(Array),
 	/// A set of values
 	/// All values are of the same type and only occur once
-	Set(SetValue),
+	Set(Set),
 	/// A tuple of values
 	Tuple(Vec<Value>),
 	/// A record of values
@@ -186,48 +187,13 @@ impl Display for Value {
 				};
 				write!(f, "∞")
 			}
-			Value::Boolean(v) => write!(f, "{}", v),
-			Value::Integer(v) => write!(f, "{}", v),
-			Value::Float(v) => write!(f, "{}", v),
+			Value::Boolean(v) => write!(f, "{v}"),
+			Value::Integer(v) => write!(f, "{v}"),
+			Value::Float(v) => write!(f, "{v}"),
 			Value::String(v) => write!(f, "{:?}", v),
-			Value::Enum(v) => write!(f, "{}", v),
-			Value::Array(idx, v) => {
-				let mut ii: Vec<i64> = idx.iter().map(|r| *r.start()).collect();
-				let incr = |ii: &mut Vec<i64>| {
-					let mut i = ii.len() - 1;
-					ii[i] += 1;
-					while !idx[i].contains(&ii[i]) && i > 0 {
-						ii[i] = *idx[i].start();
-						i = i.wrapping_sub(1);
-						ii[i] += 1;
-					}
-				};
-				let mut first = true;
-				write!(f, "[")?;
-				for x in v {
-					if !first {
-						write!(f, ", ")?;
-					}
-					match &ii[..] {
-						[i] => write!(f, "{i}: "),
-						ii => {
-							write!(f, "(")?;
-							let mut tup_first = true;
-							for i in ii {
-								if !tup_first {
-									write!(f, ",")?;
-								}
-								write!(f, "{i}")?;
-								tup_first = false;
-							}
-							write!(f, "): ")
-						}
-					}?;
-					write!(f, "{x}")?;
-					first = false;
-					incr(&mut ii);
-				}
-				write!(f, "]")
+			Value::Enum(v) => write!(f, "{v}"),
+			Value::Array(arr) => {
+				write!(f, "{arr}")
 			}
 			Value::Set(v) => {
 				write!(f, "{v}")
@@ -251,9 +217,133 @@ impl Display for Value {
 	}
 }
 
+/// Representation of an (multidimensional) indexed array
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Array {
+	indexes: Box<[Index]>,
+	members: Box<[Value]>,
+}
+
+impl Array {
+	/// Create a new array that contains the values in `elements` indexes by the given index sets
+	pub fn new(indexes: Vec<Index>, elements: Vec<Value>) -> Self {
+		assert_eq!(
+			indexes.iter().map(|i| i.len()).product::<usize>(),
+			elements.len(),
+			"the size suggested by the index sets {} does not match the number of elements {}",
+			indexes.iter().map(|i| i.len()).product::<usize>(),
+			elements.len()
+		);
+		Self {
+			indexes: indexes.into_boxed_slice(),
+			members: elements.into_boxed_slice(),
+		}
+	}
+}
+
+impl std::ops::Index<&[Value]> for Array {
+	type Output = Value;
+	fn index(&self, index: &[Value]) -> &Self::Output {
+		let mut idx = 0;
+		let mut mult = 1;
+		for (ii, ctx) in index.iter().zip_eq(self.indexes.iter()) {
+			idx *= mult;
+			match &ctx {
+				&Index::Integer(r) => {
+					if let Value::Integer(ii) = ii {
+						assert!(
+							r.contains(ii),
+							"index out of bounds: the index set is {}..={} but the index is {ii}",
+							r.start(),
+							r.end()
+						);
+						idx += (ii - r.start()) as usize;
+					} else {
+						panic!("incorrect index type: using {ii} for an integer index")
+					}
+				}
+			}
+			mult *= ctx.len();
+		}
+		&self.members[idx]
+	}
+}
+
+impl Display for Array {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let it = self
+			.indexes
+			.iter()
+			.map(|ii| match ii {
+				Index::Integer(ii) => ii.clone(),
+			})
+			.multi_cartesian_product()
+			.zip_eq(self.members.iter());
+		let mut first = true;
+		write!(f, "[")?;
+		for (ii, x) in it {
+			if !first {
+				write!(f, ", ")?;
+			}
+			match &ii[..] {
+				[i] => write!(f, "{i}: "),
+				ii => {
+					write!(f, "(")?;
+					let mut tup_first = true;
+					for i in ii {
+						if !tup_first {
+							write!(f, ",")?;
+						}
+						write!(f, "{i}")?;
+						tup_first = false;
+					}
+					write!(f, "): ")
+				}
+			}?;
+			write!(f, "{x}")?;
+			first = false;
+		}
+		write!(f, "]")
+	}
+}
+
+/// Representation of Array indexes
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Index {
+	/// Closed integer range index
+	Integer(RangeInclusive<i64>),
+	// Enum(Arc<Enum>),
+}
+
+impl Index {
+	/// Returns the cardinality of the index set
+	pub fn len(&self) -> usize {
+		match self {
+			Index::Integer(r) => {
+				if r.is_empty() {
+					0
+				} else {
+					(r.end() - r.start()) as usize + 1
+				}
+			}
+		}
+	}
+
+	/// Returns whether the index set contains any members
+	pub fn is_empty(&self) -> bool {
+		match &self {
+			Index::Integer(r) => r.is_empty(),
+		}
+	}
+}
+
+/// Member declaration of an enumerated type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Enum {}
+
 /// Different representations used to represent sets in [`Value`]
 #[derive(Debug, Clone, PartialEq)]
-pub enum SetValue {
+pub enum Set {
 	/// List of (unique) Value elements
 	SetList(Vec<Value>),
 	/// Sorted list of non-overlapping inclusive integer ranges
@@ -262,10 +352,10 @@ pub enum SetValue {
 	FloatRangeList(Vec<RangeInclusive<f64>>),
 }
 
-impl Display for SetValue {
+impl Display for Set {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			SetValue::SetList(v) => {
+			Set::SetList(v) => {
 				if v.is_empty() {
 					return write!(f, "∅");
 				}
@@ -280,7 +370,7 @@ impl Display for SetValue {
 				}
 				write!(f, "}}")
 			}
-			SetValue::IntRangeList(ranges) => {
+			Set::IntRangeList(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}
@@ -294,7 +384,7 @@ impl Display for SetValue {
 				}
 				Ok(())
 			}
-			SetValue::FloatRangeList(ranges) => {
+			Set::FloatRangeList(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}
@@ -335,7 +425,7 @@ impl<'a> IntoIterator for &'a Record {
 		self.fields.iter()
 	}
 }
-impl Index<&str> for Record {
+impl std::ops::Index<&str> for Record {
 	type Output = Value;
 
 	fn index(&self, index: &str) -> &Self::Output {

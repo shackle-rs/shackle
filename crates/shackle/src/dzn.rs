@@ -27,7 +27,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	error::{FileError, ShackleError, SyntaxError},
-	Polarity, Record, SetValue, Value,
+	Array, Index, Polarity, Record, Set, Value,
 };
 
 pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
@@ -133,7 +133,7 @@ fn value(input: Span) -> IResult<Span, Value> {
 		infinity,
 		map(boolean, Value::Boolean),
 		map(string, Value::String),
-		array,
+		map(array, Value::Array),
 		map(set, Value::Set),
 		// WARNING: record should come before tuple
 		map(record, Value::Record),
@@ -301,41 +301,38 @@ fn unicode(input: Span) -> IResult<Span, char> {
 	map_opt(convert_u32, std::char::from_u32)(input)
 }
 
-fn array(input: Span) -> IResult<Span, Value> {
+fn array(input: Span) -> IResult<Span, Array> {
 	let list = seperated_fold(value, sep(char(',')), Vec::new, |mut v, e| {
 		v.push(e);
 		v
 	});
 
 	let simple_list = map(delimited(char('['), list, char(']')), |v| {
-		Value::Array(
-			if v.is_empty() {
-				Vec::new()
-			} else {
-				vec![1..=v.len() as i64]
-			},
-			v,
-		)
+		if !v.is_empty() {
+			Array::new(vec![Index::Integer(1..=v.len() as i64)], v)
+		} else {
+			Array::default()
+		}
 	});
 
 	alt((simple_list,))(input)
 }
 
-fn set(input: Span) -> IResult<Span, SetValue> {
+fn set(input: Span) -> IResult<Span, Set> {
 	let list = seperated_fold(value, sep(char(',')), Vec::new, |mut v, e| {
 		v.push(e);
 		v
 	});
-	let simple_list = map(delimited(char('{'), list, char('}')), SetValue::SetList);
-	let empty_utf8 = map(tag("∅"), |_| SetValue::SetList(Vec::new()));
+	let simple_list = map(delimited(char('{'), list, char('}')), Set::SetList);
+	let empty_utf8 = map(tag("∅"), |_| Set::SetList(Vec::new()));
 
 	let float_range = map(
 		separated_pair(float, sep(tag("..")), float),
-		|(from, to)| SetValue::FloatRangeList(vec![from..=to]),
+		|(from, to)| Set::FloatRangeList(vec![from..=to]),
 	);
 	let int_range = map(
 		separated_pair(integer, sep(tag("..")), integer),
-		|(from, to)| SetValue::IntRangeList(vec![from..=to]),
+		|(from, to)| Set::IntRangeList(vec![from..=to]),
 	);
 
 	alt((empty_utf8, simple_list, float_range, int_range))(input)
@@ -440,7 +437,7 @@ mod tests {
 	use std::sync::Arc;
 
 	use super::{identifier, value, Span};
-	use crate::{Polarity, Record, SetValue, Value};
+	use crate::{Array, Index, Polarity, Record, Set, Value};
 
 	fn span(s: &str) -> Span {
 		Span::new_extra(s, (Some("test.dzn".into()), Arc::new(s.to_string())))
@@ -541,11 +538,11 @@ mod tests {
 		assert_eq!(
 			out,
 			Value::Tuple(vec![
-				Value::Array(vec![1..=2], vec![Value::Integer(1), Value::Integer(2)]),
-				Value::Set(SetValue::SetList(vec![
-					Value::Integer(3),
-					Value::Integer(4)
-				])),
+				Value::Array(Array::new(
+					vec![Index::Integer(1..=2)],
+					vec![Value::Integer(1), Value::Integer(2)]
+				)),
+				Value::Set(Set::SetList(vec![Value::Integer(3), Value::Integer(4)])),
 				Value::Integer(5)
 			])
 		);
@@ -566,23 +563,20 @@ mod tests {
 	#[test]
 	fn test_parse_set() {
 		let (_, out) = value(span("{}")).unwrap();
-		assert_eq!(out, Value::Set(SetValue::SetList(vec![])));
+		assert_eq!(out, Value::Set(Set::SetList(vec![])));
 		let (_, out) = value(span("∅")).unwrap();
-		assert_eq!(out, Value::Set(SetValue::SetList(vec![])));
+		assert_eq!(out, Value::Set(Set::SetList(vec![])));
 		let (_, out) = value(span("{1.0}")).unwrap();
-		assert_eq!(out, Value::Set(SetValue::SetList(vec![Value::Float(1.0)])));
+		assert_eq!(out, Value::Set(Set::SetList(vec![Value::Float(1.0)])));
 		let (_, out) = value(span("{1,2.2}")).unwrap();
 		assert_eq!(
 			out,
-			Value::Set(SetValue::SetList(vec![
-				Value::Integer(1),
-				Value::Float(2.2)
-			]))
+			Value::Set(Set::SetList(vec![Value::Integer(1), Value::Float(2.2)]))
 		);
 		let (_, out) = value(span("1..3")).unwrap();
-		assert_eq!(out, Value::Set(SetValue::IntRangeList(vec![1..=3])));
+		assert_eq!(out, Value::Set(Set::IntRangeList(vec![1..=3])));
 		let (_, out) = value(span("1.0..3.3")).unwrap();
-		assert_eq!(out, Value::Set(SetValue::FloatRangeList(vec![1.0..=3.3])));
+		assert_eq!(out, Value::Set(Set::FloatRangeList(vec![1.0..=3.3])));
 	}
 
 	#[test]
@@ -593,7 +587,6 @@ mod tests {
 		let d = Arc::new("d".to_string());
 		let e = Arc::new("e".to_string());
 		let f = Arc::new("f".to_string());
-		// simple = (a: 1, b: 2.5);
 		let (_, out) = value(span("(a: 1, b: 2.5)")).unwrap();
 		assert_eq!(
 			out,
@@ -617,12 +610,12 @@ mod tests {
 					),
 					(
 						a.clone(),
-						Value::Set(SetValue::SetList(vec![
-							Value::Integer(1),
-							Value::Integer(2)
-						]))
+						Value::Set(Set::SetList(vec![Value::Integer(1), Value::Integer(2)]))
 					),
-					(c.clone(), Value::Array(vec![1..=1], vec![Value::Absent]))
+					(
+						c.clone(),
+						Value::Array(Array::new(vec![Index::Integer(1..=1)], vec![Value::Absent]))
+					)
 				]
 				.into_iter()
 				.collect::<Record>()
@@ -661,28 +654,36 @@ mod tests {
 
 	#[test]
 	fn test_parse_simple_array() {
-		// 		empty = [];
 		let (_, out) = value(span("[]")).unwrap();
-		assert_eq!(out, Value::Array(Vec::new(), Vec::new()));
+		assert_eq!(out, Value::Array(Array::default()));
 		let (_, out) = value(span("[1.0]")).unwrap();
-		assert_eq!(out, Value::Array(vec![1..=1], vec![Value::Float(1.0)]));
+		assert_eq!(
+			out,
+			Value::Array(Array::new(
+				vec![Index::Integer(1..=1)],
+				vec![Value::Float(1.0)]
+			))
+		);
 		let (_, out) = value(span("[1, 2.2]")).unwrap();
 		assert_eq!(
 			out,
-			Value::Array(vec![1..=2], vec![Value::Integer(1), Value::Float(2.2)])
+			Value::Array(Array::new(
+				vec![Index::Integer(1..=2)],
+				vec![Value::Integer(1), Value::Float(2.2)]
+			))
 		);
 		let (_, out) = value(span("[<>, <>, 1, <>,]")).unwrap();
 		assert_eq!(
 			out,
-			Value::Array(
-				vec![1..=4],
+			Value::Array(Array::new(
+				vec![Index::Integer(1..=4)],
 				vec![
 					Value::Absent,
 					Value::Absent,
 					Value::Integer(1),
 					Value::Absent
 				]
-			)
+			))
 		);
 	}
 }

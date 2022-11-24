@@ -14,7 +14,7 @@ use crate::{
 	diagnostics::{FileError, InternalError},
 	hir::{db::Hir, Identifier},
 	ty::{Ty, TyData},
-	Message, Program, Record, SetValue, Status, Value,
+	Array, Index, Message, Program, Record, Set, Status, Value,
 };
 
 fn flatten_array(
@@ -112,26 +112,26 @@ fn deserialize_legacy_value(
 					let arr = serde_json::Value::Array(v);
 					let mut ii = &arr;
 					while let serde_json::Value::Array(v) = ii {
-						ranges.push(1..=v.len() as i64);
+						ranges.push(Index::Integer(1..=v.len() as i64));
 						if let Some(fst) = v.last() {
 							ii = fst;
 						} else {
 							#[allow(clippy::reversed_empty_ranges)]
-							ranges.push(1..=0i64);
+							ranges.push(Index::Integer(1..=0i64));
 						}
 					}
 					// Flatten content
 					let mut content = Vec::new();
 					flatten_array(db, &mut content, arr, tt.len(), element)?;
 
-					Ok(Value::Array(ranges, content))
+					Ok(Value::Array(Array::new(ranges, content)))
 				} else {
-					let range = 1..=v.len() as i64;
+					let range = Index::Integer(1..=v.len() as i64);
 					let content = v
 						.into_iter()
 						.map(|val| deserialize_legacy_value(db, element, val))
 						.collect::<Result<Vec<_>, _>>()?;
-					Ok(Value::Array(vec![range], content))
+					Ok(Value::Array(Array::new(vec![range], content)))
 				}
 			}
 			TyData::Tuple(_, types) => {
@@ -189,14 +189,14 @@ fn deserialize_legacy_value(
 									)));
 								}
 							}
-							Ok(Value::Set(SetValue::IntRangeList(content)))
+							Ok(Value::Set(Set::IntRangeList(content)))
 						}
 						_ => {
 							let content = set
 								.into_iter()
 								.map(|v| deserialize_legacy_value(db, elem, v))
 								.collect::<Result<Vec<_>, _>>()?;
-							Ok(Value::Set(SetValue::SetList(content)))
+							Ok(Value::Set(Set::SetList(content)))
 						}
 					}
 				} else {

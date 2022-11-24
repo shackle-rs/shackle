@@ -7,6 +7,7 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
+itertools = "0.10.5"
 log = "0.4.17"
 miette = "5.5.0"
 nom = "7.1.1"
