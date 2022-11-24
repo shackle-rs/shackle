@@ -5,7 +5,7 @@ use std::{fmt::Debug, ops::Deref};
 use rustc_hash::FxHashMap;
 
 use super::{
-	Annotation, Constraint, Declaration, Enumeration, Function, Identifier, Item, ItemData,
+	AnnotationId, ConstraintId, DeclarationId, EnumerationId, FunctionId, Identifier, ItemData,
 };
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
@@ -975,7 +975,7 @@ impl ExpressionBuilder for SetComprehensionBuilder {
 /// Builder for generators
 #[derive(Debug, Clone)]
 pub struct GeneratorBuilder {
-	declarations: Vec<ArenaIndex<Item<Declaration>>>,
+	declarations: Vec<DeclarationId>,
 	collection: Box<dyn ExpressionBuilder>,
 	where_clause: Option<Box<dyn ExpressionBuilder>>,
 }
@@ -991,7 +991,7 @@ impl GeneratorBuilder {
 	}
 
 	/// Add the given declaration to this generator
-	pub fn with_declaration(mut self, declaration: ArenaIndex<Item<Declaration>>) -> Self {
+	pub fn with_declaration(mut self, declaration: DeclarationId) -> Self {
 		self.declarations.push(declaration);
 		self
 	}
@@ -1575,15 +1575,15 @@ pub enum ExpressionData {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ResolvedIdentifier {
 	/// Identifier resolves to an annotation
-	Annotation(ArenaIndex<Item<Annotation>>),
+	Annotation(AnnotationId),
 	/// Identifier resolves to a declaration
-	Declaration(ArenaIndex<Item<Declaration>>),
+	Declaration(DeclarationId),
 	/// Identifier resolves to an enumeration
-	Enumeration(ArenaIndex<Item<Enumeration>>),
+	Enumeration(EnumerationId),
 	/// Identifier resolves to an enumeration member with the given index
-	EnumerationMember(ArenaIndex<Item<Enumeration>>, usize),
+	EnumerationMember(EnumerationId, usize),
 	/// Identifier resolves to a function
-	Function(ArenaIndex<Item<Function>>),
+	Function(FunctionId),
 	/// Identifier resolves to a type-inst variable
 	TyVarRef(TyVarRef),
 }
@@ -1592,7 +1592,7 @@ pub enum ResolvedIdentifier {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Generator {
 	/// Generator declaration
-	pub declarations: Vec<ArenaIndex<Item<Declaration>>>,
+	pub declarations: Vec<DeclarationId>,
 	/// Expression being iterated over
 	pub collection: ArenaIndex<Expression>,
 	/// Where clause
@@ -1612,7 +1612,7 @@ pub struct Branch {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LetItem {
 	/// A local constraint item
-	Constraint(ArenaIndex<Item<Constraint>>),
+	Constraint(ConstraintId),
 	/// A local declaration item
-	Declaration(ArenaIndex<Item<Declaration>>),
+	Declaration(DeclarationId),
 }

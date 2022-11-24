@@ -239,7 +239,7 @@ pub struct Constructor {
 	/// The name of this constructor
 	pub name: Option<Identifier>,
 	/// The constructor function parameters, or `None` if this is atomic
-	pub parameters: Option<Vec<ArenaIndex<Item<Declaration>>>>,
+	pub parameters: Option<Vec<DeclarationId>>,
 }
 
 /// Function item
@@ -252,7 +252,7 @@ pub struct Function {
 	/// Type-inst vars
 	pub type_inst_vars: Vec<TyVarRef>,
 	/// Function parameters
-	pub parameters: Vec<ArenaIndex<Item<Declaration>>>,
+	pub parameters: Vec<DeclarationId>,
 	/// The body of this function
 	pub body: Option<ArenaIndex<Expression>>,
 	/// Annotations
@@ -338,10 +338,7 @@ pub fn lookup_function(
 	model: &Model,
 	name: Identifier,
 	args: &[Ty],
-) -> Result<
-	(ArenaIndex<Item<Function>>, FunctionEntry, FunctionType),
-	FunctionResolutionError<ArenaIndex<Item<Function>>>,
-> {
+) -> Result<(FunctionId, FunctionEntry, FunctionType), FunctionResolutionError<FunctionId>> {
 	let overloads = model.functions().filter_map(|(i, f)| {
 		if f.name == name {
 			Some((i, f.function_entry(model)))
@@ -423,14 +420,14 @@ impl SolveItem {
 	}
 
 	/// Set this solve item to be for a maximization problem
-	pub fn set_maximize(&mut self, objective: ArenaIndex<Item<Declaration>>) {
+	pub fn set_maximize(&mut self, objective: DeclarationId) {
 		self.goal = Goal::Maximize {
 			objective: ResolvedIdentifier::Declaration(objective),
 		};
 	}
 
 	/// Set this solve item to be for a minimization problem
-	pub fn set_minimize(&mut self, objective: ArenaIndex<Item<Declaration>>) {
+	pub fn set_minimize(&mut self, objective: DeclarationId) {
 		self.goal = Goal::Minimize {
 			objective: ResolvedIdentifier::Declaration(objective),
 		};
