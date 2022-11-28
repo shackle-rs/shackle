@@ -273,23 +273,26 @@ impl<'a> PrettyPrinter<'a> {
 	}
 
 	fn pretty_print_solve(&self) -> String {
-		let solve = self.model.solve();
-		let mut buf = "solve ".to_owned();
-		for ann in solve.annotations.iter() {
-			write!(
-				&mut buf,
-				":: {} ",
-				self.pretty_print_expression(*ann, &solve.data)
-			)
-			.unwrap();
+		if let Some(solve) = self.model.solve() {
+			let mut buf = "solve ".to_owned();
+			for ann in solve.annotations.iter() {
+				write!(
+					&mut buf,
+					":: {} ",
+					self.pretty_print_expression(*ann, &solve.data)
+				)
+				.unwrap();
+			}
+			let s = match solve.goal {
+				Goal::Satisfy => "satisfy",
+				Goal::Maximize { .. } => "maximize _DECL_OBJ",
+				Goal::Minimize { .. } => "minimize _DECL_OBJ",
+			};
+			write!(&mut buf, "{}", s).unwrap();
+			buf
+		} else {
+			"solve satisfy".to_owned()
 		}
-		let s = match solve.goal {
-			Goal::Satisfy => "satisfy",
-			Goal::Maximize { .. } => "maximize _DECL_OBJ",
-			Goal::Minimize { .. } => "minimize _DECL_OBJ",
-		};
-		write!(&mut buf, "{}", s).unwrap();
-		buf
 	}
 
 	/// Pretty print a domain
@@ -470,19 +473,6 @@ impl<'a> PrettyPrinter<'a> {
 				function,
 				arguments,
 			} => {
-				if let ExpressionData::Identifier(ResolvedIdentifier::Function(func)) =
-					&*data.expressions[*function]
-				{
-					// Special case to output valid slicing syntax
-					let f = &self.model[*func];
-					let name = f.name.lookup(self.db.upcast());
-					if arguments.is_empty() {
-						match name.as_str() {
-							".." | "<..<" | "..<" | "<.." => return name,
-							_ => (),
-						}
-					}
-				}
 				let f = self.pretty_print_expression(*function, data);
 				let args = arguments
 					.iter()

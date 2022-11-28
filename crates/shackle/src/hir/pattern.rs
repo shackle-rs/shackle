@@ -247,5 +247,6 @@ id_registry!(
 	dot_dot: "..",
 	objective: "_objective",
 	show,
-	eq: "="
+	eq: "=",
+	index_set
 );
