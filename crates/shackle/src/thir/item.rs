@@ -4,7 +4,6 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
 	arena::{Arena, ArenaIndex, ArenaMap},
-	hir::source::Origin,
 	ty::{
 		EnumRef, FunctionEntry, FunctionResolutionError, FunctionType, OverloadedFunction,
 		PolymorphicFunctionType, Ty, TyVarRef,
@@ -13,8 +12,8 @@ use crate::{
 };
 
 use super::{
-	db::Thir, Domain, DomainBuilder, Expression, ExpressionBuilder, Identifier, Model,
-	ResolvedIdentifier,
+	db::Thir, source::Origin, CallBuilder, Domain, DomainBuilder, Expression, ExpressionBuilder,
+	Identifier, IdentifierBuilder, Model, ResolvedIdentifier,
 };
 
 /// An item of type `T`.
@@ -24,6 +23,8 @@ pub struct Item<T> {
 	pub item: T,
 	/// The data for the item
 	pub data: Box<ItemData>,
+	/// The HIR node which produced this item
+	pub origin: Origin,
 }
 
 impl<T> Item<T> {
@@ -53,8 +54,6 @@ pub struct ItemData {
 	pub expressions: Arena<Expression>,
 	/// Annotations for a given expression
 	pub annotations: ArenaMap<Expression, Vec<ArenaIndex<Expression>>>,
-	/// Origins of expressions
-	pub origins: Arena<Origin>,
 }
 
 /// Annotation item
@@ -85,7 +84,7 @@ impl DerefMut for Annotation {
 
 impl AnnotationItem {
 	/// Create a new annotation item with the given name
-	pub fn new(name: Identifier) -> Self {
+	pub fn new(name: Identifier, origin: impl Into<Origin>) -> Self {
 		Item {
 			item: Annotation {
 				constructor: Constructor {
@@ -94,6 +93,7 @@ impl AnnotationItem {
 				},
 			},
 			data: Box::new(ItemData::default()),
+			origin: origin.into(),
 		}
 	}
 }
@@ -117,7 +117,11 @@ pub type ConstraintId = ArenaIndex<ConstraintItem>;
 
 impl ConstraintItem {
 	/// Create a new constraint item with the given expression
-	pub fn new(expression: &dyn ExpressionBuilder, top_level: bool) -> Self {
+	pub fn new(
+		expression: &dyn ExpressionBuilder,
+		top_level: bool,
+		origin: impl Into<Origin>,
+	) -> Self {
 		let mut data = ItemData::default();
 		let idx = expression.finish(&mut data);
 		Item {
@@ -127,6 +131,7 @@ impl ConstraintItem {
 				top_level,
 			},
 			data: Box::new(data),
+			origin: origin.into(),
 		}
 	}
 
@@ -160,7 +165,7 @@ pub type DeclarationId = ArenaIndex<DeclarationItem>;
 
 impl DeclarationItem {
 	/// Create a new declaration item
-	pub fn new(domain: &DomainBuilder, top_level: bool) -> Self {
+	pub fn new(domain: &DomainBuilder, top_level: bool, origin: impl Into<Origin>) -> Self {
 		let mut data = Box::new(ItemData::default());
 		Item {
 			item: Declaration {
@@ -171,6 +176,7 @@ impl DeclarationItem {
 				top_level,
 			},
 			data,
+			origin: origin.into(),
 		}
 	}
 
@@ -215,7 +221,7 @@ pub struct Enumeration {
 
 impl EnumerationItem {
 	/// Create a new enumeration item
-	pub fn new(enum_type: EnumRef) -> Self {
+	pub fn new(enum_type: EnumRef, origin: impl Into<Origin>) -> Self {
 		Item {
 			data: Box::new(ItemData::default()),
 			item: Enumeration {
@@ -223,6 +229,7 @@ impl EnumerationItem {
 				definition: None,
 				enum_type,
 			},
+			origin: origin.into(),
 		}
 	}
 
@@ -267,7 +274,7 @@ pub type FunctionId = ArenaIndex<FunctionItem>;
 
 impl FunctionItem {
 	/// Create a new function item
-	pub fn new(name: Identifier, return_type: &DomainBuilder) -> Self {
+	pub fn new(name: Identifier, return_type: &DomainBuilder, origin: impl Into<Origin>) -> Self {
 		let mut data = Box::new(ItemData::default());
 		Item {
 			item: Function {
@@ -279,6 +286,7 @@ impl FunctionItem {
 				type_inst_vars: Vec::new(),
 			},
 			data,
+			origin: origin.into(),
 		}
 	}
 
@@ -331,14 +339,43 @@ impl FunctionItem {
 	}
 }
 
+/// Result of looking up a function by its signature
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FunctionLookup {
+	/// Id of the resolved function
+	pub function: FunctionId,
+	/// The function entry (i.e. not instantiated with the call arguments)
+	pub fn_entry: FunctionEntry,
+	/// The type of the resolved function (i.e. instantiated with the call arguments)
+	pub fn_type: FunctionType,
+}
+
+impl FunctionLookup {
+	/// Create a call to this function (does not have arguments set).
+	pub fn into_call(self, db: &dyn Thir, origin: impl Into<Origin>) -> Box<CallBuilder> {
+		let origin = origin.into();
+		CallBuilder::new(
+			self.fn_type.return_type,
+			IdentifierBuilder::new(
+				Ty::function(db.upcast(), self.fn_type),
+				ResolvedIdentifier::Function(self.function),
+				origin,
+			),
+			origin,
+		)
+	}
+}
+
+/// Error representing failure to lookup a function
+pub type FunctionLookupError = FunctionResolutionError<FunctionId>;
+
 /// Lookup a function by its signature
-#[allow(clippy::type_complexity)] // FIXME: fix the type complexity of the return type.
 pub fn lookup_function(
 	db: &dyn Thir,
 	model: &Model,
 	name: Identifier,
 	args: &[Ty],
-) -> Result<(FunctionId, FunctionEntry, FunctionType), FunctionResolutionError<FunctionId>> {
+) -> Result<FunctionLookup, FunctionLookupError> {
 	let overloads = model.functions().filter_map(|(i, f)| {
 		if f.name == name {
 			Some((i, f.function_entry(model)))
@@ -346,7 +383,12 @@ pub fn lookup_function(
 			None
 		}
 	});
-	FunctionEntry::match_fn(db.upcast(), overloads, args)
+	let (i, fe, ft) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
+	Ok(FunctionLookup {
+		function: i,
+		fn_entry: fe,
+		fn_type: ft,
+	})
 }
 
 /// Output item
@@ -366,7 +408,7 @@ pub type OutputId = ArenaIndex<OutputItem>;
 
 impl OutputItem {
 	/// Create a new output item
-	pub fn new(value: &dyn ExpressionBuilder) -> Self {
+	pub fn new(value: &dyn ExpressionBuilder, origin: impl Into<Origin>) -> Self {
 		let mut data = ItemData::default();
 		Item {
 			item: Output {
@@ -374,6 +416,7 @@ impl OutputItem {
 				expression: value.finish(&mut data),
 			},
 			data: Box::new(data),
+			origin: origin.into(),
 		}
 	}
 
@@ -395,19 +438,19 @@ pub struct Solve {
 /// A solve item and the data it owns
 pub type SolveItem = Item<Solve>;
 
-impl Default for SolveItem {
-	fn default() -> Self {
+impl SolveItem {
+	/// Create a new solve item
+	pub fn new(origin: impl Into<Origin>) -> Self {
 		Item {
 			item: Solve {
 				goal: Goal::Satisfy,
 				annotations: Vec::new(),
 			},
 			data: Box::new(ItemData::default()),
+			origin: origin.into(),
 		}
 	}
-}
 
-impl SolveItem {
 	/// Annotate this solve item
 	pub fn add_annotation(&mut self, annotation: &dyn ExpressionBuilder) {
 		let idx = annotation.finish(&mut self.data);
@@ -452,7 +495,7 @@ pub enum Goal {
 }
 
 /// ID of an item
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ItemId {
 	/// Annotation item
 	Annotation(AnnotationId),

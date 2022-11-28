@@ -17,13 +17,16 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
 	hir::{
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef, TypeRef},
-		source::{Origin, SourceMap},
 		PatternTy, TypeResult,
 	},
 	ty::{OptType, OverloadedFunction, Ty, TyData, TypeRegistry, VarType},
 };
 
-use super::{db::Thir, *};
+use super::{
+	db::Thir,
+	source::{DesugarKind, Origin},
+	*,
+};
 
 /// Collects HIR items and lowers them to THIR
 pub struct ItemCollector<'a> {
@@ -96,6 +99,7 @@ impl<'a> ItemCollector<'a> {
 					a.data[a.pattern]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
+					item,
 				);
 				let idx = self.model.add_annotation(annotation);
 				self.resolutions.insert(
@@ -114,7 +118,7 @@ impl<'a> ItemCollector<'a> {
 					.zip(fn_entry.overload.params())
 				{
 					let domain = collector.collect_domain(param.declared_type, *ty, false);
-					let mut declaration = DeclarationItem::new(&domain, false);
+					let mut declaration = DeclarationItem::new(&domain, false, item);
 					// Ignore destructuring and recording resolution for now since these can't have bodies which refer
 					// to parameters anyway
 					if let Some(p) = param.pattern {
@@ -126,6 +130,7 @@ impl<'a> ItemCollector<'a> {
 					a.data[a.pattern]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
+					item,
 				);
 				annotation.parameters = Some(parameters);
 				let idx = self.model.add_annotation(annotation);
@@ -145,43 +150,34 @@ impl<'a> ItemCollector<'a> {
 		item: ItemRef,
 		a: &crate::hir::Item<crate::hir::Assignment>,
 	) {
-		let types = self.db.lookup_item_types(item);
+		let db = self.db;
+		let types = db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &a.data, item, types.clone());
 		let res = types.name_resolution(a.assignee).unwrap();
 		let def = collector.collect_expression(a.definition);
-		if !self.resolutions.contains_key(&res) {
-			self.collect_item(res.item());
+		if !collector.resolutions.contains_key(&res) {
+			collector.collect_item(res.item());
 		}
-		match &self.resolutions[&res] {
-			ResolvedIdentifier::Declaration(d) => {
-				if self.model[*d].definition.is_some() {
-					// Turn subsequent assignment items into equality constraints
-					let ids = self.db.identifier_registry();
-					let origins = self.db.lookup_source_map(item.model_ref(self.db.upcast()));
-					let origin = origins.get_origin(item.into()).unwrap().clone();
-					let (i, fe, ft) = lookup_function(
-						self.db,
-						&self.model,
-						ids.eq,
-						&[types[a.assignee], types[a.definition]],
-					)
-					.unwrap();
-					let call = CallBuilder::new(
-						fe.overload.return_type(),
-						IdentifierBuilder::new(
-							Ty::function(self.db.upcast(), ft),
-							ResolvedIdentifier::Function(i),
-							origin.clone(),
-						),
-						origin,
-					);
-					let constraint = ConstraintItem::new(&*call, true);
-					self.model.add_constraint(constraint);
-				} else {
-					self.model[*d].set_definition(&*def);
-				}
-			}
+		let decl = match &collector.resolutions[&res] {
+			ResolvedIdentifier::Declaration(d) => *d,
 			_ => unreachable!(),
+		};
+		if collector.model[decl].definition.is_some() {
+			// Turn subsequent assignment items into equality constraints
+			let ids = db.identifier_registry();
+			let fn_lookup = lookup_function(
+				db,
+				&collector.model,
+				ids.eq,
+				&[types[a.assignee], types[a.definition]],
+			)
+			.unwrap();
+			let assignee = collector.collect_expression(a.assignee);
+			let call = fn_lookup.into_call(db, item).with_args([assignee, def]);
+			let constraint = ConstraintItem::new(&*call, true, item);
+			collector.model.add_constraint(constraint);
+		} else {
+			collector.model[decl].set_definition(&*def);
 		}
 	}
 
@@ -194,8 +190,11 @@ impl<'a> ItemCollector<'a> {
 	) -> ConstraintId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &c.data, item, types);
-		let mut constraint =
-			ConstraintItem::new(&*collector.collect_expression(c.expression), top_level);
+		let mut constraint = ConstraintItem::new(
+			&*collector.collect_expression(c.expression),
+			top_level,
+			item,
+		);
 		for ann in c.annotations.iter() {
 			constraint.add_annotation(&*collector.collect_expression(*ann));
 		}
@@ -216,7 +215,7 @@ impl<'a> ItemCollector<'a> {
 		match ty {
 			PatternTy::Variable(ty) => {
 				let domain = collector.collect_domain(d.declared_type, *ty, false);
-				let mut declaration = DeclarationItem::new(&domain, top_level);
+				let mut declaration = DeclarationItem::new(&domain, top_level, item);
 				for ann in d.annotations.iter() {
 					declaration.add_annotation(&*collector.collect_expression(*ann));
 				}
@@ -233,7 +232,11 @@ impl<'a> ItemCollector<'a> {
 			}
 			PatternTy::Destructuring(ty) => {
 				let domain = collector.collect_domain(d.declared_type, *ty, false);
-				let mut declaration = DeclarationItem::new(&domain, top_level);
+				let mut declaration = DeclarationItem::new(
+					&domain,
+					top_level,
+					Origin::from(item).with_desugaring(DesugarKind::Destructuring),
+				);
 				for ann in d.annotations.iter() {
 					declaration.add_annotation(&*collector.collect_expression(*ann));
 				}
@@ -241,22 +244,18 @@ impl<'a> ItemCollector<'a> {
 					declaration.set_definition(&*collector.collect_expression(def));
 				}
 				let decl = collector.model.add_declaration(declaration);
-				let origins = collector
-					.db
-					.lookup_source_map(item.model_ref(collector.db.upcast()));
-				let origin = origins
-					.get_origin(EntityRef::new(collector.db.upcast(), item, d.pattern).into())
-					.unwrap()
-					.clone();
 				let mut decls = vec![decl];
 				let mut dc = DestructuringCollector {
 					parent: &mut collector,
 					decls: &mut decls,
-					origins: &origins,
 					top_level,
 				};
 				dc.collect_destructuring(
-					IdentifierBuilder::new(*ty, ResolvedIdentifier::Declaration(decl), origin),
+					IdentifierBuilder::new(
+						*ty,
+						ResolvedIdentifier::Declaration(decl),
+						EntityRef::new(dc.db.upcast(), item, d.pattern),
+					),
 					d.pattern,
 				);
 				decls
@@ -279,7 +278,7 @@ impl<'a> ItemCollector<'a> {
 				TyData::Set(VarType::Par, OptType::NonOpt, element) => {
 					match element.lookup(collector.db.upcast()) {
 						TyData::Enum(_, _, t) => {
-							let mut enumeration = EnumerationItem::new(t);
+							let mut enumeration = EnumerationItem::new(t, item);
 							if let Some(def) = &e.definition {
 								enumeration.definition = Some(
 									def.iter().map(|c| collector.collect_enum_case(c)).collect(),
@@ -346,15 +345,13 @@ impl<'a> ItemCollector<'a> {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &f.data, item, types.clone());
 		let res = PatternRef::new(item, f.pattern);
-		let origins = collector
-			.db
-			.lookup_source_map(item.model_ref(collector.db.upcast()));
 		match &types[f.pattern] {
 			PatternTy::Function(fn_entry) => {
 				let domain =
 					collector.collect_domain(f.return_type, fn_entry.overload.return_type(), false);
 
-				let func = FunctionItem::new(f.data[f.pattern].identifier().unwrap(), &domain);
+				let func =
+					FunctionItem::new(f.data[f.pattern].identifier().unwrap(), &domain, item);
 				let fn_idx = collector.model.add_function(func);
 				collector
 					.resolutions
@@ -373,12 +370,11 @@ impl<'a> ItemCollector<'a> {
 				let mut dc = DestructuringCollector {
 					parent: &mut collector,
 					decls: &mut decls,
-					origins: &origins,
 					top_level: false,
 				};
 				for (param, ty) in f.parameters.iter().zip(fn_entry.overload.params()) {
 					let domain = dc.collect_domain(param.declared_type, *ty, false);
-					let mut declaration = DeclarationItem::new(&domain, false);
+					let mut declaration = DeclarationItem::new(&domain, false, item);
 					if let Some(p) = param.pattern {
 						declaration.name = f.data[p].identifier();
 					}
@@ -399,14 +395,10 @@ impl<'a> ItemCollector<'a> {
 								let ident = IdentifierBuilder::new(
 									*ty,
 									ResolvedIdentifier::Declaration(idx),
-									origins
-										.get_origin(
-											PatternRef::new(item, p)
-												.into_entity(dc.db.upcast())
-												.into(),
-										)
-										.unwrap()
-										.clone(),
+									Origin::from(
+										PatternRef::new(item, p).into_entity(dc.db.upcast()),
+									)
+									.with_desugaring(DesugarKind::Destructuring),
 								);
 								dc.collect_destructuring(ident, p);
 							}
@@ -421,14 +413,8 @@ impl<'a> ItemCollector<'a> {
 					} else {
 						let builder = LetBuilder::new(
 							types[e],
-							origins
-								.get_origin(
-									ExpressionRef::new(item, e)
-										.into_entity(dc.db.upcast())
-										.into(),
-								)
-								.unwrap()
-								.clone(),
+							Origin::from(ExpressionRef::new(item, e).into_entity(dc.db.upcast()))
+								.with_desugaring(DesugarKind::Destructuring),
 						)
 						.with_items(dc.decls.iter().copied().map(LetItem::Declaration))
 						.with_in(body);
@@ -450,7 +436,7 @@ impl<'a> ItemCollector<'a> {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &o.data, item, types);
 		let e = collector.collect_expression(o.expression);
-		let mut output = OutputItem::new(&*e);
+		let mut output = OutputItem::new(&*e, item);
 		if let Some(s) = o.section {
 			let section = collector.collect_expression(s);
 			output.set_section(&*section);
@@ -460,17 +446,21 @@ impl<'a> ItemCollector<'a> {
 
 	/// Collect solve item
 	pub fn collect_solve(&mut self, item: ItemRef, s: &crate::hir::Item<crate::hir::Solve>) {
+		let mut solve = SolveItem::new(item);
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &s.data, item, types.clone());
 		for ann in s.annotations.iter() {
 			let a = collector.collect_expression(*ann);
-			collector.model.solve_mut().add_annotation(&*a);
+			solve.add_annotation(&*a);
 		}
 		match &s.goal {
 			crate::hir::Goal::Maximize { pattern, objective } => match &types[*pattern] {
 				PatternTy::Variable(ty) => {
-					let mut declaration =
-						DeclarationItem::new(&DomainBuilder::unbounded(*ty), true);
+					let mut declaration = DeclarationItem::new(
+						&DomainBuilder::unbounded(*ty),
+						true,
+						Origin::from(item).with_desugaring(DesugarKind::Objective),
+					);
 					declaration.name = s.data[*pattern].identifier();
 					declaration.set_definition(&*collector.collect_expression(*objective));
 					let decl = collector.model.add_declaration(declaration);
@@ -478,14 +468,17 @@ impl<'a> ItemCollector<'a> {
 						PatternRef::new(item, *pattern),
 						ResolvedIdentifier::Declaration(decl),
 					);
-					collector.model.solve_mut().set_maximize(decl);
+					solve.set_maximize(decl);
 				}
 				_ => unreachable!(),
 			},
 			crate::hir::Goal::Minimize { pattern, objective } => match &types[*pattern] {
 				PatternTy::Variable(ty) => {
-					let mut declaration =
-						DeclarationItem::new(&DomainBuilder::unbounded(*ty), true);
+					let mut declaration = DeclarationItem::new(
+						&DomainBuilder::unbounded(*ty),
+						true,
+						Origin::from(item).with_desugaring(DesugarKind::Objective),
+					);
 					declaration.name = s.data[*pattern].identifier();
 					declaration.set_definition(&*collector.collect_expression(*objective));
 					let decl = collector.model.add_declaration(declaration);
@@ -493,12 +486,13 @@ impl<'a> ItemCollector<'a> {
 						PatternRef::new(item, *pattern),
 						ResolvedIdentifier::Declaration(decl),
 					);
-					collector.model.solve_mut().set_minimize(decl);
+					solve.set_minimize(decl);
 				}
 				_ => unreachable!(),
 			},
 			crate::hir::Goal::Satisfy => (),
 		}
+		collector.model.set_solve(solve);
 	}
 
 	/// Collect type alias item
@@ -558,36 +552,163 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			types,
 		}
 	}
+
 	/// Collect an expression
 	pub fn collect_expression(
 		&mut self,
 		idx: ArenaIndex<crate::hir::Expression>,
 	) -> Box<dyn ExpressionBuilder> {
 		let ty = self.types[idx];
-		let origins = self
-			.db
-			.lookup_source_map(self.item.model_ref(self.db.upcast()));
-		let origin = origins
-			.get_origin(EntityRef::new(self.db.upcast(), self.item, idx).into())
-			.unwrap()
-			.clone();
+		let origin: Origin = EntityRef::new(self.db.upcast(), self.item, idx).into();
 		let result: Box<dyn ExpressionBuilder> = match &self.data[idx] {
 			crate::hir::Expression::Absent => AbsentBuilder::new(ty, origin).with_annotations(
 				self.data
 					.annotations(idx)
 					.map(|ann| self.collect_expression(ann)),
 			),
-			crate::hir::Expression::ArrayAccess(aa) => ArrayAccessBuilder::new(
-				ty,
-				self.collect_expression(aa.collection),
-				self.collect_expression(aa.indices),
-				origin,
-			)
-			.with_annotations(
-				self.data
-					.annotations(idx)
-					.map(|ann| self.collect_expression(ann)),
-			),
+			crate::hir::Expression::ArrayAccess(aa) => {
+				let collection = self.collect_expression(aa.collection);
+				let has_slices = match &self.data[aa.indices] {
+					crate::hir::Expression::Slice(_) => true,
+					crate::hir::Expression::TupleLiteral(tl) => tl
+						.fields
+						.iter()
+						.any(|f| matches!(&self.data[*f], crate::hir::Expression::Slice(_))),
+					_ => false,
+				};
+				if has_slices {
+					// Rewrite a[..] into let { any: c = a } in c['..'(index_set(c))]
+					let collection_ty = self.types[aa.collection];
+					let collection_origin =
+						Origin::from(EntityRef::new(self.db.upcast(), self.item, aa.collection))
+							.with_desugaring(DesugarKind::ArraySlice);
+					let indices_origin =
+						Origin::from(EntityRef::new(self.db.upcast(), self.item, aa.indices))
+							.with_desugaring(DesugarKind::ArraySlice);
+					let mut declaration = DeclarationItem::new(
+						&DomainBuilder::unbounded(collection_ty),
+						false,
+						collection_origin,
+					);
+					declaration.set_definition(&*collection);
+					let decl = self.model.add_declaration(declaration);
+					let indices: Box<dyn ExpressionBuilder> = match &self.data[aa.indices] {
+						crate::hir::Expression::Slice(s) => {
+							// 1D array, so use `index_set` function
+							let index_set = lookup_function(
+								self.db,
+								&self.model,
+								self.db.identifier_registry().index_set,
+								&[collection_ty],
+							)
+							.unwrap();
+							let slice = lookup_function(
+								self.db,
+								&self.model,
+								*s,
+								&[index_set.fn_type.return_type],
+							)
+							.unwrap();
+							slice.into_call(self.db, indices_origin).with_arg(
+								index_set.into_call(self.db, indices_origin).with_arg(
+									IdentifierBuilder::new(
+										self.types[aa.collection],
+										ResolvedIdentifier::Declaration(decl),
+										collection_origin,
+									),
+								),
+							)
+						}
+						crate::hir::Expression::TupleLiteral(tl) => {
+							// Multidim array slice
+							let dims = tl.fields.len();
+							let (tys, indices): (Vec<_>, Vec<_>) = tl
+								.fields
+								.iter()
+								.enumerate()
+								.map(|(i, f)| -> (Ty, Box<dyn ExpressionBuilder>) {
+									if let crate::hir::Expression::Slice(s) = &self.data[*f] {
+										let origin = Origin::from(EntityRef::new(
+											self.db.upcast(),
+											self.item,
+											*f,
+										))
+										.with_desugaring(DesugarKind::ArraySlice);
+										let index_set_mofn = Identifier::new(
+											format!("index_set_{}of{}", i + 1, dims),
+											self.db.upcast(),
+										);
+										let index_set_fn = lookup_function(
+											self.db,
+											&self.model,
+											index_set_mofn,
+											&[collection_ty],
+										)
+										.unwrap();
+										let slice_fn = lookup_function(
+											self.db,
+											&self.model,
+											*s,
+											&[index_set_fn.fn_type.return_type],
+										)
+										.unwrap();
+										let ty = slice_fn.fn_type.return_type;
+										let call = slice_fn.into_call(self.db, origin).with_arg(
+											index_set_fn.into_call(self.db, origin).with_arg(
+												IdentifierBuilder::new(
+													self.types[aa.collection],
+													ResolvedIdentifier::Declaration(decl),
+													collection_origin,
+												),
+											),
+										);
+										(ty, call)
+									} else {
+										(self.types[*f], self.collect_expression(*f))
+									}
+								})
+								.unzip();
+							TupleLiteralBuilder::new(
+								Ty::tuple(self.db.upcast(), tys),
+								indices_origin,
+							)
+							.with_members(indices)
+						}
+						_ => unreachable!(),
+					};
+					LetBuilder::new(ty, origin)
+						.with_item(LetItem::Declaration(decl))
+						.with_in(
+							ArrayAccessBuilder::new(
+								ty,
+								IdentifierBuilder::new(
+									self.types[aa.collection],
+									ResolvedIdentifier::Declaration(decl),
+									collection_origin,
+								),
+								indices,
+								origin,
+							)
+							.with_annotations(
+								self.data
+									.annotations(idx)
+									.map(|ann| self.collect_expression(ann)),
+							),
+						)
+				} else {
+					ArrayAccessBuilder::new(
+						ty,
+						collection,
+						self.collect_expression(aa.indices),
+						origin,
+					)
+					.with_annotations(
+						self.data
+							.annotations(idx)
+							.map(|ann| self.collect_expression(ann)),
+					)
+				}
+			}
 			crate::hir::Expression::ArrayComprehension(c) => {
 				ArrayComprehensionBuilder::new(ty, origin)
 					.with_generators(c.generators.iter().map(|g| self.collect_generator(g)))
@@ -647,7 +768,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.map(|ann| self.collect_expression(ann)),
 				)
 			}
-			crate::hir::Expression::IfThenElse(ite) => IfThenElseBuilder::new(ty, origin.clone())
+			crate::hir::Expression::IfThenElse(ite) => IfThenElseBuilder::new(ty, origin)
 				.with_branches(ite.branches.iter().map(|b| {
 					(
 						self.collect_expression(b.condition),
@@ -678,7 +799,11 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			crate::hir::Expression::Let(l) => LetBuilder::new(ty, origin)
 				.with_items(l.items.iter().flat_map(|i| match i {
 					crate::hir::LetItem::Constraint(c) => {
-						let e = ConstraintItem::new(&*self.collect_expression(c.expression), false);
+						let e = ConstraintItem::new(
+							&*self.collect_expression(c.expression),
+							false,
+							origin,
+						);
 						vec![LetItem::Constraint(self.model.add_constraint(e))]
 					}
 					crate::hir::LetItem::Declaration(d) => {
@@ -731,22 +856,8 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
 				),
-			crate::hir::Expression::Slice(s) => {
-				let (i, _, ft) = lookup_function(self.db, &self.model, *s, &[ty]).unwrap();
-				CallBuilder::new(
-					ty,
-					IdentifierBuilder::new(
-						Ty::function(self.db.upcast(), ft),
-						ResolvedIdentifier::Function(i),
-						origin.clone(),
-					),
-					origin,
-				)
-				.with_annotations(
-					self.data
-						.annotations(idx)
-						.map(|ann| self.collect_expression(ann)),
-				)
+			crate::hir::Expression::Slice(_) => {
+				unreachable!("Slice used outside of array access")
 			}
 			crate::hir::Expression::StringLiteral(sl) => {
 				StringLiteralBuilder::new(ty, sl.clone(), origin).with_annotations(
@@ -780,8 +891,11 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		for p in g.patterns.iter() {
 			let decl = match &self.types[*p] {
 				PatternTy::Variable(ty) => {
-					let mut declaration =
-						DeclarationItem::new(&DomainBuilder::unbounded(*ty), false);
+					let mut declaration = DeclarationItem::new(
+						&DomainBuilder::unbounded(*ty),
+						false,
+						EntityRef::new(self.db.upcast(), self.item, *p),
+					);
 					declaration.name = self.data[*p].identifier();
 					let decl = self.model.add_declaration(declaration);
 					let item = self.item;
@@ -848,7 +962,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				let mut tys = Vec::with_capacity(fs.len());
 				let mut es = Vec::with_capacity(fs.len());
 				for f in fs.iter() {
-					let (t, e) = self.collect_default_else(*f, origin.clone());
+					let (t, e) = self.collect_default_else(*f, origin);
 					tys.push(t);
 					es.push(e);
 				}
@@ -863,7 +977,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				let mut tys = Vec::with_capacity(fs.len());
 				let mut es = Vec::with_capacity(fs.len());
 				for (i, f) in fs.iter() {
-					let (t, e) = self.collect_default_else(*f, origin.clone());
+					let (t, e) = self.collect_default_else(*f, origin);
 					tys.push(t);
 					es.push((*i, e));
 				}
@@ -913,18 +1027,13 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					// Replace expressions with identifiers pointing to declarations for those expressions
 					let tr = TypeRef::new(self.item, t);
 					let dom_ty = self.types[*domain];
-					let origins = self
-						.db
-						.lookup_source_map(self.item.model_ref(self.db.upcast()));
-					let origin = origins
-						.get_origin(EntityRef::new(self.db.upcast(), self.item, *domain).into())
-						.unwrap()
-						.clone();
+					let origin: Origin =
+						EntityRef::new(self.db.upcast(), self.item, *domain).into();
 					// Note: unable to keep Entry until insert, since "self" is mutably borrowed to create the value
 					#[allow(clippy::map_entry)]
 					if !self.type_alias_domains.contains_key(&tr) {
 						let mut declaration =
-							DeclarationItem::new(&DomainBuilder::unbounded(dom_ty), true);
+							DeclarationItem::new(&DomainBuilder::unbounded(dom_ty), true, origin);
 						declaration.set_definition(&*self.collect_expression(*domain));
 						let decl = self.model.add_declaration(declaration);
 						self.type_alias_domains.insert(tr, decl);
@@ -1016,7 +1125,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					.zip(c.parameters())
 					.map(|(ty, t)| {
 						let domain = self.collect_domain(t.declared_type, *ty, false);
-						let declaration = DeclarationItem::new(&domain, false);
+						let declaration = DeclarationItem::new(&domain, false, self.item);
 						self.model.add_declaration(declaration)
 					})
 					.collect(),
@@ -1028,7 +1137,6 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 struct DestructuringCollector<'a, 'b, 'c> {
 	parent: &'a mut ExpressionCollector<'b, 'c>,
 	decls: &'a mut Vec<DeclarationId>,
-	origins: &'a SourceMap,
 	top_level: bool,
 }
 
@@ -1053,8 +1161,11 @@ impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
 	) {
 		match (&self.data[pattern], self.types[pattern].clone()) {
 			(crate::hir::Pattern::Identifier(i), PatternTy::Variable(ty)) => {
-				let mut declaration =
-					DeclarationItem::new(&DomainBuilder::unbounded(ty), self.top_level);
+				let mut declaration = DeclarationItem::new(
+					&DomainBuilder::unbounded(ty),
+					self.top_level,
+					Origin::from(self.item).with_desugaring(DesugarKind::Destructuring),
+				);
 				declaration.set_definition(&*definition);
 				declaration.name = Some(*i);
 				let decl = self.model.add_declaration(declaration);
@@ -1069,10 +1180,8 @@ impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
 						ty,
 						definition.clone(),
 						IntegerLiteral((i + 1) as i64),
-						self.origins
-							.get_origin(EntityRef::new(self.db.upcast(), self.item, *f).into())
-							.unwrap()
-							.clone(),
+						Origin::from(EntityRef::new(self.db.upcast(), self.item, *f))
+							.with_desugaring(DesugarKind::Destructuring),
 					);
 					self.collect_destructuring(def, *f)
 				}
@@ -1083,10 +1192,8 @@ impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
 						ty,
 						definition.clone(),
 						*i,
-						self.origins
-							.get_origin(EntityRef::new(self.db.upcast(), self.item, *f).into())
-							.unwrap()
-							.clone(),
+						Origin::from(EntityRef::new(self.db.upcast(), self.item, *f))
+							.with_desugaring(DesugarKind::Destructuring),
 					);
 					self.collect_destructuring(def, *f)
 				}

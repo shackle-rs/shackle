@@ -14,6 +14,7 @@ pub mod expression;
 pub mod item;
 pub mod lower;
 pub mod pretty_print;
+pub mod source;
 
 use std::ops::Index;
 use std::ops::IndexMut;
@@ -36,7 +37,7 @@ pub struct Model {
 	enumerations: Arena<EnumerationItem>,
 	functions: Arena<FunctionItem>,
 	outputs: Arena<OutputItem>,
-	solve: SolveItem,
+	solve: Option<SolveItem>,
 	items: Vec<ItemId>,
 }
 
@@ -178,13 +179,18 @@ impl Model {
 	}
 
 	/// Get the solve item
-	pub fn solve(&self) -> &SolveItem {
-		&self.solve
+	pub fn solve(&self) -> Option<&SolveItem> {
+		self.solve.as_ref()
 	}
 
 	/// Get the solve item
-	pub fn solve_mut(&mut self) -> &mut SolveItem {
-		&mut self.solve
+	pub fn solve_mut(&mut self) -> Option<&mut SolveItem> {
+		self.solve.as_mut()
+	}
+
+	/// Set the solve item
+	pub fn set_solve(&mut self, solve: SolveItem) {
+		self.solve = Some(solve);
 	}
 }
 

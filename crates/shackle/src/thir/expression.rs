@@ -5,38 +5,14 @@ use std::{fmt::Debug, ops::Deref};
 use rustc_hash::FxHashMap;
 
 use super::{
-	AnnotationId, ConstraintId, DeclarationId, EnumerationId, FunctionId, Identifier, ItemData,
+	source::Origin, AnnotationId, ConstraintId, DeclarationId, EnumerationId, FunctionId,
+	Identifier, ItemData,
 };
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
 	arena::ArenaIndex,
-	hir::source::Origin,
 	ty::{Ty, TyVarRef},
-	utils::impl_enum_from,
 };
-
-/// Either an index of an origin, or a new origin to add
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[allow(variant_size_differences)]
-pub enum MaybeNewOrigin {
-	/// Origin which already exists
-	Existing(ArenaIndex<Origin>),
-	/// A new origin
-	New(Origin),
-}
-
-impl MaybeNewOrigin {
-	/// Get the origin index
-	pub fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Origin> {
-		match self {
-			MaybeNewOrigin::Existing(idx) => *idx,
-			MaybeNewOrigin::New(o) => owner.origins.insert(o.clone()),
-		}
-	}
-}
-
-impl_enum_from!(MaybeNewOrigin::Existing(ArenaIndex<Origin>));
-impl_enum_from!(MaybeNewOrigin::New(Origin));
 
 /// An expression
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,7 +20,7 @@ pub struct Expression {
 	ty: Ty,
 	annotations: Vec<ArenaIndex<Expression>>,
 	data: ExpressionData,
-	origin: ArenaIndex<Origin>,
+	origin: Origin,
 }
 
 impl Expression {
@@ -59,7 +35,7 @@ impl Expression {
 	}
 
 	/// Get the origin of this expression
-	pub fn origin(&self) -> ArenaIndex<Origin> {
+	pub fn origin(&self) -> Origin {
 		self.origin
 	}
 }
@@ -86,26 +62,17 @@ impl Clone for Box<dyn ExpressionBuilder> {
 	}
 }
 
-impl ExpressionBuilder for ArenaIndex<Expression> {
-	fn finish(&self, _owner: &mut ItemData) -> ArenaIndex<Expression> {
-		*self
-	}
-	fn clone_dyn(&self) -> Box<dyn ExpressionBuilder> {
-		Box::new(*self)
-	}
-}
-
 /// Builder for `<>`
 #[derive(Debug, Clone)]
 pub struct AbsentBuilder {
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl AbsentBuilder {
 	/// Create a new absent literal
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			annotations: Vec::new(),
 			ty,
@@ -134,12 +101,11 @@ impl AbsentBuilder {
 
 impl ExpressionBuilder for AbsentBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::Absent,
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -155,12 +121,12 @@ pub struct BooleanLiteralBuilder {
 	value: BooleanLiteral,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl BooleanLiteralBuilder {
 	/// Create a new boolean
-	pub fn new(ty: Ty, value: BooleanLiteral, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, value: BooleanLiteral, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			value,
 			annotations: Vec::new(),
@@ -190,12 +156,11 @@ impl BooleanLiteralBuilder {
 
 impl ExpressionBuilder for BooleanLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::BooleanLiteral(self.value),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -210,12 +175,12 @@ pub struct IntegerLiteralBuilder {
 	value: IntegerLiteral,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl IntegerLiteralBuilder {
 	/// Create a new integer
-	pub fn new(ty: Ty, value: IntegerLiteral, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, value: IntegerLiteral, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			value,
 			annotations: Vec::new(),
@@ -245,12 +210,11 @@ impl IntegerLiteralBuilder {
 
 impl ExpressionBuilder for IntegerLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::IntegerLiteral(self.value),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -265,12 +229,12 @@ pub struct FloatLiteralBuilder {
 	value: FloatLiteral,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl FloatLiteralBuilder {
 	/// Create a new float
-	pub fn new(ty: Ty, value: FloatLiteral, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, value: FloatLiteral, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			value,
 			annotations: Vec::new(),
@@ -300,12 +264,11 @@ impl FloatLiteralBuilder {
 
 impl ExpressionBuilder for FloatLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::FloatLiteral(self.value),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -320,12 +283,12 @@ pub struct StringLiteralBuilder {
 	value: StringLiteral,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl StringLiteralBuilder {
 	/// Create a new string
-	pub fn new(ty: Ty, value: StringLiteral, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, value: StringLiteral, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			value,
 			annotations: Vec::new(),
@@ -355,12 +318,11 @@ impl StringLiteralBuilder {
 
 impl ExpressionBuilder for StringLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::StringLiteral(self.value.clone()),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -374,12 +336,12 @@ impl ExpressionBuilder for StringLiteralBuilder {
 pub struct InfinityBuilder {
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl InfinityBuilder {
 	/// Create a new infinity
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			annotations: Vec::new(),
 			ty,
@@ -408,12 +370,11 @@ impl InfinityBuilder {
 
 impl ExpressionBuilder for InfinityBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::Infinity,
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -428,12 +389,12 @@ pub struct IdentifierBuilder {
 	value: ResolvedIdentifier,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl IdentifierBuilder {
 	/// Create a new identifier
-	pub fn new(ty: Ty, value: ResolvedIdentifier, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, value: ResolvedIdentifier, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			value,
 			annotations: Vec::new(),
@@ -463,12 +424,11 @@ impl IdentifierBuilder {
 
 impl ExpressionBuilder for IdentifierBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::Identifier(self.value),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -483,12 +443,12 @@ pub struct ArrayLiteralBuilder {
 	members: Vec<Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl ArrayLiteralBuilder {
 	/// Create a new array literal
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			members: Vec::new(),
 			annotations: Vec::new(),
@@ -533,13 +493,12 @@ impl ArrayLiteralBuilder {
 
 impl ExpressionBuilder for ArrayLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let members = self.members.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::ArrayLiteral(members),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -554,12 +513,12 @@ pub struct SetLiteralBuilder {
 	members: Vec<Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl SetLiteralBuilder {
 	/// Create a new set literal
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			members: Vec::new(),
 			annotations: Vec::new(),
@@ -604,13 +563,12 @@ impl SetLiteralBuilder {
 
 impl ExpressionBuilder for SetLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let members = self.members.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::SetLiteral(members),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -625,12 +583,12 @@ pub struct TupleLiteralBuilder {
 	members: Vec<Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl TupleLiteralBuilder {
 	/// Create a new tuple literal
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			members: Vec::new(),
 			annotations: Vec::new(),
@@ -675,13 +633,12 @@ impl TupleLiteralBuilder {
 
 impl ExpressionBuilder for TupleLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let members = self.members.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::TupleLiteral(members),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -696,12 +653,12 @@ pub struct RecordLiteralBuilder {
 	members: FxHashMap<Identifier, Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl RecordLiteralBuilder {
 	/// Create a new record literal
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			members: FxHashMap::default(),
 			annotations: Vec::new(),
@@ -750,7 +707,6 @@ impl RecordLiteralBuilder {
 
 impl ExpressionBuilder for RecordLiteralBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let members = self
 			.members
@@ -760,7 +716,7 @@ impl ExpressionBuilder for RecordLiteralBuilder {
 		owner.expressions.insert(Expression {
 			ty: self.ty,
 			data: ExpressionData::RecordLiteral(members),
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -777,12 +733,12 @@ pub struct ArrayComprehensionBuilder {
 	generators: Vec<GeneratorBuilder>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl ArrayComprehensionBuilder {
 	/// Create a new array comprehension
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			template: None,
 			indices: None,
@@ -844,7 +800,6 @@ impl ArrayComprehensionBuilder {
 
 impl ExpressionBuilder for ArrayComprehensionBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let indices = self.indices.as_ref().map(|e| e.finish(owner));
 		let template = self
@@ -868,7 +823,7 @@ impl ExpressionBuilder for ArrayComprehensionBuilder {
 				indices,
 				generators,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -884,12 +839,12 @@ pub struct SetComprehensionBuilder {
 	generators: Vec<GeneratorBuilder>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl SetComprehensionBuilder {
 	/// Create a new set comprehension
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			template: None,
 			generators: Vec::new(),
@@ -941,7 +896,6 @@ impl SetComprehensionBuilder {
 
 impl ExpressionBuilder for SetComprehensionBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let template = self
 			.template
@@ -963,7 +917,7 @@ impl ExpressionBuilder for SetComprehensionBuilder {
 				template,
 				generators,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -1021,7 +975,7 @@ pub struct ArrayAccessBuilder {
 	indices: Box<dyn ExpressionBuilder>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl ArrayAccessBuilder {
@@ -1030,7 +984,7 @@ impl ArrayAccessBuilder {
 		ty: Ty,
 		collection: Box<dyn ExpressionBuilder>,
 		indices: Box<dyn ExpressionBuilder>,
-		origin: impl Into<MaybeNewOrigin>,
+		origin: impl Into<Origin>,
 	) -> Box<Self> {
 		Box::new(Self {
 			collection,
@@ -1062,7 +1016,6 @@ impl ArrayAccessBuilder {
 
 impl ExpressionBuilder for ArrayAccessBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let collection = self.collection.finish(owner);
 		let indices = self.indices.finish(owner);
@@ -1072,7 +1025,7 @@ impl ExpressionBuilder for ArrayAccessBuilder {
 				collection,
 				indices,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -1088,7 +1041,7 @@ pub struct TupleAccessBuilder {
 	field: IntegerLiteral,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl TupleAccessBuilder {
@@ -1097,7 +1050,7 @@ impl TupleAccessBuilder {
 		ty: Ty,
 		tuple: Box<dyn ExpressionBuilder>,
 		field: IntegerLiteral,
-		origin: impl Into<MaybeNewOrigin>,
+		origin: impl Into<Origin>,
 	) -> Box<Self> {
 		Box::new(Self {
 			tuple,
@@ -1129,7 +1082,6 @@ impl TupleAccessBuilder {
 
 impl ExpressionBuilder for TupleAccessBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let tuple = self.tuple.finish(owner);
 		owner.expressions.insert(Expression {
@@ -1138,7 +1090,7 @@ impl ExpressionBuilder for TupleAccessBuilder {
 				tuple,
 				field: self.field,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -1154,7 +1106,7 @@ pub struct RecordAccessBuilder {
 	field: Identifier,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl RecordAccessBuilder {
@@ -1163,7 +1115,7 @@ impl RecordAccessBuilder {
 		ty: Ty,
 		record: Box<dyn ExpressionBuilder>,
 		field: Identifier,
-		origin: impl Into<MaybeNewOrigin>,
+		origin: impl Into<Origin>,
 	) -> Box<Self> {
 		Box::new(Self {
 			record,
@@ -1195,7 +1147,6 @@ impl RecordAccessBuilder {
 
 impl ExpressionBuilder for RecordAccessBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let record = self.record.finish(owner);
 		owner.expressions.insert(Expression {
@@ -1204,7 +1155,7 @@ impl ExpressionBuilder for RecordAccessBuilder {
 				record,
 				field: self.field,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -1220,12 +1171,12 @@ pub struct IfThenElseBuilder {
 	else_result: Option<Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl IfThenElseBuilder {
 	/// Create a new if-then-else
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			branches: Vec::new(),
 			else_result: None,
@@ -1281,7 +1232,6 @@ impl IfThenElseBuilder {
 
 impl ExpressionBuilder for IfThenElseBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let branches = self
 			.branches
@@ -1306,7 +1256,7 @@ impl ExpressionBuilder for IfThenElseBuilder {
 				branches,
 				else_result,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -1322,7 +1272,7 @@ pub struct CallBuilder {
 	arguments: Vec<Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl CallBuilder {
@@ -1330,7 +1280,7 @@ impl CallBuilder {
 	pub fn new(
 		ty: Ty,
 		function: Box<dyn ExpressionBuilder>,
-		origin: impl Into<MaybeNewOrigin>,
+		origin: impl Into<Origin>,
 	) -> Box<Self> {
 		Box::new(Self {
 			function,
@@ -1377,7 +1327,6 @@ impl CallBuilder {
 
 impl ExpressionBuilder for CallBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let function = self.function.finish(owner);
 		let arguments = self.arguments.iter().map(|a| a.finish(owner)).collect();
@@ -1387,7 +1336,7 @@ impl ExpressionBuilder for CallBuilder {
 				function,
 				arguments,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
@@ -1403,12 +1352,12 @@ pub struct LetBuilder {
 	in_expression: Option<Box<dyn ExpressionBuilder>>,
 	annotations: Vec<Box<dyn ExpressionBuilder>>,
 	ty: Ty,
-	origin: MaybeNewOrigin,
+	origin: Origin,
 }
 
 impl LetBuilder {
 	/// Create a new let expression
-	pub fn new(ty: Ty, origin: impl Into<MaybeNewOrigin>) -> Box<Self> {
+	pub fn new(ty: Ty, origin: impl Into<Origin>) -> Box<Self> {
 		Box::new(Self {
 			items: Vec::new(),
 			in_expression: None,
@@ -1457,7 +1406,6 @@ impl LetBuilder {
 
 impl ExpressionBuilder for LetBuilder {
 	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
-		let origin = self.origin.finish(owner);
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		let in_expression = self
 			.in_expression
@@ -1470,7 +1418,7 @@ impl ExpressionBuilder for LetBuilder {
 				items: self.items.clone(),
 				in_expression,
 			},
-			origin,
+			origin: self.origin,
 			annotations,
 		})
 	}
