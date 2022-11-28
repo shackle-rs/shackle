@@ -336,6 +336,16 @@ impl ScopeData {
 	}
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum PatternMode {
+	/// Destructuring for declarations
+	Destructuring,
+	/// Case expressions
+	Case,
+	/// Comprehension generators
+	Generator,
+}
+
 /// A collected scope entry
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scope {
@@ -395,24 +405,33 @@ impl ScopeCollector<'_> {
 	}
 
 	/// Add leaves of a pattern into the current scope.
-	fn collect_pattern(&mut self, index: ArenaIndex<Pattern>, irrefutable: bool) {
+	fn collect_pattern(&mut self, index: ArenaIndex<Pattern>, mode: PatternMode) {
 		self.increment_generation();
-		self.collect_pattern_inner(index, irrefutable);
+		self.collect_pattern_inner(index, mode, false);
 	}
 
-	fn collect_pattern_inner(&mut self, index: ArenaIndex<Pattern>, irrefutable: bool) {
+	fn collect_pattern_inner(
+		&mut self,
+		index: ArenaIndex<Pattern>,
+		mode: PatternMode,
+		mut had_error: bool,
+	) {
 		let generation = self.generation();
 		let mut refutable_pattern = || {
-			if irrefutable {
-				let (src, span) =
-					NodeRef::from(EntityRef::new(self.db, self.item, index)).source_span(self.db);
-				self.diagnostics.push(
-			InvalidPattern {
-				span,
-				src,
-				msg: "This pattern is not valid in this context as it may not match all cases.".to_owned()
-			}.into()
-		);
+			// When destructuring, patterns must be irrefutable
+			if let PatternMode::Destructuring = mode {
+				if !had_error {
+					let (src, span) = NodeRef::from(EntityRef::new(self.db, self.item, index))
+						.source_span(self.db);
+					self.diagnostics.push(
+					InvalidPattern {
+						span,
+						src,
+						msg: "This pattern is not valid in this context as it may not match all cases.".to_owned()
+					}.into()
+				);
+				}
+				had_error = true;
 			}
 		};
 
@@ -427,16 +446,20 @@ impl ScopeCollector<'_> {
 								current = *parent;
 								continue;
 							}
-							if scope.is_atom(*i, generation) {
-								refutable_pattern();
-								break;
+							if let PatternMode::Case = mode {
+								if scope.is_atom(*i, generation) {
+									// This identifier refers to this atom and does not create a new binding
+									break;
+								}
 							}
 							current = *parent;
 						}
 						Scope::Global => {
-							if self.db.lookup_global_atom(*i) {
-								refutable_pattern();
-								break;
+							if let PatternMode::Case = mode {
+								if self.db.lookup_global_atom(*i) {
+									// This identifier refers to this atom and does not create a new binding
+									break;
+								}
 							}
 							let scope = match self.scopes[self.current] {
 								Scope::Local { ref mut scope, .. } => scope,
@@ -458,17 +481,17 @@ impl ScopeCollector<'_> {
 			Pattern::Call { arguments, .. } => {
 				refutable_pattern();
 				for argument in arguments.iter() {
-					self.collect_pattern_inner(*argument, irrefutable);
+					self.collect_pattern_inner(*argument, mode, had_error);
 				}
 			}
 			Pattern::Tuple { fields } => {
 				for field in fields.iter() {
-					self.collect_pattern_inner(*field, irrefutable);
+					self.collect_pattern_inner(*field, mode, had_error);
 				}
 			}
 			Pattern::Record { fields } => {
 				for (_, pattern) in fields.iter() {
-					self.collect_pattern_inner(*pattern, irrefutable);
+					self.collect_pattern_inner(*pattern, mode, had_error);
 				}
 			}
 			_ => refutable_pattern(),
@@ -492,7 +515,7 @@ impl ScopeCollector<'_> {
 				for generator in c.generators.iter() {
 					self.collect_expression(generator.collection);
 					for p in generator.patterns.iter() {
-						self.collect_pattern(*p, false);
+						self.collect_pattern(*p, PatternMode::Generator);
 					}
 					if let Some(e) = generator.where_clause {
 						self.collect_expression(e)
@@ -542,7 +565,7 @@ impl ScopeCollector<'_> {
 							if let Some(def) = d.definition {
 								self.collect_expression(def)
 							}
-							self.collect_pattern(d.pattern, true);
+							self.collect_pattern(d.pattern, PatternMode::Destructuring);
 						}
 					}
 				}
@@ -554,7 +577,7 @@ impl ScopeCollector<'_> {
 				for generator in c.generators.iter() {
 					self.collect_expression(generator.collection);
 					for p in generator.patterns.iter() {
-						self.collect_pattern(*p, false);
+						self.collect_pattern(*p, PatternMode::Generator);
 					}
 					if let Some(e) = generator.where_clause {
 						self.collect_expression(e)
@@ -588,7 +611,7 @@ impl ScopeCollector<'_> {
 				self.collect_expression(c.expression);
 				for i in c.cases.iter() {
 					self.push();
-					self.collect_pattern(i.pattern, false);
+					self.collect_pattern(i.pattern, PatternMode::Case);
 					self.collect_expression(i.value);
 					self.pop();
 				}
@@ -871,7 +894,7 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			}
 			collector.push();
 			for t in function.type_inst_vars.iter() {
-				collector.collect_pattern(t.name, true);
+				collector.collect_pattern(t.name, PatternMode::Destructuring);
 			}
 			for p in function.parameters.iter() {
 				collector.collect_type(p.declared_type);
@@ -881,7 +904,7 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			for p in function.parameters.iter() {
 				// Add parameters into scope
 				if let Some(pat) = p.pattern {
-					collector.collect_pattern(pat, true);
+					collector.collect_pattern(pat, PatternMode::Destructuring);
 				}
 			}
 			if let Some(e) = function.body {
