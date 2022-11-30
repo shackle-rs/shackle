@@ -248,5 +248,6 @@ id_registry!(
 	objective: "_objective",
 	show,
 	eq: "=",
-	index_set
+	index_set,
+	shackle_type,
 );

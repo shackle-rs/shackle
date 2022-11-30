@@ -220,28 +220,30 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 	let search_dirs = db.include_search_dirs();
 	let auto_includes = ["solver_redefinitions.mzn", "stdlib.mzn"];
 
-	if let Err(e) = db.share_directory() {
-		// share/minizinc directory does not exist
-		errors.push(e);
-	} else {
-		let mut found_stdlib = false;
-		for dir in search_dirs.iter() {
-			let found = auto_includes
-				.iter()
-				.map(|i| dir.join(*i))
-				.filter(|p| p.exists())
-				.collect::<Vec<_>>();
-			if found.len() == auto_includes.len() {
-				for f in found {
-					todo.push(FileRef::new(&f, db.upcast()).into());
+	if !db.ignore_stdlib() {
+		if let Err(e) = db.share_directory() {
+			// share/minizinc directory does not exist
+			errors.push(e);
+		} else {
+			let mut found_stdlib = false;
+			for dir in search_dirs.iter() {
+				let found = auto_includes
+					.iter()
+					.map(|i| dir.join(*i))
+					.filter(|p| p.exists())
+					.collect::<Vec<_>>();
+				if found.len() == auto_includes.len() {
+					for f in found {
+						todo.push(FileRef::new(&f, db.upcast()).into());
+					}
+					found_stdlib = true;
+					break;
 				}
-				found_stdlib = true;
-				break;
 			}
-		}
-		if !found_stdlib {
-			// Could not find the files even though there was a share/minizinc directory
-			errors.push(Error::StandardLibraryNotFound);
+			if !found_stdlib {
+				// Could not find the files even though there was a share/minizinc directory
+				errors.push(Error::StandardLibraryNotFound);
+			}
 		}
 	}
 	let mut models = Vec::new();
