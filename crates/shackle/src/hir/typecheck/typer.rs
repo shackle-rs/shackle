@@ -119,6 +119,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		};
 		self.ctx
 			.add_expression(ExpressionRef::new(self.item, expr), result);
+		self.collect_annotations(expr, result);
+		result
+	}
+
+	fn collect_annotations(&mut self, expr: ArenaIndex<Expression>, ty: Ty) {
+		let db = self.db;
 		for ann in self
 			.data
 			.annotations
@@ -126,9 +132,36 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.flat_map(|anns| anns.iter())
 		{
-			self.typecheck_expression(*ann, self.types.ann, Some(result));
+			self.typecheck_expression(*ann, self.types.ann, Some(ty));
+			// If annotation is shackle_type("...") then treat as sanity check for type
+			if let Expression::Call(c) = &self.data[*ann] {
+				if let Expression::Identifier(i) = &self.data[c.function] {
+					if *i == self.identifiers.shackle_type {
+						if let Expression::StringLiteral(sl) = &self.data[c.arguments[0]] {
+							let expected = sl.value(db);
+							let actual = ty.pretty_print(db.upcast());
+							if actual != expected {
+								let (src, span) =
+									NodeRef::from(EntityRef::new(db, self.item, expr))
+										.source_span(db);
+								self.ctx.add_diagnostic(
+									self.item,
+									TypeMismatch {
+										src,
+										span,
+										msg: format!(
+									"shackle_type: expected computed type '{}' but got '{}'",
+									expected,
+									actual
+								),
+									},
+								);
+							}
+						}
+					}
+				}
+			}
 		}
-		result
 	}
 
 	fn collect_identifier(
@@ -232,7 +265,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 		match self.data[c.function] {
 			Expression::Identifier(i) => {
-				self.resolve_overloading(c.function, i, &args, is_annotation_for)
+				let (op, ret) = self.resolve_overloading(c.function, i, &args, is_annotation_for);
+				self.collect_annotations(c.function, op);
+				ret
 			}
 			_ => {
 				let ty = self.collect_expression(c.function, None);
@@ -623,7 +658,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			}
 		};
 
-		let element = el.with_inst(db.upcast(), VarType::Par).unwrap();
+		let element = el.with_inst(db.upcast(), VarType::Par).unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			panic!(
+				"Failed to make type '{}' par for element of '{}'",
+				el.pretty_print(db.upcast()),
+				&src.contents()[span.offset()..span.offset() + span.len()]
+			);
+		});
 		Ty::par_set(db.upcast(), element)
 			.and_then(|ty| {
 				if is_var {
@@ -1318,18 +1360,22 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		ty
 	}
 
+	/// Resolve overloading for the function `expr` that is the identifier `i`.
+	///
+	/// Returns a tuple of the type of the operation, and the return type
 	fn resolve_overloading(
 		&mut self,
 		expr: ArenaIndex<Expression>,
 		i: Identifier,
 		args: &[Ty],
 		is_annotation_for: Option<Ty>,
-	) -> Ty {
+	) -> (Ty, Ty) {
 		let db = self.db;
+		let error = (self.types.error, self.types.error);
 		if args.iter().any(|t| t.contains_error(db.upcast())) {
 			self.ctx
 				.add_expression(ExpressionRef::new(self.item, expr), self.types.error);
-			return self.types.error;
+			return error;
 		}
 
 		// If there's a variable in scope which is a function, use it
@@ -1347,7 +1393,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			};
 			if let Some(f) = f {
 				if f.contains_error(db.upcast()) {
-					return self.types.error;
+					return error;
 				}
 				if let Err(e) = f.matches(db.upcast(), args) {
 					let (src, span) =
@@ -1383,16 +1429,15 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					self.ctx
 						.add_diagnostic(self.item, TypeMismatch { src, span, msg });
-					return self.types.error;
+					return error;
 				}
 				let ret = f.return_type;
-				self.ctx.add_expression(
-					ExpressionRef::new(self.item, expr),
-					Ty::function(db.upcast(), f),
-				);
+				let op = Ty::function(db.upcast(), f);
+				self.ctx
+					.add_expression(ExpressionRef::new(self.item, expr), op);
 				self.ctx
 					.add_identifier_resolution(ExpressionRef::new(self.item, expr), p);
-				return ret;
+				return (op, ret);
 			}
 		}
 
@@ -1413,7 +1458,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			);
 			self.ctx
 				.add_expression(ExpressionRef::new(self.item, expr), self.types.error);
-			return self.types.error;
+			return error;
 		}
 
 		let mut overloads = Vec::with_capacity(patterns.len());
@@ -1433,7 +1478,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		if overloads.is_empty() {
 			self.ctx
 				.add_expression(ExpressionRef::new(self.item, expr), self.types.error);
-			return self.types.error;
+			return error;
 		}
 
 		let fn_result = FunctionEntry::match_fn(db.upcast(), overloads, args).or_else(|e| {
@@ -1473,12 +1518,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		match fn_result {
 			Ok((pattern, _, instantiation)) => {
 				let ret = instantiation.return_type;
-				let ty = Ty::function(db.upcast(), instantiation);
+				let op = Ty::function(db.upcast(), instantiation);
 				self.ctx
-					.add_expression(ExpressionRef::new(self.item, expr), ty);
+					.add_expression(ExpressionRef::new(self.item, expr), op);
 				self.ctx
 					.add_identifier_resolution(ExpressionRef::new(self.item, expr), pattern);
-				ret
+				(op, ret)
 			}
 			Err(FunctionResolutionError::AmbiguousOverloading(ps)) => {
 				let mut msg = format!(
@@ -1507,7 +1552,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					.add_diagnostic(self.item, AmbiguousCall { src, span, msg });
 				self.ctx
 					.add_expression(ExpressionRef::new(self.item, expr), self.types.error);
-				self.types.error
+				error
 			}
 			Err(FunctionResolutionError::NoMatchingFunction(es)) => {
 				let mut msg = String::new();
@@ -1594,7 +1639,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					.add_diagnostic(self.item, NoMatchingFunction { src, span, msg });
 				self.ctx
 					.add_expression(ExpressionRef::new(self.item, expr), self.types.error);
-				self.types.error
+				error
 			}
 		}
 	}

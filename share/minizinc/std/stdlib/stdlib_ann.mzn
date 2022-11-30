@@ -638,3 +638,5 @@ annotation mzn_internal_representation;
 /** @group stdlib.annotations.symm_red Indicates that a predicate is a FlatZinc builtin
     and does not need a declaration in the output FlatZinc */
 annotation flatzinc_builtin;
+
+annotation shackle_type(string: ty);

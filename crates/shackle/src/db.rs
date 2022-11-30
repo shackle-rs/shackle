@@ -35,6 +35,10 @@ pub trait Inputs {
 	/// Set globals library directory
 	#[salsa::input]
 	fn globals_directory(&self) -> Option<Arc<PathBuf>>;
+
+	/// Set whether to ignore stdlib
+	#[salsa::input]
+	fn ignore_stdlib(&self) -> bool;
 }
 
 /// Queries for compiler settings
@@ -201,6 +205,7 @@ impl CompilerDatabase {
 		db.set_stdlib_directory(stdlib_dir);
 		db.set_globals_directory(None);
 		db.set_search_directories(Arc::new(Vec::new()));
+		db.set_ignore_stdlib(false);
 		db
 	}
 

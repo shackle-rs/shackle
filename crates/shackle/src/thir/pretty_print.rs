@@ -14,14 +14,22 @@ use std::fmt::Write;
 pub struct PrettyPrinter<'a> {
 	db: &'a dyn Thir,
 	model: &'a Model,
+	/// Whether to output a model compatible with old MiniZinc (default `true`)
+	pub old_compat: bool,
+	/// Whether to output `shackle_type("...")` annotations for sanity checking
+	pub debug_types: bool,
 }
 
 impl<'a> PrettyPrinter<'a> {
 	/// Create a new pretty printer
 	pub fn new(db: &'a dyn Thir, model: &'a Model) -> Self {
-		Self { db, model }
+		Self {
+			db,
+			model,
+			old_compat: true,
+			debug_types: false,
+		}
 	}
-
 	/// Pretty print the model
 	pub fn pretty_print(&self) -> String {
 		let mut buf = String::new();
@@ -72,7 +80,7 @@ impl<'a> PrettyPrinter<'a> {
 		for ann in constraint.annotations.iter() {
 			write!(
 				&mut buf,
-				":: {} ",
+				":: ({}) ",
 				self.pretty_print_expression(*ann, &constraint.data)
 			)
 			.unwrap();
@@ -114,7 +122,7 @@ impl<'a> PrettyPrinter<'a> {
 		for ann in declaration.annotations.iter() {
 			write!(
 				&mut buf,
-				" :: {}",
+				" :: ({})",
 				self.pretty_print_expression(*ann, &declaration.data)
 			)
 			.unwrap();
@@ -139,7 +147,7 @@ impl<'a> PrettyPrinter<'a> {
 		for ann in enumeration.annotations.iter() {
 			write!(
 				&mut buf,
-				" :: {}",
+				" :: ({})",
 				self.pretty_print_expression(*ann, &enumeration.data)
 			)
 			.unwrap();
@@ -199,13 +207,14 @@ impl<'a> PrettyPrinter<'a> {
 		for ann in function.annotations.iter() {
 			write!(
 				&mut buf,
-				" :: {}",
+				" :: ({})",
 				self.pretty_print_expression(*ann, &function.data)
 			)
 			.unwrap();
 		}
 		if let Some(body) = function.body {
-			if function.name.lookup(self.db.upcast()) == "deopt"
+			if self.old_compat
+				&& function.name.lookup(self.db.upcast()) == "deopt"
 				&& !function.type_inst_vars.is_empty()
 				&& function.parameters.len() == 1
 				&& {
@@ -240,7 +249,7 @@ impl<'a> PrettyPrinter<'a> {
 				)
 				.unwrap();
 			}
-		} else if function.name.lookup(self.db.upcast()) == "erase_enum" {
+		} else if self.old_compat && function.name.lookup(self.db.upcast()) == "erase_enum" {
 			// For compatibility with old minizinc, we can just directly coerce
 			let d = function.parameters[0];
 			let ident = self.model[d]
@@ -278,7 +287,7 @@ impl<'a> PrettyPrinter<'a> {
 			for ann in solve.annotations.iter() {
 				write!(
 					&mut buf,
-					":: {} ",
+					":: ({}) ",
 					self.pretty_print_expression(*ann, &solve.data)
 				)
 				.unwrap();
@@ -396,7 +405,7 @@ impl<'a> PrettyPrinter<'a> {
 				collection,
 				indices,
 			} => format!(
-				"{}[{}]",
+				"({})[{}]",
 				self.pretty_print_expression(*collection, data),
 				match &*data.expressions[*indices] {
 					ExpressionData::TupleLiteral(es) => es
@@ -479,9 +488,21 @@ impl<'a> PrettyPrinter<'a> {
 					.map(|a| self.pretty_print_expression(*a, data))
 					.collect::<Vec<_>>()
 					.join(", ");
-				format!("{}({})", f, args)
+				if self.old_compat {
+					format!("{}({})", f, args)
+				} else {
+					format!("({})({})", f, args)
+				}
 			}
-			ExpressionData::FloatLiteral(f) => format!("{}", f.value()),
+			ExpressionData::FloatLiteral(f) => {
+				let value = f.value();
+				if value.fract() == 0.0 {
+					// Ensure this is is printed as a float literal and not an integer
+					format!("{}.0", value)
+				} else {
+					format!("{}", value)
+				}
+			}
 			ExpressionData::Identifier(i) => {
 				let model = self.db.model_thir();
 				match i {
@@ -653,7 +674,20 @@ impl<'a> PrettyPrinter<'a> {
 			}
 		};
 		for ann in data.expressions[idx].annotations() {
-			write!(&mut out, " :: {}", self.pretty_print_expression(*ann, data)).unwrap();
+			write!(
+				&mut out,
+				" :: ({})",
+				self.pretty_print_expression(*ann, data)
+			)
+			.unwrap();
+		}
+		if self.debug_types {
+			write!(
+				&mut out,
+				":: shackle_type({:?})",
+				&*data.expressions[idx].ty().pretty_print(self.db.upcast())
+			)
+			.unwrap();
 		}
 		out
 	}
