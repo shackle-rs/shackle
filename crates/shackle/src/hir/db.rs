@@ -12,7 +12,7 @@ use crate::error::{IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::db::SourceParser;
-use crate::ty::Ty;
+use crate::ty::{EnumRef, Ty};
 use crate::{Error, Result};
 
 use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
@@ -166,6 +166,20 @@ pub trait Hir:
 
 	/// Get a mapping from variable identifiers to their computed types
 	fn variable_type_map(&self) -> Arc<FxHashMap<Identifier, Ty>>;
+
+	/// Get a mapping from enum type to constructor patterns
+	///
+	/// Prefer `lookup_enum_constructors` instead.
+	#[salsa::invoke(super::pattern_matching::enum_constructors)]
+	fn enum_constructors(&self) -> Arc<FxHashMap<EnumRef, Arc<Vec<PatternRef>>>>;
+
+	/// Lookup the enum constructors for the given enum type
+	#[salsa::invoke(super::pattern_matching::lookup_enum_constructors)]
+	fn lookup_enum_constructors(&self, e: EnumRef) -> Option<Arc<Vec<PatternRef>>>;
+
+	/// Check that case expressions are exhaustive
+	#[salsa::invoke(super::pattern_matching::check_case_exhaustiveness)]
+	fn check_case_exhaustiveness(&self, item: ItemRef) -> Arc<Vec<Error>>;
 }
 
 fn identifier_registry(db: &dyn Hir) -> Arc<IdentifierRegistry> {
@@ -422,6 +436,8 @@ fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
 					errors.extend(db.lookup_item_scope_diagnostics(*i).iter().cloned());
 					// Collect type errors
 					errors.extend(db.lookup_item_type_diagnostics(*i).iter().cloned());
+					// Collect pattern matching exhaustiveness errors
+					errors.extend(db.check_case_exhaustiveness(*i).iter().cloned());
 				}
 			}
 			// Collect global scope errors

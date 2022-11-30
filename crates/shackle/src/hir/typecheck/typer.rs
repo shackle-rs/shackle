@@ -1228,9 +1228,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		if let VarType::Var = condition_types
 			.iter()
-			.map(|t| t.inst(db.upcast()).unwrap())
+			.flat_map(|t| t.inst(db.upcast()))
 			.max()
-			.unwrap()
+			.unwrap_or(VarType::Par)
 		{
 			// Var condition means var result
 			ty.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
@@ -1262,8 +1262,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.map(|case| (case.value, self.collect_expression(case.value, None)))
 			.collect::<Vec<_>>();
-		Ty::most_specific_supertype(db.upcast(), cases.iter().map(|(_, ty)| *ty)).unwrap_or_else(
-			|| {
+		let ty = Ty::most_specific_supertype(db.upcast(), cases.iter().map(|(_, ty)| *ty))
+			.unwrap_or_else(|| {
 				let mut expr_tys = cases.into_iter();
 				let (first_expr, first_ty) = expr_tys.next().unwrap();
 				let (_, first_span) =
@@ -1288,8 +1288,24 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 				}
 				self.types.error
-			},
-		)
+			});
+		if let Some(VarType::Var) = scrutinee.inst(db.upcast()) {
+			ty.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					IllegalType {
+						src,
+						span,
+						ty: format!("var {}", ty.pretty_print(db.upcast())),
+					},
+				);
+				self.types.error
+			})
+		} else {
+			ty
+		}
 	}
 
 	fn collect_let(&mut self, l: &Let) -> Ty {
@@ -1696,18 +1712,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let res = (|| {
 					let name = self.data[*function].identifier().unwrap();
 					let fns = self.find_function(scope?, name);
-					let cs = fns
+					let (ctor_pat, cs) = fns
 						.iter()
 						.find_map(|f| match self.ctx.type_pattern(db, *f) {
-							PatternTy::EnumConstructor(cs) => {
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
-								Some(cs)
-							}
+							PatternTy::EnumConstructor(cs) => Some((*f, cs)),
 							PatternTy::AnnotationConstructor(fe) => {
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
-								Some(Box::new([(*fe).clone()]))
+								Some((*f, Box::new([(*fe).clone()])))
 							}
 							_ => None,
 						})
@@ -1774,9 +1784,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					) {
 						self.collect_pattern(scope, *p, t);
 					}
+					let fn_pat = PatternRef::new(self.item, *function);
+					self.ctx.add_pattern_resolution(fn_pat, ctor_pat);
 					let fn_type = c.overload.clone().into_function().unwrap();
 					self.ctx.add_declaration(
-						PatternRef::new(self.item, *function),
+						fn_pat,
 						PatternTy::Destructuring(Ty::function(db.upcast(), fn_type)),
 					);
 					Some(c.overload.return_type())

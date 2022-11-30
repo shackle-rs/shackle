@@ -431,6 +431,21 @@ pub struct InvalidFieldAccess {
 	pub span: SourceSpan,
 }
 
+/// Non-exhaustive case expression pattern matching
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Non-exhaustive pattern matching")]
+#[diagnostic(code(shackle::non_exhaustive_pattern_matching))]
+pub struct NonExhaustivePatternMatching {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum ShackleError {
@@ -522,6 +537,10 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	InvalidFieldAccess(#[from] InvalidFieldAccess),
+	/// Non-exhaustive pattern matching
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	NonExhaustivePatternMatching(#[from] NonExhaustivePatternMatching),
 	/// An internal error
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),

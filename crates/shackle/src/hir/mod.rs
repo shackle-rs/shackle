@@ -20,6 +20,7 @@ pub mod ids;
 pub mod item;
 pub mod lower;
 pub mod pattern;
+pub mod pattern_matching;
 pub mod primitive;
 pub mod scope;
 pub mod source;
