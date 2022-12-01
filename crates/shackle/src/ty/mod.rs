@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicU32;
 use crate::db::{InternedString, Interner};
 use crate::hir::db::Hir;
 use crate::hir::ids::PatternRef;
+use crate::hir::Identifier;
 
 mod functions;
 pub use self::functions::*;
@@ -1006,12 +1007,7 @@ impl salsa::InternKey for NewType {
 
 impl NewType {
 	fn from_pattern(db: &dyn Hir, pattern: PatternRef) -> Self {
-		let item = pattern.item();
-		let model = item.model(db);
-		let name = item.local_item_ref(db).data(&model)[pattern.pattern()]
-			.identifier()
-			.unwrap()
-			.0;
+		let Identifier(name) = pattern.identifier(db).unwrap();
 		db.intern_newtype(NewTypeData {
 			kind: NewTypeKind::Pattern(pattern),
 			name,

@@ -510,6 +510,10 @@ impl<'a> PrettyPrinter<'a> {
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
 						.expect("Identifier refers to annotation without name"),
+					ResolvedIdentifier::AnnotationDeconstructor(a) => model[*a]
+						.name
+						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
+						.expect("Identifier refers to annotation without name"),
 					ResolvedIdentifier::Declaration(d) => model[*d]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
@@ -523,6 +527,13 @@ impl<'a> PrettyPrinter<'a> {
 						.expect("Identifier refers to non-existent enum member")[*i]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
+						.unwrap_or_else(|| "_".to_owned()),
+					ResolvedIdentifier::EnumerationDeconstructor(e, i) => model[*e]
+						.definition
+						.as_ref()
+						.expect("Identifier refers to non-existent enum member")[*i]
+						.name
+						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
 						.unwrap_or_else(|| "_".to_owned()),
 					ResolvedIdentifier::Function(f) => {
 						model[*f].name.pretty_print(self.db.upcast())

@@ -1,5 +1,7 @@
 //! AST representation of expressions
 
+use std::borrow::Cow;
+
 use crate::syntax::cst::CstNode;
 
 use super::helpers::*;
@@ -19,7 +21,7 @@ ast_enum!(
 	"set_literal" => SetLiteral,
 	"boolean_literal" => BooleanLiteral,
 	"string_literal" => StringLiteral,
-	"identifier" | "quoted_identifier" => Identifier,
+	"identifier" | "quoted_identifier" | "inversed_identifier" => Identifier,
 	"absent" => Absent,
 	"infinity" => Infinity,
 	"anonymous" => Anonymous,
@@ -65,21 +67,23 @@ ast_enum!(
 	/// An identifier (quoted or normal)
 	Identifier,
 	"identifier" => UnquotedIdentifier,
-	"quoted_identifier" => QuotedIdentifier
+	"quoted_identifier" => QuotedIdentifier,
+	"inversed_identifier" => InversedIdentifier
 );
 
 impl Identifier {
 	/// Get the name of this identifier
-	pub fn name(&self) -> &str {
+	pub fn name(&self) -> Cow<str> {
 		match *self {
-			Identifier::QuotedIdentifier(ref i) => i.name(),
-			Identifier::UnquotedIdentifier(ref i) => i.name(),
+			Identifier::QuotedIdentifier(ref i) => Cow::from(i.name()),
+			Identifier::UnquotedIdentifier(ref i) => Cow::from(i.name()),
+			Identifier::InversedIdentifier(ref i) => Cow::from(i.name()),
 		}
 	}
 }
 
 ast_node!(
-	/// Identifierentifier
+	/// Identifier
 	UnquotedIdentifier,
 	name
 );
@@ -102,6 +106,24 @@ impl QuotedIdentifier {
 	pub fn name(&self) -> &str {
 		let text = self.cst_text();
 		&text[1..text.len() - 1]
+	}
+}
+
+ast_node!(
+	/// Inversed identifier Foo^-1
+	InversedIdentifier,
+	identifier,
+	name
+);
+
+impl InversedIdentifier {
+	/// Get the identifier (without the ^-1)
+	pub fn identifier(&self) -> Identifier {
+		child_with_field_name(self, "identifier")
+	}
+	/// Get the name of this identifier ending with ⁻¹ without any enclosing quotes
+	pub fn name(&self) -> String {
+		format!("{}⁻¹", self.identifier().name())
 	}
 }
 

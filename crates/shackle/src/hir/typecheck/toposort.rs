@@ -131,13 +131,17 @@ impl<'a> TopoSorter<'a> {
 				for p in ps.iter() {
 					let signature = self.db.lookup_item_signature(p.item());
 					match &signature.patterns[p] {
-						PatternTy::Function(f) => {
+						PatternTy::Function(f)
+						| PatternTy::AnnotationConstructor(f)
+						| PatternTy::AnnotationDeconstructor(f) => {
 							overloads.push((p.item() == item, *f.clone()));
 						}
-						PatternTy::AnnotationConstructor(f) => {
-							overloads.push((p.item() == item, *f.clone()));
+						PatternTy::EnumConstructor(ec) => {
+							overloads.extend(
+								ec.iter().map(|f| (p.item() == item, f.constructor.clone())),
+							);
 						}
-						PatternTy::EnumConstructor(fs) => {
+						PatternTy::EnumDeconstructor(fs) => {
 							overloads.extend(fs.iter().map(|f| (p.item() == item, f.clone())));
 						}
 						_ => unreachable!(),

@@ -10,7 +10,7 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
-		Constructor, Goal, ItemData, Pattern, Type,
+		Constructor, ConstructorParameter, EnumConstructor, Goal, ItemData, Pattern, Type,
 	},
 	ty::{
 		EnumRef, FunctionEntry, FunctionType, OptType, OverloadedFunction, PolymorphicFunctionType,
@@ -19,7 +19,7 @@ use crate::{
 	Error,
 };
 
-use super::{PatternTy, TypeContext, Typer};
+use super::{EnumConstructorEntry, PatternTy, TypeContext, Typer};
 
 /// Collected types for an item signature
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -64,56 +64,79 @@ impl SignatureTypeContext {
 		match it {
 			LocalItemRef::Annotation(a) => {
 				let it = &model[a];
-				if it.is_atomic() {
-					self.add_declaration(
-						PatternRef::new(item, it.pattern),
-						PatternTy::AnnotationAtom,
-					);
-				} else {
-					let pattern = PatternRef::new(item, it.pattern);
-					let params = it
-						.parameters()
-						.map(|p| {
-							let mut had_error = false;
-							for t in Type::any_types(p.declared_type, &it.data) {
-								let (src, span) =
-									NodeRef::from(EntityRef::new(db, item, t)).source_span(db);
-								self.add_diagnostic(
-									item,
-									TypeInferenceFailure {
-										src,
-										span,
-										msg: "Incomplete parameter types are not allowed"
-											.to_owned(),
-									},
-								);
-								had_error = true;
-							}
-							let ty = if had_error {
-								db.type_registry().error
-							} else {
-								Typer::new(db, self, item, data)
-									.complete_type(p.declared_type, None)
-							};
-							if let Some(pat) = p.pattern {
-								self.add_declaration(
-									PatternRef::new(item, pat),
-									PatternTy::Variable(ty),
-								);
-							}
-							ty
-						})
-						.collect();
-					self.add_declaration(
-						pattern,
-						PatternTy::AnnotationConstructor(Box::new(FunctionEntry {
+				match &it.constructor {
+					Constructor::Atom { pattern } => {
+						self.add_declaration(
+							PatternRef::new(item, *pattern),
+							PatternTy::AnnotationAtom,
+						);
+					}
+					Constructor::Function {
+						constructor,
+						deconstructor,
+						parameters,
+					} => {
+						let params = parameters
+							.iter()
+							.map(|p| {
+								let mut had_error = false;
+								for t in Type::any_types(p.declared_type, &it.data) {
+									let (src, span) =
+										NodeRef::from(EntityRef::new(db, item, t)).source_span(db);
+									self.add_diagnostic(
+										item,
+										TypeInferenceFailure {
+											src,
+											span,
+											msg: "Incomplete parameter types are not allowed"
+												.to_owned(),
+										},
+									);
+									had_error = true;
+								}
+								let ty = if had_error {
+									db.type_registry().error
+								} else {
+									Typer::new(db, self, item, data)
+										.complete_type(p.declared_type, None)
+								};
+								if let Some(pat) = p.pattern {
+									self.add_declaration(
+										PatternRef::new(item, pat),
+										PatternTy::Variable(ty),
+									);
+								}
+								ty
+							})
+							.collect::<Box<_>>();
+						let ann = db.type_registry().ann;
+						let dtor = FunctionEntry {
 							has_body: false,
 							overload: OverloadedFunction::Function(FunctionType {
-								return_type: db.type_registry().ann,
+								return_type: if params.len() == 1 {
+									params[0]
+								} else {
+									Ty::tuple(db.upcast(), params.iter().copied())
+								},
+								params: Box::new([ann]),
+							}),
+						};
+						self.add_declaration(
+							PatternRef::new(item, *deconstructor),
+							PatternTy::AnnotationDeconstructor(Box::new(dtor)),
+						);
+						let ctor = FunctionEntry {
+							has_body: false,
+							overload: OverloadedFunction::Function(FunctionType {
+								return_type: ann,
 								params,
 							}),
-						})),
-					);
+						};
+						self.add_declaration(
+							PatternRef::new(item, *constructor),
+							PatternTy::AnnotationConstructor(Box::new(ctor)),
+						);
+					}
 				}
 			}
 			LocalItemRef::Function(f) => {
@@ -359,132 +382,186 @@ impl SignatureTypeContext {
 		item: ItemRef,
 		data: &ItemData,
 		ty: Ty,
-		cases: &[Constructor],
+		cases: &[EnumConstructor],
 	) {
+		let get_param_types = |ctx: &mut SignatureTypeContext,
+		                       parameters: &[ConstructorParameter]| {
+			let param_types = {
+				let mut typer = Typer::new(db, ctx, item, data);
+				parameters
+					.iter()
+					.map(|p| typer.complete_type(p.declared_type, None))
+					.collect::<Box<[_]>>()
+			};
+
+			let mut had_error = false;
+			for (p, t) in parameters.iter().zip(param_types.iter()) {
+				if t.contains_error(db.upcast()) {
+					had_error = true;
+				}
+				if !t.known_par(db.upcast()) || !t.known_enumerable(db.upcast()) {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, item, p.declared_type)).source_span(db);
+					ctx.add_diagnostic(
+						item,
+						TypeMismatch {
+							src,
+							span,
+							msg: format!(
+								"Expected par enumerable constructor parameter, but got '{}'",
+								t.pretty_print(db.upcast())
+							),
+						},
+					);
+					had_error = true;
+				}
+
+				for unbounded in Type::primitives(p.declared_type, data) {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, item, unbounded)).source_span(db);
+					ctx.add_diagnostic(
+						item,
+						TypeInferenceFailure {
+							src,
+							span,
+							msg: "Unbounded enum constructor parameters not supported".to_owned(),
+						},
+					);
+				}
+			}
+
+			(had_error, param_types)
+		};
+
 		for case in cases.iter() {
-			if case.is_atomic() {
-				self.add_declaration(PatternRef::new(item, case.pattern), PatternTy::EnumAtom(ty));
-			} else {
-				let param_types = {
-					let mut typer = Typer::new(db, self, item, data);
-					case.parameters()
-						.map(|p| typer.complete_type(p.declared_type, None))
-						.collect::<Box<[_]>>()
-				};
-
-				let mut had_error = false;
-				for (p, t) in case.parameters().zip(param_types.iter()) {
-					if t.contains_error(db.upcast()) {
-						had_error = true;
-					}
-					if !t.known_par(db.upcast()) || !t.known_enumerable(db.upcast()) {
-						let (src, span) = NodeRef::from(EntityRef::new(db, item, p.declared_type))
-							.source_span(db);
-						self.add_diagnostic(
-							item,
-							TypeMismatch {
-								src,
-								span,
-								msg: format!(
-									"Expected par enumerable constructor parameter, but got '{}'",
-									t.pretty_print(db.upcast())
-								),
-							},
-						);
-						had_error = true;
-					}
-
-					for unbounded in Type::primitives(p.declared_type, data) {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, item, unbounded)).source_span(db);
-						self.add_diagnostic(
-							item,
-							TypeInferenceFailure {
-								src,
-								span,
-								msg: "Unbounded enum constructor parameters not supported"
-									.to_owned(),
-							},
-						);
-					}
+			match case {
+				EnumConstructor::Named(Constructor::Atom { pattern }) => {
+					self.add_declaration(PatternRef::new(item, *pattern), PatternTy::EnumAtom(ty));
 				}
+				EnumConstructor::Named(Constructor::Function {
+					constructor,
+					deconstructor,
+					parameters,
+				}) => {
+					let (had_error, param_types) = get_param_types(self, parameters);
+					let is_single = param_types.len() == 1;
+					let mut constructors = Vec::with_capacity(6);
+					let mut deconstructors = Vec::with_capacity(6);
 
-				let mut constructors = Vec::with_capacity(6);
-				// C(a, b, ..) -> E
-				constructors.push(FunctionType {
-					return_type: ty,
-					params: param_types.clone(),
-				});
-				if !had_error {
-					// C(opt a, opt b, ..) -> opt E
-					constructors.push(FunctionType {
-						return_type: ty.with_opt(db.upcast(), OptType::Opt),
-						params: param_types
-							.iter()
-							.map(|t| t.with_opt(db.upcast(), OptType::Opt))
-							.collect(),
-					});
-					// C(var a, var b, ..) -> var E
-					constructors.push(FunctionType {
-						return_type: ty.with_inst(db.upcast(), VarType::Var).unwrap(),
-						params: param_types
-							.iter()
-							.map(|t| t.with_inst(db.upcast(), VarType::Var).unwrap())
-							.collect(),
-					});
-					// C(var opt a, var opt b, ..) -> var opt E
-					constructors.push(FunctionType {
-						return_type: ty
-							.with_inst(db.upcast(), VarType::Var)
-							.unwrap()
-							.with_opt(db.upcast(), OptType::Opt),
-						params: param_types
-							.iter()
-							.map(|t| {
-								t.with_inst(db.upcast(), VarType::Var)
-									.unwrap()
-									.with_opt(db.upcast(), OptType::Opt)
-							})
-							.collect(),
-					});
-					// C(set of a, set of b, ..) -> set of E
-					constructors.push(FunctionType {
-						return_type: Ty::par_set(db.upcast(), ty).unwrap(),
-						params: param_types
-							.iter()
-							.map(|t| Ty::par_set(db.upcast(), *t).unwrap())
-							.collect(),
-					});
-					// C(var set of a, var set of b, ..) -> var set of E
-					constructors.push(FunctionType {
-						return_type: Ty::par_set(db.upcast(), ty)
-							.unwrap()
-							.with_inst(db.upcast(), VarType::Var)
-							.unwrap(),
-						params: param_types
-							.iter()
-							.map(|t| {
-								Ty::par_set(db.upcast(), *t)
-									.unwrap()
-									.with_inst(db.upcast(), VarType::Var)
-									.unwrap()
-							})
-							.collect(),
-					});
+					let mut add_ctor = |e: Ty, ps: Box<[Ty]>, l: bool| {
+						deconstructors.push(FunctionEntry {
+							has_body: false,
+							overload: OverloadedFunction::Function(FunctionType {
+								return_type: if is_single {
+									ps[0]
+								} else {
+									Ty::tuple(db.upcast(), ps.iter().copied())
+								},
+								params: Box::new([e]),
+							}),
+						});
+						constructors.push(EnumConstructorEntry {
+							constructor: FunctionEntry {
+								has_body: false,
+								overload: OverloadedFunction::Function(FunctionType {
+									return_type: e,
+									params: ps,
+								}),
+							},
+							is_lifted: l,
+						});
+					};
+
+					// C(a, b, ..) -> E
+					add_ctor(ty, param_types.clone(), false);
+					if !had_error {
+						// C(var a, var b, ..) -> var E
+						add_ctor(
+							ty.with_inst(db.upcast(), VarType::Var).unwrap(),
+							param_types
+								.iter()
+								.map(|t| t.with_inst(db.upcast(), VarType::Var).unwrap())
+								.collect::<Box<_>>(),
+							false,
+						);
+
+						// C(opt a, opt b, ..) -> opt E
+						add_ctor(
+							ty.with_opt(db.upcast(), OptType::Opt),
+							param_types
+								.iter()
+								.map(|t| t.with_opt(db.upcast(), OptType::Opt))
+								.collect::<Box<_>>(),
+							true,
+						);
+						// C(var opt a, var opt b, ..) -> var opt E
+						add_ctor(
+							ty.with_inst(db.upcast(), VarType::Var)
+								.unwrap()
+								.with_opt(db.upcast(), OptType::Opt),
+							param_types
+								.iter()
+								.map(|t| {
+									t.with_inst(db.upcast(), VarType::Var)
+										.unwrap()
+										.with_opt(db.upcast(), OptType::Opt)
+								})
+								.collect(),
+							true,
+						);
+						// C(set of a, set of b, ..) -> set of E
+						add_ctor(
+							Ty::par_set(db.upcast(), ty).unwrap(),
+							param_types
+								.iter()
+								.map(|t| Ty::par_set(db.upcast(), *t).unwrap())
+								.collect(),
+							true,
+						);
+						// C(var set of a, var set of b, ..) -> var set of E
+						add_ctor(
+							Ty::par_set(db.upcast(), ty)
+								.unwrap()
+								.with_inst(db.upcast(), VarType::Var)
+								.unwrap(),
+							param_types
+								.iter()
+								.map(|t| {
+									Ty::par_set(db.upcast(), *t)
+										.unwrap()
+										.with_inst(db.upcast(), VarType::Var)
+										.unwrap()
+								})
+								.collect(),
+							true,
+						);
+					}
+
+					self.add_declaration(
+						PatternRef::new(item, *constructor),
+						PatternTy::EnumConstructor(constructors.into_boxed_slice()),
+					);
+					self.add_declaration(
+						PatternRef::new(item, *deconstructor),
+						PatternTy::EnumDeconstructor(deconstructors.into_boxed_slice()),
+					);
 				}
-
-				self.add_declaration(
-					PatternRef::new(item, case.pattern),
-					PatternTy::EnumConstructor(
-						constructors
-							.into_iter()
-							.map(|f| FunctionEntry {
-								has_body: true,
-								overload: OverloadedFunction::Function(f),
-							})
-							.collect(),
-					),
-				);
+				EnumConstructor::Anonymous {
+					pattern,
+					parameters,
+				} => {
+					let (_, param_tys) = get_param_types(self, parameters);
+					self.add_declaration(
+						PatternRef::new(item, *pattern),
+						PatternTy::AnonymousEnumConstructor(Box::new(FunctionEntry {
+							has_body: false,
+							overload: OverloadedFunction::Function(FunctionType {
+								return_type: ty,
+								params: param_tys,
+							}),
+						})),
+					);
+				}
 			}
 		}
 	}

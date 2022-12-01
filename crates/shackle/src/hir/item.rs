@@ -18,7 +18,7 @@ use std::fmt::Write;
 use std::ops::{Deref, DerefMut};
 
 use crate::arena::{Arena, ArenaIndex, ArenaMap};
-use crate::utils::{debug_print_strings, impl_index, DebugPrint};
+use crate::utils::{debug_print_strings, impl_enum_from, impl_index, DebugPrint};
 
 use super::db::Hir;
 use super::{source::Origin, Expression, Pattern, Type};
@@ -181,22 +181,39 @@ pub struct Declaration {
 
 /// A constructor atom or function for an enum or annotations
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Constructor {
-	/// Pattern being declared (always an identifier)
-	pub pattern: ArenaIndex<Pattern>,
-	/// Constructor parameters (none for an atomic constructor)
-	pub parameters: Option<Box<[ConstructorParameter]>>,
+pub enum Constructor {
+	/// Atomic constructor
+	Atom {
+		/// Pattern being declared (always an identifier)
+		pattern: ArenaIndex<Pattern>,
+	},
+	/// Functional constructor
+	Function {
+		/// Pattern being declared (always an identifier)
+		constructor: ArenaIndex<Pattern>,
+		/// Pattern for deconstructor (always an identifier with ^-1)
+		deconstructor: ArenaIndex<Pattern>,
+		/// Constructor parameters
+		parameters: Box<[ConstructorParameter]>,
+	},
 }
 
 impl Constructor {
-	/// Whether this is an atomic constructor
-	pub fn is_atomic(&self) -> bool {
-		self.parameters.is_none()
+	/// Get the pattern for this constructor
+	pub fn constructor_pattern(&self) -> ArenaIndex<Pattern> {
+		match self {
+			Constructor::Atom { pattern } => *pattern,
+			Constructor::Function { constructor, .. } => *constructor,
+		}
 	}
 
-	/// Get the parameters (if any) for this constructor
+	/// Get the parameters for this constructor
 	pub fn parameters(&self) -> impl '_ + Iterator<Item = &ConstructorParameter> {
-		self.parameters.iter().flat_map(|ps| ps.iter())
+		let params = match self {
+			Constructor::Function { parameters, .. } => Some(parameters),
+			_ => None,
+		};
+		params.into_iter().flat_map(|ps| ps.iter())
 	}
 }
 
@@ -235,7 +252,7 @@ pub struct Enumeration {
 	/// Pattern being declared (an identifier)
 	pub pattern: ArenaIndex<Pattern>,
 	/// Right-hand-side definition
-	pub definition: Option<Box<[Constructor]>>,
+	pub definition: Option<Box<[EnumConstructor]>>,
 	/// Annotations
 	pub annotations: Box<[ArenaIndex<Expression>]>,
 }
@@ -246,7 +263,43 @@ pub struct EnumAssignment {
 	/// Expression being assigned (an identifier)
 	pub assignee: ArenaIndex<Expression>,
 	/// Enum definition
-	pub definition: Box<[Constructor]>,
+	pub definition: Box<[EnumConstructor]>,
+}
+
+/// An enum constructor (i.e. can be anonymous)
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum EnumConstructor {
+	/// Anonymous constructor
+	Anonymous {
+		/// Anonymous pattern
+		pattern: ArenaIndex<Pattern>,
+		/// Parameters
+		parameters: Box<[ConstructorParameter]>,
+	},
+	/// Named constructor
+	Named(Constructor),
+}
+
+impl_enum_from!(EnumConstructor::Named(Constructor));
+
+impl EnumConstructor {
+	/// Get the pattern for this enum constructor if there is one
+	pub fn constructor_pattern(&self) -> ArenaIndex<Pattern> {
+		match self {
+			EnumConstructor::Anonymous { pattern, .. } => *pattern,
+			EnumConstructor::Named(c) => c.constructor_pattern(),
+		}
+	}
+
+	/// Get the parameters for this constructor
+	pub fn parameters(&self) -> impl '_ + Iterator<Item = &ConstructorParameter> {
+		let params = match self {
+			EnumConstructor::Anonymous { parameters, .. }
+			| EnumConstructor::Named(Constructor::Function { parameters, .. }) => Some(parameters),
+			_ => None,
+		};
+		params.into_iter().flat_map(|fs| fs.iter())
+	}
 }
 
 /// Function item

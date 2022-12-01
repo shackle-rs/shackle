@@ -427,7 +427,7 @@ impl ExpressionBuilder for IdentifierBuilder {
 		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
 		owner.expressions.insert(Expression {
 			ty: self.ty,
-			data: ExpressionData::Identifier(self.value),
+			data: ExpressionData::Identifier(self.value.clone()),
 			origin: self.origin,
 			annotations,
 		})
@@ -1520,16 +1520,20 @@ pub enum ExpressionData {
 }
 
 /// An identifier which resolves to a declaration
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolvedIdentifier {
 	/// Identifier resolves to an annotation
 	Annotation(AnnotationId),
+	/// Identifier resolves to an annotation deconstructor
+	AnnotationDeconstructor(AnnotationId),
 	/// Identifier resolves to a declaration
 	Declaration(DeclarationId),
 	/// Identifier resolves to an enumeration
 	Enumeration(EnumerationId),
 	/// Identifier resolves to an enumeration member with the given index
 	EnumerationMember(EnumerationId, usize),
+	/// Identifier resolves to the deconstructor for an enumeration member with the given index
+	EnumerationDeconstructor(EnumerationId, usize),
 	/// Identifier resolves to a function
 	Function(FunctionId),
 	/// Identifier resolves to a type-inst variable

@@ -35,12 +35,7 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<Hover>, ResponseError> {
-		let line = Point {
-			row: start.row,
-			column: 0,
-		};
-		let found = find_node(db, *model_ref, start, start)
-			.or_else(|| find_node(db, *model_ref, line, line));
+		let found = find_node(db, *model_ref, start, start);
 		Ok((|| {
 			let node = found?;
 			match node {

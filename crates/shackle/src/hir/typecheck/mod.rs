@@ -26,7 +26,11 @@
 //! always computed, so there is some redundant recomputation, but the effect
 //! is minimal.
 
-use std::{fmt::Write, ops::Index, sync::Arc};
+use std::{
+	fmt::Write,
+	ops::{Deref, Index},
+	sync::Arc,
+};
 
 use crate::{
 	arena::{ArenaIndex, ArenaMap},
@@ -202,8 +206,8 @@ impl TypeResult {
 				f.overload
 					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
-			PatternTy::EnumConstructor(e) => Some(
-				e.first()?
+			PatternTy::EnumConstructor(ec) => Some(
+				ec.first()?
 					.overload
 					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
@@ -400,11 +404,17 @@ pub enum PatternTy {
 	/// Pattern is a type-inst alias
 	TypeAlias(Ty),
 	/// Enum constructor
-	EnumConstructor(Box<[FunctionEntry]>),
+	EnumConstructor(Box<[EnumConstructorEntry]>),
+	/// Anonymous enum constructor
+	AnonymousEnumConstructor(Box<FunctionEntry>),
+	/// Enum deconstructor
+	EnumDeconstructor(Box<[FunctionEntry]>),
 	/// Enum atom
 	EnumAtom(Ty),
 	/// Annotation constructor
 	AnnotationConstructor(Box<FunctionEntry>),
+	/// Annotation deconstructor
+	AnnotationDeconstructor(Box<FunctionEntry>),
 	/// Annotation atom
 	AnnotationAtom,
 	/// Destructuring pattern
@@ -424,19 +434,36 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			}
 			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db.upcast())),
 			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db.upcast())),
-			PatternTy::EnumConstructor(fs) => {
+			PatternTy::EnumConstructor(ecs) => {
 				format!(
 					"EnumConstructor({})",
-					fs.iter()
+					ecs.iter()
 						.map(|f| f.overload.pretty_print(db.upcast()))
 						.collect::<Vec<_>>()
-						.join(", ")
+						.join(", "),
+				)
+			}
+			PatternTy::AnonymousEnumConstructor(f) => format!(
+				"AnonymousEnumConstructor({})",
+				f.overload.pretty_print(db.upcast()),
+			),
+			PatternTy::EnumDeconstructor(eds) => {
+				format!(
+					"EnumDeconstructor({})",
+					eds.iter()
+						.map(|f| f.overload.pretty_print(db.upcast()))
+						.collect::<Vec<_>>()
+						.join(", "),
 				)
 			}
 			PatternTy::EnumAtom(ty) => format!("EnumAtom({})", ty.pretty_print(db.upcast())),
 			PatternTy::AnnotationConstructor(f) => format!(
 				"AnnotationConstructor({})",
-				f.overload.pretty_print(db.upcast())
+				f.overload.pretty_print(db.upcast()),
+			),
+			PatternTy::AnnotationDeconstructor(f) => format!(
+				"AnnotationDeconstructor({})",
+				f.overload.pretty_print(db.upcast()),
 			),
 			PatternTy::AnnotationAtom => "AnnotationAtom".to_string(),
 			PatternTy::Destructuring(ty) => {
@@ -444,5 +471,21 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			}
 			PatternTy::Computing => "{computing}".to_owned(),
 		}
+	}
+}
+
+/// Constructor for an enum
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EnumConstructorEntry {
+	/// If true, this constructor is lifted and is not used for pattern matching
+	pub is_lifted: bool,
+	/// The function entry
+	pub constructor: FunctionEntry,
+}
+
+impl Deref for EnumConstructorEntry {
+	type Target = FunctionEntry;
+	fn deref(&self) -> &Self::Target {
+		&self.constructor
 	}
 }

@@ -94,31 +94,32 @@ impl<'a> ItemCollector<'a> {
 	) -> AnnotationId {
 		let types = self.db.lookup_item_types(item);
 		let mut collector = ExpressionCollector::new(self, &a.data, item, types.clone());
-		let ty = &types[a.pattern];
-		match ty {
-			PatternTy::AnnotationAtom => {
+		let ty = &types[a.constructor_pattern()];
+		match (&a.constructor, ty) {
+			(crate::hir::Constructor::Atom { pattern }, PatternTy::AnnotationAtom) => {
 				let annotation = AnnotationItem::new(
-					a.data[a.pattern]
+					a.data[*pattern]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
 					item,
 				);
 				let idx = self.model.add_annotation(annotation);
 				self.resolutions.insert(
-					PatternRef::new(item, a.pattern),
+					PatternRef::new(item, *pattern),
 					ResolvedIdentifier::Annotation(idx),
 				);
 				idx
 			}
-			PatternTy::AnnotationConstructor(fn_entry) => {
+			(
+				crate::hir::Constructor::Function {
+					constructor,
+					deconstructor,
+					parameters: params,
+				},
+				PatternTy::AnnotationConstructor(fn_entry),
+			) => {
 				let mut parameters = Vec::with_capacity(fn_entry.overload.params().len());
-				for (param, ty) in a
-					.parameters
-					.as_ref()
-					.unwrap()
-					.iter()
-					.zip(fn_entry.overload.params())
-				{
+				for (param, ty) in params.iter().zip(fn_entry.overload.params()) {
 					let domain = collector.collect_domain(param.declared_type, *ty, false);
 					let mut declaration = DeclarationItem::new(&domain, false, item);
 					// Ignore destructuring and recording resolution for now since these can't have bodies which refer
@@ -129,7 +130,7 @@ impl<'a> ItemCollector<'a> {
 					parameters.push(collector.model.add_declaration(declaration));
 				}
 				let mut annotation = AnnotationItem::new(
-					a.data[a.pattern]
+					a.data[*constructor]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
 					item,
@@ -137,8 +138,12 @@ impl<'a> ItemCollector<'a> {
 				annotation.parameters = Some(parameters);
 				let idx = self.model.add_annotation(annotation);
 				self.resolutions.insert(
-					PatternRef::new(item, a.pattern),
+					PatternRef::new(item, *constructor),
 					ResolvedIdentifier::Annotation(idx),
+				);
+				self.resolutions.insert(
+					PatternRef::new(item, *deconstructor),
+					ResolvedIdentifier::AnnotationDeconstructor(idx),
 				);
 				idx
 			}
@@ -291,12 +296,11 @@ impl<'a> ItemCollector<'a> {
 								PatternRef::new(item, e.pattern),
 								ResolvedIdentifier::Enumeration(idx),
 							);
-							for (i, c) in e.definition.iter().flat_map(|d| d.iter()).enumerate() {
-								self.resolutions.insert(
-									PatternRef::new(item, c.pattern),
-									ResolvedIdentifier::EnumerationMember(idx, i),
-								);
-							}
+							self.add_enum_resolutions(
+								idx,
+								item,
+								e.definition.iter().flat_map(|cs| cs.iter()),
+							);
 							idx
 						}
 						_ => unreachable!(),
@@ -320,24 +324,51 @@ impl<'a> ItemCollector<'a> {
 			self.collect_item(res.item());
 		}
 		let mut collector = ExpressionCollector::new(self, &a.data, item, types);
-		let e = match &collector.resolutions[&res] {
+		let idx = match &collector.resolutions[&res] {
 			ResolvedIdentifier::Enumeration(e) => *e,
 			_ => unreachable!(),
 		};
-		collector.model[e].definition = Some(
+		collector.model[idx].definition = Some(
 			a.definition
 				.iter()
 				.map(|c| collector.collect_enum_case(c))
 				.collect(),
 		);
-		for (i, c) in a.definition.iter().enumerate() {
-			self.resolutions.insert(
-				PatternRef::new(item, c.pattern),
-				ResolvedIdentifier::EnumerationMember(e, i),
-			);
-		}
+		self.add_enum_resolutions(idx, item, a.definition.iter());
 	}
 
+	fn add_enum_resolutions<'i>(
+		&mut self,
+		idx: EnumerationId,
+		item: ItemRef,
+		ecs: impl Iterator<Item = &'i crate::hir::EnumConstructor>,
+	) {
+		for (i, ec) in ecs.enumerate() {
+			match ec {
+				crate::hir::EnumConstructor::Named(crate::hir::Constructor::Atom { pattern }) => {
+					self.resolutions.insert(
+						PatternRef::new(item, *pattern),
+						ResolvedIdentifier::EnumerationMember(idx, i),
+					);
+				}
+				crate::hir::EnumConstructor::Named(crate::hir::Constructor::Function {
+					constructor,
+					deconstructor,
+					..
+				}) => {
+					self.resolutions.insert(
+						PatternRef::new(item, *constructor),
+						ResolvedIdentifier::EnumerationMember(idx, i),
+					);
+					self.resolutions.insert(
+						PatternRef::new(item, *deconstructor),
+						ResolvedIdentifier::EnumerationDeconstructor(idx, i),
+					);
+				}
+				_ => (),
+			}
+		}
+	}
 	/// Collect a function item
 	pub fn collect_function(
 		&mut self,
@@ -760,7 +791,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							.source_span(self.db.upcast())
 					);
 				}
-				IdentifierBuilder::new(ty, self.resolutions[&res], origin).with_annotations(
+				IdentifierBuilder::new(ty, self.resolutions[&res].clone(), origin).with_annotations(
 					self.data
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
@@ -1111,24 +1142,53 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		}
 	}
 
-	fn collect_enum_case(&mut self, c: &crate::hir::Constructor) -> Constructor {
-		let tys = match &self.types[c.pattern] {
-			PatternTy::EnumAtom(_) => {
+	fn collect_enum_case(&mut self, c: &crate::hir::EnumConstructor) -> Constructor {
+		let (name, params) = match (c, &self.types[c.constructor_pattern()]) {
+			(crate::hir::EnumConstructor::Named(crate::hir::Constructor::Atom { pattern }), _) => {
 				return Constructor {
-					name: self.data[c.pattern].identifier(),
+					name: self.data[*pattern].identifier(),
 					parameters: None,
 				}
 			}
-			PatternTy::EnumConstructor(fs) => fs[0].overload.params().to_owned(),
+			(
+				crate::hir::EnumConstructor::Named(crate::hir::Constructor::Function {
+					constructor,
+					parameters,
+					..
+				}),
+				PatternTy::EnumConstructor(ecs),
+			) => (
+				self.data[*constructor].identifier(),
+				ecs[0]
+					.overload
+					.params()
+					.iter()
+					.zip(parameters.iter())
+					.map(|(ty, t)| (*ty, t.declared_type))
+					.collect::<Vec<_>>(),
+			),
+			(
+				crate::hir::EnumConstructor::Anonymous { parameters, .. },
+				PatternTy::AnonymousEnumConstructor(f),
+			) => (
+				None,
+				f.overload
+					.params()
+					.iter()
+					.zip(parameters.iter())
+					.map(|(ty, t)| (*ty, t.declared_type))
+					.collect::<Vec<_>>(),
+			),
 			_ => unreachable!(),
 		};
+
 		Constructor {
-			name: self.data[c.pattern].identifier(),
+			name,
 			parameters: Some(
-				tys.iter()
-					.zip(c.parameters())
+				params
+					.iter()
 					.map(|(ty, t)| {
-						let domain = self.collect_domain(t.declared_type, *ty, false);
+						let domain = self.collect_domain(*t, *ty, false);
 						let declaration = DeclarationItem::new(&domain, false, self.item);
 						self.model.add_declaration(declaration)
 					})

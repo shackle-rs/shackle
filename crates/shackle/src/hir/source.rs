@@ -124,6 +124,8 @@ pub enum DesugarKind {
 	GeneratorCall,
 	/// Domain constraint
 	DomainConstraint,
+	/// Deconstructor function
+	Deconstructor,
 }
 
 /// Origin of an HIR node.
@@ -163,5 +165,11 @@ impl Origin {
 			SourceFile::new(self.file, db.upcast()),
 			self.range.clone().into(),
 		)
+	}
+}
+
+impl<T: AstNode> From<&T> for Origin {
+	fn from(node: &T) -> Self {
+		Self::new(node, None)
 	}
 }

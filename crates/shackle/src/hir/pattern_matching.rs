@@ -32,7 +32,7 @@ pub fn enum_constructors(db: &dyn Hir) -> Arc<FxHashMap<EnumRef, Arc<Vec<Pattern
 				let enum_ref = EnumRef::new(db, PatternRef::new(item, e.pattern));
 				let constructors = def
 					.iter()
-					.map(|c| PatternRef::new(item, c.pattern))
+					.map(|c| PatternRef::new(item, c.constructor_pattern()))
 					.collect::<Vec<_>>();
 				result.insert(enum_ref, Arc::new(constructors));
 			}
@@ -45,7 +45,7 @@ pub fn enum_constructors(db: &dyn Hir) -> Arc<FxHashMap<EnumRef, Arc<Vec<Pattern
 				let constructors = e
 					.definition
 					.iter()
-					.map(|c| PatternRef::new(item, c.pattern))
+					.map(|c| PatternRef::new(item, c.constructor_pattern()))
 					.collect::<Vec<_>>();
 				result.insert(enum_ref, Arc::new(constructors));
 			}
@@ -176,9 +176,9 @@ impl SemanticPattern {
 					PatternTy::EnumAtom(_) => {
 						data[p.pattern()].identifier().unwrap().pretty_print(db)
 					}
-					PatternTy::EnumConstructor(fs) => {
+					PatternTy::EnumConstructor(ec) => {
 						let call = data[p.pattern()].identifier().unwrap().pretty_print(db);
-						let args = fs
+						let args = ec
 							.first()
 							.map(|f| {
 								if f.overload.params().len() == ps.len() {
@@ -414,6 +414,10 @@ impl<'a> ExhaustivenessChecker<'a> {
 					required_ctors.push(PatternConstructor::Absent);
 				}
 				if let Some(ctors) = self.db.lookup_enum_constructors(e) {
+					if ctors.iter().any(|ctor| ctor.identifier(self.db).is_none()) {
+						// Cannot be fully constructed
+						return Err(SemanticPattern::Wildcard(ty));
+					}
 					required_ctors.extend(ctors.iter().copied().map(PatternConstructor::Named));
 				} else {
 					return Err(SemanticPattern::Wildcard(ty));

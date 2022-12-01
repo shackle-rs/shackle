@@ -190,7 +190,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					);
 					return self.types.error;
 				}
-				PatternTy::EnumConstructor(_) | PatternTy::AnnotationConstructor(_) => (),
+				PatternTy::EnumConstructor { .. } | PatternTy::AnnotationConstructor(_) => (),
 				PatternTy::Computing => {
 					// Error will be emitted during topological sorting
 					return self.types.error;
@@ -1480,11 +1480,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let mut overloads = Vec::with_capacity(patterns.len());
 		for p in patterns.iter() {
 			match self.ctx.type_pattern(db, *p) {
-				PatternTy::Function(function) | PatternTy::AnnotationConstructor(function) => {
-					overloads.push((*p, *function.clone()))
+				PatternTy::Function(function)
+				| PatternTy::AnnotationConstructor(function)
+				| PatternTy::AnnotationDeconstructor(function) => overloads.push((*p, *function.clone())),
+				PatternTy::EnumConstructor(ec) => {
+					overloads.extend(ec.iter().map(|ec| (*p, ec.constructor.clone())))
 				}
-				PatternTy::EnumConstructor(functions) => {
-					overloads.extend(functions.iter().map(|function| (*p, function.clone())))
+				PatternTy::EnumDeconstructor(fs) => {
+					overloads.extend(fs.iter().map(|f| (*p, f.clone())))
 				}
 				PatternTy::Computing => (),
 				_ => unreachable!(),
@@ -1715,7 +1718,19 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					let (ctor_pat, cs) = fns
 						.iter()
 						.find_map(|f| match self.ctx.type_pattern(db, *f) {
-							PatternTy::EnumConstructor(cs) => Some((*f, cs)),
+							PatternTy::EnumConstructor(ec) => Some((
+								*f,
+								Vec::from(ec)
+									.into_iter()
+									.filter_map(|ec| {
+										if ec.is_lifted {
+											None
+										} else {
+											Some(ec.constructor)
+										}
+									})
+									.collect::<Box<_>>(),
+							)),
 							PatternTy::AnnotationConstructor(fe) => {
 								Some((*f, Box::new([(*fe).clone()])))
 							}
@@ -1737,9 +1752,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						})?;
 
 					// Find the enum constructor via its return type
+					// If this type is opt, make it non opt as if this call pattern is matched, the value occurs
+					let non_opt = expected.with_opt(db.upcast(), OptType::NonOpt);
 					let c = cs
 						.iter()
-						.find(|c| expected.is_subtype_of(db.upcast(), c.overload.return_type()))
+						.find(|c| non_opt.is_subtype_of(db.upcast(), c.overload.return_type()))
 						.or_else(|| {
 							let (src, span) =
 								NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);

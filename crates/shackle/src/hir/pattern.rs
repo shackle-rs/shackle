@@ -107,6 +107,13 @@ impl Identifier {
 		db.lookup_intern_string(self.0).0
 	}
 
+	/// Append ⁻¹ to this identifier
+	pub fn inversed(&self, db: &dyn Hir) -> Self {
+		let mut v = self.lookup(db);
+		v.push_str("⁻¹");
+		Self::new(v, db)
+	}
+
 	/// Pretty print this identifier (adding quotes if needed)
 	///
 	/// TODO: Don't quote UTF-8

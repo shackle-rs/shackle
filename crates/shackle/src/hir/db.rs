@@ -2,6 +2,7 @@
 
 //! Salsa database for HIR operations
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -41,7 +42,7 @@ pub trait Hir:
 	fn resolve_includes(&self) -> Result<Arc<Vec<ModelRef>>>;
 
 	/// Get the names of the enumeration items
-	fn enumeration_names(&self) -> Arc<Vec<String>>;
+	fn enumeration_names(&self) -> Arc<HashSet<Identifier>>;
 
 	/// Lower the items of the given model to HIR.
 	///
@@ -341,16 +342,16 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 	}
 }
 
-fn enumeration_names(db: &dyn Hir) -> Arc<Vec<String>> {
+fn enumeration_names(db: &dyn Hir) -> Arc<HashSet<Identifier>> {
 	// When lowering we need to know the enumeration item names so that we can
 	// correctly handle assignments to them
-	let mut result = Vec::new();
+	let mut result = HashSet::default();
 	let models = db.resolve_includes().unwrap();
 	for model in models.iter() {
 		let ast = db.ast(**model).unwrap();
 		for item in ast.items() {
 			if let ast::Item::Enumeration(e) = item {
-				result.push(e.id().name().to_owned())
+				result.insert(Identifier::new(e.id().name(), db));
 			}
 		}
 	}

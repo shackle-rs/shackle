@@ -1032,6 +1032,10 @@
       "members": [
         {
           "type": "SYMBOL",
+          "name": "inversed_identifier"
+        },
+        {
+          "type": "SYMBOL",
           "name": "_identifier"
         },
         {
@@ -4292,6 +4296,23 @@
     "quoted_identifier": {
       "type": "PATTERN",
       "value": "'[^']*'"
+    },
+    "inversed_identifier": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "identifier",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_identifier"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "^-1"
+        }
+      ]
     },
     "_identifier": {
       "type": "CHOICE",

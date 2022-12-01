@@ -72,6 +72,10 @@
         "named": true
       },
       {
+        "type": "inversed_identifier",
+        "named": true
+      },
+      {
         "type": "let_expression",
         "named": true
       },
@@ -282,6 +286,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -401,6 +409,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -762,6 +774,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "parenthesised_expression",
             "named": true
           },
@@ -942,6 +958,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -1077,6 +1097,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -1271,6 +1295,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -1528,6 +1556,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -1724,6 +1756,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "parenthesised_expression",
             "named": true
           },
@@ -1833,6 +1869,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -2041,6 +2081,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -2395,6 +2439,26 @@
     }
   },
   {
+    "type": "inversed_identifier",
+    "named": true,
+    "fields": {
+      "identifier": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "let_expression",
     "named": true,
     "fields": {
@@ -2568,6 +2632,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -3043,6 +3111,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -3285,6 +3357,10 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -3676,6 +3752,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -4025,6 +4105,10 @@
   },
   {
     "type": "^",
+    "named": false
+  },
+  {
+    "type": "^-1",
     "named": false
   },
   {

@@ -237,6 +237,7 @@ module.exports = grammar({
       ),
     _callable: ($) =>
       choice(
+        $.inversed_identifier,
         $._identifier,
         $.call,
         $.generator_call,
@@ -651,6 +652,7 @@ module.exports = grammar({
       return new RegExp(`[^"'\\s\\.\\-\\[\\]\\^${OPERATOR_CHARACTERS}]+`);
     },
     quoted_identifier: ($) => /'[^']*'/,
+    inversed_identifier: ($) => seq(field("identifier", $._identifier), "^-1"),
     _identifier: ($) => choice($.identifier, $.quoted_identifier),
 
     _pattern: ($) =>

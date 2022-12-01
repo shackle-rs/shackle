@@ -19,6 +19,8 @@ use crate::{
 	Error, Result,
 };
 
+use super::{Constructor, EnumConstructor};
+
 /// Gets all variables in global scope.
 ///
 /// - Checks for multiply defined identifiers
@@ -30,21 +32,47 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 		let model = db.lookup_model(*m);
 		for (i, a) in model.annotations.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
-			let identifier = a.data[a.pattern]
-				.identifier()
-				.expect("Annotation item must have identifier pattern");
-			if a.is_atomic() {
-				if let Err(e) =
-					scope.add_variable(db, identifier, 0, PatternRef::new(item_ref, a.pattern))
-				{
-					diagnostics.push(e);
-				} else {
-					scope.atoms.insert(identifier);
+			match &a.constructor {
+				Constructor::Atom { pattern } => {
+					let identifier = a.data[*pattern]
+						.identifier()
+						.expect("Annotation item must have identifier pattern");
+					if let Err(e) =
+						scope.add_variable(db, identifier, 0, PatternRef::new(item_ref, *pattern))
+					{
+						diagnostics.push(e);
+					} else {
+						scope.atoms.insert(identifier);
+					}
 				}
-			} else if let Err(e) =
-				scope.add_function(db, identifier, 0, PatternRef::new(item_ref, a.pattern))
-			{
-				diagnostics.push(e);
+				Constructor::Function {
+					constructor,
+					deconstructor,
+					..
+				} => {
+					let ctor_ident = a.data[*constructor]
+						.identifier()
+						.expect("Annotation item must have identifier pattern");
+					let dtor_ident = a.data[*deconstructor]
+						.identifier()
+						.expect("Annotation item must have identifier pattern");
+					if let Err(e) = scope.add_function(
+						db,
+						ctor_ident,
+						0,
+						PatternRef::new(item_ref, *constructor),
+					) {
+						diagnostics.push(e);
+					}
+					if let Err(e) = scope.add_function(
+						db,
+						dtor_ident,
+						0,
+						PatternRef::new(item_ref, *deconstructor),
+					) {
+						diagnostics.push(e);
+					}
+				}
 			}
 		}
 		for (i, d) in model.declarations.iter() {
@@ -57,6 +85,54 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				&mut diagnostics,
 			);
 		}
+
+		let process_enum_constructor = |scope: &mut ScopeData,
+		                                diagnostics: &mut Vec<Error>,
+		                                item_ref: ItemRef,
+		                                data: &ItemData,
+		                                ec: &EnumConstructor| {
+			if let EnumConstructor::Named(c) = ec {
+				match c {
+					Constructor::Atom { pattern } => {
+						// Enum atom, so this is a variable
+						let identifier = data[*pattern].identifier().unwrap();
+						if let Err(e) = scope.add_variable(
+							db,
+							identifier,
+							0,
+							PatternRef::new(item_ref, *pattern),
+						) {
+							diagnostics.push(e);
+						} else {
+							scope.atoms.insert(identifier);
+						}
+					}
+					Constructor::Function {
+						constructor,
+						deconstructor,
+						..
+					} => {
+						// Enum constructor (overloads handled later in type checker)
+						let ctor = data[*constructor].identifier().unwrap();
+						if let Err(e) =
+							scope.add_function(db, ctor, 0, PatternRef::new(item_ref, *constructor))
+						{
+							diagnostics.push(e);
+						}
+						let dtor = data[*deconstructor].identifier().unwrap();
+						if let Err(e) = scope.add_function(
+							db,
+							dtor,
+							0,
+							PatternRef::new(item_ref, *deconstructor),
+						) {
+							diagnostics.push(e);
+						}
+					}
+				}
+			}
+		};
+
 		for (i, e) in model.enumerations.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
 			match &e.data[e.pattern] {
@@ -70,69 +146,15 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				_ => unreachable!("Enumeration must have identifier pattern"),
 			}
 			if let Some(d) = &e.definition {
-				for c in d.iter() {
-					match &e.data[c.pattern] {
-						Pattern::Identifier(identifier) => {
-							if c.is_atomic() {
-								// Enum atom, so this is a variable
-								if let Err(e) = scope.add_variable(
-									db,
-									*identifier,
-									0,
-									PatternRef::new(item_ref, c.pattern),
-								) {
-									diagnostics.push(e);
-								} else {
-									scope.atoms.insert(*identifier);
-								}
-							}
-							// Enum constructor (overloads handled later in type checker)
-							else if let Err(e) = scope.add_function(
-								db,
-								*identifier,
-								0,
-								PatternRef::new(item_ref, c.pattern),
-							) {
-								diagnostics.push(e);
-							}
-						}
-						Pattern::Anonymous => (),
-						_ => unreachable!("Enumeration case must have identifier pattern"),
-					}
+				for ec in d.iter() {
+					process_enum_constructor(&mut scope, &mut diagnostics, item_ref, &e.data, ec);
 				}
 			}
 		}
 		for (i, e) in model.enum_assignments.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
-			for c in e.definition.iter() {
-				match &e.data[c.pattern] {
-					Pattern::Identifier(identifier) => {
-						if c.is_atomic() {
-							// Enum atom, so this is a variable
-							if let Err(e) = scope.add_variable(
-								db,
-								*identifier,
-								0,
-								PatternRef::new(item_ref, c.pattern),
-							) {
-								diagnostics.push(e);
-							} else {
-								scope.atoms.insert(*identifier);
-							}
-						}
-						// Enum constructor (overloads handled later in type checker)
-						else if let Err(e) = scope.add_function(
-							db,
-							*identifier,
-							0,
-							PatternRef::new(item_ref, c.pattern),
-						) {
-							diagnostics.push(e);
-						}
-					}
-					Pattern::Anonymous => (),
-					_ => unreachable!("Enumeration case must have identifier pattern"),
-				}
+			for ec in e.definition.iter() {
+				process_enum_constructor(&mut scope, &mut diagnostics, item_ref, &e.data, ec)
 			}
 		}
 		for (i, f) in model.functions.iter() {
