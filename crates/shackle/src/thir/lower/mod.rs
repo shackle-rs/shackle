@@ -17,7 +17,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
 	hir::{
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef, TypeRef},
-		PatternTy, TypeResult,
+		IdentifierRegistry, PatternTy, TypeResult,
 	},
 	ty::{OptType, OverloadedFunction, Ty, TyData, TypeRegistry, VarType},
 };
@@ -32,6 +32,7 @@ use super::{
 pub struct ItemCollector<'a> {
 	db: &'a dyn Thir,
 	tys: &'a TypeRegistry,
+	ids: &'a IdentifierRegistry,
 	resolutions: FxHashMap<PatternRef, ResolvedIdentifier>,
 	model: Model,
 	type_alias_domains: FxHashMap<TypeRef, DeclarationId>,
@@ -40,10 +41,11 @@ pub struct ItemCollector<'a> {
 
 impl<'a> ItemCollector<'a> {
 	/// Create a new item collector
-	pub fn new(db: &'a dyn Thir, tys: &'a TypeRegistry) -> Self {
+	pub fn new(db: &'a dyn Thir, tys: &'a TypeRegistry, ids: &'a IdentifierRegistry) -> Self {
 		Self {
 			db,
 			tys,
+			ids,
 			resolutions: FxHashMap::default(),
 			model: Model::default(),
 			type_alias_domains: FxHashMap::default(),
@@ -164,14 +166,14 @@ impl<'a> ItemCollector<'a> {
 		};
 		if collector.model[decl].definition.is_some() {
 			// Turn subsequent assignment items into equality constraints
-			let ids = db.identifier_registry();
-			let fn_lookup = lookup_function(
-				db,
-				&collector.model,
-				ids.eq,
-				&[types[a.assignee], types[a.definition]],
-			)
-			.unwrap();
+			let fn_lookup = collector
+				.model
+				.lookup_function(
+					db,
+					collector.ids.eq,
+					&[types[a.assignee], types[a.definition]],
+				)
+				.unwrap();
 			let assignee = collector.collect_expression(a.assignee);
 			let call = fn_lookup.into_call(db, item).with_args([assignee, def]);
 			let constraint = ConstraintItem::new(&*call, true, item);
@@ -595,20 +597,14 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					let indices: Box<dyn ExpressionBuilder> = match &self.data[aa.indices] {
 						crate::hir::Expression::Slice(s) => {
 							// 1D array, so use `index_set` function
-							let index_set = lookup_function(
-								self.db,
-								&self.model,
-								self.db.identifier_registry().index_set,
-								&[collection_ty],
-							)
-							.unwrap();
-							let slice = lookup_function(
-								self.db,
-								&self.model,
-								*s,
-								&[index_set.fn_type.return_type],
-							)
-							.unwrap();
+							let index_set = self
+								.model
+								.lookup_function(self.db, self.ids.index_set, &[collection_ty])
+								.unwrap();
+							let slice = self
+								.model
+								.lookup_function(self.db, *s, &[index_set.fn_type.return_type])
+								.unwrap();
 							slice.into_call(self.db, indices_origin).with_arg(
 								index_set.into_call(self.db, indices_origin).with_arg(
 									IdentifierBuilder::new(
@@ -638,20 +634,22 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 											format!("index_set_{}of{}", i + 1, dims),
 											self.db.upcast(),
 										);
-										let index_set_fn = lookup_function(
-											self.db,
-											&self.model,
-											index_set_mofn,
-											&[collection_ty],
-										)
-										.unwrap();
-										let slice_fn = lookup_function(
-											self.db,
-											&self.model,
-											*s,
-											&[index_set_fn.fn_type.return_type],
-										)
-										.unwrap();
+										let index_set_fn = self
+											.model
+											.lookup_function(
+												self.db,
+												index_set_mofn,
+												&[collection_ty],
+											)
+											.unwrap();
+										let slice_fn = self
+											.model
+											.lookup_function(
+												self.db,
+												*s,
+												&[index_set_fn.fn_type.return_type],
+											)
+											.unwrap();
 										let ty = slice_fn.fn_type.return_type;
 										let call = slice_fn.into_call(self.db, origin).with_arg(
 											index_set_fn.into_call(self.db, origin).with_arg(
@@ -946,10 +944,16 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					origin,
 				),
 			),
-			TyData::Annotation(_) => {
-				unimplemented!()
-				// IdentifierBuilder::new(ty, ResolvedIdentifier::Declaration(()), origin)
-			}
+			TyData::Annotation(_) => (
+				self.tys.ann,
+				IdentifierBuilder::new(
+					self.tys.ann,
+					self.model
+						.lookup_identifier(self.ids.empty_annotation)
+						.expect("Could not find empty_annotation declaration (not lowered yet?)"),
+					origin,
+				),
+			),
 			TyData::Array { .. } => (
 				self.tys.array_of_bottom,
 				ArrayLiteralBuilder::new(self.tys.array_of_bottom, origin),
@@ -1206,7 +1210,8 @@ impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
 /// Lower a model to THIR
 pub fn lower_model(db: &dyn Thir) -> Arc<Model> {
 	let tys = db.type_registry();
-	let mut collector = ItemCollector::new(db, &tys);
+	let ids = db.identifier_registry();
+	let mut collector = ItemCollector::new(db, &tys, &ids);
 	let items = db.lookup_topological_sorted_items();
 	for item in items.iter() {
 		collector.collect_item(*item);

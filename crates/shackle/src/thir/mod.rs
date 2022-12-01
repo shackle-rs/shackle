@@ -20,13 +20,19 @@ pub mod source;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use self::db::Thir;
 pub use self::domain::*;
 pub use self::expression::*;
 pub use self::item::*;
+use self::source::Origin;
 
 use crate::arena::Arena;
 use crate::arena::ArenaIndex;
 pub use crate::hir::Identifier;
+use crate::ty::FunctionEntry;
+use crate::ty::FunctionResolutionError;
+use crate::ty::FunctionType;
+use crate::ty::Ty;
 use crate::utils::impl_index;
 
 /// A model
@@ -57,13 +63,32 @@ impl Model {
 		self.items.iter().copied()
 	}
 
+	/// Get the top-level annotation items
+	pub fn annotations(&self) -> impl Iterator<Item = (AnnotationId, &AnnotationItem)> {
+		self.annotations.iter()
+	}
+
+	/// Get the top-level annotation items
+	pub fn annotations_mut(&mut self) -> impl Iterator<Item = (AnnotationId, &mut AnnotationItem)> {
+		self.annotations.iter_mut()
+	}
+
+	/// Add an annotation item
+	pub fn add_annotation(&mut self, item: AnnotationItem) -> AnnotationId {
+		let idx = self.annotations.insert(item);
+		self.items.push(idx.into());
+		idx
+	}
+
 	/// Get the top-level constraint items
-	pub fn constraints(&self) -> impl Iterator<Item = (ConstraintId, &ConstraintItem)> {
+	pub fn top_level_constraints(&self) -> impl Iterator<Item = (ConstraintId, &ConstraintItem)> {
 		self.all_constraints().filter(|(_, c)| c.top_level)
 	}
 
 	/// Get the top-level constraint items
-	pub fn constraints_mut(&mut self) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
+	pub fn top_level_constraints_mut(
+		&mut self,
+	) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
 		self.all_constraints_mut().filter(|(_, c)| c.top_level)
 	}
 
@@ -77,13 +102,6 @@ impl Model {
 		&mut self,
 	) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
 		self.constraints.iter_mut()
-	}
-
-	/// Add an annotation item
-	pub fn add_annotation(&mut self, item: AnnotationItem) -> AnnotationId {
-		let idx = self.annotations.insert(item);
-		self.items.push(idx.into());
-		idx
 	}
 
 	/// Add a constraint item
@@ -193,6 +211,49 @@ impl Model {
 	pub fn set_solve(&mut self, solve: SolveItem) {
 		self.solve = Some(solve);
 	}
+
+	/// Lookup a function by its signature
+	pub fn lookup_function(
+		&self,
+		db: &dyn Thir,
+		name: Identifier,
+		args: &[Ty],
+	) -> Result<FunctionLookup, FunctionLookupError> {
+		let overloads = self.functions().filter_map(|(i, f)| {
+			if f.name == name {
+				Some((i, f.function_entry(self)))
+			} else {
+				None
+			}
+		});
+		let (i, fe, ft) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
+		Ok(FunctionLookup {
+			function: i,
+			fn_entry: fe,
+			fn_type: ft,
+		})
+	}
+
+	/// Lookup a top-level top-level variable or annotation atom
+	pub fn lookup_identifier(&self, name: Identifier) -> Option<ResolvedIdentifier> {
+		self.top_level_declarations()
+			.find_map(|(idx, decl)| {
+				if decl.name == Some(name) {
+					Some(ResolvedIdentifier::Declaration(idx))
+				} else {
+					None
+				}
+			})
+			.or_else(|| {
+				self.annotations().find_map(|(idx, ann)| {
+					if ann.name == Some(name) && ann.parameters.is_none() {
+						Some(ResolvedIdentifier::Annotation(idx))
+					} else {
+						None
+					}
+				})
+			})
+	}
 }
 
 impl_index!(Model[self, index: AnnotationId] -> AnnotationItem { self.annotations[index] });
@@ -228,3 +289,33 @@ impl IndexMut<ItemId> for Model {
 		}
 	}
 }
+
+/// Result of looking up a function by its signature
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FunctionLookup {
+	/// Id of the resolved function
+	pub function: FunctionId,
+	/// The function entry (i.e. not instantiated with the call arguments)
+	pub fn_entry: FunctionEntry,
+	/// The type of the resolved function (i.e. instantiated with the call arguments)
+	pub fn_type: FunctionType,
+}
+
+impl FunctionLookup {
+	/// Create a call to this function (does not have arguments set).
+	pub fn into_call(self, db: &dyn Thir, origin: impl Into<Origin>) -> Box<CallBuilder> {
+		let origin = origin.into();
+		CallBuilder::new(
+			self.fn_type.return_type,
+			IdentifierBuilder::new(
+				Ty::function(db.upcast(), self.fn_type),
+				ResolvedIdentifier::Function(self.function),
+				origin,
+			),
+			origin,
+		)
+	}
+}
+
+/// Error representing failure to lookup a function
+pub type FunctionLookupError = FunctionResolutionError<FunctionId>;

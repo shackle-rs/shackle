@@ -250,4 +250,5 @@ id_registry!(
 	eq: "=",
 	index_set,
 	shackle_type,
+	empty_annotation,
 );
