@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::{db::Upcast, hir::db::Hir, Error};
+use crate::{db::Upcast, diagnostics::Diagnostics, hir::db::Hir, Error};
 
 use super::Model;
 
@@ -17,5 +17,5 @@ pub trait Thir: Hir + Upcast<dyn Hir> {
 
 	/// Check that the pretty printed THIR is a valid model
 	#[salsa::invoke(super::sanity_check::sanity_check_thir)]
-	fn sanity_check_thir(&self) -> Arc<Vec<Error>>;
+	fn sanity_check_thir(&self) -> Arc<Diagnostics<Error>>;
 }

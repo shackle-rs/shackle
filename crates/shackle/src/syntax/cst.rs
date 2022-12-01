@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::db::FileReader;
-use crate::error::SyntaxError;
+use crate::diagnostics::SyntaxError;
 use crate::file::{FileRef, SourceFile};
 
 use super::db::SourceParser;

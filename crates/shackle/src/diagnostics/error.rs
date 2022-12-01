@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use crate::file::SourceFile;
 
+use super::Diagnostics;
+
 /// An error internal to Shackle.
 ///
 /// Encountering this error indicates a bug in Shackle.
@@ -560,6 +562,21 @@ impl TryFrom<Vec<ShackleError>> for ShackleError {
 			0 => Err(EmptyErrorVec),
 			1 => Ok(value.last().unwrap().clone()),
 			_ => Ok(MultipleErrors { errors: value }.into()),
+		}
+	}
+}
+
+impl TryFrom<Diagnostics<ShackleError>> for ShackleError {
+	type Error = EmptyErrorVec;
+
+	fn try_from(value: Diagnostics<ShackleError>) -> Result<Self, Self::Error> {
+		match value.len() {
+			0 => Err(EmptyErrorVec),
+			1 => Ok(value.iter().next().unwrap().clone()),
+			_ => Ok(MultipleErrors {
+				errors: value.iter().cloned().collect(),
+			}
+			.into()),
 		}
 	}
 }

@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use crate::{
 	arena::ArenaIndex,
 	db::InternedStringData,
-	error::{InvalidArrayLiteral, SyntaxError},
+	diagnostics::{InvalidArrayLiteral, SyntaxError},
 	hir::source::{DesugarKind, Origin},
 	syntax::ast::{self, AstNode},
 	Error,

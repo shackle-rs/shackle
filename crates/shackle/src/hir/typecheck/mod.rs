@@ -341,13 +341,20 @@ impl TypeDiagnostics {
 		let it = item.local_item_ref(db);
 		match it {
 			LocalItemRef::Assignment(_) | LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => {
-				TypeDiagnostics(db.lookup_item_body_diagnostics(item), None)
+				TypeDiagnostics(db.lookup_item_body_errors(item), None)
 			}
 			_ => TypeDiagnostics(
-				db.lookup_item_signature_diagnostics(item),
-				Some(db.lookup_item_body_diagnostics(item)),
+				db.lookup_item_signature_errors(item),
+				Some(db.lookup_item_body_errors(item)),
 			),
 		}
+	}
+
+	/// Iterate over the diagnostic vectors.
+	///
+	/// (Useful when using the `Diagnostics<Error>` helper)
+	pub fn outer_iter(&self) -> impl '_ + Iterator<Item = Arc<Vec<Error>>> {
+		[self.0.clone()].into_iter().chain(self.1.iter().cloned())
 	}
 
 	/// Iterate over the diagnostics

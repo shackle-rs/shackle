@@ -6,7 +6,7 @@
 use super::hir::db::HirStorage;
 use super::syntax::db::SourceParserStorage;
 use super::thir::db::ThirStorage;
-use crate::error::FileError;
+use crate::diagnostics::FileError;
 use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
 use crate::hir::db::Hir;
 use crate::syntax::db::SourceParser;

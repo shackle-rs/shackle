@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
-use crate::error::SyntaxError;
+use crate::diagnostics::SyntaxError;
 use crate::file::ModelRef;
 use crate::hir::db::Hir;
 use crate::hir::ids::ItemRef;

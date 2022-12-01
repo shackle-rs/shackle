@@ -6,7 +6,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-	error::{SyntaxError, TypeInferenceFailure, TypeMismatch},
+	diagnostics::{SyntaxError, TypeInferenceFailure, TypeMismatch},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},

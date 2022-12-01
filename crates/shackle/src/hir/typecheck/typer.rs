@@ -3,7 +3,7 @@ use std::{fmt::Write, sync::Arc};
 
 use crate::{
 	arena::ArenaIndex,
-	error::{
+	diagnostics::{
 		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
 		NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
 	},

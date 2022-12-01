@@ -20,7 +20,7 @@ impl RequestHandler<ViewPrettyPrint, ModelRef> for ViewPrettyPrintHandler {
 		db.set_active_file_from_document(&params.text_document)
 	}
 	fn execute(db: &CompilerDatabase, _: ModelRef) -> Result<String, ResponseError> {
-		let errors = db.all_diagnostics();
+		let errors = db.all_errors();
 		if errors.is_empty() {
 			let thir = db.model_thir();
 			let printer = PrettyPrinter::new(db, &thir);

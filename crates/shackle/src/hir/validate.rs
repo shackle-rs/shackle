@@ -12,7 +12,7 @@ use std::{collections::hash_map::Entry, sync::Arc};
 use rustc_hash::FxHashMap;
 
 use crate::{
-	error::{
+	diagnostics::{
 		AdditionalSolveItem, ConstructorAlreadyDefined, DuplicateAssignment, DuplicateConstructor,
 		DuplicateFunction, FunctionAlreadyDefined, MultipleAssignments, MultipleSolveItems,
 	},

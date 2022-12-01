@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::{
 	db::{CompilerDatabase, Inputs},
+	diagnostics::Diagnostics,
 	file::InputFile,
 	hir::db::Hir,
 	Error,
@@ -16,7 +17,7 @@ use super::{db::Thir, pretty_print::PrettyPrinter};
 ///
 /// This should give no errors (as for the THIR to exist, it must have come
 /// from a valid source program).
-pub fn sanity_check_thir(db: &dyn Thir) -> Arc<Vec<Error>> {
+pub fn sanity_check_thir(db: &dyn Thir) -> Arc<Diagnostics<Error>> {
 	let model = db.model_thir();
 
 	// Pretty print with extra info for sanity checking types
@@ -28,5 +29,5 @@ pub fn sanity_check_thir(db: &dyn Thir) -> Arc<Vec<Error>> {
 	let mut new_db = CompilerDatabase::default();
 	new_db.set_ignore_stdlib(true);
 	new_db.set_input_files(Arc::new(vec![InputFile::ModelString(code)]));
-	new_db.all_diagnostics()
+	new_db.all_errors()
 }

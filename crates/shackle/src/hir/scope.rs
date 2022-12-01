@@ -9,14 +9,13 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	arena::{Arena, ArenaIndex, ArenaMap},
-	error::{IdentifierAlreadyDefined, InvalidPattern},
+	diagnostics::{DeclarationShadowing, IdentifierAlreadyDefined, InvalidPattern},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		Expression, Goal, Identifier, ItemData, LetItem, Pattern, Type,
 	},
-	warning::{DeclarationShadowing, Warning},
-	Error, Result,
+	Error, Result, Warning,
 };
 
 use super::{Constructor, EnumConstructor};

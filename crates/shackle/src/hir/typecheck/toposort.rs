@@ -8,7 +8,7 @@ use std::sync::Arc;
 use rustc_hash::FxHashSet;
 
 use crate::{
-	error::CyclicDefinition,
+	diagnostics::CyclicDefinition,
 	hir::{
 		db::Hir,
 		ids::{ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},

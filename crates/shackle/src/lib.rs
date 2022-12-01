@@ -6,7 +6,7 @@
 
 pub mod arena;
 pub mod db;
-pub mod error;
+pub mod diagnostics;
 pub mod file;
 pub mod hir;
 mod legacy;
@@ -15,10 +15,9 @@ pub mod syntax;
 pub mod thir;
 pub mod ty;
 pub mod utils;
-pub mod warning;
 
 use db::{CompilerDatabase, Inputs};
-use error::ShackleError;
+use diagnostics::ShackleError;
 use file::InputFile;
 use serde_json::Map;
 
@@ -42,6 +41,8 @@ pub type Error = ShackleError;
 /// Result type for Shackle operations
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+pub use diagnostics::Warning;
+
 /// Structure used to build a shackle model
 pub struct Model {
 	db: CompilerDatabase,
@@ -64,10 +65,8 @@ impl Model {
 
 	/// Check whether a model contains any (non-runtime) errors
 	pub fn check(&self, _slv: &Solver, _data: &[PathBuf], _complete: bool) -> Vec<Error> {
-		// self.db.set_globals_directory()
-		// let errors = (*self.db.all_diagnostics()).clone();
 		// TODO: Check data files
-		(*self.db.all_diagnostics()).clone()
+		self.db.all_errors().iter().cloned().collect()
 	}
 
 	/// Compile current model into a Program that can be used by the Shackle interpreter

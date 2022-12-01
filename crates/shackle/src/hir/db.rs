@@ -9,13 +9,12 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::db::{CompilerSettings, FileReader, Interner, Upcast};
-use crate::error::{IncludeError, MultipleErrors};
+use crate::diagnostics::{Diagnostics, IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::db::SourceParser;
 use crate::ty::{EnumRef, Ty};
-use crate::warning::Warning;
-use crate::{Error, Result};
+use crate::{Error, Result, Warning};
 
 use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
 use super::scope::{ScopeData, ScopeResult};
@@ -41,6 +40,9 @@ pub trait Hir:
 	/// If resolving files fails, then abort (but collect as many errors as possible).
 	fn resolve_includes(&self) -> Result<Arc<Vec<ModelRef>>>;
 
+	/// Get the syntax errors (only allowed if resolving includes succeeds)
+	fn syntax_errors(&self) -> Arc<Vec<Error>>;
+
 	/// Get the names of the enumeration items
 	fn enumeration_names(&self) -> Arc<HashSet<Identifier>>;
 
@@ -56,7 +58,7 @@ pub trait Hir:
 	/// Get the source map for the given model
 	fn lookup_source_map(&self, model: ModelRef) -> Arc<SourceMap>;
 	/// Get the lowering diagnostics for the given model
-	fn lookup_lowering_diagnostics(&self, model: ModelRef) -> Arc<Vec<Error>>;
+	fn lookup_lowering_errors(&self, model: ModelRef) -> Arc<Vec<Error>>;
 	/// Get the items for the given model
 	fn lookup_items(&self, model: ModelRef) -> Arc<Vec<ItemRef>>;
 
@@ -76,7 +78,7 @@ pub trait Hir:
 	fn lookup_global_scope(&self) -> Arc<ScopeData>;
 
 	/// Get the errors from collecting global scope
-	fn lookup_global_scope_diagnostics(&self) -> Arc<Vec<Error>>;
+	fn lookup_global_scope_errors(&self) -> Arc<Vec<Error>>;
 
 	/// Get whether there is an atom with the given name in global scope
 	fn lookup_global_atom(&self, identifier: Identifier) -> bool;
@@ -98,7 +100,7 @@ pub trait Hir:
 	fn lookup_item_scope(&self, item: ItemRef) -> Arc<ScopeResult>;
 
 	/// Get the diagnostics produced when assigning scopes to all expressions in this item.
-	fn lookup_item_scope_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+	fn lookup_item_scope_errors(&self, item: ItemRef) -> Arc<Vec<Error>>;
 
 	/// Get the warnings produced when assigning scopes to all expressions in this item.
 	fn lookup_item_scope_warnings(&self, item: ItemRef) -> Arc<Vec<Warning>>;
@@ -116,7 +118,7 @@ pub trait Hir:
 	fn lookup_item_signature(&self, item: ItemRef) -> Arc<SignatureTypes>;
 
 	/// Get the diagnostics produced when computing the signature of this item.
-	fn lookup_item_signature_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+	fn lookup_item_signature_errors(&self, item: ItemRef) -> Arc<Vec<Error>>;
 
 	/// Compute the types of RHS expressions in this item.
 	/// Panics if item does not have a body.
@@ -131,7 +133,7 @@ pub trait Hir:
 	fn lookup_item_body(&self, item: ItemRef) -> Arc<BodyTypes>;
 
 	/// Get the diagnostics produced when computing types of expressions and declarations in this item.
-	fn lookup_item_body_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+	fn lookup_item_body_errors(&self, item: ItemRef) -> Arc<Vec<Error>>;
 
 	/// Get the result of typing this item.
 	#[salsa::invoke(super::typecheck::TypeResult::new)]
@@ -139,7 +141,7 @@ pub trait Hir:
 
 	/// Get the diagnostics produced when computing the types for this item.
 	#[salsa::invoke(super::typecheck::TypeDiagnostics::new)]
-	fn lookup_item_type_diagnostics(&self, item: ItemRef) -> TypeDiagnostics;
+	fn lookup_item_type_errors(&self, item: ItemRef) -> TypeDiagnostics;
 
 	/// Topologically sort items
 	///
@@ -151,17 +153,17 @@ pub trait Hir:
 	fn lookup_topological_sorted_items(&self) -> Arc<Vec<ItemRef>>;
 
 	/// Lookup errors from topologically sorting items
-	fn lookup_topological_sorted_items_diagnostics(&self) -> Arc<Vec<Error>>;
+	fn lookup_topological_sorted_items_errors(&self) -> Arc<Vec<Error>>;
 
 	/// Validate HIR
 	#[salsa::invoke(super::validate::validate_hir)]
 	fn validate_hir(&self) -> Arc<Vec<Error>>;
 
 	/// Get all diagnostics for this module.
-	fn all_diagnostics(&self) -> Arc<Vec<Error>>;
+	fn all_errors(&self) -> Arc<Diagnostics<Error>>;
 
 	/// Get all the warnings
-	fn all_warnings(&self) -> Arc<Vec<Warning>>;
+	fn all_warnings(&self) -> Arc<Diagnostics<Warning>>;
 
 	#[salsa::interned]
 	fn intern_item_ref(&self, item: ItemRefData) -> ItemRef;
@@ -190,7 +192,7 @@ pub trait Hir:
 	fn check_case_exhaustiveness(&self, item: ItemRef) -> (Arc<Vec<Error>>, Arc<Vec<Warning>>);
 
 	/// Lookup diagnostics from checking case expression exhaustiveness
-	fn lookup_case_exhaustiveness_diagnostics(&self, item: ItemRef) -> Arc<Vec<Error>>;
+	fn lookup_case_exhaustiveness_errors(&self, item: ItemRef) -> Arc<Vec<Error>>;
 
 	/// Lookup warnings from checking case expression exhaustiveness
 	fn lookup_case_exhaustiveness_warnings(&self, item: ItemRef) -> Arc<Vec<Warning>>;
@@ -366,7 +368,7 @@ fn lookup_source_map(db: &dyn Hir, model: ModelRef) -> Arc<SourceMap> {
 	db.lower_items(model).1
 }
 
-fn lookup_lowering_diagnostics(db: &dyn Hir, model: ModelRef) -> Arc<Vec<Error>> {
+fn lookup_lowering_errors(db: &dyn Hir, model: ModelRef) -> Arc<Vec<Error>> {
 	db.lower_items(model).2
 }
 
@@ -384,7 +386,7 @@ fn lookup_global_scope(db: &dyn Hir) -> Arc<ScopeData> {
 	db.collect_global_scope().0
 }
 
-fn lookup_global_scope_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
+fn lookup_global_scope_errors(db: &dyn Hir) -> Arc<Vec<Error>> {
 	db.collect_global_scope().1
 }
 
@@ -405,7 +407,7 @@ fn lookup_item_scope(db: &dyn Hir, item: ItemRef) -> Arc<ScopeResult> {
 	db.collect_item_scope(item).result
 }
 
-fn lookup_item_scope_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+fn lookup_item_scope_errors(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
 	db.collect_item_scope(item).diagnostics
 }
 
@@ -417,7 +419,7 @@ fn lookup_item_signature(db: &dyn Hir, item: ItemRef) -> Arc<SignatureTypes> {
 	db.collect_item_signature(item).0
 }
 
-fn lookup_item_signature_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+fn lookup_item_signature_errors(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
 	db.collect_item_signature(item).1
 }
 
@@ -425,7 +427,7 @@ fn lookup_item_body(db: &dyn Hir, item: ItemRef) -> Arc<BodyTypes> {
 	db.collect_item_body(item).0
 }
 
-fn lookup_item_body_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+fn lookup_item_body_errors(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
 	db.collect_item_body(item).1
 }
 
@@ -433,11 +435,11 @@ fn lookup_topological_sorted_items(db: &dyn Hir) -> Arc<Vec<ItemRef>> {
 	db.topological_sort_items().0
 }
 
-fn lookup_topological_sorted_items_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
+fn lookup_topological_sorted_items_errors(db: &dyn Hir) -> Arc<Vec<Error>> {
 	db.topological_sort_items().1
 }
 
-fn lookup_case_exhaustiveness_diagnostics(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+fn lookup_case_exhaustiveness_errors(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
 	db.check_case_exhaustiveness(item).0
 }
 
@@ -445,61 +447,60 @@ fn lookup_case_exhaustiveness_warnings(db: &dyn Hir, item: ItemRef) -> Arc<Vec<W
 	db.check_case_exhaustiveness(item).1
 }
 
-fn all_diagnostics(db: &dyn Hir) -> Arc<Vec<Error>> {
+fn syntax_errors(db: &dyn Hir) -> Arc<Vec<Error>> {
+	let errors = db
+		.resolve_includes()
+		.expect("Can't get syntax errors when resolving includes failed")
+		.iter()
+		.filter_map(|m| db.cst(**m).unwrap().error(db.upcast()))
+		.map(|e| e.into())
+		.collect::<Vec<_>>();
+	Arc::new(errors)
+}
+
+fn all_errors(db: &dyn Hir) -> Arc<Diagnostics<Error>> {
+	let mut diagnostics = Diagnostics::default();
 	match db.resolve_includes() {
 		Ok(r) => {
 			// Collect syntax errors
-			let mut errors: Vec<Error> = r
-				.iter()
-				.filter_map(|m| db.cst(**m).unwrap().error(db.upcast()))
-				.map(|e| e.into())
-				.collect();
+			diagnostics.extend(db.syntax_errors());
 			for m in r.iter() {
 				// Collect lowering errors
-				errors.extend(db.lookup_lowering_diagnostics(*m).iter().cloned());
+				diagnostics.extend(db.lookup_lowering_errors(*m));
 				for i in db.lookup_items(*m).iter() {
 					// Collect scoping errors
-					errors.extend(db.lookup_item_scope_diagnostics(*i).iter().cloned());
+					diagnostics.extend(db.lookup_item_scope_errors(*i));
 					// Collect type errors
-					errors.extend(db.lookup_item_type_diagnostics(*i).iter().cloned());
+					for e in db.lookup_item_type_errors(*i).outer_iter() {
+						diagnostics.extend(e);
+					}
 					// Collect pattern matching exhaustiveness errors
-					errors.extend(
-						db.lookup_case_exhaustiveness_diagnostics(*i)
-							.iter()
-							.cloned(),
-					);
+					diagnostics.extend(db.lookup_case_exhaustiveness_errors(*i));
 				}
 			}
 			// Collect global scope errors
-			errors.extend(db.lookup_global_scope_diagnostics().iter().cloned());
+			diagnostics.extend(db.lookup_global_scope_errors());
 			// Collect topological sort errors
-			errors.extend(
-				db.lookup_topological_sorted_items_diagnostics()
-					.iter()
-					.cloned(),
-			);
+			diagnostics.extend(db.lookup_topological_sorted_items_errors());
 			// Collect final validation errors
-			errors.extend(db.validate_hir().iter().cloned());
-			Arc::new(errors)
+			diagnostics.extend(db.validate_hir());
 		}
-		Err(e) => Arc::new(vec![e]),
+		Err(e) => diagnostics.push(e),
 	}
+	Arc::new(diagnostics)
 }
 
-fn all_warnings(db: &dyn Hir) -> Arc<Vec<Warning>> {
-	match db.resolve_includes() {
-		Ok(r) => {
-			let mut errors = Vec::new();
-			for m in r.iter() {
-				for i in db.lookup_items(*m).iter() {
-					// Collect scoping warnings
-					errors.extend(db.lookup_item_scope_warnings(*i).iter().cloned());
-					// Collect case exhaustiveness warnings
-					errors.extend(db.lookup_case_exhaustiveness_warnings(*i).iter().cloned());
-				}
+fn all_warnings(db: &dyn Hir) -> Arc<Diagnostics<Warning>> {
+	let mut diagnostics = Diagnostics::default();
+	if let Ok(r) = db.resolve_includes() {
+		for m in r.iter() {
+			for i in db.lookup_items(*m).iter() {
+				// Collect scoping warnings
+				diagnostics.extend(db.lookup_item_scope_warnings(*i));
+				// Collect case exhaustiveness warnings
+				diagnostics.extend(db.lookup_case_exhaustiveness_warnings(*i));
 			}
-			Arc::new(errors)
 		}
-		Err(_) => Arc::new(vec![]),
 	}
+	Arc::new(diagnostics)
 }
