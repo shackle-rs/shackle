@@ -15,6 +15,7 @@ pub mod syntax;
 pub mod thir;
 pub mod ty;
 pub mod utils;
+pub mod warning;
 
 use db::{CompilerDatabase, Inputs};
 use error::ShackleError;

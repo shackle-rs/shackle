@@ -15,6 +15,7 @@ use crate::{
 		ids::{EntityRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		Expression, Goal, Identifier, ItemData, LetItem, Pattern, Type,
 	},
+	warning::{DeclarationShadowing, Warning},
 	Error, Result,
 };
 
@@ -372,6 +373,7 @@ struct ScopeCollector<'a> {
 	generations: Vec<u32>,
 	expression_scope: ArenaMap<Expression, (ArenaIndex<Scope>, u32)>,
 	diagnostics: Vec<Error>,
+	warnings: Vec<Warning>,
 }
 
 impl ScopeCollector<'_> {
@@ -388,6 +390,7 @@ impl ScopeCollector<'_> {
 			generations: vec![0],
 			expression_scope: ArenaMap::new(),
 			diagnostics: Vec::new(),
+			warnings: Vec::new(),
 		}
 	}
 
@@ -435,6 +438,25 @@ impl ScopeCollector<'_> {
 			}
 		};
 
+		let mut shadowed = |p: PatternRef| {
+			let (src_orig, span_orig) = NodeRef::from(p.into_entity(self.db)).source_span(self.db);
+			let (src_new, span_new) =
+				NodeRef::from(PatternRef::new(self.item, index).into_entity(self.db))
+					.source_span(self.db);
+			if src_orig == src_new {
+				// Same file, so warn about shadowing
+				self.warnings.push(
+					DeclarationShadowing {
+						name: self.data[index].identifier().unwrap().pretty_print(self.db),
+						src: src_new,
+						span: span_new,
+						original: span_orig,
+					}
+					.into(),
+				);
+			}
+		};
+
 		match &self.data[index] {
 			Pattern::Identifier(i) => {
 				let mut current = self.current;
@@ -452,6 +474,9 @@ impl ScopeCollector<'_> {
 									break;
 								}
 							}
+							if let Some(p) = scope.find_variable(*i, generation) {
+								shadowed(p);
+							}
 							current = *parent;
 						}
 						Scope::Global => {
@@ -460,6 +485,9 @@ impl ScopeCollector<'_> {
 									// This identifier refers to this atom and does not create a new binding
 									break;
 								}
+							}
+							if let Some(p) = self.db.lookup_global_variable(*i) {
+								shadowed(p);
 							}
 							let scope = match self.scopes[self.current] {
 								Scope::Local { ref mut scope, .. } => scope,
@@ -660,15 +688,15 @@ impl ScopeCollector<'_> {
 	}
 
 	/// Get results
-	#[allow(clippy::type_complexity)] // FIXME: Refactor return into simpler type
-	fn finish(
-		self,
-	) -> (
-		Arena<Scope>,
-		ArenaMap<Expression, (ArenaIndex<Scope>, u32)>,
-		Vec<Error>,
-	) {
-		(self.scopes, self.expression_scope, self.diagnostics)
+	fn finish(self) -> ScopeCollectorResult {
+		ScopeCollectorResult {
+			result: Arc::new(ScopeResult {
+				scopes: self.scopes,
+				expression_scopes: self.expression_scope,
+			}),
+			diagnostics: Arc::new(self.diagnostics),
+			warnings: Arc::new(self.warnings),
+		}
 	}
 
 	fn push(&mut self) {
@@ -686,6 +714,17 @@ impl ScopeCollector<'_> {
 		};
 		self.generations.pop().expect("No generation left");
 	}
+}
+
+/// Result of collecting scopes for an item, including diagnostics
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeCollectorResult {
+	/// Collected scope
+	pub result: Arc<ScopeResult>,
+	/// Diagnostics
+	pub diagnostics: Arc<Vec<Error>>,
+	/// Warnings
+	pub warnings: Arc<Vec<Warning>>,
 }
 
 /// Result of collecting scopes for an item
@@ -816,9 +855,9 @@ impl ScopeResult {
 }
 
 /// Generate a mapping between expressions and the identifiers in scope for the given item.
-pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc<Vec<Error>>) {
+pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> ScopeCollectorResult {
 	let model = db.lookup_model(item.model_ref(db));
-	let (scopes, expression_scopes, diagnostics) = match item.local_item_ref(db) {
+	match item.local_item_ref(db) {
 		LocalItemRef::Annotation(a) => {
 			let annotation = &model[a];
 			let mut collector = ScopeCollector::new(db, item, annotation.data.as_ref());
@@ -943,12 +982,5 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			collector.collect_type(type_alias.aliased_type);
 			collector.finish()
 		}
-	};
-	(
-		Arc::new(ScopeResult {
-			scopes,
-			expression_scopes,
-		}),
-		Arc::new(diagnostics),
-	)
+	}
 }

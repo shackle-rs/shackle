@@ -10,6 +10,7 @@ use crate::{
 	arena::ArenaIndex,
 	error::NonExhaustivePatternMatching,
 	ty::{EnumRef, Ty, TyData, TypeRegistry},
+	warning::{UnreachablePattern, Warning},
 	Error,
 };
 
@@ -60,7 +61,11 @@ pub fn lookup_enum_constructors(db: &dyn Hir, e: EnumRef) -> Option<Arc<Vec<Patt
 }
 
 /// Check that all case statements in this item are exhaustive
-pub fn check_case_exhaustiveness(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
+pub fn check_case_exhaustiveness(
+	db: &dyn Hir,
+	item: ItemRef,
+) -> (Arc<Vec<Error>>, Arc<Vec<Warning>>) {
+	let mut warnings = Vec::new();
 	let mut errors = Vec::new();
 	let model = item.model(db);
 	let local = item.local_item_ref(db);
@@ -75,6 +80,10 @@ pub fn check_case_exhaustiveness(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>>
 				let row = vec![pat];
 				if !checker.is_useful(&matrix, &row) {
 					// Useless case
+					let (src, span) =
+						NodeRef::from(PatternRef::new(item, arm.pattern).into_entity(db))
+							.source_span(db);
+					warnings.push(UnreachablePattern { src, span }.into());
 				}
 				matrix.add_row(row);
 			}
@@ -93,7 +102,7 @@ pub fn check_case_exhaustiveness(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>>
 			}
 		}
 	}
-	Arc::new(errors)
+	(Arc::new(errors), Arc::new(warnings))
 }
 
 /// A pattern distilled into its meaning in the context of pattern matching.
