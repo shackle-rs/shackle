@@ -142,7 +142,7 @@ fn value(input: Span) -> IResult<Span, Value> {
 		map(float, Value::Float),
 		map(integer, Value::Integer),
 		// WARNING: Should be after other usages of words (e.g., infinity, array1d, enum constructors)
-		map(identifier, |s| Value::Enum(s.to_string())),
+		// map(identifier, |s| Value::Enum(s.to_string())),
 	))(input)
 }
 

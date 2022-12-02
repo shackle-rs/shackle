@@ -14,7 +14,7 @@ use crate::{
 	diagnostics::{FileError, InternalError},
 	hir::{db::Hir, Identifier},
 	ty::{Ty, TyData},
-	Array, Index, Message, Program, Record, Set, Status, Value,
+	Array, EnumValue, Index, Message, Program, Record, Set, Status, Value,
 };
 
 fn flatten_array(
@@ -148,30 +148,30 @@ fn deserialize_legacy_value(
 			))),
 		},
 		serde_json::Value::Object(mut obj) => match ty.lookup(db) {
-			TyData::Enum(_, _, _) => {
+			TyData::Enum(_, _, _) => Ok(Value::Enum(if obj.contains_key("c") {
 				let e = if let Some(s) = obj["e"].as_str() {
-					String::from(s)
+					Value::Enum(EnumValue::new_ident_member(s.to_string()))
 				} else if let Some(x) = obj["e"].as_i64() {
-					x.to_string()
+					Value::Integer(x)
 				} else if let Value::Enum(s) = deserialize_legacy_value(db, ty, obj["e"].clone())? {
-					s
+					Value::Enum(s)
 				} else {
 					return Err(InternalError::new(format!(
 						"lagacy interpreter returned an invalid enum value `{:?}'",
 						obj
 					)));
 				};
-				Ok(if obj.contains_key("c") {
-					assert_eq!(obj.len(), 2);
-					Value::Enum(format!("{}({})", obj["c"].as_str().unwrap(), e))
-				} else if obj.contains_key("i") {
-					assert_eq!(obj.len(), 2);
-					Value::Enum(format!("to_enum({}, {})", e, obj["i"].as_i64().unwrap()))
-				} else {
-					assert_eq!(obj.len(), 1);
-					Value::Enum(e)
-				})
-			}
+				EnumValue::new_constructor_member(obj["c"].as_str().unwrap().to_string(), e)
+			} else if obj.contains_key("i") {
+				assert_eq!(obj.len(), 2);
+				EnumValue::new_anon_member(
+					obj["e"].as_str().unwrap().to_string(),
+					obj["i"].as_u64().unwrap() as usize,
+				)
+			} else {
+				assert_eq!(obj.len(), 1);
+				EnumValue::new_ident_member(obj["e"].as_str().unwrap().to_string())
+			})),
 			TyData::Set(_, _, elem) => {
 				let set = obj.remove("set").unwrap();
 				if let serde_json::Value::Array(set) = set {

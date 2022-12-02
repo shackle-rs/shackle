@@ -155,7 +155,7 @@ pub enum Value {
 	String(String),
 	/// Identifier of a value of an enumerated type
 	// FIXME this should probably have the actual structuring of enumerated types
-	Enum(String),
+	Enum(EnumValue),
 	/// An array of values
 	/// All values are of the same type
 	Array(Array),
@@ -248,8 +248,8 @@ impl std::ops::Index<&[Value]> for Array {
 		let mut mult = 1;
 		for (ii, ctx) in index.iter().zip_eq(self.indexes.iter()) {
 			idx *= mult;
-			match &ctx {
-				&Index::Integer(r) => {
+			match ctx {
+				Index::Integer(r) => {
 					if let Value::Integer(ii) = ii {
 						assert!(
 							r.contains(ii),
@@ -260,6 +260,26 @@ impl std::ops::Index<&[Value]> for Array {
 						idx += (ii - r.start()) as usize;
 					} else {
 						panic!("incorrect index type: using {ii} for an integer index")
+					}
+				}
+				Index::Enum(e) => {
+					if let Value::Enum(val) = ii {
+						if e == &val.set {
+							idx += val.val
+						} else {
+							panic!("incorrect index type: using value of type {} for an index of type {}", 
+							if let Some(name) = &e.name {name.as_str()} else{"anonymous enum"},
+							if let Some(name) = &val.set.name {name.as_str()} else{"anonymous enum"},)
+						}
+					} else {
+						panic!(
+							"incorrect index type: using {ii} for an index of type {}",
+							if let Some(name) = &e.name {
+								name.as_str()
+							} else {
+								"anonymous enum"
+							}
+						)
 					}
 				}
 			}
@@ -274,9 +294,7 @@ impl Display for Array {
 		let it = self
 			.indexes
 			.iter()
-			.map(|ii| match ii {
-				Index::Integer(ii) => ii.clone(),
-			})
+			.map(|ii| ii.iter())
 			.multi_cartesian_product()
 			.zip_eq(self.members.iter());
 		let mut first = true;
@@ -312,7 +330,8 @@ impl Display for Array {
 pub enum Index {
 	/// Closed integer range index
 	Integer(RangeInclusive<i64>),
-	// Enum(Arc<Enum>),
+	/// Enumerated type used as an index
+	Enum(Arc<Enum>),
 }
 
 impl Index {
@@ -326,6 +345,7 @@ impl Index {
 					(r.end() - r.start()) as usize + 1
 				}
 			}
+			Index::Enum(e) => e.len(),
 		}
 	}
 
@@ -333,19 +353,171 @@ impl Index {
 	pub fn is_empty(&self) -> bool {
 		match &self {
 			Index::Integer(r) => r.is_empty(),
+			Index::Enum(e) => e.is_empty(),
+		}
+	}
+
+	fn iter(&self) -> IndexIter {
+		match self {
+			Index::Integer(x) => IndexIter::Integer(x.clone()),
+			Index::Enum(e) => IndexIter::Enum(e.clone(), 1..=e.len()),
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+enum IndexIter {
+	Integer(RangeInclusive<i64>),
+	Enum(Arc<Enum>, RangeInclusive<usize>),
+}
+
+impl Iterator for IndexIter {
+	type Item = Value;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			IndexIter::Integer(r) => r.next().map(Value::Integer),
+			IndexIter::Enum(e, r) => r.next().map(|v| {
+				Value::Enum(EnumValue {
+					set: e.clone(),
+					val: v,
+				})
+			}),
 		}
 	}
 }
 
 /// Member declaration of an enumerated type
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Enum {}
+pub struct Enum {
+	name: Option<String>,
+	constructors: Vec<(String, Option<Index>)>,
+}
+
+impl Enum {
+	/// Returns the number of members of the enumerated type
+	pub fn len(&self) -> usize {
+		self.constructors
+			.iter()
+			.map(|(_, i)| if let Some(i) = i { i.len() } else { 0 })
+			.sum()
+	}
+
+	/// Returns whether the enumerated type has any members
+	pub fn is_empty(&self) -> bool {
+		self.constructors.is_empty()
+	}
+}
+
+/// Member declaration of an enumerated type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumValue {
+	set: Arc<Enum>,
+	val: usize,
+}
+
+impl EnumValue {
+	/// Create a new enumerated value that is not yet associated with an
+	/// enumerated type
+	///
+	/// This method is intended for new enumerated values created by data
+	/// parsers
+	pub(crate) fn new_ident_member(ident: String) -> Self {
+		let new_enum = Enum {
+			name: None,
+			constructors: vec![(ident, None)],
+		};
+		EnumValue {
+			set: Arc::new(new_enum),
+			val: 1,
+		}
+	}
+
+	/// Create a new constructor based enumerated value that is not yet
+	/// associated with an enumerated type
+	///
+	/// This method is intended for new enumerated values created by data
+	/// parsers
+	pub(crate) fn new_constructor_member(constructor: String, val: Value) -> EnumValue {
+		let (index, val) = match val {
+			Value::Integer(i) => (Index::Integer(i..=i), 1),
+			Value::Enum(e) => (Index::Enum(e.set), e.val),
+			_ => panic!(
+				"constructing an enumerated value with an argument of unexpected type {}",
+				val
+			),
+		};
+		let new_enum = Enum {
+			name: None,
+			constructors: vec![(constructor, Some(index))],
+		};
+		EnumValue {
+			set: Arc::new(new_enum),
+			val,
+		}
+	}
+	/// Create a new value of an anonymous enumerated type that is not yet
+	/// associated with an enumerated type
+	///
+	/// This method is intended for new enumerated values created by data
+	/// parsers
+	pub(crate) fn new_anon_member(type_ident: String, i: usize) -> EnumValue {
+		let new_enum = Enum {
+			name: Some(type_ident),
+			constructors: vec![("_".to_string(), Some(Index::Integer(1..=i as i64)))],
+		};
+		EnumValue {
+			set: Arc::new(new_enum),
+			val: i,
+		}
+	}
+}
+
+impl Display for EnumValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let mut i = self.val;
+		let c = self
+			.set
+			.constructors
+			.iter()
+			.skip_while(|c| {
+				let len = if let Some(ii) = &c.1 { ii.len() } else { 1 };
+				if i > len {
+					i -= len;
+					true
+				} else {
+					false
+				}
+			})
+			.take(1)
+			.next()
+			.unwrap();
+		if c.0 == "_" {
+			write!(
+				f,
+				"to_enum({}, {})",
+				if let Some(name) = &self.set.name {
+					name.as_str()
+				} else {
+					"_"
+				},
+				i
+			)
+		} else if let Some(_ii) = &c.1 {
+			write!(f, "")
+		} else {
+			write!(f, "{}", c.0)
+		}
+	}
+}
 
 /// Different representations used to represent sets in [`Value`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Set {
 	/// List of (unique) Value elements
 	SetList(Vec<Value>),
+	/// Set that spans all members of an enumerated type
+	Enum(Arc<Enum>),
 	/// Sorted list of non-overlapping inclusive integer ranges
 	IntRangeList(Vec<RangeInclusive<i64>>),
 	/// Sorted list of non-overlapping inclusive floating point ranges
@@ -369,6 +541,17 @@ impl Display for Set {
 					first = false;
 				}
 				write!(f, "}}")
+			}
+			Set::Enum(e) => {
+				write!(
+					f,
+					"{}",
+					if let Some(name) = &e.name {
+						name.as_str()
+					} else {
+						"_"
+					}
+				)
 			}
 			Set::IntRangeList(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
