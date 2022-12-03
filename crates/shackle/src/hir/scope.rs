@@ -665,6 +665,23 @@ impl ScopeCollector<'_> {
 					self.pop();
 				}
 			}
+			Expression::Lambda(l) => {
+				if let Some(r) = l.return_type {
+					self.collect_type(r);
+				}
+				for param in l.parameters.iter() {
+					for ann in param.annotations.iter() {
+						self.collect_expression(*ann);
+					}
+					self.collect_type(param.declared_type);
+				}
+				self.push();
+				for pattern in l.parameters.iter().filter_map(|param| param.pattern) {
+					self.collect_pattern(pattern, PatternMode::Destructuring);
+				}
+				self.collect_expression(l.body);
+				self.pop();
+			}
 			_ => (),
 		}
 		self.expression_scope

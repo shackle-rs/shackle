@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use crate::syntax::cst::CstNode;
 
-use super::helpers::*;
+use super::{helpers::*, Parameter, Type};
 use super::{
 	Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, AstNode, BooleanLiteral,
 	Children, Constraint, Declaration, FloatLiteral, Generator, Infinity, IntegerLiteral, Pattern,
@@ -41,6 +41,7 @@ ast_enum!(
 	"let_expression" => Let,
 	"tuple_access" => TupleAccess,
 	"record_access" => RecordAccess,
+	"lambda" => Lambda,
 	"annotated_expression" => AnnotatedExpression,
 	"parenthesised_expression" => "expression" // Turn parenthesised_expression into Expression node
 );
@@ -465,6 +466,31 @@ impl RecordAccess {
 	/// The field being accessed
 	pub fn field(&self) -> Identifier {
 		child_with_field_name(self, "field")
+	}
+}
+
+ast_node!(
+	/// Lambda expression
+	Lambda,
+	return_type,
+	parameters,
+	body
+);
+
+impl Lambda {
+	/// The ascribed return type if there is one
+	pub fn return_type(&self) -> Option<Type> {
+		optional_child_with_field_name(self, "return_type")
+	}
+
+	/// The parameters of the function
+	pub fn parameters(&self) -> Children<'_, Parameter> {
+		children_with_field_name(self, "parameter")
+	}
+
+	/// The body of the function
+	pub fn body(&self) -> Expression {
+		child_with_field_name(self, "body")
 	}
 }
 
@@ -932,6 +958,52 @@ mod test {
 				.unwrap();
 			assert_eq!(r.record().cast::<Identifier>().unwrap().name(), "foo");
 			assert_eq!(r.field().name(), "bar");
+		}
+	}
+
+	#[test]
+
+	fn test_lambda() {
+		let model = parse_model("x = lambda int: (int: x) => x;");
+		let items: Vec<_> = model.items().collect();
+		assert_eq!(items.len(), 1);
+		{
+			let lambda = items[0]
+				.cast_ref::<Assignment>()
+				.unwrap()
+				.definition()
+				.cast::<Lambda>()
+				.unwrap();
+			let ret = lambda.return_type().unwrap().cast::<TypeBase>().unwrap();
+			assert!(ret.var_type().is_none());
+			assert!(ret.opt_type().is_none());
+			assert!(ret
+				.domain()
+				.cast::<UnboundedDomain>()
+				.unwrap()
+				.primitive_type()
+				.is_int());
+			let params: Vec<_> = lambda.parameters().collect();
+			assert_eq!(params.len(), 1);
+			let pt = params[0].declared_type().cast::<TypeBase>().unwrap();
+			assert!(pt.var_type().is_none());
+			assert!(pt.opt_type().is_none());
+			assert!(pt
+				.domain()
+				.cast::<UnboundedDomain>()
+				.unwrap()
+				.primitive_type()
+				.is_int());
+			assert_eq!(
+				params[0]
+					.pattern()
+					.unwrap()
+					.cast::<Identifier>()
+					.unwrap()
+					.name(),
+				"x"
+			);
+			assert_eq!(lambda.body().cast::<Identifier>().unwrap().name(), "x");
 		}
 	}
 }

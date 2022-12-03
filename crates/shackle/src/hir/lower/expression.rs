@@ -85,6 +85,7 @@ impl ExpressionCollector<'_> {
 			ast::Expression::Let(l) => self.collect_let(l).into(),
 			ast::Expression::TupleAccess(t) => self.collect_tuple_access(t).into(),
 			ast::Expression::RecordAccess(t) => self.collect_record_access(t).into(),
+			ast::Expression::Lambda(l) => self.collect_lambda(l).into(),
 			ast::Expression::AnnotatedExpression(e) => return self.collect_annotated_expression(e),
 		};
 		self.alloc_expression(origin, collected)
@@ -830,6 +831,29 @@ impl ExpressionCollector<'_> {
 		RecordAccess {
 			record: self.collect_expression(r.record()),
 			field: Identifier::new(r.field().name(), self.db),
+		}
+	}
+
+	fn collect_lambda(&mut self, l: ast::Lambda) -> Lambda {
+		Lambda {
+			return_type: l.return_type().map(|r| self.collect_type(r)),
+			parameters: l
+				.parameters()
+				.map(|p| {
+					let ty = self.collect_type(p.declared_type());
+					let annotations = p
+						.annotations()
+						.map(|ann| self.collect_expression(ann))
+						.collect();
+					let pattern = p.pattern().map(|p| self.collect_pattern(p));
+					Parameter {
+						declared_type: ty,
+						pattern,
+						annotations,
+					}
+				})
+				.collect(),
+			body: self.collect_expression(l.body()),
 		}
 	}
 

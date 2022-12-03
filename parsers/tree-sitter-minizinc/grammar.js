@@ -64,9 +64,12 @@ module.exports = grammar({
     [$._callable, $.assignment],
     [$._callable, $._pattern],
     [$._callable, $.pattern_call],
+    [$._callable, $.record_member],
     [$._literal, $._pattern],
     [$._literal, $.pattern_numeric_literal],
     [$.array_literal_2d, $.array_literal_2d_row],
+    [$.type_base, $.tuple_literal],
+    [$.type_base, $.parenthesised_expression],
   ],
 
   supertypes: ($) => [$._expression, $._item, $._type],
@@ -228,6 +231,7 @@ module.exports = grammar({
         $.if_then_else,
         $.infix_operator,
         $.case_expression,
+        $.lambda,
         $.let_expression,
         $.prefix_operator,
         $.postfix_operator,
@@ -409,6 +413,15 @@ module.exports = grammar({
       ),
     case_expression_case: ($) =>
       seq(field("pattern", $._pattern), "=>", field("value", $._expression)),
+
+    lambda: ($) =>
+      seq(
+        "lambda",
+        optional(seq(field("return_type", $._type), ":")),
+        $._parameters,
+        "=>",
+        field("body", $._expression)
+      ),
 
     let_expression: ($) =>
       seq(

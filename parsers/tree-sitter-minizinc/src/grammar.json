@@ -1003,6 +1003,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "lambda"
+        },
+        {
+          "type": "SYMBOL",
           "name": "let_expression"
         },
         {
@@ -2545,6 +2549,56 @@
         {
           "type": "FIELD",
           "name": "value",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_expression"
+          }
+        }
+      ]
+    },
+    "lambda": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "lambda"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "FIELD",
+                  "name": "return_type",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_type"
+                  }
+                },
+                {
+                  "type": "STRING",
+                  "value": ":"
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_parameters"
+        },
+        {
+          "type": "STRING",
+          "value": "=>"
+        },
+        {
+          "type": "FIELD",
+          "name": "body",
           "content": {
             "type": "SYMBOL",
             "name": "_expression"
@@ -4690,6 +4744,10 @@
       "pattern_call"
     ],
     [
+      "_callable",
+      "record_member"
+    ],
+    [
       "_literal",
       "_pattern"
     ],
@@ -4700,6 +4758,14 @@
     [
       "array_literal_2d",
       "array_literal_2d_row"
+    ],
+    [
+      "type_base",
+      "tuple_literal"
+    ],
+    [
+      "type_base",
+      "parenthesised_expression"
     ]
   ],
   "precedences": [],

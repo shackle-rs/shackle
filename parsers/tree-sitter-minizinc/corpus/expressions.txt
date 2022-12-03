@@ -438,3 +438,27 @@ nested =
         (pattern_tuple (identifier) (pattern_tuple (pattern_numeric_literal (integer_literal)) (identifier)))
         (pattern_record (pattern_record_field (identifier) (identifier)) (pattern_record_field (identifier) (pattern_record (pattern_record_field (identifier) (identifier))))))
       (boolean_literal)))))
+
+======
+Lambda
+======
+
+with_return_type = lambda int: (bool: x) => x;
+without_return = lambda (bool: x) => x;
+curried = lambda (int: x) => lambda (int: y) => x + y;
+
+---
+
+(source_file
+  (assignment (identifier) (lambda
+    (type_base (primitive_type))
+    (parameter (type_base (primitive_type)) (identifier))
+    (identifier)))
+  (assignment (identifier) (lambda 
+    (parameter (type_base (primitive_type)) (identifier)) 
+    (identifier)))
+  (assignment (identifier) (lambda
+    (parameter (type_base (primitive_type)) (identifier))
+    (lambda
+      (parameter (type_base (primitive_type)) (identifier))
+      (infix_operator (identifier) (identifier))))))

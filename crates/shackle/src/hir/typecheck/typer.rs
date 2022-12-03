@@ -11,8 +11,9 @@ use crate::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, NodeRef, PatternRef},
 		ArrayAccess, ArrayComprehension, ArrayLiteral, Call, Case, Declaration, Expression,
-		Identifier, IdentifierRegistry, IfThenElse, ItemData, Let, LetItem, Pattern, PrimitiveType,
-		RecordAccess, RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
+		Identifier, IdentifierRegistry, IfThenElse, ItemData, Lambda, Let, LetItem, Pattern,
+		PrimitiveType, RecordAccess, RecordLiteral, SetComprehension, SetLiteral, TupleAccess,
+		TupleLiteral, Type,
 	},
 	ty::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
@@ -114,6 +115,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Expression::IfThenElse(ite) => self.collect_if_then_else(expr, ite),
 			Expression::Case(c) => self.collect_case(expr, c),
 			Expression::Let(l) => self.collect_let(l),
+			Expression::Lambda(l) => self.collect_lambda(l),
 			Expression::Slice(_) => self.types.set_of_bottom,
 			Expression::Missing => self.types.error,
 		};
@@ -1374,6 +1376,61 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			self.typecheck_expression(*ann, self.types.ann, Some(ty));
 		}
 		ty
+	}
+
+	fn collect_lambda(&mut self, l: &Lambda) -> Ty {
+		let db = self.db;
+		for p in l
+			.parameters
+			.iter()
+			.filter_map(|param| param.pattern)
+			.flat_map(|p| Pattern::identifiers(p, self.data))
+		{
+			self.ctx
+				.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
+		}
+		let params = l
+			.parameters
+			.iter()
+			.map(|param| {
+				let ty = self.complete_type(param.declared_type, None);
+				if let Some(p) = param.pattern {
+					self.collect_pattern(None, p, ty);
+				}
+				ty
+			})
+			.collect();
+		let body = self.collect_expression(l.body, None);
+		let return_type = if let Some(r) = l.return_type {
+			let ret = self.complete_type(r, Some(body));
+			if !body.is_subtype_of(db.upcast(), ret) {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(self.db, self.item, l.body)).source_span(self.db);
+				self.ctx.add_diagnostic(
+					self.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: format!(
+							"Expected '{}' but got '{}'",
+							ret.pretty_print(db.upcast()),
+							body.pretty_print(db.upcast()),
+						),
+					},
+				);
+			}
+			ret
+		} else {
+			body
+		};
+
+		Ty::function(
+			db.upcast(),
+			FunctionType {
+				return_type,
+				params,
+			},
+		)
 	}
 
 	/// Resolve overloading for the function `expr` that is the identifier `i`.

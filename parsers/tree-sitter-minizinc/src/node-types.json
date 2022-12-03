@@ -76,6 +76,10 @@
         "named": true
       },
       {
+        "type": "lambda",
+        "named": true
+      },
+      {
         "type": "let_expression",
         "named": true
       },
@@ -290,6 +294,10 @@
             "named": true
           },
           {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -413,6 +421,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -962,6 +974,10 @@
             "named": true
           },
           {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -1101,6 +1117,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -1299,6 +1319,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -1557,6 +1581,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -1876,6 +1904,10 @@
             "named": true
           },
           {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -2085,6 +2117,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -2459,6 +2495,42 @@
     }
   },
   {
+    "type": "lambda",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "parameter",
+            "named": true
+          }
+        ]
+      },
+      "return_type": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "let_expression",
     "named": true,
     "fields": {
@@ -2636,6 +2708,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -3115,6 +3191,10 @@
             "named": true
           },
           {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -3361,6 +3441,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -3753,6 +3837,10 @@
           },
           {
             "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -4233,6 +4321,10 @@
   },
   {
     "type": "intersect",
+    "named": false
+  },
+  {
+    "type": "lambda",
     "named": false
   },
   {

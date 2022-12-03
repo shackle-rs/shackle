@@ -8,8 +8,8 @@ use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
 use super::{
 	ArrayAccess, ArrayComprehension, ArrayLiteral, BooleanLiteral, Constraint, Declaration,
-	FloatLiteral, Identifier, IntegerLiteral, ItemData, Pattern, RecordLiteral, SetComprehension,
-	SetLiteral, StringLiteral, TupleLiteral, Type,
+	FloatLiteral, Identifier, IntegerLiteral, ItemData, Parameter, Pattern, RecordLiteral,
+	SetComprehension, SetLiteral, StringLiteral, TupleLiteral, Type,
 };
 
 /// An expression
@@ -55,6 +55,8 @@ pub enum Expression {
 	TupleAccess(TupleAccess),
 	/// Record access
 	RecordAccess(RecordAccess),
+	/// Lambda function
+	Lambda(Lambda),
 	/// Slice from array access
 	Slice(Identifier),
 
@@ -169,6 +171,7 @@ impl fmt::Debug for Expression {
 			Expression::Let(x) => fmt::Debug::fmt(x, f),
 			Expression::TupleAccess(x) => fmt::Debug::fmt(x, f),
 			Expression::RecordAccess(x) => fmt::Debug::fmt(x, f),
+			Expression::Lambda(x) => fmt::Debug::fmt(x, f),
 			Expression::Slice(x) => fmt::Debug::fmt(x, f),
 			Expression::Missing => f.write_str("Missing"),
 		}
@@ -193,6 +196,7 @@ impl_enum_from!(Expression::TupleLiteral);
 impl_enum_from!(Expression::RecordLiteral);
 impl_enum_from!(Expression::TupleAccess);
 impl_enum_from!(Expression::RecordAccess);
+impl_enum_from!(Expression::Lambda);
 
 /// Anonymous variable `_`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -280,4 +284,14 @@ pub struct RecordAccess {
 	pub record: ArenaIndex<Expression>,
 	/// Field being accessed
 	pub field: Identifier,
+}
+/// Lambda function
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Lambda {
+	/// Return type if given
+	pub return_type: Option<ArenaIndex<Type>>,
+	/// Parameters
+	pub parameters: Box<[Parameter]>,
+	/// Function body
+	pub body: ArenaIndex<Expression>,
 }
