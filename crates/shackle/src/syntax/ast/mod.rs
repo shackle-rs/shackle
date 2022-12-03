@@ -126,7 +126,7 @@ pub trait TryCastFrom<T>: Sized {
 /// Model (wrapper for a CST).
 ///
 /// A model is a single `.mzn` file.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Model {
 	cst: Cst,
 }
@@ -155,6 +155,14 @@ impl Model {
 			done,
 			phantom: PhantomData,
 		}
+	}
+}
+
+impl Debug for Model {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Model")
+			.field("items", &self.items())
+			.finish()
 	}
 }
 
