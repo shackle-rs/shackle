@@ -16,3 +16,6 @@ tempfile = "3.3.0"
 thiserror = "1.0.31"
 tree-sitter = "0.20.6"
 tree-sitter-minizinc = { path = "../../parsers/tree-sitter-minizinc" }
+
+[dev-dependencies]
+expect-test = "1.4.0"

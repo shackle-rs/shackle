@@ -496,3 +496,6 @@ impl Deref for EnumConstructorEntry {
 		&self.constructor
 	}
 }
+
+#[cfg(test)]
+mod test;
