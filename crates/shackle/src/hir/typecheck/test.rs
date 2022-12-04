@@ -16,17 +16,22 @@ struct TypeTester {
 
 impl TypeTester {
 	fn check_expression(&mut self, expr: &str, expected: Expect) {
-		let ty = self.type_expression(expr);
+		let ty = self.type_expression("", expr);
 		let pretty = ty.pretty_print(&self.db);
 		expected.assert_eq(&pretty);
 	}
 
-	fn type_expression(&mut self, expr: &str) -> Ty {
-		self.db
-			.set_input_files(Arc::new(vec![InputFile::ModelString(format!(
-				"any: x = {};",
-				expr
-			))]));
+	fn check_expression_preamble(&mut self, preamble: &str, expr: &str, expected: Expect) {
+		let ty = self.type_expression(preamble, expr);
+		let pretty = ty.pretty_print(&self.db);
+		expected.assert_eq(&pretty);
+	}
+
+	fn type_expression(&mut self, preamble: &str, expr: &str) -> Ty {
+		self.db.set_input_files(Arc::new(vec![
+			InputFile::ModelString(format!("any: _TEST_EXPR = {};", expr)),
+			InputFile::ModelString(preamble.to_owned()),
+		]));
 		let model = self.db.input_models();
 		let items = self.db.lookup_items(model[0]);
 		let item = *items.last().unwrap();
@@ -141,5 +146,80 @@ fn test_type_expressions() {
 	tester.check_expression(
 		"lambda var int: (var bool: x) => x",
 		expect!("op(var int: (var bool))"),
+	);
+}
+
+#[test]
+fn test_function_resolution() {
+	let mut tester = TypeTester::default();
+	tester.check_expression_preamble(
+		r#"
+        function bool: foo(bool);
+        function int: foo(int);
+        function var int: foo(var int);
+        function bool: foo(int);
+        "#,
+		"foo(1)",
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function bool: foo(bool);
+        function int: foo(int);
+        function var int: foo(var int);
+        function bool: foo(int);
+        var bool: p;
+        "#,
+		"foo(p)",
+		expect!("var int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function any $T: foo(any $T);
+        var 1..3: x;
+        "#,
+		"foo(x)",
+		expect!("var int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function any $T: foo(any $T);
+        function bool: foo(var bool);
+        var bool: x;
+        "#,
+		"foo(x)",
+		expect!("bool"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function var $$E: foo($$E);
+        "#,
+		"foo(123)",
+		expect!("var int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function var $$E: foo($$E);
+        enum Foo = {A};
+        "#,
+		"foo(A)",
+		expect!("var Foo"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int, float);
+        function int: foo(float, int);
+        "#,
+		"foo(1, 1)",
+		expect!("error"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int, float);
+        function int: foo(float, int);
+        function int: foo(float, float);
+        "#,
+		"foo(1, 1)",
+		expect!("error"),
 	);
 }
