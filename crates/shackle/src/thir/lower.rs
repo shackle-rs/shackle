@@ -406,38 +406,8 @@ impl<'a> ItemCollector<'a> {
 					top_level: false,
 				};
 				for (param, ty) in f.parameters.iter().zip(fn_entry.overload.params()) {
-					let domain = dc.collect_domain(param.declared_type, *ty, false);
-					let mut declaration = DeclarationItem::new(&domain, false, item);
-					if let Some(p) = param.pattern {
-						declaration.name = f.data[p].identifier();
-					}
-					for ann in param.annotations.iter() {
-						declaration.add_annotation(&*dc.collect_expression(*ann));
-					}
-					let idx = dc.model.add_declaration(declaration);
+					let idx = dc.collect_fn_param(param, *ty);
 					dc.model[fn_idx].parameters.push(idx);
-					if let Some(p) = param.pattern {
-						match &types[p] {
-							PatternTy::Variable(_) => {
-								dc.resolutions.insert(
-									PatternRef::new(item, p),
-									ResolvedIdentifier::Declaration(idx),
-								);
-							}
-							PatternTy::Destructuring(_) => {
-								let ident = IdentifierBuilder::new(
-									*ty,
-									ResolvedIdentifier::Declaration(idx),
-									Origin::from(
-										PatternRef::new(item, p).into_entity(dc.db.upcast()),
-									)
-									.with_desugaring(DesugarKind::Destructuring),
-								);
-								dc.collect_destructuring(ident, p);
-							}
-							_ => unreachable!(),
-						}
-					}
 				}
 				if let Some(e) = f.body {
 					let body = dc.collect_expression(e);
@@ -825,6 +795,48 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						.annotations(idx)
 						.map(|ann| self.collect_expression(ann)),
 				),
+			crate::hir::Expression::Lambda(l) => {
+				let fn_type = match ty.lookup(self.db.upcast()) {
+					TyData::Function(_, f) => f,
+					_ => unreachable!(),
+				};
+				let mut decls = Vec::new();
+				let item = self.item;
+				let mut dc = DestructuringCollector {
+					parent: self,
+					decls: &mut decls,
+					top_level: false,
+				};
+				LambdaBuilder::new(
+					ty,
+					l.return_type
+						.map(|r| dc.collect_domain(r, fn_type.return_type, false))
+						.unwrap_or_else(|| DomainBuilder::unbounded(fn_type.return_type)),
+					origin,
+				)
+				.with_annotations(
+					dc.data
+						.annotations(idx)
+						.map(|ann| dc.collect_expression(ann)),
+				)
+				.with_parameters(
+					l.parameters
+						.iter()
+						.zip(fn_type.params.iter())
+						.map(|(param, ty)| dc.collect_fn_param(param, *ty)),
+				)
+				.with_body(if dc.decls.is_empty() {
+					dc.collect_expression(l.body)
+				} else {
+					LetBuilder::new(
+						dc.types[l.body],
+						Origin::from(ExpressionRef::new(item, l.body).into_entity(dc.db.upcast()))
+							.with_desugaring(DesugarKind::Destructuring),
+					)
+					.with_items(dc.decls.iter().copied().map(LetItem::Declaration))
+					.with_in(dc.collect_expression(l.body))
+				})
+			}
 			crate::hir::Expression::Let(l) => LetBuilder::new(ty, origin)
 				.with_items(l.items.iter().flat_map(|i| match i {
 					crate::hir::LetItem::Constraint(c) => {
@@ -1264,6 +1276,40 @@ impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
 			}
 			_ => unreachable!(),
 		}
+	}
+
+	fn collect_fn_param(&mut self, param: &crate::hir::Parameter, ty: Ty) -> DeclarationId {
+		let item = self.item;
+		let domain = self.collect_domain(param.declared_type, ty, false);
+		let mut declaration = DeclarationItem::new(&domain, false, item);
+		if let Some(p) = param.pattern {
+			declaration.name = self.data[p].identifier();
+		}
+		for ann in param.annotations.iter() {
+			declaration.add_annotation(&*self.collect_expression(*ann));
+		}
+		let idx = self.model.add_declaration(declaration);
+		if let Some(p) = param.pattern {
+			match &self.types[p] {
+				PatternTy::Variable(_) => {
+					self.resolutions.insert(
+						PatternRef::new(item, p),
+						ResolvedIdentifier::Declaration(idx),
+					);
+				}
+				PatternTy::Destructuring(_) => {
+					let ident = IdentifierBuilder::new(
+						ty,
+						ResolvedIdentifier::Declaration(idx),
+						Origin::from(PatternRef::new(item, p).into_entity(self.db.upcast()))
+							.with_desugaring(DesugarKind::Destructuring),
+					);
+					self.collect_destructuring(ident, p);
+				}
+				_ => unreachable!(),
+			}
+		}
+		idx
 	}
 }
 

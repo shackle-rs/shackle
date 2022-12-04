@@ -574,6 +574,20 @@ impl<'a> PrettyPrinter<'a> {
 			}
 			ExpressionData::Infinity => "infinity".to_owned(),
 			ExpressionData::IntegerLiteral(i) => format!("{}", i.0),
+			ExpressionData::Lambda {
+				domain,
+				parameters,
+				body,
+			} => format!(
+				"lambda {}: ({}) => {}",
+				self.pretty_print_domain(domain, data),
+				parameters
+					.iter()
+					.map(|p| self.pretty_print_declaration(*p, false))
+					.collect::<Vec<_>>()
+					.join(", "),
+				self.pretty_print_expression(*body, data)
+			),
 			ExpressionData::Let {
 				items,
 				in_expression,

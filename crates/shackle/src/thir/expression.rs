@@ -5,8 +5,8 @@ use std::{fmt::Debug, ops::Deref};
 use rustc_hash::FxHashMap;
 
 use super::{
-	source::Origin, AnnotationId, ConstraintId, DeclarationId, EnumerationId, FunctionId,
-	Identifier, ItemData,
+	source::Origin, AnnotationId, ConstraintId, DeclarationId, Domain, DomainBuilder,
+	EnumerationId, FunctionId, Identifier, ItemData,
 };
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
@@ -1427,12 +1427,90 @@ impl ExpressionBuilder for LetBuilder {
 	}
 }
 
-// /// Mutable access to an expression
-// pub struct ExpressionMut<'a> {
-// 	inner: &'a mut Expression,
-// }
+/// Builder for lambda functions
+#[derive(Debug, Clone)]
+pub struct LambdaBuilder {
+	domain: DomainBuilder,
+	params: Vec<DeclarationId>,
+	annotations: Vec<Box<dyn ExpressionBuilder>>,
+	body: Option<Box<dyn ExpressionBuilder>>,
+	ty: Ty,
+	origin: Origin,
+}
 
-// impl<'a> ExpressionMut<'a> {}
+impl LambdaBuilder {
+	/// Create a new lambda function
+	pub fn new(ty: Ty, return_type: DomainBuilder, origin: impl Into<Origin>) -> Box<Self> {
+		Box::new(Self {
+			domain: return_type,
+			params: Vec::new(),
+			annotations: Vec::new(),
+			body: None,
+			ty,
+			origin: origin.into(),
+		})
+	}
+
+	/// Add the given annotation to this expression
+	pub fn with_annotation(
+		mut self: Box<Self>,
+		annotation: Box<dyn ExpressionBuilder>,
+	) -> Box<Self> {
+		self.annotations.push(annotation);
+		self
+	}
+
+	/// Add the given annotations to this expression
+	pub fn with_annotations(
+		mut self: Box<Self>,
+		annotations: impl IntoIterator<Item = Box<dyn ExpressionBuilder>>,
+	) -> Box<Self> {
+		self.annotations.extend(annotations);
+		self
+	}
+
+	/// Add the given parameter to the lambda expression
+	pub fn with_parameter(mut self: Box<Self>, param: DeclarationId) -> Box<Self> {
+		self.params.push(param);
+		self
+	}
+
+	/// Add the given parameters to the lambda expression
+	pub fn with_parameters(
+		mut self: Box<Self>,
+		params: impl IntoIterator<Item = DeclarationId>,
+	) -> Box<Self> {
+		self.params.extend(params.into_iter());
+		self
+	}
+
+	/// Set the body of the lambda expression
+	pub fn with_body(mut self: Box<Self>, body: Box<dyn ExpressionBuilder>) -> Box<Self> {
+		self.body = Some(body);
+		self
+	}
+}
+
+impl ExpressionBuilder for LambdaBuilder {
+	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
+		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
+		let domain = self.domain.finish(owner);
+		let body = self.body.as_ref().unwrap().finish(owner);
+		owner.expressions.insert(Expression {
+			ty: self.ty,
+			data: ExpressionData::Lambda {
+				parameters: self.params.clone(),
+				domain,
+				body,
+			},
+			origin: self.origin,
+			annotations,
+		})
+	}
+	fn clone_dyn(&self) -> Box<dyn ExpressionBuilder> {
+		Box::new(self.clone())
+	}
+}
 
 /// An expression
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1516,6 +1594,15 @@ pub enum ExpressionData {
 		items: Vec<LetItem>,
 		/// Value of the let expression
 		in_expression: ArenaIndex<Expression>,
+	},
+	/// Lambda function
+	Lambda {
+		/// Domain of return type
+		domain: Domain,
+		/// Function parameters
+		parameters: Vec<DeclarationId>,
+		/// Function body
+		body: ArenaIndex<Expression>,
 	},
 }
 
