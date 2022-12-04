@@ -23,7 +23,7 @@ pub struct DispatchRequest<'a>(RequestState<'a>);
 
 impl<'a> DispatchRequest<'a> {
 	pub fn new(request: Request, db: &'a mut LanguageServerDatabase) -> Self {
-		eprintln!("got {} request #{}", request.method, request.id);
+		log::info!("got {} request #{}", request.method, request.id);
 		Self(RequestState::Unhandled { request, db })
 	}
 	pub fn on<H, R, T>(self) -> Self
@@ -47,7 +47,7 @@ impl<'a> DispatchRequest<'a> {
 										error: Some(e),
 									}))
 									.unwrap_or_else(|e| {
-										eprintln!("failed to send response: {:?}", e)
+										log::error!("failed to send response: {:?}", e)
 									});
 									return Self(RequestState::Handled(Ok(())));
 								}
@@ -71,7 +71,7 @@ impl<'a> DispatchRequest<'a> {
 								sender
 									.send(Message::Response(response))
 									.unwrap_or_else(|e| {
-										eprintln!("failed to send response: {:?}", e)
+										log::error!("failed to send response: {:?}", e)
 									});
 							});
 							Self(RequestState::Handled(Ok(())))
@@ -109,7 +109,7 @@ pub struct DispatchNotification<'a>(NotificationState<'a>);
 
 impl<'a> DispatchNotification<'a> {
 	pub fn new(notification: Notification, db: &'a mut LanguageServerDatabase) -> Self {
-		eprintln!("got {} notification", notification.method);
+		log::info!("got {} notification", notification.method);
 		Self(NotificationState::Unhandled { notification, db })
 	}
 

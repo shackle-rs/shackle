@@ -62,6 +62,7 @@ impl LanguageServerDatabase {
 	}
 
 	pub fn manage_file(&mut self, file: &Path, contents: &str) {
+		log::info!("detected file changed for file {:?}", file);
 		self.vfs.manage_file(file, contents);
 		self.db.on_file_change(file);
 		self.set_active_file(file);
@@ -69,6 +70,7 @@ impl LanguageServerDatabase {
 
 	pub fn unmanage_file(&mut self, file: &Path) {
 		self.vfs.unmanage_file(file);
+		log::info!("detected file changed for file {:?}", file);
 		self.db.on_file_change(file);
 	}
 
@@ -115,7 +117,15 @@ impl Deref for LanguageServerDatabase {
 }
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
-	eprintln!("starting MiniZinc language server");
+	env_logger::Builder::new()
+		.format_target(false)
+		.format_module_path(true)
+		.filter_level(log::LevelFilter::Trace)
+		.filter_module("salsa", log::LevelFilter::Warn)
+		.parse_default_env()
+		.init();
+
+	log::info!("starting MiniZinc language server");
 	let (connection, io_threads) = Connection::stdio();
 
 	let server_capabilities = serde_json::to_value(ServerCapabilities {
@@ -132,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 	let initialization_params = connection.initialize(server_capabilities)?;
 	main_loop(connection, initialization_params)?;
 	io_threads.join()?;
-	eprintln!("shutting down server");
+	log::info!("shutting down server");
 	Ok(())
 }
 
@@ -164,12 +174,12 @@ fn main_loop(
 					Ok(_) => (),
 					Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
 					Err(ExtractError::MethodMismatch(req)) => {
-						eprintln!("unhandled {}", req.method)
+						log::warn!("unhandled {}", req.method)
 					}
 				};
 			}
 			Message::Response(resp) => {
-				eprintln!("got response: {:?}", resp);
+				log::info!("got response: {:?}", resp);
 			}
 			Message::Notification(not) => {
 				let result = DispatchNotification::new(not, &mut db)
@@ -186,7 +196,9 @@ fn main_loop(
 				match result {
 					Ok(()) => (),
 					Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-					Err(ExtractError::MethodMismatch(not)) => eprintln!("unhandled {}", not.method),
+					Err(ExtractError::MethodMismatch(not)) => {
+						log::warn!("unhandled {}", not.method)
+					}
 				}
 			}
 		}
