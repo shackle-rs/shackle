@@ -26,3 +26,6 @@ mod item;
 
 pub use self::expression::*;
 pub use self::item::*;
+
+#[cfg(test)]
+mod test;
