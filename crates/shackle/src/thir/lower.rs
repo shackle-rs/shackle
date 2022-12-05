@@ -251,10 +251,9 @@ impl<'a> ItemCollector<'a> {
 					declaration.set_definition(&*collector.collect_expression(def));
 				}
 				let decl = collector.model.add_declaration(declaration);
-				let mut decls = vec![decl];
 				let mut dc = DestructuringCollector {
 					parent: &mut collector,
-					decls: &mut decls,
+					decls: vec![decl],
 					top_level,
 				};
 				dc.collect_destructuring(
@@ -265,7 +264,7 @@ impl<'a> ItemCollector<'a> {
 					),
 					d.pattern,
 				);
-				decls
+				dc.decls
 			}
 			_ => unreachable!(),
 		}
@@ -398,11 +397,9 @@ impl<'a> ItemCollector<'a> {
 						.type_inst_vars
 						.extend(pf.ty_params.iter().copied());
 				}
-				let mut decls = Vec::new();
-
 				let mut dc = DestructuringCollector {
 					parent: &mut collector,
-					decls: &mut decls,
+					decls: Vec::new(),
 					top_level: false,
 				};
 				for (param, ty) in f.parameters.iter().zip(fn_entry.overload.params()) {
@@ -741,8 +738,49 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							.map(|ann| self.collect_expression(ann)),
 					)
 			}
-			crate::hir::Expression::Case(_c) => {
-				unimplemented!()
+			crate::hir::Expression::Case(c) => {
+				let scrutinee_ty = self.types[c.expression];
+				let scrutinee_er = EntityRef::new(self.db.upcast(), self.item, c.expression);
+				let mut declaration = DeclarationItem::new(
+					&DomainBuilder::unbounded(scrutinee_ty),
+					false,
+					scrutinee_er,
+				);
+				declaration.set_definition(&*self.collect_expression(c.expression));
+				let decl = self.model.add_declaration(declaration);
+				let scrutinee_id = IdentifierBuilder::new(
+					scrutinee_ty,
+					ResolvedIdentifier::Declaration(decl),
+					scrutinee_er,
+				);
+				LetBuilder::new(ty, origin)
+					.with_item(LetItem::Declaration(decl))
+					.with_in(
+						CaseBuilder::new(ty, scrutinee_id.clone(), origin)
+							.with_branches(c.cases.iter().map(|c| {
+								let mut pc = CasePatternCollector {
+									decls: Vec::new(),
+									parent: self,
+								};
+								let pat = pc.collect_pattern(scrutinee_id.clone(), c.pattern);
+								let result = if pc.decls.is_empty() {
+									pc.collect_expression(c.value)
+								} else {
+									LetBuilder::new(
+										pc.types[c.value],
+										EntityRef::new(pc.db.upcast(), pc.item, c.value),
+									)
+									.with_items(pc.decls.iter().copied().map(LetItem::Declaration))
+									.with_in(pc.collect_expression(c.value))
+								};
+								(pat, result)
+							}))
+							.with_annotations(
+								self.data
+									.annotations(idx)
+									.map(|ann| self.collect_expression(ann)),
+							),
+					)
 			}
 			crate::hir::Expression::FloatLiteral(f) => FloatLiteralBuilder::new(ty, *f, origin)
 				.with_annotations(
@@ -800,11 +838,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					TyData::Function(_, f) => f,
 					_ => unreachable!(),
 				};
-				let mut decls = Vec::new();
 				let item = self.item;
 				let mut dc = DestructuringCollector {
 					parent: self,
-					decls: &mut decls,
+					decls: Vec::new(),
 					top_level: false,
 				};
 				LambdaBuilder::new(
@@ -1212,7 +1249,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 
 struct DestructuringCollector<'a, 'b, 'c> {
 	parent: &'a mut ExpressionCollector<'b, 'c>,
-	decls: &'a mut Vec<DeclarationId>,
+	decls: Vec<DeclarationId>,
 	top_level: bool,
 }
 
@@ -1310,6 +1347,309 @@ impl<'a, 'b, 'c> DestructuringCollector<'a, 'b, 'c> {
 			}
 		}
 		idx
+	}
+}
+
+struct CasePatternCollector<'a, 'b, 'c> {
+	parent: &'a mut ExpressionCollector<'b, 'c>,
+	decls: Vec<DeclarationId>,
+}
+
+impl<'a, 'b, 'c> Deref for CasePatternCollector<'a, 'b, 'c> {
+	type Target = ExpressionCollector<'b, 'c>;
+	fn deref(&self) -> &Self::Target {
+		self.parent
+	}
+}
+
+impl<'a, 'b, 'c> DerefMut for CasePatternCollector<'a, 'b, 'c> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		self.parent
+	}
+}
+
+impl<'a, 'b, 'c> CasePatternCollector<'a, 'b, 'c> {
+	fn collect_pattern(
+		&mut self,
+		definition: Box<dyn ExpressionBuilder>,
+		pattern: ArenaIndex<crate::hir::Pattern>,
+	) -> CasePatternBuilder {
+		let entity = EntityRef::new(self.db.upcast(), self.item, pattern);
+		match &self.data[pattern] {
+			crate::hir::Pattern::Absent => {
+				CasePatternBuilder::expression(AbsentBuilder::new(self.tys.opt_bottom, entity))
+			}
+			crate::hir::Pattern::Anonymous => {
+				let ty = match &self.types[pattern] {
+					PatternTy::Destructuring(ty) => *ty,
+					_ => unreachable!(),
+				};
+				CasePatternBuilder::anonymous(ty)
+			}
+			crate::hir::Pattern::Boolean(b) => CasePatternBuilder::expression(
+				BooleanLiteralBuilder::new(self.tys.par_bool, *b, entity),
+			),
+			crate::hir::Pattern::Call {
+				function,
+				arguments,
+			} => {
+				let res = self.types.pattern_resolution(*function).unwrap();
+				if !self.resolutions.contains_key(&res) {
+					self.collect_item(res.item());
+				}
+				let dtor = match &self.types[*function] {
+					PatternTy::DestructuringFn { deconstructor, .. } => *deconstructor,
+					_ => unreachable!(),
+				};
+				match self.resolutions[&res].clone() {
+					ResolvedIdentifier::Annotation(i) => {
+						if arguments.len() == 1 {
+							CasePatternBuilder::annotation_constructor(
+								i,
+								arguments.iter().map(|a| {
+									let ty = match &self.types[*a] {
+										PatternTy::Destructuring(ty) => *ty,
+										_ => unreachable!(),
+									};
+									self.collect_pattern(
+										CallBuilder::new(
+											ty,
+											IdentifierBuilder::new(
+												dtor,
+												ResolvedIdentifier::AnnotationDeconstructor(i),
+												entity,
+											),
+											entity,
+										)
+										.with_arg(definition.clone()),
+										*a,
+									)
+								}),
+							)
+						} else {
+							let tuple_ty = Ty::tuple(
+								self.db.upcast(),
+								arguments.iter().map(|a| match &self.types[*a] {
+									PatternTy::Destructuring(ty) | PatternTy::Variable(ty) => *ty,
+									_ => unreachable!(),
+								}),
+							);
+							CasePatternBuilder::annotation_constructor(
+								i,
+								arguments.iter().enumerate().map(|(idx, a)| {
+									let ty = match &self.types[*a] {
+										PatternTy::Destructuring(ty) => *ty,
+										_ => unreachable!(),
+									};
+									self.collect_pattern(
+										TupleAccessBuilder::new(
+											ty,
+											CallBuilder::new(
+												tuple_ty,
+												IdentifierBuilder::new(
+													dtor,
+													ResolvedIdentifier::AnnotationDeconstructor(i),
+													entity,
+												),
+												entity,
+											)
+											.with_arg(definition.clone()),
+											IntegerLiteral(idx as i64 + 1),
+											entity,
+										),
+										*a,
+									)
+								}),
+							)
+						}
+					}
+					ResolvedIdentifier::EnumerationMember(i, idx) => {
+						if arguments.len() == 1 {
+							CasePatternBuilder::enum_constructor(
+								i,
+								idx,
+								arguments.iter().map(|a| {
+									let ty = match &self.types[*a] {
+										PatternTy::Destructuring(ty) | PatternTy::Variable(ty) => {
+											*ty
+										}
+										_ => unreachable!(),
+									};
+									self.collect_pattern(
+										CallBuilder::new(
+											ty,
+											IdentifierBuilder::new(
+												dtor,
+												ResolvedIdentifier::EnumerationDeconstructor(
+													i, idx,
+												),
+												entity,
+											),
+											entity,
+										)
+										.with_arg(definition.clone()),
+										*a,
+									)
+								}),
+							)
+						} else {
+							let tuple_ty = Ty::tuple(
+								self.db.upcast(),
+								arguments.iter().map(|a| match &self.types[*a] {
+									PatternTy::Destructuring(ty) | PatternTy::Variable(ty) => *ty,
+									_ => unreachable!(),
+								}),
+							);
+							CasePatternBuilder::enum_constructor(
+								i,
+								idx,
+								arguments.iter().enumerate().map(|(arg_i, a)| {
+									let ty = match &self.types[*a] {
+										PatternTy::Destructuring(ty) | PatternTy::Variable(ty) => {
+											*ty
+										}
+										_ => unreachable!(),
+									};
+									self.collect_pattern(
+										TupleAccessBuilder::new(
+											ty,
+											CallBuilder::new(
+												tuple_ty,
+												IdentifierBuilder::new(
+													dtor,
+													ResolvedIdentifier::EnumerationDeconstructor(
+														i, idx,
+													),
+													entity,
+												),
+												entity,
+											)
+											.with_arg(definition.clone()),
+											IntegerLiteral(arg_i as i64 + 1),
+											entity,
+										),
+										*a,
+									)
+								}),
+							)
+						}
+					}
+					_ => unreachable!(),
+				}
+			}
+			crate::hir::Pattern::Float { negated, value } => {
+				let float = FloatLiteralBuilder::new(self.tys.par_float, *value, entity);
+				let expression: Box<dyn ExpressionBuilder> = if *negated {
+					self.model
+						.lookup_function(self.db, self.ids.minus, &[self.tys.par_float])
+						.expect("Couldn't find negation function")
+						.into_call(self.db, entity)
+						.with_arg(float)
+				} else {
+					float
+				};
+				CasePatternBuilder::expression(expression)
+			}
+			crate::hir::Pattern::Identifier(ident) => {
+				if let Some(res) = self.types.pattern_resolution(pattern) {
+					// Pattern is an atom
+					if !self.resolutions.contains_key(&res) {
+						self.collect_item(res.item());
+					}
+					let ident = self.resolutions[&res].clone();
+					CasePatternBuilder::expression(IdentifierBuilder::new(
+						if let ResolvedIdentifier::EnumerationMember(e, _) = &ident {
+							Ty::par_enum(self.db.upcast(), self.model[*e].enum_type)
+						} else {
+							self.tys.ann
+						},
+						self.resolutions[&res].clone(),
+						entity,
+					))
+				} else {
+					// Pattern binds to new variable
+					let item = self.item;
+					let ty = match &self.types[pattern] {
+						PatternTy::Variable(ty) => *ty,
+						_ => unreachable!(),
+					};
+					let mut declaration =
+						DeclarationItem::new(&DomainBuilder::unbounded(ty), false, entity);
+					declaration.name = Some(*ident);
+					declaration.set_definition(&*definition);
+					let decl = self.model.add_declaration(declaration);
+					self.resolutions.insert(
+						PatternRef::new(item, pattern),
+						ResolvedIdentifier::Declaration(decl),
+					);
+					self.decls.push(decl);
+					CasePatternBuilder::anonymous(ty)
+				}
+			}
+			crate::hir::Pattern::Infinity { negated } => {
+				let inf = InfinityBuilder::new(self.tys.par_int, entity);
+				let expression: Box<dyn ExpressionBuilder> = if *negated {
+					self.model
+						.lookup_function(self.db, self.ids.minus, &[self.tys.par_int])
+						.expect("Couldn't find negation function")
+						.into_call(self.db, entity)
+						.with_arg(inf)
+				} else {
+					inf
+				};
+				CasePatternBuilder::expression(expression)
+			}
+			crate::hir::Pattern::Integer { negated, value } => {
+				let int = IntegerLiteralBuilder::new(self.tys.par_int, *value, entity);
+				let expression: Box<dyn ExpressionBuilder> = if *negated {
+					self.model
+						.lookup_function(self.db, self.ids.minus, &[self.tys.par_int])
+						.expect("Couldn't find negation function")
+						.into_call(self.db, entity)
+						.with_arg(int)
+				} else {
+					int
+				};
+				CasePatternBuilder::expression(expression)
+			}
+			crate::hir::Pattern::Missing => unreachable!(),
+			crate::hir::Pattern::Record { fields } => {
+				CasePatternBuilder::record(fields.iter().map(|(i, p)| match &self.types[*p] {
+					PatternTy::Destructuring(ty) | PatternTy::Variable(ty) => (
+						*i,
+						self.collect_pattern(
+							RecordAccessBuilder::new(
+								*ty,
+								definition.clone(),
+								*i,
+								EntityRef::new(self.db.upcast(), self.item, *p),
+							),
+							*p,
+						),
+					),
+					_ => unreachable!(),
+				}))
+			}
+			crate::hir::Pattern::String(s) => CasePatternBuilder::expression(
+				StringLiteralBuilder::new(self.tys.string, s.clone(), entity),
+			),
+			crate::hir::Pattern::Tuple { fields } => {
+				CasePatternBuilder::tuple(fields.iter().enumerate().map(|(i, p)| match &self.types
+					[*p]
+				{
+					PatternTy::Destructuring(ty) | PatternTy::Variable(ty) => self.collect_pattern(
+						TupleAccessBuilder::new(
+							*ty,
+							definition.clone(),
+							IntegerLiteral(i as i64 + 1),
+							EntityRef::new(self.db.upcast(), self.item, *p),
+						),
+						*p,
+					),
+					_ => unreachable!(),
+				}))
+			}
+		}
 	}
 }
 

@@ -5,8 +5,9 @@ use crate::arena::ArenaIndex;
 
 use super::db::Thir;
 use super::{
-	AnnotationId, ConstraintId, DeclarationId, Domain, EnumerationId, Expression, ExpressionData,
-	FunctionId, Goal, ItemData, ItemId, LetItem, Model, OutputId, ResolvedIdentifier,
+	AnnotationId, CasePattern, ConstraintId, DeclarationId, Domain, EnumerationId, Expression,
+	ExpressionData, FunctionId, Goal, ItemData, ItemId, LetItem, Model, OutputId,
+	ResolvedIdentifier,
 };
 use std::fmt::Write;
 
@@ -56,8 +57,8 @@ impl<'a> PrettyPrinter<'a> {
 		let annotation = &self.model[idx];
 		let name = annotation
 			.name
-			.expect("Annotation has no name")
-			.pretty_print(self.db.upcast());
+			.map(|i| i.pretty_print(self.db.upcast()))
+			.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(idx)));
 		let mut buf = format!("annotation {}", name);
 		if let Some(params) = &annotation.parameters {
 			write!(
@@ -140,10 +141,8 @@ impl<'a> PrettyPrinter<'a> {
 
 	fn pretty_print_enumeration(&self, idx: EnumerationId) -> String {
 		let enumeration = &self.model[idx];
-		let mut buf = format!(
-			"enum {}",
-			enumeration.enum_type.pretty_print(self.db.upcast())
-		);
+		let enum_name = enumeration.enum_type.pretty_print(self.db.upcast());
+		let mut buf = format!("enum {}", enum_name);
 		for ann in enumeration.annotations.iter() {
 			write!(
 				&mut buf,
@@ -158,11 +157,12 @@ impl<'a> PrettyPrinter<'a> {
 				" = {}",
 				cases
 					.iter()
-					.map(|c| {
+					.enumerate()
+					.map(|(i, c)| {
 						let name = c
 							.name
 							.map(|n| n.pretty_print(self.db.upcast()))
-							.unwrap_or_else(|| "_".to_owned());
+							.unwrap_or_else(|| format!("_EM_{}_{}", enum_name, i));
 
 						match &c.parameters {
 							Some(ps) => {
@@ -494,6 +494,26 @@ impl<'a> PrettyPrinter<'a> {
 					format!("({})({})", f, args)
 				}
 			}
+			ExpressionData::Case {
+				scrutinee,
+				branches,
+			} => {
+				let branches = branches
+					.iter()
+					.map(|b| {
+						format!(
+							"{} => {}",
+							self.pretty_print_pattern(&b.pattern, data),
+							self.pretty_print_expression(b.result, data)
+						)
+					})
+					.collect::<Vec<_>>();
+				format!(
+					"case {} of {} endcase",
+					self.pretty_print_expression(*scrutinee, data),
+					branches.join(", ")
+				)
+			}
 			ExpressionData::FloatLiteral(f) => {
 				let value = f.value();
 				if value.fract() == 0.0 {
@@ -509,11 +529,11 @@ impl<'a> PrettyPrinter<'a> {
 					ResolvedIdentifier::Annotation(a) => model[*a]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
-						.expect("Identifier refers to annotation without name"),
+						.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
 					ResolvedIdentifier::AnnotationDeconstructor(a) => model[*a]
 						.name
 						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
-						.expect("Identifier refers to annotation without name"),
+						.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
 					ResolvedIdentifier::Declaration(d) => model[*d]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
@@ -527,14 +547,26 @@ impl<'a> PrettyPrinter<'a> {
 						.expect("Identifier refers to non-existent enum member")[*i]
 						.name
 						.map(|n| n.pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| "_".to_owned()),
+						.unwrap_or_else(|| {
+							format!(
+								"_EM_{}_{}",
+								self.model[*e].enum_type.pretty_print(self.db.upcast()),
+								i
+							)
+						}),
 					ResolvedIdentifier::EnumerationDeconstructor(e, i) => model[*e]
 						.definition
 						.as_ref()
 						.expect("Identifier refers to non-existent enum member")[*i]
 						.name
 						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| "_".to_owned()),
+						.unwrap_or_else(|| {
+							format!(
+								"_EM_{}_{}⁻¹",
+								self.model[*e].enum_type.pretty_print(self.db.upcast()),
+								i
+							)
+						}),
 					ResolvedIdentifier::Function(f) => {
 						model[*f].name.pretty_print(self.db.upcast())
 					}
@@ -715,5 +747,54 @@ impl<'a> PrettyPrinter<'a> {
 			.unwrap();
 		}
 		out
+	}
+
+	fn pretty_print_pattern(&self, pat: &CasePattern, data: &ItemData) -> String {
+		match pat {
+			CasePattern::Anonymous(_) => "_".to_owned(),
+			CasePattern::Expression(e) => self.pretty_print_expression(*e, data),
+			CasePattern::Tuple(fs) => format!(
+				"({})",
+				fs.iter()
+					.map(|p| self.pretty_print_pattern(p, data))
+					.collect::<Vec<_>>()
+					.join(", ")
+			),
+			CasePattern::Record(fs) => format!(
+				"({})",
+				fs.iter()
+					.map(|(i, p)| format!(
+						"{}: {}",
+						i.pretty_print(self.db.upcast()),
+						self.pretty_print_pattern(p, data)
+					))
+					.collect::<Vec<_>>()
+					.join(", ")
+			),
+			CasePattern::EnumConstructor { item, index, args } => {
+				let ctor = self.model[*item].definition.as_ref().unwrap()[*index]
+					.name
+					.unwrap()
+					.pretty_print(self.db.upcast());
+				let ps = args
+					.iter()
+					.map(|p| self.pretty_print_pattern(p, data))
+					.collect::<Vec<_>>()
+					.join(", ");
+				format!("{}({})", ctor, ps)
+			}
+			CasePattern::AnnotationConstructor { item, args } => {
+				let ctor = self.model[*item]
+					.name
+					.unwrap()
+					.pretty_print(self.db.upcast());
+				let ps = args
+					.iter()
+					.map(|p| self.pretty_print_pattern(p, data))
+					.collect::<Vec<_>>()
+					.join(", ");
+				format!("{}({})", ctor, ps)
+			}
+		}
 	}
 }

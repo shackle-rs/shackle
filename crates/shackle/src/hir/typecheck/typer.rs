@@ -1860,10 +1860,21 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					let fn_pat = PatternRef::new(self.item, *function);
 					self.ctx.add_pattern_resolution(fn_pat, ctor_pat);
-					let fn_type = c.overload.clone().into_function().unwrap();
+					let ctor_type = c.overload.clone().into_function().unwrap();
+					let dtor_type = FunctionType {
+						params: Box::new([ctor_type.return_type]),
+						return_type: if ctor_type.params.len() == 1 {
+							ctor_type.params[0]
+						} else {
+							Ty::tuple(db.upcast(), ctor_type.params.iter().copied())
+						},
+					};
 					self.ctx.add_declaration(
 						fn_pat,
-						PatternTy::Destructuring(Ty::function(db.upcast(), fn_type)),
+						PatternTy::DestructuringFn {
+							constructor: Ty::function(db.upcast(), ctor_type),
+							deconstructor: Ty::function(db.upcast(), dtor_type),
+						},
 					);
 					Some(c.overload.return_type())
 				})();

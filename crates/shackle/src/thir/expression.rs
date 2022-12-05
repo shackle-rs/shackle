@@ -1512,6 +1512,98 @@ impl ExpressionBuilder for LambdaBuilder {
 	}
 }
 
+/// Builder for case expressions
+#[derive(Debug, Clone)]
+pub struct CaseBuilder {
+	scrutinee: Box<dyn ExpressionBuilder>,
+	branches: Vec<(CasePatternBuilder, Box<dyn ExpressionBuilder>)>,
+	annotations: Vec<Box<dyn ExpressionBuilder>>,
+	ty: Ty,
+	origin: Origin,
+}
+
+impl CaseBuilder {
+	/// Create a new if-then-else
+	pub fn new(
+		ty: Ty,
+		scrutinee: Box<dyn ExpressionBuilder>,
+		origin: impl Into<Origin>,
+	) -> Box<Self> {
+		Box::new(Self {
+			scrutinee,
+			branches: Vec::new(),
+			annotations: Vec::new(),
+			ty,
+			origin: origin.into(),
+		})
+	}
+
+	/// Add the given annotation to this expression
+	pub fn with_annotation(
+		mut self: Box<Self>,
+		annotation: Box<dyn ExpressionBuilder>,
+	) -> Box<Self> {
+		self.annotations.push(annotation);
+		self
+	}
+
+	/// Add the given annotations to this expression
+	pub fn with_annotations(
+		mut self: Box<Self>,
+		annotations: impl IntoIterator<Item = Box<dyn ExpressionBuilder>>,
+	) -> Box<Self> {
+		self.annotations.extend(annotations);
+		self
+	}
+
+	/// Add the given branch to the if-then-else
+	pub fn with_branch(
+		mut self: Box<Self>,
+		pattern: CasePatternBuilder,
+		result: Box<dyn ExpressionBuilder>,
+	) -> Box<Self> {
+		self.branches.push((pattern, result));
+		self
+	}
+
+	/// Add the given branches to the if-then-else
+	pub fn with_branches(
+		mut self: Box<Self>,
+		branches: impl IntoIterator<Item = (CasePatternBuilder, Box<dyn ExpressionBuilder>)>,
+	) -> Box<Self> {
+		self.branches.extend(branches);
+		self
+	}
+}
+
+impl ExpressionBuilder for CaseBuilder {
+	fn finish(&self, owner: &mut ItemData) -> ArenaIndex<Expression> {
+		let annotations = self.annotations.iter().map(|e| e.finish(owner)).collect();
+		let scrutinee = self.scrutinee.finish(owner);
+		let branches = self
+			.branches
+			.iter()
+			.map(|(p, r)| CaseBranch {
+				pattern: p.finish(owner),
+				result: r.finish(owner),
+			})
+			.collect::<Vec<_>>();
+		assert!(!branches.is_empty(), "Cannot create case without branches");
+		owner.expressions.insert(Expression {
+			ty: self.ty,
+			data: ExpressionData::Case {
+				scrutinee,
+				branches,
+			},
+			origin: self.origin,
+			annotations,
+		})
+	}
+	fn clone_dyn(&self) -> Box<dyn ExpressionBuilder> {
+		Box::new(self.clone())
+	}
+}
+
 /// An expression
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExpressionData {
@@ -1581,6 +1673,13 @@ pub enum ExpressionData {
 		/// The else result
 		else_result: ArenaIndex<Expression>,
 	},
+	/// Case expression
+	Case {
+		/// The expression being matched on
+		scrutinee: ArenaIndex<Expression>,
+		/// The case match arms
+		branches: Vec<CaseBranch>,
+	},
 	/// Function call
 	Call {
 		/// Function being called
@@ -1645,6 +1744,140 @@ pub struct Branch {
 	pub condition: ArenaIndex<Expression>,
 	/// The result if the condition holds
 	pub result: ArenaIndex<Expression>,
+}
+
+/// A branch of a `Case`
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaseBranch {
+	/// THe pattern to match
+	pub pattern: CasePattern,
+	/// The value if the pattern matches
+	pub result: ArenaIndex<Expression>,
+}
+
+/// A pattern for a case expression
+///
+/// Note that patterns at this level do not represent binding to variables.
+/// Instead, the anonymous wildcard pattern is used, and destructuring happens
+/// via deconstructor functions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CasePattern {
+	/// Enum constructor call
+	EnumConstructor {
+		/// The enum item
+		item: EnumerationId,
+		/// The index of the member of in the enum
+		index: usize,
+		/// The constructor call arguments
+		args: Vec<CasePattern>,
+	},
+	/// Annotation constructor call
+	AnnotationConstructor {
+		/// The annotation item
+		item: AnnotationId,
+		/// The constructor call arguments
+		args: Vec<CasePattern>,
+	},
+	/// Tuple
+	Tuple(Vec<CasePattern>),
+	/// Record
+	Record(Vec<(Identifier, CasePattern)>),
+	/// Literal expression (e.g. enum atoms, numbers, strings, <>)
+	Expression(ArenaIndex<Expression>),
+	/// Wildcard pattern _
+	Anonymous(Ty),
+}
+
+/// Builder for case patterns
+#[derive(Debug, Clone)]
+pub struct CasePatternBuilder(CasePatternBuilderInner);
+
+#[derive(Debug, Clone)]
+enum CasePatternBuilderInner {
+	EnumConstructor {
+		item: EnumerationId,
+		index: usize,
+		args: Vec<CasePatternBuilder>,
+	},
+	AnnotationConstructor {
+		item: AnnotationId,
+		args: Vec<CasePatternBuilder>,
+	},
+	Tuple(Vec<CasePatternBuilder>),
+	Record(Vec<(Identifier, CasePatternBuilder)>),
+	Expression(Box<dyn ExpressionBuilder>),
+	Anonymous(Ty),
+}
+
+impl CasePatternBuilder {
+	/// Enum constructor pattern
+	pub fn enum_constructor(
+		item: EnumerationId,
+		index: usize,
+		args: impl IntoIterator<Item = CasePatternBuilder>,
+	) -> Self {
+		Self(CasePatternBuilderInner::EnumConstructor {
+			item,
+			index,
+			args: args.into_iter().collect(),
+		})
+	}
+	/// Annotation constructor pattern
+	pub fn annotation_constructor(
+		item: AnnotationId,
+		args: impl IntoIterator<Item = CasePatternBuilder>,
+	) -> Self {
+		Self(CasePatternBuilderInner::AnnotationConstructor {
+			item,
+			args: args.into_iter().collect(),
+		})
+	}
+	/// Tuple pattern
+	pub fn tuple(fields: impl IntoIterator<Item = CasePatternBuilder>) -> Self {
+		Self(CasePatternBuilderInner::Tuple(fields.into_iter().collect()))
+	}
+	/// Record pattern
+	pub fn record(fields: impl IntoIterator<Item = (Identifier, CasePatternBuilder)>) -> Self {
+		Self(CasePatternBuilderInner::Record(
+			fields.into_iter().collect(),
+		))
+	}
+	/// Literal expression pattern
+	pub fn expression(e: Box<dyn ExpressionBuilder>) -> Self {
+		Self(CasePatternBuilderInner::Expression(e))
+	}
+	/// Anonymous wildcard pattern
+	pub fn anonymous(ty: Ty) -> Self {
+		Self(CasePatternBuilderInner::Anonymous(ty))
+	}
+
+	/// Create the case pattern
+	pub fn finish(&self, owner: &mut ItemData) -> CasePattern {
+		let Self(inner) = &self;
+		match inner {
+			CasePatternBuilderInner::AnnotationConstructor { item, args } => {
+				CasePattern::AnnotationConstructor {
+					item: *item,
+					args: args.iter().map(|a| a.finish(owner)).collect(),
+				}
+			}
+			CasePatternBuilderInner::EnumConstructor { item, index, args } => {
+				CasePattern::EnumConstructor {
+					item: *item,
+					index: *index,
+					args: args.iter().map(|a| a.finish(owner)).collect(),
+				}
+			}
+			CasePatternBuilderInner::Tuple(fs) => {
+				CasePattern::Tuple(fs.iter().map(|f| f.finish(owner)).collect())
+			}
+			CasePatternBuilderInner::Record(fs) => {
+				CasePattern::Record(fs.iter().map(|(i, f)| (*i, f.finish(owner))).collect())
+			}
+			CasePatternBuilderInner::Expression(e) => CasePattern::Expression(e.finish(owner)),
+			CasePatternBuilderInner::Anonymous(ty) => CasePattern::Anonymous(*ty),
+		}
+	}
 }
 
 /// An item in a let expression

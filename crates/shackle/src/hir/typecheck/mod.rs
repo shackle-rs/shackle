@@ -177,7 +177,11 @@ impl TypeResult {
 	) -> Option<String> {
 		let decl = self.get_pattern(pattern)?;
 		match decl {
-			PatternTy::Variable(ty) | PatternTy::Destructuring(ty) => {
+			PatternTy::Variable(ty)
+			| PatternTy::Destructuring(ty)
+			| PatternTy::DestructuringFn {
+				constructor: ty, ..
+			} => {
 				if let Pattern::Identifier(i) = data[pattern] {
 					if let TyData::Function(opt, function) = ty.lookup(db.upcast()) {
 						// Pretty print functions using item-like syntax if possible
@@ -426,6 +430,13 @@ pub enum PatternTy {
 	AnnotationAtom,
 	/// Destructuring pattern
 	Destructuring(Ty),
+	/// Destructuring function call identifier
+	DestructuringFn {
+		/// The type of the constructor function
+		constructor: Ty,
+		/// The type of the deconstructor function
+		deconstructor: Ty,
+	},
 	/// Currently computing
 	Computing,
 }
@@ -475,6 +486,16 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			PatternTy::AnnotationAtom => "AnnotationAtom".to_string(),
 			PatternTy::Destructuring(ty) => {
 				format!("Destructuring({})", ty.pretty_print(db.upcast()))
+			}
+			PatternTy::DestructuringFn {
+				constructor,
+				deconstructor,
+			} => {
+				format!(
+					"DestructuringFn({}, {})",
+					constructor.pretty_print(db.upcast()),
+					deconstructor.pretty_print(db.upcast())
+				)
 			}
 			PatternTy::Computing => "{computing}".to_owned(),
 		}

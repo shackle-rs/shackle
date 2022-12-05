@@ -258,4 +258,5 @@ id_registry!(
 	index_set,
 	shackle_type,
 	empty_annotation,
+	minus: "-",
 );
