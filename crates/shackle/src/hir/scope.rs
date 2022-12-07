@@ -9,7 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	arena::{Arena, ArenaIndex, ArenaMap},
-	diagnostics::{DeclarationShadowing, IdentifierAlreadyDefined, InvalidPattern},
+	diagnostics::{IdentifierAlreadyDefined, IdentifierShadowing, InvalidPattern},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
@@ -467,7 +467,7 @@ impl ScopeCollector<'_> {
 			if src_orig == src_new {
 				// Same file, so warn about shadowing
 				self.warnings.push(
-					DeclarationShadowing {
+					IdentifierShadowing {
 						name: self.data[index].identifier().unwrap().pretty_print(self.db),
 						src: src_new,
 						span: span_new,

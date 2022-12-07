@@ -5,7 +5,8 @@ use crate::{
 	arena::ArenaIndex,
 	diagnostics::{
 		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
-		NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
+		InvalidPattern, NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch,
+		UndefinedIdentifier,
 	},
 	hir::{
 		db::Hir,
@@ -197,8 +198,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					// Error will be emitted during topological sorting
 					return self.types.error;
 				}
-				_ => {
-					unreachable!("Matched variable in scope, but not a variable or type alias")
+				pattern_ty => {
+					unreachable!(
+						"Matched variable in scope, but not a variable or type alias ({:?})",
+						pattern_ty
+					)
 				}
 			}
 		}
@@ -499,7 +503,21 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 			};
 			for p in g.patterns.iter() {
-				self.collect_pattern(Some(expr), *p, gen_el);
+				if Pattern::is_singular(*p, self.data) {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						InvalidPattern {
+							src,
+							span,
+							msg:
+								"Pattern which matches a single value cannot be used for iteration"
+									.to_owned(),
+						},
+					);
+				}
+				self.collect_pattern(Some(expr), false, *p, gen_el);
 			}
 			if let Some(w) = g.where_clause {
 				let where_clause = self.collect_expression(w, None);
@@ -611,7 +629,21 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 			};
 			for p in g.patterns.iter() {
-				self.collect_pattern(Some(expr), *p, gen_el);
+				if Pattern::is_singular(*p, self.data) {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						InvalidPattern {
+							src,
+							span,
+							msg:
+								"Pattern which matches a single value cannot be used for iteration"
+									.to_owned(),
+						},
+					);
+				}
+				self.collect_pattern(Some(expr), false, *p, gen_el);
 			}
 			if let Some(w) = g.where_clause {
 				let where_clause = self.collect_expression(w, None);
@@ -1257,7 +1289,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		let scrutinee = self.collect_expression(c.expression, None);
 		for case in c.cases.iter() {
-			self.collect_pattern(Some(expr), case.pattern, scrutinee);
+			self.collect_pattern(Some(expr), true, case.pattern, scrutinee);
 		}
 		let cases = c
 			.cases
@@ -1371,7 +1403,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		} else {
 			self.complete_type(d.declared_type, None)
 		};
-		self.collect_pattern(None, d.pattern, ty);
+		self.collect_pattern(None, false, d.pattern, ty);
 		for ann in d.annotations.iter() {
 			self.typecheck_expression(*ann, self.types.ann, Some(ty));
 		}
@@ -1395,7 +1427,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.map(|param| {
 				let ty = self.complete_type(param.declared_type, None);
 				if let Some(p) = param.pattern {
-					self.collect_pattern(None, p, ty);
+					self.collect_pattern(None, false, p, ty);
 				}
 				ty
 			})
@@ -1724,6 +1756,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	pub fn collect_pattern(
 		&mut self,
 		scope: Option<ArenaIndex<Expression>>,
+		resolves_atoms: bool,
 		pat: ArenaIndex<Pattern>,
 		expected: Ty,
 	) -> Ty {
@@ -1737,27 +1770,31 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Pattern::Anonymous => expected,
 			Pattern::Missing => self.types.error,
 			Pattern::Identifier(i) => {
-				// If this is an enum atom, then add a resolution to it
-				let res = (|| {
-					let p = self.find_variable(scope?, *i)?;
-					match self.ctx.type_pattern(db, p) {
-						PatternTy::EnumAtom(ty) => {
-							self.ctx
-								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-							Some(ty)
+				let res = if resolves_atoms {
+					// If this is an enum atom, then add a resolution to it
+					(|| {
+						let p = self.find_variable(scope?, *i)?;
+						match self.ctx.type_pattern(db, p) {
+							PatternTy::EnumAtom(ty) => {
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+								Some(ty)
+							}
+							PatternTy::AnnotationAtom => {
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+								Some(self.types.ann)
+							}
+							_ => None,
 						}
-						PatternTy::AnnotationAtom => {
-							self.ctx
-								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-							Some(self.types.ann)
-						}
-						_ => None,
-					}
-				})();
+					})()
+				} else {
+					None
+				};
 				if let Some(ty) = res {
 					ty
 				} else {
-					// This pattern is irrefutable and declares a new variable
+					// This pattern declares a new variable
 					self.ctx.add_declaration(
 						PatternRef::new(self.item, pat),
 						PatternTy::Variable(expected),
@@ -1856,7 +1893,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							.copied()
 							.chain(std::iter::repeat(self.types.error)),
 					) {
-						self.collect_pattern(scope, *p, t);
+						self.collect_pattern(scope, resolves_atoms, *p, t);
 					}
 					let fn_pat = PatternRef::new(self.item, *function);
 					self.ctx.add_pattern_resolution(fn_pat, ctor_pat);
@@ -1884,7 +1921,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				} else {
 					// Continue collection
 					for p in arguments.iter() {
-						self.collect_pattern(scope, *p, self.types.error);
+						self.collect_pattern(scope, resolves_atoms, *p, self.types.error);
 					}
 					self.types.error
 				}
@@ -1899,13 +1936,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								.copied()
 								.chain(std::iter::repeat(self.types.error)),
 						)
-						.map(|(p, e)| self.collect_pattern(scope, *p, e)),
+						.map(|(p, e)| self.collect_pattern(scope, resolves_atoms, *p, e)),
 				),
 				_ => Ty::tuple(
 					db.upcast(),
 					fields
 						.iter()
-						.map(|p| self.collect_pattern(scope, *p, self.types.error)),
+						.map(|p| self.collect_pattern(scope, resolves_atoms, *p, self.types.error)),
 				),
 			},
 			Pattern::Record { fields } => match expected.lookup(db.upcast()) {
@@ -1921,6 +1958,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								*i,
 								self.collect_pattern(
 									scope,
+									resolves_atoms,
 									*p,
 									map.get(&i.0).copied().unwrap_or(self.types.error),
 								),
@@ -1930,9 +1968,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				_ => Ty::record(
 					db.upcast(),
-					fields
-						.iter()
-						.map(|(i, p)| (*i, self.collect_pattern(scope, *p, self.types.error))),
+					fields.iter().map(|(i, p)| {
+						(
+							*i,
+							self.collect_pattern(scope, resolves_atoms, *p, self.types.error),
+						)
+					}),
 				),
 			},
 		};

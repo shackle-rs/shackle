@@ -5,21 +5,21 @@ use thiserror::Error;
 
 use crate::file::SourceFile;
 
-/// Unreachable case expression arm
+/// Identifier shadows another
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
-#[error("Declaration shadows variable")]
+#[error("Variable shadows identifier")]
 #[diagnostic(code(shackle::shadowed_variable), severity(Warning))]
-pub struct DeclarationShadowing {
+pub struct IdentifierShadowing {
 	/// The name of the variable
 	pub name: String,
 	/// The source code
 	#[source_code]
 	pub src: SourceFile,
 	/// The span of the new variable declaration
-	#[label("Variable {name} shadows variable with same name")]
+	#[label("Variable {name} shadows identifier with same name")]
 	pub span: SourceSpan,
 	/// The span of the original variable declaration
-	#[label("This variable is shadowed")]
+	#[label("This identifier is shadowed")]
 	pub original: SourceSpan,
 }
 
@@ -39,10 +39,10 @@ pub struct UnreachablePattern {
 /// Shackle warning type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum Warning {
-	/// Declaration shadows another
+	/// Identifier shadows another
 	#[error(transparent)]
 	#[diagnostic(transparent)]
-	DeclarationShadowing(#[from] DeclarationShadowing),
+	IdentifierShadowing(#[from] IdentifierShadowing),
 	/// Unreachable case expression arm
 	#[error(transparent)]
 	#[diagnostic(transparent)]

@@ -90,6 +90,22 @@ impl Pattern {
 			None
 		})
 	}
+
+	/// Get whether this pattern can only possibly match a single value
+	/// (i.e. no identifiers, no wildcards)
+	pub fn is_singular(pattern: ArenaIndex<Pattern>, data: &ItemData) -> bool {
+		let mut todo = vec![pattern];
+		while let Some(p) = todo.pop() {
+			match &data[p] {
+				Pattern::Identifier(_) | Pattern::Anonymous => return false,
+				Pattern::Call { arguments, .. } => todo.extend(arguments.iter().copied()),
+				Pattern::Tuple { fields } => todo.extend(fields.iter().copied()),
+				Pattern::Record { fields } => todo.extend(fields.iter().map(|(_, p)| *p)),
+				_ => (),
+			}
+		}
+		true
+	}
 }
 
 /// Identifier
