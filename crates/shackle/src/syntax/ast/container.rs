@@ -233,7 +233,7 @@ impl Generator {
 		child_with_field_name(self, "collection")
 	}
 
-	/// Where clause constraining interation
+	/// Where clause constraining iteration
 	pub fn where_clause(&self) -> Option<Expression> {
 		optional_child_with_field_name(self, "where")
 	}

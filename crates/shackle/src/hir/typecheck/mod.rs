@@ -18,13 +18,17 @@
 //! Bodies are for expressions in top-level items which need to be type-checked,
 //! but cannot be referred to by an identifier. So computing types for bodies
 //! may require signatures to be typed, and these in turn may require other
-//! signatures to be typed, but never bodies.
+//! signatures to be typed, but never other bodies.
 //!
 //! Typing signatures does not cause types of signatures it depends on to be
 //! queried from the database, as this can create cycles, which cannot be
 //! recovered from in a useful way. The types of dependent signatures are
 //! always computed, so there is some redundant recomputation, but the effect
 //! is minimal.
+//!
+//! The `SignatureTypeContext` and `BodyTypeContext` structs implement the
+//! `TypeContext` trait, which allows them to both use the `Typer` struct to
+//! perform type-checking of expressions.
 
 use std::{
 	fmt::Write,
@@ -368,6 +372,8 @@ impl TypeDiagnostics {
 }
 
 /// Context for computation of types
+///
+/// The `Typer` calls these functions when computing types for expressions.
 pub trait TypeContext {
 	/// Add a declaration for a pattern
 	fn add_declaration(&mut self, pattern: PatternRef, declaration: PatternTy);
@@ -406,38 +412,52 @@ pub fn collect_item_body(db: &dyn Hir, item: ItemRef) -> (Arc<BodyTypes>, Arc<Ve
 /// Type of a pattern (usually a declaration)
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PatternTy {
-	/// Pattern is a variable declaration
+	/// Pattern is a variable declaration.
 	Variable(Ty),
-	/// Pattern is a function (with a flag indicating if the return type is known yet)
+	/// Pattern is a function declaration.
 	Function(Box<FunctionEntry>),
-	/// Pattern is a type-inst variable
+	/// Pattern is a type-inst variable declaration.
 	TyVar(TyVar),
-	/// Pattern is a type-inst alias
+	/// Pattern is a type-inst alias declaration.
 	TypeAlias(Ty),
-	/// Enum constructor
+	/// Enum constructor.
+	///
+	/// Defines the Foo(x) function.
 	EnumConstructor(Box<[EnumConstructorEntry]>),
-	/// Anonymous enum constructor
+	/// Anonymous enum constructor.
+	///
+	/// While the constructor cannot actually be called,
+	/// we still keep track of it for convenience.
 	AnonymousEnumConstructor(Box<FunctionEntry>),
-	/// Enum deconstructor
+	/// Enum deconstructor.
+	///
+	/// Defines the Foo^-1(x) function.
 	EnumDeconstructor(Box<[FunctionEntry]>),
 	/// Enum atom
 	EnumAtom(Ty),
-	/// Annotation constructor
+	/// Annotation constructor.
+	///
+	/// Defines the Foo(x) function.
 	AnnotationConstructor(Box<FunctionEntry>),
-	/// Annotation deconstructor
+	/// Annotation deconstructor.
+	///
+	/// Defines the Foo^-1(x) function.
 	AnnotationDeconstructor(Box<FunctionEntry>),
 	/// Annotation atom
 	AnnotationAtom,
 	/// Destructuring pattern
 	Destructuring(Ty),
 	/// Destructuring function call identifier
+	///
+	/// Used for the constructor identifier pattern
+	/// (the call will have the `Destructuring` type)
 	DestructuringFn {
 		/// The type of the constructor function
 		constructor: Ty,
 		/// The type of the deconstructor function
 		deconstructor: Ty,
 	},
-	/// Currently computing
+	/// Currently computing - if encountered, indicates a cycle
 	Computing,
 }
 
