@@ -330,289 +330,557 @@ impl TypeInstEnumIdentifier {
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use crate::syntax::ast::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_array_type() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			array [_] of bool: x;
 			array [foo, bar] of bool: y;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: ArrayType(
+                        ArrayType {
+                            cst_kind: "array_type",
+                            dimensions: [
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Bounded(
+                                            Anonymous(
+                                                Anonymous {
+                                                    cst_kind: "anonymous",
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ],
+                            element_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Unbounded(
+                                        UnboundedDomain {
+                                            cst_kind: "primitive_type",
+                                            primitive_type: Bool,
+                                        },
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    declared_type: ArrayType(
+                        ArrayType {
+                            cst_kind: "array_type",
+                            dimensions: [
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Bounded(
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "foo",
+                                                    },
+                                                ),
+                                            ),
+                                        ),
+                                    },
+                                ),
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Bounded(
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "bar",
+                                                    },
+                                                ),
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ],
+                            element_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Unbounded(
+                                        UnboundedDomain {
+                                            cst_kind: "primitive_type",
+                                            primitive_type: Bool,
+                                        },
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		{
-			let x = items[0].cast_ref::<Declaration>().unwrap();
-			assert_eq!(x.pattern().cast::<Identifier>().unwrap().name(), "x");
-			let x_t = x.declared_type().cast::<ArrayType>().unwrap();
-			let x_dims: Vec<_> = x_t.dimensions().collect();
-			assert_eq!(x_dims.len(), 1);
-			x_dims[0]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<Expression>()
-				.unwrap()
-				.cast::<Anonymous>()
-				.unwrap();
-			assert!(x_t
-				.element_type()
-				.cast::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-		}
-		{
-			let y = items[1].cast_ref::<Declaration>().unwrap();
-			assert_eq!(y.pattern().cast::<Identifier>().unwrap().name(), "y");
-			let y_t = y.declared_type().cast::<ArrayType>().unwrap();
-			let y_dims: Vec<_> = y_t.dimensions().collect();
-			assert_eq!(y_dims.len(), 2);
-			assert_eq!(
-				y_dims[0]
-					.cast_ref::<TypeBase>()
-					.unwrap()
-					.domain()
-					.cast::<Expression>()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"foo"
-			);
-			assert_eq!(
-				y_dims[1]
-					.cast_ref::<TypeBase>()
-					.unwrap()
-					.domain()
-					.cast::<Expression>()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"bar"
-			);
-			assert!(y_t
-				.element_type()
-				.cast::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-		}
 	}
 
 	#[test]
 	fn test_tuple_type() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			tuple(int, bool): x;
 			tuple(int, tuple(bool, float)): y;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: TupleType(
+                        TupleType {
+                            cst_kind: "tuple_type",
+                            fields: [
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Int,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Bool,
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    declared_type: TupleType(
+                        TupleType {
+                            cst_kind: "tuple_type",
+                            fields: [
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Int,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                TupleType(
+                                    TupleType {
+                                        cst_kind: "tuple_type",
+                                        fields: [
+                                            TypeBase(
+                                                TypeBase {
+                                                    cst_kind: "type_base",
+                                                    var_type: None,
+                                                    opt_type: None,
+                                                    any_type: false,
+                                                    domain: Unbounded(
+                                                        UnboundedDomain {
+                                                            cst_kind: "primitive_type",
+                                                            primitive_type: Bool,
+                                                        },
+                                                    ),
+                                                },
+                                            ),
+                                            TypeBase(
+                                                TypeBase {
+                                                    cst_kind: "type_base",
+                                                    var_type: None,
+                                                    opt_type: None,
+                                                    any_type: false,
+                                                    domain: Unbounded(
+                                                        UnboundedDomain {
+                                                            cst_kind: "primitive_type",
+                                                            primitive_type: Float,
+                                                        },
+                                                    ),
+                                                },
+                                            ),
+                                        ],
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		{
-			let x = items[0].cast_ref::<Declaration>().unwrap();
-			assert_eq!(x.pattern().cast::<Identifier>().unwrap().name(), "x");
-			let x_t = x.declared_type().cast::<TupleType>().unwrap();
-			let x_fields: Vec<_> = x_t.fields().collect();
-			assert_eq!(x_fields.len(), 2);
-			assert!(x_fields[0]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			assert!(x_fields[1]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-		}
-		{
-			let y = items[1].cast_ref::<Declaration>().unwrap();
-			assert_eq!(y.pattern().cast::<Identifier>().unwrap().name(), "y");
-			let y_t = y.declared_type().cast::<TupleType>().unwrap();
-			let y_fields: Vec<_> = y_t.fields().collect();
-			assert_eq!(y_fields.len(), 2);
-			assert!(y_fields[0]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			let y_fields_2: Vec<_> = y_fields[1]
-				.cast_ref::<TupleType>()
-				.unwrap()
-				.fields()
-				.collect();
-			assert_eq!(y_fields_2.len(), 2);
-			assert!(y_fields_2[0]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-			assert!(y_fields_2[1]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_float());
-		}
 	}
 
 	#[test]
 	fn test_record_type() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			record(int: a, bool: b): x;
 			record(int: a, record(bool: c, float: d): b): y;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: RecordType(
+                        RecordType {
+                            cst_kind: "record_type",
+                            fields: [
+                                RecordField {
+                                    cst_kind: "record_type_field",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "a",
+                                        },
+                                    ),
+                                    field_type: TypeBase(
+                                        TypeBase {
+                                            cst_kind: "type_base",
+                                            var_type: None,
+                                            opt_type: None,
+                                            any_type: false,
+                                            domain: Unbounded(
+                                                UnboundedDomain {
+                                                    cst_kind: "primitive_type",
+                                                    primitive_type: Int,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                                RecordField {
+                                    cst_kind: "record_type_field",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "b",
+                                        },
+                                    ),
+                                    field_type: TypeBase(
+                                        TypeBase {
+                                            cst_kind: "type_base",
+                                            var_type: None,
+                                            opt_type: None,
+                                            any_type: false,
+                                            domain: Unbounded(
+                                                UnboundedDomain {
+                                                    cst_kind: "primitive_type",
+                                                    primitive_type: Bool,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    declared_type: RecordType(
+                        RecordType {
+                            cst_kind: "record_type",
+                            fields: [
+                                RecordField {
+                                    cst_kind: "record_type_field",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "a",
+                                        },
+                                    ),
+                                    field_type: TypeBase(
+                                        TypeBase {
+                                            cst_kind: "type_base",
+                                            var_type: None,
+                                            opt_type: None,
+                                            any_type: false,
+                                            domain: Unbounded(
+                                                UnboundedDomain {
+                                                    cst_kind: "primitive_type",
+                                                    primitive_type: Int,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                                RecordField {
+                                    cst_kind: "record_type_field",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "b",
+                                        },
+                                    ),
+                                    field_type: RecordType(
+                                        RecordType {
+                                            cst_kind: "record_type",
+                                            fields: [
+                                                RecordField {
+                                                    cst_kind: "record_type_field",
+                                                    name: UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "c",
+                                                        },
+                                                    ),
+                                                    field_type: TypeBase(
+                                                        TypeBase {
+                                                            cst_kind: "type_base",
+                                                            var_type: None,
+                                                            opt_type: None,
+                                                            any_type: false,
+                                                            domain: Unbounded(
+                                                                UnboundedDomain {
+                                                                    cst_kind: "primitive_type",
+                                                                    primitive_type: Bool,
+                                                                },
+                                                            ),
+                                                        },
+                                                    ),
+                                                },
+                                                RecordField {
+                                                    cst_kind: "record_type_field",
+                                                    name: UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "d",
+                                                        },
+                                                    ),
+                                                    field_type: TypeBase(
+                                                        TypeBase {
+                                                            cst_kind: "type_base",
+                                                            var_type: None,
+                                                            opt_type: None,
+                                                            any_type: false,
+                                                            domain: Unbounded(
+                                                                UnboundedDomain {
+                                                                    cst_kind: "primitive_type",
+                                                                    primitive_type: Float,
+                                                                },
+                                                            ),
+                                                        },
+                                                    ),
+                                                },
+                                            ],
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		{
-			let x = items[0].cast_ref::<Declaration>().unwrap();
-			assert_eq!(x.pattern().cast::<Identifier>().unwrap().name(), "x");
-			let x_t = x.declared_type().cast::<RecordType>().unwrap();
-			let x_fields: Vec<_> = x_t.fields().collect();
-			assert_eq!(x_fields.len(), 2);
-			assert_eq!(x_fields[0].name().name(), "a");
-			assert!(x_fields[0]
-				.field_type()
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			assert_eq!(x_fields[1].name().name(), "b");
-			assert!(x_fields[1]
-				.field_type()
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-		}
-		{
-			let y = items[1].cast_ref::<Declaration>().unwrap();
-			assert_eq!(y.pattern().cast::<Identifier>().unwrap().name(), "y");
-			let y_t = y.declared_type().cast::<RecordType>().unwrap();
-			let y_fields: Vec<_> = y_t.fields().collect();
-			assert_eq!(y_fields.len(), 2);
-			assert_eq!(y_fields[0].name().name(), "a");
-			assert!(y_fields[0]
-				.field_type()
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			assert_eq!(y_fields[1].name().name(), "b");
-			let y_fields_2: Vec<_> = y_fields[1]
-				.field_type()
-				.cast_ref::<RecordType>()
-				.unwrap()
-				.fields()
-				.collect();
-			assert_eq!(y_fields_2.len(), 2);
-			assert_eq!(y_fields_2[0].name().name(), "c");
-			assert!(y_fields_2[0]
-				.field_type()
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-			assert_eq!(y_fields_2[1].name().name(), "d");
-			assert!(y_fields_2[1]
-				.field_type()
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_float());
-		}
 	}
 
 	#[test]
 	fn test_operation_type() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			op(int: (bool, string)): x;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: OperationType(
+                        OperationType {
+                            cst_kind: "operation_type",
+                            return_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Unbounded(
+                                        UnboundedDomain {
+                                            cst_kind: "primitive_type",
+                                            primitive_type: Int,
+                                        },
+                                    ),
+                                },
+                            ),
+                            parameter_types: [
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Bool,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: String,
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let x = items[0].cast_ref::<Declaration>().unwrap();
-			assert_eq!(x.pattern().cast::<Identifier>().unwrap().name(), "x");
-			let x_t = x.declared_type().cast::<OperationType>().unwrap();
-			assert!(x_t
-				.return_type()
-				.cast::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			let x_ps: Vec<_> = x_t.parameter_types().collect();
-			assert_eq!(x_ps.len(), 2);
-			assert!(x_ps[0]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-			assert!(x_ps[1]
-				.cast_ref::<TypeBase>()
-				.unwrap()
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_string());
-		}
 	}
 
 	#[test]
 	fn test_type_base() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			int: a;
 			var bool: b;
@@ -624,123 +892,309 @@ mod test {
 			opt $T: h;
 			var $$E: i;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "a",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Int,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "b",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: Some(
+                                Var,
+                            ),
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Bool,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "c",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: Some(
+                                Var,
+                            ),
+                            opt_type: Some(
+                                Opt,
+                            ),
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: String,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "d",
+                            },
+                        ),
+                    ),
+                    declared_type: SetType(
+                        SetType {
+                            cst_kind: "set_type",
+                            var_type: Var,
+                            opt_type: NonOpt,
+                            element_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Bounded(
+                                        InfixOperator(
+                                            InfixOperator {
+                                                cst_kind: "infix_operator",
+                                                left: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 1,
+                                                    },
+                                                ),
+                                                operator: Operator {
+                                                    cst_kind: "..",
+                                                    name: "..",
+                                                },
+                                                right: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 3,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "e",
+                            },
+                        ),
+                    ),
+                    declared_type: SetType(
+                        SetType {
+                            cst_kind: "set_type",
+                            var_type: Par,
+                            opt_type: Opt,
+                            element_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Bounded(
+                                        Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "Foo",
+                                                },
+                                            ),
+                                        ),
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "f",
+                            },
+                        ),
+                    ),
+                    declared_type: AnyType(
+                        AnyType {
+                            cst_kind: "any_type",
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "g",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: TypeInstIdentifier(
+                                TypeInstIdentifier {
+                                    cst_kind: "type_inst_id",
+                                    name: "$T",
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "h",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: Some(
+                                Opt,
+                            ),
+                            any_type: false,
+                            domain: TypeInstIdentifier(
+                                TypeInstIdentifier {
+                                    cst_kind: "type_inst_id",
+                                    name: "$T",
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "i",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: Some(
+                                Var,
+                            ),
+                            opt_type: None,
+                            any_type: false,
+                            domain: TypeInstEnumIdentifier(
+                                TypeInstEnumIdentifier {
+                                    cst_kind: "type_inst_enum_id",
+                                    name: "$$E",
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 9);
-		{
-			let a = items[0].cast_ref::<Declaration>().unwrap();
-			assert_eq!(a.pattern().cast::<Identifier>().unwrap().name(), "a");
-			let t = a.declared_type().cast::<TypeBase>().unwrap();
-			assert!(t.var_type().is_none());
-			assert!(t.opt_type().is_none());
-			assert!(t
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-		}
-		{
-			let b = items[1].cast_ref::<Declaration>().unwrap();
-			assert_eq!(b.pattern().cast::<Identifier>().unwrap().name(), "b");
-			let t = b.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), Some(VarType::Var));
-			assert!(t.opt_type().is_none());
-			assert!(t
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_bool());
-		}
-		{
-			let c = items[2].cast_ref::<Declaration>().unwrap();
-			assert_eq!(c.pattern().cast::<Identifier>().unwrap().name(), "c");
-			let t = c.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), Some(VarType::Var));
-			assert_eq!(t.opt_type(), Some(OptType::Opt));
-			assert!(t
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_string());
-		}
-		{
-			let d = items[3].cast_ref::<Declaration>().unwrap();
-			assert_eq!(d.pattern().cast::<Identifier>().unwrap().name(), "d");
-			let t = d.declared_type().cast::<SetType>().unwrap();
-			assert_eq!(t.var_type(), VarType::Var);
-			assert_eq!(t.opt_type(), OptType::NonOpt);
-			let e = t.element_type().cast::<TypeBase>().unwrap();
-			assert!(e.var_type().is_none());
-			assert!(e.opt_type().is_none());
-			let dom = e
-				.domain()
-				.cast::<Expression>()
-				.unwrap()
-				.cast::<InfixOperator>()
-				.unwrap();
-			assert_eq!(dom.left().cast::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(dom.operator().name(), "..");
-			assert_eq!(dom.right().cast::<IntegerLiteral>().unwrap().value(), 3);
-		}
-		{
-			let e = items[4].cast_ref::<Declaration>().unwrap();
-			assert_eq!(e.pattern().cast::<Identifier>().unwrap().name(), "e");
-			let t = e.declared_type().cast::<SetType>().unwrap();
-			assert_eq!(t.var_type(), VarType::Par);
-			assert_eq!(t.opt_type(), OptType::Opt);
-			let u = t.element_type().cast::<TypeBase>().unwrap();
-			assert!(u.var_type().is_none());
-			assert!(u.opt_type().is_none());
-			assert_eq!(
-				u.domain()
-					.cast::<Expression>()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"Foo"
-			);
-		}
-		{
-			let f = items[5].cast_ref::<Declaration>().unwrap();
-			assert_eq!(f.pattern().cast::<Identifier>().unwrap().name(), "f");
-			assert!(f.declared_type().cast::<AnyType>().is_some());
-		}
-		{
-			let g = items[6].cast_ref::<Declaration>().unwrap();
-			assert_eq!(g.pattern().cast::<Identifier>().unwrap().name(), "g");
-			let t = g.declared_type().cast::<TypeBase>().unwrap();
-			assert!(t.var_type().is_none());
-			assert!(t.opt_type().is_none());
-			assert_eq!(
-				t.domain().cast::<TypeInstIdentifier>().unwrap().name(),
-				"$T"
-			);
-		}
-		{
-			let h = items[7].cast_ref::<Declaration>().unwrap();
-			assert_eq!(h.pattern().cast::<Identifier>().unwrap().name(), "h");
-			let t = h.declared_type().cast::<TypeBase>().unwrap();
-			assert!(t.var_type().is_none());
-			assert_eq!(t.opt_type(), Some(OptType::Opt));
-			assert_eq!(
-				t.domain().cast::<TypeInstIdentifier>().unwrap().name(),
-				"$T"
-			);
-		}
-		{
-			let i = items[8].cast_ref::<Declaration>().unwrap();
-			assert_eq!(i.pattern().cast::<Identifier>().unwrap().name(), "i");
-			let t = i.declared_type().cast::<TypeBase>().unwrap();
-			assert_eq!(t.var_type(), Some(VarType::Var));
-			assert!(t.opt_type().is_none());
-			assert_eq!(
-				t.domain().cast::<TypeInstEnumIdentifier>().unwrap().name(),
-				"$$E"
-			);
-		}
 	}
 }

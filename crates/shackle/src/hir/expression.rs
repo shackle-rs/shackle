@@ -8,8 +8,8 @@ use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
 use super::{
 	ArrayAccess, ArrayComprehension, ArrayLiteral, BooleanLiteral, Constraint, Declaration,
-	FloatLiteral, Identifier, IntegerLiteral, ItemData, Parameter, Pattern, RecordLiteral,
-	SetComprehension, SetLiteral, StringLiteral, TupleLiteral, Type,
+	FloatLiteral, Generator, Identifier, IntegerLiteral, ItemData, Parameter, Pattern,
+	RecordLiteral, SetComprehension, SetLiteral, StringLiteral, TupleLiteral, Type,
 };
 
 /// An expression
@@ -82,9 +82,19 @@ impl Expression {
 					todo.push(aa.indices);
 				}
 				Expression::ArrayComprehension(c) => {
-					for g in c.generators.iter() {
-						todo.push(g.collection);
-						todo.extend(g.where_clause);
+					for Generator::Iterator {
+						collection: v,
+						where_clause,
+						..
+					}
+					| Generator::Assignment {
+						value: v,
+						where_clause,
+						..
+					} in c.generators.iter()
+					{
+						todo.push(*v);
+						todo.extend(*where_clause);
 					}
 					todo.extend(c.indices);
 					todo.push(c.template);
@@ -126,9 +136,19 @@ impl Expression {
 					todo.extend(rl.fields.iter().map(|(_, e)| *e));
 				}
 				Expression::SetComprehension(c) => {
-					for g in c.generators.iter() {
-						todo.push(g.collection);
-						todo.extend(g.where_clause);
+					for Generator::Iterator {
+						collection: v,
+						where_clause,
+						..
+					}
+					| Generator::Assignment {
+						value: v,
+						where_clause,
+						..
+					} in c.generators.iter()
+					{
+						todo.push(*v);
+						todo.extend(*where_clause);
 					}
 					todo.push(c.template);
 				}

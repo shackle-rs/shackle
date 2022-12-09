@@ -569,6 +569,10 @@
         "required": true,
         "types": [
           {
+            "type": "assignment_generator",
+            "named": true
+          },
+          {
             "type": "generator",
             "named": true
           }
@@ -740,6 +744,78 @@
           },
           {
             "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "assignment_generator",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "where": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
             "named": true
           }
         ]
@@ -1809,6 +1885,10 @@
         "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "assignment_generator",
+            "named": true
+          },
           {
             "type": "generator",
             "named": true
@@ -3603,6 +3683,10 @@
         "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "assignment_generator",
+            "named": true
+          },
           {
             "type": "generator",
             "named": true

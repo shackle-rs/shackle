@@ -73,73 +73,148 @@ ast_node!(
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use crate::syntax::ast::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_integer_literal() {
-		let model = parse_model("x = 1;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let assignment = items.first().unwrap().cast_ref::<Assignment>().unwrap();
-		assert_eq!(
-			assignment.assignee().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let rhs = assignment.definition().cast::<IntegerLiteral>().unwrap();
-		assert_eq!(rhs.value(), 1);
+		check_ast("x = 1;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: IntegerLiteral(
+                        IntegerLiteral {
+                            cst_kind: "integer_literal",
+                            value: 1,
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_float_literal() {
-		let model = parse_model("x = 1.2;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let assignment = items.first().unwrap().cast_ref::<Assignment>().unwrap();
-		assert_eq!(
-			assignment.assignee().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let rhs = assignment.definition().cast::<FloatLiteral>().unwrap();
-		assert_eq!(rhs.value(), 1.2);
+		check_ast("x = 1.2;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: FloatLiteral(
+                        FloatLiteral {
+                            cst_kind: "float_literal",
+                            value: 1.2,
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_string_literal() {
-		let model = parse_model(r#"x = "foo";"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let assignment = items.first().unwrap().cast_ref::<Assignment>().unwrap();
-		assert_eq!(
-			assignment.assignee().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let rhs = assignment.definition().cast::<StringLiteral>().unwrap();
-		assert_eq!(rhs.value(), "foo");
+		check_ast(r#"x = "foo";"#, expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: StringLiteral(
+                        StringLiteral {
+                            cst_kind: "string_literal",
+                            value: "foo",
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_absent() {
-		let model = parse_model("x = <>;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let assignment = items.first().unwrap().cast_ref::<Assignment>().unwrap();
-		assert_eq!(
-			assignment.assignee().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let _ = assignment.definition().cast::<Absent>().unwrap();
+		check_ast("x = <>;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: Absent(
+                        Absent {
+                            cst_kind: "absent",
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_infinity() {
-		let model = parse_model(r#"x = infinity;"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let assignment = items.first().unwrap().cast_ref::<Assignment>().unwrap();
-		assert_eq!(
-			assignment.assignee().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let _ = assignment.definition().cast::<Infinity>().unwrap();
+		check_ast(r#"x = infinity;"#, expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: Infinity(
+                        Infinity {
+                            cst_kind: "infinity",
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 }

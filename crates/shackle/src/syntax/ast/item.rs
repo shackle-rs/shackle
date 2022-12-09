@@ -460,171 +460,380 @@ impl TypeAlias {
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use crate::syntax::ast::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_include() {
-		let model = parse_model(r#"include "foo.mzn";"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let include = items.first().unwrap().cast_ref::<Include>().unwrap();
-		let file = include.file();
-		assert_eq!(file.value(), "foo.mzn");
+		check_ast(r#"include "foo.mzn";"#, expect!([r#"
+    Model {
+        items: [
+            Include(
+                Include {
+                    cst_kind: "include",
+                    file: StringLiteral {
+                        cst_kind: "string_literal",
+                        value: "foo.mzn",
+                    },
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_declaration() {
-		let model = parse_model("int: x = 3;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let declaration = items.first().unwrap().cast_ref::<Declaration>().unwrap();
-		assert_eq!(
-			declaration.pattern().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let base = declaration.declared_type().cast::<TypeBase>().unwrap();
-		assert!(base.var_type().is_none());
-		let pt = base
-			.domain()
-			.cast_ref::<UnboundedDomain>()
-			.unwrap()
-			.primitive_type();
-		assert!(pt.is_int());
-		let def = declaration
-			.definition()
-			.unwrap()
-			.cast::<IntegerLiteral>()
-			.unwrap();
-		assert_eq!(def.value(), 3);
+		check_ast("int: x = 3;", expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Int,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: Some(
+                        IntegerLiteral(
+                            IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: 3,
+                            },
+                        ),
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_enumeration() {
-		let model = parse_model("enum Foo = {A, B, C};");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let enumeration = items.first().unwrap().cast_ref::<Enumeration>().unwrap();
-		assert_eq!(enumeration.id().name(), "Foo");
-		let cases: Vec<_> = enumeration.cases().collect();
-		assert_eq!(cases.len(), 1);
-		let definition = cases
-			.first()
-			.unwrap()
-			.cast_ref::<EnumerationMembers>()
-			.unwrap();
-		let members: Vec<_> = definition.members().collect();
-		assert_eq!(members.len(), 3);
-		assert_eq!(members[0].name(), "A");
-		assert_eq!(members[1].name(), "B");
-		assert_eq!(members[2].name(), "C");
+		check_ast("enum Foo = {A, B, C};", expect!([r#"
+    Model {
+        items: [
+            Enumeration(
+                Enumeration {
+                    cst_kind: "enumeration",
+                    id: UnquotedIdentifier(
+                        UnquotedIdentifier {
+                            cst_kind: "identifier",
+                            name: "Foo",
+                        },
+                    ),
+                    cases: [
+                        Members(
+                            EnumerationMembers {
+                                cst_kind: "enumeration_members",
+                                members: [
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "A",
+                                        },
+                                    ),
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "B",
+                                        },
+                                    ),
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "C",
+                                        },
+                                    ),
+                                ],
+                            },
+                        ),
+                    ],
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_assignment() {
-		let model = parse_model("x = 1;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let assignment = items.first().unwrap().cast_ref::<Assignment>().unwrap();
-		assert_eq!(
-			assignment.assignee().cast::<Identifier>().unwrap().name(),
-			"x"
-		);
-		let rhs = assignment.definition().cast::<IntegerLiteral>().unwrap();
-		assert_eq!(rhs.value(), 1);
+		check_ast("x = 1;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: IntegerLiteral(
+                        IntegerLiteral {
+                            cst_kind: "integer_literal",
+                            value: 1,
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_constraint() {
-		let model = parse_model("constraint x > 1;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let constraint = items.first().unwrap().cast_ref::<Constraint>().unwrap();
-		let op = constraint.expression().cast::<InfixOperator>().unwrap();
-		assert_eq!(op.operator().name(), ">");
-		let lhs = op.left().cast::<Identifier>().unwrap();
-		assert_eq!(lhs.name(), "x");
-		let rhs = op.right().cast::<IntegerLiteral>().unwrap();
-		assert_eq!(rhs.value(), 1);
+		check_ast("constraint x > 1;", expect!([r#"
+    Model {
+        items: [
+            Constraint(
+                Constraint {
+                    cst_kind: "constraint",
+                    expression: InfixOperator(
+                        InfixOperator {
+                            cst_kind: "infix_operator",
+                            left: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "x",
+                                    },
+                                ),
+                            ),
+                            operator: Operator {
+                                cst_kind: ">",
+                                name: ">",
+                            },
+                            right: IntegerLiteral(
+                                IntegerLiteral {
+                                    cst_kind: "integer_literal",
+                                    value: 1,
+                                },
+                            ),
+                        },
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_solve() {
-		let model = parse_model("solve minimize x;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let solve = items.first().unwrap().cast_ref::<Solve>().unwrap();
-		let goal = solve.goal();
-		assert!(goal.is_minimize());
-		let objective = goal.objective().unwrap().cast_ref::<Identifier>().unwrap();
-		assert_eq!(objective.name(), "x");
+		check_ast("solve minimize x;", expect!([r#"
+    Model {
+        items: [
+            Solve(
+                Solve {
+                    cst_kind: "goal",
+                    goal: Minimize(
+                        Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_output() {
-		let model = parse_model(r#"output ["foo"];"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let output = items.first().unwrap().cast_ref::<Output>().unwrap();
-		let value = output.expression().cast::<ArrayLiteral>().unwrap();
-		let members: Vec<_> = value.members().collect();
-		assert_eq!(members.len(), 1);
-		let string = members
-			.first()
-			.unwrap()
-			.value()
-			.cast::<StringLiteral>()
-			.unwrap();
-		assert_eq!(string.value(), "foo");
+		check_ast(r#"output ["foo"];"#, expect!([r#"
+    Model {
+        items: [
+            Output(
+                Output {
+                    cst_kind: "output",
+                    expression: ArrayLiteral(
+                        ArrayLiteral {
+                            cst_kind: "array_literal",
+                            members: [
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: None,
+                                    value: StringLiteral(
+                                        StringLiteral {
+                                            cst_kind: "string_literal",
+                                            value: "foo",
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    section: None,
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_function() {
-		let model = parse_model("function int: foo(int: x) = x + 1;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-
-		let function = items.first().unwrap().cast_ref::<Function>().unwrap();
-		assert_eq!(function.id().name(), "foo");
-
-		let params: Vec<_> = function.parameters().collect();
-		assert_eq!(params.len(), 1);
-		let param = params.first().unwrap();
-		assert_eq!(
-			param
-				.pattern()
-				.unwrap()
-				.cast::<Identifier>()
-				.unwrap()
-				.name(),
-			"x"
-		);
-		let param_type = param.declared_type().cast::<TypeBase>().unwrap();
-		assert!(param_type.var_type().is_none());
-		let domain = param_type.domain().cast::<UnboundedDomain>().unwrap();
-		assert!(domain.primitive_type().is_int());
-
-		let body = function.body().unwrap().cast::<InfixOperator>().unwrap();
-		assert_eq!(body.operator().name(), "+");
-		let lhs = body.left().cast::<Identifier>().unwrap();
-		assert_eq!(lhs.name(), "x");
-		let rhs = body.right().cast::<IntegerLiteral>().unwrap();
-		assert_eq!(rhs.value(), 1);
+		check_ast("function int: foo(int: x) = x + 1;", expect!([r#"
+    Model {
+        items: [
+            Function(
+                Function {
+                    cst_kind: "function_item",
+                    return_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Int,
+                                },
+                            ),
+                        },
+                    ),
+                    id: UnquotedIdentifier(
+                        UnquotedIdentifier {
+                            cst_kind: "identifier",
+                            name: "foo",
+                        },
+                    ),
+                    parameters: [
+                        Parameter {
+                            cst_kind: "parameter",
+                            declared_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Unbounded(
+                                        UnboundedDomain {
+                                            cst_kind: "primitive_type",
+                                            primitive_type: Int,
+                                        },
+                                    ),
+                                },
+                            ),
+                            pattern: Some(
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "x",
+                                        },
+                                    ),
+                                ),
+                            ),
+                            annotations: [],
+                        },
+                    ],
+                    body: Some(
+                        InfixOperator(
+                            InfixOperator {
+                                cst_kind: "infix_operator",
+                                left: Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "x",
+                                        },
+                                    ),
+                                ),
+                                operator: Operator {
+                                    cst_kind: "+",
+                                    name: "+",
+                                },
+                                right: IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 1,
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_type_alias() {
-		let model = parse_model("type Foo = set of int");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		let alias = items.first().unwrap().cast_ref::<TypeAlias>().unwrap();
-		assert_eq!("Foo", alias.name().name());
-		let st = alias.aliased_type().cast::<SetType>().unwrap();
-		assert_eq!(st.var_type(), VarType::Par);
-		assert_eq!(st.opt_type(), OptType::NonOpt);
-		let et = st.element_type().cast::<TypeBase>().unwrap();
-		assert!(et.var_type().is_none());
-		assert!(et.opt_type().is_none());
-		let d = et.domain().cast::<UnboundedDomain>().unwrap();
-		assert_eq!(d.primitive_type(), PrimitiveType::Int);
+		check_ast("type Foo = set of int", expect!([r#"
+    Model {
+        items: [
+            TypeAlias(
+                TypeAlias {
+                    cst_kind: "type_alias",
+                    name: UnquotedIdentifier(
+                        UnquotedIdentifier {
+                            cst_kind: "identifier",
+                            name: "Foo",
+                        },
+                    ),
+                    aliased_type: SetType(
+                        SetType {
+                            cst_kind: "set_type",
+                            var_type: Par,
+                            opt_type: NonOpt,
+                            element_type: TypeBase(
+                                TypeBase {
+                                    cst_kind: "type_base",
+                                    var_type: None,
+                                    opt_type: None,
+                                    any_type: false,
+                                    domain: Unbounded(
+                                        UnboundedDomain {
+                                            cst_kind: "primitive_type",
+                                            primitive_type: Int,
+                                        },
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 }

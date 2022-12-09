@@ -615,10 +615,17 @@ impl ExpressionCollector<'_> {
 	}
 
 	fn collect_generator(&mut self, g: ast::Generator) -> Generator {
-		Generator {
-			collection: self.collect_expression(g.collection()),
-			patterns: g.patterns().map(|p| self.collect_pattern(p)).collect(),
-			where_clause: g.where_clause().map(|w| self.collect_expression(w)),
+		match g {
+			ast::Generator::IteratorGenerator(i) => Generator::Iterator {
+				patterns: i.patterns().map(|p| self.collect_pattern(p)).collect(),
+				collection: self.collect_expression(i.collection()),
+				where_clause: i.where_clause().map(|w| self.collect_expression(w)),
+			},
+			ast::Generator::AssignmentGenerator(a) => Generator::Assignment {
+				pattern: self.collect_pattern(a.pattern()),
+				value: self.collect_expression(a.value()),
+				where_clause: a.where_clause().map(|w| self.collect_expression(w)),
+			},
 		}
 	}
 

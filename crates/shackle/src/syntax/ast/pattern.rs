@@ -118,11 +118,11 @@ impl PatternRecordField {
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use crate::syntax::ast::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_patterns() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		any: (a: (p, q), b: r) = foo;
 		any: v = case x of
@@ -138,86 +138,343 @@ mod test {
 			_ => 10,
 		endcase;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Record(
+                        PatternRecord {
+                            cst_kind: "pattern_record",
+                            fields: [
+                                PatternRecordField {
+                                    cst_kind: "pattern_record_field",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "a",
+                                        },
+                                    ),
+                                    value: Tuple(
+                                        PatternTuple {
+                                            cst_kind: "pattern_tuple",
+                                            fields: [
+                                                Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "p",
+                                                        },
+                                                    ),
+                                                ),
+                                                Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "q",
+                                                        },
+                                                    ),
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                },
+                                PatternRecordField {
+                                    cst_kind: "pattern_record_field",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "b",
+                                        },
+                                    ),
+                                    value: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "r",
+                                            },
+                                        ),
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    declared_type: AnyType(
+                        AnyType {
+                            cst_kind: "any_type",
+                        },
+                    ),
+                    definition: Some(
+                        Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "foo",
+                                },
+                            ),
+                        ),
+                    ),
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "v",
+                            },
+                        ),
+                    ),
+                    declared_type: AnyType(
+                        AnyType {
+                            cst_kind: "any_type",
+                        },
+                    ),
+                    definition: Some(
+                        Case(
+                            Case {
+                                cst_kind: "case_expression",
+                                expression: Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "x",
+                                        },
+                                    ),
+                                ),
+                                cases: [
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "A",
+                                                },
+                                            ),
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: Call(
+                                            PatternCall {
+                                                cst_kind: "pattern_call",
+                                                identifier: UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "B",
+                                                    },
+                                                ),
+                                                arguments: [
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "x",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ],
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 2,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: Call(
+                                            PatternCall {
+                                                cst_kind: "pattern_call",
+                                                identifier: UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "C",
+                                                    },
+                                                ),
+                                                arguments: [
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "x",
+                                                            },
+                                                        ),
+                                                    ),
+                                                    Call(
+                                                        PatternCall {
+                                                            cst_kind: "pattern_call",
+                                                            identifier: UnquotedIdentifier(
+                                                                UnquotedIdentifier {
+                                                                    cst_kind: "identifier",
+                                                                    name: "D",
+                                                                },
+                                                            ),
+                                                            arguments: [
+                                                                Identifier(
+                                                                    UnquotedIdentifier(
+                                                                        UnquotedIdentifier {
+                                                                            cst_kind: "identifier",
+                                                                            name: "y",
+                                                                        },
+                                                                    ),
+                                                                ),
+                                                            ],
+                                                        },
+                                                    ),
+                                                ],
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 3,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: BooleanLiteral(
+                                            BooleanLiteral {
+                                                cst_kind: "boolean_literal",
+                                                value: true,
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 4,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: PatternNumericLiteral(
+                                            PatternNumericLiteral {
+                                                cst_kind: "pattern_numeric_literal",
+                                                negated: false,
+                                                value: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 123,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 5,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: PatternNumericLiteral(
+                                            PatternNumericLiteral {
+                                                cst_kind: "pattern_numeric_literal",
+                                                negated: true,
+                                                value: FloatLiteral(
+                                                    FloatLiteral {
+                                                        cst_kind: "float_literal",
+                                                        value: 5.5,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 6,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: PatternNumericLiteral(
+                                            PatternNumericLiteral {
+                                                cst_kind: "pattern_numeric_literal",
+                                                negated: false,
+                                                value: Infinity(
+                                                    Infinity {
+                                                        cst_kind: "infinity",
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 7,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: StringLiteral(
+                                            StringLiteral {
+                                                cst_kind: "string_literal",
+                                                value: "foo",
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 8,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: Absent(
+                                            Absent {
+                                                cst_kind: "absent",
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 9,
+                                            },
+                                        ),
+                                    },
+                                    CaseItem {
+                                        cst_kind: "case_expression_case",
+                                        pattern: Anonymous(
+                                            Anonymous {
+                                                cst_kind: "anonymous",
+                                            },
+                                        ),
+                                        value: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 10,
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        ),
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		let destructuring = items[0].cast_ref::<Declaration>().unwrap().pattern();
-		let rfs: Vec<_> = destructuring
-			.cast::<PatternRecord>()
-			.unwrap()
-			.fields()
-			.collect();
-		assert_eq!(rfs.len(), 2);
-		assert_eq!(rfs[0].name().name(), "a");
-		let tfs: Vec<_> = rfs[0]
-			.value()
-			.cast::<PatternTuple>()
-			.unwrap()
-			.fields()
-			.collect();
-		assert_eq!(tfs.len(), 2);
-		assert_eq!(tfs[0].cast_ref::<Identifier>().unwrap().name(), "p");
-		assert_eq!(tfs[1].cast_ref::<Identifier>().unwrap().name(), "q");
-		assert_eq!(rfs[1].name().name(), "b");
-		assert_eq!(rfs[1].value().cast::<Identifier>().unwrap().name(), "r");
-		let cases: Vec<_> = items[1]
-			.cast_ref::<Declaration>()
-			.unwrap()
-			.definition()
-			.unwrap()
-			.cast::<Case>()
-			.unwrap()
-			.cases()
-			.collect();
-		assert_eq!(cases.len(), 10);
-		assert_eq!(cases[0].pattern().cast::<Identifier>().unwrap().name(), "A");
-		{
-			let call = cases[1].pattern().cast::<PatternCall>().unwrap();
-			assert_eq!(call.identifier().name(), "B");
-			let call_args: Vec<_> = call.arguments().collect();
-			assert_eq!(call_args.len(), 1);
-			assert_eq!(call_args[0].cast_ref::<Identifier>().unwrap().name(), "x");
-		}
-		{
-			let call = cases[2].pattern().cast::<PatternCall>().unwrap();
-			assert_eq!(call.identifier().name(), "C");
-			let call_args: Vec<_> = call.arguments().collect();
-			assert_eq!(call_args.len(), 2);
-			assert_eq!(call_args[0].cast_ref::<Identifier>().unwrap().name(), "x");
-			let inner_call = call_args[1].cast_ref::<PatternCall>().unwrap();
-			assert_eq!(inner_call.identifier().name(), "D");
-			let inner_call_args: Vec<_> = inner_call.arguments().collect();
-			assert_eq!(inner_call_args.len(), 1);
-			assert_eq!(
-				inner_call_args[0].cast_ref::<Identifier>().unwrap().name(),
-				"y"
-			);
-		}
-		assert!(cases[3].pattern().cast::<BooleanLiteral>().unwrap().value());
-		{
-			let number = cases[4].pattern().cast::<PatternNumericLiteral>().unwrap();
-			assert!(!number.negated());
-			assert_eq!(
-				number.value().cast::<IntegerLiteral>().unwrap().value(),
-				123
-			);
-		}
-		{
-			let number = cases[5].pattern().cast::<PatternNumericLiteral>().unwrap();
-			assert!(number.negated());
-			assert_eq!(number.value().cast::<FloatLiteral>().unwrap().value(), 5.5);
-		}
-		{
-			let number = cases[6].pattern().cast::<PatternNumericLiteral>().unwrap();
-			assert!(!number.negated());
-			let _ = number.value().cast::<Infinity>().unwrap();
-		}
-
-		assert_eq!(
-			cases[7].pattern().cast::<StringLiteral>().unwrap().value(),
-			"foo"
-		);
-		let _ = cases[8].pattern().cast::<Absent>().unwrap();
-		let _ = cases[9].pattern().cast::<Anonymous>().unwrap();
 	}
 }

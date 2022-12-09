@@ -260,7 +260,7 @@ module.exports = grammar({
         optional(seq(field("index", $._expression), ":")),
         field("template", $._expression),
         "|",
-        sepBy1(",", field("generator", $.generator)),
+        sepBy1(",", field("generator", $._generator)),
         "]"
       ),
 
@@ -281,7 +281,7 @@ module.exports = grammar({
         seq(
           field("function", $._callable),
           "(",
-          sepBy1(",", field("generator", $.generator)),
+          sepBy1(",", field("generator", $._generator)),
           ")",
           "(",
           field("template", $._expression),
@@ -289,11 +289,19 @@ module.exports = grammar({
         )
       ),
 
+    _generator: ($) => choice($.generator, $.assignment_generator),
     generator: ($) =>
       seq(
         sepBy1(",", field("name", $._pattern)),
         "in",
         field("collection", $._expression),
+        optional(seq("where", field("where", $._expression)))
+      ),
+    assignment_generator: ($) =>
+      seq(
+        field("name", $._pattern),
+        "=",
+        field("value", $._expression),
         optional(seq("where", field("where", $._expression)))
       ),
 
@@ -473,7 +481,7 @@ module.exports = grammar({
         "{",
         field("template", $._expression),
         "|",
-        sepBy1(",", field("generator", $.generator)),
+        sepBy1(",", field("generator", $._generator)),
         "}"
       ),
 

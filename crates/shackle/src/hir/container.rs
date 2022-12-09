@@ -48,13 +48,25 @@ pub struct SetComprehension {
 
 /// Comprehension generator
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Generator {
-	/// Patterns (usually variable names)
-	pub patterns: Box<[ArenaIndex<Pattern>]>,
-	/// Expression being iterated over
-	pub collection: ArenaIndex<Expression>,
-	/// Where clause
-	pub where_clause: Option<ArenaIndex<Expression>>,
+pub enum Generator {
+	/// Iterator generator
+	Iterator {
+		/// Patterns (usually variable names)
+		patterns: Box<[ArenaIndex<Pattern>]>,
+		/// Expression being iterated over
+		collection: ArenaIndex<Expression>,
+		/// Where clause
+		where_clause: Option<ArenaIndex<Expression>>,
+	},
+	/// Assignment generator
+	Assignment {
+		/// Pattern (usually variable name)
+		pattern: ArenaIndex<Pattern>,
+		/// Assigned value
+		value: ArenaIndex<Expression>,
+		/// Where clause
+		where_clause: Option<ArenaIndex<Expression>>,
+	},
 }
 
 /// Tuple literal

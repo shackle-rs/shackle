@@ -497,513 +497,1210 @@ impl Lambda {
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use crate::syntax::ast::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_annotated_expression() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = foo :: bar :: qux;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: AnnotatedExpression(
+                        AnnotatedExpression {
+                            cst_kind: "annotated_expression",
+                            annotations: [
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "bar",
+                                        },
+                                    ),
+                                ),
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "qux",
+                                        },
+                                    ),
+                                ),
+                            ],
+                            expression: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let ae = x.definition().cast::<AnnotatedExpression>().unwrap();
-			let anns: Vec<_> = ae.annotations().collect();
-			assert_eq!(anns.len(), 2);
-			assert_eq!(anns[0].cast_ref::<Identifier>().unwrap().name(), "bar");
-			assert_eq!(anns[1].cast_ref::<Identifier>().unwrap().name(), "qux");
-			assert_eq!(ae.expression().cast::<Identifier>().unwrap().name(), "foo");
-		}
 	}
 
 	#[test]
 	fn test_identifier() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		bool: x;
 		bool: 'hello world';
 		bool: ✔️;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Bool,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        QuotedIdentifier(
+                            QuotedIdentifier {
+                                cst_kind: "quoted_identifier",
+                                name: "hello world",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Bool,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "✔\u{fe0f}",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Bool,
+                                },
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 3);
-		let cases = items
-			.into_iter()
-			.map(|i| {
-				i.cast::<Declaration>()
-					.unwrap()
-					.pattern()
-					.cast::<Identifier>()
-					.unwrap()
-			})
-			.zip(["x", "hello world", "✔️"]);
-		for (item, expected) in cases {
-			assert_eq!(item.name(), expected);
-		}
 	}
 
 	#[test]
 	fn test_if_then_else() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = if a then b else c endif;
 		y = if a then b elseif c then d else e endif;
 		z = if a then b endif;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: IfThenElse(
+                        IfThenElse {
+                            cst_kind: "if_then_else",
+                            branches: Branches {
+                                conditions: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "a",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                                results: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "b",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                            },
+                            else_result: Some(
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "c",
+                                        },
+                                    ),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: IfThenElse(
+                        IfThenElse {
+                            cst_kind: "if_then_else",
+                            branches: Branches {
+                                conditions: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "a",
+                                            },
+                                        ),
+                                    ),
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "c",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                                results: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "b",
+                                            },
+                                        ),
+                                    ),
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "d",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                            },
+                            else_result: Some(
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "e",
+                                        },
+                                    ),
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: IfThenElse(
+                        IfThenElse {
+                            cst_kind: "if_then_else",
+                            branches: Branches {
+                                conditions: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "a",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                                results: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "b",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                            },
+                            else_result: None,
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 3);
-		{
-			let asg = items[0].cast_ref::<Assignment>().unwrap();
-			let ite = asg.definition().cast::<IfThenElse>().unwrap();
-			let branches: Vec<_> = ite.branches().collect();
-			assert_eq!(branches.len(), 1);
-			assert_eq!(
-				branches[0]
-					.condition
-					.cast_ref::<Identifier>()
-					.unwrap()
-					.name(),
-				"a"
-			);
-			assert_eq!(
-				branches[0].result.cast_ref::<Identifier>().unwrap().name(),
-				"b"
-			);
-			assert_eq!(
-				ite.else_result()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"c"
-			);
-		}
-		{
-			let asg = items[1].cast_ref::<Assignment>().unwrap();
-			let ite = asg.definition().cast::<IfThenElse>().unwrap();
-			let branches: Vec<_> = ite.branches().collect();
-			assert_eq!(branches.len(), 2);
-			assert_eq!(
-				branches[0]
-					.condition
-					.cast_ref::<Identifier>()
-					.unwrap()
-					.name(),
-				"a"
-			);
-			assert_eq!(
-				branches[0].result.cast_ref::<Identifier>().unwrap().name(),
-				"b"
-			);
-			assert_eq!(
-				branches[1]
-					.condition
-					.cast_ref::<Identifier>()
-					.unwrap()
-					.name(),
-				"c"
-			);
-			assert_eq!(
-				branches[1].result.cast_ref::<Identifier>().unwrap().name(),
-				"d"
-			);
-			assert_eq!(
-				ite.else_result()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"e"
-			);
-		}
-		{
-			let asg = items[2].cast_ref::<Assignment>().unwrap();
-			let ite = asg.definition().cast::<IfThenElse>().unwrap();
-			let branches: Vec<_> = ite.branches().collect();
-			assert_eq!(branches.len(), 1);
-			assert_eq!(
-				branches[0]
-					.condition
-					.cast_ref::<Identifier>()
-					.unwrap()
-					.name(),
-				"a"
-			);
-			assert_eq!(
-				branches[0].result.cast_ref::<Identifier>().unwrap().name(),
-				"b"
-			);
-			assert!(ite.else_result().is_none());
-		}
 	}
 
 	#[test]
 	fn test_call() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = foo();
 		y = foo(one, two);
 		z = foo(bar)(qux);
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: Call(
+                        Call {
+                            cst_kind: "call",
+                            function: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            arguments: [],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: Call(
+                        Call {
+                            cst_kind: "call",
+                            function: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            arguments: [
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "one",
+                                        },
+                                    ),
+                                ),
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "two",
+                                        },
+                                    ),
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: Call(
+                        Call {
+                            cst_kind: "call",
+                            function: Call(
+                                Call {
+                                    cst_kind: "call",
+                                    function: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "foo",
+                                            },
+                                        ),
+                                    ),
+                                    arguments: [
+                                        Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "bar",
+                                                },
+                                            ),
+                                        ),
+                                    ],
+                                },
+                            ),
+                            arguments: [
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "qux",
+                                        },
+                                    ),
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 3);
-		{
-			let call = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<Call>()
-				.unwrap();
-			assert_eq!(call.function().cast::<Identifier>().unwrap().name(), "foo");
-			assert_eq!(call.arguments().count(), 0);
-		}
-		{
-			let call = items[1]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<Call>()
-				.unwrap();
-			assert_eq!(call.function().cast::<Identifier>().unwrap().name(), "foo");
-			let args: Vec<_> = call.arguments().collect();
-			assert_eq!(args[0].cast_ref::<Identifier>().unwrap().name(), "one");
-			assert_eq!(args[1].cast_ref::<Identifier>().unwrap().name(), "two");
-		}
-		{
-			let outer = items[2]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<Call>()
-				.unwrap();
-			let outer_args: Vec<_> = outer.arguments().collect();
-			assert_eq!(outer_args.len(), 1);
-			assert_eq!(
-				outer_args[0].cast_ref::<Identifier>().unwrap().name(),
-				"qux"
-			);
-			let inner = outer.function().cast::<Call>().unwrap();
-			assert_eq!(inner.function().cast::<Identifier>().unwrap().name(), "foo");
-			let inner_args: Vec<_> = inner.arguments().collect();
-			assert_eq!(inner_args.len(), 1);
-			assert_eq!(
-				inner_args[0].cast_ref::<Identifier>().unwrap().name(),
-				"bar"
-			);
-		}
 	}
 
 	#[test]
 	fn test_prefix_operator() {
-		let model = parse_model("x = -a;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let op = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<PrefixOperator>()
-				.unwrap();
-			assert_eq!(op.operator().name(), "-");
-			assert_eq!(op.operand().cast::<Identifier>().unwrap().name(), "a");
-		}
+		check_ast("x = -a;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: PrefixOperator(
+                        PrefixOperator {
+                            cst_kind: "prefix_operator",
+                            operator: Operator {
+                                cst_kind: "-",
+                                name: "-",
+                            },
+                            operand: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "a",
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_infix_operator() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = a + b;
 		y = a + b * c;
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: InfixOperator(
+                        InfixOperator {
+                            cst_kind: "infix_operator",
+                            left: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "a",
+                                    },
+                                ),
+                            ),
+                            operator: Operator {
+                                cst_kind: "+",
+                                name: "+",
+                            },
+                            right: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "b",
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: InfixOperator(
+                        InfixOperator {
+                            cst_kind: "infix_operator",
+                            left: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "a",
+                                    },
+                                ),
+                            ),
+                            operator: Operator {
+                                cst_kind: "+",
+                                name: "+",
+                            },
+                            right: InfixOperator(
+                                InfixOperator {
+                                    cst_kind: "infix_operator",
+                                    left: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "b",
+                                            },
+                                        ),
+                                    ),
+                                    operator: Operator {
+                                        cst_kind: "*",
+                                        name: "*",
+                                    },
+                                    right: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "c",
+                                            },
+                                        ),
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		{
-			let op = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<InfixOperator>()
-				.unwrap();
-			assert_eq!(op.left().cast::<Identifier>().unwrap().name(), "a");
-			assert_eq!(op.operator().name(), "+");
-			assert_eq!(op.right().cast::<Identifier>().unwrap().name(), "b");
-		}
-		{
-			let sum = items[1]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<InfixOperator>()
-				.unwrap();
-			assert_eq!(sum.left().cast::<Identifier>().unwrap().name(), "a");
-			assert_eq!(sum.operator().name(), "+");
-			let product = sum.right().cast::<InfixOperator>().unwrap();
-			assert_eq!(product.left().cast::<Identifier>().unwrap().name(), "b");
-			assert_eq!(product.operator().name(), "*");
-			assert_eq!(product.right().cast::<Identifier>().unwrap().name(), "c");
-		}
 	}
 
 	#[test]
 	fn test_postfix_operator() {
-		let model = parse_model("x = a..;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let op = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<PostfixOperator>()
-				.unwrap();
-			assert_eq!(op.operand().cast::<Identifier>().unwrap().name(), "a");
-			assert_eq!(op.operator().name(), "..");
-		}
+		check_ast("x = a..;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: PostfixOperator(
+                        PostfixOperator {
+                            cst_kind: "postfix_operator",
+                            operand: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "a",
+                                    },
+                                ),
+                            ),
+                            operator: Operator {
+                                cst_kind: "..",
+                                name: "..",
+                            },
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_generator_call() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			constraint forall (i in s) (true);
 			constraint exists (i, j in s, k in t where p) (true);
 			"#,
+			expect!([r#"
+    Model {
+        items: [
+            Constraint(
+                Constraint {
+                    cst_kind: "constraint",
+                    expression: GeneratorCall(
+                        GeneratorCall {
+                            cst_kind: "generator_call",
+                            function: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "forall",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                            ],
+                            template: BooleanLiteral(
+                                BooleanLiteral {
+                                    cst_kind: "boolean_literal",
+                                    value: true,
+                                },
+                            ),
+                        },
+                    ),
+                    annotations: [],
+                },
+            ),
+            Constraint(
+                Constraint {
+                    cst_kind: "constraint",
+                    expression: GeneratorCall(
+                        GeneratorCall {
+                            cst_kind: "generator_call",
+                            function: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "exists",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "j",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "k",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "t",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: Some(
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "p",
+                                                    },
+                                                ),
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ],
+                            template: BooleanLiteral(
+                                BooleanLiteral {
+                                    cst_kind: "boolean_literal",
+                                    value: true,
+                                },
+                            ),
+                        },
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		{
-			let call = items[0]
-				.cast_ref::<Constraint>()
-				.unwrap()
-				.expression()
-				.cast::<GeneratorCall>()
-				.unwrap();
-			assert_eq!(
-				call.function().cast::<Identifier>().unwrap().name(),
-				"forall"
-			);
-			let gs: Vec<_> = call.generators().collect();
-			assert_eq!(gs.len(), 1);
-			let g1ps: Vec<_> = gs[0].patterns().collect();
-			assert_eq!(g1ps.len(), 1);
-			assert_eq!(g1ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(gs[0].collection().cast::<Identifier>().unwrap().name(), "s");
-			assert!(gs[0].where_clause().is_none());
-			assert!(call.template().cast::<BooleanLiteral>().unwrap().value());
-		}
-		{
-			let call = items[1]
-				.cast_ref::<Constraint>()
-				.unwrap()
-				.expression()
-				.cast::<GeneratorCall>()
-				.unwrap();
-			assert_eq!(
-				call.function().cast::<Identifier>().unwrap().name(),
-				"exists"
-			);
-			let gs: Vec<_> = call.generators().collect();
-			assert_eq!(gs.len(), 2);
-			let g1ps: Vec<_> = gs[0].patterns().collect();
-			assert_eq!(g1ps.len(), 2);
-			assert_eq!(g1ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(g1ps[1].cast_ref::<Identifier>().unwrap().name(), "j");
-			assert_eq!(gs[0].collection().cast::<Identifier>().unwrap().name(), "s");
-			assert!(gs[0].where_clause().is_none());
-			let g2ps: Vec<_> = gs[1].patterns().collect();
-			assert_eq!(g2ps.len(), 1);
-			assert_eq!(g2ps[0].cast_ref::<Identifier>().unwrap().name(), "k");
-			assert_eq!(gs[1].collection().cast::<Identifier>().unwrap().name(), "t");
-			assert_eq!(
-				gs[1]
-					.where_clause()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"p"
-			);
-			assert!(call.template().cast::<BooleanLiteral>().unwrap().value());
-		}
 	}
 
 	#[test]
 	fn test_string_interpolation() {
-		let model = parse_model(r#"x = "foo\(y)bar";"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let s = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<StringInterpolation>()
-				.unwrap();
-			let cs: Vec<_> = s.contents().collect();
-			assert_eq!(cs.len(), 3);
-			assert_eq!(cs[0].string().unwrap(), "foo");
-			assert_eq!(
-				cs[1]
-					.expression()
-					.unwrap()
-					.cast_ref::<Identifier>()
-					.unwrap()
-					.name(),
-				"y"
-			);
-			assert_eq!(cs[2].string().unwrap(), "bar");
-		}
+		check_ast(r#"x = "foo\(y)bar";"#, expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: StringInterpolation(
+                        StringInterpolation {
+                            cst_kind: "string_interpolation",
+                            contents: [
+                                String(
+                                    "foo",
+                                ),
+                                Expression(
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "y",
+                                            },
+                                        ),
+                                    ),
+                                ),
+                                String(
+                                    "bar",
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_let() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			constraint let {
 				var int: x;
 				constraint false;
 			} in true;
 			"#,
+			expect!([r#"
+    Model {
+        items: [
+            Constraint(
+                Constraint {
+                    cst_kind: "constraint",
+                    expression: Let(
+                        Let {
+                            cst_kind: "let_expression",
+                            items: [
+                                Declaration(
+                                    Declaration {
+                                        cst_kind: "declaration",
+                                        pattern: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "x",
+                                                },
+                                            ),
+                                        ),
+                                        declared_type: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: Some(
+                                                    Var,
+                                                ),
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Unbounded(
+                                                    UnboundedDomain {
+                                                        cst_kind: "primitive_type",
+                                                        primitive_type: Int,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        definition: None,
+                                        annotations: [],
+                                    },
+                                ),
+                                Constraint(
+                                    Constraint {
+                                        cst_kind: "constraint",
+                                        expression: BooleanLiteral(
+                                            BooleanLiteral {
+                                                cst_kind: "boolean_literal",
+                                                value: false,
+                                            },
+                                        ),
+                                        annotations: [],
+                                    },
+                                ),
+                            ],
+                            in_expression: BooleanLiteral(
+                                BooleanLiteral {
+                                    cst_kind: "boolean_literal",
+                                    value: true,
+                                },
+                            ),
+                        },
+                    ),
+                    annotations: [],
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let l = items[0]
-				.cast_ref::<Constraint>()
-				.unwrap()
-				.expression()
-				.cast::<Let>()
-				.unwrap();
-			let is: Vec<_> = l.items().collect();
-			assert_eq!(is.len(), 2);
-			let d = is[0].cast_ref::<Declaration>().unwrap();
-			assert_eq!(d.pattern().cast::<Identifier>().unwrap().name(), "x");
-			let c = is[1].cast_ref::<Constraint>().unwrap();
-			assert!(!c.expression().cast::<BooleanLiteral>().unwrap().value());
-			assert!(l.in_expression().cast::<BooleanLiteral>().unwrap().value());
-		}
 	}
 
 	#[test]
 	fn test_case() {
-		let model = parse_model(
+		check_ast(
 			r#"
 			x = case a of 
 					Foo(b) => true,
 					_ => false
 				endcase;
 			"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: Case(
+                        Case {
+                            cst_kind: "case_expression",
+                            expression: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "a",
+                                    },
+                                ),
+                            ),
+                            cases: [
+                                CaseItem {
+                                    cst_kind: "case_expression_case",
+                                    pattern: Call(
+                                        PatternCall {
+                                            cst_kind: "pattern_call",
+                                            identifier: UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "Foo",
+                                                },
+                                            ),
+                                            arguments: [
+                                                Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "b",
+                                                        },
+                                                    ),
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                    value: BooleanLiteral(
+                                        BooleanLiteral {
+                                            cst_kind: "boolean_literal",
+                                            value: true,
+                                        },
+                                    ),
+                                },
+                                CaseItem {
+                                    cst_kind: "case_expression_case",
+                                    pattern: Anonymous(
+                                        Anonymous {
+                                            cst_kind: "anonymous",
+                                        },
+                                    ),
+                                    value: BooleanLiteral(
+                                        BooleanLiteral {
+                                            cst_kind: "boolean_literal",
+                                            value: false,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let c = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<Case>()
-				.unwrap();
-			assert_eq!(c.expression().cast::<Identifier>().unwrap().name(), "a");
-			let cs: Vec<_> = c.cases().collect();
-			assert_eq!(cs.len(), 2);
-			let p1 = cs[0].pattern().cast::<PatternCall>().unwrap();
-			assert_eq!(p1.identifier().name(), "Foo");
-			let p1as: Vec<_> = p1.arguments().collect();
-			assert_eq!(p1as.len(), 1);
-			assert_eq!(p1as[0].cast_ref::<Identifier>().unwrap().name(), "b");
-			assert!(cs[0].value().cast::<BooleanLiteral>().unwrap().value());
-			assert!(cs[1].pattern().cast::<Anonymous>().is_some());
-			assert!(!cs[1].value().cast::<BooleanLiteral>().unwrap().value());
-		}
 	}
 
 	#[test]
 	fn test_tuple_access() {
-		let model = parse_model("x = foo.1;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let t = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<TupleAccess>()
-				.unwrap();
-			assert_eq!(t.tuple().cast::<Identifier>().unwrap().name(), "foo");
-			assert_eq!(t.field().value(), 1);
-		}
+		check_ast("x = foo.1;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: TupleAccess(
+                        TupleAccess {
+                            cst_kind: "tuple_access",
+                            tuple: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            field: IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: 1,
+                            },
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 	fn test_record_access() {
-		let model = parse_model("x = foo.bar;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let r = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<RecordAccess>()
-				.unwrap();
-			assert_eq!(r.record().cast::<Identifier>().unwrap().name(), "foo");
-			assert_eq!(r.field().name(), "bar");
-		}
+		check_ast("x = foo.bar;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: RecordAccess(
+                        RecordAccess {
+                            cst_kind: "record_access",
+                            record: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            field: UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "bar",
+                                },
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 
 	#[test]
 
 	fn test_lambda() {
-		let model = parse_model("x = lambda int: (int: x) => x;");
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let lambda = items[0]
-				.cast_ref::<Assignment>()
-				.unwrap()
-				.definition()
-				.cast::<Lambda>()
-				.unwrap();
-			let ret = lambda.return_type().unwrap().cast::<TypeBase>().unwrap();
-			assert!(ret.var_type().is_none());
-			assert!(ret.opt_type().is_none());
-			assert!(ret
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			let params: Vec<_> = lambda.parameters().collect();
-			assert_eq!(params.len(), 1);
-			let pt = params[0].declared_type().cast::<TypeBase>().unwrap();
-			assert!(pt.var_type().is_none());
-			assert!(pt.opt_type().is_none());
-			assert!(pt
-				.domain()
-				.cast::<UnboundedDomain>()
-				.unwrap()
-				.primitive_type()
-				.is_int());
-			assert_eq!(
-				params[0]
-					.pattern()
-					.unwrap()
-					.cast::<Identifier>()
-					.unwrap()
-					.name(),
-				"x"
-			);
-			assert_eq!(lambda.body().cast::<Identifier>().unwrap().name(), "x");
-		}
+		check_ast("x = lambda int: (int: x) => x;", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: Lambda(
+                        Lambda {
+                            cst_kind: "lambda",
+                            return_type: Some(
+                                TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Int,
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ),
+                            parameters: [
+                                Parameter {
+                                    cst_kind: "parameter",
+                                    declared_type: TypeBase(
+                                        TypeBase {
+                                            cst_kind: "type_base",
+                                            var_type: None,
+                                            opt_type: None,
+                                            any_type: false,
+                                            domain: Unbounded(
+                                                UnboundedDomain {
+                                                    cst_kind: "primitive_type",
+                                                    primitive_type: Int,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                    pattern: Some(
+                                        Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "x",
+                                                },
+                                            ),
+                                        ),
+                                    ),
+                                    annotations: [],
+                                },
+                            ],
+                            body: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "x",
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]));
 	}
 }

@@ -18,7 +18,7 @@ use crate::{
 	Error, Result, Warning,
 };
 
-use super::{Constructor, EnumConstructor};
+use super::{Constructor, EnumConstructor, Generator};
 
 /// Gets all variables in global scope.
 ///
@@ -562,13 +562,7 @@ impl ScopeCollector<'_> {
 			Expression::ArrayComprehension(c) => {
 				self.push();
 				for generator in c.generators.iter() {
-					self.collect_expression(generator.collection);
-					for p in generator.patterns.iter() {
-						self.collect_pattern(*p, PatternMode::Generator);
-					}
-					if let Some(e) = generator.where_clause {
-						self.collect_expression(e)
-					}
+					self.collect_generator(generator);
 				}
 				if let Some(i) = c.indices {
 					self.collect_expression(i);
@@ -624,13 +618,7 @@ impl ScopeCollector<'_> {
 			Expression::SetComprehension(c) => {
 				self.push();
 				for generator in c.generators.iter() {
-					self.collect_expression(generator.collection);
-					for p in generator.patterns.iter() {
-						self.collect_pattern(*p, PatternMode::Generator);
-					}
-					if let Some(e) = generator.where_clause {
-						self.collect_expression(e)
-					}
+					self.collect_generator(generator);
 				}
 				self.collect_expression(c.template);
 				self.pop();
@@ -686,6 +674,35 @@ impl ScopeCollector<'_> {
 		}
 		self.expression_scope
 			.insert(index, (self.current, self.generation()));
+	}
+
+	fn collect_generator(&mut self, generator: &Generator) {
+		match generator {
+			Generator::Iterator {
+				patterns,
+				collection,
+				where_clause,
+			} => {
+				self.collect_expression(*collection);
+				for p in patterns.iter() {
+					self.collect_pattern(*p, PatternMode::Generator);
+				}
+				if let Some(e) = where_clause {
+					self.collect_expression(*e)
+				}
+			}
+			Generator::Assignment {
+				pattern,
+				value,
+				where_clause,
+			} => {
+				self.collect_expression(*value);
+				self.collect_pattern(*pattern, PatternMode::Destructuring);
+				if let Some(e) = where_clause {
+					self.collect_expression(*e)
+				}
+			}
+		}
 	}
 
 	/// Collect scope for a type

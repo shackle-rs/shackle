@@ -965,34 +965,35 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 	}
 
 	fn collect_generator(&mut self, g: &crate::hir::Generator) -> GeneratorBuilder {
-		let mut b = GeneratorBuilder::new(self.collect_expression(g.collection));
-		for p in g.patterns.iter() {
-			let decl = match &self.types[*p] {
-				PatternTy::Variable(ty) => {
-					let mut declaration = DeclarationItem::new(
-						&DomainBuilder::unbounded(*ty),
-						false,
-						EntityRef::new(self.db.upcast(), self.item, *p),
-					);
-					declaration.name = self.data[*p].identifier();
-					let decl = self.model.add_declaration(declaration);
-					let item = self.item;
-					self.resolutions.insert(
-						PatternRef::new(item, *p),
-						ResolvedIdentifier::Declaration(decl),
-					);
-					decl
-				}
-				// TODO: Rewrite into where clause
-				PatternTy::Destructuring(_) => unimplemented!(),
-				_ => unreachable!(),
-			};
-			b = b.with_declaration(decl)
-		}
-		if let Some(w) = g.where_clause {
-			b = b.with_where(self.collect_expression(w));
-		}
-		b
+		unimplemented!()
+		// let mut b = GeneratorBuilder::new(self.collect_expression(g.collection));
+		// for p in g.patterns.iter() {
+		// 	let decl = match &self.types[*p] {
+		// 		PatternTy::Variable(ty) => {
+		// 			let mut declaration = DeclarationItem::new(
+		// 				&DomainBuilder::unbounded(*ty),
+		// 				false,
+		// 				EntityRef::new(self.db.upcast(), self.item, *p),
+		// 			);
+		// 			declaration.name = self.data[*p].identifier();
+		// 			let decl = self.model.add_declaration(declaration);
+		// 			let item = self.item;
+		// 			self.resolutions.insert(
+		// 				PatternRef::new(item, *p),
+		// 				ResolvedIdentifier::Declaration(decl),
+		// 			);
+		// 			decl
+		// 		}
+		// 		// TODO: Rewrite into where clause
+		// 		PatternTy::Destructuring(_) => unimplemented!(),
+		// 		_ => unreachable!(),
+		// 	};
+		// 	b = b.with_declaration(decl)
+		// }
+		// if let Some(w) = g.where_clause {
+		// 	b = b.with_where(self.collect_expression(w));
+		// }
+		// b
 	}
 
 	fn collect_default_else(&self, ty: Ty, origin: Origin) -> (Ty, Box<dyn ExpressionBuilder>) {

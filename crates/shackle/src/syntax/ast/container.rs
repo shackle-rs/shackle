@@ -214,15 +214,22 @@ impl SetComprehension {
 	}
 }
 
-ast_node!(
+ast_enum!(
 	/// Generator for a comprehension
 	Generator,
+	"generator" => IteratorGenerator,
+	"assignment_generator" => AssignmentGenerator
+);
+
+ast_node!(
+	/// Generator for a comprehension
+	IteratorGenerator,
 	patterns,
 	collection,
 	where_clause
 );
 
-impl Generator {
+impl IteratorGenerator {
 	/// Patterns (variable names)
 	pub fn patterns(&self) -> Children<'_, Pattern> {
 		children_with_field_name(self, "name")
@@ -239,302 +246,560 @@ impl Generator {
 	}
 }
 
+ast_node!(
+	/// Assignment generator for a comprehension
+	AssignmentGenerator,
+	pattern,
+	value,
+	where_clause
+);
+
+impl AssignmentGenerator {
+	/// Pattern (variable name)
+	pub fn pattern(&self) -> Pattern {
+		child_with_field_name(self, "name")
+	}
+
+	/// Expression being iterated over
+	pub fn value(&self) -> Expression {
+		child_with_field_name(self, "value")
+	}
+
+	/// Where clause constraining iteration
+	pub fn where_clause(&self) -> Option<Expression> {
+		optional_child_with_field_name(self, "where")
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use crate::syntax::ast::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_tuple_literal() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = (1, 2);
 		y = (1, (2, 3));
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: TupleLiteral(
+                        TupleLiteral {
+                            cst_kind: "tuple_literal",
+                            members: [
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 1,
+                                    },
+                                ),
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 2,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: TupleLiteral(
+                        TupleLiteral {
+                            cst_kind: "tuple_literal",
+                            members: [
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 1,
+                                    },
+                                ),
+                                TupleLiteral(
+                                    TupleLiteral {
+                                        cst_kind: "tuple_literal",
+                                        members: [
+                                            IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 2,
+                                                },
+                                            ),
+                                            IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 3,
+                                                },
+                                            ),
+                                        ],
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_tl = x.definition().cast::<TupleLiteral>().unwrap();
-			let x_members: Vec<_> = x_tl.members().collect();
-			assert_eq!(x_members.len(), 2);
-			assert_eq!(
-				x_members[0].cast_ref::<IntegerLiteral>().unwrap().value(),
-				1
-			);
-			assert_eq!(
-				x_members[1].cast_ref::<IntegerLiteral>().unwrap().value(),
-				2
-			);
-		}
-
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_tl = y.definition().cast::<TupleLiteral>().unwrap();
-			let y_members: Vec<_> = y_tl.members().collect();
-			assert_eq!(y_members.len(), 2);
-			assert_eq!(
-				y_members[0].cast_ref::<IntegerLiteral>().unwrap().value(),
-				1
-			);
-			let y2_members: Vec<_> = y_members[1]
-				.cast_ref::<TupleLiteral>()
-				.unwrap()
-				.members()
-				.collect();
-			assert_eq!(y2_members.len(), 2);
-			assert_eq!(
-				y2_members[0].cast_ref::<IntegerLiteral>().unwrap().value(),
-				2
-			);
-			assert_eq!(
-				y2_members[1].cast_ref::<IntegerLiteral>().unwrap().value(),
-				3
-			);
-		}
 	}
 
 	#[test]
 	fn test_record_literal() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = (a: 1, b: 2);
 		y = (a: 1, b: (c: 2, d: 3));
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: RecordLiteral(
+                        RecordLiteral {
+                            cst_kind: "record_literal",
+                            members: [
+                                RecordLiteralMember {
+                                    cst_kind: "record_member",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "a",
+                                        },
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                },
+                                RecordLiteralMember {
+                                    cst_kind: "record_member",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "b",
+                                        },
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 2,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: RecordLiteral(
+                        RecordLiteral {
+                            cst_kind: "record_literal",
+                            members: [
+                                RecordLiteralMember {
+                                    cst_kind: "record_member",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "a",
+                                        },
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                },
+                                RecordLiteralMember {
+                                    cst_kind: "record_member",
+                                    name: UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "b",
+                                        },
+                                    ),
+                                    value: RecordLiteral(
+                                        RecordLiteral {
+                                            cst_kind: "record_literal",
+                                            members: [
+                                                RecordLiteralMember {
+                                                    cst_kind: "record_member",
+                                                    name: UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "c",
+                                                        },
+                                                    ),
+                                                    value: IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 2,
+                                                        },
+                                                    ),
+                                                },
+                                                RecordLiteralMember {
+                                                    cst_kind: "record_member",
+                                                    name: UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "d",
+                                                        },
+                                                    ),
+                                                    value: IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 3,
+                                                        },
+                                                    ),
+                                                },
+                                            ],
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 2);
-
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_tl = x.definition().cast::<RecordLiteral>().unwrap();
-			let x_members: Vec<_> = x_tl.members().collect();
-			assert_eq!(x_members.len(), 2);
-			assert_eq!(x_members[0].name().name(), "a");
-			assert_eq!(
-				x_members[0]
-					.value()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			assert_eq!(x_members[1].name().name(), "b");
-			assert_eq!(
-				x_members[1]
-					.value()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				2
-			);
-		}
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_tl = y.definition().cast::<RecordLiteral>().unwrap();
-			let y_members: Vec<_> = y_tl.members().collect();
-			assert_eq!(y_members.len(), 2);
-			assert_eq!(y_members[0].name().name(), "a");
-			assert_eq!(
-				y_members[0]
-					.value()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			assert_eq!(y_members[1].name().name(), "b");
-			let y2_members: Vec<_> = y_members[1]
-				.value()
-				.cast_ref::<RecordLiteral>()
-				.unwrap()
-				.members()
-				.collect();
-			assert_eq!(y2_members.len(), 2);
-			assert_eq!(y2_members[0].name().name(), "c");
-			assert_eq!(
-				y2_members[0]
-					.value()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				2
-			);
-			assert_eq!(y2_members[1].name().name(), "d");
-			assert_eq!(
-				y2_members[1]
-					.value()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				3
-			);
-		}
 	}
 
 	#[test]
 	fn test_set_literal() {
-		let model = parse_model("x = {1, 2};");
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 1);
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_sl = x.definition().cast::<SetLiteral>().unwrap();
-
-			let x_members: Vec<_> = x_sl.members().collect();
-			assert_eq!(x_members.len(), 2);
-
-			assert_eq!(
-				x_members[0].cast_ref::<IntegerLiteral>().unwrap().value(),
-				1
-			);
-			assert_eq!(
-				x_members[1].cast_ref::<IntegerLiteral>().unwrap().value(),
-				2
-			);
-		}
+		check_ast("x = {1, 2};", expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: SetLiteral(
+                        SetLiteral {
+                            cst_kind: "set_literal",
+                            members: [
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 1,
+                                    },
+                                ),
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 2,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]))
 	}
 
 	#[test]
 	fn test_array_literal() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = [1, 3];
 		y = [2: 1, 3];
 		z = [0: 1, 1: 3];
 		w = [(1, 1): 1, (1, 2): 3];
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral(
+                        ArrayLiteral {
+                            cst_kind: "array_literal",
+                            members: [
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: None,
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                },
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: None,
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 3,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral(
+                        ArrayLiteral {
+                            cst_kind: "array_literal",
+                            members: [
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: Some(
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 2,
+                                            },
+                                        ),
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                },
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: None,
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 3,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral(
+                        ArrayLiteral {
+                            cst_kind: "array_literal",
+                            members: [
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: Some(
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 0,
+                                            },
+                                        ),
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                },
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: Some(
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 3,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "w",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral(
+                        ArrayLiteral {
+                            cst_kind: "array_literal",
+                            members: [
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: Some(
+                                        TupleLiteral(
+                                            TupleLiteral {
+                                                cst_kind: "tuple_literal",
+                                                members: [
+                                                    IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 1,
+                                                        },
+                                                    ),
+                                                    IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 1,
+                                                        },
+                                                    ),
+                                                ],
+                                            },
+                                        ),
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                },
+                                ArrayLiteralMember {
+                                    cst_kind: "array_literal_member",
+                                    indices: Some(
+                                        TupleLiteral(
+                                            TupleLiteral {
+                                                cst_kind: "tuple_literal",
+                                                members: [
+                                                    IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 1,
+                                                        },
+                                                    ),
+                                                    IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 2,
+                                                        },
+                                                    ),
+                                                ],
+                                            },
+                                        ),
+                                    ),
+                                    value: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 3,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 4);
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_al = x.definition().cast::<ArrayLiteral>().unwrap();
-			let x_members: Vec<_> = x_al.members().collect();
-			assert_eq!(x_members.len(), 2);
-			assert_eq!(
-				x_members[0]
-					.value()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			assert_eq!(
-				x_members[1]
-					.value()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				3
-			);
-		}
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_al = y.definition().cast::<ArrayLiteral>().unwrap();
-			let y_members: Vec<_> = y_al.members().collect();
-			assert_eq!(y_members.len(), 2);
-			let y0 = &y_members[0];
-			assert_eq!(
-				y0.indices()
-					.unwrap()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				2
-			);
-			assert_eq!(y0.value().cast::<IntegerLiteral>().unwrap().value(), 1);
-			let y1 = &y_members[1];
-			assert!(y1.indices().is_none());
-			assert_eq!(y1.value().cast::<IntegerLiteral>().unwrap().value(), 3);
-		}
-		{
-			let z = items[2].cast_ref::<Assignment>().unwrap();
-			assert_eq!(z.assignee().cast::<Identifier>().unwrap().name(), "z");
-			let z_al = z.definition().cast::<ArrayLiteral>().unwrap();
-			let z_members: Vec<_> = z_al.members().collect();
-			assert_eq!(z_members.len(), 2);
-			let z0 = &z_members[0];
-			assert_eq!(
-				z0.indices()
-					.unwrap()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				0
-			);
-			assert_eq!(z0.value().cast::<IntegerLiteral>().unwrap().value(), 1);
-			let z1 = &z_members[1];
-			assert_eq!(
-				z1.indices()
-					.unwrap()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			assert_eq!(z1.value().cast::<IntegerLiteral>().unwrap().value(), 3);
-		}
-		{
-			let w = items[3].cast_ref::<Assignment>().unwrap();
-			assert_eq!(w.assignee().cast::<Identifier>().unwrap().name(), "w");
-			let w_al = w.definition().cast::<ArrayLiteral>().unwrap();
-			let w_members: Vec<_> = w_al.members().collect();
-			assert_eq!(w_members.len(), 2);
-			let w0 = &w_members[0];
-			let w0_indices: Vec<_> = w0
-				.indices()
-				.unwrap()
-				.cast::<TupleLiteral>()
-				.unwrap()
-				.members()
-				.collect();
-			assert_eq!(w0_indices.len(), 2);
-			assert_eq!(
-				w0_indices[0].cast_ref::<IntegerLiteral>().unwrap().value(),
-				1
-			);
-			assert_eq!(
-				w0_indices[1].cast_ref::<IntegerLiteral>().unwrap().value(),
-				1
-			);
-			assert_eq!(w0.value().cast::<IntegerLiteral>().unwrap().value(), 1);
-			let w1 = &w_members[1];
-			let w1_indices: Vec<_> = w1
-				.indices()
-				.unwrap()
-				.cast::<TupleLiteral>()
-				.unwrap()
-				.members()
-				.collect();
-			assert_eq!(w1_indices.len(), 2);
-			assert_eq!(
-				w1_indices[0].cast_ref::<IntegerLiteral>().unwrap().value(),
-				1
-			);
-			assert_eq!(
-				w1_indices[1].cast_ref::<IntegerLiteral>().unwrap().value(),
-				2
-			);
-			assert_eq!(w1.value().cast::<IntegerLiteral>().unwrap().value(), 3);
-		}
 	}
 
 	#[test]
 	fn test_2d_array_literal() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = [| 1, 2
 		     | 3, 4 |];
@@ -544,361 +809,1081 @@ mod test {
 		     | 1: 1, 2 |];
 		w = [| 1: 1, 2 |];
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral2D(
+                        ArrayLiteral2D {
+                            cst_kind: "array_literal_2d",
+                            column_indices: [],
+                            rows: [
+                                ArrayLiteral2DRow {
+                                    cst_kind: "array_literal_2d_row",
+                                    index: None,
+                                    members: [
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 2,
+                                            },
+                                        ),
+                                    ],
+                                },
+                                ArrayLiteral2DRow {
+                                    cst_kind: "array_literal_2d_row",
+                                    index: None,
+                                    members: [
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 3,
+                                            },
+                                        ),
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 4,
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral2D(
+                        ArrayLiteral2D {
+                            cst_kind: "array_literal_2d",
+                            column_indices: [
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 1,
+                                    },
+                                ),
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 2,
+                                    },
+                                ),
+                            ],
+                            rows: [
+                                ArrayLiteral2DRow {
+                                    cst_kind: "array_literal_2d_row",
+                                    index: None,
+                                    members: [
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 2,
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral2D(
+                        ArrayLiteral2D {
+                            cst_kind: "array_literal_2d",
+                            column_indices: [
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 1,
+                                    },
+                                ),
+                                IntegerLiteral(
+                                    IntegerLiteral {
+                                        cst_kind: "integer_literal",
+                                        value: 2,
+                                    },
+                                ),
+                            ],
+                            rows: [
+                                ArrayLiteral2DRow {
+                                    cst_kind: "array_literal_2d_row",
+                                    index: Some(
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                    ),
+                                    members: [
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 2,
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "w",
+                            },
+                        ),
+                    ),
+                    definition: ArrayLiteral2D(
+                        ArrayLiteral2D {
+                            cst_kind: "array_literal_2d",
+                            column_indices: [],
+                            rows: [
+                                ArrayLiteral2DRow {
+                                    cst_kind: "array_literal_2d_row",
+                                    index: Some(
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                    ),
+                                    members: [
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 1,
+                                            },
+                                        ),
+                                        IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: 2,
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 4);
-
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_al = x.definition().cast::<ArrayLiteral2D>().unwrap();
-			let x_rows: Vec<_> = x_al.rows().collect();
-			assert_eq!(x_rows.len(), 2);
-
-			let x0: Vec<_> = x_rows[0].members().collect();
-			assert_eq!(x0.len(), 2);
-			assert_eq!(x0[0].cast_ref::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(x0[1].cast_ref::<IntegerLiteral>().unwrap().value(), 2);
-
-			let x1: Vec<_> = x_rows[1].members().collect();
-			assert_eq!(x1.len(), 2);
-			assert_eq!(x1[0].cast_ref::<IntegerLiteral>().unwrap().value(), 3);
-			assert_eq!(x1[1].cast_ref::<IntegerLiteral>().unwrap().value(), 4);
-		}
-
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_al = y.definition().cast::<ArrayLiteral2D>().unwrap();
-
-			let y_cols: Vec<_> = y_al.column_indices().collect();
-			assert_eq!(y_cols.len(), 2);
-			assert_eq!(y_cols[0].cast_ref::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(y_cols[1].cast_ref::<IntegerLiteral>().unwrap().value(), 2);
-
-			let y_rows: Vec<_> = y_al.rows().collect();
-			assert_eq!(y_rows.len(), 1);
-
-			let y0: Vec<_> = y_rows[0].members().collect();
-			assert_eq!(y0.len(), 2);
-			assert_eq!(y0[0].cast_ref::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(y0[1].cast_ref::<IntegerLiteral>().unwrap().value(), 2);
-		}
-		{
-			let z = items[2].cast_ref::<Assignment>().unwrap();
-			assert_eq!(z.assignee().cast::<Identifier>().unwrap().name(), "z");
-			let z_al = z.definition().cast::<ArrayLiteral2D>().unwrap();
-
-			let z_cols: Vec<_> = z_al.column_indices().collect();
-			assert_eq!(z_cols.len(), 2);
-			assert_eq!(z_cols[0].cast_ref::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(z_cols[1].cast_ref::<IntegerLiteral>().unwrap().value(), 2);
-
-			let z_rows: Vec<_> = z_al.rows().collect();
-			assert_eq!(z_rows.len(), 1);
-
-			assert_eq!(
-				z_rows[0]
-					.index()
-					.unwrap()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			let z0: Vec<_> = z_rows[0].members().collect();
-			assert_eq!(z0.len(), 2);
-			assert_eq!(z0[0].cast_ref::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(z0[1].cast_ref::<IntegerLiteral>().unwrap().value(), 2);
-		}
-		{
-			let w = items[3].cast_ref::<Assignment>().unwrap();
-			assert_eq!(w.assignee().cast::<Identifier>().unwrap().name(), "w");
-			let w_al = w.definition().cast::<ArrayLiteral2D>().unwrap();
-
-			assert!(w_al.column_indices().next().is_none());
-
-			let w_rows: Vec<_> = w_al.rows().collect();
-			assert_eq!(w_rows.len(), 1);
-
-			assert_eq!(
-				w_rows[0]
-					.index()
-					.unwrap()
-					.cast::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			let w0: Vec<_> = w_rows[0].members().collect();
-			assert_eq!(w0.len(), 2);
-			assert_eq!(w0[0].cast_ref::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(w0[1].cast_ref::<IntegerLiteral>().unwrap().value(), 2);
-		}
 	}
 
 	#[test]
 	fn test_array_access() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = foo[1];
 		y = foo[1, 2];
 		z = foo[1, .., 3..];
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: ArrayAccess(
+                        ArrayAccess {
+                            cst_kind: "indexed_access",
+                            collection: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            indices: [
+                                Expression(
+                                    IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: ArrayAccess(
+                        ArrayAccess {
+                            cst_kind: "indexed_access",
+                            collection: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            indices: [
+                                Expression(
+                                    IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                ),
+                                Expression(
+                                    IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 2,
+                                        },
+                                    ),
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: ArrayAccess(
+                        ArrayAccess {
+                            cst_kind: "indexed_access",
+                            collection: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "foo",
+                                    },
+                                ),
+                            ),
+                            indices: [
+                                Expression(
+                                    IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: 1,
+                                        },
+                                    ),
+                                ),
+                                IndexSlice(
+                                    IndexSlice {
+                                        cst_kind: "..",
+                                        operator: "..",
+                                    },
+                                ),
+                                Expression(
+                                    PostfixOperator(
+                                        PostfixOperator {
+                                            cst_kind: "postfix_operator",
+                                            operand: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 3,
+                                                },
+                                            ),
+                                            operator: Operator {
+                                                cst_kind: "..",
+                                                name: "..",
+                                            },
+                                        },
+                                    ),
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 3);
-
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_aa = x.definition().cast::<ArrayAccess>().unwrap();
-			assert_eq!(
-				x_aa.collection().cast::<Identifier>().unwrap().name(),
-				"foo"
-			);
-			let x_idxs: Vec<_> = x_aa.indices().collect();
-			assert_eq!(x_idxs.len(), 1);
-			assert_eq!(
-				x_idxs[0]
-					.cast_ref::<Expression>()
-					.unwrap()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-		}
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_aa = y.definition().cast::<ArrayAccess>().unwrap();
-			assert_eq!(
-				y_aa.collection().cast::<Identifier>().unwrap().name(),
-				"foo"
-			);
-			let y_idxs: Vec<_> = y_aa.indices().collect();
-			assert_eq!(y_idxs.len(), 2);
-			assert_eq!(
-				y_idxs[0]
-					.cast_ref::<Expression>()
-					.unwrap()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			assert_eq!(
-				y_idxs[1]
-					.cast_ref::<Expression>()
-					.unwrap()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				2
-			);
-		}
-		{
-			let z = items[2].cast_ref::<Assignment>().unwrap();
-			assert_eq!(z.assignee().cast::<Identifier>().unwrap().name(), "z");
-			let z_aa = z.definition().cast::<ArrayAccess>().unwrap();
-			assert_eq!(
-				z_aa.collection().cast::<Identifier>().unwrap().name(),
-				"foo"
-			);
-			let z_idxs: Vec<_> = z_aa.indices().collect();
-			assert_eq!(z_idxs.len(), 3);
-			assert_eq!(
-				z_idxs[0]
-					.cast_ref::<Expression>()
-					.unwrap()
-					.cast_ref::<IntegerLiteral>()
-					.unwrap()
-					.value(),
-				1
-			);
-			assert_eq!(z_idxs[1].cast_ref::<IndexSlice>().unwrap().operator(), "..");
-			let z_op = z_idxs[2]
-				.cast_ref::<Expression>()
-				.unwrap()
-				.cast_ref::<PostfixOperator>()
-				.unwrap();
-			assert_eq!(z_op.operand().cast::<IntegerLiteral>().unwrap().value(), 3);
-			assert_eq!(z_op.operator().name(), "..");
-		}
 	}
 
 	#[test]
 	fn test_array_comprehension() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = [1 | i in s];
 		y = [i: v | i in 1..3, j in s where i < j];
-		z = [(i, j): v | i, j in s];
+		z = [(i, j): v | i, j in s]
+		a = [j | i in s, j = i + 1];
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: ArrayComprehension(
+                        ArrayComprehension {
+                            cst_kind: "array_comprehension",
+                            indices: None,
+                            template: IntegerLiteral(
+                                IntegerLiteral {
+                                    cst_kind: "integer_literal",
+                                    value: 1,
+                                },
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: ArrayComprehension(
+                        ArrayComprehension {
+                            cst_kind: "array_comprehension",
+                            indices: Some(
+                                Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "i",
+                                        },
+                                    ),
+                                ),
+                            ),
+                            template: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "v",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: InfixOperator(
+                                            InfixOperator {
+                                                cst_kind: "infix_operator",
+                                                left: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 1,
+                                                    },
+                                                ),
+                                                operator: Operator {
+                                                    cst_kind: "..",
+                                                    name: "..",
+                                                },
+                                                right: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 3,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "j",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: Some(
+                                            InfixOperator(
+                                                InfixOperator {
+                                                    cst_kind: "infix_operator",
+                                                    left: Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "i",
+                                                            },
+                                                        ),
+                                                    ),
+                                                    operator: Operator {
+                                                        cst_kind: "<",
+                                                        name: "<",
+                                                    },
+                                                    right: Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "j",
+                                                            },
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: InfixOperator(
+                        InfixOperator {
+                            cst_kind: "infix_operator",
+                            left: ArrayComprehension(
+                                ArrayComprehension {
+                                    cst_kind: "array_comprehension",
+                                    indices: Some(
+                                        TupleLiteral(
+                                            TupleLiteral {
+                                                cst_kind: "tuple_literal",
+                                                members: [
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "i",
+                                                            },
+                                                        ),
+                                                    ),
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "j",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ],
+                                            },
+                                        ),
+                                    ),
+                                    template: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "v",
+                                            },
+                                        ),
+                                    ),
+                                    generators: [
+                                        IteratorGenerator(
+                                            IteratorGenerator {
+                                                cst_kind: "generator",
+                                                patterns: [
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "i",
+                                                            },
+                                                        ),
+                                                    ),
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "j",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ],
+                                                collection: Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "s",
+                                                        },
+                                                    ),
+                                                ),
+                                                where_clause: None,
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ),
+                            operator: Operator {
+                                cst_kind: "=",
+                                name: "=",
+                            },
+                            right: ArrayComprehension(
+                                ArrayComprehension {
+                                    cst_kind: "array_comprehension",
+                                    indices: None,
+                                    template: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "j",
+                                            },
+                                        ),
+                                    ),
+                                    generators: [
+                                        IteratorGenerator(
+                                            IteratorGenerator {
+                                                cst_kind: "generator",
+                                                patterns: [
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "i",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ],
+                                                collection: Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "s",
+                                                        },
+                                                    ),
+                                                ),
+                                                where_clause: None,
+                                            },
+                                        ),
+                                        AssignmentGenerator(
+                                            AssignmentGenerator {
+                                                cst_kind: "assignment_generator",
+                                                pattern: Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "j",
+                                                        },
+                                                    ),
+                                                ),
+                                                value: InfixOperator(
+                                                    InfixOperator {
+                                                        cst_kind: "infix_operator",
+                                                        left: Identifier(
+                                                            UnquotedIdentifier(
+                                                                UnquotedIdentifier {
+                                                                    cst_kind: "identifier",
+                                                                    name: "i",
+                                                                },
+                                                            ),
+                                                        ),
+                                                        operator: Operator {
+                                                            cst_kind: "+",
+                                                            name: "+",
+                                                        },
+                                                        right: IntegerLiteral(
+                                                            IntegerLiteral {
+                                                                cst_kind: "integer_literal",
+                                                                value: 1,
+                                                            },
+                                                        ),
+                                                    },
+                                                ),
+                                                where_clause: None,
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 3);
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_c = x.definition().cast::<ArrayComprehension>().unwrap();
-			assert!(x_c.indices().is_none());
-			assert_eq!(x_c.template().cast::<IntegerLiteral>().unwrap().value(), 1);
-			let x_gs: Vec<_> = x_c.generators().collect();
-			assert_eq!(x_gs.len(), 1);
-			let x_g0_ps: Vec<_> = x_gs[0].patterns().collect();
-			assert_eq!(x_g0_ps.len(), 1);
-			assert_eq!(x_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(
-				x_gs[0].collection().cast::<Identifier>().unwrap().name(),
-				"s"
-			);
-			assert!(x_gs[0].where_clause().is_none());
-		}
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_c = y.definition().cast::<ArrayComprehension>().unwrap();
-			assert_eq!(
-				y_c.indices().unwrap().cast::<Identifier>().unwrap().name(),
-				"i"
-			);
-			assert_eq!(y_c.template().cast::<Identifier>().unwrap().name(), "v");
-			let y_gs: Vec<_> = y_c.generators().collect();
-			assert_eq!(y_gs.len(), 2);
-			let y_g0_ps: Vec<_> = y_gs[0].patterns().collect();
-			assert_eq!(y_g0_ps.len(), 1);
-			assert_eq!(y_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			let y_g0_c = y_gs[0].collection().cast::<InfixOperator>().unwrap();
-			assert_eq!(y_g0_c.left().cast::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(y_g0_c.operator().name(), "..");
-			assert_eq!(y_g0_c.right().cast::<IntegerLiteral>().unwrap().value(), 3);
-			assert!(y_gs[0].where_clause().is_none());
-			let y_g1_ps: Vec<_> = y_gs[1].patterns().collect();
-			assert_eq!(y_g1_ps.len(), 1);
-			assert_eq!(y_g1_ps[0].cast_ref::<Identifier>().unwrap().name(), "j");
-			assert_eq!(
-				y_gs[1].collection().cast::<Identifier>().unwrap().name(),
-				"s"
-			);
-			let y_g1_w = y_gs[1]
-				.where_clause()
-				.unwrap()
-				.cast::<InfixOperator>()
-				.unwrap();
-			assert_eq!(y_g1_w.left().cast::<Identifier>().unwrap().name(), "i");
-			assert_eq!(y_g1_w.operator().name(), "<");
-			assert_eq!(y_g1_w.right().cast::<Identifier>().unwrap().name(), "j");
-		}
-		{
-			let z = items[2].cast_ref::<Assignment>().unwrap();
-			assert_eq!(z.assignee().cast::<Identifier>().unwrap().name(), "z");
-			let z_c = z.definition().cast::<ArrayComprehension>().unwrap();
-			let z_idxs: Vec<_> = z_c
-				.indices()
-				.unwrap()
-				.cast::<TupleLiteral>()
-				.unwrap()
-				.members()
-				.collect();
-			assert_eq!(z_idxs.len(), 2);
-			assert_eq!(z_idxs[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(z_idxs[1].cast_ref::<Identifier>().unwrap().name(), "j");
-
-			assert_eq!(z_c.template().cast::<Identifier>().unwrap().name(), "v");
-			let z_gs: Vec<_> = z_c.generators().collect();
-			assert_eq!(z_gs.len(), 1);
-			let z_g0_ps: Vec<_> = z_gs[0].patterns().collect();
-			assert_eq!(z_g0_ps.len(), 2);
-			assert_eq!(z_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(z_g0_ps[1].cast_ref::<Identifier>().unwrap().name(), "j");
-			assert_eq!(
-				z_gs[0].collection().cast::<Identifier>().unwrap().name(),
-				"s"
-			);
-			assert!(z_gs[0].where_clause().is_none());
-		}
 	}
 
 	#[test]
 	fn test_set_comprehension() {
-		let model = parse_model(
+		check_ast(
 			r#"
 		x = {v | i in s};
 		y = {v | i in 1..3, j in s where i < j};
 		z = {v | i, j in s};
+		a = {j | i in s, j = i + 1};
 		"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: SetComprehension(
+                        SetComprehension {
+                            cst_kind: "set_comprehension",
+                            template: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "v",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ),
+                    ),
+                    definition: SetComprehension(
+                        SetComprehension {
+                            cst_kind: "set_comprehension",
+                            template: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "v",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: InfixOperator(
+                                            InfixOperator {
+                                                cst_kind: "infix_operator",
+                                                left: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 1,
+                                                    },
+                                                ),
+                                                operator: Operator {
+                                                    cst_kind: "..",
+                                                    name: "..",
+                                                },
+                                                right: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 3,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "j",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: Some(
+                                            InfixOperator(
+                                                InfixOperator {
+                                                    cst_kind: "infix_operator",
+                                                    left: Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "i",
+                                                            },
+                                                        ),
+                                                    ),
+                                                    operator: Operator {
+                                                        cst_kind: "<",
+                                                        name: "<",
+                                                    },
+                                                    right: Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                                name: "j",
+                                                            },
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "z",
+                            },
+                        ),
+                    ),
+                    definition: SetComprehension(
+                        SetComprehension {
+                            cst_kind: "set_comprehension",
+                            template: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "v",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "j",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "a",
+                            },
+                        ),
+                    ),
+                    definition: SetComprehension(
+                        SetComprehension {
+                            cst_kind: "set_comprehension",
+                            template: Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "j",
+                                    },
+                                ),
+                            ),
+                            generators: [
+                                IteratorGenerator(
+                                    IteratorGenerator {
+                                        cst_kind: "generator",
+                                        patterns: [
+                                            Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "i",
+                                                    },
+                                                ),
+                                            ),
+                                        ],
+                                        collection: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "s",
+                                                },
+                                            ),
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                                AssignmentGenerator(
+                                    AssignmentGenerator {
+                                        cst_kind: "assignment_generator",
+                                        pattern: Identifier(
+                                            UnquotedIdentifier(
+                                                UnquotedIdentifier {
+                                                    cst_kind: "identifier",
+                                                    name: "j",
+                                                },
+                                            ),
+                                        ),
+                                        value: InfixOperator(
+                                            InfixOperator {
+                                                cst_kind: "infix_operator",
+                                                left: Identifier(
+                                                    UnquotedIdentifier(
+                                                        UnquotedIdentifier {
+                                                            cst_kind: "identifier",
+                                                            name: "i",
+                                                        },
+                                                    ),
+                                                ),
+                                                operator: Operator {
+                                                    cst_kind: "+",
+                                                    name: "+",
+                                                },
+                                                right: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 1,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        where_clause: None,
+                                    },
+                                ),
+                            ],
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
 		);
-
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 3);
-		{
-			let x = items[0].cast_ref::<Assignment>().unwrap();
-			assert_eq!(x.assignee().cast::<Identifier>().unwrap().name(), "x");
-			let x_c = x.definition().cast::<SetComprehension>().unwrap();
-			assert_eq!(x_c.template().cast::<Identifier>().unwrap().name(), "v");
-			let x_gs: Vec<_> = x_c.generators().collect();
-			assert_eq!(x_gs.len(), 1);
-			let x_g0_ps: Vec<_> = x_gs[0].patterns().collect();
-			assert_eq!(x_g0_ps.len(), 1);
-			assert_eq!(x_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(
-				x_gs[0].collection().cast::<Identifier>().unwrap().name(),
-				"s"
-			);
-			assert!(x_gs[0].where_clause().is_none());
-		}
-		{
-			let y = items[1].cast_ref::<Assignment>().unwrap();
-			assert_eq!(y.assignee().cast::<Identifier>().unwrap().name(), "y");
-			let y_c = y.definition().cast::<SetComprehension>().unwrap();
-			assert_eq!(y_c.template().cast::<Identifier>().unwrap().name(), "v");
-			let y_gs: Vec<_> = y_c.generators().collect();
-			assert_eq!(y_gs.len(), 2);
-			let y_g0_ps: Vec<_> = y_gs[0].patterns().collect();
-			assert_eq!(y_g0_ps.len(), 1);
-			assert_eq!(y_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			let y_g0_c = y_gs[0].collection().cast::<InfixOperator>().unwrap();
-			assert_eq!(y_g0_c.left().cast::<IntegerLiteral>().unwrap().value(), 1);
-			assert_eq!(y_g0_c.operator().name(), "..");
-			assert_eq!(y_g0_c.right().cast::<IntegerLiteral>().unwrap().value(), 3);
-			assert!(y_gs[0].where_clause().is_none());
-			let y_g1_ps: Vec<_> = y_gs[1].patterns().collect();
-			assert_eq!(y_g1_ps.len(), 1);
-			assert_eq!(y_g1_ps[0].cast_ref::<Identifier>().unwrap().name(), "j");
-			assert_eq!(
-				y_gs[1].collection().cast::<Identifier>().unwrap().name(),
-				"s"
-			);
-			let y_g1_w = y_gs[1]
-				.where_clause()
-				.unwrap()
-				.cast::<InfixOperator>()
-				.unwrap();
-			assert_eq!(y_g1_w.left().cast::<Identifier>().unwrap().name(), "i");
-			assert_eq!(y_g1_w.operator().name(), "<");
-			assert_eq!(y_g1_w.right().cast::<Identifier>().unwrap().name(), "j");
-		}
-		{
-			let z = items[2].cast_ref::<Assignment>().unwrap();
-			assert_eq!(z.assignee().cast::<Identifier>().unwrap().name(), "z");
-			let z_c = z.definition().cast::<SetComprehension>().unwrap();
-			assert_eq!(z_c.template().cast::<Identifier>().unwrap().name(), "v");
-			let z_gs: Vec<_> = z_c.generators().collect();
-			assert_eq!(z_gs.len(), 1);
-			let z_g0_ps: Vec<_> = z_gs[0].patterns().collect();
-			assert_eq!(z_g0_ps.len(), 2);
-			assert_eq!(z_g0_ps[0].cast_ref::<Identifier>().unwrap().name(), "i");
-			assert_eq!(z_g0_ps[1].cast_ref::<Identifier>().unwrap().name(), "j");
-			assert_eq!(
-				z_gs[0].collection().cast::<Identifier>().unwrap().name(),
-				"s"
-			);
-			assert!(z_gs[0].where_clause().is_none());
-		}
 	}
 }

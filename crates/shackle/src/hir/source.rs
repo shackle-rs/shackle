@@ -126,6 +126,8 @@ pub enum DesugarKind {
 	DomainConstraint,
 	/// Deconstructor function
 	Deconstructor,
+	/// Generator destructuring
+	DestructuringGenerator,
 }
 
 /// Origin of an HIR node.

@@ -5,16 +5,15 @@ use crate::{
 	arena::ArenaIndex,
 	diagnostics::{
 		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
-		InvalidPattern, NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch,
-		UndefinedIdentifier,
+		NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
 	},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, NodeRef, PatternRef},
 		ArrayAccess, ArrayComprehension, ArrayLiteral, Call, Case, Declaration, Expression,
-		Identifier, IdentifierRegistry, IfThenElse, ItemData, Lambda, Let, LetItem, Pattern,
-		PrimitiveType, RecordAccess, RecordLiteral, SetComprehension, SetLiteral, TupleAccess,
-		TupleLiteral, Type,
+		Generator, Identifier, IdentifierRegistry, IfThenElse, ItemData, Lambda, Let, LetItem,
+		Pattern, PrimitiveType, RecordAccess, RecordLiteral, SetComprehension, SetLiteral,
+		TupleAccess, TupleLiteral, Type,
 	},
 	ty::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
@@ -472,74 +471,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		let mut lift_to_opt = false;
 		for g in c.generators.iter() {
-			let collection = self.collect_expression(g.collection, None);
-			let gen_el = match collection.lookup(db.upcast()) {
-				TyData::Array {
-					opt: OptType::NonOpt,
-					element,
-					..
-				} => element,
-				TyData::Set(VarType::Par, OptType::NonOpt, element) => element,
-				TyData::Set(VarType::Var, OptType::NonOpt, element) => {
-					lift_to_opt = true;
-					element
-				}
-				TyData::Error => self.types.error,
-				_ => {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-					self.types.error
-				}
-			};
-			for p in g.patterns.iter() {
-				if Pattern::is_singular(*p, self.data) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						InvalidPattern {
-							src,
-							span,
-							msg:
-								"Pattern which matches a single value cannot be used for iteration"
-									.to_owned(),
-						},
-					);
-				}
-				self.collect_pattern(Some(expr), false, *p, gen_el);
-			}
-			if let Some(w) = g.where_clause {
-				let where_clause = self.collect_expression(w, None);
-				if let Some(VarType::Var) = where_clause.inst(db.upcast()) {
-					lift_to_opt = true;
-				}
-				if !where_clause.is_subtype_of(db.upcast(), self.types.var_bool) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-				}
-			}
+			lift_to_opt |= self.collect_generator(expr, g);
 		}
 		let el = self.collect_expression(c.template, None);
 		let element = if lift_to_opt {
@@ -591,81 +523,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		let mut is_var = false;
 		for g in c.generators.iter() {
-			let collection = self.collect_expression(g.collection, None);
-			let gen_el = match collection.lookup(db.upcast()) {
-				TyData::Array {
-					opt: OptType::NonOpt,
-					element,
-					..
-				} => match element.inst(db.upcast()) {
-					Some(VarType::Var) => {
-						is_var = true;
-						element.with_inst(db.upcast(), VarType::Par).unwrap()
-					}
-					Some(VarType::Par) => element,
-					None => self.types.error,
-				},
-				TyData::Set(VarType::Par, OptType::NonOpt, element) => element,
-				TyData::Set(VarType::Var, OptType::NonOpt, element) => {
-					is_var = true;
-					element
-				}
-				TyData::Error => self.types.error,
-				_ => {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-					self.types.error
-				}
-			};
-			for p in g.patterns.iter() {
-				if Pattern::is_singular(*p, self.data) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						InvalidPattern {
-							src,
-							span,
-							msg:
-								"Pattern which matches a single value cannot be used for iteration"
-									.to_owned(),
-						},
-					);
-				}
-				self.collect_pattern(Some(expr), false, *p, gen_el);
-			}
-			if let Some(w) = g.where_clause {
-				let where_clause = self.collect_expression(w, None);
-				if let Some(VarType::Var) = where_clause.inst(db.upcast()) {
-					is_var = true;
-				}
-				if !where_clause.is_subtype_of(db.upcast(), self.types.var_bool) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-				}
-			}
+			is_var |= self.collect_generator(expr, g);
 		}
 		let el = self.collect_expression(c.template, None);
 		if !is_var {
@@ -725,6 +583,83 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				);
 				self.types.error
 			})
+	}
+
+	fn collect_generator(&mut self, expr: ArenaIndex<Expression>, g: &Generator) -> bool {
+		let db = self.db;
+		let mut is_var = false;
+		let where_clause = match g {
+			Generator::Iterator {
+				patterns,
+				collection,
+				where_clause,
+			} => {
+				let collection_ty = self.collect_expression(*collection, None);
+				let gen_el = match collection_ty.lookup(db.upcast()) {
+					TyData::Array {
+						opt: OptType::NonOpt,
+						element,
+						..
+					}
+					| TyData::Set(VarType::Par, OptType::NonOpt, element) => element,
+					TyData::Set(VarType::Var, OptType::NonOpt, element) => {
+						is_var = true;
+						element
+					}
+					TyData::Error => self.types.error,
+					_ => {
+						let (src, span) = NodeRef::from(EntityRef::new(db, self.item, *collection))
+							.source_span(db);
+						self.ctx.add_diagnostic(
+							self.item,
+							TypeMismatch {
+								src,
+								span,
+								msg: format!(
+									"Expected set or array type, but got {}",
+									collection_ty.pretty_print(db.upcast())
+								),
+							},
+						);
+						self.types.error
+					}
+				};
+				for p in patterns.iter() {
+					self.collect_pattern(Some(expr), false, *p, gen_el);
+				}
+				*where_clause
+			}
+			Generator::Assignment {
+				pattern,
+				value,
+				where_clause,
+			} => {
+				let ty = self.collect_expression(*value, None);
+				self.collect_pattern(Some(expr), false, *pattern, ty);
+				*where_clause
+			}
+		};
+		if let Some(w) = where_clause {
+			let ty = self.collect_expression(w, None);
+			if !ty.is_subtype_of(db.upcast(), self.types.var_bool) {
+				let (src, span) = NodeRef::from(EntityRef::new(db, self.item, w)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: format!(
+							"Expected boolean where clause, but got {}",
+							ty.pretty_print(db.upcast())
+						),
+					},
+				);
+			}
+			if let Some(VarType::Var) = ty.inst(db.upcast()) {
+				is_var = true;
+			}
+		}
+		is_var
 	}
 
 	fn collect_array_access(&mut self, expr: ArenaIndex<Expression>, aa: &ArrayAccess) -> Ty {

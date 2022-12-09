@@ -169,11 +169,14 @@ impl Debug for Model {
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
+	use expect_test::expect;
 
 	#[test]
 	fn test_model() {
-		let model = parse_model(r#"% Line comment"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 0);
+		check_ast(r#"% Line comment"#, expect!([r#"
+    Model {
+        items: [],
+    }
+"#]));
 	}
 }
