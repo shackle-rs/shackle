@@ -231,7 +231,7 @@ impl Compile {
 			warn!("compilation only considers a model, the data files provided are ignored.")
 		}
 
-		let filename = model.with_extension("shacke.mzn");
+		let filename = model.with_extension("shackle.mzn");
 
 		let slv = self.solver()?;
 		let model = Model::from_file(model);
