@@ -154,7 +154,6 @@ pub enum Value {
 	/// String
 	String(String),
 	/// Identifier of a value of an enumerated type
-	// FIXME this should probably have the actual structuring of enumerated types
 	Enum(EnumValue),
 	/// An array of values
 	/// All values are of the same type
@@ -399,7 +398,7 @@ impl Enum {
 	pub fn len(&self) -> usize {
 		self.constructors
 			.iter()
-			.map(|(_, i)| if let Some(i) = i { i.len() } else { 0 })
+			.map(|(_, i)| if let Some(i) = i { i.len() } else { 1 })
 			.sum()
 	}
 
@@ -471,10 +470,10 @@ impl EnumValue {
 			val: i,
 		}
 	}
-}
 
-impl Display for EnumValue {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	/// Internal function used to find the constructor definition in the
+	/// enumerated type and the position the value has within this constructor
+	pub(crate) fn constructor_and_pos(&self) -> (&String, &Option<Index>, usize) {
 		let mut i = self.val;
 		let c = self
 			.set
@@ -492,8 +491,58 @@ impl Display for EnumValue {
 			.take(1)
 			.next()
 			.unwrap();
-		if c.0 == "_" {
-			write!(
+		(&c.0, &c.1, i)
+	}
+
+	/// Returns the enumerated type to which this enumerated value belongs
+	///
+	/// ## Warning
+	/// On parsed data the enumerated type might be a placeholder with only
+	/// information required to fit the data to a `Program`.
+	pub fn enum_type(&self) -> Arc<Enum> {
+		self.set.clone()
+	}
+
+	/// Returns the name used to construct the value of the enumerated type
+	///
+	/// The method returns [`None`] if the enumerated type is anonymous
+	pub fn constructor(&self) -> Option<&str> {
+		let (c, _, _) = self.constructor_and_pos();
+		if c == "_" {
+			None
+		} else {
+			Some(c.as_str())
+		}
+	}
+
+	/// Returns the argument used to construct the value of the enumerated type
+	///
+	/// This method resturns [`None`] if no argument was used to construct the
+	/// value
+	pub fn arg(&self) -> Option<Value> {
+		let (_, index, i) = self.constructor_and_pos();
+		match index {
+			Some(Index::Enum(e)) => Some(Value::Enum(EnumValue {
+				set: e.clone(),
+				val: i,
+			})),
+			Some(Index::Integer(range)) => Some(Value::Integer(range.start() + i as i64 - 1)),
+			None => {
+				debug_assert!(i == 1);
+				None
+			}
+		}
+	}
+}
+
+impl Display for EnumValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self.constructor() {
+			Some(constructor) => match self.arg() {
+				Some(arg) => write!(f, "{constructor}({arg})"),
+				None => write!(f, "{}", constructor),
+			},
+			None => write!(
 				f,
 				"to_enum({}, {})",
 				if let Some(name) = &self.set.name {
@@ -501,12 +550,8 @@ impl Display for EnumValue {
 				} else {
 					"_"
 				},
-				i
-			)
-		} else if let Some(_ii) = &c.1 {
-			write!(f, "")
-		} else {
-			write!(f, "{}", c.0)
+				self.arg().unwrap()
+			),
 		}
 	}
 }

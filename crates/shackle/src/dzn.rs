@@ -27,7 +27,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	error::{FileError, ShackleError, SyntaxError},
-	Array, Index, Polarity, Record, Set, Value,
+	Array, EnumValue, Index, Polarity, Record, Set, Value,
 };
 
 pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
@@ -142,7 +142,7 @@ fn value(input: Span) -> IResult<Span, Value> {
 		map(float, Value::Float),
 		map(integer, Value::Integer),
 		// WARNING: Should be after other usages of words (e.g., infinity, array1d, enum constructors)
-		// map(identifier, |s| Value::Enum(s.to_string())),
+		map(enum_val, |s| Value::Enum(s)),
 	))(input)
 }
 
@@ -299,6 +299,23 @@ fn unicode(input: Span) -> IResult<Span, char> {
 	});
 	// Convert to corresponding character
 	map_opt(convert_u32, std::char::from_u32)(input)
+}
+
+fn enum_val(input: Span) -> IResult<Span, EnumValue> {
+	let (input, ident) = identifier(input)?;
+	let (input, _) = ws(input)?;
+	if let Ok((input, _)) = char::<_, nom::error::Error<Span>>('(')(input.clone()) {
+		let (input, _) = ws(input)?;
+		let (input, arg) = alt((map(integer, Value::Integer), map(enum_val, Value::Enum)))(input)?;
+		let (input, _) = ws(input)?;
+		let (input, _) = char(')')(input)?;
+		Ok((
+			input,
+			EnumValue::new_constructor_member(ident.to_string(), arg),
+		))
+	} else {
+		Ok((input, EnumValue::new_ident_member(ident.to_string())))
+	}
 }
 
 fn array(input: Span) -> IResult<Span, Array> {
@@ -518,6 +535,18 @@ mod tests {
 		assert_eq!(out, Value::String("    Another test    ".to_string()));
 		let (_, out) = value(span("\"\\t\\n\"")).unwrap();
 		assert_eq!(out, Value::String("\t\n".to_string()));
+	}
+
+	#[test]
+	fn test_parse_enum_val() {
+		let (_, out) = value(span("A")).unwrap();
+		assert_eq!(out.to_string(), "A");
+		let (_, out) = value(span("A(1)")).unwrap();
+		assert_eq!(out.to_string(), "A(1)");
+		let (_, out) = value(span("A(B)")).unwrap();
+		assert_eq!(out.to_string(), "A(B)");
+		let (_, out) = value(span("A(B(C(D(-60))))")).unwrap();
+		assert_eq!(out.to_string(), "A(B(C(D(-60))))");
 	}
 
 	#[test]
