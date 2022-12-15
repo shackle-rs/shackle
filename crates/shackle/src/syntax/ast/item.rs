@@ -464,7 +464,9 @@ mod test {
 
 	#[test]
 	fn test_include() {
-		check_ast(r#"include "foo.mzn";"#, expect!([r#"
+		check_ast(
+			r#"include "foo.mzn";"#,
+			expect!([r#"
     Model {
         items: [
             Include(
@@ -478,12 +480,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_declaration() {
-		check_ast("int: x = 3;", expect!([r#"
+		check_ast(
+			"int: x = 3;",
+			expect!([r#"
     Model {
         items: [
             Declaration(
@@ -524,12 +529,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_enumeration() {
-		check_ast("enum Foo = {A, B, C};", expect!([r#"
+		check_ast(
+			"enum Foo = {A, B, C};",
+			expect!([r#"
     Model {
         items: [
             Enumeration(
@@ -573,12 +581,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_assignment() {
-		check_ast("x = 1;", expect!([r#"
+		check_ast(
+			"x = 1;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -602,12 +613,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_constraint() {
-		check_ast("constraint x > 1;", expect!([r#"
+		check_ast(
+			"constraint x > 1;",
+			expect!([r#"
     Model {
         items: [
             Constraint(
@@ -641,12 +655,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_solve() {
-		check_ast("solve minimize x;", expect!([r#"
+		check_ast(
+			"solve minimize x;",
+			expect!([r#"
     Model {
         items: [
             Solve(
@@ -667,12 +684,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_output() {
-		check_ast(r#"output ["foo"];"#, expect!([r#"
+		check_ast(
+			r#"output ["foo"];"#,
+			expect!([r#"
     Model {
         items: [
             Output(
@@ -700,12 +720,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_function() {
-		check_ast("function int: foo(int: x) = x + 1;", expect!([r#"
+		check_ast(
+			"function int: foo(int: x) = x + 1;",
+			expect!([r#"
     Model {
         items: [
             Function(
@@ -791,12 +814,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_type_alias() {
-		check_ast("type Foo = set of int", expect!([r#"
+		check_ast(
+			"type Foo = set of int",
+			expect!([r#"
     Model {
         items: [
             TypeAlias(
@@ -834,6 +860,7 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 }

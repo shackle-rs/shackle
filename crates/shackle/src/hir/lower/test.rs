@@ -105,7 +105,7 @@ fn test_lower_annotation() {
 	check_lower_item(
 		"annotation foo(int, float);",
 		expect!([r#"
-    Item: Annotation { constructor: Function { constructor: <Pattern::1>, deconstructor: <Pattern::2>, parameters: [ConstructorParameter { declared_type: <Type::1>, pattern: None }, ConstructorParameter { declared_type: <Type::2>, pattern: None }] } }
+    Item: Annotation { constructor: Function { constructor: <Pattern::1>, destructor: <Pattern::2>, parameters: [ConstructorParameter { declared_type: <Type::1>, pattern: None }, ConstructorParameter { declared_type: <Type::2>, pattern: None }] } }
       Expressions:
       Types:
         <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
@@ -148,7 +148,7 @@ fn test_lower_enumeration() {
 	check_lower_item(
 		"enum Foo = A(B) ++ {C};",
 		expect!([r#"
-    Item: Enumeration { pattern: <Pattern::1>, definition: Some([Named(Function { constructor: <Pattern::2>, deconstructor: <Pattern::3>, parameters: [ConstructorParameter { declared_type: <Type::1>, pattern: None }] }), Named(Atom { pattern: <Pattern::4> })]), annotations: [] }
+    Item: Enumeration { pattern: <Pattern::1>, definition: Some([Named(Function { constructor: <Pattern::2>, destructor: <Pattern::3>, parameters: [ConstructorParameter { declared_type: <Type::1>, pattern: None }] }), Named(Atom { pattern: <Pattern::4> })]), annotations: [] }
       Expressions:
         <Expression::1>: Identifier("B")
       Types:
@@ -184,7 +184,7 @@ fn test_lower_enumeration() {
             Foo = A(B) ++ {C};
         "#,
 		expect!([r#"
-    Item: EnumAssignment { assignee: <Expression::1>, definition: [Named(Function { constructor: <Pattern::2>, deconstructor: <Pattern::3>, parameters: [ConstructorParameter { declared_type: <Type::1>, pattern: None }] }), Named(Atom { pattern: <Pattern::1> })] }
+    Item: EnumAssignment { assignee: <Expression::1>, definition: [Named(Function { constructor: <Pattern::2>, destructor: <Pattern::3>, parameters: [ConstructorParameter { declared_type: <Type::1>, pattern: None }] }), Named(Atom { pattern: <Pattern::1> })] }
       Expressions:
         <Expression::1>: Identifier("Foo")
         <Expression::2>: Identifier("B")
@@ -274,7 +274,7 @@ fn test_lower_function() {
 	check_lower_item(
 		"function var $$E: foo($T: x, $$E: y);",
 		expect!([r#"
-    Item: Function { return_type: <Type::1>, pattern: <Pattern::1>, type_inst_vars: [TypeInstIdentifierDeclaration { name: <Pattern::2>, is_enum: true, is_varifiable: true, is_indexable: false }, TypeInstIdentifierDeclaration { name: <Pattern::3>, is_enum: false, is_varifiable: false, is_indexable: false }], parameters: [Parameter { declared_type: <Type::2>, pattern: Some(<Pattern::4>), annotations: [] }, Parameter { declared_type: <Type::3>, pattern: Some(<Pattern::6>), annotations: [] }], body: None, annotations: [] }
+    Item: Function { return_type: <Type::1>, pattern: <Pattern::1>, type_inst_vars: [TypeInstIdentifierDeclaration { name: <Pattern::2>, anonymous: false, is_enum: true, is_varifiable: true, is_indexable: false }, TypeInstIdentifierDeclaration { name: <Pattern::3>, anonymous: false, is_enum: false, is_varifiable: false, is_indexable: false }], parameters: [Parameter { declared_type: <Type::2>, pattern: Some(<Pattern::4>), annotations: [] }, Parameter { declared_type: <Type::3>, pattern: Some(<Pattern::6>), annotations: [] }], body: None, annotations: [] }
       Expressions:
         <Expression::1>: Identifier("$$E")
         <Expression::2>: Identifier("$T")

@@ -78,12 +78,6 @@ pub enum Type {
 		opt: Option<OptType>,
 		/// The pattern for this type-inst var
 		pattern: ArenaIndex<Pattern>,
-		/// Whether this type-inst var is varifiable
-		varifiable: bool,
-		/// Whether this type-inst var is enumerable
-		enumerable: bool,
-		/// Whether this type-inst var is an index type (enumerable or tuple of enumerable)
-		indexable: bool,
 	},
 	/// Type inferred from RHS
 	Any,

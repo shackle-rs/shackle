@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use rustc_hash::FxHashMap;
-
 use crate::diagnostics::SyntaxError;
 use crate::file::ModelRef;
 use crate::hir::db::Hir;
@@ -11,7 +9,7 @@ use crate::hir::*;
 use crate::syntax::ast::{self, AstNode};
 use crate::Error;
 
-use super::ExpressionCollector;
+use super::{ExpressionCollector, TypeInstIdentifiers};
 
 /// Lower a model to HIR
 pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>, Arc<Vec<Error>>) {
@@ -84,13 +82,13 @@ impl ItemCollector<'_> {
 		let name = Identifier::new(a.id().name(), self.db);
 		let pattern = ctx.alloc_pattern(Origin::new(&a.id(), None), name);
 		let constructor = if let Some(ps) = a.parameters() {
-			let deconstructor = ctx.alloc_pattern(
-				Origin::new(&a.id(), Some(DesugarKind::Deconstructor)),
+			let destructor = ctx.alloc_pattern(
+				Origin::new(&a.id(), Some(DesugarKind::DestructuringFunction)),
 				name.inversed(self.db),
 			);
 			Constructor::Function {
 				constructor: pattern,
-				deconstructor,
+				destructor,
 				parameters: ps
 					.iter()
 					.map(|p| {
@@ -173,8 +171,11 @@ impl ItemCollector<'_> {
 									definition.push(
 										Constructor::Function {
 											constructor: ctx.alloc_pattern((&i).into(), name),
-											deconstructor: ctx.alloc_pattern(
-												Origin::new(&i, Some(DesugarKind::Deconstructor)),
+											destructor: ctx.alloc_pattern(
+												Origin::new(
+													&i,
+													Some(DesugarKind::DestructuringFunction),
+												),
 												name.inversed(self.db),
 											),
 											parameters,
@@ -296,8 +297,8 @@ impl ItemCollector<'_> {
 					cases.push(
 						Constructor::Function {
 							constructor: ctx.alloc_pattern(Origin::new(&c.id(), None), name),
-							deconstructor: ctx.alloc_pattern(
-								Origin::new(&c.id(), Some(DesugarKind::Deconstructor)),
+							destructor: ctx.alloc_pattern(
+								Origin::new(&c.id(), Some(DesugarKind::DestructuringFunction)),
 								name.inversed(self.db),
 							),
 							parameters,
@@ -351,7 +352,7 @@ impl ItemCollector<'_> {
 			.collect();
 		let body = f.body().map(|e| ctx.collect_expression(e));
 		let pattern = ctx.collect_pattern(f.id().into());
-		let mut tiids = FxHashMap::default();
+		let mut tiids = TypeInstIdentifiers::default();
 		let return_type = ctx.collect_type_with_tiids(f.return_type(), &mut tiids, false, false);
 		let parameters = f
 			.parameters()
@@ -422,7 +423,7 @@ impl ItemCollector<'_> {
 				primitive_type: PrimitiveType::Bool,
 			},
 		);
-		let mut tiids = FxHashMap::default();
+		let mut tiids = TypeInstIdentifiers::default();
 		let parameters = f
 			.parameters()
 			.map(|p| {

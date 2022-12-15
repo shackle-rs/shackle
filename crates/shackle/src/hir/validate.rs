@@ -39,7 +39,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 		for p in ps.iter() {
 			let signature = db.lookup_item_signature(p.item());
 			match &signature.patterns[p] {
-				PatternTy::Function(f) | PatternTy::AnnotationDeconstructor(f) => {
+				PatternTy::Function(f) | PatternTy::AnnotationDestructure(f) => {
 					overloads.push((*p, *f.clone()));
 				}
 				PatternTy::AnnotationConstructor(f) => {
@@ -54,7 +54,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 					}
 					enum_constructors.push(*p);
 				}
-				PatternTy::EnumDeconstructor(fs) => {
+				PatternTy::EnumDestructure(fs) => {
 					overloads.extend(fs.iter().map(|f| (*p, f.clone())));
 				}
 				_ => unreachable!(),

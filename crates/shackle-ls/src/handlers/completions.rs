@@ -115,7 +115,7 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 				match &types[p.pattern()] {
 					PatternTy::Function(f)
 					| PatternTy::AnnotationConstructor(f)
-					| PatternTy::AnnotationDeconstructor(f) => completions.push(CompletionItem {
+					| PatternTy::AnnotationDestructure(f) => completions.push(CompletionItem {
 						label: i.pretty_print(db),
 						kind: Some(CompletionItemKind::FUNCTION),
 						detail: Some(if additional_overloads == 0 {
@@ -151,7 +151,7 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 							..Default::default()
 						});
 					}
-					PatternTy::EnumDeconstructor(ec) => {
+					PatternTy::EnumDestructure(ec) => {
 						let func = &ec[0];
 						additional_overloads += ec.len() - 1;
 						completions.push(CompletionItem {

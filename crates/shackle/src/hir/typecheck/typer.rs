@@ -17,7 +17,7 @@ use crate::{
 	},
 	ty::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
-		TyData, TyVar, TyVarRef, TypeRegistry, VarType,
+		TyData, TypeRegistry, VarType,
 	},
 	Error,
 };
@@ -1506,11 +1506,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			match self.ctx.type_pattern(db, *p) {
 				PatternTy::Function(function)
 				| PatternTy::AnnotationConstructor(function)
-				| PatternTy::AnnotationDeconstructor(function) => overloads.push((*p, *function.clone())),
+				| PatternTy::AnnotationDestructure(function) => overloads.push((*p, *function.clone())),
 				PatternTy::EnumConstructor(ec) => {
 					overloads.extend(ec.iter().map(|ec| (*p, ec.constructor.clone())))
 				}
-				PatternTy::EnumDeconstructor(fs) => {
+				PatternTy::EnumDestructure(fs) => {
 					overloads.extend(fs.iter().map(|f| (*p, f.clone())))
 				}
 				PatternTy::Computing => (),
@@ -1845,7 +1845,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						fn_pat,
 						PatternTy::DestructuringFn {
 							constructor: Ty::function(db.upcast(), ctor_type),
-							deconstructor: Ty::function(db.upcast(), dtor_type),
+							destructor: Ty::function(db.upcast(), dtor_type),
 						},
 					);
 					Some(c.overload.return_type())
@@ -2257,21 +2257,15 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				)
 				.with_opt(db.upcast(), *opt),
 			},
-			Type::AnonymousTypeInstVar {
-				inst,
-				opt,
-				pattern,
-				varifiable,
-				enumerable,
-				indexable,
-			} => {
+			Type::AnonymousTypeInstVar { inst, opt, pattern } => {
 				let mut ty = Ty::type_inst_var(
 					db.upcast(),
-					TyVar {
-						ty_var: TyVarRef::new(db, PatternRef::new(self.item, *pattern)),
-						varifiable: *varifiable,
-						enumerable: *enumerable,
-						indexable: *indexable,
+					match self
+						.ctx
+						.type_pattern(db, PatternRef::new(self.item, *pattern))
+					{
+						PatternTy::TyVar(tv) => tv,
+						_ => unimplemented!(),
 					},
 				);
 				if let Some(inst) = inst {

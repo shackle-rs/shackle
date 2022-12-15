@@ -2,9 +2,13 @@
 //!
 //! Tracks desugarings performed when lowering HIR to THIR.
 
-use std::ops::Deref;
+use std::ops::{Deref, Index};
+
+use rustc_hash::FxHashMap;
 
 use crate::hir::ids::{EntityRef, ItemRef, NodeRef};
+
+use super::ExpressionId;
 
 /// The HIR node which produced a THIR node
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -62,4 +66,33 @@ pub enum DesugarKind {
 	Destructuring,
 	/// Desugared from objective value
 	Objective,
+}
+
+/// Tracks HIR nodes which produced THIR nodes
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ItemOrigins {
+	item: Origin,
+	expressions: FxHashMap<ExpressionId, Origin>,
+}
+
+impl Index<ExpressionId> for ItemOrigins {
+	type Output = Origin;
+	fn index(&self, index: ExpressionId) -> &Self::Output {
+		&self.expressions[&index]
+	}
+}
+
+impl ItemOrigins {
+	/// Create a new item origin table
+	pub fn new(item: Origin) -> Self {
+		Self {
+			item,
+			expressions: FxHashMap::default(),
+		}
+	}
+
+	/// Insert an expression into the table
+	pub fn insert(&mut self, expression: ExpressionId, origin: impl Into<Origin>) {
+		self.expressions.insert(expression, origin.into());
+	}
 }

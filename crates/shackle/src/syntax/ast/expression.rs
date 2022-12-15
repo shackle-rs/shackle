@@ -977,7 +977,9 @@ mod test {
 
 	#[test]
 	fn test_prefix_operator() {
-		check_ast("x = -a;", expect!([r#"
+		check_ast(
+			"x = -a;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -1012,7 +1014,8 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
@@ -1126,7 +1129,9 @@ mod test {
 
 	#[test]
 	fn test_postfix_operator() {
-		check_ast("x = a..;", expect!([r#"
+		check_ast(
+			"x = a..;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -1161,7 +1166,8 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
@@ -1325,7 +1331,9 @@ mod test {
 
 	#[test]
 	fn test_string_interpolation() {
-		check_ast(r#"x = "foo\(y)bar";"#, expect!([r#"
+		check_ast(
+			r#"x = "foo\(y)bar";"#,
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -1366,7 +1374,8 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
@@ -1541,7 +1550,9 @@ mod test {
 
 	#[test]
 	fn test_tuple_access() {
-		check_ast("x = foo.1;", expect!([r#"
+		check_ast(
+			"x = foo.1;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -1576,12 +1587,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_record_access() {
-		check_ast("x = foo.bar;", expect!([r#"
+		check_ast(
+			"x = foo.bar;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -1618,13 +1632,16 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 
 	fn test_lambda() {
-		check_ast("x = lambda int: (int: x) => x;", expect!([r#"
+		check_ast(
+			"x = lambda int: (int: x) => x;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -1701,6 +1718,7 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 }

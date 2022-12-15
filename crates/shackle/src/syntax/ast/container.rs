@@ -518,7 +518,9 @@ mod test {
 
 	#[test]
 	fn test_set_literal() {
-		check_ast("x = {1, 2};", expect!([r#"
+		check_ast(
+			"x = {1, 2};",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -555,7 +557,8 @@ mod test {
             ),
         ],
     }
-"#]))
+"#]),
+		)
 	}
 
 	#[test]

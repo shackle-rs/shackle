@@ -429,20 +429,20 @@ pub enum PatternTy {
 	/// While the constructor cannot actually be called,
 	/// we still keep track of it for convenience.
 	AnonymousEnumConstructor(Box<FunctionEntry>),
-	/// Enum deconstructor.
+	/// Enum destructor.
 	///
 	/// Defines the Foo^-1(x) function.
-	EnumDeconstructor(Box<[FunctionEntry]>),
+	EnumDestructure(Box<[FunctionEntry]>),
 	/// Enum atom
 	EnumAtom(Ty),
 	/// Annotation constructor.
 	///
 	/// Defines the Foo(x) function.
 	AnnotationConstructor(Box<FunctionEntry>),
-	/// Annotation deconstructor.
+	/// Annotation destructor.
 	///
 	/// Defines the Foo^-1(x) function.
-	AnnotationDeconstructor(Box<FunctionEntry>),
+	AnnotationDestructure(Box<FunctionEntry>),
 	/// Annotation atom
 	AnnotationAtom,
 	/// Destructuring pattern
@@ -454,8 +454,8 @@ pub enum PatternTy {
 	DestructuringFn {
 		/// The type of the constructor function
 		constructor: Ty,
-		/// The type of the deconstructor function
-		deconstructor: Ty,
+		/// The type of the destructor function
+		destructor: Ty,
 	},
 	/// Currently computing - if encountered, indicates a cycle
 	Computing,
@@ -485,9 +485,9 @@ impl<'a> DebugPrint<'a> for PatternTy {
 				"AnonymousEnumConstructor({})",
 				f.overload.pretty_print(db.upcast()),
 			),
-			PatternTy::EnumDeconstructor(eds) => {
+			PatternTy::EnumDestructure(eds) => {
 				format!(
-					"EnumDeconstructor({})",
+					"EnumDestructure({})",
 					eds.iter()
 						.map(|f| f.overload.pretty_print(db.upcast()))
 						.collect::<Vec<_>>()
@@ -499,8 +499,8 @@ impl<'a> DebugPrint<'a> for PatternTy {
 				"AnnotationConstructor({})",
 				f.overload.pretty_print(db.upcast()),
 			),
-			PatternTy::AnnotationDeconstructor(f) => format!(
-				"AnnotationDeconstructor({})",
+			PatternTy::AnnotationDestructure(f) => format!(
+				"AnnotationDestructure({})",
 				f.overload.pretty_print(db.upcast()),
 			),
 			PatternTy::AnnotationAtom => "AnnotationAtom".to_string(),
@@ -509,12 +509,12 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			}
 			PatternTy::DestructuringFn {
 				constructor,
-				deconstructor,
+				destructor,
 			} => {
 				format!(
 					"DestructuringFn({}, {})",
 					constructor.pretty_print(db.upcast()),
-					deconstructor.pretty_print(db.upcast())
+					destructor.pretty_print(db.upcast())
 				)
 			}
 			PatternTy::Computing => "{computing}".to_owned(),

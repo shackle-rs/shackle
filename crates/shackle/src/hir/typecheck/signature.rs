@@ -73,7 +73,7 @@ impl SignatureTypeContext {
 					}
 					Constructor::Function {
 						constructor,
-						deconstructor,
+						destructor,
 						parameters,
 					} => {
 						let params = parameters
@@ -122,8 +122,8 @@ impl SignatureTypeContext {
 							}),
 						};
 						self.add_declaration(
-							PatternRef::new(item, *deconstructor),
-							PatternTy::AnnotationDeconstructor(Box::new(dtor)),
+							PatternRef::new(item, *destructor),
+							PatternTy::AnnotationDestructure(Box::new(dtor)),
 						);
 						let ctor = FunctionEntry {
 							has_body: false,
@@ -161,17 +161,6 @@ impl SignatureTypeContext {
 						);
 						ty_var
 					})
-					.chain(
-						it.parameters
-							.iter()
-							.flat_map(|p| Type::anonymous_ty_vars(p.declared_type, &it.data))
-							.map(|t| match &it.data[t] {
-								Type::AnonymousTypeInstVar { pattern, .. } => {
-									TyVarRef::new(db, PatternRef::new(item, *pattern))
-								}
-								_ => unreachable!(),
-							}),
-					)
 					.collect::<Box<[_]>>();
 				let params = it
 					.parameters
@@ -440,16 +429,16 @@ impl SignatureTypeContext {
 				}
 				EnumConstructor::Named(Constructor::Function {
 					constructor,
-					deconstructor,
+					destructor,
 					parameters,
 				}) => {
 					let (had_error, param_types) = get_param_types(self, parameters);
 					let is_single = param_types.len() == 1;
 					let mut constructors = Vec::with_capacity(6);
-					let mut deconstructors = Vec::with_capacity(6);
+					let mut destructors = Vec::with_capacity(6);
 
 					let mut add_ctor = |e: Ty, ps: Box<[Ty]>, l: bool| {
-						deconstructors.push(FunctionEntry {
+						destructors.push(FunctionEntry {
 							has_body: false,
 							overload: OverloadedFunction::Function(FunctionType {
 								return_type: if is_single {
@@ -542,8 +531,8 @@ impl SignatureTypeContext {
 						PatternTy::EnumConstructor(constructors.into_boxed_slice()),
 					);
 					self.add_declaration(
-						PatternRef::new(item, *deconstructor),
-						PatternTy::EnumDeconstructor(deconstructors.into_boxed_slice()),
+						PatternRef::new(item, *destructor),
+						PatternTy::EnumDestructure(destructors.into_boxed_slice()),
 					);
 				}
 				EnumConstructor::Anonymous {

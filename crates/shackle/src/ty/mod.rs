@@ -404,6 +404,37 @@ impl Ty {
 		}
 	}
 
+	/// Return whether or not this is an array
+	pub fn is_array(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Array { .. })
+	}
+
+	/// Whether or not this type is a set
+	pub fn is_set(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Set(_, _, _))
+	}
+
+	/// Returns the number of array dimensions if known
+	pub fn dims(&self, db: &dyn Interner) -> Option<usize> {
+		match self.lookup(db) {
+			TyData::Array { dim, .. } => match dim.lookup(db) {
+				TyData::Tuple(_, fs) => Some(fs.len()),
+				TyData::TyVar(_, _, tv) if !tv.enumerable => None,
+				_ => Some(1),
+			},
+			_ => None,
+		}
+	}
+
+	/// Returns the number of fields if this is a tuple/record type
+	pub fn field_len(&self, db: &dyn Interner) -> Option<usize> {
+		match self.lookup(db) {
+			TyData::Tuple(_, fs) => Some(fs.len()),
+			TyData::Record(_, fs) => Some(fs.len()),
+			_ => None,
+		}
+	}
+
 	/// Get the most specific supertype of the given types if there is one.
 	///
 	/// Returns `None` if there is no supertype of the given types.
@@ -1054,6 +1085,11 @@ impl EnumRef {
 	/// The name is only used for pretty printing.
 	pub fn introduce(db: &dyn Interner, name: impl Into<InternedString>) -> Self {
 		Self(NewType::introduce(db, name))
+	}
+
+	/// Get the name of this enum
+	pub fn name(&self, db: &dyn Interner) -> InternedString {
+		db.lookup_intern_newtype(self.0).name
 	}
 
 	/// Get the human readable name of this enum

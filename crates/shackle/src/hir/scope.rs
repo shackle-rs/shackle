@@ -46,13 +46,13 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				}
 				Constructor::Function {
 					constructor,
-					deconstructor,
+					destructor,
 					..
 				} => {
 					let ctor_ident = a.data[*constructor]
 						.identifier()
 						.expect("Annotation item must have identifier pattern");
-					let dtor_ident = a.data[*deconstructor]
+					let dtor_ident = a.data[*destructor]
 						.identifier()
 						.expect("Annotation item must have identifier pattern");
 					if let Err(e) = scope.add_function(
@@ -67,7 +67,7 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 						db,
 						dtor_ident,
 						0,
-						PatternRef::new(item_ref, *deconstructor),
+						PatternRef::new(item_ref, *destructor),
 					) {
 						diagnostics.push(e);
 					}
@@ -108,7 +108,7 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 					}
 					Constructor::Function {
 						constructor,
-						deconstructor,
+						destructor,
 						..
 					} => {
 						// Enum constructor (overloads handled later in type checker)
@@ -118,13 +118,10 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 						{
 							diagnostics.push(e);
 						}
-						let dtor = data[*deconstructor].identifier().unwrap();
-						if let Err(e) = scope.add_function(
-							db,
-							dtor,
-							0,
-							PatternRef::new(item_ref, *deconstructor),
-						) {
+						let dtor = data[*destructor].identifier().unwrap();
+						if let Err(e) =
+							scope.add_function(db, dtor, 0, PatternRef::new(item_ref, *destructor))
+						{
 							diagnostics.push(e);
 						}
 					}
@@ -988,7 +985,9 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> ScopeCollectorResult {
 			}
 			collector.push();
 			for t in function.type_inst_vars.iter() {
-				collector.collect_pattern(t.name, PatternMode::Destructuring);
+				if !t.anonymous {
+					collector.collect_pattern(t.name, PatternMode::Destructuring);
+				}
 			}
 			for p in function.parameters.iter() {
 				collector.collect_type(p.declared_type);

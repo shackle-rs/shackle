@@ -173,10 +173,13 @@ mod test {
 
 	#[test]
 	fn test_model() {
-		check_ast(r#"% Line comment"#, expect!([r#"
+		check_ast(
+			r#"% Line comment"#,
+			expect!([r#"
     Model {
         items: [],
     }
-"#]));
+"#]),
+		);
 	}
 }

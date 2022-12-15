@@ -191,8 +191,8 @@ pub enum Constructor {
 	Function {
 		/// Pattern being declared (always an identifier)
 		constructor: ArenaIndex<Pattern>,
-		/// Pattern for deconstructor (always an identifier with ^-1)
-		deconstructor: ArenaIndex<Pattern>,
+		/// Pattern for destructor (always an identifier with ^-1)
+		destructor: ArenaIndex<Pattern>,
 		/// Constructor parameters
 		parameters: Box<[ConstructorParameter]>,
 	},
@@ -324,6 +324,8 @@ pub struct Function {
 pub struct TypeInstIdentifierDeclaration {
 	/// The name of this identifier
 	pub name: ArenaIndex<Pattern>,
+	/// Whether this is an anonymous tiid
+	pub anonymous: bool,
 	/// Whether this is an enum ID
 	pub is_enum: bool,
 	/// Whether this is varifiable

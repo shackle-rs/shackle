@@ -124,8 +124,8 @@ pub enum DesugarKind {
 	GeneratorCall,
 	/// Domain constraint
 	DomainConstraint,
-	/// Deconstructor function
-	Deconstructor,
+	/// Destructuring function
+	DestructuringFunction,
 	/// Generator destructuring
 	DestructuringGenerator,
 }

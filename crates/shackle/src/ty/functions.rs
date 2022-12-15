@@ -1,7 +1,10 @@
 /// Function overloading and instantiation
 use rustc_hash::FxHashMap;
 
-use crate::db::{InternedString, Interner};
+use crate::{
+	db::{InternedString, Interner},
+	utils::DebugPrint,
+};
 
 use super::{OptType, Ty, TyData, TyVarRef, VarType};
 
@@ -12,6 +15,29 @@ pub enum FunctionResolutionError<T> {
 	NoMatchingFunction(Vec<(T, FunctionEntry, InstantiationError)>),
 	/// Ambiguous call
 	AmbiguousOverloading(Vec<(T, FunctionEntry)>),
+}
+
+impl<'a, T> DebugPrint<'a> for FunctionResolutionError<T> {
+	type Database = dyn Interner;
+	fn debug_print(&self, db: &Self::Database) -> String {
+		match self {
+			Self::NoMatchingFunction(fs) => ["No matching function:".to_owned()]
+				.into_iter()
+				.chain(fs.iter().map(|(_, fe, e)| {
+					format!("  {}: {}", fe.overload.pretty_print(db), e.debug_print(db))
+				}))
+				.collect::<Vec<_>>()
+				.join("\n"),
+			Self::AmbiguousOverloading(fs) => ["Ambiguous overloading".to_owned()]
+				.into_iter()
+				.chain(
+					fs.iter()
+						.map(|(_, fe)| format!("  {}", fe.overload.pretty_print(db))),
+				)
+				.collect::<Vec<_>>()
+				.join("\n"),
+		}
+	}
 }
 
 /// Represent failure to instantiate a function
@@ -40,6 +66,41 @@ pub enum InstantiationError {
 		/// Actual number of arguments
 		actual: usize,
 	},
+}
+
+impl<'a> DebugPrint<'a> for InstantiationError {
+	type Database = dyn Interner + 'a;
+
+	fn debug_print(&self, db: &Self::Database) -> String {
+		match self {
+			Self::IncompatibleTypeInstVariable { ty_var, types } => {
+				format!(
+					"type-inst var {} instantiated with incompatible types [{}]",
+					ty_var.pretty_print(db),
+					types
+						.iter()
+						.map(|ty| ty.pretty_print(db))
+						.collect::<Vec<_>>()
+						.join(", ")
+				)
+			}
+			Self::ArgumentMismatch {
+				index,
+				expected,
+				actual,
+			} => {
+				format!(
+					"argument {} expected {} but {}",
+					*index,
+					expected.pretty_print(db),
+					actual.pretty_print(db)
+				)
+			}
+			Self::ArgumentCountMismatch { expected, actual } => {
+				format!("expected {} arguments but got {}", *expected, *actual)
+			}
+		}
+	}
 }
 
 /// Illegal overloading error

@@ -275,4 +275,6 @@ id_registry!(
 	shackle_type,
 	empty_annotation,
 	minus: "-",
+	erase_enum,
+	forall,
 );

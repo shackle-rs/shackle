@@ -93,7 +93,7 @@ impl ExpressionCollector<'_> {
 
 	/// Lower an AST type into HIR
 	pub fn collect_type(&mut self, t: ast::Type) -> ArenaIndex<Type> {
-		let mut tiids = FxHashMap::default();
+		let mut tiids = TypeInstIdentifiers::default();
 		self.collect_type_with_tiids(t, &mut tiids, false, false)
 	}
 
@@ -101,7 +101,7 @@ impl ExpressionCollector<'_> {
 	pub fn collect_type_with_tiids(
 		&mut self,
 		t: ast::Type,
-		tiids: &mut FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+		tiids: &mut TypeInstIdentifiers,
 		is_array_dim: bool,
 		is_fn_parameter: bool,
 	) -> ArenaIndex<Type> {
@@ -276,7 +276,7 @@ impl ExpressionCollector<'_> {
 	fn collect_type_base(
 		&mut self,
 		b: ast::TypeBase,
-		tiids: &mut FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+		tiids: &mut TypeInstIdentifiers,
 		is_array_dim: bool,
 		is_fn_parameter: bool,
 	) -> Type {
@@ -285,16 +285,21 @@ impl ExpressionCollector<'_> {
 				if is_array_dim && b.var_type().is_none() && b.opt_type().is_none() {
 					if let ast::Expression::Anonymous(_) = e {
 						if is_fn_parameter {
+							let pattern = self.alloc_pattern(
+								Origin::new(&e, None),
+								Identifier::new("_", self.db),
+							);
+							tiids.anons.push(TypeInstIdentifierDeclaration {
+								name: pattern,
+								anonymous: true,
+								is_enum: true,
+								is_varifiable: true,
+								is_indexable: false,
+							});
 							return Type::AnonymousTypeInstVar {
 								inst: Some(VarType::Par),
 								opt: Some(OptType::NonOpt),
-								pattern: self.alloc_pattern(
-									Origin::new(&e, None),
-									Identifier::new("_", self.db),
-								),
-								enumerable: true,
-								varifiable: true,
-								indexable: false,
+								pattern,
 							};
 						} else {
 							return Type::Any;
@@ -323,6 +328,7 @@ impl ExpressionCollector<'_> {
 					(_, i, o) => (i, o),          // var opt means var opt
 				};
 				tiids
+					.tiids
 					.entry(ident)
 					.and_modify(|tiid| {
 						tiid.is_varifiable =
@@ -331,6 +337,7 @@ impl ExpressionCollector<'_> {
 					})
 					.or_insert(TypeInstIdentifierDeclaration {
 						name: self.alloc_pattern(origin.clone(), ident),
+						anonymous: false,
 						is_enum: false,
 						is_varifiable: inst == Some(VarType::Var) || is_array_dim,
 						is_indexable: is_array_dim,
@@ -345,9 +352,11 @@ impl ExpressionCollector<'_> {
 				let ident = Identifier::new(tiid.name(), self.db);
 				let origin = Origin::new(&tiid, None);
 				tiids
+					.tiids
 					.entry(ident)
 					.or_insert(TypeInstIdentifierDeclaration {
 						name: self.alloc_pattern(origin.clone(), ident),
+						anonymous: false,
 						is_enum: true,
 						is_varifiable: true,
 						is_indexable: false,
@@ -909,5 +918,21 @@ impl ExpressionCollector<'_> {
 		let index = self.data.patterns.insert(v);
 		self.source_map.pattern_source.insert(index, origin);
 		index
+	}
+}
+
+/// Tracks type-inst identifiers used in a function item
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TypeInstIdentifiers {
+	/// The named type-inst ids
+	pub tiids: FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+	/// Anonymous type-inst ids
+	pub anons: Vec<TypeInstIdentifierDeclaration>,
+}
+
+impl TypeInstIdentifiers {
+	/// Get the `TypeInstIdentifierDeclaration`s
+	pub fn into_values(self) -> impl Iterator<Item = TypeInstIdentifierDeclaration> {
+		self.tiids.into_values().chain(self.anons)
 	}
 }

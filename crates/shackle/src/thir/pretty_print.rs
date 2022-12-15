@@ -5,9 +5,9 @@ use crate::arena::ArenaIndex;
 
 use super::db::Thir;
 use super::{
-	AnnotationId, CasePattern, ConstraintId, DeclarationId, Domain, EnumerationId, Expression,
-	ExpressionData, FunctionId, Goal, ItemData, ItemId, LetItem, Model, OutputId,
-	ResolvedIdentifier,
+	AnnotationId, ConstraintId, DeclarationId, Domain, DomainData, EnumerationId, Expression,
+	ExpressionAllocator, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Model,
+	OutputId, Pattern, ResolvedIdentifier,
 };
 use std::fmt::Write;
 
@@ -37,7 +37,9 @@ impl<'a> PrettyPrinter<'a> {
 		for item in self.model.top_level_items() {
 			writeln!(&mut buf, "{};", self.pretty_print_item(item)).unwrap();
 		}
-		writeln!(&mut buf, "{};", self.pretty_print_solve()).unwrap();
+		if self.model.solve().is_none() {
+			writeln!(&mut buf, "solve satisfy;").unwrap();
+		}
 		buf
 	}
 
@@ -50,6 +52,7 @@ impl<'a> PrettyPrinter<'a> {
 			ItemId::Enumeration(i) => self.pretty_print_enumeration(i),
 			ItemId::Function(i) => self.pretty_print_function(i),
 			ItemId::Output(i) => self.pretty_print_output(i),
+			ItemId::Solve => self.pretty_print_solve(),
 		}
 	}
 
@@ -78,18 +81,18 @@ impl<'a> PrettyPrinter<'a> {
 	fn pretty_print_constraint(&self, idx: ConstraintId) -> String {
 		let constraint = &self.model[idx];
 		let mut buf = "constraint ".to_owned();
-		for ann in constraint.annotations.iter() {
+		for ann in constraint.annotations() {
 			write!(
 				&mut buf,
 				":: ({}) ",
-				self.pretty_print_expression(*ann, &constraint.data)
+				self.pretty_print_expression(ann, constraint.expressions())
 			)
 			.unwrap();
 		}
 		write!(
 			&mut buf,
 			"{}",
-			self.pretty_print_expression(constraint.expression, &constraint.data)
+			self.pretty_print_expression(constraint.expression(), constraint.expressions())
 		)
 		.unwrap();
 		buf
@@ -97,21 +100,21 @@ impl<'a> PrettyPrinter<'a> {
 
 	fn pretty_print_declaration(&self, idx: DeclarationId, is_let_item: bool) -> String {
 		let declaration = &self.model[idx];
-		let ty = declaration.domain.ty();
+		let ty = declaration.ty();
 		let mut buf = if is_let_item
 			&& ty.contains_type_inst_var(self.db.upcast())
-			&& declaration.definition.is_some()
+			&& declaration.definition().is_some()
 		{
 			// Workaround since let items can't use TiIDs in MiniZinc
 			"any".to_owned()
 		} else {
-			self.pretty_print_domain(&declaration.domain, &declaration.data)
+			self.pretty_print_domain(declaration.domain(), declaration.expressions())
 		};
 		write!(
 			&mut buf,
 			": {}",
 			declaration
-				.name
+				.name()
 				.map(|name| if name.lookup(self.db.upcast()) == "_objective" {
 					"_DECL_OBJ".to_owned()
 				} else {
@@ -120,19 +123,19 @@ impl<'a> PrettyPrinter<'a> {
 				.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(idx)))
 		)
 		.unwrap();
-		for ann in declaration.annotations.iter() {
+		for ann in declaration.annotations() {
 			write!(
 				&mut buf,
 				" :: ({})",
-				self.pretty_print_expression(*ann, &declaration.data)
+				self.pretty_print_expression(ann, declaration.expressions())
 			)
 			.unwrap();
 		}
-		if let Some(def) = declaration.definition {
+		if let Some(def) = declaration.definition() {
 			write!(
 				&mut buf,
 				" = {}",
-				self.pretty_print_expression(def, &declaration.data)
+				self.pretty_print_expression(def, declaration.expressions())
 			)
 			.unwrap();
 		}
@@ -141,17 +144,17 @@ impl<'a> PrettyPrinter<'a> {
 
 	fn pretty_print_enumeration(&self, idx: EnumerationId) -> String {
 		let enumeration = &self.model[idx];
-		let enum_name = enumeration.enum_type.pretty_print(self.db.upcast());
+		let enum_name = enumeration.enum_type().pretty_print(self.db.upcast());
 		let mut buf = format!("enum {}", enum_name);
-		for ann in enumeration.annotations.iter() {
+		for ann in enumeration.annotations() {
 			write!(
 				&mut buf,
 				" :: ({})",
-				self.pretty_print_expression(*ann, &enumeration.data)
+				self.pretty_print_expression(ann, enumeration.expressions())
 			)
 			.unwrap();
 		}
-		if let Some(cases) = &enumeration.definition {
+		if let Some(cases) = enumeration.definition() {
 			write!(
 				&mut buf,
 				" = {}",
@@ -170,8 +173,8 @@ impl<'a> PrettyPrinter<'a> {
 									.iter()
 									.map(|d| {
 										self.pretty_print_domain(
-											&self.model[*d].domain,
-											&self.model[*d].data,
+											self.model[*d].domain(),
+											self.model[*d].expressions(),
 										)
 									})
 									.collect::<Vec<_>>()
@@ -194,46 +197,46 @@ impl<'a> PrettyPrinter<'a> {
 		write!(
 			&mut buf,
 			"function {}: {}({})",
-			self.pretty_print_domain(&function.domain, &function.data),
-			function.name.pretty_print(self.db.upcast()),
+			self.pretty_print_domain(function.domain(), function.expressions()),
+			function.name().pretty_print(self.db.upcast()),
 			function
-				.parameters
+				.parameters()
 				.iter()
 				.map(|p| self.pretty_print_declaration(*p, false))
 				.collect::<Vec<_>>()
 				.join(", ")
 		)
 		.unwrap();
-		for ann in function.annotations.iter() {
+		for ann in function.annotations() {
 			write!(
 				&mut buf,
 				" :: ({})",
-				self.pretty_print_expression(*ann, &function.data)
+				self.pretty_print_expression(ann, function.expressions())
 			)
 			.unwrap();
 		}
-		if let Some(body) = function.body {
+		if let Some(body) = function.body() {
 			if self.old_compat
-				&& function.name.lookup(self.db.upcast()) == "deopt"
-				&& !function.type_inst_vars.is_empty()
-				&& function.parameters.len() == 1
+				&& function.name().lookup(self.db.upcast()) == "deopt"
+				&& !function.type_inst_vars().is_empty()
+				&& function.parameters().len() == 1
 				&& {
-					let ty = self.model[function.parameters[0]].domain.ty();
+					let ty = self.model[function.parameter(0)].ty();
 					!ty.known_par(self.db.upcast()) && !ty.known_occurs(self.db.upcast())
 				} {
 				// For compatibility with old minizinc, we can just directly coerce
-				match &*function.data.expressions[body] {
+				match &*function[body] {
 					ExpressionData::Call {
 						function: f,
 						arguments: args,
-					} => match &*function.data.expressions[*f] {
+					} => match &*function[*f] {
 						ExpressionData::Identifier(ResolvedIdentifier::Function(idx)) => {
-							assert_eq!(self.model[*idx].name.lookup(self.db.upcast()), "to_enum");
+							assert_eq!(self.model[*idx].name().lookup(self.db.upcast()), "to_enum");
 							assert_eq!(args.len(), 2);
 							write!(
 								&mut buf,
 								" = {}",
-								self.pretty_print_expression(args[1], &function.data)
+								self.pretty_print_expression(args[1], function.expressions())
 							)
 							.unwrap();
 						}
@@ -245,15 +248,15 @@ impl<'a> PrettyPrinter<'a> {
 				write!(
 					&mut buf,
 					" = {}",
-					self.pretty_print_expression(body, &function.data)
+					self.pretty_print_expression(body, function.expressions())
 				)
 				.unwrap();
 			}
-		} else if self.old_compat && function.name.lookup(self.db.upcast()) == "erase_enum" {
+		} else if self.old_compat && function.name().lookup(self.db.upcast()) == "erase_enum" {
 			// For compatibility with old minizinc, we can just directly coerce
-			let d = function.parameters[0];
+			let d = function.parameter(0);
 			let ident = self.model[d]
-				.name
+				.name()
 				.map(|n| n.pretty_print(self.db.upcast()))
 				.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)));
 			write!(&mut buf, " = {}", ident).unwrap();
@@ -264,57 +267,55 @@ impl<'a> PrettyPrinter<'a> {
 	fn pretty_print_output(&self, idx: OutputId) -> String {
 		let output = &self.model[idx];
 		let mut buf = "output ".to_owned();
-		if let Some(s) = output.section {
+		if let Some(s) = output.section() {
 			write!(
 				&mut buf,
 				":: {} ",
-				self.pretty_print_expression(s, &output.data)
+				self.pretty_print_expression(s, output.expressions())
 			)
 			.unwrap();
 		}
 		write!(
 			&mut buf,
 			"{}",
-			self.pretty_print_expression(output.expression, &output.data)
+			self.pretty_print_expression(output.expression(), output.expressions())
 		)
 		.unwrap();
 		buf
 	}
 
 	fn pretty_print_solve(&self) -> String {
-		if let Some(solve) = self.model.solve() {
-			let mut buf = "solve ".to_owned();
-			for ann in solve.annotations.iter() {
-				write!(
-					&mut buf,
-					":: ({}) ",
-					self.pretty_print_expression(*ann, &solve.data)
-				)
-				.unwrap();
-			}
-			let s = match solve.goal {
-				Goal::Satisfy => "satisfy",
-				Goal::Maximize { .. } => "maximize _DECL_OBJ",
-				Goal::Minimize { .. } => "minimize _DECL_OBJ",
-			};
-			write!(&mut buf, "{}", s).unwrap();
-			buf
-		} else {
-			"solve satisfy".to_owned()
+		let solve = self.model.solve().unwrap();
+		let mut buf = "solve ".to_owned();
+		for ann in solve.annotations() {
+			write!(
+				&mut buf,
+				":: ({}) ",
+				self.pretty_print_expression(ann, solve.expressions())
+			)
+			.unwrap();
 		}
+		let s = match solve.goal() {
+			Goal::Satisfy => "satisfy",
+			Goal::Maximize { .. } => "maximize _DECL_OBJ",
+			Goal::Minimize { .. } => "minimize _DECL_OBJ",
+		};
+		write!(&mut buf, "{}", s).unwrap();
+		buf
 	}
 
 	/// Pretty print a domain
-	pub fn pretty_print_domain(&self, domain: &Domain, data: &ItemData) -> String {
-		match domain {
-			Domain::Array(ty, dim, el) => {
-				let dims = match &**dim {
-					Domain::Tuple(_, ds) => ds
+	pub fn pretty_print_domain(&self, domain: &Domain, data: &ExpressionAllocator) -> String {
+		let ty = domain.ty();
+		match &**domain {
+			DomainData::Array(dim, el) => {
+				let dims = match &***dim {
+					DomainData::Tuple(ds) => ds
 						.iter()
 						.map(|d| self.pretty_print_domain(d, data))
 						.collect::<Vec<_>>()
 						.join(", "),
-					dom => self.pretty_print_domain(dom, data),
+					_ => self.pretty_print_domain(dim, data),
 				};
 				ty.opt(self.db.upcast())
 					.into_iter()
@@ -327,7 +328,7 @@ impl<'a> PrettyPrinter<'a> {
 					.collect::<Vec<_>>()
 					.join(" ")
 			}
-			Domain::Set(ty, el) => ty
+			DomainData::Bounded(e) => ty
 				.inst(self.db.upcast())
 				.into_iter()
 				.flat_map(|i| i.pretty_print())
@@ -336,10 +337,23 @@ impl<'a> PrettyPrinter<'a> {
 						.into_iter()
 						.flat_map(|o| o.pretty_print()),
 				)
-				.chain(["set of".to_owned(), self.pretty_print_domain(el, data)])
+				.chain([self.pretty_print_expression(*e, data)])
 				.collect::<Vec<_>>()
 				.join(" "),
-			Domain::Tuple(ty, ds) => {
+			DomainData::Set(s) => ty
+				.inst(self.db.upcast())
+				.into_iter()
+				.flat_map(|i| i.pretty_print())
+				.chain(
+					ty.opt(self.db.upcast())
+						.into_iter()
+						.flat_map(|o| o.pretty_print()),
+				)
+				.chain(["set of".to_owned()])
+				.chain([self.pretty_print_domain(s, data)])
+				.collect::<Vec<_>>()
+				.join(" "),
+			DomainData::Tuple(ds) => {
 				let doms = ds
 					.iter()
 					.map(|d| self.pretty_print_domain(d, data))
@@ -357,7 +371,7 @@ impl<'a> PrettyPrinter<'a> {
 					.collect::<Vec<_>>()
 					.join(" ")
 			}
-			Domain::Record(ty, ds) => {
+			DomainData::Record(ds) => {
 				let doms = ds
 					.iter()
 					.map(|(i, d)| {
@@ -381,25 +395,17 @@ impl<'a> PrettyPrinter<'a> {
 					.collect::<Vec<_>>()
 					.join(" ")
 			}
-			Domain::Bounded(ty, e) => ty
-				.inst(self.db.upcast())
-				.into_iter()
-				.flat_map(|i| i.pretty_print())
-				.chain(
-					ty.opt(self.db.upcast())
-						.into_iter()
-						.flat_map(|o| o.pretty_print()),
-				)
-				.chain([self.pretty_print_expression(*e, data)])
-				.collect::<Vec<_>>()
-				.join(" "),
-			Domain::Unbounded(ty) => ty.pretty_print(self.db.upcast()),
+			DomainData::Unbounded => ty.pretty_print(self.db.upcast()),
 		}
 	}
 
 	/// Pretty print an expression
-	pub fn pretty_print_expression(&self, idx: ArenaIndex<Expression>, data: &ItemData) -> String {
-		let mut out = match &*data.expressions[idx] {
+	pub fn pretty_print_expression(
+		&self,
+		idx: ArenaIndex<Expression>,
+		data: &ExpressionAllocator,
+	) -> String {
+		let mut out = match &*data[idx] {
 			ExpressionData::Absent => "<>".to_owned(),
 			ExpressionData::ArrayAccess {
 				collection,
@@ -407,7 +413,7 @@ impl<'a> PrettyPrinter<'a> {
 			} => format!(
 				"({})[{}]",
 				self.pretty_print_expression(*collection, data),
-				match &*data.expressions[*indices] {
+				match &*data[*indices] {
 					ExpressionData::TupleLiteral(es) => es
 						.iter()
 						.map(|e| self.pretty_print_expression(*e, data))
@@ -421,7 +427,6 @@ impl<'a> PrettyPrinter<'a> {
 				indices,
 				generators,
 			} => {
-				let model = self.db.model_thir();
 				let mut buf = String::new();
 				write!(&mut buf, "[").unwrap();
 				if let Some(i) = indices {
@@ -430,33 +435,7 @@ impl<'a> PrettyPrinter<'a> {
 				let t = self.pretty_print_expression(*template, data);
 				let gs = generators
 					.iter()
-					.map(|g| {
-						let decls = g
-							.declarations
-							.iter()
-							.map(|d| {
-								model[*d]
-									.name
-									.map(|n| n.pretty_print(self.db.upcast()))
-									.unwrap_or_else(|| "_".to_owned())
-							})
-							.collect::<Vec<_>>()
-							.join(", ");
-						let mut gen = format!(
-							"{} in {}",
-							decls,
-							self.pretty_print_expression(g.collection, data)
-						);
-						if let Some(where_clause) = g.where_clause {
-							write!(
-								&mut gen,
-								" where {}",
-								self.pretty_print_expression(where_clause, data)
-							)
-							.unwrap();
-						}
-						gen
-					})
+					.map(|g| self.pretty_print_generator(g, data))
 					.collect::<Vec<_>>()
 					.join(", ");
 				write!(&mut buf, "{} | {}]", t, gs).unwrap();
@@ -523,56 +502,53 @@ impl<'a> PrettyPrinter<'a> {
 					format!("{}", value)
 				}
 			}
-			ExpressionData::Identifier(i) => {
-				let model = self.db.model_thir();
-				match i {
-					ResolvedIdentifier::Annotation(a) => model[*a]
-						.name
-						.map(|n| n.pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
-					ResolvedIdentifier::AnnotationDeconstructor(a) => model[*a]
-						.name
-						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
-					ResolvedIdentifier::Declaration(d) => model[*d]
-						.name
-						.map(|n| n.pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d))),
-					ResolvedIdentifier::Enumeration(e) => {
-						model[*e].enum_type.pretty_print(self.db.upcast())
-					}
-					ResolvedIdentifier::EnumerationMember(e, i) => model[*e]
-						.definition
-						.as_ref()
-						.expect("Identifier refers to non-existent enum member")[*i]
-						.name
-						.map(|n| n.pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| {
-							format!(
-								"_EM_{}_{}",
-								self.model[*e].enum_type.pretty_print(self.db.upcast()),
-								i
-							)
-						}),
-					ResolvedIdentifier::EnumerationDeconstructor(e, i) => model[*e]
-						.definition
-						.as_ref()
-						.expect("Identifier refers to non-existent enum member")[*i]
-						.name
-						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
-						.unwrap_or_else(|| {
-							format!(
-								"_EM_{}_{}⁻¹",
-								self.model[*e].enum_type.pretty_print(self.db.upcast()),
-								i
-							)
-						}),
-					ResolvedIdentifier::Function(f) => {
-						model[*f].name.pretty_print(self.db.upcast())
-					}
-					ResolvedIdentifier::TyVarRef(t) => t.pretty_print(self.db.upcast()),
+			ExpressionData::Identifier(i) => match i {
+				ResolvedIdentifier::Annotation(a) => self.model[*a]
+					.name
+					.map(|n| n.pretty_print(self.db.upcast()))
+					.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
+				ResolvedIdentifier::AnnotationDestructure(a) => self.model[*a]
+					.name
+					.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
+					.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
+				ResolvedIdentifier::Declaration(d) => self.model[*d]
+					.name()
+					.map(|n| n.pretty_print(self.db.upcast()))
+					.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d))),
+				ResolvedIdentifier::Enumeration(e) => {
+					self.model[*e].enum_type().pretty_print(self.db.upcast())
 				}
-			}
+				ResolvedIdentifier::EnumerationMember(m) => self.model[*m]
+					.name
+					.map(|n| n.pretty_print(self.db.upcast()))
+					.unwrap_or_else(|| {
+						format!(
+							"_EM_{}_{}",
+							self.model[m.enumeration_id()]
+								.enum_type()
+								.pretty_print(self.db.upcast()),
+							m.member_index()
+						)
+					}),
+				ResolvedIdentifier::EnumerationDestructure(m) => self.model[*m]
+					.name
+					.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
+					.unwrap_or_else(|| {
+						format!(
+							"_EM_{}_{}⁻¹",
+							self.model[m.enumeration_id()]
+								.enum_type()
+								.pretty_print(self.db.upcast()),
+							m.member_index()
+						)
+					}),
+				ResolvedIdentifier::Function(f) => {
+					self.model[*f].name().pretty_print(self.db.upcast())
+				}
+				ResolvedIdentifier::TyVarRef(t) => {
+					self.model[*t].ty_var.pretty_print(self.db.upcast())
+				}
+			},
 			ExpressionData::IfThenElse {
 				branches,
 				else_result,
@@ -670,39 +646,12 @@ impl<'a> PrettyPrinter<'a> {
 				template,
 				generators,
 			} => {
-				let model = self.db.model_thir();
 				let mut buf = String::new();
 				write!(&mut buf, "{{").unwrap();
 				let t = self.pretty_print_expression(*template, data);
 				let gs = generators
 					.iter()
-					.map(|g| {
-						let decls = g
-							.declarations
-							.iter()
-							.map(|d| {
-								model[*d]
-									.name
-									.map(|n| n.pretty_print(self.db.upcast()))
-									.unwrap_or_else(|| "_".to_owned())
-							})
-							.collect::<Vec<_>>()
-							.join(", ");
-						let mut gen = format!(
-							"{} in {}",
-							decls,
-							self.pretty_print_expression(g.collection, data)
-						);
-						if let Some(where_clause) = g.where_clause {
-							write!(
-								&mut gen,
-								" where {}",
-								self.pretty_print_expression(where_clause, data)
-							)
-							.unwrap();
-						}
-						gen
-					})
+					.map(|g| self.pretty_print_generator(g, data))
 					.collect::<Vec<_>>()
 					.join(", ");
 				write!(&mut buf, "{} | {}}}", t, gs).unwrap();
@@ -730,11 +679,11 @@ impl<'a> PrettyPrinter<'a> {
 				format!("({})", fields)
 			}
 		};
-		for ann in data.expressions[idx].annotations() {
+		for ann in data.expression_annotations(idx) {
 			write!(
 				&mut out,
 				" :: ({})",
-				self.pretty_print_expression(*ann, data)
+				self.pretty_print_expression(ann, data)
 			)
 			.unwrap();
 		}
@@ -742,25 +691,82 @@ impl<'a> PrettyPrinter<'a> {
 			write!(
 				&mut out,
 				":: shackle_type({:?})",
-				&*data.expressions[idx].ty().pretty_print(self.db.upcast())
+				&*data[idx].ty().pretty_print(self.db.upcast())
 			)
 			.unwrap();
 		}
 		out
 	}
 
-	fn pretty_print_pattern(&self, pat: &CasePattern, data: &ItemData) -> String {
+	fn pretty_print_generator(&self, g: &Generator, data: &ExpressionAllocator) -> String {
+		let (mut gen, w) = match g {
+			Generator::Iterator {
+				declarations,
+				collection,
+				where_clause,
+			} => {
+				let decls = declarations
+					.iter()
+					.map(|d| {
+						self.model[*d]
+							.name()
+							.map(|n| n.pretty_print(self.db.upcast()))
+							.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d)))
+					})
+					.collect::<Vec<_>>()
+					.join(", ");
+				(
+					format!(
+						"{} in {}",
+						decls,
+						self.pretty_print_expression(*collection, data)
+					),
+					*where_clause,
+				)
+			}
+			Generator::Assignment {
+				assignment,
+				where_clause,
+			} => {
+				let decl = &self.model[*assignment];
+				(
+					format!(
+						"{} = {}",
+						decl.name()
+							.map(|n| n.pretty_print(self.db.upcast()))
+							.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
+						self.pretty_print_expression(
+							decl.definition().unwrap(),
+							decl.expressions()
+						)
+					),
+					*where_clause,
+				)
+			}
+		};
+		if let Some(where_clause) = w {
+			write!(
+				&mut gen,
+				" where {}",
+				self.pretty_print_expression(where_clause, data)
+			)
+			.unwrap();
+		}
+		gen
+	}
+
+	fn pretty_print_pattern(&self, pat: &Pattern, data: &ExpressionAllocator) -> String {
 		match pat {
-			CasePattern::Anonymous(_) => "_".to_owned(),
-			CasePattern::Expression(e) => self.pretty_print_expression(*e, data),
-			CasePattern::Tuple(fs) => format!(
+			Pattern::Anonymous(_) => "_".to_owned(),
+			Pattern::Expression(e) => self.pretty_print_expression(*e, data),
+			Pattern::Tuple(fs) => format!(
 				"({})",
 				fs.iter()
 					.map(|p| self.pretty_print_pattern(p, data))
 					.collect::<Vec<_>>()
 					.join(", ")
 			),
-			CasePattern::Record(fs) => format!(
+			Pattern::Record(fs) => format!(
 				"({})",
 				fs.iter()
 					.map(|(i, p)| format!(
@@ -771,8 +777,8 @@ impl<'a> PrettyPrinter<'a> {
 					.collect::<Vec<_>>()
 					.join(", ")
 			),
-			CasePattern::EnumConstructor { item, index, args } => {
-				let ctor = self.model[*item].definition.as_ref().unwrap()[*index]
+			Pattern::EnumConstructor { member, args, .. } => {
+				let ctor = self.model[*member]
 					.name
 					.unwrap()
 					.pretty_print(self.db.upcast());
@@ -783,7 +789,7 @@ impl<'a> PrettyPrinter<'a> {
 					.join(", ");
 				format!("{}({})", ctor, ps)
 			}
-			CasePattern::AnnotationConstructor { item, args } => {
+			Pattern::AnnotationConstructor { item, args } => {
 				let ctor = self.model[*item]
 					.name
 					.unwrap()

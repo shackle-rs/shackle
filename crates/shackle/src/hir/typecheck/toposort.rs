@@ -64,6 +64,14 @@ impl<'a> TopoSorter<'a> {
 		let model = item.model(self.db);
 		let local_item = item.local_item_ref(self.db);
 		match local_item {
+			LocalItemRef::Annotation(a) => {
+				let data = local_item.data(&model);
+				for p in model[a].parameters() {
+					for e in Type::expressions(p.declared_type, data) {
+						self.visit_expression(ExpressionRef::new(item, e));
+					}
+				}
+			}
 			LocalItemRef::Assignment(a) => {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[a].assignee) {
@@ -71,6 +79,12 @@ impl<'a> TopoSorter<'a> {
 					self.visit_expression(ExpressionRef::new(item, model[a].definition));
 					self.current.remove(&p);
 				}
+			}
+			LocalItemRef::Constraint(c) => {
+				for ann in model[c].annotations.iter() {
+					self.visit_expression(ExpressionRef::new(item, *ann));
+				}
+				self.visit_expression(ExpressionRef::new(item, model[c].expression));
 			}
 			LocalItemRef::Declaration(d) => {
 				let data = local_item.data(&model);
@@ -133,7 +147,7 @@ impl<'a> TopoSorter<'a> {
 					match &signature.patterns[p] {
 						PatternTy::Function(f)
 						| PatternTy::AnnotationConstructor(f)
-						| PatternTy::AnnotationDeconstructor(f) => {
+						| PatternTy::AnnotationDestructure(f) => {
 							overloads.push((p.item() == item, *f.clone()));
 						}
 						PatternTy::EnumConstructor(ec) => {
@@ -141,7 +155,7 @@ impl<'a> TopoSorter<'a> {
 								ec.iter().map(|f| (p.item() == item, f.constructor.clone())),
 							);
 						}
-						PatternTy::EnumDeconstructor(fs) => {
+						PatternTy::EnumDestructure(fs) => {
 							overloads.extend(fs.iter().map(|f| (p.item() == item, f.clone())));
 						}
 						_ => unreachable!(),
@@ -167,6 +181,9 @@ impl<'a> TopoSorter<'a> {
 				self.current.insert(p);
 				let data = local_item.data(&model);
 				for p in model[f].parameters.iter() {
+					for ann in p.annotations.iter() {
+						self.visit_expression(ExpressionRef::new(item, *ann));
+					}
 					for e in Type::expressions(p.declared_type, data) {
 						self.visit_expression(ExpressionRef::new(item, e));
 					}
@@ -178,6 +195,12 @@ impl<'a> TopoSorter<'a> {
 					self.visit_expression(ExpressionRef::new(item, *ann));
 				}
 				self.current.remove(&p);
+			}
+			LocalItemRef::Output(o) => {
+				if let Some(s) = model[o].section {
+					self.visit_expression(ExpressionRef::new(item, s));
+				}
+				self.visit_expression(ExpressionRef::new(item, model[o].expression));
 			}
 			LocalItemRef::Solve(s) => match model[s].goal {
 				Goal::Maximize { pattern, objective }
@@ -209,9 +232,6 @@ impl<'a> TopoSorter<'a> {
 					self.visit_expression(ExpressionRef::new(item, e));
 				}
 				self.current.remove(&p);
-			}
-			LocalItemRef::Annotation(_) | LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => {
-				// Never cyclic, so skip check
 			}
 		}
 		self.sorted.push(item);

@@ -77,7 +77,9 @@ mod test {
 
 	#[test]
 	fn test_integer_literal() {
-		check_ast("x = 1;", expect!([r#"
+		check_ast(
+			"x = 1;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -101,12 +103,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_float_literal() {
-		check_ast("x = 1.2;", expect!([r#"
+		check_ast(
+			"x = 1.2;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -130,12 +135,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_string_literal() {
-		check_ast(r#"x = "foo";"#, expect!([r#"
+		check_ast(
+			r#"x = "foo";"#,
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -159,12 +167,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_absent() {
-		check_ast("x = <>;", expect!([r#"
+		check_ast(
+			"x = <>;",
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -187,12 +198,15 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 
 	#[test]
 	fn test_infinity() {
-		check_ast(r#"x = infinity;"#, expect!([r#"
+		check_ast(
+			r#"x = infinity;"#,
+			expect!([r#"
     Model {
         items: [
             Assignment(
@@ -215,6 +229,7 @@ mod test {
             ),
         ],
     }
-"#]));
+"#]),
+		);
 	}
 }
