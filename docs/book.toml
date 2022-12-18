@@ -9,3 +9,6 @@ title = "The Shackle Almanac"
 additional-js = ["theme/mzn-highlight.js"]
 # TODO: We use newer version (3.1+) of MathJax for the proofs. Remove custom "head.hbs" code when possible
 mathjax-support = false
+
+[preprocessor.mermaid]
+command = "python utils/mermaid.py"

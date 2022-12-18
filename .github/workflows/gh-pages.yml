@@ -21,6 +21,8 @@ jobs:
 
       - run: mdbook build
         working-directory: ./docs
+        env:
+          MDBOOK_PREPROCESSOR__MERMAID__PREPROCESS: "true"
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

@@ -1,11 +1,7 @@
 # Compilation to MicroZinc
 
-Compilation of the MiniZinc AST to MicroZinc will involve transformation to
-a new AST for MicroZinc.
-
-## Replacing operators by function calls
-
-Operators need to be replaced by calls.
+Compilation of the MiniZinc THIR to MicroZinc will involve transformation to
+a new IR for MicroZinc.
 
 ## Decomposition of variable conditionals
 

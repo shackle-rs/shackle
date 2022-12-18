@@ -1,7 +1,7 @@
 hljs.registerLanguage("MiniZinc", (hljs) => {
   const KEYWORDS = {
     keyword:
-      "ann annotation any array bool case constraint default div diff else elseif endif enum float function if include intersect in int let maximize minimize mod not of output opt par predicate record satisfy set solve string subset superset symdiff test then tuple type union var variant_record where xor",
+      "ann annotation any array bool case constraint default div diff else elseif endcase endif enum float function if include intersect in int lambda let maximize minimize mod not of op opt output par predicate record satisfy set solve string subset superset symdiff test then tuple type union var variant_record where xor",
     literal: "false true <> _",
   };
   const STRING = {

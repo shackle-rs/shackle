@@ -169,7 +169,7 @@ impl Debug for Model {
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
-	use expect_test::expect;
+	use expect_test::{expect, expect_file};
 
 	#[test]
 	fn test_model() {
@@ -180,6 +180,14 @@ mod test {
         items: [],
     }
 "#]),
+		);
+	}
+
+	#[test]
+	fn test_doc_simple_model() {
+		check_ast_file(
+			include_str!("../../../../../docs/src/examples/simple-model.mzn"),
+			expect_file!("../../../../../docs/src/examples/simple-model-ast.txt"),
 		);
 	}
 }
