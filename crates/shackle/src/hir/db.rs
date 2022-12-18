@@ -308,11 +308,15 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 						.path(db.upcast())
 						.and_then(|p| p.parent().map(|p| p.to_owned()));
 
-					let resolved = search_dirs
-						.iter()
-						.chain(file_dir.iter())
-						.map(|p| p.join(included))
-						.find(|p| p.exists());
+					let resolved = if included.starts_with("./") {
+						file_dir.map(|p| p.join(included)).filter(|p| p.exists())
+					} else {
+						search_dirs
+							.iter()
+							.chain(file_dir.iter())
+							.map(|p| p.join(included))
+							.find(|p| p.exists())
+					};
 
 					match resolved {
 						Some(r) => r,
