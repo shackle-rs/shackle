@@ -153,7 +153,7 @@ impl ArrayAccess {
 ast_enum!(
 	/// Array index (could be `..` or an expression)
 	ArrayIndex,
-	".." | "<.." | "<..<" => IndexSlice,
+	".." | "<.." | "<..<" | "..<" => IndexSlice,
 	_ => Expression
 );
 
