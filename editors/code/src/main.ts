@@ -21,7 +21,7 @@ export function activate(context: ExtensionContext) {
 
   const run = {
     command,
-    transport: TransportKind.ipc,
+    transport: TransportKind.stdio,
   };
   const serverOptions: ServerOptions = {
     run,
@@ -39,8 +39,7 @@ export function activate(context: ExtensionContext) {
     clientOptions
   );
 
-  client.start();
-  client.onReady().then(() => {
+  client.start().then(() => {
     context.subscriptions.push(
       commands.registerCommand("shackleLanguageServer.viewCst", () =>
         handleCstViewCommand(client)
