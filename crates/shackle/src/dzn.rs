@@ -27,7 +27,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	error::{FileError, ShackleError, SyntaxError},
-	Array, EnumValue, Index, Polarity, Record, Set, Value,
+	Array, Enum, EnumValue, Index, Polarity, Record, Set, Value,
 };
 
 pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
@@ -36,6 +36,12 @@ pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
 
 /// Parses a DataZinc file, returning a mapping of the name of the left hand
 /// side of the assignment items to the values on the right hand side.
+///
+/// # Warning
+/// Enumerated types and their values are unified during parsing. Values of
+/// these types will only have a valid reference to their type, and integer
+/// value, after it has been fitted to the model. The member declaration of an
+/// enumerated type might be represented as a [`SetList`] of [`EnumValue`]s.
 pub fn parse_dzn_file(path: &Path) -> Result<FxHashMap<String, Value>, ShackleError> {
 	let content = read_to_string(path).map_err(|err| FileError {
 		file: path.to_path_buf(),
@@ -135,6 +141,7 @@ fn value(input: Span) -> IResult<Span, Value> {
 		map(string, Value::String),
 		map(array, Value::Array),
 		map(set, Value::Set),
+		map(enum_constructor, |e| Value::Set(Set::Enum(Arc::new(e)))),
 		// WARNING: record should come before tuple
 		map(record, Value::Record),
 		map(tuple_value, Value::Tuple),
@@ -142,7 +149,7 @@ fn value(input: Span) -> IResult<Span, Value> {
 		map(float, Value::Float),
 		map(integer, Value::Integer),
 		// WARNING: Should be after other usages of words (e.g., infinity, array1d, enum constructors)
-		map(enum_val, |s| Value::Enum(s)),
+		map(enum_val, Value::Enum),
 	))(input)
 }
 
@@ -340,7 +347,10 @@ fn set(input: Span) -> IResult<Span, Set> {
 		v.push(e);
 		v
 	});
-	let simple_list = map(delimited(char('{'), list, char('}')), Set::SetList);
+	let simple_list = map(
+		delimited(sep(char('{')), list, sep(char('}'))),
+		Set::SetList,
+	);
 	let empty_utf8 = map(tag("∅"), |_| Set::SetList(Vec::new()));
 
 	let float_range = map(
@@ -355,8 +365,39 @@ fn set(input: Span) -> IResult<Span, Set> {
 	alt((empty_utf8, simple_list, float_range, int_range))(input)
 }
 
+fn enum_constructor(input: Span) -> IResult<Span, Enum> {
+	let constr_or_ident = |input| -> IResult<Span, (String, Option<Index>)> {
+		let (input, ident) = identifier(input)?;
+		if let Ok((inner, _)) = sep(char('('))(input.clone()) {
+			let int_range = map(
+				separated_pair(integer, sep(tag("..")), integer),
+				|(from, to)| Index::Integer(from..=to),
+			);
+			let enum_ident = map(identifier, |name| {
+				Index::Enum(Arc::new(Enum {
+					name: Some(name.to_string()),
+					constructors: Vec::new(),
+				}))
+			});
+			let (inner, index) = alt((int_range, enum_ident))(inner)?;
+			let (inner, _) = sep(char(')'))(inner)?;
+			Ok((inner, (ident.to_string(), Some(index))))
+		} else {
+			Ok((input, (ident.to_string(), None)))
+		}
+	};
+	let list = seperated_fold(constr_or_ident, sep(char(',')), Vec::new, |mut v, c| {
+		v.push(c);
+		v
+	});
+	map(delimited(sep(char('{')), list, sep(char('}'))), |l| Enum {
+		name: None,
+		constructors: l,
+	})(input)
+}
+
 fn tuple_value(input: Span) -> IResult<Span, Vec<Value>> {
-	let (input, _) = char('(')(input)?;
+	let (input, _) = sep(char('('))(input)?;
 	let (input, val) = value(input)?;
 	let (input, _) = sep(char(','))(input)?;
 	let (input, v) = seperated_fold(
@@ -368,19 +409,19 @@ fn tuple_value(input: Span) -> IResult<Span, Vec<Value>> {
 			v
 		},
 	)(input)?;
-	let (input, _) = char(')')(input)?;
+	let (input, _) = sep(char(')'))(input)?;
 	Ok((input, v))
 }
 
 fn record(input: Span) -> IResult<Span, Record> {
 	let named_value = separated_pair(identifier, sep(char(':')), value);
 	let (input, pairs) = delimited(
-		char('('),
+		sep(char('(')),
 		seperated_fold(named_value, sep(char(',')), Vec::new, |mut v, e| {
 			v.push(e);
 			v
 		}),
-		char(')'),
+		sep(char(')')),
 	)(input)?;
 	// FIXME: Detect duplicates
 	// FIXME: Ensure at least 1 element
@@ -454,7 +495,7 @@ mod tests {
 	use std::sync::Arc;
 
 	use super::{identifier, value, Span};
-	use crate::{Array, Index, Polarity, Record, Set, Value};
+	use crate::{Array, Enum, Index, Polarity, Record, Set, Value};
 
 	fn span(s: &str) -> Span {
 		Span::new_extra(s, (Some("test.dzn".into()), Arc::new(s.to_string())))
@@ -540,13 +581,115 @@ mod tests {
 	#[test]
 	fn test_parse_enum_val() {
 		let (_, out) = value(span("A")).unwrap();
-		assert_eq!(out.to_string(), "A");
+		if let Value::Enum(v) = out {
+			assert_eq!(v.constructor(), Some("A"));
+			assert_eq!(v.arg(), None);
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
 		let (_, out) = value(span("A(1)")).unwrap();
-		assert_eq!(out.to_string(), "A(1)");
+		if let Value::Enum(v) = out {
+			assert_eq!(v.constructor(), Some("A"));
+			assert_eq!(v.arg(), Some(Value::Integer(1)));
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
 		let (_, out) = value(span("A(B)")).unwrap();
-		assert_eq!(out.to_string(), "A(B)");
+		if let Value::Enum(v) = out {
+			assert_eq!(v.constructor(), Some("A"));
+			if let Some(Value::Enum(x)) = v.arg() {
+				assert_eq!(x.constructor(), Some("B"));
+				assert_eq!(x.arg(), None);
+			} else {
+				panic!("enum parsed using the wrong value type")
+			}
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
 		let (_, out) = value(span("A(B(C(D(-60))))")).unwrap();
 		assert_eq!(out.to_string(), "A(B(C(D(-60))))");
+	}
+
+	#[test]
+	fn test_parse_enum_members() {
+		// These examples are parsed as set literals, and would have to be converted later.
+		let has_identifiers = |e: Vec<Value>, l: Vec<&str>| {
+			for (v, name) in e.iter().zip(l.iter()) {
+				if let Value::Enum(x) = v {
+					assert_eq!(x.constructor(), Some(name.clone()))
+				} else {
+					panic!("enum identifier {v} parsed using the wrong value type")
+				}
+			}
+		};
+
+		let (_, out) = value(span("{ A }")).unwrap();
+		if let Value::Set(Set::SetList(l)) = out {
+			has_identifiers(l, vec!["A"])
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
+
+		let (_, out) = value(span("{ A, B, C }")).unwrap();
+		if let Value::Set(Set::SetList(l)) = out {
+			has_identifiers(l, vec!["A", "B", "C"])
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
+
+		let (_, out) = value(span("{ X(Y) }")).unwrap();
+		if let Value::Set(Set::SetList(l)) = out {
+			assert_eq!(l.len(), 1);
+			if let Value::Enum(v) = &l[0] {
+				assert_eq!(v.constructor(), Some("X"));
+				if let Some(Value::Enum(x)) = v.arg() {
+					assert_eq!(x.constructor(), Some("Y"));
+					assert_eq!(x.arg(), None);
+				} else {
+					panic!("enum parsed using the wrong value type")
+				}
+			} else {
+				panic!("enum parsed using the wrong value type")
+			}
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
+
+		// These examples are parsed as constructors, but will still need fitting to
+		// replace identifiers of enumerated types with actual references
+		let has_constructors = |e: Arc<Enum>, l: Vec<(&str, Option<Index>)>| {
+			for (v, cons) in e.constructors.iter().zip(l.iter()) {
+				assert_eq!(&v.0, cons.0);
+				assert_eq!(v.1, cons.1);
+			}
+		};
+
+		let (_, out) = value(span("{ X(1..6) }")).unwrap();
+		if let Value::Set(Set::Enum(e)) = out {
+			has_constructors(e, vec![("X", Some(Index::Integer(1..=6)))])
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
+
+		let (_, out) = value(span("{ A, Z(-1..1), X(Y) }")).unwrap();
+		if let Value::Set(Set::Enum(e)) = out {
+			has_constructors(
+				e,
+				vec![
+					("A", None),
+					("Z", Some(Index::Integer(-1..=1))),
+					(
+						"X",
+						Some(Index::Enum(Arc::new(Enum {
+							name: Some("Y".to_string()),
+							constructors: Vec::new(),
+						}))),
+					),
+				],
+			)
+		} else {
+			panic!("enum parsed using the wrong value type")
+		}
 	}
 
 	#[test]
@@ -591,7 +734,7 @@ mod tests {
 
 	#[test]
 	fn test_parse_set() {
-		let (_, out) = value(span("{}")).unwrap();
+		let (_, out) = value(span("{ }")).unwrap();
 		assert_eq!(out, Value::Set(Set::SetList(vec![])));
 		let (_, out) = value(span("∅")).unwrap();
 		assert_eq!(out, Value::Set(Set::SetList(vec![])));
