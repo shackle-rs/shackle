@@ -56,16 +56,26 @@
         "title": "MiniZinc: View Pretty Printed MiniZinc"
       }
     ],
+    "grammars": [
+      {
+        "language": "minizinc",
+        "scopeName": "source.MiniZinc",
+        "path": "./syntaxes/minizinc.tmLanguage"
+      }
+    ],
     "languages": [
       {
         "id": "minizinc",
         "extensions": [
-          ".mzn"
+          ".mzn",
+          ".dzn",
+          ".fzn"
         ],
         "aliases": [
           "MiniZinc",
           "mzn"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ]
   },
