@@ -1,8 +1,9 @@
 use crossbeam_channel::{SendError, Sender};
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, ServerCapabilities,
-	TextDocumentIdentifier, TextDocumentSyncKind,
+	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, SemanticTokensFullOptions,
+	SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
+	ServerCapabilities, TextDocumentIdentifier, TextDocumentSyncKind,
 };
 use std::ops::Deref;
 use std::sync::Arc;
@@ -136,6 +137,16 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 			trigger_characters: Some(vec![".".to_owned()]),
 			..Default::default()
 		}),
+		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+			SemanticTokensOptions {
+				full: Some(SemanticTokensFullOptions::Bool(true)),
+				legend: SemanticTokensLegend {
+					token_types: TokenType::legend(),
+					token_modifiers: TokenModifier::legend(),
+				},
+				..Default::default()
+			},
+		)),
 		..Default::default()
 	})
 	.unwrap();
@@ -168,6 +179,7 @@ fn main_loop(
 					.on::<GotoDefinitionHandler, _, _>()
 					.on::<HoverHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()
+					.on::<SemanticTokensHandler, _, _>()
 					.finish();
 
 				match result {

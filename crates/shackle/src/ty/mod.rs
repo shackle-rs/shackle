@@ -414,6 +414,11 @@ impl Ty {
 		matches!(self.lookup(db), TyData::Set(_, _, _))
 	}
 
+	/// Whether or not this type is a function
+	pub fn is_function(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Function(_, _))
+	}
+
 	/// Returns the number of array dimensions if known
 	pub fn dims(&self, db: &dyn Interner) -> Option<usize> {
 		match self.lookup(db) {

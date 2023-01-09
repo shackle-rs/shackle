@@ -245,7 +245,7 @@ impl<'a> ItemCollector<'a> {
 		let types = self.db.lookup_item_types(item);
 		let ty = &types[e.pattern];
 		match ty {
-			PatternTy::Variable(ty) => match ty.lookup(self.db.upcast()) {
+			PatternTy::Enum(ty) => match ty.lookup(self.db.upcast()) {
 				TyData::Set(VarType::Par, OptType::NonOpt, element) => {
 					match element.lookup(self.db.upcast()) {
 						TyData::Enum(_, _, t) => {
@@ -1605,7 +1605,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					}
 				}
 				hir::Pattern::Identifier(name) => {
-					if let PatternTy::Variable(_) = &self.types[p] {
+					if matches!(
+						&self.types[p],
+						PatternTy::Variable(_) | PatternTy::Argument(_)
+					) {
 						if i > 0 {
 							destructuring[i - 1].name = Some(*name);
 							// Mark used destructurings as to be created
@@ -1703,7 +1706,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		let origin = EntityRef::new(db.upcast(), self.item, pattern);
 		let ty = match &self.types[pattern] {
 			PatternTy::Destructuring(ty) => *ty,
-			PatternTy::Variable(ty) => return Pattern::Anonymous(*ty),
+			PatternTy::Variable(ty) | PatternTy::Argument(ty) => return Pattern::Anonymous(*ty),
 			_ => unreachable!(),
 		};
 		match &self.data[pattern] {

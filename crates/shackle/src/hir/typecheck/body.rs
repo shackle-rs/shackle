@@ -130,7 +130,7 @@ impl BodyTypeContext {
 				let it = &model[e];
 				let signature = db.lookup_item_signature(item);
 				let ty = match &signature.patterns[&PatternRef::new(item, it.pattern)] {
-					PatternTy::Variable(t) => *t,
+					PatternTy::Enum(t) => *t,
 					_ => unreachable!(),
 				};
 				for ann in it.annotations.iter() {

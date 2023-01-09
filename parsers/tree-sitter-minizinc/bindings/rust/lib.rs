@@ -40,6 +40,9 @@ pub const HIGHLIGHTS_QUERY: &str = include_str!("../../queries/highlights.scm");
 // pub const LOCALS_QUERY: &'static str = include_str!("../../queries/locals.scm");
 pub const TAGS_QUERY: &str = include_str!("../../queries/tags.scm");
 
+/// Get identifier names
+pub const IDENTIFIERS_QUERY: &str = include_str!("../../queries/identifiers.scm");
+
 #[cfg(test)]
 mod tests {
 	#[test]

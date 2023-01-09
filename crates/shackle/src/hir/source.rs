@@ -5,6 +5,7 @@ use std::fmt::Write;
 
 use miette::SourceSpan;
 use rustc_hash::FxHashMap;
+use tree_sitter::Node;
 pub use tree_sitter::Point;
 
 use crate::{
@@ -50,6 +51,11 @@ impl SourceMap {
 		self.map.get(&node)
 	}
 
+	/// Get the reference to the HIR node from the CST node ID
+	pub fn find_node<'a>(&self, cst_node: impl Into<Node<'a>>) -> Option<NodeRef> {
+		self.reverse.get(&cst_node.into().id()).copied()
+	}
+
 	/// Add entries for item data source map
 	pub fn add_from_item_data(&mut self, db: &dyn Hir, item: ItemRef, sm: &ItemDataSourceMap) {
 		for (k, v) in sm.expression_source.iter() {
@@ -71,8 +77,8 @@ pub fn find_node(db: &dyn Hir, file: FileRef, start: Point, end: Point) -> Optio
 	let mut node = root.descendant_for_point_range(start, end)?;
 	let source_map = db.lookup_source_map(file.into());
 	loop {
-		match source_map.reverse.get(&node.id()) {
-			Some(r) => return Some(*r),
+		match source_map.find_node(node) {
+			Some(r) => return Some(r),
 			None => node = node.parent()?,
 		}
 	}

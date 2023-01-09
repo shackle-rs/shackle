@@ -263,6 +263,15 @@ where
 	}
 }
 
+impl<'a> From<CstNode> for Node<'a>
+where
+	CstNode: 'a,
+{
+	fn from(x: CstNode) -> Self {
+		x.node
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use expect_test::{expect_file, ExpectFile};

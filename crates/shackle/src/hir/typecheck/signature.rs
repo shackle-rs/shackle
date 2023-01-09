@@ -103,7 +103,7 @@ impl SignatureTypeContext {
 								if let Some(pat) = p.pattern {
 									self.add_declaration(
 										PatternRef::new(item, pat),
-										PatternTy::Variable(ty),
+										PatternTy::Argument(ty),
 									);
 								}
 								ty
@@ -213,7 +213,7 @@ impl SignatureTypeContext {
 							typer.complete_type(p.declared_type, None)
 						};
 						if let Some(pat) = p.pattern {
-							typer.collect_pattern(None, false, pat, ty);
+							typer.collect_pattern(None, false, pat, ty, true);
 						}
 						ty
 					})
@@ -295,7 +295,7 @@ impl SignatureTypeContext {
 				if data[it.declared_type].is_complete(data) {
 					// Use LHS type only
 					let expected = typer.complete_type(it.declared_type, None);
-					typer.collect_pattern(None, false, it.pattern, expected);
+					typer.collect_pattern(None, false, it.pattern, expected, false);
 				} else {
 					typer.collect_declaration(it);
 				}
@@ -308,7 +308,7 @@ impl SignatureTypeContext {
 				);
 				self.add_declaration(
 					PatternRef::new(item, it.pattern),
-					PatternTy::Variable(Ty::par_set(db.upcast(), ty).unwrap()),
+					PatternTy::Enum(Ty::par_set(db.upcast(), ty).unwrap()),
 				);
 				if let Some(cases) = &it.definition {
 					self.add_enum_cases(db, item, data, ty, cases);

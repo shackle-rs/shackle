@@ -177,9 +177,17 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 			for (i, p) in scope.variables_in_scope(db, expression.expression()) {
 				let types = db.lookup_item_types(p.item());
 				match types[p.pattern()] {
-					PatternTy::Variable(ty) => completions.push(CompletionItem {
+					PatternTy::Variable(ty) | PatternTy::Argument(ty) => {
+						completions.push(CompletionItem {
+							label: i.pretty_print(db),
+							kind: Some(CompletionItemKind::VARIABLE),
+							detail: Some(ty.pretty_print(db)),
+							..Default::default()
+						})
+					}
+					PatternTy::Enum(ty) => completions.push(CompletionItem {
 						label: i.pretty_print(db),
-						kind: Some(CompletionItemKind::VARIABLE),
+						kind: Some(CompletionItemKind::ENUM),
 						detail: Some(ty.pretty_print(db)),
 						..Default::default()
 					}),

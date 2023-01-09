@@ -182,6 +182,8 @@ impl TypeResult {
 		let decl = self.get_pattern(pattern)?;
 		match decl {
 			PatternTy::Variable(ty)
+			| PatternTy::Argument(ty)
+			| PatternTy::Enum(ty)
 			| PatternTy::Destructuring(ty)
 			| PatternTy::DestructuringFn {
 				constructor: ty, ..
@@ -416,10 +418,14 @@ pub enum PatternTy {
 	Variable(Ty),
 	/// Pattern is a function declaration.
 	Function(Box<FunctionEntry>),
+	/// Pattern is a function parameter.
+	Argument(Ty),
 	/// Pattern is a type-inst variable declaration.
 	TyVar(TyVar),
 	/// Pattern is a type-inst alias declaration.
 	TypeAlias(Ty),
+	/// An enum declaration (type is of the defining set of the enum).
+	Enum(Ty),
 	/// Enum constructor.
 	///
 	/// Defines the Foo(x) function.
@@ -470,8 +476,10 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			PatternTy::Function(function) => {
 				format!("Function({})", function.overload.pretty_print(db.upcast()))
 			}
+			PatternTy::Argument(ty) => format!("Argument({})", ty.pretty_print(db.upcast())),
 			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db.upcast())),
 			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db.upcast())),
+			PatternTy::Enum(ty) => format!("Enum({})", ty.pretty_print(db.upcast())),
 			PatternTy::EnumConstructor(ecs) => {
 				format!(
 					"EnumConstructor({})",
