@@ -322,20 +322,31 @@ pub struct AmbiguousCall {
 
 /// Illegal overloading
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
-#[error("Illegal overloading")]
+#[error("Return type conflicts with return type of other overloads")]
+#[diagnostic(code(shackle::illegal_overload))]
+pub struct IllegalOverloading {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The span associated with the error
+	#[label("The function was first defined here")]
+	pub span: SourceSpan,
+	/// The related errors
+	#[related]
+	pub others: Vec<IllegalOverload>,
+}
+
+/// Function with same signature already defined
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Return type conflicts with another overload")]
 #[diagnostic(code(shackle::illegal_overload))]
 pub struct IllegalOverload {
 	/// The source code
 	#[source_code]
 	pub src: SourceFile,
-	/// The error message
-	pub msg: String,
 	/// The span associated with the error
-	#[label("{msg}")]
+	#[label]
 	pub span: SourceSpan,
-	/// The related errors
-	#[related]
-	pub others: Vec<IllegalOverload>,
 }
 
 /// Function with same signature already defined
@@ -522,7 +533,7 @@ pub enum ShackleError {
 	/// Illegal overloading
 	#[error(transparent)]
 	#[diagnostic(transparent)]
-	IllegalOverload(#[from] IllegalOverload),
+	IllegalOverloading(#[from] IllegalOverloading),
 	/// Function already defined
 	#[error(transparent)]
 	#[diagnostic(transparent)]

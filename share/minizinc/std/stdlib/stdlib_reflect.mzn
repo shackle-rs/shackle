@@ -51,8 +51,8 @@ function set of $$E: ub_array(array[$U] of var set of $$E: x);
 function set of $$E: dom(var $$E: x);
 /** @group stdlib.reflect Return domain of \a x */
 function set of $$E: dom(var opt $$E: x);
-function set of int: dom(var bool: b) =
-  if is_fixed(b) then if fix(b) then {1} else {0} endif else {0,1} endif;
+function set of bool: dom(var bool: b) =
+  if is_fixed(b) then {fix(b)} else {true, false} endif;
 
 /** @group stdlib.reflect Return union of all domains of the elements in array \a x */
 function set of $$E: dom_array(array[$T] of var opt $$E: x);

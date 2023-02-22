@@ -159,10 +159,6 @@ function var opt int: erase_enum(var opt $$E) ::mzn_internal_representation;
 function opt int: erase_enum(opt $$E) ::mzn_internal_representation;
 
 /** @group stdlib.builtins.coercion Erase enum index set information  */
-function array [int] of any $T: erase_enum(array [_] of any $T: x) = [erase_enum(i): x[i] | i in index_set(x)];
-/** @group stdlib.builtins.coercion Erase enum index set information  */
-function array [int, int] of any $T: erase_enum(array [_, _] of any $T: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
-/** @group stdlib.builtins.coercion Erase enum index set information  */
 function array [int] of bool: erase_enum(array [_] of bool: x) = [erase_enum(i): x[i] | i in index_set(x)];
 /** @group stdlib.builtins.coercion Erase enum index set information  */
 function array [int, int] of bool: erase_enum(array [_, _] of bool: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
@@ -196,6 +192,23 @@ function array [int] of opt int: erase_enum(array [_] of opt $$E: x) = [erase_en
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
 function array [int, int] of opt int: erase_enum(array [_, _] of opt $$E: x) = [(erase_enum(i), erase_enum(j)): erase_enum(x[i, j]) | i in index_set_1of2(x), j in index_set_2of2(x)];
 
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of float: erase_enum(array [_] of float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of float: erase_enum(array [_, _] of float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of opt float: erase_enum(array [_] of opt float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of opt float: erase_enum(array [_, _] of opt float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of var float: erase_enum(array [_] of var float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of var float: erase_enum(array [_, _] of var float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of var opt float: erase_enum(array [_] of var opt float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of var opt float: erase_enum(array [_, _] of var opt float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
 function array [int] of var set of int: erase_enum(array [_] of var set of $$E: x) = [erase_enum(i): {erase_enum(v) | v in x[i]} | i in index_set(x)];
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
@@ -204,6 +217,11 @@ function array [int, int] of var set of int: erase_enum(array [_, _] of var set 
 function array [int] of set of int: erase_enum(array [_] of set of $$E: x) = [erase_enum(i): {erase_enum(v) | v in x[i]} | i in index_set(x)];
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
 function array [int, int] of set of int: erase_enum(array [_, _] of set of $$E: x) = [(erase_enum(i), erase_enum(j)): {erase_enum(v) | v in x[i, j]} | i in index_set_1of2(x), j in index_set_2of2(x)];
+
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
+function array [int] of set of float: erase_enum(array [_] of set of float: x) = [erase_enum(i): {v | v in x[i]} | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
+function array [int, int] of set of float: erase_enum(array [_, _] of set of float: x) = [(erase_enum(i), erase_enum(j)): {v | v in x[i, j]} | i in index_set_1of2(x), j in index_set_2of2(x)];
 
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be a set of integers  */
 function var set of int: erase_enum(var set of $$E: x) = {erase_enum(i) | i in x};

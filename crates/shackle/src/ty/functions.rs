@@ -113,6 +113,13 @@ pub enum OverloadingError<T> {
 		/// Other functions with the same signature
 		others: Vec<(T, FunctionEntry)>,
 	},
+	/// Subtyped overload has incompatible return type
+	IncompatibleReturnType {
+		/// First function
+		first: (T, FunctionEntry),
+		/// Other functions with incompatible return types
+		others: Vec<(T, FunctionEntry)>,
+	},
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -280,13 +287,14 @@ impl FunctionEntry {
 	}
 
 	/// Validate that the given overloads are legal
-	pub fn check_overloading<T>(
+	pub fn check_overloading<T: Clone>(
 		db: &dyn Interner,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
 	) -> Vec<OverloadingError<T>> {
 		let mut diagnostics = Vec::new();
 		let overloads = overloads.into_iter().collect::<Vec<_>>();
 		let mut same_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
+		let mut incompat_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
 		// TODO: Make less horrible
 		for (i, (_, a)) in overloads.iter().enumerate() {
 			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
@@ -297,10 +305,27 @@ impl FunctionEntry {
 						// Same function with multiple definitions
 						same_fns[i + j + 1] = Some(i);
 					}
+					if !b
+						.overload
+						.return_type()
+						.is_subtype_of(db, a.overload.instantiate(db, &tpa).return_type)
+					{
+						// Functions have incompatible return types
+						incompat_fns[i + j + 1] = Some(i);
+					}
+				} else if let Ok(tpb) = b.overload.instantiate_ty_params(db, a.overload.params()) {
+					if !a
+						.overload
+						.return_type()
+						.is_subtype_of(db, b.overload.instantiate(db, &tpb).return_type)
+					{
+						// Functions have incompatible return types
+						incompat_fns[i + j + 1] = Some(i);
+					}
 				}
 			}
 		}
-		let mut drain = overloads.into_iter().map(Some).collect::<Vec<_>>();
+		let mut drain = overloads.iter().cloned().map(Some).collect::<Vec<_>>();
 		for i in 0..same_fns.len() {
 			let others = same_fns
 				.iter()
@@ -321,6 +346,29 @@ impl FunctionEntry {
 				});
 			}
 		}
+
+		let mut drain = overloads.iter().cloned().map(Some).collect::<Vec<_>>();
+		for i in 0..incompat_fns.len() {
+			let others = incompat_fns
+				.iter()
+				.enumerate()
+				.filter_map(|(j, dup)| {
+					if let Some(x) = dup {
+						if *x == i {
+							return Some(drain[j].take().unwrap());
+						}
+					}
+					None
+				})
+				.collect::<Vec<_>>();
+			if !others.is_empty() {
+				diagnostics.push(OverloadingError::IncompatibleReturnType {
+					first: drain[i].take().unwrap(),
+					others,
+				});
+			}
+		}
+
 		diagnostics
 	}
 }

@@ -161,7 +161,7 @@ annotation bounds;
 /** @group stdlib.annotations.search Sequentially perform the searches specified in array \a s */
 annotation seq_search(array[int] of ann: s);
 /** @group stdlib.annotations.search Sequentially perform the searches specified in array \a s */
-function ann: seq_search(array[$X] of ann: s) = seq_search(erase_enum(array1d(s)));
+function ann: seq_search(array[$X] of ann: s) = seq_search(array1d(s));
 
 /** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
   strategy \a select, value choice strategy \a choice, and exploration strategy
@@ -500,7 +500,7 @@ function ann: warm_start(array[$X] of var float: x, array[$X] of float: v) = let
     index_sets_agree(x, v),
     "warm_start: variable and value arrays must have identical index sets"
   );
-} in warm_start_float(erase_enum(array1d(x)), erase_enum(array1d(v)));
+} in warm_start_float(array1d(x), array1d(v));
 /** @group stdlib.annotations.warmstart Specify warm start values \a v for an array \a x */
 function ann: warm_start(array[$X] of var set of $$E: x, array[$X] of set of $$E: v) = let {
   constraint assert(

@@ -14,7 +14,8 @@ use rustc_hash::FxHashMap;
 use crate::{
 	diagnostics::{
 		AdditionalSolveItem, ConstructorAlreadyDefined, DuplicateAssignment, DuplicateConstructor,
-		DuplicateFunction, FunctionAlreadyDefined, MultipleAssignments, MultipleSolveItems,
+		DuplicateFunction, FunctionAlreadyDefined, IllegalOverload, IllegalOverloading,
+		MultipleAssignments, MultipleSolveItems,
 	},
 	hir::ids::{ItemRef, NodeRef},
 	ty::{FunctionEntry, OverloadingError},
@@ -110,6 +111,24 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 						.map(|(p, _)| {
 							let (src, span) = NodeRef::from(p.into_entity(db)).source_span(db);
 							DuplicateFunction { src, span }
+						})
+						.collect(),
+				}
+				.into()
+			}
+			OverloadingError::IncompatibleReturnType {
+				first: (first_pat, _),
+				others,
+			} => {
+				let (src, span) = NodeRef::from(first_pat.into_entity(db)).source_span(db);
+				IllegalOverloading {
+					src,
+					span,
+					others: others
+						.iter()
+						.map(|(p, _)| {
+							let (src, span) = NodeRef::from(p.into_entity(db)).source_span(db);
+							IllegalOverload { src, span }
 						})
 						.collect(),
 				}
