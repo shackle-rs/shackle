@@ -15,6 +15,7 @@ mod annotations;
 mod domain;
 mod expression;
 mod item;
+mod traverse;
 
 pub use self::annotations::*;
 pub use self::domain::*;

@@ -74,6 +74,13 @@ impl DerefMut for Annotation {
 	}
 }
 
+impl From<Constructor> for Annotation {
+	fn from(constructor: Constructor) -> Self {
+		assert!(constructor.name.is_some());
+		Self { constructor }
+	}
+}
+
 impl Annotation {
 	/// Create a new annotation item with the given name
 	pub fn new(name: Identifier) -> Self {
