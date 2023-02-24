@@ -1,6 +1,6 @@
 //! THIR representation of items
 
-use std::ops::{Deref, DerefMut, Index};
+use std::ops::{Deref, DerefMut};
 
 use crate::{
 	arena::ArenaIndex,
@@ -12,13 +12,12 @@ use crate::{
 	utils::impl_enum_from,
 };
 
-use super::{Domain, Expression, ExpressionAllocator, ExpressionId, Identifier, Model};
+use super::{domain::Domain, Annotations, Expression, Identifier, Model};
 
 /// An item of type `T`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Item<T> {
 	item: T,
-	expressions: ExpressionAllocator,
 	origin: Origin,
 }
 
@@ -35,22 +34,18 @@ impl<T> DerefMut for Item<T> {
 	}
 }
 
-impl<T> Index<ExpressionId> for Item<T> {
-	type Output = Expression;
-	fn index(&self, index: ExpressionId) -> &Self::Output {
-		&self.expressions[index]
-	}
-}
-
 impl<T> Item<T> {
-	/// Get the expressions allocator
-	pub fn expressions(&self) -> &ExpressionAllocator {
-		&self.expressions
+	/// Create a new item
+	pub fn new(item: T, origin: impl Into<Origin>) -> Self {
+		Self {
+			item,
+			origin: origin.into(),
+		}
 	}
 
-	/// Get a mutable reference to the expressions allocator
-	pub fn expressions_mut(&mut self) -> &mut ExpressionAllocator {
-		&mut self.expressions
+	/// Get the origin of this item
+	pub fn origin(&self) -> Origin {
+		self.origin
 	}
 }
 
@@ -79,18 +74,14 @@ impl DerefMut for Annotation {
 	}
 }
 
-impl AnnotationItem {
+impl Annotation {
 	/// Create a new annotation item with the given name
-	pub fn new(name: Identifier, origin: impl Into<Origin>) -> Self {
+	pub fn new(name: Identifier) -> Self {
 		Self {
-			item: Annotation {
-				constructor: Constructor {
-					name: Some(name),
-					parameters: None,
-				},
+			constructor: Constructor {
+				name: Some(name),
+				parameters: None,
 			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
 		}
 	}
 }
@@ -98,56 +89,39 @@ impl AnnotationItem {
 /// Constraint item
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Constraint {
-	expression: Option<ExpressionId>,
-	annotations: Vec<ExpressionId>,
+	expression: Expression,
+	annotations: Annotations,
 	top_level: bool,
 }
 
 /// A constraint item and the data it owns
 pub type ConstraintItem = Item<Constraint>;
 
-impl ConstraintItem {
+impl Constraint {
 	/// Create a constraint item.
 	///
 	/// Takes an allocator since the expression has to be set to create the item.
-	pub fn new(top_level: bool, origin: impl Into<Origin>) -> Self {
+	pub fn new(top_level: bool, expression: Expression) -> Self {
 		Self {
-			item: Constraint {
-				expression: None,
-				annotations: Vec::new(),
-				top_level,
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			expression,
+			annotations: Annotations::default(),
+			top_level,
 		}
 	}
 
 	/// Get the constraint's value
-	pub fn expression(&self) -> ExpressionId {
-		self.expression.expect("No expression set")
+	pub fn expression(&self) -> &Expression {
+		&self.expression
 	}
 
-	/// Set the constraint's value
-	pub fn set_expression(&mut self, expression: ExpressionId) {
-		self.expression = Some(expression);
+	/// Get the annotations attached to this expression
+	pub fn annotations(&self) -> &Annotations {
+		&self.annotations
 	}
 
-	/// Get the annotations
-	pub fn annotations(&self) -> impl '_ + Iterator<Item = ExpressionId> {
-		self.annotations.iter().copied()
-	}
-
-	/// Add the given annotation
-	pub fn add_annotation(&mut self, ann: ExpressionId) {
-		self.annotations.push(ann);
-	}
-
-	/// Remove the given annotation
-	pub fn remove_annotation(&mut self, ann: ExpressionId) {
-		let found = self.annotations().position(|item| item == ann);
-		if let Some(idx) = found {
-			self.annotations.swap_remove(idx);
-		}
+	/// Get a mutable reference to the annotations attached to this expression
+	pub fn annotations_mut(&mut self) -> &mut Annotations {
+		&mut self.annotations
 	}
 
 	/// Whether or not this constraint is top-level
@@ -167,10 +141,10 @@ pub type ConstraintId = ArenaIndex<ConstraintItem>;
 /// A declaration item
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Declaration {
-	domain: Option<Domain>,
+	domain: Domain,
 	name: Option<Identifier>,
-	definition: Option<ExpressionId>,
-	annotations: Vec<ExpressionId>,
+	definition: Option<Expression>,
+	annotations: Annotations,
 	top_level: bool,
 }
 
@@ -181,34 +155,32 @@ pub type DeclarationItem = Item<Declaration>;
 pub type DeclarationId = ArenaIndex<DeclarationItem>;
 
 impl DeclarationItem {
+	/// Get the type of this declaration
+	pub fn ty(&self) -> Ty {
+		self.domain().ty()
+	}
+}
+
+impl Declaration {
 	/// Create a new declaration item.
-	pub fn new(top_level: bool, origin: impl Into<Origin>) -> Self {
+	pub fn new(top_level: bool, domain: Domain) -> Self {
 		Self {
-			item: Declaration {
-				domain: None,
-				name: None,
-				definition: None,
-				annotations: Vec::new(),
-				top_level,
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			domain,
+			name: None,
+			definition: None,
+			annotations: Annotations::default(),
+			top_level,
 		}
 	}
 
 	/// Get the domain of this declaration
 	pub fn domain(&self) -> &Domain {
-		self.domain.as_ref().expect("No domain set")
+		&self.domain
 	}
 
 	/// Set the domain of this declaration
 	pub fn set_domain(&mut self, domain: Domain) {
-		self.domain = Some(domain)
-	}
-
-	/// Get the type of this declaration
-	pub fn ty(&self) -> Ty {
-		self.domain().ty()
+		self.domain = domain
 	}
 
 	/// Get declaration name
@@ -227,16 +199,12 @@ impl DeclarationItem {
 	}
 
 	/// Get the RHS definition of this declaration
-	pub fn definition(&self) -> Option<ExpressionId> {
-		self.definition
+	pub fn definition(&self) -> Option<&Expression> {
+		self.definition.as_ref()
 	}
 
 	/// Set the RHS definition of this declaration
-	pub fn set_definition(&mut self, definition: ExpressionId) {
-		if self.domain.is_none() {
-			// Make the domain match the RHS if not set
-			self.set_domain(Domain::unbounded(self.expressions()[definition].ty()));
-		}
+	pub fn set_definition(&mut self, definition: Expression) {
 		self.definition = Some(definition);
 	}
 
@@ -245,22 +213,14 @@ impl DeclarationItem {
 		self.definition = None;
 	}
 
-	/// Get the annotations
-	pub fn annotations(&self) -> impl '_ + Iterator<Item = ExpressionId> {
-		self.annotations.iter().copied()
+	/// Get the annotations attached to this expression
+	pub fn annotations(&self) -> &Annotations {
+		&self.annotations
 	}
 
-	/// Add the given annotation
-	pub fn add_annotation(&mut self, ann: ExpressionId) {
-		self.annotations.push(ann);
-	}
-
-	/// Remove the given annotation
-	pub fn remove_annotation(&mut self, ann: ExpressionId) {
-		let found = self.annotations().position(|item| item == ann);
-		if let Some(idx) = found {
-			self.annotations.swap_remove(idx);
-		}
+	/// Get a mutable reference to the annotations attached to this expression
+	pub fn annotations_mut(&mut self) -> &mut Annotations {
+		&mut self.annotations
 	}
 
 	/// Whether or not this declaration is top-level
@@ -285,20 +245,16 @@ pub type EnumerationId = ArenaIndex<EnumerationItem>;
 pub struct Enumeration {
 	enum_type: EnumRef,
 	definition: Option<Vec<Constructor>>,
-	annotations: Vec<ExpressionId>,
+	annotations: Annotations,
 }
 
-impl EnumerationItem {
+impl Enumeration {
 	/// Create a new enumeration item
-	pub fn new(enum_type: EnumRef, origin: impl Into<Origin>) -> Self {
+	pub fn new(enum_type: EnumRef) -> Self {
 		Self {
-			item: Enumeration {
-				annotations: Vec::new(),
-				definition: None,
-				enum_type,
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			annotations: Annotations::default(),
+			definition: None,
+			enum_type,
 		}
 	}
 
@@ -339,22 +295,14 @@ impl EnumerationItem {
 		self.definition = None;
 	}
 
-	/// Get the annotations
-	pub fn annotations(&self) -> impl '_ + Iterator<Item = ExpressionId> {
-		self.annotations.iter().copied()
+	/// Get the annotations attached to this expression
+	pub fn annotations(&self) -> &Annotations {
+		&self.annotations
 	}
 
-	/// Add the given annotation
-	pub fn add_annotation(&mut self, ann: ExpressionId) {
-		self.annotations.push(ann);
-	}
-
-	/// Remove the given annotation
-	pub fn remove_annotation(&mut self, ann: ExpressionId) {
-		let found = self.annotations().position(|item| item == ann);
-		if let Some(idx) = found {
-			self.annotations.swap_remove(idx);
-		}
+	/// Get a mutable reference to the annotations attached to this expression
+	pub fn annotations_mut(&mut self) -> &mut Annotations {
+		&mut self.annotations
 	}
 }
 
@@ -370,12 +318,12 @@ pub struct Constructor {
 /// Function item
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
-	domain: Option<Domain>,
+	domain: Domain,
 	name: Identifier,
 	type_inst_vars: Vec<TyVar>,
 	parameters: Vec<DeclarationId>,
-	body: Option<ExpressionId>,
-	annotations: Vec<ExpressionId>,
+	body: Option<Expression>,
+	annotations: Annotations,
 }
 
 /// A function item and the data it owns
@@ -384,20 +332,16 @@ pub type FunctionItem = Item<Function>;
 /// ID of a function item
 pub type FunctionId = ArenaIndex<FunctionItem>;
 
-impl FunctionItem {
+impl Function {
 	/// Create a new function item.
-	pub fn new(name: Identifier, origin: impl Into<Origin>) -> Self {
+	pub fn new(name: Identifier, domain: Domain) -> Self {
 		Self {
-			item: Function {
-				annotations: Vec::new(),
-				body: None,
-				domain: None,
-				name,
-				parameters: Vec::new(),
-				type_inst_vars: Vec::new(),
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			annotations: Annotations::default(),
+			body: None,
+			domain,
+			name,
+			parameters: Vec::new(),
+			type_inst_vars: Vec::new(),
 		}
 	}
 
@@ -426,6 +370,11 @@ impl FunctionItem {
 		self.type_inst_vars = ty_vars.into_iter().collect();
 	}
 
+	/// Whether or not this function is polymorphic
+	pub fn is_polymorphic(&self) -> bool {
+		!self.type_inst_vars().is_empty()
+	}
+
 	/// Get the parameters of this function
 	pub fn parameters(&self) -> &[DeclarationId] {
 		&self.parameters
@@ -443,21 +392,21 @@ impl FunctionItem {
 
 	/// Get the domain of this function
 	pub fn domain(&self) -> &Domain {
-		self.domain.as_ref().expect("No domain set")
+		&self.domain
 	}
 
 	/// Set the domain of the return type of this function
 	pub fn set_domain(&mut self, value: Domain) {
-		self.domain = Some(value);
+		self.domain = value;
 	}
 
 	/// Get the RHS definition of this function
-	pub fn body(&self) -> Option<ExpressionId> {
-		self.body
+	pub fn body(&self) -> Option<&Expression> {
+		self.body.as_ref()
 	}
 
 	/// Set the RHS definition of this function
-	pub fn set_body(&mut self, value: ExpressionId) {
+	pub fn set_body(&mut self, value: Expression) {
 		self.body = Some(value);
 	}
 
@@ -466,24 +415,18 @@ impl FunctionItem {
 		self.body = None;
 	}
 
-	/// Get the annotations
-	pub fn annotations(&self) -> impl '_ + Iterator<Item = ExpressionId> {
-		self.annotations.iter().copied()
+	/// Get the annotations attached to this expression
+	pub fn annotations(&self) -> &Annotations {
+		&self.annotations
 	}
 
-	/// Add the given annotation
-	pub fn add_annotation(&mut self, ann: ExpressionId) {
-		self.annotations.push(ann);
+	/// Get a mutable reference to the annotations attached to this expression
+	pub fn annotations_mut(&mut self) -> &mut Annotations {
+		&mut self.annotations
 	}
+}
 
-	/// Remove the given annotation
-	pub fn remove_annotation(&mut self, ann: ExpressionId) {
-		let found = self.annotations().position(|item| item == ann);
-		if let Some(idx) = found {
-			self.annotations.swap_remove(idx);
-		}
-	}
-
+impl FunctionItem {
 	/// Convert to a function entry
 	pub fn function_entry(&self, model: &Model) -> FunctionEntry {
 		FunctionEntry {
@@ -515,8 +458,8 @@ impl FunctionItem {
 /// Output item
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Output {
-	section: Option<ExpressionId>,
-	expression: Option<ExpressionId>,
+	section: Option<Expression>,
+	expression: Expression,
 }
 
 /// An output item and the data it owns
@@ -525,26 +468,22 @@ pub type OutputItem = Item<Output>;
 /// ID of an output item
 pub type OutputId = ArenaIndex<OutputItem>;
 
-impl OutputItem {
-	/// Create a new output item.
-	pub fn new(origin: impl Into<Origin>) -> Self {
+impl Output {
+	/// Create a new output item
+	pub fn new(expression: Expression) -> Self {
 		Self {
-			item: Output {
-				section: None,
-				expression: None,
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			section: None,
+			expression,
 		}
 	}
 
 	/// Get the section of this output item (always string literal or `None`)
-	pub fn section(&self) -> Option<ExpressionId> {
-		self.section
+	pub fn section(&self) -> Option<&Expression> {
+		self.section.as_ref()
 	}
 
 	/// Set the section of this output item
-	pub fn set_section(&mut self, section: ExpressionId) {
+	pub fn set_section(&mut self, section: Expression) {
 		self.section = Some(section);
 	}
 
@@ -554,13 +493,13 @@ impl OutputItem {
 	}
 
 	/// Get the expression to output
-	pub fn expression(&self) -> ExpressionId {
-		self.expression.expect("Expression not set")
+	pub fn expression(&self) -> &Expression {
+		&self.expression
 	}
 
 	/// Set the expression of the output item
-	pub fn set_expression(&mut self, expression: ExpressionId) {
-		self.expression = Some(expression)
+	pub fn set_expression(&mut self, expression: Expression) {
+		self.expression = expression;
 	}
 }
 
@@ -570,70 +509,58 @@ pub struct Solve {
 	/// Solve goal
 	goal: Goal,
 	/// Annotations
-	annotations: Vec<ExpressionId>,
+	annotations: Annotations,
 }
 
 /// A solve item and the data it owns
 pub type SolveItem = Item<Solve>;
 
-impl SolveItem {
+impl Solve {
 	/// Create a new solve satisfy item
-	pub fn satisfy(origin: impl Into<Origin>) -> Self {
+	pub fn satisfy() -> Self {
 		Self {
-			item: Solve {
-				goal: Goal::Satisfy,
-				annotations: Vec::new(),
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			goal: Goal::Satisfy,
+			annotations: Annotations::default(),
 		}
 	}
 
 	/// Create a new solve satisfy item
-	pub fn minimize(objective: DeclarationId, origin: impl Into<Origin>) -> Self {
+	pub fn minimize(objective: DeclarationId) -> Self {
 		Self {
-			item: Solve {
-				goal: Goal::Minimize { objective },
-				annotations: Vec::new(),
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			goal: Goal::Minimize { objective },
+			annotations: Annotations::default(),
 		}
 	}
 
 	/// Create a new solve maximize item
-	pub fn maximize(objective: DeclarationId, origin: impl Into<Origin>) -> Self {
+	pub fn maximize(objective: DeclarationId) -> Self {
 		Self {
-			item: Solve {
-				goal: Goal::Maximize { objective },
-				annotations: Vec::new(),
-			},
-			expressions: ExpressionAllocator::default(),
-			origin: origin.into(),
+			goal: Goal::Maximize { objective },
+			annotations: Annotations::default(),
 		}
 	}
 
-	/// Get the annotations
-	pub fn annotations(&self) -> impl '_ + Iterator<Item = ExpressionId> {
-		self.annotations.iter().copied()
+	/// Get the annotations attached to this expression
+	pub fn annotations(&self) -> &Annotations {
+		&self.annotations
 	}
 
-	/// Add the given annotation
-	pub fn add_annotation(&mut self, ann: ExpressionId) {
-		self.annotations.push(ann);
-	}
-
-	/// Remove the given annotation
-	pub fn remove_annotation(&mut self, ann: ExpressionId) {
-		let found = self.annotations().position(|item| item == ann);
-		if let Some(idx) = found {
-			self.annotations.swap_remove(idx);
-		}
+	/// Get a mutable reference to the annotations attached to this expression
+	pub fn annotations_mut(&mut self) -> &mut Annotations {
+		&mut self.annotations
 	}
 
 	/// Get the solve goal
 	pub fn goal(&self) -> &Goal {
 		&self.goal
+	}
+
+	/// Get the objective value
+	pub fn objective(&self) -> Option<DeclarationId> {
+		match self.goal() {
+			Goal::Maximize { objective } | Goal::Minimize { objective } => Some(*objective),
+			_ => None,
+		}
 	}
 
 	/// Set this solve item to be for a satisfaction problem

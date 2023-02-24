@@ -7,18 +7,20 @@ use crate::arena::Arena;
 use crate::hir::Identifier;
 use crate::ty::FunctionEntry;
 use crate::ty::FunctionResolutionError;
-use crate::ty::FunctionType;
 use crate::ty::Ty;
-use crate::ty::TyVar;
+use crate::ty::TyParamInstantiations;
 use crate::utils::impl_index;
 
+mod annotations;
 mod domain;
 mod expression;
 mod item;
 
+pub use self::annotations::*;
 pub use self::domain::*;
 pub use self::expression::*;
 pub use self::item::*;
+pub use self::traverse::*;
 
 use super::db::Thir;
 
@@ -202,32 +204,6 @@ impl Model {
 		ItemId::Solve
 	}
 
-	/// Get the expressions storage for an item
-	pub fn expressions(&self, item: ItemId) -> &ExpressionAllocator {
-		match item {
-			ItemId::Annotation(idx) => self[idx].expressions(),
-			ItemId::Constraint(idx) => self[idx].expressions(),
-			ItemId::Declaration(idx) => self[idx].expressions(),
-			ItemId::Enumeration(idx) => self[idx].expressions(),
-			ItemId::Function(idx) => self[idx].expressions(),
-			ItemId::Output(idx) => self[idx].expressions(),
-			ItemId::Solve => self.solve().expect("No solve item").expressions(),
-		}
-	}
-
-	/// Get the expressions storage for an item
-	pub fn expressions_mut(&mut self, item: ItemId) -> &mut ExpressionAllocator {
-		match item {
-			ItemId::Annotation(idx) => self[idx].expressions_mut(),
-			ItemId::Constraint(idx) => self[idx].expressions_mut(),
-			ItemId::Declaration(idx) => self[idx].expressions_mut(),
-			ItemId::Enumeration(idx) => self[idx].expressions_mut(),
-			ItemId::Function(idx) => self[idx].expressions_mut(),
-			ItemId::Output(idx) => self[idx].expressions_mut(),
-			ItemId::Solve => self.solve_mut().expect("No solve item").expressions_mut(),
-		}
-	}
-
 	/// Lookup a function by its signature
 	///
 	/// Prefer using `ExpressionAllocator::lookup_call` to create an call expression.
@@ -244,11 +220,11 @@ impl Model {
 				None
 			}
 		});
-		let (i, fe, ft) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
+		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
 		Ok(FunctionLookup {
-			function: i,
-			fn_entry: fe,
-			fn_type: ft,
+			function,
+			fn_entry,
+			ty_vars,
 		})
 	}
 
@@ -275,6 +251,7 @@ impl Model {
 								if n == name {
 									return Some(ResolvedIdentifier::EnumerationMember(
 										EnumMemberId::new(idx, j as u32),
+										EnumConstructorKind::Par,
 									));
 								}
 							}
@@ -311,22 +288,15 @@ impl Index<EnumMemberId> for Model {
 	}
 }
 
-impl Index<TyVarId> for Model {
-	type Output = TyVar;
-	fn index(&self, index: TyVarId) -> &Self::Output {
-		&self.functions[index.function_id()].type_inst_vars()[index.ty_var_index() as usize]
-	}
-}
-
 /// Result of looking up a function by its signature
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionLookup {
 	/// Id of the resolved function
 	pub function: FunctionId,
 	/// The function entry (i.e. not instantiated with the call arguments)
 	pub fn_entry: FunctionEntry,
-	/// The type of the resolved function (i.e. instantiated with the call arguments)
-	pub fn_type: FunctionType,
+	/// The instantiated types of the type inst vars (if any)
+	pub ty_vars: TyParamInstantiations,
 }
 
 /// Error representing failure to lookup a function

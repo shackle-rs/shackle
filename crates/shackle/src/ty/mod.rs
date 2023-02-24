@@ -361,6 +361,29 @@ impl Ty {
 		}
 	}
 
+	/// Walk over the `Ty`s in this `Ty`
+	pub fn walk<'a>(&self, db: &'a dyn Interner) -> impl 'a + Iterator<Item = Ty> {
+		let mut todo = vec![*self];
+		std::iter::from_fn(move || {
+			let ty = todo.pop()?;
+			match ty.lookup(db) {
+				TyData::Array { dim, element, .. } => {
+					todo.push(dim);
+					todo.push(element);
+				}
+				TyData::Set(_, _, e) => todo.push(e),
+				TyData::Tuple(_, fs) => todo.extend(fs.iter().copied()),
+				TyData::Record(_, fs) => todo.extend(fs.iter().map(|(_, t)| *t)),
+				TyData::Function(_, ft) => {
+					todo.extend(ft.params.iter().copied());
+					todo.push(ft.return_type);
+				}
+				_ => (),
+			}
+			Some(ty)
+		})
+	}
+
 	/// The inst of this type (or `None` if the inst cannot be determined)
 	pub fn inst(&self, db: &dyn Interner) -> Option<VarType> {
 		match self.lookup(db) {
@@ -853,6 +876,47 @@ impl Ty {
 				o1 == OptType::NonOpt || Some(o1) == o2
 			}
 			_ => false,
+		}
+	}
+
+	/// Instantiate the given type-inst variables with the given types from `instantiations` in this type.
+	///
+	/// Panics if this is not possible.
+	pub fn instantiate_ty_vars(&self, db: &dyn Interner, ty_vars: &TyParamInstantiations) -> Ty {
+		match self.lookup(db) {
+			TyData::TyVar(i, o, t) if ty_vars.contains_key(&t.ty_var) => {
+				let mut ty = ty_vars[&t.ty_var];
+				if let Some(inst) = i {
+					ty = ty
+						.with_inst(db, inst)
+						.expect("Type-inst is incompatible with type-inst var");
+				}
+				if let Some(opt) = o {
+					ty = ty.with_opt(db, opt);
+				}
+				ty
+			}
+			TyData::Array { opt, dim, element } => db.intern_ty(TyData::Array {
+				opt,
+				dim: dim.instantiate_ty_vars(db, ty_vars),
+				element: element.instantiate_ty_vars(db, ty_vars),
+			}),
+			TyData::Set(i, o, t) => {
+				db.intern_ty(TyData::Set(i, o, t.instantiate_ty_vars(db, ty_vars)))
+			}
+			TyData::Tuple(o, fs) => db.intern_ty(TyData::Tuple(
+				o,
+				fs.iter()
+					.map(|f| f.instantiate_ty_vars(db, ty_vars))
+					.collect(),
+			)),
+			TyData::Record(o, fs) => db.intern_ty(TyData::Record(
+				o,
+				fs.iter()
+					.map(|(i, f)| (*i, f.instantiate_ty_vars(db, ty_vars)))
+					.collect(),
+			)),
+			_ => *self,
 		}
 	}
 

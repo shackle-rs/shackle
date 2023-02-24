@@ -75,9 +75,9 @@ impl<'a> TopoSorter<'a> {
 			LocalItemRef::Assignment(a) => {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[a].assignee) {
-					self.current.insert(p);
+					self.current.insert(p.pattern());
 					self.visit_expression(ExpressionRef::new(item, model[a].definition));
-					self.current.remove(&p);
+					self.current.remove(&p.pattern());
 				}
 			}
 			LocalItemRef::Constraint(c) => {
@@ -126,7 +126,7 @@ impl<'a> TopoSorter<'a> {
 			LocalItemRef::EnumAssignment(e) => {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[e].assignee) {
-					self.current.insert(p);
+					self.current.insert(p.pattern());
 					let data = local_item.data(&model);
 					for c in model[e].definition.iter() {
 						for param in c.parameters() {
@@ -135,7 +135,7 @@ impl<'a> TopoSorter<'a> {
 							}
 						}
 					}
-					self.current.remove(&p);
+					self.current.remove(&p.pattern());
 				}
 			}
 			LocalItemRef::Function(f) => {
@@ -245,7 +245,7 @@ impl<'a> TopoSorter<'a> {
 		for e in Expression::walk(expression.expression(), data) {
 			if let Expression::Identifier(i) = data[e] {
 				if let Some(p) = types.name_resolution(e) {
-					if self.current.contains(&p) {
+					if self.current.contains(&p.pattern()) {
 						// Cyclic definition, emit error
 						let (src, span) =
 							NodeRef::from(expression.into_entity(self.db)).source_span(self.db);
@@ -260,7 +260,7 @@ impl<'a> TopoSorter<'a> {
 						);
 						continue;
 					}
-					self.run(p.item());
+					self.run(p.pattern().item());
 				}
 			}
 		}

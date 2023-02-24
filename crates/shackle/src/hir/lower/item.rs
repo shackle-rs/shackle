@@ -4,7 +4,7 @@ use crate::diagnostics::SyntaxError;
 use crate::file::ModelRef;
 use crate::hir::db::Hir;
 use crate::hir::ids::ItemRef;
-use crate::hir::source::{DesugarKind, Origin, SourceMap};
+use crate::hir::source::{Origin, SourceMap};
 use crate::hir::*;
 use crate::syntax::ast::{self, AstNode};
 use crate::Error;
@@ -68,7 +68,7 @@ impl ItemCollector<'_> {
 			ast::Item::Solve(s) => self.collect_solve(s),
 			ast::Item::TypeAlias(t) => self.collect_type_alias(t),
 		};
-		self.source_map.insert(it.into(), Origin::new(&item, None));
+		self.source_map.insert(it.into(), Origin::new(&item));
 		self.source_map.add_from_item_data(self.db, it, &sm);
 	}
 
@@ -80,12 +80,9 @@ impl ItemCollector<'_> {
 	fn collect_annotation(&mut self, a: ast::Annotation) -> (ItemRef, ItemDataSourceMap) {
 		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 		let name = Identifier::new(a.id().name(), self.db);
-		let pattern = ctx.alloc_pattern(Origin::new(&a.id(), None), name);
+		let pattern = ctx.alloc_pattern(Origin::new(&a.id()), name);
 		let constructor = if let Some(ps) = a.parameters() {
-			let destructor = ctx.alloc_pattern(
-				Origin::new(&a.id(), Some(DesugarKind::DestructuringFunction)),
-				name.inversed(self.db),
-			);
+			let destructor = ctx.alloc_pattern(Origin::new(&a.id()), name.inversed(self.db));
 			Constructor::Function {
 				constructor: pattern,
 				destructor,
@@ -144,7 +141,7 @@ impl ItemCollector<'_> {
 								let parameters = c
 									.arguments()
 									.map(|arg| {
-										let origin = Origin::new(&arg, None);
+										let origin = Origin::new(&arg);
 										let domain = ctx.collect_expression(arg);
 										ConstructorParameter {
 											declared_type: ctx.alloc_type(
@@ -172,10 +169,7 @@ impl ItemCollector<'_> {
 										Constructor::Function {
 											constructor: ctx.alloc_pattern((&i).into(), name),
 											destructor: ctx.alloc_pattern(
-												Origin::new(
-													&i,
-													Some(DesugarKind::DestructuringFunction),
-												),
+												Origin::new(&i),
 												name.inversed(self.db),
 											),
 											parameters,
@@ -296,11 +290,9 @@ impl ItemCollector<'_> {
 						.collect();
 					cases.push(
 						Constructor::Function {
-							constructor: ctx.alloc_pattern(Origin::new(&c.id(), None), name),
-							destructor: ctx.alloc_pattern(
-								Origin::new(&c.id(), Some(DesugarKind::DestructuringFunction)),
-								name.inversed(self.db),
-							),
+							constructor: ctx.alloc_pattern(Origin::new(&c.id()), name),
+							destructor: ctx
+								.alloc_pattern(Origin::new(&c.id()), name.inversed(self.db)),
 							parameters,
 						}
 						.into(),
@@ -413,7 +405,7 @@ impl ItemCollector<'_> {
 		let body = f.body().map(|e| ctx.collect_expression(e));
 		let pattern = ctx.collect_pattern(f.id().into());
 		let return_type = ctx.alloc_type(
-			Origin::new(&f, None),
+			Origin::new(&f),
 			Type::Primitive {
 				inst: match f.declared_type() {
 					ast::PredicateType::Predicate => VarType::Var,
@@ -466,14 +458,14 @@ impl ItemCollector<'_> {
 		let goal = match s.goal() {
 			ast::Goal::Maximize(objective) => Goal::Maximize {
 				pattern: ctx.alloc_pattern(
-					Origin::new(&objective, None),
+					Origin::new(&objective),
 					Pattern::Identifier(self.identifiers.objective),
 				),
 				objective: ctx.collect_expression(objective),
 			},
 			ast::Goal::Minimize(objective) => Goal::Minimize {
 				pattern: ctx.alloc_pattern(
-					Origin::new(&objective, None),
+					Origin::new(&objective),
 					Pattern::Identifier(self.identifiers.objective),
 				),
 				objective: ctx.collect_expression(objective),

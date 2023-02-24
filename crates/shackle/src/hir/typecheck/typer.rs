@@ -10,10 +10,10 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, NodeRef, PatternRef},
-		ArrayAccess, ArrayComprehension, ArrayLiteral, Call, Case, Declaration, Expression,
-		Generator, Identifier, IdentifierRegistry, IfThenElse, ItemData, Lambda, Let, LetItem,
-		Pattern, PrimitiveType, RecordAccess, RecordLiteral, SetComprehension, SetLiteral,
-		TupleAccess, TupleLiteral, Type,
+		ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, Call, Case, Declaration,
+		Expression, Generator, Identifier, IdentifierRegistry, IfThenElse, IndexedArrayLiteral,
+		ItemData, Lambda, Let, LetItem, MaybeIndexSet, Pattern, PrimitiveType, RecordAccess,
+		RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
 	},
 	ty::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
@@ -22,7 +22,7 @@ use crate::{
 	Error,
 };
 
-use super::{PatternTy, TypeContext};
+use super::{NameResolution, PatternTy, TypeContext};
 
 /// Computes types of expressions and patterns in an item.
 ///
@@ -104,6 +104,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Expression::Identifier(i) => self.collect_identifier(expr, i, is_annotation_for),
 			Expression::Call(c) => self.collect_call(expr, c, is_annotation_for),
 			Expression::ArrayLiteral(al) => self.collect_array_literal(expr, al),
+			Expression::ArrayLiteral2D(al) => self.collect_array_literal_2d(expr, al),
+			Expression::IndexedArrayLiteral(al) => self.collect_indexed_array_literal(expr, al),
 			Expression::SetLiteral(sl) => self.collect_set_literal(expr, sl),
 			Expression::TupleLiteral(tl) => self.collect_tuple_literal(tl),
 			Expression::RecordLiteral(rl) => self.collect_record_literal(rl),
@@ -175,7 +177,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		if let Some(p) = self.find_variable(expr, *i) {
 			let expression = ExpressionRef::new(self.item, expr);
-			self.ctx.add_identifier_resolution(expression, p);
+			self.ctx
+				.add_identifier_resolution(expression, NameResolution::Pattern(p));
 			match self.ctx.type_pattern(db, p) {
 				PatternTy::Variable(ty)
 				| PatternTy::Argument(ty)
@@ -220,7 +223,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					_ => None,
 				});
-			if let Some((p, _, t)) = fn_match {
+			if let Some((p, fe, t)) = fn_match {
 				match p.item().local_item_ref(db) {
 					crate::hir::ids::LocalItemRef::Function(f) => {
 						let fi = &p.item().model(db)[f];
@@ -235,9 +238,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									_ => false,
 								});
 						if has_annotated_expression {
-							let ret = t.return_type;
-							self.ctx
-								.add_identifier_resolution(ExpressionRef::new(self.item, expr), p);
+							let ret = fe.overload.instantiate(db.upcast(), &t).return_type;
+							self.ctx.add_identifier_resolution(
+								ExpressionRef::new(self.item, expr),
+								NameResolution::with_ty_params(p, t),
+							);
 							return ret;
 						}
 					}
@@ -354,6 +359,139 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		})
 	}
 
+	fn collect_array_literal_2d(
+		&mut self,
+		expr: ArenaIndex<Expression>,
+		al: &ArrayLiteral2D,
+	) -> Ty {
+		let db = self.db;
+		let mut idx_ty = |dim: &MaybeIndexSet| match dim {
+			MaybeIndexSet::Indexed(indices) => Ty::most_specific_supertype(
+				db.upcast(),
+				indices.iter().map(|e| self.collect_expression(*e, None)),
+			)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform array indices".to_owned(),
+					},
+				);
+				self.types.error
+			}),
+			MaybeIndexSet::NonIndexed(len) => {
+				if *len > 0 {
+					self.types.par_int
+				} else {
+					self.types.bottom
+				}
+			}
+		};
+		let dim_ty = Ty::tuple(db.upcast(), [idx_ty(&al.rows), idx_ty(&al.columns)]);
+		let el_ty = if al.members.is_empty() {
+			self.types.bottom
+		} else {
+			Ty::most_specific_supertype(
+				db.upcast(),
+				al.members.iter().map(|e| self.collect_expression(*e, None)),
+			)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform array literal".to_owned(),
+					},
+				);
+				self.types.error
+			})
+		};
+		Ty::array(db.upcast(), dim_ty, el_ty).unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				IllegalType {
+					src,
+					span,
+					ty: format!(
+						"array [{}] of {}",
+						dim_ty.pretty_print_as_dims(db.upcast()),
+						el_ty.pretty_print(db.upcast())
+					),
+				},
+			);
+			self.types.error
+		})
+	}
+
+	fn collect_indexed_array_literal(
+		&mut self,
+		expr: ArenaIndex<Expression>,
+		al: &IndexedArrayLiteral,
+	) -> Ty {
+		let db = self.db;
+		let dim_ty = Ty::most_specific_supertype(
+			db.upcast(),
+			al.indices.iter().map(|e| self.collect_expression(*e, None)),
+		)
+		.unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				InvalidArrayLiteral {
+					src,
+					span,
+					msg: "Non-uniform array indices".to_owned(),
+				},
+			);
+			self.types.error
+		});
+		let el_ty = if al.members.is_empty() {
+			self.types.bottom
+		} else {
+			Ty::most_specific_supertype(
+				db.upcast(),
+				al.members.iter().map(|e| self.collect_expression(*e, None)),
+			)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform array literal".to_owned(),
+					},
+				);
+				self.types.error
+			})
+		};
+		Ty::array(db.upcast(), dim_ty, el_ty).unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				IllegalType {
+					src,
+					span,
+					ty: format!(
+						"array [{}] of {}",
+						dim_ty.pretty_print_as_dims(db.upcast()),
+						el_ty.pretty_print(db.upcast())
+					),
+				},
+			);
+			self.types.error
+		})
+	}
+
 	fn collect_set_literal(&mut self, expr: ArenaIndex<Expression>, sl: &SetLiteral) -> Ty {
 		let db = self.db;
 		if sl.members.is_empty() {
@@ -370,7 +508,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				InvalidArrayLiteral {
 					src,
 					span,
-					msg: "Non-uniform array literal".to_owned(),
+					msg: "Non-uniform set literal".to_owned(),
 				},
 			);
 			self.types.error
@@ -1478,8 +1616,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let op = Ty::function(db.upcast(), f);
 				self.ctx
 					.add_expression(ExpressionRef::new(self.item, expr), op);
-				self.ctx
-					.add_identifier_resolution(ExpressionRef::new(self.item, expr), p);
+				self.ctx.add_identifier_resolution(
+					ExpressionRef::new(self.item, expr),
+					NameResolution::Pattern(p),
+				);
 				return (op, ret);
 			}
 		}
@@ -1562,13 +1702,16 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		});
 
 		match fn_result {
-			Ok((pattern, _, instantiation)) => {
+			Ok((pattern, fe, tvs)) => {
+				let instantiation = fe.overload.instantiate(db.upcast(), &tvs);
 				let ret = instantiation.return_type;
 				let op = Ty::function(db.upcast(), instantiation);
 				self.ctx
 					.add_expression(ExpressionRef::new(self.item, expr), op);
-				self.ctx
-					.add_identifier_resolution(ExpressionRef::new(self.item, expr), pattern);
+				self.ctx.add_identifier_resolution(
+					ExpressionRef::new(self.item, expr),
+					NameResolution::with_ty_params(pattern, tvs),
+				);
 				(op, ret)
 			}
 			Err(FunctionResolutionError::AmbiguousOverloading(ps)) => {
@@ -1715,13 +1858,17 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						let p = self.find_variable(scope?, *i)?;
 						match self.ctx.type_pattern(db, p) {
 							PatternTy::EnumAtom(ty) => {
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+								self.ctx.add_pattern_resolution(
+									PatternRef::new(self.item, pat),
+									NameResolution::Pattern(p),
+								);
 								Some(ty)
 							}
 							PatternTy::AnnotationAtom => {
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+								self.ctx.add_pattern_resolution(
+									PatternRef::new(self.item, pat),
+									NameResolution::Pattern(p),
+								);
 								Some(self.types.ann)
 							}
 							_ => None,
@@ -1839,7 +1986,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						self.collect_pattern(scope, resolves_atoms, *p, t, is_argument);
 					}
 					let fn_pat = PatternRef::new(self.item, *function);
-					self.ctx.add_pattern_resolution(fn_pat, ctor_pat);
+					self.ctx
+						.add_pattern_resolution(fn_pat, NameResolution::Pattern(ctor_pat));
 					let ctor_type = c.overload.clone().into_function().unwrap();
 					let dtor_type = FunctionType {
 						params: Box::new([ctor_type.return_type]),
@@ -2006,12 +2154,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					Expression::Identifier(i) => {
 						if let Some(p) = self.find_variable(*domain, *i) {
 							let domain_ref = ExpressionRef::new(self.item, *domain);
-							self.ctx.add_identifier_resolution(domain_ref, p);
+							self.ctx
+								.add_identifier_resolution(domain_ref, NameResolution::Pattern(p));
 							match self.ctx.type_pattern(db, p) {
-								PatternTy::TypeAlias(ty) | PatternTy::Enum(ty) => ty,
-								PatternTy::Variable(ty) | PatternTy::Argument(ty) => match ty
-									.lookup(db.upcast())
-								{
+								PatternTy::TypeAlias(ty) => ty,
+								PatternTy::Variable(ty)
+								| PatternTy::Argument(ty)
+								| PatternTy::Enum(ty) => match ty.lookup(db.upcast()) {
 									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {
 										self.ctx.add_expression(domain_ref, ty);
 										inner

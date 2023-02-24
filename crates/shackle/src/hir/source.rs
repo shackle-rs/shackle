@@ -111,35 +111,9 @@ pub fn find_expression(
 	})
 }
 
-/// Type of desugaring that occurred.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum DesugarKind {
-	/// Indexed array literal
-	IndexedArrayLiteral,
-	/// 2D array literal
-	ArrayLiteral2D,
-	/// String interpolation
-	StringInterpolation,
-	/// Prefix operator
-	PrefixOperator,
-	/// Infix operator
-	InfixOperator,
-	/// Postfix operator
-	PostfixOperator,
-	/// Generator call
-	GeneratorCall,
-	/// Domain constraint
-	DomainConstraint,
-	/// Destructuring function
-	DestructuringFunction,
-	/// Generator destructuring
-	DestructuringGenerator,
-}
-
 /// Origin of an HIR node.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Origin {
-	desugar_kind: Option<DesugarKind>,
 	file: FileRef,
 	range: std::ops::Range<usize>,
 	node_id: usize,
@@ -147,23 +121,12 @@ pub struct Origin {
 
 impl Origin {
 	/// Create an origin.
-	pub fn new<T: AstNode>(node: &T, kind: Option<DesugarKind>) -> Self {
+	pub fn new<T: AstNode>(node: &T) -> Self {
 		let node = node.cst_node();
 		Self {
-			desugar_kind: kind,
 			file: node.cst().file(),
 			range: node.as_ref().byte_range(),
 			node_id: node.as_ref().id(),
-		}
-	}
-
-	/// Clone this origin and assign the given desugaring kind.
-	pub fn with_desugaring(&self, kind: DesugarKind) -> Self {
-		Self {
-			desugar_kind: Some(kind),
-			file: self.file,
-			range: self.range.clone(),
-			node_id: self.node_id,
 		}
 	}
 
@@ -178,6 +141,6 @@ impl Origin {
 
 impl<T: AstNode> From<&T> for Origin {
 	fn from(node: &T) -> Self {
-		Self::new(node, None)
+		Self::new(node)
 	}
 }

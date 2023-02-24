@@ -1,22 +1,22 @@
 //! Representation of variable domains
-
 use std::ops::Deref;
 
 use crate::{
 	hir::Identifier,
-	thir::db::Thir,
+	thir::{db::Thir, source::Origin},
 	ty::{Ty, TyData},
 };
 
-use super::{ExpressionAllocator, ExpressionId};
+use super::Expression;
 
 pub use crate::hir::{OptType, VarType};
 
 /// Ascribed domain of a variable
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Domain {
 	ty: Ty,
 	data: DomainData,
+	origin: Origin,
 }
 
 impl Deref for Domain {
@@ -26,11 +26,135 @@ impl Deref for Domain {
 	}
 }
 
+impl Domain {
+	/// The type of the variable this domain is for (not of the domain)
+	pub fn ty(&self) -> Ty {
+		self.ty
+	}
+
+	/// Get the origin of this domain
+	pub fn origin(&self) -> Origin {
+		self.origin
+	}
+
+	/// Create a domain bounded by an expression
+	///
+	/// E.g. `var 1..3`
+	pub fn bounded(
+		db: &dyn Thir,
+		origin: impl Into<Origin>,
+		inst: VarType,
+		opt: OptType,
+		expression: Expression,
+	) -> Self {
+		let dom_ty = expression.ty();
+		let ty = match dom_ty.lookup(db.upcast()) {
+			TyData::Set(VarType::Par, OptType::NonOpt, e) => e
+				.with_inst(db.upcast(), inst)
+				.unwrap()
+				.with_opt(db.upcast(), opt),
+			_ => unreachable!("Invalid domain type"),
+		};
+		Self {
+			ty,
+			data: DomainData::Bounded(Box::new(expression)),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create an array domain
+	///
+	/// E.g. `array [int] of 1..3`
+	pub fn array(
+		db: &dyn Thir,
+		origin: impl Into<Origin>,
+		dimensions: Domain,
+		element: Domain,
+	) -> Self {
+		let ty = Ty::array(db.upcast(), dimensions.ty(), element.ty()).expect("Invalid array type");
+		Self {
+			ty,
+			data: DomainData::Array(Box::new(dimensions), Box::new(element)),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create a set variable domain
+	///
+	/// E.g. `var set of 1..3`
+	pub fn set(
+		db: &dyn Thir,
+		origin: impl Into<Origin>,
+		inst: VarType,
+		opt: OptType,
+		element: Domain,
+	) -> Self {
+		let ty = Ty::par_set(db.upcast(), element.ty())
+			.expect("Invalid set element type")
+			.with_inst(db.upcast(), inst)
+			.expect("Cannot make var set domain")
+			.with_opt(db.upcast(), opt);
+		Self {
+			ty,
+			data: DomainData::Set(Box::new(element)),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create a tuple variable domain
+	///
+	/// E.g. `tuple(1..2, string)`
+	pub fn tuple(
+		db: &dyn Thir,
+		origin: impl Into<Origin>,
+		fields: impl IntoIterator<Item = Domain>,
+	) -> Self {
+		let fields = fields.into_iter().collect::<Vec<_>>();
+		let ty = Ty::tuple(db.upcast(), fields.iter().map(|d| d.ty()));
+		Self {
+			ty,
+			data: DomainData::Tuple(fields),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create a record variable domain
+	///
+	/// E.g. `record(1..2: x, string: y)`
+	pub fn record(
+		db: &dyn Thir,
+		origin: impl Into<Origin>,
+		fields: impl IntoIterator<Item = (Identifier, Domain)>,
+	) -> Self {
+		let fields = fields.into_iter().collect::<Vec<_>>();
+		let ty = Ty::record(db.upcast(), fields.iter().map(|(i, d)| (*i, d.ty())));
+		Self {
+			ty,
+			data: DomainData::Record(fields),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create an unbounded domain
+	pub fn unbounded(origin: impl Into<Origin>, ty: Ty) -> Self {
+		Self {
+			ty,
+			data: DomainData::Unbounded,
+			origin: origin.into(),
+		}
+	}
+
+	/// Get the inner data
+	pub fn into_inner(self) -> (Ty, DomainData, Origin) {
+		(self.ty, self.data, self.origin)
+	}
+}
+
 /// Ascribed domain of a variable
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum DomainData {
 	/// Bounded by an expression
-	Bounded(ExpressionId),
+	Bounded(Box<Expression>),
 	/// Array index sets and element domain
 	Array(Box<Domain>, Box<Domain>),
 	/// Set domain
@@ -41,86 +165,4 @@ pub enum DomainData {
 	Record(Vec<(Identifier, Domain)>),
 	/// Unbounded domain
 	Unbounded,
-}
-
-impl Domain {
-	/// The type of the variable this domain is for (not of the domain)
-	pub fn ty(&self) -> Ty {
-		self.ty
-	}
-
-	/// Create a domain for a scalar variable bounded by the given expression
-	pub fn bounded(
-		db: &dyn Thir,
-		owner: &ExpressionAllocator,
-		inst: VarType,
-		opt: OptType,
-		expression: ExpressionId,
-	) -> Self {
-		let dom_ty = owner[expression].ty();
-		let ty = match dom_ty.lookup(db.upcast()) {
-			TyData::Set(VarType::Par, OptType::NonOpt, e) => e
-				.with_inst(db.upcast(), inst)
-				.unwrap()
-				.with_opt(db.upcast(), opt),
-			_ => unreachable!("Invalid domain type"),
-		};
-		Self::bounded_unchecked(ty, expression)
-	}
-
-	/// Create a domain for a variable of type `ty` bounded by the given `expression`.
-	///
-	/// Does not check if the domain and type actually make sense.
-	pub fn bounded_unchecked(ty: Ty, expression: ExpressionId) -> Self {
-		Self {
-			ty,
-			data: DomainData::Bounded(expression),
-		}
-	}
-
-	/// Create a domain for an array variable
-	pub fn array(db: &dyn Thir, dims: Domain, elem: Domain) -> Self {
-		Self {
-			ty: Ty::array(db.upcast(), dims.ty(), elem.ty()).expect("Invalid array type"),
-			data: DomainData::Array(Box::new(dims), Box::new(elem)),
-		}
-	}
-
-	/// Create a domain for a set variable bounded by the given expression
-	pub fn set(db: &dyn Thir, inst: VarType, opt: OptType, element: Domain) -> Self {
-		Self {
-			ty: Ty::par_set(db.upcast(), element.ty())
-				.expect("Invalid set element type")
-				.with_inst(db.upcast(), inst)
-				.expect("Cannot make var set domain")
-				.with_opt(db.upcast(), opt),
-			data: DomainData::Set(Box::new(element)),
-		}
-	}
-
-	/// Create a domain for a tuple
-	pub fn tuple(db: &dyn Thir, fields: impl IntoIterator<Item = Domain>) -> Self {
-		let fields: Vec<_> = fields.into_iter().collect();
-		Self {
-			ty: Ty::tuple(db.upcast(), fields.iter().map(|d| d.ty())),
-			data: DomainData::Tuple(fields),
-		}
-	}
-
-	/// Create a domain for a tuple
-	pub fn record(db: &dyn Thir, fields: impl IntoIterator<Item = (Identifier, Domain)>) -> Self {
-		let fields: Vec<_> = fields.into_iter().collect();
-		Self {
-			ty: Ty::record(db.upcast(), fields.iter().map(|(i, d)| (*i, d.ty()))),
-			data: DomainData::Record(fields),
-		}
-	}
-
-	/// Create an unbounded domain for a variable of the given type
-	pub fn unbounded(ty: Ty) -> Self {
-		Self {
-			ty,
-			data: DomainData::Unbounded,
-		}
-	}
 }

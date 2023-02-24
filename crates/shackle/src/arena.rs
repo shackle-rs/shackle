@@ -88,6 +88,7 @@ impl<T> From<ArenaIndex<T>> for u32 {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Arena<T> {
 	items: Vec<T>,
+	forbidden: Option<ArenaIndex<T>>,
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Arena<T> {
@@ -101,7 +102,10 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Arena<T> {
 
 impl<T> std::default::Default for Arena<T> {
 	fn default() -> Self {
-		Self { items: Vec::new() }
+		Self {
+			items: Vec::new(),
+			forbidden: None,
+		}
 	}
 }
 
@@ -337,6 +341,18 @@ impl<K, V> ArenaMap<K, V> {
 			Some(v) => v.as_mut(),
 			None => None,
 		}
+	}
+
+	/// Get a mutable reference to a value in the arena map, inserting the default
+	/// value if it is not present.
+	pub fn get_mut_or_default(&mut self, idx: ArenaIndex<K>) -> &mut V
+	where
+		V: Default,
+	{
+		if self.items.get((idx.index.get() - 1) as usize).is_none() {
+			self.insert(idx, V::default());
+		}
+		self.get_mut(idx).unwrap()
 	}
 
 	/// Get an iterator over the values in the map.

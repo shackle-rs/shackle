@@ -5,6 +5,8 @@
 //! - Destructuring declarations are rewritten as separate declarations
 //! - Destructuring in generators is rewritten into a where clause
 //! - Type alias items removed as they have been resolved
+//! - 2D array literals are re-written using `array2d` calls
+//! - Indexed array literals are re-written using `arrayNd` calls
 //! - Array slicing is re-written using calls to `slice_Xd`
 //!
 
@@ -91,12 +93,12 @@ impl<'a> ItemCollector<'a> {
 		let ty = &types[a.constructor_pattern()];
 		match (&a.constructor, ty) {
 			(hir::Constructor::Atom { pattern }, PatternTy::AnnotationAtom) => {
-				let idx = self.model.add_annotation(AnnotationItem::new(
+				let annotation = Annotation::new(
 					a.data[*pattern]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
-					item,
-				));
+				);
+				let idx = self.model.add_annotation(Item::new(annotation, item));
 				self.resolutions.insert(
 					PatternRef::new(item, *pattern),
 					ResolvedIdentifier::Annotation(idx),
@@ -113,30 +115,26 @@ impl<'a> ItemCollector<'a> {
 			) => {
 				let mut parameters = Vec::with_capacity(fn_entry.overload.params().len());
 				for (param, ty) in params.iter().zip(fn_entry.overload.params()) {
-					let param_decl = self
-						.model
-						.add_declaration(DeclarationItem::new(false, item));
-					let mut collector =
-						ExpressionCollector::new(self, &a.data, item, param_decl, &types);
+					let mut collector = ExpressionCollector::new(self, &a.data, item, &types);
 					let domain = collector.collect_domain(param.declared_type, *ty, false);
-					self.model[param_decl].set_domain(domain);
+					let mut param_decl = Declaration::new(false, domain);
 					// Ignore destructuring and recording resolution for now since these can't have bodies which refer
 					// to parameters anyway
 					if let Some(p) = param.pattern {
 						if let Some(i) = a.data[p].identifier() {
-							self.model[param_decl].set_name(i);
+							param_decl.set_name(i);
 						}
 					}
-					parameters.push(param_decl);
+					let idx = self.model.add_declaration(Item::new(param_decl, item));
+					parameters.push(idx);
 				}
-				let mut annotation = AnnotationItem::new(
+				let mut annotation = Annotation::new(
 					a.data[*constructor]
 						.identifier()
 						.expect("Annotation must have identifier pattern"),
-					item,
 				);
 				annotation.parameters = Some(parameters);
-				let idx = self.model.add_annotation(annotation);
+				let idx = self.model.add_annotation(Item::new(annotation, item));
 				self.resolutions.insert(
 					PatternRef::new(item, *constructor),
 					ResolvedIdentifier::Annotation(idx),
@@ -156,28 +154,31 @@ impl<'a> ItemCollector<'a> {
 		let db = self.db;
 		let types = db.lookup_item_types(item);
 		let res = types.name_resolution(a.assignee).unwrap();
-		let decl = match &self.resolutions[&res] {
+		let decl = match &self.resolutions[&res.pattern()] {
 			ResolvedIdentifier::Declaration(d) => *d,
 			_ => unreachable!(),
 		};
 		if self.model[decl].definition().is_some() {
 			// Turn subsequent assignment items into equality constraints
-			let constraint = self.model.add_constraint(ConstraintItem::new(true, item));
-			let mut collector = ExpressionCollector::new(self, &a.data, item, constraint, &types);
-			let lhs = collector.collect_expression(a.assignee);
-			let rhs = collector.collect_expression(a.definition);
-			let call = ExpressionBuilder::new(db, &self.model)
-				.lookup_call(
-					self.ids.eq,
-					[lhs, rhs],
-					self.model[constraint].expressions(),
-				)
-				.finish(self.model[constraint].expressions_mut(), item);
-			self.model[constraint].set_expression(call);
+			let mut collector = ExpressionCollector::new(self, &a.data, item, &types);
+			let call = LookupCall {
+				function: collector.parent.ids.eq,
+				arguments: vec![
+					collector.collect_expression(a.assignee),
+					collector.collect_expression(a.definition),
+				],
+			};
+			let constraint = Constraint::new(
+				true,
+				Expression::new(db, &collector.parent.model, item, call),
+			);
+			self.model.add_constraint(Item::new(constraint, item));
 		} else {
-			let mut collector = ExpressionCollector::new(self, &a.data, item, decl, &types);
+			let mut declaration = self.model[decl].clone();
+			let mut collector = ExpressionCollector::new(self, &a.data, item, &types);
 			let def = collector.collect_expression(a.definition);
-			self.model[decl].set_definition(def);
+			declaration.set_definition(def);
+			self.model[decl] = declaration;
 		}
 	}
 
@@ -190,17 +191,14 @@ impl<'a> ItemCollector<'a> {
 		top_level: bool,
 	) -> ConstraintId {
 		let types = self.db.lookup_item_types(item);
-		let constraint = self
-			.model
-			.add_constraint(ConstraintItem::new(top_level, item));
-		let mut collector = ExpressionCollector::new(self, data, item, constraint, &types);
-		let value = collector.collect_expression(c.expression);
-		collector.parent.model[constraint].set_expression(value);
-		for ann in c.annotations.iter() {
-			let a = collector.collect_expression(*ann);
-			collector.parent.model[constraint].add_annotation(a);
-		}
-		constraint
+		let mut collector = ExpressionCollector::new(self, data, item, &types);
+		let mut constraint = Constraint::new(top_level, collector.collect_expression(c.expression));
+		constraint.annotations_mut().extend(
+			c.annotations
+				.iter()
+				.map(|ann| collector.collect_expression(*ann)),
+		);
+		self.model.add_constraint(Item::new(constraint, item))
 	}
 
 	/// Collect a declaration item
@@ -218,22 +216,23 @@ impl<'a> ItemCollector<'a> {
 			PatternTy::Destructuring(ty) => *ty,
 			_ => unreachable!(),
 		};
-		let decl = self
-			.model
-			.add_declaration(DeclarationItem::new(top_level, item));
-		let mut collector = ExpressionCollector::new(self, data, item, decl, &types);
+		let mut collector = ExpressionCollector::new(self, data, item, &types);
 		let domain = collector.collect_domain(d.declared_type, ty, false);
-		collector.parent.model[decl].set_domain(domain);
-		let decls = collector.collect_destructuring(decl, top_level, d.pattern);
-		for ann in d.annotations.iter() {
-			let a = collector.collect_expression(*ann);
-			collector.parent.model[decl].add_annotation(a);
-		}
+		let mut decl = Declaration::new(top_level, domain);
+		decl.annotations_mut().extend(
+			d.annotations
+				.iter()
+				.map(|ann| collector.collect_expression(*ann)),
+		);
 		if let Some(def) = d.definition {
-			let e = collector.collect_expression(def);
-			collector.parent.model[decl].set_definition(e);
+			decl.set_definition(collector.collect_expression(def));
 		}
-		[decl].into_iter().chain(decls).collect()
+		let idx = collector
+			.parent
+			.model
+			.add_declaration(Item::new(decl, item));
+		let decls = collector.collect_destructuring(idx, top_level, d.pattern);
+		[idx].into_iter().chain(decls).collect()
 	}
 
 	/// Collect an enumeration item
@@ -249,14 +248,14 @@ impl<'a> ItemCollector<'a> {
 				TyData::Set(VarType::Par, OptType::NonOpt, element) => {
 					match element.lookup(self.db.upcast()) {
 						TyData::Enum(_, _, t) => {
-							let mut enumeration = EnumerationItem::new(t, item);
+							let mut enumeration = Enumeration::new(t);
 							if let Some(def) = &e.definition {
 								enumeration.set_definition(
 									def.iter()
 										.map(|c| self.collect_enum_case(c, &e.data, item, &types)),
 								)
 							}
-							let idx = self.model.add_enumeration(enumeration);
+							let idx = self.model.add_enumeration(Item::new(enumeration, item));
 							self.resolutions.insert(
 								PatternRef::new(item, e.pattern),
 								ResolvedIdentifier::Enumeration(idx),
@@ -285,7 +284,7 @@ impl<'a> ItemCollector<'a> {
 	) {
 		let types = self.db.lookup_item_types(item);
 		let res = types.name_resolution(a.assignee).unwrap();
-		let idx = match &self.resolutions[&res] {
+		let idx = match &self.resolutions[&res.pattern()] {
 			ResolvedIdentifier::Enumeration(e) => *e,
 			_ => unreachable!(),
 		};
@@ -309,7 +308,10 @@ impl<'a> ItemCollector<'a> {
 				hir::EnumConstructor::Named(hir::Constructor::Atom { pattern }) => {
 					self.resolutions.insert(
 						PatternRef::new(item, *pattern),
-						ResolvedIdentifier::EnumerationMember(EnumMemberId::new(idx, i as u32)),
+						ResolvedIdentifier::EnumerationMember(
+							EnumMemberId::new(idx, i as u32),
+							EnumConstructorKind::Par,
+						),
 					);
 				}
 				hir::EnumConstructor::Named(hir::Constructor::Function {
@@ -319,13 +321,17 @@ impl<'a> ItemCollector<'a> {
 				}) => {
 					self.resolutions.insert(
 						PatternRef::new(item, *constructor),
-						ResolvedIdentifier::EnumerationMember(EnumMemberId::new(idx, i as u32)),
+						ResolvedIdentifier::EnumerationMember(
+							EnumMemberId::new(idx, i as u32),
+							EnumConstructorKind::Par,
+						),
 					);
 					self.resolutions.insert(
 						PatternRef::new(item, *destructor),
-						ResolvedIdentifier::EnumerationDestructure(EnumMemberId::new(
-							idx, i as u32,
-						)),
+						ResolvedIdentifier::EnumerationDestructure(
+							EnumMemberId::new(idx, i as u32),
+							EnumConstructorKind::Par,
+						),
 					);
 				}
 				_ => (),
@@ -385,14 +391,10 @@ impl<'a> ItemCollector<'a> {
 				params
 					.iter()
 					.map(|(ty, t)| {
-						let declaration = self
-							.model
-							.add_declaration(DeclarationItem::new(false, item));
-						let mut collector =
-							ExpressionCollector::new(self, data, item, declaration, types);
+						let mut collector = ExpressionCollector::new(self, data, item, types);
 						let domain = collector.collect_domain(*t, *ty, false);
-						self.model[declaration].set_domain(domain);
-						declaration
+						let declaration = Declaration::new(false, domain);
+						self.model.add_declaration(Item::new(declaration, item))
 					})
 					.collect(),
 			),
@@ -402,32 +404,24 @@ impl<'a> ItemCollector<'a> {
 	/// Collect a function item
 	pub fn collect_function(&mut self, item: ItemRef, f: &hir::Item<hir::Function>) -> FunctionId {
 		let types = self.db.lookup_item_types(item);
-		let function = self.model.add_function(FunctionItem::new(
-			f.data[f.pattern].identifier().unwrap(),
-			item,
-		));
-		let mut collector = ExpressionCollector::new(self, &f.data, item, function, &types);
-		for ann in f.annotations.iter() {
-			let a = collector.collect_expression(*ann);
-			collector.parent.model[function].add_annotation(a);
-		}
+		let mut collector = ExpressionCollector::new(self, &f.data, item, &types);
 		let res = PatternRef::new(item, f.pattern);
-		collector
-			.parent
-			.resolutions
-			.insert(res, ResolvedIdentifier::Function(function));
 		match &types[f.pattern] {
 			PatternTy::Function(fn_entry) => {
 				let domain =
 					collector.collect_domain(f.return_type, fn_entry.overload.return_type(), false);
-				collector.parent.model[function].set_domain(domain);
-
-				collector.parent.model[function].set_type_inst_vars(f.type_inst_vars.iter().map(
-					|t| match &types[t.name] {
+				let mut function = Function::new(f.data[f.pattern].identifier().unwrap(), domain);
+				function.annotations_mut().extend(
+					f.annotations
+						.iter()
+						.map(|ann| collector.collect_expression(*ann)),
+				);
+				function.set_type_inst_vars(f.type_inst_vars.iter().map(|t| {
+					match &types[t.name] {
 						PatternTy::TyVar(tv) => tv.clone(),
 						_ => unreachable!(),
-					},
-				));
+					}
+				}));
 
 				let parameters = f
 					.parameters
@@ -439,11 +433,15 @@ impl<'a> ItemCollector<'a> {
 							.collect_fn_param(param, *ty, &f.data, item, &types)
 					})
 					.collect::<Vec<_>>();
-				collector.parent.model[function].set_parameters(parameters);
+				function.set_parameters(parameters);
+
+				let idx = self.model.add_function(Item::new(function, item));
+				self.resolutions
+					.insert(res, ResolvedIdentifier::Function(idx));
 				if f.body.is_some() {
-					self.deferred.push((function, item));
+					self.deferred.push((idx, item));
 				}
-				function
+				idx
 			}
 			_ => unreachable!(),
 		}
@@ -457,31 +455,27 @@ impl<'a> ItemCollector<'a> {
 		item: ItemRef,
 		types: &TypeResult,
 	) -> DeclarationId {
-		let declaration = self
-			.model
-			.add_declaration(DeclarationItem::new(false, item));
-		let mut collector = ExpressionCollector::new(self, data, item, declaration, types);
+		let mut collector = ExpressionCollector::new(self, data, item, types);
 		let domain = collector.collect_domain(param.declared_type, ty, false);
-		collector.parent.model[declaration].set_domain(domain);
-		for ann in param.annotations.iter() {
-			let a = collector.collect_expression(*ann);
-			collector.parent.model[declaration].add_annotation(a);
-		}
-		declaration
+		let mut declaration = Declaration::new(false, domain);
+		declaration.annotations_mut().extend(
+			param
+				.annotations
+				.iter()
+				.map(|ann| collector.collect_expression(*ann)),
+		);
+		self.model.add_declaration(Item::new(declaration, item))
 	}
 
 	/// Collect an output item
 	pub fn collect_output(&mut self, item: ItemRef, o: &hir::Item<hir::Output>) -> OutputId {
 		let types = self.db.lookup_item_types(item);
-		let output = self.model.add_output(OutputItem::new(item));
-		let mut collector = ExpressionCollector::new(self, &o.data, item, output, &types);
-		let e = collector.collect_expression(o.expression);
-		collector.parent.model[output].set_expression(e);
+		let mut collector = ExpressionCollector::new(self, &o.data, item, &types);
+		let mut output = Output::new(collector.collect_expression(o.expression));
 		if let Some(s) = o.section {
-			let section = collector.collect_expression(s);
-			collector.parent.model[output].set_section(section);
+			output.set_section(collector.collect_expression(s));
 		}
-		output
+		self.model.add_output(Item::new(output, item))
 	}
 
 	/// Collect solve item
@@ -491,68 +485,68 @@ impl<'a> ItemCollector<'a> {
 		                    objective: ArenaIndex<hir::Expression>,
 		                    is_maximize: bool| match &types[pattern] {
 			PatternTy::Variable(ty) => {
-				let declaration = self.model.add_declaration(DeclarationItem::new(
-					true,
+				let objective_origin = EntityRef::new(self.db.upcast(), item, objective);
+				let mut collector = ExpressionCollector::new(self, &s.data, item, &types);
+				let mut declaration =
+					Declaration::new(true, Domain::unbounded(objective_origin, *ty));
+				if let Some(name) = s.data[pattern].identifier() {
+					declaration.set_name(name);
+				}
+				let obj = collector.collect_expression(objective);
+				declaration.set_definition(obj);
+				let idx = self.model.add_declaration(Item::new(
+					declaration,
 					Origin::from(item).with_desugaring(DesugarKind::Objective),
 				));
-				self.model[declaration].set_domain(Domain::unbounded(*ty));
-				if let Some(name) = s.data[pattern].identifier() {
-					self.model[declaration].set_name(name);
-				}
-				let mut collector =
-					ExpressionCollector::new(self, &s.data, item, declaration, &types);
-				let obj = collector.collect_expression(objective);
-				self.model[declaration].set_definition(obj);
 				self.resolutions.insert(
 					PatternRef::new(item, pattern),
-					ResolvedIdentifier::Declaration(declaration),
+					ResolvedIdentifier::Declaration(idx),
 				);
 				if is_maximize {
-					SolveItem::maximize(declaration, item)
+					Solve::maximize(idx)
 				} else {
-					SolveItem::minimize(declaration, item)
+					Solve::minimize(idx)
 				}
 			}
 			_ => unreachable!(),
 		};
-		let si = match &s.goal {
+		let mut si = match &s.goal {
 			hir::Goal::Maximize { pattern, objective } => optimise(*pattern, *objective, true),
 			hir::Goal::Minimize { pattern, objective } => optimise(*pattern, *objective, false),
-			hir::Goal::Satisfy => SolveItem::satisfy(item),
+			hir::Goal::Satisfy => Solve::satisfy(),
 		};
-		let solve = self.model.set_solve(si);
-		let mut collector = ExpressionCollector::new(self, &s.data, item, solve, &types);
-		for ann in s.annotations.iter() {
-			let a = collector.collect_expression(*ann);
-			collector
-				.parent
-				.model
-				.solve_mut()
-				.unwrap()
-				.add_annotation(a);
-		}
+		let mut collector = ExpressionCollector::new(self, &s.data, item, &types);
+		si.annotations_mut().extend(
+			s.annotations
+				.iter()
+				.map(|ann| collector.collect_expression(*ann)),
+		);
+		self.model.set_solve(Item::new(si, item));
 	}
 
 	fn collect_type_alias(&mut self, item: ItemRef, ta: &hir::Item<hir::TypeAlias>) {
 		let types = self.db.lookup_item_types(item);
 		for e in hir::Type::expressions(ta.aliased_type, &ta.data) {
 			if let Some(res) = types.name_resolution(e) {
-				let res_types = self.db.lookup_item_types(res.item());
-				if matches!(&res_types[res.pattern()], PatternTy::TypeAlias(_)) {
+				let res_types = self.db.lookup_item_types(res.pattern().item());
+				if matches!(&res_types[res.pattern().pattern()], PatternTy::TypeAlias(_)) {
 					// Skip type aliases inside other type aliases (already will be processed)
 					continue;
 				}
 			}
 			// Create a declaration with the value of each expression used in a type alias
-			let decl = self.model.add_declaration(DeclarationItem::new(
-				true,
-				EntityRef::new(self.db.upcast(), item, e),
-			));
 			let expression =
-				ExpressionCollector::new(self, &ta.data, item, decl, &types).collect_expression(e);
-			self.model[decl].set_definition(expression);
+				ExpressionCollector::new(self, &ta.data, item, &types).collect_expression(e);
+			let mut decl = Declaration::new(
+				true,
+				Domain::unbounded(expression.origin(), expression.ty()),
+			);
+			decl.set_definition(expression);
+			let idx = self
+				.model
+				.add_declaration(Item::new(decl, EntityRef::new(self.db.upcast(), item, e)));
 			self.type_alias_expressions
-				.insert(ExpressionRef::new(item, e), decl);
+				.insert(ExpressionRef::new(item, e), idx);
 		}
 	}
 
@@ -564,34 +558,35 @@ impl<'a> ItemCollector<'a> {
 			let local_item = item.local_item_ref(self.db.upcast());
 			match local_item {
 				LocalItemRef::Function(f) => {
+					let mut function = self.model[func].clone();
+					let param_decls = function.parameters().to_owned();
 					let mut decls = Vec::new();
-					let param_decls = self.model[func].parameters().to_owned();
+					let mut collector =
+						ExpressionCollector::new(self, &model[f].data, item, &types);
 					for (decl, param) in param_decls.into_iter().zip(model[f].parameters.iter()) {
 						if let Some(p) = param.pattern {
-							let dsts =
-								ExpressionCollector::new(self, &model[f].data, item, decl, &types)
-									.collect_destructuring(decl, false, p);
+							let dsts = collector.collect_destructuring(decl, false, p);
 							decls.extend(dsts);
 						}
 					}
 					let body = model[f].body.unwrap();
-					let mut collector =
-						ExpressionCollector::new(self, &model[f].data, item, func, &types);
 					let collected_body = collector.collect_expression(body);
 					let e = if decls.is_empty() {
 						collected_body
 					} else {
 						let origin = EntityRef::new(collector.parent.db.upcast(), item, body);
-						collector
-							.builder()
-							.let_expression(
-								decls.into_iter().map(LetItem::Declaration),
-								collected_body,
-								collector.expressions(),
-							)
-							.finish(collector.expressions_mut(), origin)
+						Expression::new(
+							self.db,
+							&self.model,
+							origin,
+							Let {
+								items: decls.into_iter().map(LetItem::Declaration).collect(),
+								in_expression: Box::new(collected_body),
+							},
+						)
 					};
-					self.model[func].set_body(e);
+					function.set_body(e);
+					self.model[func] = function;
 				}
 				_ => unreachable!(),
 			}
@@ -608,7 +603,6 @@ struct ExpressionCollector<'a, 'b> {
 	parent: &'a mut ItemCollector<'b>,
 	data: &'a hir::ItemData,
 	item: ItemRef,
-	thir_item: ItemId,
 	types: &'a TypeResult,
 }
 
@@ -617,61 +611,37 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		parent: &'a mut ItemCollector<'b>,
 		data: &'a crate::hir::ItemData,
 		item: ItemRef,
-		thir_item: impl Into<ItemId>,
 		types: &'a TypeResult,
 	) -> Self {
 		Self {
 			parent,
 			data,
 			item,
-			thir_item: thir_item.into(),
 			types,
 		}
-	}
-
-	fn builder(&self) -> ExpressionBuilder<'_> {
-		ExpressionBuilder::new(self.parent.db, &self.parent.model)
 	}
 
 	fn introduce_declaration(
 		&mut self,
 		top_level: bool,
 		origin: impl Into<Origin>,
-		f: impl FnOnce(&mut ExpressionCollector<'_, '_>, DeclarationId) -> ExpressionId,
+		f: impl FnOnce(&mut ExpressionCollector<'_, '_>) -> Expression,
 	) -> DeclarationId {
-		let decl = DeclarationItem::new(top_level, origin);
-		let idx = self.parent.model.add_declaration(decl);
-		let mut collector =
-			ExpressionCollector::new(self.parent, self.data, self.item, idx, self.types);
-		let def = f(&mut collector, idx);
-		collector.parent.model[idx].set_definition(def);
-		idx
-	}
-
-	fn expressions(&self) -> &'_ ExpressionAllocator {
-		self.parent.model.expressions(self.thir_item)
-	}
-
-	fn expressions_mut(&mut self) -> &'_ mut ExpressionAllocator {
-		self.parent.model.expressions_mut(self.thir_item)
+		let origin: Origin = origin.into();
+		let mut collector = ExpressionCollector::new(self.parent, self.data, self.item, self.types);
+		let def = f(&mut collector);
+		let mut decl = Declaration::new(top_level, Domain::unbounded(origin, def.ty()));
+		decl.set_definition(def);
+		self.parent.model.add_declaration(Item::new(decl, origin))
 	}
 
 	/// Collect an expression
-	pub fn collect_expression(&mut self, idx: ArenaIndex<hir::Expression>) -> ExpressionId {
+	pub fn collect_expression(&mut self, idx: ArenaIndex<hir::Expression>) -> Expression {
 		let db = self.parent.db;
 		let ty = self.types[idx];
 		let origin = EntityRef::new(db.upcast(), self.item, idx);
-		let annotations = self
-			.data
-			.annotations(idx)
-			.map(|ann| self.collect_expression(ann))
-			.collect::<Vec<_>>();
-		let result = match &self.data[idx] {
-			hir::Expression::Absent => self
-				.builder()
-				.absent()
-				.with_annotations(annotations)
-				.finish(self.expressions_mut(), origin),
+		let mut result = match &self.data[idx] {
+			hir::Expression::Absent => alloc_expression(Absent, self, origin),
 			hir::Expression::ArrayAccess(aa) => {
 				let is_slice = match self.types[aa.indices].lookup(db.upcast()) {
 					TyData::Tuple(_, fs) => fs.iter().any(|f| f.is_set(db.upcast())),
@@ -680,15 +650,15 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				};
 				if is_slice {
 					self.collect_slice(aa.collection, aa.indices, origin)
-						.with_annotations(annotations)
-						.finish(self.expressions_mut(), origin)
 				} else {
-					let collection = self.collect_expression(aa.collection);
-					let indices = self.collect_expression(aa.indices);
-					self.builder()
-						.array_access(collection, indices, self.expressions())
-						.with_annotations(annotations)
-						.finish(self.expressions_mut(), origin)
+					alloc_expression(
+						ArrayAccess {
+							collection: Box::new(self.collect_expression(aa.collection)),
+							indices: Box::new(self.collect_expression(aa.indices)),
+						},
+						self,
+						origin,
+					)
 				}
 			}
 			hir::Expression::ArrayComprehension(c) => {
@@ -696,168 +666,250 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				for g in c.generators.iter() {
 					self.collect_generator(g, &mut generators);
 				}
-				let template = self.collect_expression(c.template);
-				if let Some(indices) = c.indices {
-					let indices = self.collect_expression(indices);
-					self.builder()
-						.indexed_array_comprehension(
-							generators,
-							indices,
-							template,
-							self.expressions(),
-						)
-						.with_annotations(annotations)
-						.finish(self.expressions_mut(), origin)
-				} else {
-					self.builder()
-						.array_comprehension(generators, template, self.expressions())
-						.with_annotations(annotations)
-						.finish(self.expressions_mut(), origin)
-				}
+				alloc_expression(
+					ArrayComprehension {
+						generators,
+						template: Box::new(self.collect_expression(c.template)),
+						indices: c
+							.indices
+							.map(|indices| Box::new(self.collect_expression(indices))),
+					},
+					self,
+					origin,
+				)
 			}
-			hir::Expression::ArrayLiteral(al) => {
-				let members = al
-					.members
-					.iter()
-					.map(|m| self.collect_expression(*m))
-					.collect::<Vec<_>>();
-				self.builder()
-					.array(members, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
+			hir::Expression::ArrayLiteral(al) => alloc_expression(
+				ArrayLiteral(
+					al.members
+						.iter()
+						.map(|m| self.collect_expression(*m))
+						.collect(),
+				),
+				self,
+				origin,
+			),
+			// Desugar 2D array literal into array2d call
+			hir::Expression::ArrayLiteral2D(al) => {
+				let mut idx_array = |dim: &hir::MaybeIndexSet| match dim {
+					hir::MaybeIndexSet::Indexed(es) => alloc_expression(
+						ArrayLiteral(es.iter().map(|e| self.collect_expression(*e)).collect()),
+						self,
+						origin,
+					),
+					hir::MaybeIndexSet::NonIndexed(c) => alloc_expression(
+						LookupCall {
+							function: self.parent.ids.set2array,
+							arguments: vec![if *c > 0 {
+								alloc_expression(
+									LookupCall {
+										function: self.parent.ids.dot_dot,
+										arguments: vec![
+											alloc_expression(IntegerLiteral(1), self, origin),
+											alloc_expression(
+												IntegerLiteral(*c as i64),
+												self,
+												origin,
+											),
+										],
+									},
+									self,
+									origin,
+								)
+							} else {
+								alloc_expression(SetLiteral(Vec::new()), self, origin)
+							}],
+						},
+						self,
+						origin,
+					),
+				};
+				let rows = idx_array(&al.rows);
+				let columns = idx_array(&al.columns);
+				alloc_expression(
+					LookupCall {
+						function: self.parent.ids.array2d,
+						arguments: vec![
+							rows,
+							columns,
+							alloc_expression(
+								ArrayLiteral(
+									al.members
+										.iter()
+										.map(|e| self.collect_expression(*e))
+										.collect(),
+								),
+								self,
+								origin,
+							),
+						],
+					},
+					self,
+					origin,
+				)
 			}
-			hir::Expression::BooleanLiteral(b) => self
-				.builder()
-				.boolean(*b)
-				.with_annotations(annotations)
-				.finish(self.expressions_mut(), origin),
-			hir::Expression::Call(c) => {
-				let function = self.collect_expression(c.function);
-				let arguments = c
-					.arguments
-					.iter()
-					.map(|arg| self.collect_expression(*arg))
-					.collect::<Vec<_>>();
-				self.builder()
-					.call(function, arguments, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
+			// Desugar indexed array literal into arrayNd call
+			hir::Expression::IndexedArrayLiteral(al) => alloc_expression(
+				LookupCall {
+					function: self.parent.ids.array_nd,
+					arguments: vec![
+						if al.indices.len() == 1 {
+							self.collect_expression(al.indices[0])
+						} else {
+							alloc_expression(
+								ArrayLiteral(
+									al.indices
+										.iter()
+										.map(|e| self.collect_expression(*e))
+										.collect(),
+								),
+								self,
+								origin,
+							)
+						},
+						alloc_expression(
+							ArrayLiteral(
+								al.members
+									.iter()
+									.map(|e| self.collect_expression(*e))
+									.collect(),
+							),
+							self,
+							origin,
+						),
+					],
+				},
+				self,
+				origin,
+			),
+			hir::Expression::BooleanLiteral(b) => alloc_expression(*b, self, origin),
+			hir::Expression::Call(c) => alloc_expression(
+				Call {
+					function: Box::new(self.collect_expression(c.function)),
+					arguments: c
+						.arguments
+						.iter()
+						.map(|arg| self.collect_expression(*arg))
+						.collect(),
+				},
+				self,
+				origin,
+			),
 			hir::Expression::Case(c) => {
 				let scrutinee_origin =
 					EntityRef::new(self.parent.db.upcast(), self.item, c.expression);
-				let scrutinee =
-					self.introduce_declaration(false, scrutinee_origin, |collector, _| {
-						collector.collect_expression(c.expression)
-					});
-				let branches = c
-					.cases
-					.iter()
-					.map(|case| {
-						let pattern_origin =
-							EntityRef::new(self.parent.db.upcast(), self.item, case.pattern);
-						let pattern = self.collect_pattern(case.pattern);
-						let decls = self.collect_destructuring(scrutinee, false, case.pattern);
-						let result = self.collect_expression(case.value);
-						if decls.is_empty() {
-							CaseBranch::new(pattern, result)
-						} else {
-							CaseBranch::new(
-								pattern,
-								self.builder()
-									.let_expression(
-										decls.into_iter().map(LetItem::Declaration),
-										result,
-										self.expressions(),
-									)
-									.finish(self.expressions_mut(), pattern_origin),
-							)
-						}
-					})
-					.collect::<Vec<_>>();
-				let scrutinee_ident = self
-					.builder()
-					.identifier(scrutinee)
-					.finish(self.expressions_mut(), scrutinee_origin);
-				let case_expression = self
-					.builder()
-					.case(scrutinee_ident, branches, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin);
-				self.builder()
-					.let_expression(
-						[LetItem::Declaration(scrutinee)],
-						case_expression,
-						self.expressions(),
-					)
-					.finish(self.expressions_mut(), origin)
+				let scrutinee = self.introduce_declaration(false, scrutinee_origin, |collector| {
+					collector.collect_expression(c.expression)
+				});
+				alloc_expression(
+					Let {
+						items: vec![LetItem::Declaration(scrutinee)],
+						in_expression: Box::new(alloc_expression(
+							Case {
+								scrutinee: Box::new(alloc_expression(scrutinee, self, origin)),
+								branches: c
+									.cases
+									.iter()
+									.map(|case| {
+										let pattern_origin = EntityRef::new(
+											self.parent.db.upcast(),
+											self.item,
+											case.pattern,
+										);
+										let pattern = self.collect_pattern(case.pattern);
+										let decls = self.collect_destructuring(
+											scrutinee,
+											false,
+											case.pattern,
+										);
+										let result = self.collect_expression(case.value);
+										if decls.is_empty() {
+											CaseBranch::new(pattern, result)
+										} else {
+											CaseBranch::new(
+												pattern,
+												alloc_expression(
+													Let {
+														items: decls
+															.into_iter()
+															.map(LetItem::Declaration)
+															.collect(),
+														in_expression: Box::new(result),
+													},
+													self,
+													pattern_origin,
+												),
+											)
+										}
+									})
+									.collect(),
+							},
+							self,
+							origin,
+						)),
+					},
+					self,
+					origin,
+				)
 			}
-			hir::Expression::FloatLiteral(f) => self
-				.builder()
-				.float(*f)
-				.with_annotations(annotations)
-				.finish(self.expressions_mut(), origin),
+			hir::Expression::FloatLiteral(f) => alloc_expression(*f, self, origin),
 			hir::Expression::Identifier(_) => {
 				let res = self.types.name_resolution(idx).unwrap();
-				let ident = ExpressionData::Identifier(
-					self.parent
-						.resolutions
-						.get(&res)
-						.unwrap_or_else(|| {
-							panic!(
-								"Did not lower {:?} at {:?} used by {:?} at {:?}",
-								res,
-								NodeRef::from(res.into_entity(self.parent.db.upcast()))
-									.source_span(self.parent.db.upcast()),
-								ExpressionRef::new(self.item, idx),
-								NodeRef::from(EntityRef::new(
-									self.parent.db.upcast(),
-									self.item,
-									idx
-								))
+				let ident = self
+					.parent
+					.resolutions
+					.get(&res.pattern())
+					.unwrap_or_else(|| {
+						panic!(
+							"Did not lower {:?} at {:?} used by {:?} at {:?}",
+							res,
+							NodeRef::from(res.pattern().into_entity(self.parent.db.upcast()))
 								.source_span(self.parent.db.upcast()),
+							ExpressionRef::new(self.item, idx),
+							NodeRef::from(EntityRef::new(self.parent.db.upcast(), self.item, idx))
+								.source_span(self.parent.db.upcast()),
+						)
+					});
+				alloc_expression(
+					match (ident, res) {
+						(
+							ResolvedIdentifier::Function(f),
+							hir::NameResolution::PolymorphicFunction(_, tvs),
+						) => ResolvedIdentifier::PolymorphicFunction(
+							*f,
+							Box::new(TyVarInstantiations::new(
+								self.parent.model[*f].type_inst_vars(),
+								tvs,
+							)),
+						),
+						_ => ident.clone(),
+					},
+					self,
+					origin,
+				)
+			}
+			hir::Expression::IfThenElse(ite) => alloc_expression(
+				IfThenElse {
+					branches: ite
+						.branches
+						.iter()
+						.map(|b| {
+							Branch::new(
+								self.collect_expression(b.condition),
+								self.collect_expression(b.result),
 							)
 						})
-						.clone(),
-				);
-				let allocator = self.expressions_mut();
-				let idx = allocator.new_unchecked(origin, ty, ident);
-				for ann in annotations {
-					allocator.annotate_expression(idx, ann);
-				}
-				idx
-			}
-			hir::Expression::IfThenElse(ite) => {
-				let branches = ite
-					.branches
-					.iter()
-					.map(|b| {
-						Branch::new(
-							self.collect_expression(b.condition),
-							self.collect_expression(b.result),
-						)
-					})
-					.collect::<Vec<_>>();
-				let else_result = if let Some(e) = ite.else_result {
-					self.collect_expression(e)
-				} else {
-					self.collect_default_else(ty, origin.into())
-				};
-				self.builder()
-					.if_then_else(branches, else_result, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
-			hir::Expression::Infinity => self
-				.builder()
-				.infinity()
-				.with_annotations(annotations)
-				.finish(self.expressions_mut(), origin),
-			hir::Expression::IntegerLiteral(i) => self
-				.builder()
-				.integer(*i)
-				.with_annotations(annotations)
-				.finish(self.expressions_mut(), origin),
+						.collect(),
+					else_result: Box::new(
+						ite.else_result
+							.map(|e| self.collect_expression(e))
+							.unwrap_or_else(|| self.collect_default_else(ty, origin.into())),
+					),
+				},
+				self,
+				origin,
+			),
+			hir::Expression::Infinity => alloc_expression(Infinity, self, origin),
+			hir::Expression::IntegerLiteral(i) => alloc_expression(*i, self, origin),
 			hir::Expression::Lambda(l) => {
 				let fn_type = match ty.lookup(db.upcast()) {
 					TyData::Function(_, f) => f,
@@ -866,7 +918,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				let return_type = l
 					.return_type
 					.map(|r| self.collect_domain(r, fn_type.return_type, false))
-					.unwrap_or_else(|| Domain::unbounded(fn_type.return_type));
+					.unwrap_or_else(|| Domain::unbounded(origin, fn_type.return_type));
 				let mut decls = Vec::new();
 				let parameters = l
 					.parameters
@@ -883,127 +935,135 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					})
 					.collect::<Vec<_>>();
 				let body = self.collect_expression(l.body);
-				let b = if decls.is_empty() {
-					body
-				} else {
-					let body_entity = EntityRef::new(self.parent.db.upcast(), self.item, l.body);
-					self.builder()
-						.let_expression(
-							decls.into_iter().map(LetItem::Declaration),
-							body,
-							self.expressions(),
-						)
-						.finish(self.expressions_mut(), body_entity)
-				};
-				self.builder()
-					.lambda(return_type, parameters, b)
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
+				alloc_expression(
+					Lambda {
+						domain: Box::new(return_type),
+						parameters,
+						body: Box::new(if decls.is_empty() {
+							body
+						} else {
+							let body_entity =
+								EntityRef::new(self.parent.db.upcast(), self.item, l.body);
+							alloc_expression(
+								Let {
+									items: decls.into_iter().map(LetItem::Declaration).collect(),
+									in_expression: Box::new(body),
+								},
+								self,
+								body_entity,
+							)
+						}),
+					},
+					self,
+					origin,
+				)
 			}
-			hir::Expression::Let(l) => {
-				let items = l
-					.items
-					.iter()
-					.flat_map(|i| match i {
-						hir::LetItem::Constraint(c) => {
-							let constraint = self
+			hir::Expression::Let(l) => alloc_expression(
+				Let {
+					items: l
+						.items
+						.iter()
+						.flat_map(|i| match i {
+							hir::LetItem::Constraint(c) => {
+								let constraint = self
+									.parent
+									.collect_constraint(self.item, c, self.data, false);
+								vec![LetItem::Constraint(constraint)]
+							}
+							hir::LetItem::Declaration(d) => self
 								.parent
-								.collect_constraint(self.item, c, self.data, false);
-							vec![LetItem::Constraint(constraint)]
-						}
-						hir::LetItem::Declaration(d) => self
-							.parent
-							.collect_declaration(self.item, d, self.data, false)
-							.into_iter()
-							.map(LetItem::Declaration)
-							.collect::<Vec<_>>(),
-					})
-					.collect::<Vec<_>>();
-				let in_expression = self.collect_expression(l.in_expression);
-				self.builder()
-					.let_expression(items, in_expression, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
-			hir::Expression::RecordAccess(ra) => {
-				let record = self.collect_expression(ra.record);
-				self.builder()
-					.record_access(record, ra.field, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
-			hir::Expression::RecordLiteral(rl) => {
-				let fields = rl
-					.fields
-					.iter()
-					.map(|(i, v)| {
-						(
-							self.data[*i].identifier().unwrap(),
-							self.collect_expression(*v),
-						)
-					})
-					.collect::<Vec<_>>();
-				self.builder()
-					.record(fields, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
+								.collect_declaration(self.item, d, self.data, false)
+								.into_iter()
+								.map(LetItem::Declaration)
+								.collect::<Vec<_>>(),
+						})
+						.collect(),
+					in_expression: Box::new(self.collect_expression(l.in_expression)),
+				},
+				self,
+				origin,
+			),
+			hir::Expression::RecordAccess(ra) => alloc_expression(
+				RecordAccess {
+					record: Box::new(self.collect_expression(ra.record)),
+					field: ra.field,
+				},
+				self,
+				origin,
+			),
+			hir::Expression::RecordLiteral(rl) => alloc_expression(
+				RecordLiteral(
+					rl.fields
+						.iter()
+						.map(|(i, v)| {
+							(
+								self.data[*i].identifier().unwrap(),
+								self.collect_expression(*v),
+							)
+						})
+						.collect(),
+				),
+				self,
+				origin,
+			),
 			hir::Expression::SetComprehension(c) => {
 				let mut generators = Vec::with_capacity(c.generators.len());
 				for g in c.generators.iter() {
 					self.collect_generator(g, &mut generators);
 				}
-				let template = self.collect_expression(c.template);
-				self.builder()
-					.set_comprehension(generators, template, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
+				alloc_expression(
+					SetComprehension {
+						generators,
+						template: Box::new(self.collect_expression(c.template)),
+					},
+					self,
+					origin,
+				)
 			}
-			hir::Expression::SetLiteral(sl) => {
-				let members = sl
-					.members
-					.iter()
-					.map(|m| self.collect_expression(*m))
-					.collect::<Vec<_>>();
-				self.builder()
-					.set(members, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
+			hir::Expression::SetLiteral(sl) => alloc_expression(
+				SetLiteral(
+					sl.members
+						.iter()
+						.map(|m| self.collect_expression(*m))
+						.collect(),
+				),
+				self,
+				origin,
+			),
 			hir::Expression::Slice(_) => {
 				unreachable!("Slice used outside of array access")
 			}
-			hir::Expression::StringLiteral(sl) => self
-				.builder()
-				.string(sl.clone())
-				.with_annotations(annotations)
-				.finish(self.expressions_mut(), origin),
-			hir::Expression::TupleAccess(ta) => {
-				let tuple = self.collect_expression(ta.tuple);
-				self.builder()
-					.tuple_access(tuple, ta.field, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
-			hir::Expression::TupleLiteral(tl) => {
-				let fields = tl
-					.fields
-					.iter()
-					.map(|f| self.collect_expression(*f))
-					.collect::<Vec<_>>();
-				self.builder()
-					.tuple(fields, self.expressions())
-					.with_annotations(annotations)
-					.finish(self.expressions_mut(), origin)
-			}
-			_ => unimplemented!("{:?}", &self.data[idx]),
+			hir::Expression::StringLiteral(sl) => alloc_expression(sl.clone(), self, origin),
+			hir::Expression::TupleAccess(ta) => alloc_expression(
+				TupleAccess {
+					tuple: Box::new(self.collect_expression(ta.tuple)),
+					field: ta.field,
+				},
+				self,
+				origin,
+			),
+			hir::Expression::TupleLiteral(tl) => alloc_expression(
+				TupleLiteral(
+					tl.fields
+						.iter()
+						.map(|f| self.collect_expression(*f))
+						.collect(),
+				),
+				self,
+				origin,
+			),
+			hir::Expression::Missing => unreachable!("Missing expression"),
 		};
-		let result_ty = self.expressions()[result].ty();
+		result.annotations_mut().extend(
+			self.data
+				.annotations(idx)
+				.map(|ann| self.collect_expression(ann)),
+		);
 		assert_eq!(
-			result_ty,
+			result.ty(),
 			ty,
 			"Type by construction ({}) disagrees with typechecker ({}) at {:?}",
-			result_ty.pretty_print(db.upcast()),
+			result.ty().pretty_print(db.upcast()),
 			ty.pretty_print(db.upcast()),
 			NodeRef::from(origin).source_span(db.upcast())
 		);
@@ -1016,21 +1076,22 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		collection: ArenaIndex<hir::Expression>,
 		indices: ArenaIndex<hir::Expression>,
 		origin: impl Into<Origin>,
-	) -> ExpressionBuilderWithData {
+	) -> Expression {
+		let origin: Origin = origin.into();
 		let collection_entity = EntityRef::new(self.parent.db.upcast(), self.item, collection);
 		let indices_entity = EntityRef::new(self.parent.db.upcast(), self.item, indices);
 
 		let mut decls = Vec::new();
 		let collection_decl = if matches!(&self.data[collection], hir::Expression::Identifier(_)) {
-			let idx = self.collect_expression(collection);
-			match &*self.expressions()[idx] {
+			let expr = self.collect_expression(collection);
+			match &*expr {
 				ExpressionData::Identifier(ResolvedIdentifier::Declaration(decl)) => *decl,
 				_ => unreachable!(),
 			}
 		} else {
 			// Add declaration to store collection
 			let origin = EntityRef::new(self.parent.db.upcast(), self.item, collection);
-			let decl = self.introduce_declaration(false, origin, |collector, _| {
+			let decl = self.introduce_declaration(false, origin, |collector| {
 				collector.collect_expression(collection)
 			});
 			decls.push(decl);
@@ -1045,52 +1106,52 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				if let hir::Expression::TupleLiteral(tl) = &self.data[indices] {
 					for (i, (ty, e)) in fs.iter().zip(tl.fields.iter()).enumerate() {
 						let index_entity = EntityRef::new(self.parent.db.upcast(), self.item, *e);
-						let decl =
-							self.introduce_declaration(false, index_entity, |collector, decl| {
-								if let hir::Expression::Slice(s) = &collector.data[*e] {
-									// Rewrite infinite slice .. into `'..'(index_set_mofn(c))`
-									let collection_ident = collector
-										.builder()
-										.identifier(collection_decl)
-										.finish(collector.expressions_mut(), collection_entity);
-									let index_set = collector
-										.builder()
-										.lookup_call(
-											Identifier::new(
-												format!("index_set_{}of{}", i + 1, array_dims),
-												collector.parent.db.upcast(),
-											),
-											[collection_ident],
-											collector.expressions(),
-										)
-										.finish(collector.expressions_mut(), index_entity);
-									let call = collector
-										.builder()
-										.lookup_call(*s, [index_set], collector.expressions())
-										.finish(collector.expressions_mut(), index_entity);
-									slices.push((decl, true, index_entity));
-									call
-								} else if ty.is_set(collector.parent.db.upcast()) {
-									// Slice
-									slices.push((decl, true, index_entity));
-									collector.collect_expression(*e)
-								} else {
-									// Rewrite index as slice of {i}
-									let index = collector.collect_expression(*e);
-									let set = collector
-										.builder()
-										.set([index], collector.expressions())
-										.finish(collector.expressions_mut(), index_entity);
-									slices.push((decl, false, index_entity));
-									set
-								}
-							});
+						let mut is_set = true;
+						let decl = self.introduce_declaration(false, index_entity, |collector| {
+							if let hir::Expression::Slice(s) = &collector.data[*e] {
+								// Rewrite infinite slice .. into `'..'(index_set_mofn(c))`
+								alloc_expression(
+									LookupCall {
+										function: *s,
+										arguments: vec![alloc_expression(
+											LookupCall {
+												function: Identifier::new(
+													format!("index_set_{}of{}", i + 1, array_dims),
+													collector.parent.db.upcast(),
+												),
+												arguments: vec![alloc_expression(
+													collection_decl,
+													collector,
+													collection_entity,
+												)],
+											},
+											collector,
+											index_entity,
+										)],
+									},
+									collector,
+									index_entity,
+								)
+							} else if ty.is_set(collector.parent.db.upcast()) {
+								// Slice
+								collector.collect_expression(*e)
+							} else {
+								// Rewrite index as slice of {i}
+								is_set = false;
+								alloc_expression(
+									SetLiteral(vec![collector.collect_expression(*e)]),
+									collector,
+									index_entity,
+								)
+							}
+						});
+						slices.push((decl, is_set, index_entity));
 						decls.push(decl);
 					}
 				} else {
 					// Expression which evaluates to a tuple
 					let indices_decl =
-						self.introduce_declaration(false, indices_entity, |collector, _| {
+						self.introduce_declaration(false, indices_entity, |collector| {
 							collector.collect_expression(indices)
 						});
 					decls.push(indices_decl);
@@ -1098,120 +1159,113 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						// Create declaration for each index
 						let is_set = f.is_set(self.parent.db.upcast());
 						let accessor =
-							self.introduce_declaration(false, indices_entity, |collector, decl| {
-								let ident = collector
-									.builder()
-									.identifier(indices_decl)
-									.finish(collector.expressions_mut(), indices_entity);
-								let ta = collector
-									.builder()
-									.tuple_access(
-										ident,
-										IntegerLiteral(i as i64 + 1),
-										collector.expressions(),
-									)
-									.finish(collector.expressions_mut(), indices_entity);
+							self.introduce_declaration(false, indices_entity, |collector| {
+								let ta = alloc_expression(
+									TupleAccess {
+										tuple: Box::new(alloc_expression(
+											indices_decl,
+											collector,
+											indices_entity,
+										)),
+										field: IntegerLiteral(i as i64 + 1),
+									},
+									collector,
+									indices_entity,
+								);
 								if is_set {
-									slices.push((decl, true, indices_entity));
 									ta
 								} else {
 									// Rewrite as {i}
-									let sl = collector
-										.builder()
-										.set([ta], collector.expressions())
-										.finish(collector.expressions_mut(), indices_entity);
-									slices.push((decl, false, indices_entity));
-									sl
+									alloc_expression(
+										SetLiteral(vec![ta]),
+										collector,
+										indices_entity,
+									)
 								}
 							});
+
+						slices.push((accessor, is_set, indices_entity));
 						decls.push(accessor);
 					}
 				}
 			}
 			_ => {
 				// 1D slicing, so must be a set index
-				let decl = self.introduce_declaration(false, indices_entity, |collector, decl| {
+				let decl = self.introduce_declaration(false, indices_entity, |collector| {
 					if let hir::Expression::Slice(s) = &collector.data[indices] {
 						// Rewrite infinite slice .. into `'..'(index_set(c))`
-						let collection_ident = collector
-							.builder()
-							.identifier(collection_decl)
-							.finish(collector.expressions_mut(), collection_entity);
-						let index_set = collector
-							.builder()
-							.lookup_call(
-								collector.parent.ids.index_set,
-								[collection_ident],
-								collector.expressions(),
-							)
-							.finish(collector.expressions_mut(), indices_entity);
-						let call = collector
-							.builder()
-							.lookup_call(*s, [index_set], collector.expressions())
-							.finish(collector.expressions_mut(), indices_entity);
-						slices.push((decl, true, indices_entity));
-						call
+						alloc_expression(
+							LookupCall {
+								function: *s,
+								arguments: vec![alloc_expression(
+									LookupCall {
+										function: collector.parent.ids.index_set,
+										arguments: vec![alloc_expression(
+											collection_decl,
+											collector,
+											collection_entity,
+										)],
+									},
+									collector,
+									indices_entity,
+								)],
+							},
+							collector,
+							indices_entity,
+						)
 					} else {
-						let rhs = collector.collect_expression(indices);
-						slices.push((decl, true, indices_entity));
-						rhs
+						collector.collect_expression(indices)
 					}
 				});
+				slices.push((decl, true, indices_entity));
 				decls.push(decl);
 			}
 		}
-
-		let collection_ident = self
-			.builder()
-			.identifier(collection_decl)
-			.finish(self.expressions_mut(), collection_entity);
-		let slice_elements = slices
-			.iter()
-			.map(|(decl, _, origin)| {
-				let ident = self
-					.builder()
-					.identifier(*decl)
-					.finish(self.expressions_mut(), *origin);
-				self.builder()
-					.lookup_call(self.parent.ids.erase_enum, [ident], self.expressions())
-					.finish(self.expressions_mut(), *origin)
-			})
-			.collect::<Vec<_>>();
-		let slice_array = self
-			.builder()
-			.array(slice_elements, self.expressions())
-			.finish(self.expressions_mut(), indices_entity);
-		let dims_elements = slices
-			.iter()
-			.filter_map(|(decl, is_slice, origin)| {
-				if *is_slice {
-					Some(
-						self.builder()
-							.identifier(*decl)
-							.finish(self.expressions_mut(), *origin),
-					)
-				} else {
-					None
-				}
-			})
-			.collect::<Vec<_>>();
-		let call = self
-			.builder()
-			.lookup_call(
-				Identifier::new(
-					format!("slice_{}d", dims_elements.len()),
-					self.parent.db.upcast(),
-				),
-				[collection_ident, slice_array]
-					.into_iter()
-					.chain(dims_elements),
-				self.expressions(),
-			)
-			.finish(self.expressions_mut(), origin);
-		self.builder().let_expression(
-			decls.into_iter().map(LetItem::Declaration),
-			call,
-			self.expressions(),
+		let collection_ident = alloc_expression(collection_decl, self, collection_entity);
+		let slice_array = alloc_expression(
+			ArrayLiteral(
+				slices
+					.iter()
+					.map(|(decl, _, origin)| {
+						alloc_expression(
+							LookupCall {
+								function: self.parent.ids.erase_enum,
+								arguments: vec![alloc_expression(*decl, self, *origin)],
+							},
+							self,
+							*origin,
+						)
+					})
+					.collect(),
+			),
+			self,
+			indices_entity,
+		);
+		let mut arguments = vec![collection_ident, slice_array];
+		arguments.extend(slices.iter().filter_map(|(decl, is_slice, origin)| {
+			if *is_slice {
+				Some(alloc_expression(*decl, self, *origin))
+			} else {
+				None
+			}
+		}));
+		alloc_expression(
+			Let {
+				items: decls.into_iter().map(LetItem::Declaration).collect(),
+				in_expression: Box::new(alloc_expression(
+					LookupCall {
+						function: Identifier::new(
+							format!("slice_{}d", arguments.len() - 2),
+							self.parent.db.upcast(),
+						),
+						arguments,
+					},
+					self,
+					origin,
+				)),
+			},
+			self,
+			origin,
 		)
 	}
 
@@ -1232,38 +1286,38 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							PatternTy::Variable(ty) | PatternTy::Destructuring(ty) => *ty,
 							_ => unreachable!(),
 						};
-						let mut declaration = DeclarationItem::new(false, origin);
-						declaration.set_domain(Domain::unbounded(ty));
-						let decl = self.parent.model.add_declaration(declaration);
+						let declaration = Declaration::new(false, Domain::unbounded(origin, ty));
+						let decl = self
+							.parent
+							.model
+							.add_declaration(Item::new(declaration, origin));
 						let asgs = self.collect_destructuring(decl, false, *p);
 						if !asgs.is_empty() {
 							// Turn destructuring into where clause of case matching pattern
 							let pattern = self.collect_pattern(*p);
-							let ident = self
-								.builder()
-								.identifier(decl)
-								.finish(self.expressions_mut(), origin);
-							let branches = [
-								CaseBranch::new(
-									pattern,
-									self.builder()
-										.boolean(BooleanLiteral(true))
-										.finish(self.expressions_mut(), origin),
-								),
-								CaseBranch::new(
-									Pattern::Anonymous(match &self.types[*p] {
-										PatternTy::Destructuring(ty) => *ty,
-										_ => unreachable!(),
-									}),
-									self.builder()
-										.boolean(BooleanLiteral(false))
-										.finish(self.expressions_mut(), origin),
-								),
-							];
-							let case = self
-								.builder()
-								.case(ident, branches, self.expressions())
-								.finish(self.expressions_mut(), origin);
+							let case = alloc_expression(
+								Case {
+									scrutinee: Box::new(alloc_expression(decl, self, origin)),
+									branches: vec![
+										CaseBranch::new(
+											pattern,
+											alloc_expression(BooleanLiteral(true), self, origin),
+										),
+										CaseBranch::new(
+											Pattern::new(
+												PatternData::Anonymous(match &self.types[*p] {
+													PatternTy::Destructuring(ty) => *ty,
+													_ => unreachable!(),
+												}),
+												origin,
+											),
+											alloc_expression(BooleanLiteral(false), self, origin),
+										),
+									],
+								},
+								self,
+								origin,
+							);
 							where_clauses.push(case);
 						}
 						assignments.extend(asgs);
@@ -1285,30 +1339,40 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						generators.push(Generator::Iterator {
 							declarations,
 							collection,
-							where_clause: Some(where_clauses[0]),
+							where_clause: Some(where_clauses.pop().unwrap()),
 						});
 					} else {
-						let arguments = self
-							.builder()
-							.array(where_clauses, self.expressions())
-							.finish(self.expressions_mut(), origin);
-						let call = self
-							.builder()
-							.lookup_call(self.parent.ids.forall, [arguments], self.expressions())
-							.finish(self.expressions_mut(), origin);
+						let call = alloc_expression(
+							LookupCall {
+								function: self.parent.ids.forall,
+								arguments: vec![alloc_expression(
+									ArrayLiteral(where_clauses),
+									self,
+									origin,
+								)],
+							},
+							self,
+							origin,
+						);
 						generators.push(Generator::Iterator {
 							declarations,
 							collection,
 							where_clause: Some(call),
 						});
 					}
-					let last = assignments.len() - 1;
-					for (i, assignment) in assignments.into_iter().enumerate() {
+					let mut iter = assignments.into_iter();
+					let mut assignment = iter.next().unwrap();
+					for next in iter {
 						generators.push(Generator::Assignment {
 							assignment,
-							where_clause: if i == last { where_clause } else { None },
+							where_clause: None,
 						});
+						assignment = next;
 					}
+					generators.push(Generator::Assignment {
+						assignment,
+						where_clause,
+					});
 				}
 			}
 			hir::Generator::Assignment {
@@ -1316,35 +1380,31 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				value,
 				where_clause,
 			} => {
-				let assignment = self.parent.model.add_declaration(DeclarationItem::new(
-					false,
+				let def = ExpressionCollector::new(self.parent, self.data, self.item, self.types)
+					.collect_expression(*value);
+				let mut assignment =
+					Declaration::new(false, Domain::unbounded(def.origin(), def.ty()));
+				assignment.set_definition(def);
+				if let Some(name) = self.data[*pattern].identifier() {
+					assignment.set_name(name);
+				}
+				let idx = self.parent.model.add_declaration(Item::new(
+					assignment,
 					EntityRef::new(self.parent.db.upcast(), self.item, *pattern),
 				));
-				let def = ExpressionCollector::new(
-					self.parent,
-					self.data,
-					self.item,
-					assignment,
-					self.types,
-				)
-				.collect_expression(*value);
-				self.parent.model[assignment].set_definition(def);
-				if let Some(name) = self.data[*pattern].identifier() {
-					self.parent.model[assignment].set_name(name);
-					self.parent.resolutions.insert(
-						PatternRef::new(self.item, *pattern),
-						ResolvedIdentifier::Declaration(assignment),
-					);
-				}
+				self.parent.resolutions.insert(
+					PatternRef::new(self.item, *pattern),
+					ResolvedIdentifier::Declaration(idx),
+				);
 				generators.push(Generator::Assignment {
-					assignment,
+					assignment: idx,
 					where_clause: where_clause.map(|w| self.collect_expression(w)),
 				});
 			}
 		}
 	}
 
-	fn collect_default_else(&mut self, ty: Ty, origin: Origin) -> ExpressionId {
+	fn collect_default_else(&mut self, ty: Ty, origin: Origin) -> Expression {
 		let db = self.parent.db;
 		match ty.lookup(db.upcast()) {
 			TyData::Boolean(_, OptType::Opt)
@@ -1359,48 +1419,36 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			| TyData::Tuple(OptType::Opt, _)
 			| TyData::Record(OptType::Opt, _)
 			| TyData::Function(OptType::Opt, _)
-			| TyData::TyVar(_, Some(OptType::Opt), _) => self
-				.builder()
-				.absent()
-				.finish(self.expressions_mut(), origin),
-			TyData::Boolean(_, _) => self
-				.builder()
-				.boolean(BooleanLiteral(true))
-				.finish(self.expressions_mut(), origin),
-			TyData::String(_) => self
-				.builder()
-				.string(StringLiteral::new("", db.upcast()))
-				.finish(self.expressions_mut(), origin),
-			TyData::Annotation(_) => self
-				.builder()
-				.lookup_identifier(self.parent.ids.empty_annotation)
-				.finish(self.expressions_mut(), origin),
-			TyData::Array { .. } => self
-				.builder()
-				.array([], self.expressions())
-				.finish(self.expressions_mut(), origin),
-			TyData::Set(_, _, _) => self
-				.builder()
-				.set([], self.expressions())
-				.finish(self.expressions_mut(), origin),
-			TyData::Tuple(_, fs) => {
-				let fields = fs
-					.iter()
-					.map(|f| self.collect_default_else(*f, origin))
-					.collect::<Vec<_>>();
-				self.builder()
-					.tuple(fields, self.expressions())
-					.finish(self.expressions_mut(), origin)
+			| TyData::TyVar(_, Some(OptType::Opt), _) => alloc_expression(Absent, self, origin),
+			TyData::Boolean(_, _) => alloc_expression(BooleanLiteral(true), self, origin),
+			TyData::String(_) => alloc_expression(
+				StringLiteral::new("", self.parent.db.upcast()),
+				self,
+				origin,
+			),
+			TyData::Annotation(_) => {
+				alloc_expression(self.parent.ids.empty_annotation, self, origin)
 			}
-			TyData::Record(_, fs) => {
-				let fields = fs
-					.iter()
-					.map(|(i, t)| (Identifier(*i), self.collect_default_else(*t, origin)))
-					.collect::<Vec<_>>();
-				self.builder()
-					.record(fields, self.expressions())
-					.finish(self.expressions_mut(), origin)
-			}
+			TyData::Array { .. } => alloc_expression(ArrayLiteral::default(), self, origin),
+			TyData::Set(_, _, _) => alloc_expression(SetLiteral::default(), self, origin),
+			TyData::Tuple(_, fs) => alloc_expression(
+				TupleLiteral(
+					fs.iter()
+						.map(|f| self.collect_default_else(*f, origin))
+						.collect(),
+				),
+				self,
+				origin,
+			),
+			TyData::Record(_, fs) => alloc_expression(
+				RecordLiteral(
+					fs.iter()
+						.map(|(i, t)| (Identifier(*i), self.collect_default_else(*t, origin)))
+						.collect(),
+				),
+				self,
+				origin,
+			),
 			_ => unreachable!("No default value for this type"),
 		}
 	}
@@ -1408,22 +1456,24 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 	// Collect a domain from a user ascribed type
 	fn collect_domain(&mut self, t: ArenaIndex<hir::Type>, ty: Ty, is_type_alias: bool) -> Domain {
 		let db = self.parent.db;
+		let origin = EntityRef::new(db.upcast(), self.item, t);
 		match (&self.data[t], ty.lookup(db.upcast())) {
 			(hir::Type::Bounded { domain, .. }, _) => {
 				if let Some(res) = self.types.name_resolution(*domain) {
-					let res_types = db.lookup_item_types(res.item());
-					match &res_types[res.pattern()] {
+					let res_types = db.lookup_item_types(res.pattern().item());
+					match &res_types[res.pattern().pattern()] {
 						// Identifier is actually a type, not a domain expression
-						PatternTy::TyVar(_) => return Domain::unbounded(ty),
+						PatternTy::TyVar(_) => {
+							return Domain::unbounded(origin, ty);
+						}
 						PatternTy::TypeAlias(_) => {
-							let model = res.item().model(db.upcast());
-							match res.item().local_item_ref(db.upcast()) {
+							let model = res.pattern().item().model(db.upcast());
+							match res.pattern().item().local_item_ref(db.upcast()) {
 								LocalItemRef::TypeAlias(ta) => {
 									let mut c = ExpressionCollector::new(
 										self.parent,
 										&model[ta].data,
-										res.item(),
-										self.thir_item,
+										res.pattern().item(),
 										&res_types,
 									);
 									return c.collect_domain(model[ta].aliased_type, ty, true);
@@ -1438,22 +1488,18 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					// Replace expressions with identifiers pointing to declarations for those expressions
 					let er = ExpressionRef::new(self.item, *domain);
 					let origin = EntityRef::new(db.upcast(), self.item, *domain);
-					let ident = self
-						.builder()
-						.identifier(self.parent.type_alias_expressions[&er])
-						.finish(self.expressions_mut(), origin);
 					Domain::bounded(
 						db,
-						self.expressions(),
+						origin,
 						ty.inst(db.upcast()).unwrap(),
 						ty.opt(db.upcast()).unwrap(),
-						ident,
+						alloc_expression(self.parent.type_alias_expressions[&er], self, origin),
 					)
 				} else {
 					let e = self.collect_expression(*domain);
 					Domain::bounded(
 						db,
-						self.expressions(),
+						origin,
 						ty.inst(db.upcast()).unwrap(),
 						ty.opt(db.upcast()).unwrap(),
 						e,
@@ -1471,52 +1517,52 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					element: el,
 					..
 				},
-			) => {
-				let dim = self.collect_domain(*dimensions, d, is_type_alias);
-				let el = self.collect_domain(*element, el, is_type_alias);
-				Domain::array(db, dim, el)
-			}
+			) => Domain::array(
+				db,
+				origin,
+				self.collect_domain(*dimensions, d, is_type_alias),
+				self.collect_domain(*element, el, is_type_alias),
+			),
 			(hir::Type::Set { element, .. }, TyData::Set(inst, opt, e)) => Domain::set(
 				db,
+				origin,
 				inst,
 				opt,
 				self.collect_domain(*element, e, is_type_alias),
 			),
-			(hir::Type::Tuple { fields, .. }, TyData::Tuple(_, fs)) => {
-				let domains = fields
+			(hir::Type::Tuple { fields, .. }, TyData::Tuple(_, fs)) => Domain::tuple(
+				db,
+				origin,
+				fields
 					.iter()
 					.zip(fs.iter())
-					.map(|(f, ty)| self.collect_domain(*f, *ty, is_type_alias))
-					.collect::<Vec<_>>();
-				Domain::tuple(db, domains)
-			}
-			(hir::Type::Record { fields, .. }, TyData::Record(_, fs)) => {
-				let domains = fs
-					.iter()
-					.map(|(i, ty)| {
-						let ident = Identifier(*i);
-						(
-							ident,
-							self.collect_domain(
-								fields
-									.iter()
-									.find_map(|(p, t)| {
-										if self.data[*p].identifier().unwrap() == ident {
-											Some(*t)
-										} else {
-											None
-										}
-									})
-									.unwrap(),
-								*ty,
-								is_type_alias,
-							),
-						)
-					})
-					.collect::<Vec<_>>();
-				Domain::record(db, domains)
-			}
-			_ => Domain::unbounded(ty),
+					.map(|(f, ty)| self.collect_domain(*f, *ty, is_type_alias)),
+			),
+			(hir::Type::Record { fields, .. }, TyData::Record(_, fs)) => Domain::record(
+				db,
+				origin,
+				fs.iter().map(|(i, ty)| {
+					let ident = Identifier(*i);
+					(
+						ident,
+						self.collect_domain(
+							fields
+								.iter()
+								.find_map(|(p, t)| {
+									if self.data[*p].identifier().unwrap() == ident {
+										Some(*t)
+									} else {
+										None
+									}
+								})
+								.unwrap(),
+							*ty,
+							is_type_alias,
+						),
+					)
+				}),
+			),
+			_ => Domain::unbounded(origin, ty),
 		}
 	}
 
@@ -1565,7 +1611,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						p
 					};
 					let pat = self.types.pattern_resolution(*function).unwrap();
-					let res = &self.parent.resolutions[&pat];
+					let res = &self.parent.resolutions[&pat.pattern()];
 					match res {
 						ResolvedIdentifier::Annotation(ann) => {
 							destructuring.push(DestructuringEntry::new(
@@ -1574,7 +1620,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 								destructuring_pattern,
 							));
 						}
-						ResolvedIdentifier::EnumerationMember(member) => {
+						ResolvedIdentifier::EnumerationMember(member, _) => {
 							let kind = match &self.types[p] {
 								PatternTy::Destructuring(ty) => {
 									EnumConstructorKind::from_ty(self.parent.db, *ty)
@@ -1644,46 +1690,57 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			.filter(|(_, item)| item.create)
 		{
 			let origin = EntityRef::new(self.parent.db.upcast(), self.item, item.pattern);
-			let decl = self.introduce_declaration(top_level, origin, |collector, _| {
-				let ident = collector
-					.builder()
-					.identifier(if item.parent == 0 {
+			let decl = self.introduce_declaration(top_level, origin, |collector| {
+				let ident = alloc_expression(
+					if item.parent == 0 {
 						root_decl
 					} else {
 						decl_map[&item.parent]
-					})
-					.finish(collector.expressions_mut(), origin);
+					},
+					collector,
+					origin,
+				);
 				match item.kind {
-					Destructuring::Annotation(a) => {
-						let dtor = collector
-							.builder()
-							.annotation_destructure(a)
-							.finish(collector.expressions_mut(), origin);
-						let call = collector
-							.builder()
-							.call(dtor, [ident], collector.expressions())
-							.finish(collector.expressions_mut(), origin);
-						call
-					}
-					Destructuring::Enumeration(e, k) => {
-						let dtor = collector
-							.builder()
-							.enum_destructure(e, k)
-							.finish(collector.expressions_mut(), origin);
-						let call = collector
-							.builder()
-							.call(dtor, [ident], collector.expressions())
-							.finish(collector.expressions_mut(), origin);
-						call
-					}
-					Destructuring::RecordAccess(f) => collector
-						.builder()
-						.record_access(ident, f, collector.expressions())
-						.finish(collector.expressions_mut(), origin),
-					Destructuring::TupleAccess(f) => collector
-						.builder()
-						.tuple_access(ident, f, collector.expressions())
-						.finish(collector.expressions_mut(), origin),
+					Destructuring::Annotation(a) => alloc_expression(
+						Call {
+							function: Box::new(alloc_expression(
+								AnnotationDestructure(a),
+								collector,
+								origin,
+							)),
+							arguments: vec![ident],
+						},
+						collector,
+						origin,
+					),
+					Destructuring::Enumeration(e, k) => alloc_expression(
+						Call {
+							function: Box::new(alloc_expression(
+								EnumDestructure(e, k),
+								collector,
+								origin,
+							)),
+							arguments: vec![ident],
+						},
+						collector,
+						origin,
+					),
+					Destructuring::RecordAccess(f) => alloc_expression(
+						RecordAccess {
+							record: Box::new(ident),
+							field: f,
+						},
+						collector,
+						origin,
+					),
+					Destructuring::TupleAccess(f) => alloc_expression(
+						TupleAccess {
+							tuple: Box::new(ident),
+							field: f,
+						},
+						collector,
+						origin,
+					),
 				}
 			});
 			if let Some(name) = item.name {
@@ -1706,113 +1763,128 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		let origin = EntityRef::new(db.upcast(), self.item, pattern);
 		let ty = match &self.types[pattern] {
 			PatternTy::Destructuring(ty) => *ty,
-			PatternTy::Variable(ty) | PatternTy::Argument(ty) => return Pattern::Anonymous(*ty),
+			PatternTy::Variable(ty) | PatternTy::Argument(ty) => {
+				return Pattern::new(PatternData::Anonymous(*ty), origin);
+			}
 			_ => unreachable!(),
 		};
-		match &self.data[pattern] {
-			hir::Pattern::Absent => Pattern::Expression(
-				self.builder()
-					.absent()
-					.finish(self.expressions_mut(), origin),
-			),
-			hir::Pattern::Anonymous => Pattern::Anonymous(ty),
-			hir::Pattern::Boolean(b) => Pattern::Expression(
-				self.builder()
-					.boolean(*b)
-					.finish(self.expressions_mut(), origin),
-			),
-			hir::Pattern::Call {
-				function,
-				arguments,
-			} => {
-				let args = arguments.iter().map(|a| self.collect_pattern(*a)).collect();
-				let pat = self.types.pattern_resolution(*function).unwrap();
-				let res = &self.parent.resolutions[&pat];
-				match res {
-					ResolvedIdentifier::Annotation(ann) => {
-						Pattern::AnnotationConstructor { item: *ann, args }
+		Pattern::new(
+			match &self.data[pattern] {
+				hir::Pattern::Absent => {
+					PatternData::Expression(Box::new(alloc_expression(Absent, self, origin)))
+				}
+				hir::Pattern::Anonymous => PatternData::Anonymous(ty),
+				hir::Pattern::Boolean(b) => {
+					PatternData::Expression(Box::new(alloc_expression(*b, self, origin)))
+				}
+				hir::Pattern::Call {
+					function,
+					arguments,
+				} => {
+					let args = arguments.iter().map(|a| self.collect_pattern(*a)).collect();
+					let pat = self.types.pattern_resolution(*function).unwrap();
+					let res = &self.parent.resolutions[&pat.pattern()];
+					match res {
+						ResolvedIdentifier::Annotation(ann) => {
+							PatternData::AnnotationConstructor { item: *ann, args }
+						}
+						ResolvedIdentifier::EnumerationMember(member, _) => {
+							PatternData::EnumConstructor {
+								member: *member,
+								kind: EnumConstructorKind::from_ty(self.parent.db, ty),
+								args,
+							}
+						}
+						_ => unreachable!(),
 					}
-					ResolvedIdentifier::EnumerationMember(member) => Pattern::EnumConstructor {
-						member: *member,
-						kind: EnumConstructorKind::from_ty(self.parent.db, ty),
-						args,
-					},
-					_ => unreachable!(),
 				}
-			}
-			hir::Pattern::Float { negated, value } => {
-				let v = self
-					.builder()
-					.float(*value)
-					.finish(self.expressions_mut(), origin);
-				Pattern::Expression(if *negated {
-					self.builder()
-						.lookup_call(self.parent.ids.minus, [v], self.expressions())
-						.finish(self.expressions_mut(), origin)
-				} else {
-					v
-				})
-			}
-			hir::Pattern::Identifier(_) => {
-				let pat = self.types.pattern_resolution(pattern).unwrap();
-				let res = &self.parent.resolutions[&pat];
-				match res {
-					ResolvedIdentifier::Annotation(a) => Pattern::Expression(
-						self.builder()
-							.annotation_constructor(*a)
-							.finish(self.expressions_mut(), origin),
-					),
-					ResolvedIdentifier::EnumerationMember(m) => Pattern::Expression(
-						self.builder()
-							.enum_atom(*m)
-							.finish(self.expressions_mut(), origin),
-					),
-					_ => unreachable!(),
+				hir::Pattern::Float { negated, value } => {
+					let v = alloc_expression(*value, self, origin);
+					PatternData::Expression(Box::new(if *negated {
+						alloc_expression(
+							LookupCall {
+								function: self.parent.ids.minus,
+								arguments: vec![v],
+							},
+							self,
+							origin,
+						)
+					} else {
+						v
+					}))
 				}
-			}
-			hir::Pattern::Infinity { negated } => {
-				let v = self
-					.builder()
-					.infinity()
-					.finish(self.expressions_mut(), origin);
-				Pattern::Expression(if *negated {
-					self.builder()
-						.lookup_call(self.parent.ids.minus, [v], self.expressions())
-						.finish(self.expressions_mut(), origin)
-				} else {
-					v
-				})
-			}
-			hir::Pattern::Integer { negated, value } => {
-				let v = self
-					.builder()
-					.integer(*value)
-					.finish(self.expressions_mut(), origin);
-				Pattern::Expression(if *negated {
-					self.builder()
-						.lookup_call(self.parent.ids.minus, [v], self.expressions())
-						.finish(self.expressions_mut(), origin)
-				} else {
-					v
-				})
-			}
-			hir::Pattern::Missing => unreachable!(),
-			hir::Pattern::Record { fields } => Pattern::Record(
-				fields
-					.iter()
-					.map(|(i, p)| (*i, self.collect_pattern(*p)))
-					.collect(),
-			),
-			hir::Pattern::String(s) => Pattern::Expression(
-				self.builder()
-					.string(s.clone())
-					.finish(self.expressions_mut(), origin),
-			),
-			hir::Pattern::Tuple { fields } => {
-				Pattern::Tuple(fields.iter().map(|f| self.collect_pattern(*f)).collect())
-			}
-		}
+				hir::Pattern::Identifier(_) => {
+					let pat = self.types.pattern_resolution(pattern).unwrap();
+					let res = &self.parent.resolutions[&pat.pattern()];
+					match res {
+						ResolvedIdentifier::Annotation(a) => {
+							PatternData::Expression(Box::new(alloc_expression(*a, self, origin)))
+						}
+						ResolvedIdentifier::EnumerationMember(m, _) => {
+							PatternData::Expression(Box::new(alloc_expression(
+								EnumConstructor(*m, EnumConstructorKind::Par),
+								self,
+								origin,
+							)))
+						}
+						_ => unreachable!(),
+					}
+				}
+				hir::Pattern::Infinity { negated } => {
+					let v = alloc_expression(Infinity, self, origin);
+					PatternData::Expression(Box::new(if *negated {
+						alloc_expression(
+							LookupCall {
+								function: self.parent.ids.minus,
+								arguments: vec![v],
+							},
+							self,
+							origin,
+						)
+					} else {
+						v
+					}))
+				}
+				hir::Pattern::Integer { negated, value } => {
+					let v = alloc_expression(*value, self, origin);
+					PatternData::Expression(Box::new(if *negated {
+						alloc_expression(
+							LookupCall {
+								function: self.parent.ids.minus,
+								arguments: vec![v],
+							},
+							self,
+							origin,
+						)
+					} else {
+						v
+					}))
+				}
+				hir::Pattern::Missing => unreachable!(),
+				hir::Pattern::Record { fields } => PatternData::Record(
+					fields
+						.iter()
+						.map(|(i, p)| (*i, self.collect_pattern(*p)))
+						.collect(),
+				),
+				hir::Pattern::String(s) => {
+					PatternData::Expression(Box::new(alloc_expression(s.clone(), self, origin)))
+				}
+				hir::Pattern::Tuple { fields } => {
+					PatternData::Tuple(fields.iter().map(|f| self.collect_pattern(*f)).collect())
+				}
+			},
+			origin,
+		)
 	}
+}
+
+fn alloc_expression(
+	data: impl ExpressionBuilder,
+	collector: &ExpressionCollector<'_, '_>,
+	origin: impl Into<Origin>,
+) -> Expression {
+	Expression::new(collector.parent.db, &collector.parent.model, origin, data)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

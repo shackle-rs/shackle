@@ -18,7 +18,7 @@ use crate::{
 	Error, Result, Warning,
 };
 
-use super::{Constructor, EnumConstructor, Generator};
+use super::{Constructor, EnumConstructor, Generator, MaybeIndexSet};
 
 /// Gets all variables in global scope.
 ///
@@ -538,6 +538,15 @@ impl ScopeCollector<'_> {
 		}
 		let e = &self.data[index];
 		match e {
+			Expression::Absent
+			| Expression::BooleanLiteral(_)
+			| Expression::FloatLiteral(_)
+			| Expression::Identifier(_)
+			| Expression::Infinity
+			| Expression::IntegerLiteral(_)
+			| Expression::Missing
+			| Expression::Slice(_)
+			| Expression::StringLiteral(_) => (),
 			Expression::ArrayAccess(aa) => {
 				self.collect_expression(aa.collection);
 				self.collect_expression(aa.indices);
@@ -554,6 +563,29 @@ impl ScopeCollector<'_> {
 				self.pop();
 			}
 			Expression::ArrayLiteral(al) => {
+				for e in al.members.iter() {
+					self.collect_expression(*e);
+				}
+			}
+			Expression::ArrayLiteral2D(al) => {
+				if let MaybeIndexSet::Indexed(es) = &al.rows {
+					for e in es.iter() {
+						self.collect_expression(*e);
+					}
+				}
+				if let MaybeIndexSet::Indexed(es) = &al.columns {
+					for e in es.iter() {
+						self.collect_expression(*e);
+					}
+				}
+				for e in al.members.iter() {
+					self.collect_expression(*e);
+				}
+			}
+			Expression::IndexedArrayLiteral(al) => {
+				for e in al.indices.iter() {
+					self.collect_expression(*e);
+				}
 				for e in al.members.iter() {
 					self.collect_expression(*e);
 				}
@@ -653,7 +685,6 @@ impl ScopeCollector<'_> {
 				self.collect_expression(l.body);
 				self.pop();
 			}
-			_ => (),
 		}
 		self.expression_scope
 			.insert(index, (self.current, self.generation()));

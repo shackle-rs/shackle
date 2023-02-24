@@ -17,7 +17,7 @@ use crate::{
 	Error,
 };
 
-use super::{PatternTy, TypeContext, Typer};
+use super::{NameResolution, PatternTy, TypeContext, Typer};
 
 /// Collected types for an item body
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,9 +27,9 @@ pub struct BodyTypes {
 	/// Types of expressions
 	pub expressions: ArenaMap<Expression, Ty>,
 	/// Identifier resolution
-	pub identifier_resolution: FxHashMap<ArenaIndex<Expression>, PatternRef>,
+	pub identifier_resolution: FxHashMap<ArenaIndex<Expression>, NameResolution>,
 	/// Pattern resolution
-	pub pattern_resolution: FxHashMap<ArenaIndex<Pattern>, PatternRef>,
+	pub pattern_resolution: FxHashMap<ArenaIndex<Pattern>, NameResolution>,
 }
 
 /// Context for typing an item body
@@ -181,7 +181,7 @@ impl TypeContext for BodyTypeContext {
 		);
 		self.data.expressions.insert(expression.expression(), ty);
 	}
-	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: PatternRef) {
+	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: NameResolution) {
 		assert_eq!(expression.item(), self.item);
 		let old = self
 			.data
@@ -193,7 +193,7 @@ impl TypeContext for BodyTypeContext {
 			expression
 		);
 	}
-	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: PatternRef) {
+	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: NameResolution) {
 		assert_eq!(pattern.item(), self.item);
 		let old = self
 			.data

@@ -277,4 +277,5 @@ id_registry!(
 	minus: "-",
 	erase_enum,
 	forall,
+	set2array,
 );

@@ -122,13 +122,13 @@ pub enum OverloadingError<T> {
 	},
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Candidate<T> {
 	is_candidate: bool,
 	has_error: bool,
 	data: T,
 	entry: FunctionEntry,
-	instantiation: FunctionType,
+	ty_params: TyParamInstantiations,
 }
 
 /// An overloaded function entry
@@ -149,34 +149,32 @@ impl FunctionEntry {
 		db: &dyn Interner,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
 		args: &[Ty],
-	) -> Result<(T, FunctionEntry, FunctionType), FunctionResolutionError<T>> {
+	) -> Result<(T, FunctionEntry, TyParamInstantiations), FunctionResolutionError<T>> {
 		let (matches, mismatches) = overloads
 			.into_iter()
 			.map(|(data, entry)| {
-				let instantiation = entry.overload.instantiate(db, args);
-				(data, entry, instantiation)
+				let ty_params = entry.overload.instantiate_ty_params(db, args);
+				(data, entry, ty_params)
 			})
-			.partition::<Vec<_>, _>(|(_, _, instantiation)| instantiation.is_ok());
+			.partition::<Vec<_>, _>(|(_, _, ty_params)| ty_params.is_ok());
 
 		if matches.is_empty() {
 			return Err(FunctionResolutionError::NoMatchingFunction(
 				mismatches
 					.into_iter()
-					.map(|(data, overload, instantiation)| {
-						(data, overload, instantiation.unwrap_err())
-					})
+					.map(|(data, overload, ty_params)| (data, overload, ty_params.unwrap_err()))
 					.collect(),
 			));
 		}
 
 		let mut candidates = matches
 			.into_iter()
-			.map(|(data, overload, instantiation)| Candidate {
+			.map(|(data, overload, ty_params)| Candidate {
 				is_candidate: true,
 				has_error: overload.overload.contains_error(db),
 				data,
 				entry: overload,
-				instantiation: instantiation.unwrap(),
+				ty_params: ty_params.unwrap(),
 			})
 			.collect::<Vec<_>>();
 
@@ -202,14 +200,10 @@ impl FunctionEntry {
 					c2.is_candidate = false;
 					continue;
 				}
-				let m1 = c1
-					.instantiation
-					.matches(db, &c2.instantiation.params)
-					.is_ok();
-				let m2 = c2
-					.instantiation
-					.matches(db, &c1.instantiation.params)
-					.is_ok();
+				let f1 = c1.entry.overload.instantiate(db, &c1.ty_params);
+				let f2 = c2.entry.overload.instantiate(db, &c2.ty_params);
+				let m1 = f1.matches(db, &f2.params).is_ok();
+				let m2 = f2.matches(db, &f1.params).is_ok();
 				if m1 && !m2 {
 					// We accept their args, but they don't accept ours, so they're more specific
 					c1.is_candidate = false;
@@ -237,8 +231,8 @@ impl FunctionEntry {
 							OverloadedFunction::PolymorphicFunction(p1),
 							OverloadedFunction::PolymorphicFunction(p2),
 						) => {
-							let m1 = p1.instantiate(db, &p2.params).is_ok();
-							let m2 = p2.instantiate(db, &p1.params).is_ok();
+							let m1 = p1.instantiate_ty_params(db, &p2.params).is_ok();
+							let m2 = p2.instantiate_ty_params(db, &p1.params).is_ok();
 							if m1 && !m2 {
 								// We accept their args, but they don't accept ours, so they're more specific
 								c1.is_candidate = false;
@@ -283,7 +277,7 @@ impl FunctionEntry {
 			));
 		}
 		let c = candidates.pop().unwrap();
-		Ok((c.data, c.entry, c.instantiation))
+		Ok((c.data, c.entry, c.ty_params))
 	}
 
 	/// Validate that the given overloads are legal
@@ -298,9 +292,11 @@ impl FunctionEntry {
 		// TODO: Make less horrible
 		for (i, (_, a)) in overloads.iter().enumerate() {
 			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
-				if let Ok(fa) = a.overload.instantiate(db, b.overload.params()) {
-					if b.overload.instantiate(db, a.overload.params()).is_ok()
-						&& (a.has_body && b.has_body || fa.return_type != b.overload.return_type())
+				if let Ok(tpa) = a.overload.instantiate_ty_params(db, b.overload.params()) {
+					if b.overload
+						.instantiate_ty_params(db, a.overload.params())
+						.is_ok() && (a.has_body && b.has_body
+						|| a.overload.instantiate(db, &tpa).return_type != b.overload.return_type())
 					{
 						// Same function with multiple definitions
 						same_fns[i + j + 1] = Some(i);
@@ -423,18 +419,30 @@ impl OverloadedFunction {
 		}
 	}
 
-	/// Instantiate this function with the given argument types
-	pub fn instantiate(
+	/// Instantiate this function's type parameters with the given argument types
+	pub fn instantiate_ty_params(
 		&self,
 		db: &dyn Interner,
 		args: &[Ty],
-	) -> Result<FunctionType, InstantiationError> {
+	) -> Result<TyParamInstantiations, InstantiationError> {
 		match self {
 			OverloadedFunction::Function(f) => {
 				f.matches(db, args)?;
-				Ok(f.clone())
+				Ok(TyParamInstantiations::default())
 			}
-			OverloadedFunction::PolymorphicFunction(p) => p.instantiate(db, args),
+			OverloadedFunction::PolymorphicFunction(p) => p.instantiate_ty_params(db, args),
+		}
+	}
+
+	/// Instantiate this function using the given type parameter types
+	pub fn instantiate(
+		&self,
+		db: &dyn Interner,
+		instantiations: &TyParamInstantiations,
+	) -> FunctionType {
+		match self {
+			OverloadedFunction::Function(f) => f.clone(),
+			OverloadedFunction::PolymorphicFunction(p) => p.instantiate(db, instantiations),
 		}
 	}
 
@@ -559,6 +567,9 @@ impl FunctionType {
 	}
 }
 
+/// Mapping from type parameters to the concrete type used to instantiate them
+pub type TyParamInstantiations = FxHashMap<TyVarRef, Ty>;
+
 /// Type of a generic function with type-inst parameters
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PolymorphicFunctionType {
@@ -577,11 +588,24 @@ impl PolymorphicFunctionType {
 	}
 
 	/// Instantiates this polymorphic function using the given parameter types if possible.
-	pub fn instantiate(
+	pub fn instantiate(&self, db: &dyn Interner, ty_vars: &TyParamInstantiations) -> FunctionType {
+		FunctionType {
+			return_type: self.return_type.instantiate_ty_vars(db, ty_vars),
+			params: self
+				.params
+				.iter()
+				.map(|p| p.instantiate_ty_vars(db, ty_vars))
+				.collect(),
+		}
+	}
+
+	/// Instantiates this polymorphic function using the given parameter types if possible, returning
+	/// the type-parameter instantiations.
+	pub fn instantiate_ty_params(
 		&self,
 		db: &dyn Interner,
 		args: &[Ty],
-	) -> Result<FunctionType, InstantiationError> {
+	) -> Result<TyParamInstantiations, InstantiationError> {
 		if args.len() != self.params.len() {
 			return Err(InstantiationError::ArgumentCountMismatch {
 				expected: self.params.len(),
@@ -620,14 +644,8 @@ impl PolymorphicFunctionType {
 				}
 			}
 		}
-		Ok(FunctionType {
-			return_type: PolymorphicFunctionType::instantiate_type(db, &resolved, self.return_type),
-			params: self
-				.params
-				.iter()
-				.map(|p| PolymorphicFunctionType::instantiate_type(db, &resolved, *p))
-				.collect(),
-		})
+
+		Ok(resolved)
 	}
 
 	/// Collects the types to instantiate unbound type-inst variables with.
@@ -734,52 +752,6 @@ impl PolymorphicFunctionType {
 				false
 			}
 			_ => arg.is_subtype_of(db, param),
-		}
-	}
-
-	/// Instantiate the given type-inst variables with the given types from `instantiations` in the type `t`.
-	fn instantiate_type(db: &dyn Interner, instantiations: &FxHashMap<TyVarRef, Ty>, t: Ty) -> Ty {
-		match t.lookup(db) {
-			TyData::TyVar(i, o, t) if instantiations.contains_key(&t.ty_var) => {
-				let mut ty = instantiations[&t.ty_var];
-				if let Some(inst) = i {
-					ty = ty
-						.with_inst(db, inst)
-						.expect("Type-inst is incompatible with type-inst var");
-				}
-				if let Some(opt) = o {
-					ty = ty.with_opt(db, opt);
-				}
-				ty
-			}
-			TyData::Array { opt, dim, element } => db.intern_ty(TyData::Array {
-				opt,
-				dim: PolymorphicFunctionType::instantiate_type(db, instantiations, dim),
-				element: PolymorphicFunctionType::instantiate_type(db, instantiations, element),
-			}),
-			TyData::Set(i, o, t) => db.intern_ty(TyData::Set(
-				i,
-				o,
-				PolymorphicFunctionType::instantiate_type(db, instantiations, t),
-			)),
-			TyData::Tuple(o, fs) => db.intern_ty(TyData::Tuple(
-				o,
-				fs.iter()
-					.map(|f| PolymorphicFunctionType::instantiate_type(db, instantiations, *f))
-					.collect(),
-			)),
-			TyData::Record(o, fs) => db.intern_ty(TyData::Record(
-				o,
-				fs.iter()
-					.map(|(i, f)| {
-						(
-							*i,
-							PolymorphicFunctionType::instantiate_type(db, instantiations, *f),
-						)
-					})
-					.collect(),
-			)),
-			_ => t,
 		}
 	}
 

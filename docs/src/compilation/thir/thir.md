@@ -91,6 +91,93 @@ tuple(var A, var B): x;
 
 </table>
 
+2D array literals are rewritten using `array2d`:
+
+<table style="width:100%">
+
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+
+<tr>
+<td>
+
+```mzn
+[| 1, 2
+ | 3, 4 |]
+```
+
+</td>
+<td>
+
+```mzn
+array2d(1..2, 1..2, [1, 2, 3, 4])
+```
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+```mzn
+[|    c: d:
+ | a: 1, 2
+ | b: 3, 4 |]
+```
+
+</td>
+<td>
+
+```mzn
+array2d([a, b], [c, d], [1, 2, 3, 4])
+```
+
+</td>
+</tr>
+
+</table>
+
+Indexed array literals are rewritten using `arrayNd`:
+
+<table style="width:100%">
+
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+
+<tr>
+<td>
+
+```mzn
+[3: a, b, c]
+```
+
+</td>
+<td>
+
+```mzn
+arrayNd(3, [a, b, c])
+```
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+```mzn
+[3: a, 4: b, 5: c]
+```
+
+</td>
+<td>
+
+```mzn
+arrayNd([3, 4, 5], [a, b, c])
+```
+
+</td>
+</tr>
+
+</table>
+
 Slicing is rewritten using `slice_xd` function calls:
 
 <table style="width:100%">

@@ -61,6 +61,15 @@ they are used in to obtain the implied type-inst identifier 'declarations'.
 
 The HIR involves several syntactic desugarings from the AST.
 
+> Note that only desugarings which cannot cause future errors referring to non-user written constructs to occur are
+> permitted, in order to avoid emitting confusing error messages, or needing to track desugarings and specialise error
+> messages for them.
+>
+> For example, we could desugar 2D array literals into calls to `array2d` at this point, however, if the user were to
+> use an invalid index set type, as in `[|"a": "b": | 2: x, 3: y |]`, we would immediately rewrite that into
+> `array2d([2, 3], ["a", "b"], [x, y])`, which would give a type error indicating that no overload of `array2d` exists
+> for the given argument types, even though the user has not called `array2d` at all.
+
 Predicate/test items are rewritten into function items:
 
 <table style="width:100%">
@@ -190,93 +199,6 @@ String interpolation is rewritten using `concat` and `show`:
 
 ```mzn
 concat(["foo", show(value), "bar"])
-```
-
-</td>
-</tr>
-
-</table>
-
-2D array literals are rewritten using `array2d`:
-
-<table style="width:100%">
-
-<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
-
-<tr>
-<td>
-
-```mzn
-[| 1, 2
- | 3, 4 |]
-```
-
-</td>
-<td>
-
-```mzn
-array2d(1..2, 1..2, [1, 2, 3, 4])
-```
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-```mzn
-[|    c: d:
- | a: 1, 2
- | b: 3, 4 |]
-```
-
-</td>
-<td>
-
-```mzn
-array2d({a, b}, {c, d}, [1, 2, 3, 4])
-```
-
-</td>
-</tr>
-
-</table>
-
-Index array literals are rewritten using `arrayNd`:
-
-<table style="width:100%">
-
-<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
-
-<tr>
-<td>
-
-```mzn
-[3: a, b, c]
-```
-
-</td>
-<td>
-
-```mzn
-arrayNd(3, [a, b, c])
-```
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-```mzn
-[3: a, 4: b, 5: c]
-```
-
-</td>
-<td>
-
-```mzn
-arrayNd([3, 4, 5], [a, b, c])
 ```
 
 </td>

@@ -7,9 +7,10 @@ use std::fmt;
 use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
 use super::{
-	ArrayAccess, ArrayComprehension, ArrayLiteral, BooleanLiteral, Constraint, Declaration,
-	FloatLiteral, Generator, Identifier, IntegerLiteral, ItemData, Parameter, Pattern,
-	RecordLiteral, SetComprehension, SetLiteral, StringLiteral, TupleLiteral, Type,
+	ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, BooleanLiteral, Constraint,
+	Declaration, FloatLiteral, Generator, Identifier, IndexedArrayLiteral, IntegerLiteral,
+	ItemData, MaybeIndexSet, Parameter, Pattern, RecordLiteral, SetComprehension, SetLiteral,
+	StringLiteral, TupleLiteral, Type,
 };
 
 /// An expression
@@ -37,6 +38,10 @@ pub enum Expression {
 	RecordLiteral(RecordLiteral),
 	/// Array literal
 	ArrayLiteral(ArrayLiteral),
+	/// 2D array literal
+	ArrayLiteral2D(ArrayLiteral2D),
+	/// Indexed array literal
+	IndexedArrayLiteral(IndexedArrayLiteral),
 	/// Array access
 	ArrayAccess(ArrayAccess),
 	/// Array comprehension
@@ -77,6 +82,15 @@ impl Expression {
 				todo.extend(anns.iter().copied());
 			}
 			match &data[e] {
+				Expression::Absent
+				| Expression::BooleanLiteral(_)
+				| Expression::FloatLiteral(_)
+				| Expression::Identifier(_)
+				| Expression::Infinity
+				| Expression::IntegerLiteral(_)
+				| Expression::Missing
+				| Expression::Slice(_)
+				| Expression::StringLiteral(_) => (),
 				Expression::ArrayAccess(aa) => {
 					todo.push(aa.collection);
 					todo.push(aa.indices);
@@ -102,6 +116,19 @@ impl Expression {
 				Expression::ArrayLiteral(al) => {
 					todo.extend(al.members.iter().copied());
 				}
+				Expression::ArrayLiteral2D(al) => {
+					if let MaybeIndexSet::Indexed(s) = &al.rows {
+						todo.extend(s.iter().copied());
+					}
+					if let MaybeIndexSet::Indexed(s) = &al.columns {
+						todo.extend(s.iter().copied());
+					}
+					todo.extend(al.members.iter().copied());
+				}
+				Expression::IndexedArrayLiteral(al) => {
+					todo.extend(al.indices.iter().copied());
+					todo.extend(al.members.iter().copied());
+				}
 				Expression::Call(c) => {
 					todo.push(c.function);
 					todo.extend(c.arguments.iter().copied());
@@ -113,6 +140,13 @@ impl Expression {
 				Expression::IfThenElse(ite) => {
 					todo.extend(ite.branches.iter().flat_map(|b| [b.condition, b.result]));
 					todo.extend(ite.else_result);
+				}
+				Expression::Lambda(l) => {
+					for p in l.parameters.iter() {
+						todo.extend(p.annotations.iter().copied());
+						todo.extend(Type::expressions(p.declared_type, data));
+					}
+					todo.push(l.body);
 				}
 				Expression::Let(l) => {
 					for i in l.items.iter() {
@@ -161,7 +195,6 @@ impl Expression {
 				Expression::TupleLiteral(tl) => {
 					todo.extend(tl.fields.iter().copied());
 				}
-				_ => (),
 			}
 			Some(e)
 		})
@@ -182,6 +215,8 @@ impl fmt::Debug for Expression {
 			Expression::TupleLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::RecordLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::ArrayLiteral(x) => fmt::Debug::fmt(x, f),
+			Expression::ArrayLiteral2D(x) => fmt::Debug::fmt(x, f),
+			Expression::IndexedArrayLiteral(x) => fmt::Debug::fmt(x, f),
 			Expression::ArrayAccess(x) => fmt::Debug::fmt(x, f),
 			Expression::ArrayComprehension(x) => fmt::Debug::fmt(x, f),
 			Expression::SetComprehension(x) => fmt::Debug::fmt(x, f),
@@ -205,6 +240,8 @@ impl_enum_from!(Expression::SetLiteral);
 impl_enum_from!(Expression::BooleanLiteral);
 impl_enum_from!(Expression::StringLiteral);
 impl_enum_from!(Expression::ArrayLiteral);
+impl_enum_from!(Expression::ArrayLiteral2D);
+impl_enum_from!(Expression::IndexedArrayLiteral);
 impl_enum_from!(Expression::ArrayAccess);
 impl_enum_from!(Expression::ArrayComprehension);
 impl_enum_from!(Expression::SetComprehension);

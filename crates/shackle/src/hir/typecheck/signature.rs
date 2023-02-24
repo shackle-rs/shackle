@@ -19,7 +19,7 @@ use crate::{
 	Error,
 };
 
-use super::{EnumConstructorEntry, PatternTy, TypeContext, Typer};
+use super::{EnumConstructorEntry, NameResolution, PatternTy, TypeContext, Typer};
 
 /// Collected types for an item signature
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,9 +29,9 @@ pub struct SignatureTypes {
 	/// Types of expressions
 	pub expressions: FxHashMap<ExpressionRef, Ty>,
 	/// Identifier resolution
-	pub identifier_resolution: FxHashMap<ExpressionRef, PatternRef>,
+	pub identifier_resolution: FxHashMap<ExpressionRef, NameResolution>,
 	/// Pattern resolution
-	pub pattern_resolution: FxHashMap<PatternRef, PatternRef>,
+	pub pattern_resolution: FxHashMap<PatternRef, NameResolution>,
 }
 
 /// Context for typing an item signature
@@ -578,7 +578,7 @@ impl TypeContext for SignatureTypeContext {
 			expression
 		);
 	}
-	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: PatternRef) {
+	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: NameResolution) {
 		let old = self
 			.data
 			.identifier_resolution
@@ -589,7 +589,7 @@ impl TypeContext for SignatureTypeContext {
 			expression
 		);
 	}
-	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: PatternRef) {
+	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: NameResolution) {
 		let old = self.data.pattern_resolution.insert(pattern, resolution);
 		assert!(
 			old.is_none(),

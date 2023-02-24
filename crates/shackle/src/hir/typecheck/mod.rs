@@ -38,7 +38,7 @@ use std::{
 
 use crate::{
 	arena::{ArenaIndex, ArenaMap},
-	ty::{FunctionEntry, Ty, TyData, TyVar},
+	ty::{FunctionEntry, Ty, TyData, TyParamInstantiations, TyVar},
 	utils::{debug_print_strings, DebugPrint},
 	Error,
 };
@@ -92,29 +92,29 @@ impl TypeResult {
 	}
 
 	/// Get the pattern this identifier expression resolves to
-	pub fn name_resolution(&self, index: ArenaIndex<Expression>) -> Option<PatternRef> {
+	pub fn name_resolution(&self, index: ArenaIndex<Expression>) -> Option<&NameResolution> {
 		if let Some(t) = self.body.identifier_resolution.get(&index) {
-			return Some(*t);
+			return Some(t);
 		}
 		if let Some(b) = &self.signature {
 			if let Some(t) = b
 				.identifier_resolution
 				.get(&ExpressionRef::new(self.item, index))
 			{
-				return Some(*t);
+				return Some(t);
 			}
 		}
 		None
 	}
 
 	/// Get the pattern this pattern (e.g. enum atom/constructor) resolves to
-	pub fn pattern_resolution(&self, index: ArenaIndex<Pattern>) -> Option<PatternRef> {
+	pub fn pattern_resolution(&self, index: ArenaIndex<Pattern>) -> Option<&NameResolution> {
 		if let Some(t) = self.body.pattern_resolution.get(&index) {
-			return Some(*t);
+			return Some(t);
 		}
 		if let Some(b) = &self.signature {
 			if let Some(t) = b.pattern_resolution.get(&PatternRef::new(self.item, index)) {
-				return Some(*t);
+				return Some(t);
 			}
 		}
 		None
@@ -382,9 +382,9 @@ pub trait TypeContext {
 	/// Add a type for an expression
 	fn add_expression(&mut self, expression: ExpressionRef, ty: Ty);
 	/// Add identifier resolution
-	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: PatternRef);
+	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: NameResolution);
 	/// Add pattern resolution
-	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: PatternRef);
+	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: NameResolution);
 	/// Add an error
 	fn add_diagnostic(&mut self, item: ItemRef, e: impl Into<Error>);
 
@@ -543,6 +543,35 @@ impl Deref for EnumConstructorEntry {
 	type Target = FunctionEntry;
 	fn deref(&self) -> &Self::Target {
 		&self.constructor
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// Resolve of identifier/pattern name resolution
+pub enum NameResolution {
+	/// Identifier resolves to some pattern in an item
+	Pattern(PatternRef),
+	/// Identifiers resolving to polymorphic functions also need to carry the
+	/// types of the type parameters
+	PolymorphicFunction(PatternRef, Box<TyParamInstantiations>),
+}
+
+impl NameResolution {
+	/// Create a name resolution resolving to the the given function pattern using
+	/// the given type parameter instantiations.
+	pub fn with_ty_params(pattern: PatternRef, tvs: TyParamInstantiations) -> Self {
+		if tvs.is_empty() {
+			Self::Pattern(pattern)
+		} else {
+			Self::PolymorphicFunction(pattern, Box::new(tvs))
+		}
+	}
+
+	/// Get the pattern this name points to
+	pub fn pattern(&self) -> PatternRef {
+		match self {
+			Self::Pattern(p) | Self::PolymorphicFunction(p, _) => *p,
+		}
 	}
 }
 
