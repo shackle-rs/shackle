@@ -452,7 +452,7 @@ pub fn add_annotation<F: Folder + ?Sized>(
 	model: &Model,
 	a: AnnotationId,
 ) -> AnnotationId {
-	let annotation = folder.fold_annotation(db, model, &*model[a]);
+	let annotation = folder.fold_annotation(db, model, &model[a]);
 	let idx = folder
 		.model()
 		.add_annotation(Item::new(annotation, model[a].origin()));
@@ -467,7 +467,7 @@ pub fn fold_annotation<F: Folder + ?Sized>(
 	model: &Model,
 	a: &Annotation,
 ) -> Annotation {
-	folder.fold_constructor(db, model, &**a).into()
+	folder.fold_constructor(db, model, a).into()
 }
 
 /// Fold an annotation ID
@@ -490,7 +490,7 @@ pub fn add_constraint<F: Folder + ?Sized>(
 	model: &Model,
 	c: ConstraintId,
 ) -> ConstraintId {
-	let constraint = folder.fold_constraint(db, model, &*model[c]);
+	let constraint = folder.fold_constraint(db, model, &model[c]);
 	let idx = folder
 		.model()
 		.add_constraint(Item::new(constraint, model[c].origin()));
@@ -537,7 +537,7 @@ pub fn add_declaration<F: Folder + ?Sized>(
 	model: &Model,
 	d: DeclarationId,
 ) -> DeclarationId {
-	let declaration = folder.fold_declaration(db, model, &*model[d]);
+	let declaration = folder.fold_declaration(db, model, &model[d]);
 	let idx = folder
 		.model()
 		.add_declaration(Item::new(declaration, model[d].origin()));
@@ -588,7 +588,7 @@ pub fn add_enumeration<F: Folder + ?Sized>(
 	model: &Model,
 	e: EnumerationId,
 ) -> EnumerationId {
-	let enumeration = folder.fold_enumeration(db, model, &*model[e]);
+	let enumeration = folder.fold_enumeration(db, model, &model[e]);
 	let idx = folder
 		.model()
 		.add_enumeration(Item::new(enumeration, model[e].origin()));
@@ -668,7 +668,7 @@ pub fn add_function<F: Folder + ?Sized>(
 	model: &Model,
 	f: FunctionId,
 ) -> FunctionId {
-	let function = folder.fold_function(db, model, &*model[f]);
+	let function = folder.fold_function(db, model, &model[f]);
 	let idx = folder
 		.model()
 		.add_function(Item::new(function, model[f].origin()));
@@ -736,7 +736,7 @@ pub fn add_output<F: Folder + ?Sized>(
 	model: &Model,
 	o: OutputId,
 ) -> OutputId {
-	let output = folder.fold_output(db, model, &*model[o]);
+	let output = folder.fold_output(db, model, &model[o]);
 	let idx = folder
 		.model()
 		.add_output(Item::new(output, model[o].origin()));
@@ -773,7 +773,7 @@ pub fn fold_output_id<F: Folder + ?Sized>(
 
 /// Add the folded version of the solve item into the destination model.
 pub fn add_solve<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model) {
-	let solve = folder.fold_solve(db, model, &**model.solve().unwrap());
+	let solve = folder.fold_solve(db, model, model.solve().unwrap());
 	folder
 		.model()
 		.set_solve(Item::new(solve, model.solve().unwrap().origin()));
@@ -917,7 +917,7 @@ pub fn fold_array_comprehension<F: Folder + ?Sized>(
 		indices: c
 			.indices
 			.as_ref()
-			.map(|i| Box::new(folder.fold_expression(db, model, &i))),
+			.map(|i| Box::new(folder.fold_expression(db, model, i))),
 		template: Box::new(folder.fold_expression(db, model, &c.template)),
 	}
 }
@@ -1221,14 +1221,14 @@ pub fn fold_domain<F: Folder + ?Sized>(
 	let ty = domain.ty();
 	match &**domain {
 		DomainData::Array(dims, elem) => {
-			let dimensions = folder.fold_domain(db, model, &dims);
-			let element = folder.fold_domain(db, model, &elem);
+			let dimensions = folder.fold_domain(db, model, dims);
+			let element = folder.fold_domain(db, model, elem);
 			Domain::array(db, origin, dimensions, element)
 		}
 		DomainData::Bounded(e) => {
 			let inst = ty.inst(db.upcast()).unwrap();
 			let opt = ty.opt(db.upcast()).unwrap();
-			let expression = folder.fold_expression(db, model, &e);
+			let expression = folder.fold_expression(db, model, e);
 			Domain::bounded(db, origin, inst, opt, expression)
 		}
 		DomainData::Record(items) => {
@@ -1241,7 +1241,7 @@ pub fn fold_domain<F: Folder + ?Sized>(
 		DomainData::Set(d) => {
 			let inst = ty.inst(db.upcast()).unwrap();
 			let opt = ty.opt(db.upcast()).unwrap();
-			let element = folder.fold_domain(db, model, &d);
+			let element = folder.fold_domain(db, model, d);
 			Domain::set(db, origin, inst, opt, element)
 		}
 		DomainData::Tuple(items) => {
@@ -1281,7 +1281,7 @@ pub fn fold_pattern<F: Folder + ?Sized>(
 				.collect(),
 		},
 		PatternData::Expression(e) => {
-			PatternData::Expression(Box::new(folder.fold_expression(db, model, &e)))
+			PatternData::Expression(Box::new(folder.fold_expression(db, model, e)))
 		}
 		PatternData::Record(fs) => PatternData::Record(
 			fs.iter()

@@ -75,7 +75,7 @@ impl Model {
 		if !errors.is_empty() {
 			return Err(ShackleError::try_from(errors).unwrap());
 		}
-		let prg_model = self.db.model_thir();
+		let prg_model = self.db.final_thir();
 		Ok(Program {
 			db: self.db,
 			slv: slv.clone(),

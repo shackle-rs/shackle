@@ -22,7 +22,7 @@ impl RequestHandler<ViewPrettyPrint, ModelRef> for ViewPrettyPrintHandler {
 	fn execute(db: &CompilerDatabase, _: ModelRef) -> Result<String, ResponseError> {
 		let errors = db.all_errors();
 		if errors.is_empty() {
-			let thir = db.model_thir();
+			let thir = db.final_thir();
 			let printer = PrettyPrinter::new(db, &thir);
 			Ok(printer.pretty_print())
 		} else {

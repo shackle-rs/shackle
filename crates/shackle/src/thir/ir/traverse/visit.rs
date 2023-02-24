@@ -306,7 +306,7 @@ pub fn visit_array_comprehension<V: Visitor + ?Sized>(
 		visitor.visit_generator(model, generator);
 	}
 	if let Some(indices) = &c.indices {
-		visitor.visit_expression(model, &indices);
+		visitor.visit_expression(model, indices);
 	}
 	visitor.visit_expression(model, &c.template);
 }
@@ -450,18 +450,18 @@ pub fn visit_generator<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, gene
 pub fn visit_domain<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, domain: &Domain) {
 	match &**domain {
 		DomainData::Array(dims, elem) => {
-			visitor.visit_domain(model, &dims);
-			visitor.visit_domain(model, &elem);
+			visitor.visit_domain(model, dims);
+			visitor.visit_domain(model, elem);
 		}
 		DomainData::Bounded(e) => {
-			visitor.visit_expression(model, &e);
+			visitor.visit_expression(model, e);
 		}
 		DomainData::Record(items) => {
 			for (_, d) in items.iter() {
 				visitor.visit_domain(model, d);
 			}
 		}
-		DomainData::Set(d) => visitor.visit_domain(model, &d),
+		DomainData::Set(d) => visitor.visit_domain(model, d),
 		DomainData::Tuple(items) => {
 			for d in items.iter() {
 				visitor.visit_domain(model, d);
@@ -486,7 +486,7 @@ pub fn visit_pattern<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, patter
 				visitor.visit_pattern(model, p);
 			}
 		}
-		PatternData::Expression(e) => visitor.visit_expression(model, &e),
+		PatternData::Expression(e) => visitor.visit_expression(model, e),
 		_ => (),
 	}
 }
