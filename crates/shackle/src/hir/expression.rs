@@ -153,6 +153,7 @@ impl Expression {
 						match i {
 							LetItem::Constraint(c) => {
 								todo.extend(c.annotations.iter().copied());
+								todo.push(c.expression);
 							}
 							LetItem::Declaration(d) => {
 								todo.extend(Type::expressions(d.declared_type, data));

@@ -271,3 +271,66 @@ impl<'a> TopoSorter<'a> {
 		(self.sorted, self.diagnostics)
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use std::sync::Arc;
+
+	use expect_test::{expect, Expect};
+
+	use crate::{
+		db::{CompilerDatabase, FileReader, Inputs},
+		file::InputFile,
+		hir::db::Hir,
+	};
+
+	fn check_toposort(model: &str, expected: Expect) {
+		let mut db = CompilerDatabase::default();
+		db.set_ignore_stdlib(true);
+		db.set_input_files(Arc::new(vec![InputFile::ModelString(model.to_owned())]));
+		let model = db.input_models()[0];
+		let sm = db.lookup_source_map(model);
+		let items = db.lookup_topological_sorted_items();
+		let mut actual = String::new();
+		for item in items.iter().copied() {
+			let origin = sm.get_origin(item.into()).unwrap();
+			let (source, span) = origin.source_span(&db);
+			actual.push_str(&source.as_str()[span.offset()..span.offset() + span.len()]);
+			actual.push_str(";\n");
+		}
+		expected.assert_eq(&actual);
+	}
+
+	#[test]
+	fn test_topological_sort() {
+		check_toposort(
+			r#"
+			constraint x;
+			var bool: x;
+		"#,
+			expect!([r#"
+    var bool: x;
+    constraint x;
+"#]),
+		);
+
+		check_toposort(
+			r#"
+			constraint let {
+				int: y = 3;
+				constraint x;
+			} in foo(y);
+			var bool: x;
+			predicate foo(int: a);
+		"#,
+			expect!([r#"
+    predicate foo(int: a);
+    var bool: x;
+    constraint let {
+    				int: y = 3;
+    				constraint x;
+    			} in foo(y);
+"#]),
+		);
+	}
+}
