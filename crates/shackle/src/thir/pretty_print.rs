@@ -171,7 +171,7 @@ impl<'a> PrettyPrinter<'a> {
 			&mut buf,
 			"function {}: {}({})",
 			self.pretty_print_domain(function.domain()),
-			function.name().pretty_print(self.db.upcast()),
+			function.name().pretty_print(self.db),
 			function
 				.parameters()
 				.iter()
@@ -185,7 +185,7 @@ impl<'a> PrettyPrinter<'a> {
 		}
 		if let Some(body) = function.body() {
 			if self.old_compat
-				&& function.name().lookup(self.db.upcast()) == "deopt"
+				&& function.name() == self.db.identifier_registry().deopt
 				&& !function.type_inst_vars().is_empty()
 				&& function.parameters().len() == 1
 				&& {
@@ -199,7 +199,10 @@ impl<'a> PrettyPrinter<'a> {
 							idx,
 							_,
 						)) => {
-							assert_eq!(self.model[*idx].name().lookup(self.db.upcast()), "to_enum");
+							assert_eq!(
+								self.model[*idx].name(),
+								self.db.identifier_registry().to_enum
+							);
 							assert_eq!(c.arguments.len(), 2);
 							write!(
 								&mut buf,
@@ -215,7 +218,7 @@ impl<'a> PrettyPrinter<'a> {
 			} else {
 				write!(&mut buf, " = {}", self.pretty_print_expression(body)).unwrap();
 			}
-		} else if self.old_compat && function.name().lookup(self.db.upcast()) == "erase_enum" {
+		} else if self.old_compat && function.name() == self.db.identifier_registry().erase_enum {
 			// For compatibility with old minizinc, we can just directly coerce
 			let d = function.parameter(0);
 			let ident = self.model[d]
@@ -481,11 +484,9 @@ impl<'a> PrettyPrinter<'a> {
 							m.member_index()
 						)
 					}),
-				ResolvedIdentifier::Function(f) => {
-					self.model[*f].name().pretty_print(self.db.upcast())
-				}
+				ResolvedIdentifier::Function(f) => self.model[*f].name().pretty_print(self.db),
 				ResolvedIdentifier::PolymorphicFunction(f, _) => {
-					self.model[*f].name().pretty_print(self.db.upcast())
+					self.model[*f].name().pretty_print(self.db)
 				}
 			},
 			ExpressionData::IfThenElse(ite) => {
@@ -520,13 +521,14 @@ impl<'a> PrettyPrinter<'a> {
 			ExpressionData::IntegerLiteral(i) => format!("{}", i.0),
 			ExpressionData::Lambda(l) => format!(
 				"lambda {}: ({}) => {}",
-				self.pretty_print_domain(&l.domain),
-				l.parameters
+				self.pretty_print_domain(self.model[**l].domain()),
+				self.model[**l]
+					.parameters()
 					.iter()
 					.map(|p| self.pretty_print_declaration(*p, false))
 					.collect::<Vec<_>>()
 					.join(", "),
-				self.pretty_print_expression(&l.body)
+				self.pretty_print_expression(self.model[**l].body().unwrap())
 			),
 			ExpressionData::Let(l) => {
 				let mut buf = String::new();

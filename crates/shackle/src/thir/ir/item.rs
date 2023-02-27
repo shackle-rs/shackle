@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
 	arena::ArenaIndex,
-	thir::source::Origin,
+	thir::{db::Thir, source::Origin},
 	ty::{
 		EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty,
 		TyVar,
@@ -322,15 +322,64 @@ pub struct Constructor {
 	pub parameters: Option<Vec<DeclarationId>>,
 }
 
+/// Function name or identifier for anonymous function
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum FunctionName {
+	/// Named function.
+	Named(Identifier),
+	/// Anonymous function.
+	///
+	/// Allows us to use the same ID for overloading
+	Anonymous(u32),
+}
+
+impl FunctionName {
+	/// Create a function name
+	pub fn new(identifier: Identifier) -> Self {
+		Self::Named(identifier)
+	}
+
+	/// Create a fresh anonymous function name
+	pub fn anonymous() -> Self {
+		static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+		Self::Anonymous(COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst))
+	}
+
+	/// Pretty print function name
+	pub fn pretty_print(&self, db: &dyn Thir) -> String {
+		match self {
+			FunctionName::Named(identifier) => identifier.pretty_print(db.upcast()),
+			FunctionName::Anonymous(v) => format!("FN_{}", v),
+		}
+	}
+}
+
+impl From<Identifier> for FunctionName {
+	fn from(identifier: Identifier) -> Self {
+		FunctionName::new(identifier)
+	}
+}
+
+impl PartialEq<Identifier> for FunctionName {
+	fn eq(&self, other: &Identifier) -> bool {
+		if let Self::Named(identifier) = self {
+			identifier == other
+		} else {
+			false
+		}
+	}
+}
+
 /// Function item
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
 	domain: Domain,
-	name: Identifier,
+	name: FunctionName,
 	type_inst_vars: Vec<TyVar>,
 	parameters: Vec<DeclarationId>,
 	body: Option<Expression>,
 	annotations: Annotations,
+	top_level: bool,
 }
 
 /// A function item and the data it owns
@@ -341,7 +390,7 @@ pub type FunctionId = ArenaIndex<FunctionItem>;
 
 impl Function {
 	/// Create a new function item.
-	pub fn new(name: Identifier, domain: Domain) -> Self {
+	pub fn new(name: FunctionName, domain: Domain) -> Self {
 		Self {
 			annotations: Annotations::default(),
 			body: None,
@@ -349,17 +398,36 @@ impl Function {
 			name,
 			parameters: Vec::new(),
 			type_inst_vars: Vec::new(),
+			top_level: true,
 		}
 	}
 
+	/// Create an anonymous lambda function
+	pub fn lambda(domain: Domain, parameters: Vec<DeclarationId>, body: Expression) -> Self {
+		Self {
+			annotations: Annotations::default(),
+			body: Some(body),
+			domain,
+			name: FunctionName::anonymous(),
+			parameters,
+			type_inst_vars: Vec::new(),
+			top_level: false,
+		}
+	}
+
+	/// Whether this is a top-level function, or a local function
+	pub fn top_level(&self) -> bool {
+		self.top_level
+	}
+
 	/// Get the name of this function
-	pub fn name(&self) -> Identifier {
+	pub fn name(&self) -> FunctionName {
 		self.name
 	}
 
 	/// Set the name of this function
 	pub fn set_name(&mut self, name: Identifier) {
-		self.name = name;
+		self.name = FunctionName::new(name);
 	}
 
 	/// Get the type-inst var with the given index

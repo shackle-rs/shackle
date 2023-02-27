@@ -355,6 +355,19 @@ impl<K, V> ArenaMap<K, V> {
 		self.get_mut(idx).unwrap()
 	}
 
+	/// Remove a value from the map and return it if it was present
+	pub fn remove(&mut self, idx: ArenaIndex<K>) -> Option<V> {
+		self.items
+			.get_mut((idx.index.get() - 1) as usize)
+			.unwrap()
+			.take()
+	}
+
+	/// Get the keys in the arena map
+	pub fn keys(&self) -> impl '_ + Iterator<Item = ArenaIndex<K>> {
+		self.iter().map(|(k, _)| k)
+	}
+
 	/// Get an iterator over the values in the map.
 	pub fn values(&self) -> impl Iterator<Item = &V> {
 		self.items.iter().filter_map(|v| v.as_ref())
@@ -371,6 +384,14 @@ impl<K, V> ArenaMap<K, V> {
 			.iter()
 			.enumerate()
 			.filter_map(|(idx, o)| o.as_ref().map(|v| (ArenaIndex::new((idx + 1) as u32), v)))
+	}
+
+	/// Get an iterator of pairs of `ArenaIndex` and mutable values allocated in this arena.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = (ArenaIndex<K>, &mut V)> {
+		self.items
+			.iter_mut()
+			.enumerate()
+			.filter_map(|(idx, o)| o.as_mut().map(|v| (ArenaIndex::new((idx + 1) as u32), v)))
 	}
 
 	/// Consume and iterate

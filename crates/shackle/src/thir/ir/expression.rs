@@ -6,9 +6,9 @@ use std::{
 };
 
 use super::{
-	domain::{Domain, OptType, VarType},
-	AnnotationId, Annotations, ConstraintId, DeclarationId, EnumerationId, FunctionId, Identifier,
-	Model,
+	domain::{OptType, VarType},
+	AnnotationId, Annotations, ConstraintId, DeclarationId, EnumerationId, FunctionId,
+	FunctionName, Identifier, Model,
 };
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
@@ -650,7 +650,7 @@ impl ExpressionBuilder for Call {
 /// Used only to build expressions. Becomes a `Call` once built.
 pub struct LookupCall {
 	/// Function name
-	pub function: Identifier,
+	pub function: FunctionName,
 	/// Call arguments
 	pub arguments: Vec<Expression>,
 }
@@ -665,7 +665,7 @@ impl LookupCall {
 			.unwrap_or_else(|e| {
 				panic!(
 					"Function {}({}) not found:\n{}",
-					self.function.pretty_print(db.upcast()),
+					self.function.pretty_print(db),
 					arg_tys
 						.iter()
 						.map(|ty| ty.pretty_print(db.upcast()))
@@ -729,28 +729,29 @@ impl ExpressionBuilder for Let {
 
 /// A lambda function
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Lambda {
-	/// Domain of return type
-	pub domain: Box<Domain>,
-	/// Function parameters
-	pub parameters: Vec<DeclarationId>,
-	/// Function body
-	pub body: Box<Expression>,
-}
+pub struct Lambda(pub FunctionId);
 
 impl ExpressionBuilder for Lambda {
 	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+		let fe = model[self.0].function_entry(model);
 		Expression::new_unchecked(
 			Ty::function(
 				db.upcast(),
 				FunctionType {
-					return_type: self.domain.ty(),
-					params: self.parameters.iter().map(|d| model[*d].ty()).collect(),
+					return_type: fe.overload.return_type(),
+					params: fe.overload.params().iter().copied().collect(),
 				},
 			),
 			self,
 			origin,
 		)
+	}
+}
+
+impl Deref for Lambda {
+	type Target = FunctionId;
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
 }
 

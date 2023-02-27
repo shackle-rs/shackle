@@ -185,7 +185,7 @@ impl<'a> ItemCollector<'a> {
 			// Turn subsequent assignment items into equality constraints
 			let mut collector = ExpressionCollector::new(self, &a.data, item, &types);
 			let call = LookupCall {
-				function: collector.parent.ids.eq,
+				function: collector.parent.ids.eq.into(),
 				arguments: vec![
 					collector.collect_expression(a.assignee),
 					collector.collect_expression(a.definition),
@@ -450,7 +450,8 @@ impl<'a> ItemCollector<'a> {
 			PatternTy::Function(fn_entry) => {
 				let domain =
 					collector.collect_domain(f.return_type, fn_entry.overload.return_type(), false);
-				let mut function = Function::new(f.data[f.pattern].identifier().unwrap(), domain);
+				let mut function =
+					Function::new(f.data[f.pattern].identifier().unwrap().into(), domain);
 				function.annotations_mut().extend(
 					f.annotations
 						.iter()
@@ -738,11 +739,11 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					),
 					hir::MaybeIndexSet::NonIndexed(c) => alloc_expression(
 						LookupCall {
-							function: self.parent.ids.set2array,
+							function: self.parent.ids.set2array.into(),
 							arguments: vec![if *c > 0 {
 								alloc_expression(
 									LookupCall {
-										function: self.parent.ids.dot_dot,
+										function: self.parent.ids.dot_dot.into(),
 										arguments: vec![
 											alloc_expression(IntegerLiteral(1), self, origin),
 											alloc_expression(
@@ -767,7 +768,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				let columns = idx_array(&al.columns);
 				alloc_expression(
 					LookupCall {
-						function: self.parent.ids.array2d,
+						function: self.parent.ids.array2d.into(),
 						arguments: vec![
 							rows,
 							columns,
@@ -790,7 +791,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			// Desugar indexed array literal into arrayNd call
 			hir::Expression::IndexedArrayLiteral(al) => alloc_expression(
 				LookupCall {
-					function: self.parent.ids.array_nd,
+					function: self.parent.ids.array_nd.into(),
 					arguments: vec![
 						if al.indices.len() == 1 {
 							self.collect_expression(al.indices[0])
@@ -975,28 +976,26 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					})
 					.collect::<Vec<_>>();
 				let body = self.collect_expression(l.body);
-				alloc_expression(
-					Lambda {
-						domain: Box::new(return_type),
-						parameters,
-						body: Box::new(if decls.is_empty() {
-							body
-						} else {
-							let body_entity =
-								EntityRef::new(self.parent.db.upcast(), self.item, l.body);
-							alloc_expression(
-								Let {
-									items: decls.into_iter().map(LetItem::Declaration).collect(),
-									in_expression: Box::new(body),
-								},
-								self,
-								body_entity,
-							)
-						}),
+				let function = Function::lambda(
+					return_type,
+					parameters,
+					if decls.is_empty() {
+						body
+					} else {
+						let body_entity =
+							EntityRef::new(self.parent.db.upcast(), self.item, l.body);
+						alloc_expression(
+							Let {
+								items: decls.into_iter().map(LetItem::Declaration).collect(),
+								in_expression: Box::new(body),
+							},
+							self,
+							body_entity,
+						)
 					},
-					self,
-					origin,
-				)
+				);
+				let f = self.parent.model.add_function(Item::new(function, origin));
+				alloc_expression(Lambda(f), self, origin)
 			}
 			hir::Expression::Let(l) => alloc_expression(
 				Let {
@@ -1176,7 +1175,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 
 					let annotate = alloc_expression(
 						LookupCall {
-							function: self.parent.ids.annotate,
+							function: self.parent.ids.annotate.into(),
 							arguments: vec![
 								alloc_expression(
 									ResolvedIdentifier::Declaration(decl),
@@ -1236,7 +1235,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 
 						let annotate = alloc_expression(
 							LookupCall {
-								function: self.parent.ids.annotate,
+								function: self.parent.ids.annotate.into(),
 								arguments: vec![
 									alloc_expression(
 										ResolvedIdentifier::Declaration(decl),
@@ -1325,13 +1324,14 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 								// Rewrite infinite slice .. into `'..'(index_set_mofn(c))`
 								alloc_expression(
 									LookupCall {
-										function: *s,
+										function: (*s).into(),
 										arguments: vec![alloc_expression(
 											LookupCall {
 												function: Identifier::new(
 													format!("index_set_{}of{}", i + 1, array_dims),
 													collector.parent.db.upcast(),
-												),
+												)
+												.into(),
 												arguments: vec![alloc_expression(
 													collection_decl,
 													collector,
@@ -1409,10 +1409,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						// Rewrite infinite slice .. into `'..'(index_set(c))`
 						alloc_expression(
 							LookupCall {
-								function: *s,
+								function: (*s).into(),
 								arguments: vec![alloc_expression(
 									LookupCall {
-										function: collector.parent.ids.index_set,
+										function: collector.parent.ids.index_set.into(),
 										arguments: vec![alloc_expression(
 											collection_decl,
 											collector,
@@ -1442,7 +1442,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					.map(|(decl, _, origin)| {
 						alloc_expression(
 							LookupCall {
-								function: self.parent.ids.erase_enum,
+								function: self.parent.ids.erase_enum.into(),
 								arguments: vec![alloc_expression(*decl, self, *origin)],
 							},
 							self,
@@ -1470,7 +1470,8 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						function: Identifier::new(
 							format!("slice_{}d", arguments.len() - 2),
 							self.parent.db.upcast(),
-						),
+						)
+						.into(),
 						arguments,
 					},
 					self,
@@ -1557,7 +1558,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					} else {
 						let call = alloc_expression(
 							LookupCall {
-								function: self.parent.ids.forall,
+								function: self.parent.ids.forall.into(),
 								arguments: vec![alloc_expression(
 									ArrayLiteral(where_clauses),
 									self,
@@ -2015,7 +2016,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					PatternData::Expression(Box::new(if *negated {
 						alloc_expression(
 							LookupCall {
-								function: self.parent.ids.minus,
+								function: self.parent.ids.minus.into(),
 								arguments: vec![v],
 							},
 							self,
@@ -2047,7 +2048,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					PatternData::Expression(Box::new(if *negated {
 						alloc_expression(
 							LookupCall {
-								function: self.parent.ids.minus,
+								function: self.parent.ids.minus.into(),
 								arguments: vec![v],
 							},
 							self,
@@ -2062,7 +2063,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					PatternData::Expression(Box::new(if *negated {
 						alloc_expression(
 							LookupCall {
-								function: self.parent.ids.minus,
+								function: self.parent.ids.minus.into(),
 								arguments: vec![v],
 							},
 							self,

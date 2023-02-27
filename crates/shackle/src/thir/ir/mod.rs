@@ -45,6 +45,7 @@ impl Model {
 			.filter(|idx| match idx {
 				ItemId::Constraint(c) => self[*c].top_level(),
 				ItemId::Declaration(d) => self[*d].top_level(),
+				ItemId::Function(f) => self[*f].top_level(),
 				_ => true,
 			})
 			.chain(self.solve().map(|_| ItemId::Solve))
@@ -156,12 +157,12 @@ impl Model {
 	}
 
 	/// Get the function items
-	pub fn functions(&self) -> impl Iterator<Item = (FunctionId, &FunctionItem)> {
+	pub fn all_functions(&self) -> impl Iterator<Item = (FunctionId, &FunctionItem)> {
 		self.functions.iter()
 	}
 
 	/// Get the function items
-	pub fn functions_mut(&mut self) -> impl Iterator<Item = (FunctionId, &mut FunctionItem)> {
+	pub fn all_functions_mut(&mut self) -> impl Iterator<Item = (FunctionId, &mut FunctionItem)> {
 		self.functions.iter_mut()
 	}
 
@@ -170,6 +171,18 @@ impl Model {
 		let idx = self.functions.insert(item);
 		self.items.push(idx.into());
 		idx
+	}
+
+	/// Get the top-level function items
+	pub fn top_level_functions(&self) -> impl Iterator<Item = (FunctionId, &FunctionItem)> {
+		self.all_functions().filter(|(_, f)| f.top_level())
+	}
+
+	/// Get the top-level function items
+	pub fn top_level_functions_mut(
+		&mut self,
+	) -> impl Iterator<Item = (FunctionId, &mut FunctionItem)> {
+		self.all_functions_mut().filter(|(_, f)| f.top_level())
 	}
 
 	/// Get the output items
@@ -211,10 +224,10 @@ impl Model {
 	pub fn lookup_function(
 		&self,
 		db: &dyn Thir,
-		name: Identifier,
+		name: FunctionName,
 		args: &[Ty],
 	) -> Result<FunctionLookup, FunctionLookupError> {
-		let overloads = self.functions().filter_map(|(i, f)| {
+		let overloads = self.all_functions().filter_map(|(i, f)| {
 			if f.name() == name {
 				Some((i, f.function_entry(self)))
 			} else {

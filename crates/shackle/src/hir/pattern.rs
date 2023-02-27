@@ -130,6 +130,11 @@ impl Identifier {
 		Self::new(v, db)
 	}
 
+	/// Whether this identifier matches a string
+	pub fn is<T: Into<InternedStringData>>(&self, db: &dyn Hir, v: T) -> bool {
+		db.intern_string(v.into()) == self.0
+	}
+
 	/// Pretty print this identifier (adding quotes if needed)
 	///
 	/// TODO: Don't quote UTF-8
@@ -279,4 +284,6 @@ id_registry!(
 	forall,
 	set2array,
 	annotate,
+	to_enum,
+	deopt,
 );

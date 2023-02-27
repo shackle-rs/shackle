@@ -378,11 +378,7 @@ pub fn visit_let<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, l: &Let) {
 
 /// Visit the children of a lambda expression
 pub fn visit_lambda<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, l: &Lambda) {
-	visitor.visit_domain(model, &l.domain);
-	for p in l.parameters.iter() {
-		visitor.visit_item(model, (*p).into())
-	}
-	visitor.visit_expression(model, &l.body);
+	visitor.visit_function(model, l.0);
 }
 
 /// Visit the children of an expression.

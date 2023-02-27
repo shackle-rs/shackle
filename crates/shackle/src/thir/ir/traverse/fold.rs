@@ -425,7 +425,7 @@ pub fn add_model<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Mode
 		folder.add_item(db, model, item);
 	}
 	// Now that all items have been added, we can process function bodies
-	for (f, i) in model.functions() {
+	for (f, i) in model.all_functions() {
 		if i.body().is_some() {
 			folder.fold_function_body(db, model, f);
 		}
@@ -1067,18 +1067,8 @@ pub fn fold_lambda<F: Folder + ?Sized>(
 	model: &Model,
 	l: &Lambda,
 ) -> Lambda {
-	Lambda {
-		domain: Box::new(folder.fold_domain(db, model, &l.domain)),
-		parameters: l
-			.parameters
-			.iter()
-			.map(|p| {
-				folder.add_declaration(db, model, *p);
-				folder.fold_declaration_id(db, model, *p)
-			})
-			.collect(),
-		body: Box::new(folder.fold_expression(db, model, &l.body)),
-	}
+	folder.add_function(db, model, l.0);
+	Lambda(folder.fold_function_id(db, model, l.0))
 }
 
 /// Fold an expression.
