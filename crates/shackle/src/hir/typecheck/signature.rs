@@ -316,7 +316,7 @@ impl SignatureTypeContext {
 			}
 			LocalItemRef::EnumAssignment(e) => {
 				let it = &model[e];
-				let set_ty = Typer::new(db, self, item, data).collect_expression(it.assignee, None);
+				let set_ty = Typer::new(db, self, item, data).collect_expression(it.assignee);
 				let ty = match set_ty.lookup(db.upcast()) {
 					TyData::Set(_, _, e) => e,
 					_ => unreachable!(),
@@ -330,7 +330,7 @@ impl SignatureTypeContext {
 					| Goal::Minimize { pattern, objective } => {
 						self.add_declaration(PatternRef::new(item, *pattern), PatternTy::Computing);
 						let actual =
-							Typer::new(db, self, item, data).collect_expression(*objective, None);
+							Typer::new(db, self, item, data).collect_expression(*objective);
 						if !actual.is_subtype_of(db.upcast(), db.type_registry().var_float) {
 							let (src, span) =
 								NodeRef::from(EntityRef::new(db, item, *objective)).source_span(db);

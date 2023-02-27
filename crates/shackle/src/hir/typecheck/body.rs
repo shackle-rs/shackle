@@ -11,7 +11,7 @@ use crate::{
 	hir::{
 		db::Hir,
 		ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-		Expression, Pattern, Type,
+		Expression, Pattern,
 	},
 	ty::Ty,
 	Error,
@@ -66,20 +66,26 @@ impl BodyTypeContext {
 			LocalItemRef::Annotation(_) => {}
 			LocalItemRef::Function(f) => {
 				let it = &model[f];
+				let signature = db.lookup_item_signature(item);
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann, None);
+					typer.typecheck_expression(*ann, types.ann);
 				}
 				for param in it.parameters.iter() {
-					for ann in param.annotations.iter() {
-						typer.typecheck_expression(*ann, types.ann, None);
+					if let Some(p) = param.pattern {
+						let param_ty = match &signature.patterns[&PatternRef::new(item, p)] {
+							PatternTy::Argument(t) | PatternTy::Destructuring(t) => *t,
+							_ => unreachable!(),
+						};
+						for ann in param.annotations.iter() {
+							typer.typecheck_declaration_annotation(*ann, param_ty);
+						}
 					}
 				}
 
 				if let Some(e) = it.body {
-					let signature = db.lookup_item_signature(item);
 					match &signature.patterns[&PatternRef::new(item, it.pattern)] {
 						PatternTy::Function(function) => {
-							typer.typecheck_expression(e, function.overload.return_type(), None);
+							typer.typecheck_expression(e, function.overload.return_type());
 						}
 						_ => unreachable!(),
 					};
@@ -92,39 +98,40 @@ impl BodyTypeContext {
 					PatternTy::Variable(t) | PatternTy::Destructuring(t) => *t,
 					_ => unreachable!(),
 				};
-				if let Type::Any = data[it.declared_type] {
-					// Already done in signature
-				} else if let Some(e) = it.definition {
-					typer.typecheck_expression(e, expected, None);
-				}
-				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann, Some(expected));
+				// Declarations with incomplete types would have been done during signature typing
+				if data[it.declared_type].is_complete(data) {
+					if let Some(e) = it.definition {
+						typer.typecheck_expression(e, expected);
+					}
+					for ann in it.annotations.iter() {
+						typer.typecheck_declaration_annotation(*ann, expected);
+					}
 				}
 			}
 			LocalItemRef::Output(o) => {
 				let it = &model[o];
 				if let Some(s) = &it.section {
-					typer.typecheck_expression(*s, types.string, None);
+					typer.typecheck_expression(*s, types.string);
 				}
-				typer.typecheck_expression(it.expression, types.array_of_string, None);
+				typer.typecheck_expression(it.expression, types.array_of_string);
 			}
 			LocalItemRef::Constraint(c) => {
 				let it = &model[c];
-				typer.typecheck_expression(it.expression, types.var_bool, None);
+				typer.typecheck_expression(it.expression, types.var_bool);
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann, Some(types.var_bool));
+					typer.typecheck_expression(*ann, types.ann);
 				}
 			}
 			LocalItemRef::Solve(s) => {
 				let it = &model[s];
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann, None);
+					typer.typecheck_expression(*ann, types.ann);
 				}
 			}
 			LocalItemRef::Assignment(a) => {
 				let it = &model[a];
-				let expected = typer.collect_expression(it.assignee, None);
-				typer.typecheck_expression(it.definition, expected, None);
+				let expected = typer.collect_expression(it.assignee);
+				typer.typecheck_expression(it.definition, expected);
 			}
 			LocalItemRef::Enumeration(e) => {
 				let it = &model[e];
@@ -134,17 +141,17 @@ impl BodyTypeContext {
 					_ => unreachable!(),
 				};
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann, Some(ty));
+					typer.typecheck_declaration_annotation(*ann, ty);
 				}
 			}
 			LocalItemRef::EnumAssignment(e) => {
 				let it = &model[e];
-				typer.collect_expression(it.assignee, None);
+				typer.collect_expression(it.assignee);
 			}
 			LocalItemRef::TypeAlias(t) => {
 				let it = &model[t];
 				for ann in it.annotations.iter() {
-					typer.typecheck_expression(*ann, types.ann, None);
+					typer.typecheck_expression(*ann, types.ann);
 				}
 			}
 		}

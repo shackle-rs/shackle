@@ -90,8 +90,8 @@ impl<'a> DebugPrint<'a> for InstantiationError {
 				actual,
 			} => {
 				format!(
-					"argument {} expected {} but {}",
-					*index,
+					"argument {} expected {} but got {}",
+					*index + 1,
 					expected.pretty_print(db),
 					actual.pretty_print(db)
 				)

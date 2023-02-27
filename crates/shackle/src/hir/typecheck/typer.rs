@@ -61,14 +61,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	}
 
 	/// Collect the type of an expression and check that it is a subtype of the expected type.
-	pub fn typecheck_expression(
-		&mut self,
-		expr: ArenaIndex<Expression>,
-		expected: Ty,
-		is_annotation_for: Option<Ty>,
-	) {
+	pub fn typecheck_expression(&mut self, expr: ArenaIndex<Expression>, expected: Ty) {
 		let db = self.db;
-		let actual = self.collect_expression(expr, is_annotation_for);
+		let actual = self.collect_expression(expr);
 		if !actual.is_subtype_of(self.db.upcast(), expected) {
 			let (src, span) =
 				NodeRef::from(EntityRef::new(self.db, self.item, expr)).source_span(self.db);
@@ -88,11 +83,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	}
 
 	/// Get the type of this expression
-	pub fn collect_expression(
-		&mut self,
-		expr: ArenaIndex<Expression>,
-		is_annotation_for: Option<Ty>,
-	) -> Ty {
+	pub fn collect_expression(&mut self, expr: ArenaIndex<Expression>) -> Ty {
 		let db = self.db;
 		let result = match &self.data[expr] {
 			Expression::Absent => self.types.bottom.with_opt(db.upcast(), OptType::Opt),
@@ -101,8 +92,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Expression::FloatLiteral(_) => self.types.par_float,
 			Expression::StringLiteral(_) => self.types.string,
 			Expression::Infinity => self.types.par_int,
-			Expression::Identifier(i) => self.collect_identifier(expr, i, is_annotation_for),
-			Expression::Call(c) => self.collect_call(expr, c, is_annotation_for),
+			Expression::Identifier(i) => self.collect_identifier(expr, i, None),
+			Expression::Call(c) => self.collect_call(expr, c, None),
 			Expression::ArrayLiteral(al) => self.collect_array_literal(expr, al),
 			Expression::ArrayLiteral2D(al) => self.collect_array_literal_2d(expr, al),
 			Expression::IndexedArrayLiteral(al) => self.collect_indexed_array_literal(expr, al),
@@ -136,7 +127,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.flat_map(|anns| anns.iter())
 		{
-			self.typecheck_expression(*ann, self.types.ann, Some(ty));
+			self.typecheck_expression(*ann, self.types.ann);
 			// If annotation is shackle_type("...") then treat as sanity check for type
 			if let Expression::Call(c) = &self.data[*ann] {
 				if let Expression::Identifier(i) = &self.data[c.function] {
@@ -273,7 +264,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let args = c
 			.arguments
 			.iter()
-			.map(|e| self.collect_expression(*e, None))
+			.map(|e| self.collect_expression(*e))
 			.collect::<Vec<_>>();
 
 		match self.data[c.function] {
@@ -283,7 +274,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				ret
 			}
 			_ => {
-				let ty = self.collect_expression(c.function, None);
+				let ty = self.collect_expression(c.function);
 				if let TyData::Function(OptType::NonOpt, f) = ty.lookup(db.upcast()) {
 					if f.matches(db.upcast(), &args).is_err() {
 						let (src, span) =
@@ -331,7 +322,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		let ty = Ty::most_specific_supertype(
 			db.upcast(),
-			al.members.iter().map(|e| self.collect_expression(*e, None)),
+			al.members.iter().map(|e| self.collect_expression(*e)),
 		)
 		.unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -368,7 +359,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let mut idx_ty = |dim: &MaybeIndexSet| match dim {
 			MaybeIndexSet::Indexed(indices) => Ty::most_specific_supertype(
 				db.upcast(),
-				indices.iter().map(|e| self.collect_expression(*e, None)),
+				indices.iter().map(|e| self.collect_expression(*e)),
 			)
 			.unwrap_or_else(|| {
 				let (src, span) =
@@ -397,7 +388,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		} else {
 			Ty::most_specific_supertype(
 				db.upcast(),
-				al.members.iter().map(|e| self.collect_expression(*e, None)),
+				al.members.iter().map(|e| self.collect_expression(*e)),
 			)
 			.unwrap_or_else(|| {
 				let (src, span) =
@@ -439,7 +430,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		let dim_ty = Ty::most_specific_supertype(
 			db.upcast(),
-			al.indices.iter().map(|e| self.collect_expression(*e, None)),
+			al.indices.iter().map(|e| self.collect_expression(*e)),
 		)
 		.unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -458,7 +449,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		} else {
 			Ty::most_specific_supertype(
 				db.upcast(),
-				al.members.iter().map(|e| self.collect_expression(*e, None)),
+				al.members.iter().map(|e| self.collect_expression(*e)),
 			)
 			.unwrap_or_else(|| {
 				let (src, span) =
@@ -499,7 +490,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		let ty = Ty::most_specific_supertype(
 			db.upcast(),
-			sl.members.iter().map(|e| self.collect_expression(*e, None)),
+			sl.members.iter().map(|e| self.collect_expression(*e)),
 		)
 		.unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -565,7 +556,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		Ty::tuple(
 			db.upcast(),
-			tl.fields.iter().map(|f| self.collect_expression(*f, None)),
+			tl.fields.iter().map(|f| self.collect_expression(*f)),
 		)
 	}
 
@@ -596,7 +587,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					);
 				}
 				seen.insert(ident);
-				(ident, self.collect_expression(*f, None))
+				(ident, self.collect_expression(*f))
 			})
 			.collect::<Vec<_>>();
 		fields.sort_by_key(|(i, _)| i.lookup(db));
@@ -614,7 +605,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		for g in c.generators.iter() {
 			lift_to_opt |= self.collect_generator(expr, g);
 		}
-		let el = self.collect_expression(c.template, None);
+		let el = self.collect_expression(c.template);
 		let element = if lift_to_opt {
 			el.with_opt(db.upcast(), OptType::Opt)
 				.with_inst(db.upcast(), VarType::Var)
@@ -636,7 +627,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		};
 		let dim = c
 			.indices
-			.map(|i| self.collect_expression(i, None))
+			.map(|i| self.collect_expression(i))
 			.unwrap_or(self.types.par_int);
 		Ty::array(db.upcast(), dim, element).unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -666,7 +657,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		for g in c.generators.iter() {
 			is_var |= self.collect_generator(expr, g);
 		}
-		let el = self.collect_expression(c.template, None);
+		let el = self.collect_expression(c.template);
 		if !is_var {
 			// Inst determined by el inst
 			match el.inst(db.upcast()) {
@@ -735,7 +726,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				collection,
 				where_clause,
 			} => {
-				let collection_ty = self.collect_expression(*collection, None);
+				let collection_ty = self.collect_expression(*collection);
 				let gen_el = match collection_ty.lookup(db.upcast()) {
 					TyData::Array {
 						opt: OptType::NonOpt,
@@ -775,13 +766,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				value,
 				where_clause,
 			} => {
-				let ty = self.collect_expression(*value, None);
+				let ty = self.collect_expression(*value);
 				self.collect_pattern(Some(expr), false, *pattern, ty, false);
 				*where_clause
 			}
 		};
 		if let Some(w) = where_clause {
-			let ty = self.collect_expression(w, None);
+			let ty = self.collect_expression(w);
 			if !ty.is_subtype_of(db.upcast(), self.types.var_bool) {
 				let (src, span) = NodeRef::from(EntityRef::new(db, self.item, w)).source_span(db);
 				self.ctx.add_diagnostic(
@@ -805,8 +796,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_array_access(&mut self, expr: ArenaIndex<Expression>, aa: &ArrayAccess) -> Ty {
 		let db = self.db;
-		let collection = self.collect_expression(aa.collection, None);
-		let indices = self.collect_expression(aa.indices, None);
+		let collection = self.collect_expression(aa.collection);
+		let indices = self.collect_expression(aa.indices);
 
 		let process_index = |index: Ty, dim: Ty| -> Result<_, Error> {
 			let mut make_var = false;
@@ -866,15 +857,15 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					src,
 					span,
 					msg: format!(
-						"Expected '{}', but got {}",
-						dim.pretty_print(db.upcast()),
+						"Expected '{}', but got '{}'",
+						dim.pretty_print_as_dims(db.upcast()),
 						index.pretty_print(db.upcast())
 					),
 				}
 				.into());
 			}
 
-			match indices.opt(db.upcast()) {
+			match index.opt(db.upcast()) {
 				Some(OptType::Opt) => {
 					make_opt = true;
 				}
@@ -892,7 +883,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				_ => (),
 			}
-			match indices.inst(db.upcast()) {
+			match index.inst(db.upcast()) {
 				Some(VarType::Var) => {
 					make_var = true;
 				}
@@ -1050,7 +1041,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_tuple_access(&mut self, expr: ArenaIndex<Expression>, ta: &TupleAccess) -> Ty {
 		let db = self.db;
-		let tuple = self.collect_expression(ta.tuple, None);
+		let tuple = self.collect_expression(ta.tuple);
 		match tuple.lookup(db.upcast()) {
 			TyData::Tuple(opt, fields) => {
 				let i = ta.field.0;
@@ -1156,7 +1147,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_record_access(&mut self, expr: ArenaIndex<Expression>, ra: &RecordAccess) -> Ty {
 		let db = self.db;
-		let record = self.collect_expression(ra.record, None);
+		let record = self.collect_expression(ra.record);
 		match record.lookup(db.upcast()) {
 			TyData::Record(opt, fields) => {
 				let ty = fields
@@ -1269,7 +1260,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let condition_types = ite
 			.branches
 			.iter()
-			.map(|b| self.collect_expression(b.condition, None))
+			.map(|b| self.collect_expression(b.condition))
 			.collect::<Vec<_>>();
 		for (t, b) in condition_types.iter().zip(ite.branches.iter()) {
 			if !t.is_subtype_of(db.upcast(), self.types.var_bool) {
@@ -1293,7 +1284,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.map(|b| b.result)
 			.chain(ite.else_result)
-			.map(|e| (e, self.collect_expression(e, None)))
+			.map(|e| (e, self.collect_expression(e)))
 			.collect::<Vec<_>>();
 		let ty = Ty::most_specific_supertype(db.upcast(), result_types.iter().map(|(_, ty)| *ty))
 			.unwrap_or_else(|| {
@@ -1363,14 +1354,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_case(&mut self, expr: ArenaIndex<Expression>, c: &Case) -> Ty {
 		let db = self.db;
-		let scrutinee = self.collect_expression(c.expression, None);
+		let scrutinee = self.collect_expression(c.expression);
 		for case in c.cases.iter() {
 			self.collect_pattern(Some(expr), true, case.pattern, scrutinee, false);
 		}
 		let cases = c
 			.cases
 			.iter()
-			.map(|case| (case.value, self.collect_expression(case.value, None)))
+			.map(|case| (case.value, self.collect_expression(case.value)))
 			.collect::<Vec<_>>();
 		let ty = Ty::most_specific_supertype(db.upcast(), cases.iter().map(|(_, ty)| *ty))
 			.unwrap_or_else(|| {
@@ -1424,9 +1415,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			match item {
 				LetItem::Constraint(c) => {
 					for ann in c.annotations.iter() {
-						self.typecheck_expression(*ann, self.types.ann, None);
+						self.typecheck_expression(*ann, self.types.ann);
 					}
-					self.typecheck_expression(c.expression, self.types.var_bool, None);
+					self.typecheck_expression(c.expression, self.types.var_bool);
 				}
 				LetItem::Declaration(d) => {
 					let ty = self.collect_declaration(d);
@@ -1447,7 +1438,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 			}
 		}
-		self.collect_expression(l.in_expression, None)
+		self.collect_expression(l.in_expression)
 	}
 
 	/// Type check a declaration
@@ -1457,7 +1448,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
 		}
 		let ty = if let Some(e) = d.definition {
-			let actual = self.collect_expression(e, None);
+			let actual = self.collect_expression(e);
 			let expected = self.complete_type(d.declared_type, Some(actual));
 			if !actual.is_subtype_of(self.db.upcast(), expected) {
 				let (src, span) =
@@ -1481,9 +1472,44 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		};
 		self.collect_pattern(None, false, d.pattern, ty, false);
 		for ann in d.annotations.iter() {
-			self.typecheck_expression(*ann, self.types.ann, Some(ty));
+			// Handle identifiers/calls which lead to ::annotated_expression functions
+
+			self.typecheck_expression(*ann, self.types.ann);
 		}
 		ty
+	}
+
+	/// Typecheck an annotation for a declaration (since these may be calls to annotations using ::annotated_expression)
+	pub fn typecheck_declaration_annotation(
+		&mut self,
+		ann: ArenaIndex<Expression>,
+		declaration_ty: Ty,
+	) {
+		let db = self.db;
+		let actual = match &self.data[ann] {
+			Expression::Identifier(i) => self.collect_identifier(ann, i, Some(declaration_ty)),
+			Expression::Call(c) => self.collect_call(ann, c, Some(declaration_ty)),
+			_ => self.collect_expression(ann),
+		};
+		if !actual.is_subtype_of(db.upcast(), self.types.ann) {
+			let (src, span) =
+				NodeRef::from(EntityRef::new(db, self.item, ann)).source_span(self.db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeMismatch {
+					src,
+					span,
+					msg: format!(
+						"Expected '{}' but got '{}'",
+						self.types.ann.pretty_print(db.upcast()),
+						actual.pretty_print(db.upcast())
+					),
+				},
+			);
+		}
+		self.ctx
+			.add_expression(ExpressionRef::new(self.item, ann), actual);
+		self.collect_annotations(ann, actual);
 	}
 
 	fn collect_lambda(&mut self, l: &Lambda) -> Ty {
@@ -1508,7 +1534,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				ty
 			})
 			.collect();
-		let body = self.collect_expression(l.body, None);
+		let body = self.collect_expression(l.body);
 		let return_type = if let Some(r) = l.return_type {
 			let ret = self.complete_type(r, Some(body));
 			if !body.is_subtype_of(db.upcast(), ret) {
@@ -2219,7 +2245,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						}
 					}
 					_ => {
-						let ty = self.collect_expression(*domain, None);
+						let ty = self.collect_expression(*domain);
 						match ty.lookup(db.upcast()) {
 							TyData::Set(VarType::Par, OptType::NonOpt, e) => e,
 							TyData::Error => self.types.error,

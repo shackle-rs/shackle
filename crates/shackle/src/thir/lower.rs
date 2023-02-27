@@ -22,6 +22,7 @@ use crate::{
 		IdentifierRegistry, PatternTy, TypeResult,
 	},
 	ty::{OptType, Ty, TyData, VarType},
+	utils::impl_enum_from,
 };
 
 use super::{
@@ -29,6 +30,28 @@ use super::{
 	source::{DesugarKind, Origin},
 	*,
 };
+
+enum DeclOrConstraint {
+	Declaration(DeclarationId),
+	Constraint(ConstraintId),
+}
+
+impl_enum_from!(DeclOrConstraint::Declaration(DeclarationId));
+impl_enum_from!(DeclOrConstraint::Constraint(ConstraintId));
+
+impl From<DeclOrConstraint> for LetItem {
+	fn from(d: DeclOrConstraint) -> Self {
+		match d {
+			DeclOrConstraint::Constraint(c) => LetItem::Constraint(c),
+			DeclOrConstraint::Declaration(d) => LetItem::Declaration(d),
+		}
+	}
+}
+
+enum LoweredAnnotation {
+	Items(Vec<DeclOrConstraint>),
+	Expression(Expression),
+}
 
 /// Collects HIR items and lowers them to THIR
 struct ItemCollector<'a> {
@@ -208,7 +231,7 @@ impl<'a> ItemCollector<'a> {
 		d: &hir::Declaration,
 		data: &hir::ItemData,
 		top_level: bool,
-	) -> Vec<DeclarationId> {
+	) -> Vec<DeclOrConstraint> {
 		let types = self.db.lookup_item_types(item);
 
 		let ty = match &types[d.pattern] {
@@ -219,11 +242,6 @@ impl<'a> ItemCollector<'a> {
 		let mut collector = ExpressionCollector::new(self, data, item, &types);
 		let domain = collector.collect_domain(d.declared_type, ty, false);
 		let mut decl = Declaration::new(top_level, domain);
-		decl.annotations_mut().extend(
-			d.annotations
-				.iter()
-				.map(|ann| collector.collect_expression(*ann)),
-		);
 		if let Some(def) = d.definition {
 			decl.set_definition(collector.collect_expression(def));
 		}
@@ -232,7 +250,20 @@ impl<'a> ItemCollector<'a> {
 			.model
 			.add_declaration(Item::new(decl, item));
 		let decls = collector.collect_destructuring(idx, top_level, d.pattern);
-		[idx].into_iter().chain(decls).collect()
+		let mut ids = vec![idx.into()];
+		collector.parent.model[idx]
+			.annotations_mut()
+			.reserve(d.annotations.len());
+		for ann in d.annotations.iter().copied() {
+			match collector.collect_declaration_annotation(idx, ann) {
+				LoweredAnnotation::Expression(e) => {
+					collector.parent.model[idx].annotations_mut().push(e)
+				}
+				LoweredAnnotation::Items(items) => ids.extend(items),
+			}
+		}
+		ids.extend(decls.into_iter().map(DeclOrConstraint::Declaration));
+		ids
 	}
 
 	/// Collect an enumeration item
@@ -249,6 +280,15 @@ impl<'a> ItemCollector<'a> {
 					match element.lookup(self.db.upcast()) {
 						TyData::Enum(_, _, t) => {
 							let mut enumeration = Enumeration::new(t);
+							{
+								let mut collector =
+									ExpressionCollector::new(self, &e.data, item, &types);
+								enumeration.annotations_mut().extend(
+									e.annotations
+										.iter()
+										.map(|ann| collector.collect_expression(*ann)),
+								);
+							}
 							if let Some(def) = &e.definition {
 								enumeration.set_definition(
 									def.iter()
@@ -974,7 +1014,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 								.parent
 								.collect_declaration(self.item, d, self.data, false)
 								.into_iter()
-								.map(LetItem::Declaration)
+								.map(|d| d.into())
 								.collect::<Vec<_>>(),
 						})
 						.collect(),
@@ -1068,6 +1108,179 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			NodeRef::from(origin).source_span(db.upcast())
 		);
 		result
+	}
+
+	fn collect_declaration_annotation(
+		&mut self,
+		decl: DeclarationId,
+		ann: ArenaIndex<hir::Expression>,
+	) -> LoweredAnnotation {
+		// Declarations can have annotations which point to functions using ::annotated_expression.
+		// These need to be desugared into constraints.
+		match &self.data[ann] {
+			hir::Expression::Identifier(_) => {
+				let res = self.types.name_resolution(ann).unwrap();
+				let ident = self
+					.parent
+					.resolutions
+					.get(&res.pattern())
+					.unwrap_or_else(|| {
+						panic!(
+							"Did not lower {:?} at {:?} used by {:?} at {:?}",
+							res,
+							NodeRef::from(res.pattern().into_entity(self.parent.db.upcast()))
+								.source_span(self.parent.db.upcast()),
+							ExpressionRef::new(self.item, ann),
+							NodeRef::from(EntityRef::new(self.parent.db.upcast(), self.item, ann))
+								.source_span(self.parent.db.upcast()),
+						)
+					})
+					.clone();
+				if let ResolvedIdentifier::Function(f) = ident {
+					let origin = EntityRef::new(self.parent.db.upcast(), self.item, ann);
+					let ann_decl = self.introduce_declaration(
+						self.parent.model[decl].top_level(),
+						origin,
+						|collector| {
+							// Call annotation function using the annotated declaration
+							let function = alloc_expression(
+								if let hir::NameResolution::PolymorphicFunction(_, tvs) = res {
+									ResolvedIdentifier::PolymorphicFunction(
+										f,
+										Box::new(TyVarInstantiations::new(
+											collector.parent.model[f].type_inst_vars(),
+											tvs,
+										)),
+									)
+								} else {
+									ident
+								},
+								collector,
+								origin,
+							);
+							let arguments = vec![alloc_expression(
+								ResolvedIdentifier::Declaration(decl),
+								collector,
+								origin,
+							)];
+							alloc_expression(
+								Call {
+									function: Box::new(function),
+									arguments,
+								},
+								collector,
+								origin,
+							)
+						},
+					);
+
+					let annotate = alloc_expression(
+						LookupCall {
+							function: self.parent.ids.annotate,
+							arguments: vec![
+								alloc_expression(
+									ResolvedIdentifier::Declaration(decl),
+									self,
+									origin,
+								),
+								alloc_expression(
+									ResolvedIdentifier::Declaration(ann_decl),
+									self,
+									origin,
+								),
+							],
+						},
+						self,
+						origin,
+					);
+					let constraint = Constraint::new(self.parent.model[decl].top_level(), annotate);
+					let c_idx = self
+						.parent
+						.model
+						.add_constraint(Item::new(constraint, origin));
+
+					return LoweredAnnotation::Items(vec![ann_decl.into(), c_idx.into()]);
+				}
+			}
+			hir::Expression::Call(c) => {
+				let origin = EntityRef::new(self.parent.db.upcast(), self.item, ann);
+				let function = self.collect_expression(c.function);
+				if let ExpressionData::Identifier(ResolvedIdentifier::Function(f))
+				| ExpressionData::Identifier(ResolvedIdentifier::PolymorphicFunction(f, _)) = &*function
+				{
+					if self.parent.model[*f].parameters().len() > c.arguments.len() {
+						// Add the annotated declaration identifier as first argument
+						let mut arguments = Vec::with_capacity(c.arguments.len() + 1);
+						arguments.push(alloc_expression(
+							ResolvedIdentifier::Declaration(decl),
+							self,
+							origin,
+						));
+						arguments
+							.extend(c.arguments.iter().map(|arg| self.collect_expression(*arg)));
+
+						let ann_decl = self.introduce_declaration(
+							self.parent.model[decl].top_level(),
+							origin,
+							|collector| {
+								alloc_expression(
+									Call {
+										function: Box::new(function),
+										arguments,
+									},
+									collector,
+									origin,
+								)
+							},
+						);
+
+						let annotate = alloc_expression(
+							LookupCall {
+								function: self.parent.ids.annotate,
+								arguments: vec![
+									alloc_expression(
+										ResolvedIdentifier::Declaration(decl),
+										self,
+										origin,
+									),
+									alloc_expression(
+										ResolvedIdentifier::Declaration(ann_decl),
+										self,
+										origin,
+									),
+								],
+							},
+							self,
+							origin,
+						);
+						let constraint =
+							Constraint::new(self.parent.model[decl].top_level(), annotate);
+						let c_idx = self
+							.parent
+							.model
+							.add_constraint(Item::new(constraint, origin));
+
+						return LoweredAnnotation::Items(vec![ann_decl.into(), c_idx.into()]);
+					}
+				}
+
+				// Return as is
+				return LoweredAnnotation::Expression(alloc_expression(
+					Call {
+						function: Box::new(function),
+						arguments: c
+							.arguments
+							.iter()
+							.map(|arg| self.collect_expression(*arg))
+							.collect(),
+					},
+					self,
+					origin,
+				));
+			}
+			_ => (),
+		}
+		LoweredAnnotation::Expression(self.collect_expression(ann))
 	}
 
 	/// Rewrite index slicing into slice_Xd() call
@@ -1744,7 +1957,6 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				}
 			});
 			if let Some(name) = item.name {
-				eprintln!("{:?}", PatternRef::new(self.item, item.pattern));
 				self.parent.model[decl].set_name(name);
 				self.parent.resolutions.insert(
 					PatternRef::new(self.item, item.pattern),

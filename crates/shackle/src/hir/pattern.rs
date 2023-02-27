@@ -278,4 +278,5 @@ id_registry!(
 	erase_enum,
 	forall,
 	set2array,
+	annotate,
 );
