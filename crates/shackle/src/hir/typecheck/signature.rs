@@ -94,6 +94,20 @@ impl SignatureTypeContext {
 									);
 									had_error = true;
 								}
+								for t in Type::operations(p.declared_type, &it.data) {
+									let (src, span) =
+										NodeRef::from(EntityRef::new(db, item, t)).source_span(db);
+									self.add_diagnostic(
+										item,
+										TypeInferenceFailure {
+											src,
+											span,
+											msg: "Operation types are not allowed in annotation items"
+												.to_owned(),
+										},
+									);
+									had_error = true;
+								}
 								let ty = if had_error {
 									db.type_registry().error
 								} else {

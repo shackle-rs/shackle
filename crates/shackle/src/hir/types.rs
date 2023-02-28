@@ -132,6 +132,14 @@ impl Type {
 		Type::walk(t, data).filter(|t| matches!(data[*t], Type::AnonymousTypeInstVar { .. }))
 	}
 
+	/// Return the operation types in the given type.
+	pub fn operations(
+		t: ArenaIndex<Type>,
+		data: &ItemData,
+	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
+		Type::walk(t, data).filter(|t| matches!(data[*t], Type::Operation { .. }))
+	}
+
 	/// Get the unbounded primitive types in this type
 	pub fn primitives(
 		t: ArenaIndex<Type>,
