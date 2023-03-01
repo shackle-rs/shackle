@@ -24,6 +24,29 @@ use crate::{
 
 use super::{NameResolution, PatternTy, TypeContext};
 
+/// Mode for completing types
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeCompletionMode {
+	/// Give an error if non-primitive types are used
+	AnnotationParameter,
+	/// Give an error if non-primitive types are used
+	Operation,
+	/// Give an error if unbounded types are used
+	EnumerationParameter,
+	/// Allow all types
+	Default,
+}
+
+/// Result of completing a type
+pub struct TypeCompletionResult {
+	/// The computed type
+	pub ty: Ty,
+	/// Whether this type contains a bound
+	pub has_bounded: bool,
+	/// Whether this type contains an unbounded type
+	pub has_unbounded: bool,
+}
+
 /// Computes types of expressions and patterns in an item.
 ///
 /// The typer walks an expression tree and computes types of child nodes to
@@ -176,7 +199,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				| PatternTy::Enum(ty)
 				| PatternTy::EnumAtom(ty) => return ty,
 				PatternTy::AnnotationAtom => return self.types.ann,
-				PatternTy::TypeAlias(_) => {
+				PatternTy::TypeAlias { .. } => {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 					self.ctx.add_diagnostic(
@@ -1449,7 +1472,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		let ty = if let Some(e) = d.definition {
 			let actual = self.collect_expression(e);
-			let expected = self.complete_type(d.declared_type, Some(actual));
+			let expected = self
+				.complete_type(d.declared_type, Some(actual), TypeCompletionMode::Default)
+				.ty;
 			if !actual.is_subtype_of(self.db.upcast(), expected) {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(self.db, self.item, e)).source_span(self.db);
@@ -1468,7 +1493,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			}
 			expected
 		} else {
-			self.complete_type(d.declared_type, None)
+			self.complete_type(d.declared_type, None, TypeCompletionMode::Default)
+				.ty
 		};
 		self.collect_pattern(None, false, d.pattern, ty, false);
 		for ann in d.annotations.iter() {
@@ -1527,7 +1553,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.parameters
 			.iter()
 			.map(|param| {
-				let ty = self.complete_type(param.declared_type, None);
+				let ty = self
+					.complete_type(param.declared_type, None, TypeCompletionMode::Default)
+					.ty;
 				if let Some(p) = param.pattern {
 					self.collect_pattern(None, false, p, ty, true);
 				}
@@ -1536,7 +1564,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.collect();
 		let body = self.collect_expression(l.body);
 		let return_type = if let Some(r) = l.return_type {
-			let ret = self.complete_type(r, Some(body));
+			let ret = self
+				.complete_type(r, Some(body), TypeCompletionMode::Default)
+				.ty;
 			if !body.is_subtype_of(db.upcast(), ret) {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(self.db, self.item, l.body)).source_span(self.db);
@@ -2139,14 +2169,90 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	}
 
 	/// Collect an ascribed type `t`, filling in `Any` types with using `ty` if present.
-	pub fn complete_type(&mut self, t: ArenaIndex<Type>, ty: Option<Ty>) -> Ty {
+	pub fn complete_type(
+		&mut self,
+		t: ArenaIndex<Type>,
+		ty: Option<Ty>,
+		mode: TypeCompletionMode,
+	) -> TypeCompletionResult {
+		let mut has_bounded = false;
+		let mut has_unbounded = false;
+		let ty = self.complete_type_inner(t, ty, mode, &mut has_bounded, &mut has_unbounded);
+		TypeCompletionResult {
+			ty,
+			has_bounded,
+			has_unbounded,
+		}
+	}
+
+	fn complete_type_inner(
+		&mut self,
+		t: ArenaIndex<Type>,
+		ty: Option<Ty>,
+		mode: TypeCompletionMode,
+		has_bounded: &mut bool,
+		has_unbounded: &mut bool,
+	) -> Ty {
 		let db = self.db;
+
+		let mut set_bounded = |typer: &mut Self, domain: ArenaIndex<Expression>| {
+			*has_bounded = true;
+			match mode {
+				TypeCompletionMode::AnnotationParameter => {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, typer.item, domain)).source_span(db);
+					typer.ctx.add_diagnostic(
+						typer.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Bounded domains are not supported in annotation parameters."
+								.to_owned(),
+						},
+					);
+				}
+				TypeCompletionMode::Operation => {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, typer.item, domain)).source_span(db);
+					typer.ctx.add_diagnostic(
+						typer.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Bounded domains are not \
+supported in operation types."
+								.to_owned(),
+						},
+					);
+				}
+				_ => (),
+			}
+		};
+
+		let mut set_unbounded = |typer: &mut Self| {
+			*has_unbounded = true;
+			if let TypeCompletionMode::EnumerationParameter = mode {
+				let (src, span) = NodeRef::from(EntityRef::new(db, typer.item, t)).source_span(db);
+				typer.ctx.add_diagnostic(
+					typer.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: "Unbounded enumeration constructor \
+						parameters are not supported"
+							.to_owned(),
+					},
+				);
+			}
+		};
+
 		match &self.data[t] {
 			Type::Primitive {
 				inst,
 				opt,
 				primitive_type,
 			} => {
+				set_unbounded(self);
 				let ty = match primitive_type {
 					PrimitiveType::Ann => Ty::ann(db.upcast()),
 					PrimitiveType::Bool => Ty::par_bool(db.upcast()),
@@ -2183,11 +2289,24 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							self.ctx
 								.add_identifier_resolution(domain_ref, NameResolution::Pattern(p));
 							match self.ctx.type_pattern(db, p) {
-								PatternTy::TypeAlias(ty) => ty,
-								PatternTy::Variable(ty)
-								| PatternTy::Argument(ty)
-								| PatternTy::Enum(ty) => match ty.lookup(db.upcast()) {
+								PatternTy::TypeAlias {
+									ty,
+									has_bounded: b,
+									has_unbounded: ub,
+								} => {
+									if b {
+										set_bounded(self, *domain);
+									}
+									if ub {
+										set_unbounded(self);
+									}
+									ty
+								}
+								PatternTy::Variable(ty) | PatternTy::Argument(ty) => match ty
+									.lookup(db.upcast())
+								{
 									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {
+										set_bounded(self, *domain);
 										self.ctx.add_expression(domain_ref, ty);
 										inner
 									}
@@ -2210,7 +2329,20 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 										return self.types.error;
 									}
 								},
-								PatternTy::TyVar(t) => Ty::type_inst_var(db.upcast(), t),
+								PatternTy::Enum(ty) => match ty.lookup(db.upcast()) {
+									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {
+										// Don't set has_bounded or has_unbounded as enums are accepted
+										// everywhere
+										self.ctx.add_expression(domain_ref, ty);
+										inner
+									}
+									TyData::Error => self.types.error,
+									_ => unreachable!(),
+								},
+								PatternTy::TyVar(t) => {
+									*has_unbounded = true;
+									Ty::type_inst_var(db.upcast(), t)
+								}
 								PatternTy::Computing => {
 									// Error will be emitted during topological sorting
 									return self.types.error;
@@ -2247,7 +2379,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					_ => {
 						let ty = self.collect_expression(*domain);
 						match ty.lookup(db.upcast()) {
-							TyData::Set(VarType::Par, OptType::NonOpt, e) => e,
+							TyData::Set(VarType::Par, OptType::NonOpt, e) => {
+								set_bounded(self, *domain);
+								e
+							}
 							TyData::Error => self.types.error,
 							_ => {
 								let (src, span) =
@@ -2303,8 +2438,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					Some(TyData::Array { dim, element, .. }) => (Some(dim), Some(element)),
 					_ => (None, None),
 				};
-				let dim = self.complete_type(*dimensions, d_ty);
-				let element = self.complete_type(*element, e_ty);
+				let dim =
+					self.complete_type_inner(*dimensions, d_ty, mode, has_bounded, has_unbounded);
+				let element =
+					self.complete_type_inner(*element, e_ty, mode, has_bounded, has_unbounded);
 				let ty = Ty::array(db.upcast(), dim, element).unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
@@ -2329,7 +2466,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					Some(TyData::Set(_, _, element)) => Some(element),
 					_ => None,
 				};
-				let el = self.complete_type(*element, e_ty);
+				let el = self.complete_type_inner(*element, e_ty, mode, has_bounded, has_unbounded);
 				let ty = Ty::par_set(db.upcast(), el).unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
@@ -2370,12 +2507,16 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					fields
 						.iter()
 						.zip(fs.iter().map(|f| Some(*f)).chain(std::iter::repeat(None)))
-						.map(|(f, f_ty)| self.complete_type(*f, f_ty)),
+						.map(|(f, f_ty)| {
+							self.complete_type_inner(*f, f_ty, mode, has_bounded, has_unbounded)
+						}),
 				)
 				.with_opt(db.upcast(), *opt),
 				_ => Ty::tuple(
 					db.upcast(),
-					fields.iter().map(|f| self.complete_type(*f, None)),
+					fields.iter().map(|f| {
+						self.complete_type_inner(*f, None, mode, has_bounded, has_unbounded)
+					}),
 				)
 				.with_opt(db.upcast(), *opt),
 			},
@@ -2414,7 +2555,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					fields.into_iter().map(|(i, f)| {
 						(
 							i,
-							self.complete_type(
+							self.complete_type_inner(
 								f,
 								ty.and_then(|ty| match ty.lookup(db.upcast()) {
 									TyData::Record(_, fs) => {
@@ -2422,6 +2563,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									}
 									_ => None,
 								}),
+								mode,
+								has_bounded,
+								has_unbounded,
 							),
 						)
 					}),
@@ -2432,38 +2576,86 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				opt,
 				return_type,
 				parameter_types,
-			} => match ty.map(|ty| ty.lookup(db.upcast())) {
-				Some(TyData::Function(
-					_,
-					FunctionType {
-						return_type: r,
-						params: ps,
-					},
-				)) => Ty::function(
-					db.upcast(),
-					FunctionType {
-						return_type: self.complete_type(*return_type, Some(r)),
-						params: parameter_types
-							.iter()
-							.zip(ps.iter().map(|p| Some(*p)).chain(std::iter::repeat(None)))
-							.map(|(p, p_ty)| self.complete_type(*p, p_ty))
-							.collect(),
-					},
-				)
-				.with_opt(db.upcast(), *opt),
-				_ => Ty::function(
-					db.upcast(),
-					FunctionType {
-						return_type: self.complete_type(*return_type, None),
-						params: parameter_types
-							.iter()
-							.map(|p| self.complete_type(*p, None))
-							.collect(),
-					},
-				)
-				.with_opt(db.upcast(), *opt),
-			},
+			} => {
+				match mode {
+					TypeCompletionMode::AnnotationParameter => {
+						let (src, span) =
+							NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
+						self.ctx.add_diagnostic(
+							self.item,
+							TypeMismatch {
+								src,
+								span,
+								msg: "Operation types are are not supported in \
+									annotation item parameters"
+									.to_owned(),
+							},
+						);
+					}
+					_ => (),
+				}
+				match ty.map(|ty| ty.lookup(db.upcast())) {
+					Some(TyData::Function(
+						_,
+						FunctionType {
+							return_type: r,
+							params: ps,
+						},
+					)) => Ty::function(
+						db.upcast(),
+						FunctionType {
+							return_type: self.complete_type_inner(
+								*return_type,
+								Some(r),
+								TypeCompletionMode::Operation,
+								has_bounded,
+								has_unbounded,
+							),
+							params: parameter_types
+								.iter()
+								.zip(ps.iter().map(|p| Some(*p)).chain(std::iter::repeat(None)))
+								.map(|(p, p_ty)| {
+									self.complete_type_inner(
+										*p,
+										p_ty,
+										TypeCompletionMode::Operation,
+										has_bounded,
+										has_unbounded,
+									)
+								})
+								.collect(),
+						},
+					)
+					.with_opt(db.upcast(), *opt),
+					_ => Ty::function(
+						db.upcast(),
+						FunctionType {
+							return_type: self.complete_type_inner(
+								*return_type,
+								None,
+								TypeCompletionMode::Operation,
+								has_bounded,
+								has_unbounded,
+							),
+							params: parameter_types
+								.iter()
+								.map(|p| {
+									self.complete_type_inner(
+										*p,
+										None,
+										TypeCompletionMode::Operation,
+										has_bounded,
+										has_unbounded,
+									)
+								})
+								.collect(),
+						},
+					)
+					.with_opt(db.upcast(), *opt),
+				}
+			}
 			Type::AnonymousTypeInstVar { inst, opt, pattern } => {
+				*has_unbounded = true;
 				let mut ty = Ty::type_inst_var(
 					db.upcast(),
 					match self
@@ -2499,18 +2691,22 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				ty
 			}
-			Type::Any => ty.unwrap_or_else(|| {
-				let (src, span) = NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
-				self.ctx.add_diagnostic(
-					self.item,
-					TypeInferenceFailure {
-						src,
-						span,
-						msg: "Unable to infer type".to_owned(),
-					},
-				);
-				self.types.error
-			}),
+			Type::Any => {
+				*has_unbounded = true;
+				ty.unwrap_or_else(|| {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						TypeInferenceFailure {
+							src,
+							span,
+							msg: "Unable to infer type".to_owned(),
+						},
+					);
+					self.types.error
+				})
+			}
 			Type::Missing => self.types.error,
 		}
 	}

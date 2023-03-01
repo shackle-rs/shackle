@@ -82,7 +82,7 @@ impl RequestHandler<SemanticTokensFullRequest, ModelRef> for SemanticTokensHandl
 								token_type = TokenType::Function
 							}
 							Some(PatternTy::TyVar(_)) => token_type = TokenType::TypeParameter,
-							Some(PatternTy::TypeAlias(_)) => token_type = TokenType::Type,
+							Some(PatternTy::TypeAlias { .. }) => token_type = TokenType::Type,
 							Some(PatternTy::Variable(ty)) => {
 								is_par = is_par || ty.known_par(db);
 								if ty.is_function(db) {

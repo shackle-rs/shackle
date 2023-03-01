@@ -570,7 +570,10 @@ impl<'a> ItemCollector<'a> {
 		for e in hir::Type::expressions(ta.aliased_type, &ta.data) {
 			if let Some(res) = types.name_resolution(e) {
 				let res_types = self.db.lookup_item_types(res.pattern().item());
-				if matches!(&res_types[res.pattern().pattern()], PatternTy::TypeAlias(_)) {
+				if matches!(
+					&res_types[res.pattern().pattern()],
+					PatternTy::TypeAlias { .. }
+				) {
 					// Skip type aliases inside other type aliases (already will be processed)
 					continue;
 				}
@@ -1680,7 +1683,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						PatternTy::TyVar(_) => {
 							return Domain::unbounded(origin, ty);
 						}
-						PatternTy::TypeAlias(_) => {
+						PatternTy::TypeAlias { .. } => {
 							let model = res.pattern().item().model(db.upcast());
 							match res.pattern().item().local_item_ref(db.upcast()) {
 								LocalItemRef::TypeAlias(ta) => {

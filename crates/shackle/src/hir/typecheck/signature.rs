@@ -19,7 +19,9 @@ use crate::{
 	Error,
 };
 
-use super::{EnumConstructorEntry, NameResolution, PatternTy, TypeContext, Typer};
+use super::{
+	EnumConstructorEntry, NameResolution, PatternTy, TypeCompletionMode, TypeContext, Typer,
+};
 
 /// Collected types for an item signature
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,25 +96,16 @@ impl SignatureTypeContext {
 									);
 									had_error = true;
 								}
-								for t in Type::operations(p.declared_type, &it.data) {
-									let (src, span) =
-										NodeRef::from(EntityRef::new(db, item, t)).source_span(db);
-									self.add_diagnostic(
-										item,
-										TypeInferenceFailure {
-											src,
-											span,
-											msg: "Operation types are not allowed in annotation items"
-												.to_owned(),
-										},
-									);
-									had_error = true;
-								}
 								let ty = if had_error {
 									db.type_registry().error
 								} else {
 									Typer::new(db, self, item, data)
-										.complete_type(p.declared_type, None)
+										.complete_type(
+											p.declared_type,
+											None,
+											TypeCompletionMode::AnnotationParameter,
+										)
+										.ty
 								};
 								if let Some(pat) = p.pattern {
 									self.add_declaration(
@@ -224,7 +217,9 @@ impl SignatureTypeContext {
 						let ty = if had_error {
 							db.type_registry().error
 						} else {
-							typer.complete_type(p.declared_type, None)
+							typer
+								.complete_type(p.declared_type, None, TypeCompletionMode::Default)
+								.ty
 						};
 						if let Some(pat) = p.pattern {
 							typer.collect_pattern(None, false, pat, ty, true);
@@ -278,7 +273,9 @@ impl SignatureTypeContext {
 				let return_type = if had_error {
 					db.type_registry().error
 				} else {
-					Typer::new(db, self, item, data).complete_type(it.return_type, None)
+					Typer::new(db, self, item, data)
+						.complete_type(it.return_type, None, TypeCompletionMode::Default)
+						.ty
 				};
 
 				let d = self.data.patterns.get_mut(&pattern).unwrap();
@@ -308,7 +305,9 @@ impl SignatureTypeContext {
 				let mut typer = Typer::new(db, self, item, data);
 				if data[it.declared_type].is_complete(data) {
 					// Use LHS type only
-					let expected = typer.complete_type(it.declared_type, None);
+					let expected = typer
+						.complete_type(it.declared_type, None, TypeCompletionMode::Default)
+						.ty;
 					typer.collect_pattern(None, false, it.pattern, expected, false);
 				} else {
 					typer.collect_declaration(it);
@@ -372,8 +371,19 @@ impl SignatureTypeContext {
 				let it = &model[t];
 				let pat = PatternRef::new(item, it.name);
 				self.add_declaration(pat, PatternTy::Computing);
-				let ty = Typer::new(db, self, item, data).complete_type(it.aliased_type, None);
-				self.add_declaration(pat, PatternTy::TypeAlias(ty));
+				let result = Typer::new(db, self, item, data).complete_type(
+					it.aliased_type,
+					None,
+					TypeCompletionMode::Default,
+				);
+				self.add_declaration(
+					pat,
+					PatternTy::TypeAlias {
+						ty: result.ty,
+						has_bounded: result.has_bounded,
+						has_unbounded: result.has_unbounded,
+					},
+				);
 			}
 			_ => unreachable!("Item {:?} does not have signature", it),
 		}
@@ -393,7 +403,15 @@ impl SignatureTypeContext {
 				let mut typer = Typer::new(db, ctx, item, data);
 				parameters
 					.iter()
-					.map(|p| typer.complete_type(p.declared_type, None))
+					.map(|p| {
+						typer
+							.complete_type(
+								p.declared_type,
+								None,
+								TypeCompletionMode::EnumerationParameter,
+							)
+							.ty
+					})
 					.collect::<Box<[_]>>()
 			};
 
@@ -417,19 +435,6 @@ impl SignatureTypeContext {
 						},
 					);
 					had_error = true;
-				}
-
-				for unbounded in Type::primitives(p.declared_type, data) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, item, unbounded)).source_span(db);
-					ctx.add_diagnostic(
-						item,
-						TypeInferenceFailure {
-							src,
-							span,
-							msg: "Unbounded enum constructor parameters not supported".to_owned(),
-						},
-					);
 				}
 			}
 

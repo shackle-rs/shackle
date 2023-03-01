@@ -222,7 +222,7 @@ impl TypeResult {
 					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
 			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(db.upcast())),
-			PatternTy::TypeAlias(ty) => Some(format!(
+			PatternTy::TypeAlias { ty, .. } => Some(format!(
 				"type {} = {}",
 				data[pattern].identifier()?.pretty_print(db),
 				ty.pretty_print(db.upcast())
@@ -423,7 +423,14 @@ pub enum PatternTy {
 	/// Pattern is a type-inst variable declaration.
 	TyVar(TyVar),
 	/// Pattern is a type-inst alias declaration.
-	TypeAlias(Ty),
+	TypeAlias {
+		/// The type which is aliased
+		ty: Ty,
+		/// True if this type alias contains a bounded type
+		has_bounded: bool,
+		/// True if this type alias contains a primitive type
+		has_unbounded: bool,
+	},
 	/// An enum declaration (type is of the defining set of the enum).
 	Enum(Ty),
 	/// Enum constructor.
@@ -478,7 +485,9 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			}
 			PatternTy::Argument(ty) => format!("Argument({})", ty.pretty_print(db.upcast())),
 			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db.upcast())),
-			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db.upcast())),
+			PatternTy::TypeAlias { ty, .. } => {
+				format!("TypeAlias({})", ty.pretty_print(db.upcast()))
+			}
 			PatternTy::Enum(ty) => format!("Enum({})", ty.pretty_print(db.upcast())),
 			PatternTy::EnumConstructor(ecs) => {
 				format!(
