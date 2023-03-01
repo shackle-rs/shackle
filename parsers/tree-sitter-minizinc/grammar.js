@@ -529,14 +529,7 @@ module.exports = grammar({
         field("type", $._type)
       ),
     tuple_type: ($) =>
-      seq(
-        "tuple",
-        "(",
-        field("field", $._type),
-        ",",
-        sepBy1(",", field("field", $._type)),
-        ")"
-      ),
+      seq("tuple", "(", sepBy1(",", field("field", $._type)), ")"),
     record_type: ($) =>
       seq("record", "(", sepBy1(",", field("field", $.record_type_field)), ")"),
     record_type_field: ($) =>
@@ -661,7 +654,7 @@ module.exports = grammar({
         "(",
         field("member", $._expression),
         ",",
-        sepBy1(",", field("member", $._expression)),
+        sepBy(",", field("member", $._expression)),
         ")"
       ),
     record_literal: ($) =>
@@ -705,7 +698,7 @@ module.exports = grammar({
         "(",
         field("field", $._pattern),
         ",",
-        sepBy1(",", field("field", $._pattern)),
+        sepBy(",", field("field", $._pattern)),
         ")"
       ),
     pattern_record: ($) =>
