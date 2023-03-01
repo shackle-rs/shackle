@@ -291,6 +291,11 @@ pub trait Folder {
 		fold_identifier(self, db, model, identifier)
 	}
 
+	/// Fold a callable
+	fn fold_callable(&mut self, db: &dyn Thir, model: &Model, function: &Callable) -> Callable {
+		fold_callable(self, db, model, function)
+	}
+
 	/// Fold an array literal
 	fn fold_array_literal(
 		&mut self,
@@ -814,34 +819,40 @@ pub fn fold_identifier<F: Folder + ?Sized>(
 		ResolvedIdentifier::Annotation(idx) => {
 			ResolvedIdentifier::Annotation(folder.fold_annotation_id(db, model, *idx))
 		}
-		ResolvedIdentifier::AnnotationDestructure(idx) => {
-			ResolvedIdentifier::AnnotationDestructure(folder.fold_annotation_id(db, model, *idx))
-		}
 		ResolvedIdentifier::Declaration(idx) => {
 			ResolvedIdentifier::Declaration(folder.fold_declaration_id(db, model, *idx))
 		}
 		ResolvedIdentifier::Enumeration(idx) => {
 			ResolvedIdentifier::Enumeration(folder.fold_enumeration_id(db, model, *idx))
 		}
-		ResolvedIdentifier::EnumerationDestructure(idx, kind) => {
-			ResolvedIdentifier::EnumerationDestructure(
-				folder.fold_enum_member_id(db, model, *idx),
-				*kind,
-			)
+		ResolvedIdentifier::EnumerationMember(idx) => {
+			ResolvedIdentifier::EnumerationMember(folder.fold_enum_member_id(db, model, *idx))
 		}
-		ResolvedIdentifier::EnumerationMember(idx, kind) => ResolvedIdentifier::EnumerationMember(
-			folder.fold_enum_member_id(db, model, *idx),
-			*kind,
-		),
-		ResolvedIdentifier::Function(idx) => {
-			ResolvedIdentifier::Function(folder.fold_function_id(db, model, *idx))
+	}
+}
+
+/// Fold a callable
+pub fn fold_callable<F: Folder + ?Sized>(
+	folder: &mut F,
+	db: &dyn Thir,
+	model: &Model,
+	function: &Callable,
+) -> Callable {
+	match function {
+		Callable::Annotation(a) => Callable::Annotation(folder.fold_annotation_id(db, model, *a)),
+		Callable::AnnotationDestructure(a) => {
+			Callable::AnnotationDestructure(folder.fold_annotation_id(db, model, *a))
 		}
-		ResolvedIdentifier::PolymorphicFunction(idx, tvs) => {
-			ResolvedIdentifier::PolymorphicFunction(
-				folder.fold_function_id(db, model, *idx),
-				tvs.clone(),
-			)
+		Callable::EnumConstructor(e) => {
+			Callable::EnumConstructor(folder.fold_enum_member_id(db, model, *e))
 		}
+		Callable::EnumDestructor(e) => {
+			Callable::EnumDestructor(folder.fold_enum_member_id(db, model, *e))
+		}
+		Callable::Expression(e) => {
+			Callable::Expression(Box::new(folder.fold_expression(db, model, &e)))
+		}
+		Callable::Function(f) => Callable::Function(folder.fold_function_id(db, model, *f)),
 	}
 }
 
@@ -1030,7 +1041,7 @@ pub fn fold_call<F: Folder + ?Sized>(
 	c: &Call,
 ) -> Call {
 	Call {
-		function: Box::new(folder.fold_expression(db, model, &c.function)),
+		function: folder.fold_callable(db, model, &c.function),
 		arguments: c
 			.arguments
 			.iter()
@@ -1262,9 +1273,8 @@ pub fn fold_pattern<F: Folder + ?Sized>(
 				.collect(),
 		},
 		PatternData::Anonymous(ty) => PatternData::Anonymous(*ty),
-		PatternData::EnumConstructor { member, kind, args } => PatternData::EnumConstructor {
+		PatternData::EnumConstructor { member, args } => PatternData::EnumConstructor {
 			member: folder.fold_enum_member_id(db, model, *member),
-			kind: *kind,
 			args: args
 				.iter()
 				.map(|arg| folder.fold_pattern(db, model, arg))

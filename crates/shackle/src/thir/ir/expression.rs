@@ -615,31 +615,127 @@ impl ExpressionBuilder for Case {
 	}
 }
 
+/// Target of a function call
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum Callable {
+	/// Call to a function item
+	Function(FunctionId),
+	/// Call to an annotation constructor function
+	Annotation(AnnotationId),
+	/// Call to an annotation destructor function
+	AnnotationDestructure(AnnotationId),
+	/// Call to an enum constructor function
+	EnumConstructor(EnumMemberId),
+	/// Call to an enum destructor function
+	EnumDestructor(EnumMemberId),
+	/// Call to a lambda expression
+	Expression(Box<Expression>),
+}
+
 /// A function call
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Call {
 	/// Function being called
-	pub function: Box<Expression>,
+	pub function: Callable,
 	/// Call arguments
 	pub arguments: Vec<Expression>,
 }
 
 impl ExpressionBuilder for Call {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
-		let ty = match self.function.ty().lookup(db.upcast()) {
-			TyData::Function(_, ft) => {
-				let tys = self
-					.arguments
-					.iter()
-					.map(|arg| arg.ty())
-					.collect::<Vec<_>>();
+	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+		let ty = match &self.function {
+			Callable::Annotation(a) => {
+				let params = model[*a]
+					.parameters
+					.as_ref()
+					.expect("Not an annotation function");
+				assert_eq!(params.len(), self.arguments.len());
+				for (arg, param) in self.arguments.iter().zip(params.iter()) {
+					assert!(arg.ty().is_subtype_of(db.upcast(), model[*param].ty()));
+				}
+				db.type_registry().ann
+			}
+			Callable::AnnotationDestructure(a) => {
+				assert_eq!(self.arguments.len(), 1);
+				assert_eq!(self.arguments[0].ty(), db.type_registry().ann);
+				let params = model[*a]
+					.parameters
+					.as_ref()
+					.expect("Not an annotation function");
 				assert!(
-					ft.matches(db.upcast(), &tys).is_ok(),
-					"Function does not accept argument types"
+					!params.is_empty(),
+					"Cannot destructure parameterless annotation function"
 				);
+				if params.len() == 1 {
+					model[params[0]].ty()
+				} else {
+					Ty::tuple(db.upcast(), params.iter().map(|p| model[*p].ty()))
+				}
+			}
+			Callable::EnumConstructor(e) => {
+				let params = model[*e]
+					.parameters
+					.as_ref()
+					.expect("Not an enum constructor");
+				assert_eq!(self.arguments.len(), params.len());
+				let mut kind = None;
+				for (arg, param) in self.arguments.iter().zip(params.iter()) {
+					let (arg_k, arg_ty) = EnumConstructorKind::from_ty(db, arg.ty());
+					if let Some(k) = kind {
+						assert_eq!(k, arg_k, "Invalid enum constructor arguments");
+					} else {
+						kind = Some(arg_k);
+					}
+					assert!(arg_ty.is_subtype_of(db.upcast(), model[*param].ty()));
+				}
+				let ty = Ty::par_enum(db.upcast(), model[e.enumeration_id()].enum_type());
+				kind.unwrap().lift(db, ty)
+			}
+			Callable::EnumDestructor(e) => {
+				assert_eq!(self.arguments.len(), 1);
+				let (kind, ty) = EnumConstructorKind::from_ty(db, self.arguments[0].ty());
+				assert_eq!(
+					model[e.enumeration_id()].enum_type(),
+					ty.enum_ty(db.upcast()).unwrap()
+				);
+				let params = model[*e]
+					.parameters
+					.as_ref()
+					.expect("Not an enum constructor function");
+				if params.len() == 1 {
+					kind.lift(db, model[params[0]].ty())
+				} else {
+					Ty::tuple(
+						db.upcast(),
+						params.iter().map(|p| kind.lift(db, model[*p].ty())),
+					)
+				}
+			}
+			Callable::Expression(e) => match e.ty().lookup(db.upcast()) {
+				TyData::Function(_, ft) => {
+					let tys = self
+						.arguments
+						.iter()
+						.map(|arg| arg.ty())
+						.collect::<Vec<_>>();
+					assert!(
+						ft.matches(db.upcast(), &tys).is_ok(),
+						"Function does not accept argument types"
+					);
+					ft.return_type
+				}
+				_ => unreachable!("Invalid function type"),
+			},
+			Callable::Function(f) => {
+				let arg_tys = self.arguments.iter().map(|e| e.ty()).collect::<Vec<_>>();
+				let fe = model[*f].function_entry(model);
+				let ty_params = fe
+					.overload
+					.instantiate_ty_params(db.upcast(), &arg_tys)
+					.expect("Failed to instantiate function");
+				let ft = fe.overload.instantiate(db.upcast(), &ty_params);
 				ft.return_type
 			}
-			_ => unreachable!("Invalid function type"),
 		};
 		Expression::new_unchecked(ty, self, origin)
 	}
@@ -657,7 +753,7 @@ pub struct LookupCall {
 
 impl LookupCall {
 	/// Perform the call lookup and produce a `Call`
-	pub fn resolve(self, db: &dyn Thir, model: &Model, function_origin: Origin) -> (Call, Ty) {
+	pub fn resolve(self, db: &dyn Thir, model: &Model) -> (Call, Ty) {
 		let args: Vec<_> = self.arguments.into_iter().collect();
 		let arg_tys: Vec<_> = args.iter().map(|arg| arg.ty()).collect();
 		let lookup = model
@@ -680,24 +776,9 @@ impl LookupCall {
 			.instantiate(db.upcast(), &lookup.ty_vars);
 		let return_ty = fn_type.return_type;
 
-		let function = Expression::new_unchecked(
-			Ty::function(db.upcast(), fn_type),
-			if lookup.ty_vars.is_empty() {
-				ResolvedIdentifier::Function(lookup.function)
-			} else {
-				ResolvedIdentifier::PolymorphicFunction(
-					lookup.function,
-					Box::new(TyVarInstantiations::new(
-						model[lookup.function].type_inst_vars(),
-						&lookup.ty_vars,
-					)),
-				)
-			},
-			function_origin,
-		);
 		(
 			Call {
-				function: Box::new(function),
+				function: Callable::Function(lookup.function),
 				arguments: args,
 			},
 			return_ty,
@@ -707,7 +788,7 @@ impl LookupCall {
 
 impl ExpressionBuilder for LookupCall {
 	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
-		let (call, return_ty) = self.resolve(db, model, origin);
+		let (call, return_ty) = self.resolve(db, model);
 		Expression::new_unchecked(return_ty, call, origin)
 	}
 }
@@ -773,46 +854,6 @@ impl ExpressionBuilder for AnnotationId {
 	}
 }
 
-/// An identifier which points to the destructuring function for an annotation.
-///
-/// Used for building expressions only. Becomes a ResolvedIdentifier when built.
-pub struct AnnotationDestructure(pub AnnotationId);
-
-impl From<AnnotationDestructure> for ExpressionData {
-	fn from(AnnotationDestructure(idx): AnnotationDestructure) -> Self {
-		ResolvedIdentifier::AnnotationDestructure(idx).into()
-	}
-}
-
-impl ExpressionBuilder for AnnotationDestructure {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
-		let Self(item) = &self;
-		let ann = db.type_registry().ann;
-		let params = model[*item]
-			.parameters
-			.as_ref()
-			.expect("Cannot destructure annotation atom");
-		let ty = if params.len() == 1 {
-			Ty::function(
-				db.upcast(),
-				FunctionType {
-					params: Box::new([ann]),
-					return_type: model[params[0]].ty(),
-				},
-			)
-		} else {
-			Ty::function(
-				db.upcast(),
-				FunctionType {
-					params: Box::new([ann]),
-					return_type: Ty::tuple(db.upcast(), params.iter().map(|d| model[*d].ty())),
-				},
-			)
-		};
-		Expression::new_unchecked(ty, self, origin)
-	}
-}
-
 impl From<DeclarationId> for ExpressionData {
 	fn from(idx: DeclarationId) -> Self {
 		ResolvedIdentifier::Declaration(idx).into()
@@ -824,9 +865,6 @@ impl ExpressionBuilder for DeclarationId {
 		Expression::new_unchecked(model[self].ty(), self, origin)
 	}
 }
-
-/// An identifier pointing to the defining set of an enum
-pub struct EnumDefiningSet(pub EnumerationId);
 
 impl From<EnumerationId> for ExpressionData {
 	fn from(idx: EnumerationId) -> Self {
@@ -845,162 +883,6 @@ impl ExpressionBuilder for EnumerationId {
 	}
 }
 
-/// An identifier pointing to an enum constructor function or atom.
-///
-/// Used for building expressions only. Becomes a ResolvedIdentifier when built.
-pub struct EnumConstructor(pub EnumMemberId, pub EnumConstructorKind);
-
-impl From<EnumConstructor> for ExpressionData {
-	fn from(EnumConstructor(idx, kind): EnumConstructor) -> Self {
-		ResolvedIdentifier::EnumerationMember(idx, kind).into()
-	}
-}
-
-impl ExpressionBuilder for EnumConstructor {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
-		let Self(member, kind) = &self;
-		let enum_ty = Ty::par_enum(db.upcast(), model[member.enumeration_id()].enum_type());
-		let ctor = &model[*member];
-		let ty = if let Some(ps) = ctor.parameters.as_ref() {
-			let params = ps.iter().map(|d| model[*d].ty());
-			let f = match kind {
-				EnumConstructorKind::Par => FunctionType {
-					params: params.collect(),
-					return_type: enum_ty,
-				},
-				EnumConstructorKind::Var => FunctionType {
-					params: params
-						.map(|p| p.with_inst(db.upcast(), VarType::Var).unwrap())
-						.collect(),
-					return_type: enum_ty.with_inst(db.upcast(), VarType::Var).unwrap(),
-				},
-				EnumConstructorKind::Opt => FunctionType {
-					params: params
-						.map(|p| p.with_opt(db.upcast(), OptType::Opt))
-						.collect(),
-					return_type: enum_ty.with_opt(db.upcast(), OptType::Opt),
-				},
-				EnumConstructorKind::VarOpt => FunctionType {
-					params: params
-						.map(|p| {
-							p.with_inst(db.upcast(), VarType::Var)
-								.unwrap()
-								.with_opt(db.upcast(), OptType::Opt)
-						})
-						.collect(),
-					return_type: enum_ty
-						.with_inst(db.upcast(), VarType::Var)
-						.unwrap()
-						.with_opt(db.upcast(), OptType::Opt),
-				},
-				EnumConstructorKind::Set => FunctionType {
-					params: params
-						.map(|p| Ty::par_set(db.upcast(), p).unwrap())
-						.collect(),
-					return_type: Ty::par_set(db.upcast(), enum_ty).unwrap(),
-				},
-				EnumConstructorKind::VarSet => FunctionType {
-					params: params
-						.map(|p| {
-							Ty::par_set(db.upcast(), p)
-								.unwrap()
-								.with_inst(db.upcast(), VarType::Var)
-								.unwrap()
-						})
-						.collect(),
-					return_type: Ty::par_set(db.upcast(), enum_ty)
-						.unwrap()
-						.with_inst(db.upcast(), VarType::Var)
-						.unwrap(),
-				},
-			};
-			Ty::function(db.upcast(), f)
-		} else {
-			assert_eq!(
-				*kind,
-				EnumConstructorKind::Par,
-				"Enum atom cannot be {:?}",
-				kind
-			);
-			Ty::par_enum(db.upcast(), model[member.enumeration_id()].enum_type())
-		};
-		Expression::new_unchecked(ty, self, origin)
-	}
-}
-
-/// An identifier which points to the destructuring function for an enumeration member.
-///
-/// Used for building expressions only. Becomes a ResolvedIdentifier when built.
-pub struct EnumDestructure(pub EnumMemberId, pub EnumConstructorKind);
-
-impl From<EnumDestructure> for ExpressionData {
-	fn from(EnumDestructure(idx, kind): EnumDestructure) -> Self {
-		ResolvedIdentifier::EnumerationDestructure(idx, kind).into()
-	}
-}
-
-impl ExpressionBuilder for EnumDestructure {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
-		let Self(member, kind) = &self;
-		let enum_ty = Ty::par_enum(db.upcast(), model[member.enumeration_id()].enum_type());
-		let ctor = &model[*member];
-		let params = ctor.parameters.as_ref().unwrap();
-		let return_type = if params.len() == 1 {
-			model[params[0]].ty()
-		} else {
-			Ty::tuple(db.upcast(), params.iter().map(|d| model[*d].ty()))
-		};
-		let f = match kind {
-			EnumConstructorKind::Par => FunctionType {
-				params: Box::new([enum_ty]),
-				return_type,
-			},
-			EnumConstructorKind::Var => FunctionType {
-				params: Box::new([enum_ty.with_inst(db.upcast(), VarType::Var).unwrap()]),
-				return_type: return_type.with_inst(db.upcast(), VarType::Var).unwrap(),
-			},
-			_ => unreachable!("Unsupported destructuring kind"),
-		};
-		Expression::new_unchecked(Ty::function(db.upcast(), f), self, origin)
-	}
-}
-
-/// An identifier pointing to a function
-///
-/// Used for building expressions only. Becomes a `ResolvedIdentifier` when built.
-pub struct FunctionIdentifier {
-	/// The function to call
-	pub function: FunctionId,
-	/// The argument types
-	pub args: Vec<Ty>,
-}
-
-impl ExpressionBuilder for FunctionIdentifier {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
-		let fe = model[self.function].function_entry(model);
-		let ty_params = fe
-			.overload
-			.instantiate_ty_params(db.upcast(), &self.args)
-			.expect("Failed to instantiate function");
-		let ft = fe.overload.instantiate(db.upcast(), &ty_params);
-		Expression::new_unchecked(
-			Ty::function(db.upcast(), ft),
-			if ty_params.is_empty() {
-				ResolvedIdentifier::Function(self.function)
-			} else {
-				ResolvedIdentifier::PolymorphicFunction(
-					self.function,
-					Box::new(TyVarInstantiations::new(
-						model[self.function].type_inst_vars(),
-						&ty_params,
-					)),
-				)
-			},
-			origin,
-		)
-	}
-}
-
 impl ExpressionBuilder for Identifier {
 	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
 		let result = model
@@ -1013,62 +895,28 @@ impl ExpressionBuilder for Identifier {
 /// An identifier which resolves to a declaration
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ResolvedIdentifier {
-	/// Identifier resolves to an annotation
+	/// Identifier resolves to an annotation atom
 	Annotation(AnnotationId),
-	/// Identifier resolves to an annotation destructor
-	AnnotationDestructure(AnnotationId),
 	/// Identifier resolves to a declaration
 	Declaration(DeclarationId),
-	/// Identifier resolves to an enumeration
+	/// Identifier resolves to an enumeration defining set
 	Enumeration(EnumerationId),
-	/// Identifier resolves to an enumeration member with the given index
-	EnumerationMember(EnumMemberId, EnumConstructorKind),
-	/// Identifier resolves to the destructor for an enumeration member with the given index
-	EnumerationDestructure(EnumMemberId, EnumConstructorKind),
-	/// Identifier resolves to a non-polymorphic function
-	Function(FunctionId),
-	/// Identifier resolves to a polymorphic function
-	PolymorphicFunction(FunctionId, Box<TyVarInstantiations>),
+	/// Identifier resolves to an enumeration member atom with the given index
+	EnumerationMember(EnumMemberId),
 }
+
+impl_enum_from!(ResolvedIdentifier::Annotation(AnnotationId));
+impl_enum_from!(ResolvedIdentifier::Declaration(DeclarationId));
+impl_enum_from!(ResolvedIdentifier::Enumeration(EnumerationId));
+impl_enum_from!(ResolvedIdentifier::EnumerationMember(EnumMemberId));
 
 impl ExpressionBuilder for ResolvedIdentifier {
 	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
 		match self {
 			ResolvedIdentifier::Annotation(i) => i.build(db, model, origin),
-			ResolvedIdentifier::AnnotationDestructure(i) => {
-				AnnotationDestructure(i).build(db, model, origin)
-			}
 			ResolvedIdentifier::Declaration(i) => i.build(db, model, origin),
 			ResolvedIdentifier::Enumeration(i) => i.build(db, model, origin),
-			ResolvedIdentifier::EnumerationDestructure(i, k) => {
-				EnumDestructure(i, k).build(db, model, origin)
-			}
-			ResolvedIdentifier::EnumerationMember(i, k) => {
-				EnumConstructor(i, k).build(db, model, origin)
-			}
-			ResolvedIdentifier::Function(i) => {
-				let fe = model[i].function_entry(model);
-				let ft = fe
-					.overload
-					.into_function()
-					.expect("Function is polymorphic");
-				Expression::new_unchecked(
-					Ty::function(db.upcast(), ft),
-					ResolvedIdentifier::Function(i),
-					origin,
-				)
-			}
-			ResolvedIdentifier::PolymorphicFunction(i, tvs) => {
-				let fe = model[i].function_entry(model);
-				let ft = fe
-					.overload
-					.instantiate(db.upcast(), &tvs.as_map(model[i].type_inst_vars()));
-				Expression::new_unchecked(
-					Ty::function(db.upcast(), ft),
-					ResolvedIdentifier::PolymorphicFunction(i, tvs),
-					origin,
-				)
-			}
+			ResolvedIdentifier::EnumerationMember(i) => i.build(db, model, origin),
 		}
 	}
 }
@@ -1100,6 +948,19 @@ impl EnumMemberId {
 	}
 }
 
+impl ExpressionBuilder for EnumMemberId {
+	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+		let ty = Ty::par_enum(db.upcast(), model[self.enumeration_id()].enum_type());
+		Expression::new_unchecked(ty, self, origin)
+	}
+}
+
+impl From<EnumMemberId> for ExpressionData {
+	fn from(idx: EnumMemberId) -> Self {
+		ResolvedIdentifier::EnumerationMember(idx).into()
+	}
+}
+
 /// Kind of enum constructor (or destructor)
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum EnumConstructorKind {
@@ -1119,18 +980,50 @@ pub enum EnumConstructorKind {
 
 impl EnumConstructorKind {
 	/// Gets the enum constructor kind which was used to create something of this type
-	pub fn from_ty(db: &dyn Thir, ty: Ty) -> Self {
+	pub fn from_ty(db: &dyn Thir, ty: Ty) -> (Self, Ty) {
 		let is_var = ty.inst(db.upcast()).unwrap() == VarType::Var;
 		let is_opt = ty.opt(db.upcast()).unwrap() == OptType::Opt;
 		let is_set = ty.is_set(db.upcast());
 		match (is_var, is_opt, is_set) {
-			(false, false, false) => EnumConstructorKind::Par,
-			(true, false, false) => EnumConstructorKind::Var,
-			(false, true, false) => EnumConstructorKind::Opt,
-			(true, true, false) => EnumConstructorKind::VarOpt,
-			(false, false, true) => EnumConstructorKind::Set,
-			(true, false, true) => EnumConstructorKind::VarSet,
+			(false, false, false) => (EnumConstructorKind::Par, ty),
+			(true, false, false) => (
+				EnumConstructorKind::Var,
+				ty.with_inst(db.upcast(), VarType::Par).unwrap(),
+			),
+			(false, true, false) => (
+				EnumConstructorKind::Opt,
+				ty.with_opt(db.upcast(), OptType::NonOpt),
+			),
+			(true, true, false) => (
+				EnumConstructorKind::VarOpt,
+				ty.with_inst(db.upcast(), VarType::Par)
+					.unwrap()
+					.with_opt(db.upcast(), OptType::NonOpt),
+			),
+			(false, false, true) => (EnumConstructorKind::Set, ty.elem_ty(db.upcast()).unwrap()),
+			(true, false, true) => (
+				EnumConstructorKind::VarSet,
+				ty.elem_ty(db.upcast()).unwrap(),
+			),
 			_ => unreachable!(),
+		}
+	}
+
+	/// Apply this kind of lifting to the given type
+	pub fn lift(&self, db: &dyn Thir, ty: Ty) -> Ty {
+		match self {
+			EnumConstructorKind::Par => ty,
+			EnumConstructorKind::Var => ty.with_inst(db.upcast(), VarType::Var).unwrap(),
+			EnumConstructorKind::Opt => ty.with_opt(db.upcast(), OptType::Opt),
+			EnumConstructorKind::VarOpt => ty
+				.with_inst(db.upcast(), VarType::Var)
+				.unwrap()
+				.with_opt(db.upcast(), OptType::Opt),
+			EnumConstructorKind::Set => Ty::par_set(db.upcast(), ty).unwrap(),
+			EnumConstructorKind::VarSet => Ty::par_set(db.upcast(), ty)
+				.unwrap()
+				.with_inst(db.upcast(), VarType::Var)
+				.unwrap(),
 		}
 	}
 }
@@ -1270,8 +1163,6 @@ pub enum PatternData {
 	EnumConstructor {
 		/// The enum item member
 		member: EnumMemberId,
-		/// Type of constructor
-		kind: EnumConstructorKind,
 		/// The constructor call arguments
 		args: Vec<Pattern>,
 	},

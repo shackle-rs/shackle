@@ -19,9 +19,7 @@ use crate::{
 	Error,
 };
 
-use super::{
-	EnumConstructorEntry, NameResolution, PatternTy, TypeCompletionMode, TypeContext, Typer,
-};
+use super::{EnumConstructorEntry, PatternTy, TypeCompletionMode, TypeContext, Typer};
 
 /// Collected types for an item signature
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,9 +29,9 @@ pub struct SignatureTypes {
 	/// Types of expressions
 	pub expressions: FxHashMap<ExpressionRef, Ty>,
 	/// Identifier resolution
-	pub identifier_resolution: FxHashMap<ExpressionRef, NameResolution>,
+	pub identifier_resolution: FxHashMap<ExpressionRef, PatternRef>,
 	/// Pattern resolution
-	pub pattern_resolution: FxHashMap<PatternRef, NameResolution>,
+	pub pattern_resolution: FxHashMap<PatternRef, PatternRef>,
 }
 
 /// Context for typing an item signature
@@ -117,21 +115,23 @@ impl SignatureTypeContext {
 							})
 							.collect::<Box<_>>();
 						let ann = db.type_registry().ann;
-						let dtor = FunctionEntry {
-							has_body: false,
-							overload: OverloadedFunction::Function(FunctionType {
-								return_type: if params.len() == 1 {
-									params[0]
-								} else {
-									Ty::tuple(db.upcast(), params.iter().copied())
-								},
-								params: Box::new([ann]),
-							}),
-						};
-						self.add_declaration(
-							PatternRef::new(item, *destructor),
-							PatternTy::AnnotationDestructure(Box::new(dtor)),
-						);
+						if !params.is_empty() {
+							let dtor = FunctionEntry {
+								has_body: false,
+								overload: OverloadedFunction::Function(FunctionType {
+									return_type: if params.len() == 1 {
+										params[0]
+									} else {
+										Ty::tuple(db.upcast(), params.iter().copied())
+									},
+									params: Box::new([ann]),
+								}),
+							};
+							self.add_declaration(
+								PatternRef::new(item, *destructor),
+								PatternTy::AnnotationDestructure(Box::new(dtor)),
+							);
+						}
 						let ctor = FunctionEntry {
 							has_body: false,
 							overload: OverloadedFunction::Function(FunctionType {
@@ -597,7 +597,7 @@ impl TypeContext for SignatureTypeContext {
 			expression
 		);
 	}
-	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: NameResolution) {
+	fn add_identifier_resolution(&mut self, expression: ExpressionRef, resolution: PatternRef) {
 		let old = self
 			.data
 			.identifier_resolution
@@ -608,7 +608,7 @@ impl TypeContext for SignatureTypeContext {
 			expression
 		);
 	}
-	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: NameResolution) {
+	fn add_pattern_resolution(&mut self, pattern: PatternRef, resolution: PatternRef) {
 		let old = self.data.pattern_resolution.insert(pattern, resolution);
 		assert!(
 			old.is_none(),

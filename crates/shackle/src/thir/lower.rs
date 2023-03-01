@@ -31,6 +31,7 @@ use super::{
 	*,
 };
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum DeclOrConstraint {
 	Declaration(DeclarationId),
 	Constraint(ConstraintId),
@@ -48,16 +49,23 @@ impl From<DeclOrConstraint> for LetItem {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum LoweredAnnotation {
 	Items(Vec<DeclOrConstraint>),
 	Expression(Expression),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum LoweredIdentifier {
+	ResolvedIdentifier(ResolvedIdentifier),
+	Callable(Callable),
 }
 
 /// Collects HIR items and lowers them to THIR
 struct ItemCollector<'a> {
 	db: &'a dyn Thir,
 	ids: &'a IdentifierRegistry,
-	resolutions: FxHashMap<PatternRef, ResolvedIdentifier>,
+	resolutions: FxHashMap<PatternRef, LoweredIdentifier>,
 	model: Model,
 	type_alias_expressions: FxHashMap<ExpressionRef, DeclarationId>,
 	deferred: Vec<(FunctionId, ItemRef)>,
@@ -124,7 +132,7 @@ impl<'a> ItemCollector<'a> {
 				let idx = self.model.add_annotation(Item::new(annotation, item));
 				self.resolutions.insert(
 					PatternRef::new(item, *pattern),
-					ResolvedIdentifier::Annotation(idx),
+					LoweredIdentifier::ResolvedIdentifier(idx.into()),
 				);
 				idx
 			}
@@ -160,11 +168,11 @@ impl<'a> ItemCollector<'a> {
 				let idx = self.model.add_annotation(Item::new(annotation, item));
 				self.resolutions.insert(
 					PatternRef::new(item, *constructor),
-					ResolvedIdentifier::Annotation(idx),
+					LoweredIdentifier::Callable(Callable::Annotation(idx)),
 				);
 				self.resolutions.insert(
 					PatternRef::new(item, *destructor),
-					ResolvedIdentifier::AnnotationDestructure(idx),
+					LoweredIdentifier::Callable(Callable::AnnotationDestructure(idx)),
 				);
 				idx
 			}
@@ -177,8 +185,8 @@ impl<'a> ItemCollector<'a> {
 		let db = self.db;
 		let types = db.lookup_item_types(item);
 		let res = types.name_resolution(a.assignee).unwrap();
-		let decl = match &self.resolutions[&res.pattern()] {
-			ResolvedIdentifier::Declaration(d) => *d,
+		let decl = match &self.resolutions[&res] {
+			LoweredIdentifier::ResolvedIdentifier(ResolvedIdentifier::Declaration(d)) => *d,
 			_ => unreachable!(),
 		};
 		if self.model[decl].definition().is_some() {
@@ -298,7 +306,7 @@ impl<'a> ItemCollector<'a> {
 							let idx = self.model.add_enumeration(Item::new(enumeration, item));
 							self.resolutions.insert(
 								PatternRef::new(item, e.pattern),
-								ResolvedIdentifier::Enumeration(idx),
+								LoweredIdentifier::ResolvedIdentifier(idx.into()),
 							);
 							self.add_enum_resolutions(
 								idx,
@@ -324,8 +332,8 @@ impl<'a> ItemCollector<'a> {
 	) {
 		let types = self.db.lookup_item_types(item);
 		let res = types.name_resolution(a.assignee).unwrap();
-		let idx = match &self.resolutions[&res.pattern()] {
-			ResolvedIdentifier::Enumeration(e) => *e,
+		let idx = match &self.resolutions[&res] {
+			LoweredIdentifier::ResolvedIdentifier(ResolvedIdentifier::Enumeration(e)) => *e,
 			_ => unreachable!(),
 		};
 		let def = a
@@ -348,9 +356,8 @@ impl<'a> ItemCollector<'a> {
 				hir::EnumConstructor::Named(hir::Constructor::Atom { pattern }) => {
 					self.resolutions.insert(
 						PatternRef::new(item, *pattern),
-						ResolvedIdentifier::EnumerationMember(
-							EnumMemberId::new(idx, i as u32),
-							EnumConstructorKind::Par,
+						LoweredIdentifier::ResolvedIdentifier(
+							EnumMemberId::new(idx, i as u32).into(),
 						),
 					);
 				}
@@ -361,17 +368,15 @@ impl<'a> ItemCollector<'a> {
 				}) => {
 					self.resolutions.insert(
 						PatternRef::new(item, *constructor),
-						ResolvedIdentifier::EnumerationMember(
-							EnumMemberId::new(idx, i as u32),
-							EnumConstructorKind::Par,
-						),
+						LoweredIdentifier::Callable(Callable::EnumConstructor(EnumMemberId::new(
+							idx, i as u32,
+						))),
 					);
 					self.resolutions.insert(
 						PatternRef::new(item, *destructor),
-						ResolvedIdentifier::EnumerationDestructure(
-							EnumMemberId::new(idx, i as u32),
-							EnumConstructorKind::Par,
-						),
+						LoweredIdentifier::Callable(Callable::EnumDestructor(EnumMemberId::new(
+							idx, i as u32,
+						))),
 					);
 				}
 				_ => (),
@@ -478,7 +483,7 @@ impl<'a> ItemCollector<'a> {
 
 				let idx = self.model.add_function(Item::new(function, item));
 				self.resolutions
-					.insert(res, ResolvedIdentifier::Function(idx));
+					.insert(res, LoweredIdentifier::Callable(Callable::Function(idx)));
 				if f.body.is_some() {
 					self.deferred.push((idx, item));
 				}
@@ -541,7 +546,7 @@ impl<'a> ItemCollector<'a> {
 				));
 				self.resolutions.insert(
 					PatternRef::new(item, pattern),
-					ResolvedIdentifier::Declaration(idx),
+					LoweredIdentifier::ResolvedIdentifier(idx.into()),
 				);
 				if is_maximize {
 					Solve::maximize(idx)
@@ -569,11 +574,8 @@ impl<'a> ItemCollector<'a> {
 		let types = self.db.lookup_item_types(item);
 		for e in hir::Type::expressions(ta.aliased_type, &ta.data) {
 			if let Some(res) = types.name_resolution(e) {
-				let res_types = self.db.lookup_item_types(res.pattern().item());
-				if matches!(
-					&res_types[res.pattern().pattern()],
-					PatternTy::TypeAlias { .. }
-				) {
+				let res_types = self.db.lookup_item_types(res.item());
+				if matches!(&res_types[res.pattern()], PatternTy::TypeAlias { .. }) {
 					// Skip type aliases inside other type aliases (already will be processed)
 					continue;
 				}
@@ -826,18 +828,44 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				origin,
 			),
 			hir::Expression::BooleanLiteral(b) => alloc_expression(*b, self, origin),
-			hir::Expression::Call(c) => alloc_expression(
-				Call {
-					function: Box::new(self.collect_expression(c.function)),
-					arguments: c
-						.arguments
-						.iter()
-						.map(|arg| self.collect_expression(*arg))
-						.collect(),
-				},
-				self,
-				origin,
-			),
+			hir::Expression::Call(c) => {
+				let function = if let hir::Expression::Identifier(_) = self.data[c.function] {
+					let res = self.types.name_resolution(c.function).unwrap();
+					let ident = self.parent.resolutions.get(&res).unwrap_or_else(|| {
+						panic!(
+							"Did not lower {:?} at {:?} used by {:?} at {:?}",
+							res,
+							NodeRef::from(res.into_entity(self.parent.db.upcast()))
+								.source_span(self.parent.db.upcast()),
+							ExpressionRef::new(self.item, c.function),
+							NodeRef::from(EntityRef::new(
+								self.parent.db.upcast(),
+								self.item,
+								c.function
+							))
+							.source_span(self.parent.db.upcast()),
+						)
+					});
+					match ident {
+						LoweredIdentifier::Callable(c) => c.clone(),
+						_ => Callable::Expression(Box::new(self.collect_expression(c.function))),
+					}
+				} else {
+					Callable::Expression(Box::new(self.collect_expression(c.function)))
+				};
+				alloc_expression(
+					Call {
+						function,
+						arguments: c
+							.arguments
+							.iter()
+							.map(|arg| self.collect_expression(*arg))
+							.collect(),
+					},
+					self,
+					origin,
+				)
+			}
 			hir::Expression::Case(c) => {
 				let scrutinee_origin =
 					EntityRef::new(self.parent.db.upcast(), self.item, c.expression);
@@ -898,34 +926,21 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			hir::Expression::FloatLiteral(f) => alloc_expression(*f, self, origin),
 			hir::Expression::Identifier(_) => {
 				let res = self.types.name_resolution(idx).unwrap();
-				let ident = self
-					.parent
-					.resolutions
-					.get(&res.pattern())
-					.unwrap_or_else(|| {
-						panic!(
-							"Did not lower {:?} at {:?} used by {:?} at {:?}",
-							res,
-							NodeRef::from(res.pattern().into_entity(self.parent.db.upcast()))
-								.source_span(self.parent.db.upcast()),
-							ExpressionRef::new(self.item, idx),
-							NodeRef::from(EntityRef::new(self.parent.db.upcast(), self.item, idx))
-								.source_span(self.parent.db.upcast()),
-						)
-					});
+				let ident = self.parent.resolutions.get(&res).unwrap_or_else(|| {
+					panic!(
+						"Did not lower {:?} at {:?} used by {:?} at {:?}",
+						res,
+						NodeRef::from(res.into_entity(self.parent.db.upcast()))
+							.source_span(self.parent.db.upcast()),
+						ExpressionRef::new(self.item, idx),
+						NodeRef::from(EntityRef::new(self.parent.db.upcast(), self.item, idx))
+							.source_span(self.parent.db.upcast()),
+					)
+				});
 				alloc_expression(
-					match (ident, res) {
-						(
-							ResolvedIdentifier::Function(f),
-							hir::NameResolution::PolymorphicFunction(_, tvs),
-						) => ResolvedIdentifier::PolymorphicFunction(
-							*f,
-							Box::new(TyVarInstantiations::new(
-								self.parent.model[*f].type_inst_vars(),
-								tvs,
-							)),
-						),
-						_ => ident.clone(),
+					match ident {
+						LoweredIdentifier::ResolvedIdentifier(i) => i.clone(),
+						_ => unreachable!(),
 					},
 					self,
 					origin,
@@ -1122,44 +1137,24 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		match &self.data[ann] {
 			hir::Expression::Identifier(_) => {
 				let res = self.types.name_resolution(ann).unwrap();
-				let ident = self
-					.parent
-					.resolutions
-					.get(&res.pattern())
-					.unwrap_or_else(|| {
-						panic!(
-							"Did not lower {:?} at {:?} used by {:?} at {:?}",
-							res,
-							NodeRef::from(res.pattern().into_entity(self.parent.db.upcast()))
-								.source_span(self.parent.db.upcast()),
-							ExpressionRef::new(self.item, ann),
-							NodeRef::from(EntityRef::new(self.parent.db.upcast(), self.item, ann))
-								.source_span(self.parent.db.upcast()),
-						)
-					})
-					.clone();
-				if let ResolvedIdentifier::Function(f) = ident {
+				let ident = self.parent.resolutions.get(&res).unwrap_or_else(|| {
+					panic!(
+						"Did not lower {:?} at {:?} used by {:?} at {:?}",
+						res,
+						NodeRef::from(res.into_entity(self.parent.db.upcast()))
+							.source_span(self.parent.db.upcast()),
+						ExpressionRef::new(self.item, ann),
+						NodeRef::from(EntityRef::new(self.parent.db.upcast(), self.item, ann))
+							.source_span(self.parent.db.upcast()),
+					)
+				});
+				if let LoweredIdentifier::Callable(function) = ident.clone() {
 					let origin = EntityRef::new(self.parent.db.upcast(), self.item, ann);
 					let ann_decl = self.introduce_declaration(
 						self.parent.model[decl].top_level(),
 						origin,
 						|collector| {
 							// Call annotation function using the annotated declaration
-							let function = alloc_expression(
-								if let hir::NameResolution::PolymorphicFunction(_, tvs) = res {
-									ResolvedIdentifier::PolymorphicFunction(
-										f,
-										Box::new(TyVarInstantiations::new(
-											collector.parent.model[f].type_inst_vars(),
-											tvs,
-										)),
-									)
-								} else {
-									ident
-								},
-								collector,
-								origin,
-							);
 							let arguments = vec![alloc_expression(
 								ResolvedIdentifier::Declaration(decl),
 								collector,
@@ -1167,7 +1162,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							)];
 							alloc_expression(
 								Call {
-									function: Box::new(function),
+									function: function.clone(),
 									arguments,
 								},
 								collector,
@@ -1206,10 +1201,32 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			}
 			hir::Expression::Call(c) => {
 				let origin = EntityRef::new(self.parent.db.upcast(), self.item, ann);
-				let function = self.collect_expression(c.function);
-				if let ExpressionData::Identifier(ResolvedIdentifier::Function(f))
-				| ExpressionData::Identifier(ResolvedIdentifier::PolymorphicFunction(f, _)) = &*function
-				{
+				let function = if let hir::Expression::Identifier(_) = self.data[c.function] {
+					let res = self.types.name_resolution(c.function).unwrap();
+					let ident = self.parent.resolutions.get(&res).unwrap_or_else(|| {
+						panic!(
+							"Did not lower {:?} at {:?} used by {:?} at {:?}",
+							res,
+							NodeRef::from(res.into_entity(self.parent.db.upcast()))
+								.source_span(self.parent.db.upcast()),
+							ExpressionRef::new(self.item, c.function),
+							NodeRef::from(EntityRef::new(
+								self.parent.db.upcast(),
+								self.item,
+								c.function
+							))
+							.source_span(self.parent.db.upcast()),
+						)
+					});
+					match ident {
+						LoweredIdentifier::Callable(c) => c.clone(),
+						_ => Callable::Expression(Box::new(self.collect_expression(c.function))),
+					}
+				} else {
+					Callable::Expression(Box::new(self.collect_expression(c.function)))
+				};
+
+				if let Callable::Function(f) = &function {
 					if self.parent.model[*f].parameters().len() > c.arguments.len() {
 						// Add the annotated declaration identifier as first argument
 						let mut arguments = Vec::with_capacity(c.arguments.len() + 1);
@@ -1227,7 +1244,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							|collector| {
 								alloc_expression(
 									Call {
-										function: Box::new(function),
+										function,
 										arguments,
 									},
 									collector,
@@ -1269,7 +1286,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				// Return as is
 				return LoweredAnnotation::Expression(alloc_expression(
 					Call {
-						function: Box::new(function),
+						function,
 						arguments: c
 							.arguments
 							.iter()
@@ -1611,7 +1628,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				));
 				self.parent.resolutions.insert(
 					PatternRef::new(self.item, *pattern),
-					ResolvedIdentifier::Declaration(idx),
+					LoweredIdentifier::ResolvedIdentifier(idx.into()),
 				);
 				generators.push(Generator::Assignment {
 					assignment: idx,
@@ -1677,20 +1694,20 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		match (&self.data[t], ty.lookup(db.upcast())) {
 			(hir::Type::Bounded { domain, .. }, _) => {
 				if let Some(res) = self.types.name_resolution(*domain) {
-					let res_types = db.lookup_item_types(res.pattern().item());
-					match &res_types[res.pattern().pattern()] {
+					let res_types = db.lookup_item_types(res.item());
+					match &res_types[res.pattern()] {
 						// Identifier is actually a type, not a domain expression
 						PatternTy::TyVar(_) => {
 							return Domain::unbounded(origin, ty);
 						}
 						PatternTy::TypeAlias { .. } => {
-							let model = res.pattern().item().model(db.upcast());
-							match res.pattern().item().local_item_ref(db.upcast()) {
+							let model = res.item().model(db.upcast());
+							match res.item().local_item_ref(db.upcast()) {
 								LocalItemRef::TypeAlias(ta) => {
 									let mut c = ExpressionCollector::new(
 										self.parent,
 										&model[ta].data,
-										res.pattern().item(),
+										res.item(),
 										&res_types,
 									);
 									return c.collect_domain(model[ta].aliased_type, ty, true);
@@ -1828,25 +1845,19 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						p
 					};
 					let pat = self.types.pattern_resolution(*function).unwrap();
-					let res = &self.parent.resolutions[&pat.pattern()];
+					let res = &self.parent.resolutions[&pat];
 					match res {
-						ResolvedIdentifier::Annotation(ann) => {
+						LoweredIdentifier::Callable(Callable::Annotation(ann)) => {
 							destructuring.push(DestructuringEntry::new(
 								i,
 								Destructuring::Annotation(*ann),
 								destructuring_pattern,
 							));
 						}
-						ResolvedIdentifier::EnumerationMember(member, _) => {
-							let kind = match &self.types[p] {
-								PatternTy::Destructuring(ty) => {
-									EnumConstructorKind::from_ty(self.parent.db, *ty)
-								}
-								_ => unreachable!(),
-							};
+						LoweredIdentifier::Callable(Callable::EnumConstructor(member)) => {
 							destructuring.push(DestructuringEntry::new(
 								i,
-								Destructuring::Enumeration(*member, kind),
+								Destructuring::Enumeration(*member),
 								destructuring_pattern,
 							));
 						}
@@ -1891,7 +1902,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							self.parent.model[root_decl].set_name(*name);
 							self.parent.resolutions.insert(
 								PatternRef::new(self.item, pattern),
-								ResolvedIdentifier::Declaration(root_decl),
+								LoweredIdentifier::ResolvedIdentifier(root_decl.into()),
 							);
 						}
 					}
@@ -1920,23 +1931,15 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				match item.kind {
 					Destructuring::Annotation(a) => alloc_expression(
 						Call {
-							function: Box::new(alloc_expression(
-								AnnotationDestructure(a),
-								collector,
-								origin,
-							)),
+							function: Callable::AnnotationDestructure(a),
 							arguments: vec![ident],
 						},
 						collector,
 						origin,
 					),
-					Destructuring::Enumeration(e, k) => alloc_expression(
+					Destructuring::Enumeration(e) => alloc_expression(
 						Call {
-							function: Box::new(alloc_expression(
-								EnumDestructure(e, k),
-								collector,
-								origin,
-							)),
+							function: Callable::EnumDestructor(e),
 							arguments: vec![ident],
 						},
 						collector,
@@ -1964,7 +1967,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				self.parent.model[decl].set_name(name);
 				self.parent.resolutions.insert(
 					PatternRef::new(self.item, item.pattern),
-					ResolvedIdentifier::Declaration(decl),
+					LoweredIdentifier::ResolvedIdentifier(decl.into()),
 				);
 			}
 			decl_map.insert(idx + 1, decl);
@@ -1999,15 +2002,14 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				} => {
 					let args = arguments.iter().map(|a| self.collect_pattern(*a)).collect();
 					let pat = self.types.pattern_resolution(*function).unwrap();
-					let res = &self.parent.resolutions[&pat.pattern()];
+					let res = &self.parent.resolutions[&pat];
 					match res {
-						ResolvedIdentifier::Annotation(ann) => {
+						LoweredIdentifier::Callable(Callable::Annotation(ann)) => {
 							PatternData::AnnotationConstructor { item: *ann, args }
 						}
-						ResolvedIdentifier::EnumerationMember(member, _) => {
+						LoweredIdentifier::Callable(Callable::EnumConstructor(member)) => {
 							PatternData::EnumConstructor {
 								member: *member,
-								kind: EnumConstructorKind::from_ty(self.parent.db, ty),
 								args,
 							}
 						}
@@ -2031,18 +2033,14 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				}
 				hir::Pattern::Identifier(_) => {
 					let pat = self.types.pattern_resolution(pattern).unwrap();
-					let res = &self.parent.resolutions[&pat.pattern()];
+					let res = &self.parent.resolutions[&pat];
 					match res {
-						ResolvedIdentifier::Annotation(a) => {
-							PatternData::Expression(Box::new(alloc_expression(*a, self, origin)))
-						}
-						ResolvedIdentifier::EnumerationMember(m, _) => {
-							PatternData::Expression(Box::new(alloc_expression(
-								EnumConstructor(*m, EnumConstructorKind::Par),
-								self,
-								origin,
-							)))
-						}
+						LoweredIdentifier::ResolvedIdentifier(ResolvedIdentifier::Annotation(
+							a,
+						)) => PatternData::Expression(Box::new(alloc_expression(*a, self, origin))),
+						LoweredIdentifier::ResolvedIdentifier(
+							ResolvedIdentifier::EnumerationMember(m),
+						) => PatternData::Expression(Box::new(alloc_expression(*m, self, origin))),
 						_ => unreachable!(),
 					}
 				}
@@ -2128,7 +2126,7 @@ impl DestructuringEntry {
 enum Destructuring {
 	TupleAccess(IntegerLiteral),
 	RecordAccess(Identifier),
-	Enumeration(EnumMemberId, EnumConstructorKind),
+	Enumeration(EnumMemberId),
 	Annotation(AnnotationId),
 }
 

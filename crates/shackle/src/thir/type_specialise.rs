@@ -5,13 +5,13 @@
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::ty::TyParamInstantiations;
+use crate::ty::{Ty, TyParamInstantiations};
 
 use super::{
 	add_function, db::Thir, fold_call, fold_declaration_id, fold_domain, fold_function,
-	fold_function_body, fold_function_id, visit_call, visit_function, Call, DeclarationId, Domain,
-	DomainData, ExpressionData, Folder, Function, FunctionId, LookupCall, Model, ReplacementMap,
-	ResolvedIdentifier, TyVarInstantiations, Visitor,
+	fold_function_body, fold_function_id, visit_call, visit_function, Call, Callable,
+	DeclarationId, Domain, DomainData, Folder, Function, FunctionId, LookupCall, Model,
+	ReplacementMap, Visitor,
 };
 
 /// Collects (possibly nested) concrete instantiations of polymorphic functions.
@@ -20,15 +20,15 @@ use super::{
 /// and also doesn't collect instantiations for which an overload has been written by the user
 #[derive(Debug, Default)]
 struct ConcreteCalls {
-	concrete: FxHashSet<TyVarInstantiations>,
-	children: Vec<(FunctionId, TyVarInstantiations)>,
+	concrete: FxHashSet<Vec<Ty>>,
+	children: Vec<(FunctionId, Vec<Ty>)>,
 }
 
 struct ConcreteCallCollector<'a> {
 	db: &'a dyn Thir,
 	polymorphic: FxHashMap<FunctionId, ConcreteCalls>,
 	non_polymorphic: FxHashSet<FunctionId>,
-	current: Option<Vec<(FunctionId, TyVarInstantiations)>>,
+	current: Option<Vec<(FunctionId, Vec<Ty>)>>,
 }
 
 impl<'a> Visitor for ConcreteCallCollector<'a> {
@@ -38,8 +38,44 @@ impl<'a> Visitor for ConcreteCallCollector<'a> {
 	}
 
 	fn visit_call(&mut self, model: &Model, call: &Call) {
-		match &**call.function {
-			ExpressionData::Identifier(ResolvedIdentifier::Function(f)) => {
+		if let Callable::Function(f) = &call.function {
+			if model[*f].is_polymorphic() {
+				if model[*f].body().is_some() {
+					let arg_tys = call.arguments.iter().map(|e| e.ty()).collect::<Vec<_>>();
+					if !self.polymorphic.contains_key(f) {
+						let mut entry = ConcreteCalls::default();
+						if let Some(body) = model[*f].body() {
+							let prev = self.current.replace(Vec::new());
+							self.visit_expression(model, body);
+							let c = if let Some(p) = prev {
+								self.current.replace(p)
+							} else {
+								self.current.take()
+							}
+							.unwrap();
+							entry.children = c;
+						}
+						self.polymorphic.insert(*f, entry);
+					}
+					if let Some(c) = self.current.as_mut() {
+						if arg_tys
+							.iter()
+							.any(|ty| ty.contains_type_inst_var(self.db.upcast()))
+						{
+							// Polymorphic call depends on instantiation of parent.
+							// This will get handled later.
+							c.push((*f, arg_tys));
+							visit_call(self, model, call);
+							return;
+						}
+					}
+					self.polymorphic
+						.get_mut(f)
+						.unwrap()
+						.concrete
+						.insert(arg_tys);
+				}
+			} else {
 				if self.non_polymorphic.insert(*f) {
 					if let Some(body) = model[*f].body() {
 						let prev = self.current.take();
@@ -48,42 +84,6 @@ impl<'a> Visitor for ConcreteCallCollector<'a> {
 					}
 				}
 			}
-			ExpressionData::Identifier(ResolvedIdentifier::PolymorphicFunction(f, i))
-				if model[*f].body().is_some() =>
-			{
-				if !self.polymorphic.contains_key(f) {
-					let mut entry = ConcreteCalls::default();
-					if let Some(body) = model[*f].body() {
-						let prev = self.current.replace(Vec::new());
-						self.visit_expression(model, body);
-						let c = if let Some(p) = prev {
-							self.current.replace(p)
-						} else {
-							self.current.take()
-						}
-						.unwrap();
-						entry.children = c;
-					}
-					self.polymorphic.insert(*f, entry);
-				}
-				if let Some(c) = self.current.as_mut() {
-					if i.iter()
-						.any(|ty| ty.contains_type_inst_var(self.db.upcast()))
-					{
-						// Polymorphic call depends on instantiation of parent.
-						// This will get handled later.
-						c.push((*f, (**i).clone()));
-						visit_call(self, model, call);
-						return;
-					}
-				}
-				self.polymorphic
-					.get_mut(f)
-					.unwrap()
-					.concrete
-					.insert((**i).clone());
-			}
-			_ => (),
 		}
 		visit_call(self, model, call);
 	}
@@ -109,20 +109,24 @@ impl<'a> ConcreteCallCollector<'a> {
 				if !e.concrete.is_empty() && !e.children.is_empty() {
 					done = false;
 					for concrete in e.concrete.iter() {
-						let ty_vars = concrete.as_map(model[*f].type_inst_vars());
-						for (child, instantiations) in e.children.drain(..) {
+						let ty_vars = model[*f]
+							.function_entry(model)
+							.overload
+							.instantiate_ty_params(db.upcast(), &concrete)
+							.unwrap();
+						for (child, args) in e.children.drain(..) {
 							if child == *f {
 								continue;
 							}
-							let child_ty_vars = instantiations
+							let child_args = args
 								.iter()
 								.map(|ty| ty.instantiate_ty_vars(db.upcast(), &ty_vars))
-								.collect::<TyVarInstantiations>();
+								.collect();
 							self.polymorphic
 								.get_mut(&child)
 								.unwrap()
 								.concrete
-								.insert(child_ty_vars);
+								.insert(child_args);
 						}
 					}
 				}
@@ -135,23 +139,17 @@ impl<'a> ConcreteCallCollector<'a> {
 				let instantiations = e
 					.concrete
 					.iter()
-					.filter_map(|instantiation| {
-						let ty_vars = instantiation.as_map(model[f].type_inst_vars());
-						let args = model[f]
-							.parameters()
-							.iter()
-							.map(|p| {
-								model[*p]
-									.domain()
-									.ty()
-									.instantiate_ty_vars(db.upcast(), &ty_vars)
-							})
-							.collect::<Vec<_>>();
+					.filter_map(|args| {
 						let lookup = model.lookup_function(db, model[f].name(), &args).unwrap();
 						if lookup.function != f {
 							// Already exists
 							return None;
 						}
+						let ty_vars = model[f]
+							.function_entry(model)
+							.overload
+							.instantiate_ty_params(db.upcast(), &args)
+							.unwrap();
 						Some(SpecialisedFunction::new(ty_vars))
 					})
 					.collect::<Vec<_>>();
@@ -279,20 +277,20 @@ impl Folder for Specialiser {
 	}
 
 	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call {
-		if let ExpressionData::Identifier(ResolvedIdentifier::PolymorphicFunction(f, _)) =
-			&**call.function
-		{
-			// Lookup polymorphic calls again to make them point to new specialised versions (or existing overloads)
-			return LookupCall {
-				function: model[*f].name(),
-				arguments: call
-					.arguments
-					.iter()
-					.map(|arg| self.fold_expression(db, model, arg))
-					.collect(),
+		if let Callable::Function(f) = &call.function {
+			if model[*f].is_polymorphic() {
+				// Lookup polymorphic calls again to make them point to new specialised versions (or existing overloads)
+				return LookupCall {
+					function: model[*f].name(),
+					arguments: call
+						.arguments
+						.iter()
+						.map(|arg| self.fold_expression(db, model, arg))
+						.collect(),
+				}
+				.resolve(db, &self.specialised_model)
+				.0;
 			}
-			.resolve(db, &self.specialised_model, call.function.origin())
-			.0;
 		}
 		fold_call(self, db, model, call)
 	}

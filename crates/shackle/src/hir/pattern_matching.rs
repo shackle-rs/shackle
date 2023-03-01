@@ -40,7 +40,7 @@ pub fn enum_constructors(db: &dyn Hir) -> Arc<FxHashMap<EnumRef, Arc<Vec<Pattern
 			let item = ItemRef::new(db, *m, i);
 			let types = db.lookup_item_types(item);
 			if let Some(p) = types.name_resolution(e.assignee) {
-				let enum_ref = EnumRef::new(db, p.pattern());
+				let enum_ref = EnumRef::new(db, p);
 				let constructors = e
 					.definition
 					.iter()
@@ -522,9 +522,7 @@ impl<'a> ExhaustivenessChecker<'a> {
 				PatternTy::Destructuring(ty),
 			) => SemanticPattern::Constructor(
 				*ty,
-				PatternConstructor::Named(
-					self.types.pattern_resolution(*function).unwrap().pattern(),
-				),
+				PatternConstructor::Named(self.types.pattern_resolution(*function).unwrap()),
 				arguments
 					.iter()
 					.map(|arg| self.lower_pattern(*arg))
@@ -532,9 +530,7 @@ impl<'a> ExhaustivenessChecker<'a> {
 			),
 			(Pattern::Identifier(_), PatternTy::Destructuring(ty)) => SemanticPattern::Constructor(
 				*ty,
-				PatternConstructor::Named(
-					self.types.pattern_resolution(pattern).unwrap().pattern(),
-				),
+				PatternConstructor::Named(self.types.pattern_resolution(pattern).unwrap()),
 				Box::new([]),
 			),
 			(Pattern::Identifier(_), PatternTy::Variable(ty)) => SemanticPattern::Wildcard(*ty),

@@ -57,7 +57,7 @@ impl RequestHandler<SemanticTokensFullRequest, ModelRef> for SemanticTokensHandl
 									.get_expression(e)
 									.map(|ty| ty.known_par(db))
 									.unwrap_or_default();
-							types.name_resolution(e).map(|p| p.pattern())
+							types.name_resolution(e)
 						}
 						LocalEntityRef::Pattern(p) => Some(PatternRef::new(item, p)),
 						_ => None,

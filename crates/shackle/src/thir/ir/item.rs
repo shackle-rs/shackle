@@ -445,6 +445,11 @@ impl Function {
 		self.type_inst_vars = ty_vars.into_iter().collect();
 	}
 
+	/// Add a type-inst var to this function
+	pub fn add_type_inst_var(&mut self, ty_var: TyVar) {
+		self.type_inst_vars.push(ty_var);
+	}
+
 	/// Whether or not this function is polymorphic
 	pub fn is_polymorphic(&self) -> bool {
 		!self.type_inst_vars().is_empty()
@@ -458,6 +463,11 @@ impl Function {
 	/// Set the parameters of this function
 	pub fn set_parameters(&mut self, parameters: impl IntoIterator<Item = DeclarationId>) {
 		self.parameters = parameters.into_iter().collect();
+	}
+
+	/// Add a parameter to this function
+	pub fn add_parameter(&mut self, parameter: DeclarationId) {
+		self.parameters.push(parameter);
 	}
 
 	/// Get the parameter with the given index

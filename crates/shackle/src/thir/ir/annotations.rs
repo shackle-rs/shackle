@@ -3,7 +3,7 @@
 
 use std::ops::{Deref, DerefMut};
 
-use super::{Call, Expression, ExpressionData, Identifier, Model, ResolvedIdentifier};
+use super::{Call, Callable, Expression, ExpressionData, Identifier, Model, ResolvedIdentifier};
 
 /// Collection of annotations
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
@@ -38,12 +38,10 @@ impl Annotations {
 	/// Find an annotation which is a call with the given name
 	pub fn get_call(&self, model: &Model, name: Identifier) -> Option<&Expression> {
 		self.annotations.iter().find(|ann| match &***ann {
-			ExpressionData::Call(Call { function, .. }) => match &***function {
-				ExpressionData::Identifier(ResolvedIdentifier::Annotation(item)) => {
-					model[*item].name == Some(name)
-				}
-				_ => false,
-			},
+			ExpressionData::Call(Call {
+				function: Callable::Annotation(item),
+				..
+			}) => model[*item].name == Some(name),
 			_ => false,
 		})
 	}

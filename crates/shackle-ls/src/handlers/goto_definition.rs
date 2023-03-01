@@ -44,7 +44,7 @@ impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler
 							let resolution = types.name_resolution(e)?;
 							Some(GotoDefinitionResponse::Scalar(node_ref_to_location(
 								db,
-								resolution.pattern().into_entity(db),
+								resolution.into_entity(db),
 							)?))
 						}
 						LocalEntityRef::Pattern(p) => {
@@ -52,7 +52,7 @@ impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler
 							let resolution = types.pattern_resolution(p)?;
 							Some(GotoDefinitionResponse::Scalar(node_ref_to_location(
 								db,
-								resolution.pattern().into_entity(db),
+								resolution.into_entity(db),
 							)?))
 						}
 						_ => None,

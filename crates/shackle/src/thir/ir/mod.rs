@@ -265,7 +265,6 @@ impl Model {
 								if n == name {
 									return Some(ResolvedIdentifier::EnumerationMember(
 										EnumMemberId::new(idx, j as u32),
-										EnumConstructorKind::Par,
 									));
 								}
 							}

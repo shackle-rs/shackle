@@ -5,7 +5,7 @@ use lsp_types::{
 use shackle::{
 	db::CompilerDatabase,
 	file::ModelRef,
-	hir::{db::Hir, ids::NodeRef, NameResolution},
+	hir::{db::Hir, ids::NodeRef},
 	hir::{
 		ids::LocalEntityRef,
 		source::{find_node, Point},
@@ -49,17 +49,10 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 							let value =
 								types.pretty_print_expression_ty(db, data, e).or_else(|| {
 									let res = types.name_resolution(e)?;
-									if let NameResolution::Pattern(p) = res {
-										let types = db.lookup_item_types(p.item());
-										let model = p.item().model(db);
-										let data = p.item().local_item_ref(db).data(&model);
-										return types.pretty_print_pattern_ty(
-											db,
-											data,
-											p.pattern(),
-										);
-									}
-									None
+									let types = db.lookup_item_types(res.item());
+									let model = res.item().model(db);
+									let data = res.item().local_item_ref(db).data(&model);
+									return types.pretty_print_pattern_ty(db, data, res.pattern());
 								})?;
 							Some(Hover {
 								contents: HoverContents::Scalar(MarkedString::LanguageString(

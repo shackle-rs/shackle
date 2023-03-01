@@ -3,9 +3,9 @@
 
 use super::db::Thir;
 use super::{
-	AnnotationId, ConstraintId, DeclarationId, Domain, DomainData, EnumerationId, Expression,
-	ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Model, OutputId, Pattern,
-	PatternData, ResolvedIdentifier,
+	AnnotationId, Callable, ConstraintId, DeclarationId, Domain, DomainData, EnumerationId,
+	Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Model, OutputId,
+	Pattern, PatternData, ResolvedIdentifier,
 };
 use std::fmt::Write;
 
@@ -194,11 +194,8 @@ impl<'a> PrettyPrinter<'a> {
 				} {
 				// For compatibility with old minizinc, we can just directly coerce
 				match &**body {
-					ExpressionData::Call(c) => match &**c.function {
-						ExpressionData::Identifier(ResolvedIdentifier::PolymorphicFunction(
-							idx,
-							_,
-						)) => {
+					ExpressionData::Call(c) => match &c.function {
+						Callable::Function(idx) => {
 							assert_eq!(
 								self.model[*idx].name(),
 								self.db.identifier_registry().to_enum
@@ -404,7 +401,42 @@ impl<'a> PrettyPrinter<'a> {
 				}
 			}
 			ExpressionData::Call(c) => {
-				let f = self.pretty_print_expression(&c.function);
+				let f = match &c.function {
+					Callable::Annotation(a) => self.model[*a]
+						.name
+						.map(|n| n.pretty_print(self.db.upcast()))
+						.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
+					Callable::AnnotationDestructure(a) => self.model[*a]
+						.name
+						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
+						.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
+					Callable::EnumConstructor(m) => self.model[*m]
+						.name
+						.map(|n| n.pretty_print(self.db.upcast()))
+						.unwrap_or_else(|| {
+							format!(
+								"_EM_{}_{}",
+								self.model[m.enumeration_id()]
+									.enum_type()
+									.pretty_print(self.db.upcast()),
+								m.member_index()
+							)
+						}),
+					Callable::EnumDestructor(m) => self.model[*m]
+						.name
+						.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
+						.unwrap_or_else(|| {
+							format!(
+								"_EM_{}_{}⁻¹",
+								self.model[m.enumeration_id()]
+									.enum_type()
+									.pretty_print(self.db.upcast()),
+								m.member_index()
+							)
+						}),
+					Callable::Function(f) => self.model[*f].name().pretty_print(self.db),
+					Callable::Expression(e) => self.pretty_print_expression(e),
+				};
 				let args = c
 					.arguments
 					.iter()
@@ -449,10 +481,7 @@ impl<'a> PrettyPrinter<'a> {
 					.name
 					.map(|n| n.pretty_print(self.db.upcast()))
 					.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
-				ResolvedIdentifier::AnnotationDestructure(a) => self.model[*a]
-					.name
-					.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
-					.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
+
 				ResolvedIdentifier::Declaration(d) => self.model[*d]
 					.name()
 					.map(|n| n.pretty_print(self.db.upcast()))
@@ -460,7 +489,7 @@ impl<'a> PrettyPrinter<'a> {
 				ResolvedIdentifier::Enumeration(e) => {
 					self.model[*e].enum_type().pretty_print(self.db.upcast())
 				}
-				ResolvedIdentifier::EnumerationMember(m, _) => self.model[*m]
+				ResolvedIdentifier::EnumerationMember(m) => self.model[*m]
 					.name
 					.map(|n| n.pretty_print(self.db.upcast()))
 					.unwrap_or_else(|| {
@@ -472,22 +501,6 @@ impl<'a> PrettyPrinter<'a> {
 							m.member_index()
 						)
 					}),
-				ResolvedIdentifier::EnumerationDestructure(m, _) => self.model[*m]
-					.name
-					.map(|n| n.inversed(self.db.upcast()).pretty_print(self.db.upcast()))
-					.unwrap_or_else(|| {
-						format!(
-							"_EM_{}_{}⁻¹",
-							self.model[m.enumeration_id()]
-								.enum_type()
-								.pretty_print(self.db.upcast()),
-							m.member_index()
-						)
-					}),
-				ResolvedIdentifier::Function(f) => self.model[*f].name().pretty_print(self.db),
-				ResolvedIdentifier::PolymorphicFunction(f, _) => {
-					self.model[*f].name().pretty_print(self.db)
-				}
 			},
 			ExpressionData::IfThenElse(ite) => {
 				let mut buf = String::new();

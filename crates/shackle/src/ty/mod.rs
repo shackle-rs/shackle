@@ -463,6 +463,25 @@ impl Ty {
 		}
 	}
 
+	/// Get the element type for array/set types (will be par for var sets)
+	pub fn elem_ty(&self, db: &dyn Interner) -> Option<Ty> {
+		match self.lookup(db) {
+			TyData::Array { element, .. } => Some(element),
+			TyData::Set(_, _, e) => Some(e),
+			_ => None,
+		}
+	}
+
+	/// Get the enum ref for this type if it is an enum
+	pub fn enum_ty(&self, db: &dyn Interner) -> Option<EnumRef> {
+		match self.lookup(db) {
+			TyData::Enum(_, _, e) => Some(e),
+			TyData::Array { element, .. } => element.enum_ty(db),
+			TyData::Set(_, _, e) => e.enum_ty(db),
+			_ => None,
+		}
+	}
+
 	/// Get the most specific supertype of the given types if there is one.
 	///
 	/// Returns `None` if there is no supertype of the given types.

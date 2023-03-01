@@ -78,6 +78,11 @@ pub trait Visitor {
 	/// Visit an identifier
 	fn visit_identifier(&mut self, _model: &Model, _identifier: &ResolvedIdentifier) {}
 
+	/// Visit a callable
+	fn visit_callable(&mut self, model: &Model, callable: &Callable) {
+		visit_callable(self, model, callable);
+	}
+
 	/// Visit an array literal
 	fn visit_array_literal(&mut self, model: &Model, al: &ArrayLiteral) {
 		visit_array_literal(self, model, al);
@@ -357,9 +362,16 @@ pub fn visit_case<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Case)
 	}
 }
 
+/// Visit the children of a callable
+pub fn visit_callable<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Callable) {
+	if let Callable::Expression(e) = c {
+		visitor.visit_expression(model, e);
+	}
+}
+
 /// Visit the children of a call expression
 pub fn visit_call<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Call) {
-	visitor.visit_expression(model, &c.function);
+	visitor.visit_callable(model, &c.function);
 	for arg in c.arguments.iter() {
 		visitor.visit_expression(model, arg);
 	}

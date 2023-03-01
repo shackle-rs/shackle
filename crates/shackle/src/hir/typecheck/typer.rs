@@ -22,7 +22,7 @@ use crate::{
 	Error,
 };
 
-use super::{NameResolution, PatternTy, TypeContext};
+use super::{PatternTy, TypeContext};
 
 /// Mode for completing types
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -191,8 +191,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		if let Some(p) = self.find_variable(expr, *i) {
 			let expression = ExpressionRef::new(self.item, expr);
-			self.ctx
-				.add_identifier_resolution(expression, NameResolution::Pattern(p));
+			self.ctx.add_identifier_resolution(expression, p);
 			match self.ctx.type_pattern(db, p) {
 				PatternTy::Variable(ty)
 				| PatternTy::Argument(ty)
@@ -253,10 +252,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								});
 						if has_annotated_expression {
 							let ret = fe.overload.instantiate(db.upcast(), &t).return_type;
-							self.ctx.add_identifier_resolution(
-								ExpressionRef::new(self.item, expr),
-								NameResolution::with_ty_params(p, t),
-							);
+							self.ctx
+								.add_identifier_resolution(ExpressionRef::new(self.item, expr), p);
 							return ret;
 						}
 					}
@@ -1672,10 +1669,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let op = Ty::function(db.upcast(), f);
 				self.ctx
 					.add_expression(ExpressionRef::new(self.item, expr), op);
-				self.ctx.add_identifier_resolution(
-					ExpressionRef::new(self.item, expr),
-					NameResolution::Pattern(p),
-				);
+				self.ctx
+					.add_identifier_resolution(ExpressionRef::new(self.item, expr), p);
 				return (op, ret);
 			}
 		}
@@ -1764,10 +1759,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let op = Ty::function(db.upcast(), instantiation);
 				self.ctx
 					.add_expression(ExpressionRef::new(self.item, expr), op);
-				self.ctx.add_identifier_resolution(
-					ExpressionRef::new(self.item, expr),
-					NameResolution::with_ty_params(pattern, tvs),
-				);
+				self.ctx
+					.add_identifier_resolution(ExpressionRef::new(self.item, expr), pattern);
 				(op, ret)
 			}
 			Err(FunctionResolutionError::AmbiguousOverloading(ps)) => {
@@ -1914,17 +1907,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						let p = self.find_variable(scope?, *i)?;
 						match self.ctx.type_pattern(db, p) {
 							PatternTy::EnumAtom(ty) => {
-								self.ctx.add_pattern_resolution(
-									PatternRef::new(self.item, pat),
-									NameResolution::Pattern(p),
-								);
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
 								Some(ty)
 							}
 							PatternTy::AnnotationAtom => {
-								self.ctx.add_pattern_resolution(
-									PatternRef::new(self.item, pat),
-									NameResolution::Pattern(p),
-								);
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
 								Some(self.types.ann)
 							}
 							_ => None,
@@ -2042,8 +2031,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						self.collect_pattern(scope, resolves_atoms, *p, t, is_argument);
 					}
 					let fn_pat = PatternRef::new(self.item, *function);
-					self.ctx
-						.add_pattern_resolution(fn_pat, NameResolution::Pattern(ctor_pat));
+					self.ctx.add_pattern_resolution(fn_pat, ctor_pat);
 					let ctor_type = c.overload.clone().into_function().unwrap();
 					let dtor_type = FunctionType {
 						params: Box::new([ctor_type.return_type]),
@@ -2286,8 +2274,7 @@ supported in operation types."
 					Expression::Identifier(i) => {
 						if let Some(p) = self.find_variable(*domain, *i) {
 							let domain_ref = ExpressionRef::new(self.item, *domain);
-							self.ctx
-								.add_identifier_resolution(domain_ref, NameResolution::Pattern(p));
+							self.ctx.add_identifier_resolution(domain_ref, p);
 							match self.ctx.type_pattern(db, p) {
 								PatternTy::TypeAlias {
 									ty,

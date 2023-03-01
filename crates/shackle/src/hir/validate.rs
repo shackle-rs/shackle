@@ -145,13 +145,13 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 			let item_ref = ItemRef::new(db, *m, i);
 			let types = db.lookup_item_types(item_ref);
 			if let Some(p) = types.name_resolution(a.assignee) {
-				match assignments.entry(p.pattern()) {
+				match assignments.entry(p) {
 					Entry::Occupied(mut e) => {
 						e.get_mut().push(item_ref.into());
 					}
 					Entry::Vacant(e) => {
 						let mut v = Vec::new();
-						let resolved_item = p.pattern().item();
+						let resolved_item = p.item();
 						if let LocalItemRef::Declaration(d) = resolved_item.local_item_ref(db) {
 							let model = resolved_item.model(db);
 							if let Some(def) = model[d].definition {
@@ -168,17 +168,17 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 			let item_ref = ItemRef::new(db, *m, i);
 			let types = db.lookup_item_types(item_ref);
 			if let Some(p) = types.name_resolution(a.assignee) {
-				match assignments.entry(p.pattern()) {
+				match assignments.entry(p) {
 					Entry::Occupied(mut e) => {
 						e.get_mut().push(item_ref.into());
 					}
 					Entry::Vacant(e) => {
 						let mut v = Vec::new();
-						let resolved_item = p.pattern().item();
+						let resolved_item = p.item();
 						if let LocalItemRef::Enumeration(e) = resolved_item.local_item_ref(db) {
 							let model = resolved_item.model(db);
 							if model[e].definition.is_some() {
-								v.push(p.pattern().into_entity(db).into());
+								v.push(p.into_entity(db).into());
 							}
 						}
 						v.push(item_ref.into());
