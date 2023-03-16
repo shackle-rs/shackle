@@ -14,14 +14,14 @@ use crate::diagnostics::{Diagnostics, IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::db::SourceParser;
-use crate::ty::{EnumRef, Ty};
+use crate::ty::EnumRef;
 use crate::{Error, Result, Warning};
 
 use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
 use super::scope::{ScopeData, ScopeResult};
 use super::source::SourceMap;
 use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
-use super::{Identifier, Model, Pattern, PatternTy, ScopeCollectorResult};
+use super::{Identifier, Model, ScopeCollectorResult};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]
@@ -180,9 +180,6 @@ pub trait Hir:
 	/// Get identifier constants
 	fn identifier_registry(&self) -> Arc<IdentifierRegistry>;
 
-	/// Get a mapping from variable identifiers to their computed types
-	fn variable_type_map(&self) -> Arc<FxHashMap<Identifier, Ty>>;
-
 	/// Get a mapping from enum type to constructor patterns
 	///
 	/// Prefer `lookup_enum_constructors` instead.
@@ -260,47 +257,6 @@ fn run_hir_phase(db: &dyn Hir) -> Result<Arc<Vec<ItemRef>>, Arc<Diagnostics<Erro
 
 fn identifier_registry(db: &dyn Hir) -> Arc<IdentifierRegistry> {
 	Arc::new(IdentifierRegistry::new(db))
-}
-
-fn variable_type_map(db: &dyn Hir) -> Arc<FxHashMap<Identifier, Ty>> {
-	let mut result = FxHashMap::default();
-	for m in db.resolve_includes().unwrap().iter() {
-		let model = db.lookup_model(*m);
-		for (idx, declaration) in model.declarations.iter() {
-			let types = db.lookup_item_types(ItemRef::new(db, *m, idx));
-			for ident in Pattern::identifiers(declaration.pattern, &declaration.data) {
-				let pattern_ty = types.get_pattern(ident).unwrap();
-				let ty = match &pattern_ty {
-					PatternTy::Variable(ty) => *ty,
-					_ => unreachable!(),
-				};
-				result.insert(declaration.data[ident].identifier().unwrap(), ty);
-			}
-		}
-		for (idx, solve) in model.solves.iter() {
-			let types = db.lookup_item_types(ItemRef::new(db, *m, idx));
-			let ident = Identifier::new("_objective", db);
-			let pattern_ty = match solve.goal {
-				super::Goal::Satisfy => None,
-				super::Goal::Maximize {
-					pattern,
-					objective: _,
-				} => Some(types.get_pattern(pattern).unwrap()),
-				super::Goal::Minimize {
-					pattern,
-					objective: _,
-				} => Some(types.get_pattern(pattern).unwrap()),
-			};
-			match &pattern_ty {
-				Some(PatternTy::Variable(ty)) => {
-					result.insert(ident, *ty);
-				}
-				Some(_) => unreachable!(),
-				None => {}
-			};
-		}
-	}
-	Arc::new(result)
 }
 
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {

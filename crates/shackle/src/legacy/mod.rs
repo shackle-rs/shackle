@@ -6,14 +6,15 @@ use std::{
 	sync::Arc,
 };
 
+use rustc_hash::FxHashMap;
 use serde_json::Map;
 use tempfile::Builder;
 
 use crate::{
 	db::CompilerDatabase,
 	diagnostics::{FileError, InternalError},
-	hir::{db::Hir, Identifier},
-	ty::{Ty, TyData},
+	hir::Identifier,
+	ty::{self, Ty, TyData},
 	Array, EnumValue, Index, Message, Program, Record, Set, Status, Value,
 };
 
@@ -284,7 +285,8 @@ impl Program {
 		let mut child = cmd.spawn().unwrap(); // TODO: fix unwrap
 		let stdout = child.stdout.take().unwrap();
 
-		let ty_map = self.db.variable_type_map();
+		// let ty_map = self.db.variable_type_map();
+		let ty_map: FxHashMap<Identifier, ty::Ty> = FxHashMap::default(); // TODO!!
 		let mut status = Status::Unknown;
 		for line in BufReader::new(stdout).lines() {
 			match line {

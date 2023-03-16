@@ -4,9 +4,10 @@
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
-use crate::{db::Upcast, diagnostics::Diagnostics, hir::db::Hir, Error, Result};
+use rustc_hash::FxHashMap;
 
-use super::{transform::thir_transforms, Model};
+use super::{transform::thir_transforms, Identifier, Model};
+use crate::{db::Upcast, diagnostics::Diagnostics, hir::db::Hir, ty, Error, Result};
 
 /// THIR queries
 #[salsa::query_group(ThirStorage)]
@@ -21,6 +22,12 @@ pub trait Thir: Hir + Upcast<dyn Hir> {
 	/// Check that the pretty printed THIR is a valid model
 	#[salsa::invoke(super::sanity_check::sanity_check_thir)]
 	fn sanity_check_thir(&self) -> Arc<Diagnostics<Error>>;
+
+	/// Get a mapping from variable identifiers to their computed types
+	fn input_type_map(&self) -> Arc<FxHashMap<Identifier, ty::Ty>>;
+
+	/// Get a mapping from variable identifiers to their computed types
+	fn output_type_map(&self) -> Arc<FxHashMap<Identifier, ty::Ty>>;
 }
 
 /// Represents an intermediate query result which can be taken
@@ -72,4 +79,47 @@ impl<T: Eq> Eq for Intermediate<T> {}
 fn final_thir(db: &dyn Thir) -> Result<Arc<Model>> {
 	let model = db.model_thir();
 	thir_transforms()(db, model.take()).map(Arc::new)
+}
+
+fn input_type_map(db: &dyn Thir) -> Arc<FxHashMap<Identifier, ty::Ty>> {
+	let model = db.final_thir().unwrap();
+
+	let mut result = FxHashMap::default();
+	for (_, decl) in model.all_declarations() {
+		if decl.top_level()
+			&& decl.domain().ty().known_par(db.upcast())
+			&& decl.definition().is_none()
+		{
+			result.insert(decl.name().unwrap(), decl.domain().ty());
+		}
+	}
+	Arc::new(result)
+}
+
+fn output_type_map(db: &dyn Thir) -> Arc<FxHashMap<Identifier, ty::Ty>> {
+	let model = db.final_thir().unwrap();
+
+	// Find the annotation identifiers
+	let reg = db.identifier_registry();
+	let output = reg.output;
+	let no_output = reg.no_output;
+
+	let mut result = FxHashMap::default();
+	for (_, decl) in model.all_declarations() {
+		let mut should_output = None;
+		if decl.annotations().has(&model, output) {
+			should_output = Some(true)
+		} else if decl.annotations().has(&model, no_output) {
+			should_output = Some(false)
+		}
+		if should_output == Some(true)
+			|| (should_output == None
+				&& decl.top_level()
+				&& !decl.domain().ty().known_par(db.upcast())
+				&& decl.definition().is_none())
+		{
+			result.insert(decl.name().unwrap(), decl.domain().ty());
+		}
+	}
+	Arc::new(result)
 }

@@ -20,10 +20,12 @@ pub mod ty;
 pub mod utils;
 
 use db::{CompilerDatabase, Inputs};
-use diagnostics::ShackleError;
+use diagnostics::{InternalError, ShackleError};
 use file::InputFile;
 use itertools::Itertools;
+use rustc_hash::FxHashMap;
 use serde_json::Map;
+use ty::{Ty, TyData};
 
 use std::{
 	collections::BTreeMap,
@@ -39,6 +41,9 @@ use crate::{
 	hir::db::Hir,
 	thir::{db::Thir, pretty_print::PrettyPrinter},
 };
+
+// Export OptType enumeration used in [`Type`]
+pub use ty::OptType;
 
 /// Shackle error type
 pub type Error = ShackleError;
@@ -83,10 +88,34 @@ impl Model {
 			return Err(ShackleError::try_from(errors).unwrap());
 		}
 		let prg_model = self.db.final_thir()?;
+
+		let input_types = self
+			.db
+			.input_type_map()
+			.iter()
+			.map(|(ident, ty)| match Type::from_compiler(&self.db, *ty) {
+				Ok(nty) => Ok((ident.0.value(&self.db), nty)),
+				Err(e) => Err(e),
+			})
+			.collect::<Result<FxHashMap<_, _>, _>>()?;
+
+		let output_types = self
+			.db
+			.output_type_map()
+			.iter()
+			.map(|(ident, ty)| match Type::from_compiler(&self.db, *ty) {
+				Ok(nty) => Ok((ident.0.value(&self.db), nty)),
+				Err(e) => Err(e),
+			})
+			.collect::<Result<FxHashMap<_, _>, _>>()?;
+
 		Ok(Program {
 			db: self.db,
 			slv: slv.clone(),
 			code: prg_model,
+			_input_types: input_types,
+			_input_data: FxHashMap::default(),
+			_output_types: output_types,
 			enable_stats: false,
 			time_limit: None,
 		})
@@ -112,10 +141,15 @@ impl Solver {
 
 /// Structure to capture the result of succesful compilation of a Model object
 pub struct Program {
-	// FIXME: CompilerDatabase should not be part of Program anymore
+	// FIXME: CompilerDatabase should (probably) not be part of Program anymore
 	db: CompilerDatabase,
-	slv: Solver,
 	code: Arc<thir::Model>,
+	slv: Solver,
+	// Model instance data
+	_input_types: FxHashMap<String, Type>,
+	_input_data: FxHashMap<String, Value>,
+
+	_output_types: FxHashMap<String, Type>,
 	// run() options
 	enable_stats: bool,
 	time_limit: Option<Duration>,
@@ -167,7 +201,115 @@ pub enum Value {
 	Record(Record),
 }
 
+/// An type of the input or output of a Shackle model
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Type {
+	/// Boolean scalar
+	Boolean(OptType),
+	/// Integer scalar
+	Integer(OptType),
+	/// Float scalar
+	Float(OptType),
+	/// Enumerated type scalar
+	Enum(OptType, Option<Arc<Enum>>),
+
+	/// String scalar
+	String(OptType),
+	/// Annotation scalar
+	Annotation(OptType),
+
+	/// Array type
+	Array {
+		/// Whether the array is optional
+		opt: OptType,
+		/// Type used for indexing
+		dim: Box<[Type]>,
+		/// Type of the element
+		element: Box<Type>,
+	},
+	/// Set type
+	Set(OptType, Box<Type>),
+	/// Tuple type
+	Tuple(OptType, Box<[Type]>),
+	/// Record type
+	Record(OptType, Box<[(String, Type)]>),
+}
+
+impl Type {
+	fn from_compiler(db: &CompilerDatabase, value: Ty) -> Result<Self, ShackleError> {
+		let data = value.lookup(db);
+		match data {
+			TyData::Boolean(_, opt) => Ok(Type::Boolean(opt)),
+			TyData::Integer(_, opt) => Ok(Type::Integer(opt)),
+			TyData::Float(_, opt) => Ok(Type::Float(opt)),
+			TyData::Enum(_, opt, _) => Ok(Type::Enum(opt, None)), // TODO: Fix None
+			TyData::String(opt) => Ok(Type::String(opt)),
+			TyData::Annotation(opt) => Ok(Type::Annotation(opt)),
+			TyData::Array { opt, dim, element } => {
+				let elem = Type::from_compiler(db, element)?;
+				let index_conv = |nty| -> Result<Type, ShackleError> {
+					match nty {
+						TyData::Integer(ty::VarType::Par, OptType::NonOpt) => {
+							Ok(Type::Integer(OptType::NonOpt))
+						}
+						TyData::Enum(ty::VarType::Par, OptType::NonOpt, _) => {
+							Ok(Type::Enum(OptType::NonOpt, None)) // TODO: Fix None
+						}
+						_ => Err(InternalError::new(format!(
+							"Unexpected index set type on user facing type {:?}",
+							nty
+						))
+						.into()),
+					}
+				};
+				let ndim = match dim.lookup(db) {
+					TyData::Tuple(OptType::NonOpt, li) => li
+						.iter()
+						.map(|ty| index_conv(ty.lookup(db)))
+						.collect::<Result<Vec<_>, _>>()?,
+					x => {
+						let nty = index_conv(x)?;
+						vec![nty]
+					}
+				};
+				Ok(Type::Array {
+					opt,
+					dim: ndim.into_boxed_slice(),
+					element: Box::new(elem),
+				})
+			}
+			TyData::Set(_, opt, elem) => {
+				Ok(Type::Set(opt, Box::new(Type::from_compiler(db, elem)?)))
+			}
+			TyData::Tuple(opt, li) => Ok(Type::Tuple(
+				opt,
+				li.iter()
+					.map(|ty| Type::from_compiler(db, *ty))
+					.collect::<Result<Vec<_>, _>>()?
+					.into_boxed_slice(),
+			)),
+			TyData::Record(opt, li) => Ok(Type::Record(
+				opt,
+				li.iter()
+					.map(|(name, ty)| match Type::from_compiler(db, *ty) {
+						Ok(nty) => Ok((name.value(db), nty)),
+						Err(e) => Err(e),
+					})
+					.collect::<Result<Vec<_>, _>>()?
+					.into_boxed_slice(),
+			)),
+			_ => Err(InternalError::new(format!(
+				"Unable to create user facing type from {:?}",
+				data
+			))
+			.into()),
+		}
+	}
+}
+
 /// Whether an value is negative or positive
+///
+/// For example, used for the constant infinity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Polarity {
 	/// Positive
@@ -734,10 +876,4 @@ impl Program {
 }
 
 #[cfg(test)]
-mod tests {
-	#[test]
-	fn it_works() {
-		let result = 2 + 2;
-		assert_eq!(result, 4);
-	}
-}
+mod tests {}

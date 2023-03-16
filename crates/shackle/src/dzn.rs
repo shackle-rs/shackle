@@ -26,7 +26,7 @@ use nom_locate::LocatedSpan;
 use rustc_hash::FxHashMap;
 
 use crate::{
-	error::{FileError, ShackleError, SyntaxError},
+	diagnostics::{FileError, ShackleError, SyntaxError},
 	Array, Enum, EnumValue, Index, Polarity, Record, Set, Value,
 };
 
@@ -616,7 +616,7 @@ mod tests {
 		let has_identifiers = |e: Vec<Value>, l: Vec<&str>| {
 			for (v, name) in e.iter().zip(l.iter()) {
 				if let Value::Enum(x) = v {
-					assert_eq!(x.constructor(), Some(name.clone()))
+					assert_eq!(x.constructor(), Some(*name))
 				} else {
 					panic!("enum identifier {v} parsed using the wrong value type")
 				}
