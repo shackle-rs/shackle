@@ -30,22 +30,29 @@ MicroZinc is defined using the following syntax,
 		\mathit{func}\* \\\\
 	\mathit{func} &::=&
 		\mathsf{function}~\mathit{typeinst}~\mathsf{:}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathit{letExpr}]\mathsf{;}\\\\&|&
-		\mathsf{predicate}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathsf{true}]\mathsf{;} \\\\
+		\mathsf{predicate}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathit{letRoot}]\mathsf{;} \\\\
 	\mathit{typing} &::=&
 		\mathit{typeinst}~\mathsf{:}~\mathit{ident} \\\\
 	\\\\
+	\mathit{expr} &::=&
+		\mathit{letExpr} \\\\&|&
+		\mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]\*\mathsf{)} \\\\&|&
+		\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letExpr}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letExpr}]\*~\mathsf{else}~\mathit{letExpr}~\mathsf{endif} \\\\&|&
+		\mathsf{[}[\mathit{tuple}\mathsf{:}]~\mathit{letExpr}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]} \\\\
+	\mathit{rootExpr} &::=&
+		\mathit{letRoot} \\\\&|&
+		\mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]\*\mathsf{)} \\\\&|&
+		\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letRoot}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letRoot}]\*~\mathsf{else}~\mathit{letRoot}~\mathsf{endif} \\\\&|&
+		\mathsf{forall_root}\mathsf{(}\mathsf{[}\mathit{letRoot}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]}\mathsf{)} \\\\
 	\mathit{letExpr} &::=&
 		\mathit{val} \\\\&|&
 		\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathit{val} \\\\
+	\mathit{letRoot} &::=&
+		\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathsf{root} \\\\
 	\mathit{item} &::=&
 		\mathit{typing}~\mathsf{;} \\\\&|&
 		\mathit{typing}~\mathsf{=}~\mathit{expr}~\mathsf{;} \\\\&|&
-		\mathsf{constraint}~\mathit{ident}~\mathsf{(}~\mathit{val} [ \mathsf{,}~ \mathit{val}]\*~\mathsf{)}~\mathsf{;} \\\\
-	\mathit{expr} &::=&
-		\mathit{letExpr} \\\\&|&
-		\mathit{ident}~\mathsf{(}~\mathit{val} [ \mathsf{,}~ \mathit{val}]\*~\mathsf{)} \\\\&|&
-		\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letExpr}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letExpr}]\*~\mathsf{else}~\mathit{letExpr}~\mathsf{endif} \\\\&|&
-		\mathsf{[}[\mathit{tuple}\mathsf{:}]~\mathit{letExpr}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]} \\\\
+		\mathsf{constraint}~\mathit{rootExpr}~\mathsf{;} \\\\
 	\mathit{genExpr} &::=&
 		\mathit{ident}~\mathsf{in}~\mathit{letExpr}~[\mathsf{where}~\mathit{letExpr}] \\\\&|&
 		\mathit{ident}~\mathsf{=}~\mathit{letExpr} \\\\
@@ -88,6 +95,7 @@ The following syntax describes the types available in MicroZinc. The type syntax
 \\[
 \begin{array}{lcl}
 	\mathit{typeinst} &::=&
+		\mathsf{pred} \\\\&|&
 		\mathsf{array}~\mathsf{[}\mathit{i62}\mathsf{..}\mathit{i62} [ \mathsf{,}~ \mathit{i62}\mathsf{..}\mathit{i62}]\*\mathsf{]}~\mathsf{of}~\mathit{baseType} \\\\&|&
 		\mathit{baseType} \\\\
 	\mathit{baseType} &::=&
@@ -109,6 +117,8 @@ The following syntax describes the types available in MicroZinc. The type syntax
 Importantly, MicroZinc includes two types of sub-typing. When type \\( T_1 \\) is a sub-type of type \\( T_2 \\) then \\( T_1 \\) can be used anywhere where the type \\( T_2 \\) is required.
  - In MicroZinc, \\( \mathsf{par}~T \\) is a sub-type of \\( \mathsf{var}~T \\).
  - MicroZinc also has numeric subtyping (i.e., \\( \mathsf{par~bool} \\) is a subtype of \\( \mathsf{par~int} \\), which is a sub-type of \\( \mathsf{par~float} \\), and similarly \\( \mathsf{var~bool} \\) is a sub-type of \\( \mathsf{var~int} \\), which is a sub-type of \\( \mathsf{var~float} \\))
+
+The \\( \mathsf{pred} \\) type is a special value given to expressions that enforce constraints, but do not return a value. This  It should be noted that the 
 
 The following rules describe the conditions under which a MicroZinc program is correctly typed. In these rules the variable \\( \Gamma \\) will denote the typing context. This context contains known types for identifiers.
 
@@ -167,7 +177,7 @@ Calls are defined in both the context of a constraint and on the right hand side
 
 ### Let expressions and identifiers
 
-Identifiers are typed simply using a lookup in the typing context. The typing of the let expression iteratively adds the types of each declaration item to the typing context. The program is well-typed when all expressions on the right-hand side of a declaration match their declared types, and any constraint items are of \\( \mathsf{var~bool} \\) type.
+Identifiers are typed simply using a lookup in the typing context. The typing of the let expression iteratively adds the types of each declaration item to the typing context. The program is well-typed when all expressions on the right-hand side of a declaration match their declared types, and any constraint items are of \\( \mathsf{pred} \\) type.
 
 \\[
 \begin{prooftree}
@@ -353,6 +363,11 @@ The remaining parts of the MicroZinc laguage are simple literals that have an in
 \\[
 \begin{prooftree}
 	\AxiomC{}
+	\RightLabel{(T-Root)}
+	\UnaryInfC{$\vdash{} \mathsf{root} : \mathsf{pred}$}
+\end{prooftree}
+\begin{prooftree}
+	\AxiomC{}
 	\RightLabel{(T-True)}
 	\UnaryInfC{$\vdash{} \mathsf{true} : \mathsf{par}~\mathsf{bool}$}
 \end{prooftree}
@@ -449,7 +464,7 @@ Note that only function calls and the items in let expressions change the enviro
 	\AxiomC{$ \mathsf{function}~T\mathsf{:}~F\mathsf{(} p_1, \dots, p_k \mathsf{)} = E; \in{} \Prog{},~\text{where the}~p_i~\text{are fresh} $}
 	\AxiomC{$ \Sem{E_{[p_i \mapsto a_i, \forall{} 1 \leq{} i \leq{} k]}}{\Prog, \Env} \Rightarrow{} \tuple{v, \Env'} $}
 	\RightLabel{(E-Call)}
-	\BinaryInfC{$ \Sem{F\mathsf{(}a_1, \ldots, a_k\mathsf{)}}{\Prog, \Env} \Rightarrow{} \tuple{v, \Env'} $}
+	\BinaryInfC{$ \Sem{F\mathsf{(}a_1, \ldots, a_k\mathsf{)}}{\Prog, \Env, C} \Rightarrow{} \tuple{v, \Env'} $}
 \end{prooftree}
 \\]
 
