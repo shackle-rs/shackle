@@ -15,7 +15,6 @@ variables introduced in the same let expression.
 
 ### TODO: Remaining questions
 
-- How many bits will we need to steal for efficient value storage?).
 - What annotation operations should be allowed in MicroZinc?
 - The operational semantics for array access definition only works for 1-dimensional arrays. How can we generalise them for multiple dimensions?
 - Add list of built-in functions
@@ -59,8 +58,8 @@ MicroZinc is defined using the following syntax,
 	\mathit{val} &::=&
 		\mathit{lit}~|~\mathit{range}~|~\mathit{tuple} \\\\&|&
 		\mathsf{\\{}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{\\}} \\\\&|&
-		\mathsf{array}\mathit{i62}\mathsf{d(}\mathit{range}~\mathsf{,}~[\mathit{range}~\mathsf{,}]\*~\mathsf{[}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{])} \\\\&|&
-		\mathit{ident}~\mathsf{.}~\mathit{i62} \\\\&|&
+		\mathsf{array}\mathit{int}\mathsf{d(}\mathit{range}~\mathsf{,}~[\mathit{range}~\mathsf{,}]\*~\mathsf{[}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{])} \\\\&|&
+		\mathit{ident}~\mathsf{.}~\mathit{int} \\\\&|&
 		\mathit{ident}~\mathsf{[}\mathit{lit}\mathsf{]} \\\\
 	\mathit{tuple} &::=& 
 		\mathsf{(}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{)} \\\\
@@ -69,21 +68,21 @@ MicroZinc is defined using the following syntax,
 		\mathit{ident} \\\\
 	\mathit{lit} &::=&
 		\mathit{bool} \\\\&|&
-		\mathit{i62} \\\\&|&
-		\mathit{f62} \\\\&|&
+		\mathit{int} \\\\&|&
+		\mathit{float} \\\\&|&
 		\mathit{str} \\\\&|&
 		\mathit{ident} \\\\
 	\\\\
 	\mathit{bool} &::=&
 		\mathsf{true}~|~\mathsf{false} \\\\
-	\mathit{i62} &::=&
+	\mathit{int} &::=&
 		/\texttt{[0-9]+}/ \\\\
-	\mathit{f62} &::=&
-		/\texttt{[0-9]+.[0-9]+}/ \\\\&|&
-		/\texttt{[0-9]+.[0-9]+e[-+]?[0-9]+}/ \\\\
+	\mathit{float} &::=&
+		/\texttt{0[xX]\([0-9a-fA-F]\*\\.[0-9a-fA-F]+\)|\([0-9a-fA-F]+\\.?\)\([pP][+-]?[0-9]+\)?}/ \\\\
 	\mathit{str} &::=&
 		/\texttt{"[\^\"]\*"}/ \\\\
 	\mathit{ident} &::=&
 		/\texttt{[A-Za-z][A-Za-z0-9_]*}/ \\\\
 \end{array}
 \\]
+

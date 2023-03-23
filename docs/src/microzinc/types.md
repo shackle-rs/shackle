@@ -7,7 +7,7 @@ The following syntax describes the types available in MicroZinc. The type syntax
 \begin{array}{lcl}
 	\mathit{typeinst} &::=&
 		\mathsf{pred} \\\\&|&
-		\mathsf{array}~\mathsf{[}\mathit{i62}\mathsf{..}\mathit{i62} [ \mathsf{,}~ \mathit{i62}\mathsf{..}\mathit{i62}]\*\mathsf{]}~\mathsf{of}~\mathit{baseType} \\\\&|&
+		\mathsf{array}~\mathsf{[}\mathit{int}\mathsf{..}\mathit{int} [ \mathsf{,}~ \mathit{int}\mathsf{..}\mathit{int}]\*\mathsf{]}~\mathsf{of}~\mathit{baseType} \\\\&|&
 		\mathit{baseType} \\\\
 	\mathit{baseType} &::=&
 		\mathsf{tuple}~\mathsf{(}\mathit{typeinst} [ \mathsf{,}~ \mathit{typeinst}]\*\mathsf{)} \\\\&|&
@@ -291,7 +291,7 @@ The remaining parts of the MicroZinc laguage are simple literals that have an in
 \\[
 \begin{prooftree}
 	\AxiomC{}
-	\RightLabel{(T-i62)}
+	\RightLabel{(T-int)}
 	\UnaryInfC{$\vdash{} /\texttt{[0-9]+}/ : \mathsf{par}~\mathsf{int}$}
 \end{prooftree}
 \begin{prooftree}
@@ -303,13 +303,8 @@ The remaining parts of the MicroZinc laguage are simple literals that have an in
 \\[
 \begin{prooftree}
 	\AxiomC{}
-	\RightLabel{(T-f62)}
-	\UnaryInfC{$\vdash{} /\texttt{[0-9]+.[0-9]+}/ : \mathsf{par}~\mathsf{float}$}
-\end{prooftree}
-\begin{prooftree}
-	\AxiomC{}
-	\RightLabel{(T-f62-exp)}
-	\UnaryInfC{$\vdash{} /\texttt{[0-9]+.[0-9]+e[-+]?[0-9]+}/: \mathsf{par}~\mathsf{float}$}
+	\RightLabel{(T-float)}
+	\UnaryInfC{$\vdash{} /\texttt{0[xX]\([0-9a-fA-F]\*\\.[0-9a-fA-F]+\)|\([0-9a-fA-F]+\\.?\)\([pP][+-]?[0-9]+\)?}/ : \mathsf{par}~\mathsf{float}$}
 \end{prooftree}
 \\]
 
