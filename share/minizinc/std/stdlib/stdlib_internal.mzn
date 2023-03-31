@@ -139,11 +139,7 @@ predicate var_dom(array[$T] of var opt float: x, set of float: d) =
     in forall (i in index_set(xx)) (var_dom(xx[i],d));
 */
 predicate float_dom(var opt float: x, array[int] of float: as) =
-  let {
-    var bool : b = occurs_internal_float(x);
-    var float : dx = deopt_internal_float(x);
-    constraint (x = reverse_map_var_opt_float(b,dx)) :: is_reverse_map;
-  } in float_dom(dx, as);
+  float_dom(deopt(x), as);
 
 predicate float_opt_eq(var opt float: x, var opt float: y) =
   deopt(x) = deopt(y) /\ occurs(x) = occurs(y);
@@ -1135,6 +1131,7 @@ function var opt bool: element(var opt int: idx1, var opt int: idx2, array[int,i
 function set of int: compute_div_bounds(var int: x, var int: y);
 function set of int: compute_mod_bounds(var int: x, var int: y);
 function set of float: compute_float_div_bounds(var float: x, var float: y);
+function set of int: compute_pow_bounds(var int: x, var int: y);
 
 function var int: div_t(var int: x, var int: y) :: promise_total =
   let {

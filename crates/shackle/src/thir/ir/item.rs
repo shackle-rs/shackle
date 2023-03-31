@@ -352,6 +352,26 @@ impl FunctionName {
 			FunctionName::Anonymous(v) => format!("FN_{}", v),
 		}
 	}
+
+	/// Get a mangled identifier for this function
+	pub fn mangled(&self, db: &dyn Thir, params: impl IntoIterator<Item = Ty>) -> Identifier {
+		let base = match self {
+			FunctionName::Named(identifier) => identifier.lookup(db.upcast()),
+			FunctionName::Anonymous(v) => format!("FN_{}", v),
+		};
+		Identifier::new(
+			format!(
+				"{}<{}>",
+				base,
+				params
+					.into_iter()
+					.map(|ty| ty.pretty_print(db.upcast()))
+					.collect::<Vec<_>>()
+					.join(", ")
+			),
+			db.upcast(),
+		)
+	}
 }
 
 impl From<Identifier> for FunctionName {

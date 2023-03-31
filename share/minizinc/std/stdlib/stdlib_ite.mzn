@@ -129,3 +129,86 @@ predicate if_then_else(array[int] of var bool: c, array[int] of var set of int: 
 predicate if_then_else_partiality(array[int] of var bool: c, array[int] of var bool: d, var bool: b) =
     fzn_if_then_else_partiality(c, d, b);
 
+function var bool: if_then_else(array[int] of var bool: c, array[int] of var bool: x) = 
+  let {
+    var bool: r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var opt bool: if_then_else(array[int] of var bool: c, array[int] of var opt bool: x) =
+  let {
+    var opt bool: r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var bool: if_then_else(array[int] of var bool: c, array[int] of bool: x) = 
+  let {
+    var bool: r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var opt bool: if_then_else(array[int] of var bool: c, array[int] of opt bool: x) =
+  let {
+    var opt bool: r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var $$E: if_then_else(array[int] of var bool: c, array[int] of var $$E: x) = 
+  let {
+    var dom_array(x): r;
+    constraint if_then_else(c, erase_enum(x), erase_enum(r));
+  } in r;
+
+function var opt $$E: if_then_else(array[int] of var bool: c, array[int] of var opt $$E: x) =
+  let {
+    var opt dom_array(x): r;
+    constraint if_then_else(c, erase_enum(x), erase_enum(r));
+  } in r;
+
+function var $$E: if_then_else(array[int] of var bool: c, array[int] of $$E: x) = 
+  let {
+    var dom_array(x): r;
+    constraint if_then_else(c, erase_enum(x), erase_enum(r));
+  } in r;
+
+function var opt $$E: if_then_else(array[int] of var bool: c, array[int] of opt $$E: x) =
+  let {
+    var opt dom_array(x): r;
+    constraint if_then_else(c, erase_enum(x), erase_enum(r));
+  } in r;
+
+function var set of $$E: if_then_else(array[int] of var bool: c, array[int] of var set of $$E: x) = 
+  let {
+    var set of ub_array(x): r;
+    constraint if_then_else(c, erase_enum(x), erase_enum(r));
+  } in r;
+
+function var set of $$E: if_then_else(array[int] of var bool: c, array[int] of set of $$E: x) = 
+  let {
+    var set of ub_array(x): r;
+    constraint if_then_else(c, erase_enum(x), erase_enum(r));
+  } in r;
+
+function var float: if_then_else(array[int] of var bool: c, array[int] of var float: x) = 
+  let {
+    var lb_array(x)..ub_array(x): r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var opt float: if_then_else(array[int] of var bool: c, array[int] of var opt float: x) = 
+  let {
+    var lb_array(x)..ub_array(x): r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var float: if_then_else(array[int] of var bool: c, array[int] of float: x) = 
+  let {
+    var lb_array(x)..ub_array(x): r;
+    constraint if_then_else(c, x, r);
+  } in r;
+
+function var opt float: if_then_else(array[int] of var bool: c, array[int] of opt float: x) = 
+  let {
+    var lb_array(x)..ub_array(x): r;
+    constraint if_then_else(c, x, r);
+  } in r;

@@ -702,14 +702,18 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			}
 		};
 
-		let element = el.with_inst(db.upcast(), VarType::Par).unwrap_or_else(|| {
-			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
-			panic!(
-				"Failed to make type '{}' par for element of '{}'",
-				el.pretty_print(db.upcast()),
-				&src.contents()[span.offset()..span.offset() + span.len()]
-			);
-		});
+		let element = el
+			.with_opt(db.upcast(), OptType::NonOpt)
+			.with_inst(db.upcast(), VarType::Par)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				panic!(
+					"Failed to make type '{}' par for element of '{}'",
+					el.pretty_print(db.upcast()),
+					&src.contents()[span.offset()..span.offset() + span.len()]
+				);
+			});
 		Ty::par_set(db.upcast(), element)
 			.and_then(|ty| {
 				if is_var {
@@ -1333,6 +1337,20 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				self.types.error
 			});
+		if ty.contains_function(db.upcast()) {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeInferenceFailure {
+					src,
+					span,
+					msg:
+						"Function types cannot be used in the results of if-then-else expressions."
+							.to_owned(),
+				},
+			);
+			return self.types.error;
+		}
 		if ite.else_result.is_none() && !ty.has_default_value(db.upcast()) {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 			self.ctx.add_diagnostic(
@@ -1410,6 +1428,19 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				self.types.error
 			});
+		if ty.contains_function(db.upcast()) {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeInferenceFailure {
+					src,
+					span,
+					msg: "Function types cannot be used in the results of case expressions."
+						.to_owned(),
+				},
+			);
+			return self.types.error;
+		}
 		if let Some(VarType::Var) = scrutinee.inst(db.upcast()) {
 			ty.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
 				let (src, span) =
@@ -2564,22 +2595,19 @@ supported in operation types."
 				return_type,
 				parameter_types,
 			} => {
-				match mode {
-					TypeCompletionMode::AnnotationParameter => {
-						let (src, span) =
-							NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
-						self.ctx.add_diagnostic(
-							self.item,
-							TypeMismatch {
-								src,
-								span,
-								msg: "Operation types are are not supported in \
+				if let TypeCompletionMode::AnnotationParameter = mode {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Operation types are are not supported in \
 									annotation item parameters"
-									.to_owned(),
-							},
-						);
-					}
-					_ => (),
+								.to_owned(),
+						},
+					);
 				}
 				match ty.map(|ty| ty.lookup(db.upcast())) {
 					Some(TyData::Function(

@@ -96,7 +96,7 @@ function bool: has_ann(any $T: x, ann: a);
 /** @group stdlib.reflect Annotate declaration of \a x with annotation \a a */
 function bool: annotate(any $T: x, ann: a);
 /** @group stdlib.reflect Annotate declaration of \a x with annotation \a a */
-function bool: annotate(array [$X] of any $T: x, ann: a);
+function bool: annotate(array [$X] of any $T: x, ann: a) = true;
 
 /** @group stdlib.reflect Test if \a x and \a y are the same variable */
 function bool: is_same(any $T: x, any $U: y);

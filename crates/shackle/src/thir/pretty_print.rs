@@ -268,6 +268,10 @@ impl<'a> PrettyPrinter<'a> {
 						.map(|d| self.pretty_print_domain(d))
 						.collect::<Vec<_>>()
 						.join(", "),
+					DomainData::Unbounded => ty
+						.dim_ty(self.db.upcast())
+						.unwrap()
+						.pretty_print_as_dims(self.db.upcast()),
 					_ => self.pretty_print_domain(dim),
 				};
 				ty.opt(self.db.upcast())
@@ -618,7 +622,8 @@ impl<'a> PrettyPrinter<'a> {
 					.map(|f| self.pretty_print_expression(f))
 					.collect::<Vec<_>>()
 					.join(", ");
-				format!("({})", fields)
+				let end = if fs.len() <= 1 { "," } else { "" };
+				format!("({}{})", fields, end)
 			}
 		};
 		for ann in expression.annotations().iter() {

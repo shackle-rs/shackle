@@ -644,7 +644,7 @@ impl PolymorphicFunctionType {
 				}
 			}
 		}
-
+		resolved.shrink_to_fit();
 		Ok(resolved)
 	}
 
@@ -725,13 +725,18 @@ impl PolymorphicFunctionType {
 			(TyData::Array { .. }, TyData::TyVar(_, _, _)) => false,
 			(_, TyData::TyVar(i, o, t)) => {
 				let mut ty = arg;
-				match (ty.inst(db), i) {
-					(_, None) | (_, Some(VarType::Var)) | (Some(VarType::Par), _) => (),
-					_ => return false,
-				}
-				match (ty.opt(db), o) {
-					(_, None) | (_, Some(OptType::Opt)) | (Some(OptType::NonOpt), _) => (),
-					_ => return false,
+				if !matches!(
+					// Check that inst is compatible
+					(ty.inst(db), i),
+					(_, None) | (_, Some(VarType::Var)) | (Some(VarType::Par), _)
+				) || !matches!(
+					// Check that optionality is compatible
+					(ty.opt(db), o),
+					(_, None) | (_, Some(OptType::Opt)) | (Some(OptType::NonOpt), _)
+				) || ty.contains_function(db)
+				// $T doesn't accept functions
+				{
+					return false;
 				}
 				if let Some(VarType::Var) = i {
 					ty = ty.with_inst(db, VarType::Par).expect("Failed to make par!");

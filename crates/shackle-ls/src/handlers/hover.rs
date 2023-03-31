@@ -52,7 +52,7 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 									let types = db.lookup_item_types(res.item());
 									let model = res.item().model(db);
 									let data = res.item().local_item_ref(db).data(&model);
-									return types.pretty_print_pattern_ty(db, data, res.pattern());
+									types.pretty_print_pattern_ty(db, data, res.pattern())
 								})?;
 							Some(Hover {
 								contents: HoverContents::Scalar(MarkedString::LanguageString(

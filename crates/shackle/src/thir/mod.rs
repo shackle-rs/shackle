@@ -13,7 +13,7 @@ pub mod lower;
 pub mod pretty_print;
 pub mod sanity_check;
 pub mod source;
-pub mod type_specialise;
+pub mod transform;
 
 mod ir;
 

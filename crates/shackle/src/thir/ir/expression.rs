@@ -418,7 +418,7 @@ impl ExpressionBuilder for SetComprehension {
 			.generators
 			.iter()
 			.any(|g| g.var_where(db) || g.var_set(db));
-		let elem_ty = self.template.ty();
+		let elem_ty = self.template.ty().with_opt(db.upcast(), OptType::NonOpt);
 		let ty = if let VarType::Var = elem_ty
 			.inst(db.upcast())
 			.expect("Invalid template inst for set comprehension")
@@ -732,7 +732,14 @@ impl ExpressionBuilder for Call {
 				let ty_params = fe
 					.overload
 					.instantiate_ty_params(db.upcast(), &arg_tys)
-					.expect("Failed to instantiate function");
+					.unwrap_or_else(|e| {
+						panic!(
+							"Failed to instantiate function {} ({}): {}",
+							model[*f].name().pretty_print(db),
+							fe.overload.pretty_print(db.upcast()),
+							e.debug_print(db.upcast())
+						);
+					});
 				let ft = fe.overload.instantiate(db.upcast(), &ty_params);
 				ft.return_type
 			}
@@ -1068,11 +1075,32 @@ impl Generator {
 	/// Whether this generator iterates over a var set
 	pub fn var_set(&self, db: &dyn Thir) -> bool {
 		match self {
-			Generator::Iterator { collection, .. } => matches!(
-				collection.ty().lookup(db.upcast()),
-				TyData::Set(VarType::Var, _, _)
-			),
+			Generator::Iterator { collection, .. } => collection.ty().is_var_set(db.upcast()),
 			_ => false,
+		}
+	}
+
+	/// Get the where clause for this generator
+	pub fn where_clause(&self) -> Option<&Expression> {
+		match self {
+			Generator::Iterator { where_clause, .. }
+			| Generator::Assignment { where_clause, .. } => where_clause.as_ref(),
+		}
+	}
+
+	/// Set the where clause for this generator
+	pub fn set_where(&mut self, w: Expression) {
+		match self {
+			Generator::Iterator { where_clause, .. }
+			| Generator::Assignment { where_clause, .. } => *where_clause = Some(w),
+		}
+	}
+
+	/// Get the declarations/assignment for this generator
+	pub fn declarations(&self) -> impl '_ + Iterator<Item = DeclarationId> {
+		match self {
+			Generator::Iterator { declarations, .. } => declarations.clone().into_iter(),
+			Generator::Assignment { assignment, .. } => vec![*assignment].into_iter(),
 		}
 	}
 }
@@ -1090,6 +1118,11 @@ impl Branch {
 	/// Create a new branch for an if-then-else
 	pub fn new(condition: Expression, result: Expression) -> Self {
 		Self { condition, result }
+	}
+
+	/// True if the condition is var
+	pub fn var_condition(&self, db: &dyn Thir) -> bool {
+		self.condition.ty().inst(db.upcast()).unwrap() == VarType::Var
 	}
 }
 

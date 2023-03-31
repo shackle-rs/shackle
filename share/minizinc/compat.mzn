@@ -1,0 +1,1 @@
+test mzn_check_only_range_domains() = mzn_check_only_range_domains()

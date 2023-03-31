@@ -504,6 +504,9 @@ impl<'a> ItemCollector<'a> {
 		let mut collector = ExpressionCollector::new(self, data, item, types);
 		let domain = collector.collect_domain(param.declared_type, ty, false);
 		let mut declaration = Declaration::new(false, domain);
+		if let Some(p) = param.pattern.and_then(|p| data[p].identifier()) {
+			declaration.set_name(p);
+		}
 		declaration.annotations_mut().extend(
 			param
 				.annotations
@@ -2132,6 +2135,10 @@ enum Destructuring {
 
 /// Lower a model to THIR
 pub fn lower_model(db: &dyn Thir) -> Arc<Model> {
+	for e in db.all_errors().iter() {
+		eprintln!("{:#?}", e);
+	}
+	assert!(db.all_errors().is_empty());
 	let ids = db.identifier_registry();
 	let mut collector = ItemCollector::new(db, &ids);
 	let items = db.lookup_topological_sorted_items();

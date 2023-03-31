@@ -303,7 +303,7 @@ var int: y;
 
 As it can be reordered into:
 
-```
+```mzn
 var int: y;
 var int: x = y;
 constraint y = x;

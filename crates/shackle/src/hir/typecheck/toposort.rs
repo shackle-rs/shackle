@@ -2,6 +2,9 @@
 //!
 //! Gives the order in which items should be processed (stable topological sort).
 //! Checks for cyclic definitions.
+//!
+//! Also ensures that globals (possibly transitively) used in function bodies
+//! appear before the function declaration.
 
 use std::sync::Arc;
 
@@ -68,7 +71,7 @@ impl<'a> TopoSorter<'a> {
 				let data = local_item.data(&model);
 				for p in model[a].parameters() {
 					for e in Type::expressions(p.declared_type, data) {
-						self.visit_expression(ExpressionRef::new(item, e));
+						self.visit_expression(ExpressionRef::new(item, e), None);
 					}
 				}
 			}
@@ -76,15 +79,15 @@ impl<'a> TopoSorter<'a> {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[a].assignee) {
 					self.current.insert(p);
-					self.visit_expression(ExpressionRef::new(item, model[a].definition));
+					self.visit_expression(ExpressionRef::new(item, model[a].definition), None);
 					self.current.remove(&p);
 				}
 			}
 			LocalItemRef::Constraint(c) => {
 				for ann in model[c].annotations.iter() {
-					self.visit_expression(ExpressionRef::new(item, *ann));
+					self.visit_expression(ExpressionRef::new(item, *ann), None);
 				}
-				self.visit_expression(ExpressionRef::new(item, model[c].expression));
+				self.visit_expression(ExpressionRef::new(item, model[c].expression), None);
 			}
 			LocalItemRef::Declaration(d) => {
 				let data = local_item.data(&model);
@@ -93,13 +96,13 @@ impl<'a> TopoSorter<'a> {
 					.collect::<Vec<_>>();
 				self.current.extend(pats.iter().copied());
 				for e in Type::expressions(model[d].declared_type, data) {
-					self.visit_expression(ExpressionRef::new(item, e));
+					self.visit_expression(ExpressionRef::new(item, e), None);
 				}
 				for ann in model[d].annotations.iter() {
-					self.visit_expression(ExpressionRef::new(item, *ann));
+					self.visit_expression(ExpressionRef::new(item, *ann), None);
 				}
 				if let Some(def) = model[d].definition {
-					self.visit_expression(ExpressionRef::new(item, def));
+					self.visit_expression(ExpressionRef::new(item, def), None);
 				}
 				for p in pats.iter() {
 					self.current.remove(p);
@@ -109,14 +112,14 @@ impl<'a> TopoSorter<'a> {
 				let p = PatternRef::new(item, model[e].pattern);
 				self.current.insert(p);
 				for ann in model[e].annotations.iter() {
-					self.visit_expression(ExpressionRef::new(item, *ann));
+					self.visit_expression(ExpressionRef::new(item, *ann), None);
 				}
 				if let Some(def) = &model[e].definition {
 					let data = local_item.data(&model);
 					for c in def.iter() {
 						for param in c.parameters() {
 							for e in Type::expressions(param.declared_type, data) {
-								self.visit_expression(ExpressionRef::new(item, e));
+								self.visit_expression(ExpressionRef::new(item, e), None);
 							}
 						}
 					}
@@ -131,7 +134,7 @@ impl<'a> TopoSorter<'a> {
 					for c in model[e].definition.iter() {
 						for param in c.parameters() {
 							for e in Type::expressions(param.declared_type, data) {
-								self.visit_expression(ExpressionRef::new(item, e));
+								self.visit_expression(ExpressionRef::new(item, e), None);
 							}
 						}
 					}
@@ -182,25 +185,30 @@ impl<'a> TopoSorter<'a> {
 				let data = local_item.data(&model);
 				for p in model[f].parameters.iter() {
 					for ann in p.annotations.iter() {
-						self.visit_expression(ExpressionRef::new(item, *ann));
+						self.visit_expression(ExpressionRef::new(item, *ann), None);
 					}
 					for e in Type::expressions(p.declared_type, data) {
-						self.visit_expression(ExpressionRef::new(item, e));
+						self.visit_expression(ExpressionRef::new(item, e), None);
 					}
 				}
 				for e in Type::expressions(model[f].return_type, data) {
-					self.visit_expression(ExpressionRef::new(item, e));
+					self.visit_expression(ExpressionRef::new(item, e), None);
 				}
 				for ann in model[f].annotations.iter() {
-					self.visit_expression(ExpressionRef::new(item, *ann));
+					self.visit_expression(ExpressionRef::new(item, *ann), None);
+				}
+				if let Some(body) = model[f].body {
+					// Inside this expression, don't visit function items for calls, instead visit the body since we
+					// only care about globals and recursive functions are allowed.
+					self.visit_expression(ExpressionRef::new(item, body), Some(p));
 				}
 				self.current.remove(&p);
 			}
 			LocalItemRef::Output(o) => {
 				if let Some(s) = model[o].section {
-					self.visit_expression(ExpressionRef::new(item, s));
+					self.visit_expression(ExpressionRef::new(item, s), None);
 				}
-				self.visit_expression(ExpressionRef::new(item, model[o].expression));
+				self.visit_expression(ExpressionRef::new(item, model[o].expression), None);
 			}
 			LocalItemRef::Solve(s) => match model[s].goal {
 				Goal::Maximize { pattern, objective }
@@ -210,14 +218,14 @@ impl<'a> TopoSorter<'a> {
 					let p = PatternRef::new(item, pattern);
 					self.current.insert(p);
 					for ann in model[s].annotations.iter() {
-						self.visit_expression(ExpressionRef::new(item, *ann));
+						self.visit_expression(ExpressionRef::new(item, *ann), None);
 					}
-					self.visit_expression(ExpressionRef::new(item, objective));
+					self.visit_expression(ExpressionRef::new(item, objective), None);
 					self.current.remove(&p);
 				}
 				_ => {
 					for ann in model[s].annotations.iter() {
-						self.visit_expression(ExpressionRef::new(item, *ann));
+						self.visit_expression(ExpressionRef::new(item, *ann), None);
 					}
 				}
 			},
@@ -225,11 +233,11 @@ impl<'a> TopoSorter<'a> {
 				let p = PatternRef::new(item, model[t].name);
 				self.current.insert(p);
 				for ann in model[t].annotations.iter() {
-					self.visit_expression(ExpressionRef::new(item, *ann));
+					self.visit_expression(ExpressionRef::new(item, *ann), None);
 				}
 				let data = local_item.data(&model);
 				for e in Type::expressions(model[t].aliased_type, data) {
-					self.visit_expression(ExpressionRef::new(item, e));
+					self.visit_expression(ExpressionRef::new(item, e), None);
 				}
 				self.current.remove(&p);
 			}
@@ -237,30 +245,48 @@ impl<'a> TopoSorter<'a> {
 		self.sorted.push(item);
 	}
 
-	fn visit_expression(&mut self, expression: ExpressionRef) {
-		let item = expression.item();
-		let model = item.model(self.db);
-		let data = item.local_item_ref(self.db).data(&model);
-		let types = self.db.lookup_item_types(item);
-		for e in Expression::walk(expression.expression(), data) {
-			if let Expression::Identifier(i) = data[e] {
-				if let Some(p) = types.name_resolution(e) {
-					if self.current.contains(&p) {
-						// Cyclic definition, emit error
-						let (src, span) =
-							NodeRef::from(expression.into_entity(self.db)).source_span(self.db);
-						let variable = i.pretty_print(self.db);
-						self.diagnostics.push(
-							CyclicDefinition {
-								src,
-								span,
-								variable,
+	fn visit_expression(&mut self, expression: ExpressionRef, visit_call_body: Option<PatternRef>) {
+		let mut todo = vec![expression];
+		let mut seen = visit_call_body.into_iter().collect::<FxHashSet<_>>();
+		while let Some(expression) = todo.pop() {
+			let item = expression.item();
+			let model = item.model(self.db);
+			let data = item.local_item_ref(self.db).data(&model);
+			let types = self.db.lookup_item_types(item);
+			for e in Expression::walk(expression.expression(), data) {
+				if let Expression::Identifier(i) = data[e] {
+					if let Some(p) = types.name_resolution(e) {
+						if (visit_call_body.is_none() || !seen.contains(&p))
+							&& self.current.contains(&p)
+						{
+							// Cyclic definition, emit error
+							let (src, span) =
+								NodeRef::from(ExpressionRef::new(item, e).into_entity(self.db))
+									.source_span(self.db);
+							let variable = i.pretty_print(self.db);
+							self.diagnostics.push(
+								CyclicDefinition {
+									src,
+									span,
+									variable,
+								}
+								.into(),
+							);
+							continue;
+						}
+						if visit_call_body.is_some() {
+							if let LocalItemRef::Function(f) = p.item().local_item_ref(self.db) {
+								if !seen.contains(&p) {
+									if let Some(body) = p.item().model(self.db)[f].body {
+										seen.insert(p);
+										todo.push(ExpressionRef::new(p.item(), body));
+									}
+								}
+								continue;
 							}
-							.into(),
-						);
-						continue;
+						}
+						self.run(p.item());
 					}
-					self.run(p.item());
 				}
 			}
 		}

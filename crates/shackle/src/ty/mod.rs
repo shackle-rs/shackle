@@ -319,20 +319,14 @@ impl Ty {
 
 	/// Whether this type-inst contains a type-inst variable
 	pub fn contains_type_inst_var(&self, db: &dyn Interner) -> bool {
-		match self.lookup(db) {
-			TyData::TyVar(_, _, _) => true,
-			TyData::Array { dim, element, .. } => {
-				dim.contains_type_inst_var(db) || element.contains_type_inst_var(db)
-			}
-			TyData::Set(_, _, e) => e.contains_type_inst_var(db),
-			TyData::Tuple(_, fs) => fs.iter().any(|f| f.contains_type_inst_var(db)),
-			TyData::Record(_, fs) => fs.iter().any(|(_, f)| f.contains_type_inst_var(db)),
-			TyData::Function(_, f) => {
-				f.return_type.contains_type_inst_var(db)
-					|| f.params.iter().any(|p| p.contains_type_inst_var(db))
-			}
-			_ => false,
-		}
+		self.walk_data(db)
+			.any(|(_, td)| matches!(td, TyData::TyVar(_, _, _)))
+	}
+
+	/// Whether this type-inst contains an operation type
+	pub fn contains_function(&self, db: &dyn Interner) -> bool {
+		self.walk_data(db)
+			.any(|(_, td)| matches!(td, TyData::Function(_, _)))
 	}
 
 	/// Whether this type inst contains something that is par
@@ -348,30 +342,51 @@ impl Ty {
 
 	/// Whether this type-inst contains an error.
 	pub fn contains_error(&self, db: &dyn Interner) -> bool {
-		match self.lookup(db) {
-			TyData::Error => true,
-			TyData::Function(_, f) => f.contains_error(db),
-			TyData::Set(_, _, e) => e.contains_error(db),
-			TyData::Array { dim, element, .. } => {
-				dim.contains_error(db) || element.contains_error(db)
-			}
-			TyData::Tuple(_, fs) => fs.iter().any(|f| f.contains_error(db)),
-			TyData::Record(_, fs) => fs.iter().any(|(_, f)| f.contains_error(db)),
-			_ => false,
-		}
+		self.walk_data(db)
+			.any(|(_, td)| matches!(td, TyData::Error))
+	}
+
+	/// Whether this type contains a type that will be erased
+	pub fn contains_erased_type(&self, db: &dyn Interner) -> bool {
+		self.walk_data(db).any(|(_, td)| {
+			matches!(
+				td,
+				TyData::Annotation(OptType::Opt)
+					| TyData::Array {
+						opt: OptType::Opt,
+						..
+					} | TyData::Boolean(_, OptType::Opt)
+					| TyData::Bottom(OptType::Opt)
+					| TyData::Enum(_, _, _)
+					| TyData::Float(_, OptType::Opt)
+					| TyData::Function(OptType::Opt, _)
+					| TyData::Integer(_, OptType::Opt)
+					| TyData::Record(_, _)
+					| TyData::Set(_, OptType::Opt, _)
+					| TyData::String(OptType::Opt)
+					| TyData::Tuple(OptType::Opt, _)
+					| TyData::TyVar(_, Some(OptType::Opt), _)
+			)
+		})
 	}
 
 	/// Walk over the `Ty`s in this `Ty`
 	pub fn walk<'a>(&self, db: &'a dyn Interner) -> impl 'a + Iterator<Item = Ty> {
+		self.walk_data(db).map(|(ty, _)| ty)
+	}
+
+	/// Walk the `Ty`s and their data in this `Ty`
+	pub fn walk_data<'a>(&self, db: &'a dyn Interner) -> impl 'a + Iterator<Item = (Ty, TyData)> {
 		let mut todo = vec![*self];
 		std::iter::from_fn(move || {
 			let ty = todo.pop()?;
-			match ty.lookup(db) {
+			let td = ty.lookup(db);
+			match &td {
 				TyData::Array { dim, element, .. } => {
-					todo.push(dim);
-					todo.push(element);
+					todo.push(*dim);
+					todo.push(*element);
 				}
-				TyData::Set(_, _, e) => todo.push(e),
+				TyData::Set(_, _, e) => todo.push(*e),
 				TyData::Tuple(_, fs) => todo.extend(fs.iter().copied()),
 				TyData::Record(_, fs) => todo.extend(fs.iter().map(|(_, t)| *t)),
 				TyData::Function(_, ft) => {
@@ -380,7 +395,7 @@ impl Ty {
 				}
 				_ => (),
 			}
-			Some(ty)
+			Some((ty, td))
 		})
 	}
 
@@ -437,6 +452,11 @@ impl Ty {
 		matches!(self.lookup(db), TyData::Set(_, _, _))
 	}
 
+	/// Whether or not this type is a var set
+	pub fn is_var_set(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Set(VarType::Var, _, _))
+	}
+
 	/// Whether or not this type is a function
 	pub fn is_function(&self, db: &dyn Interner) -> bool {
 		matches!(self.lookup(db), TyData::Function(_, _))
@@ -450,6 +470,14 @@ impl Ty {
 				TyData::TyVar(_, _, tv) if !tv.enumerable => None,
 				_ => Some(1),
 			},
+			_ => None,
+		}
+	}
+
+	/// Get the type of the dimensions if this is an array
+	pub fn dim_ty(&self, db: &dyn Interner) -> Option<Ty> {
+		match self.lookup(db) {
+			TyData::Array { dim, .. } => Some(dim),
 			_ => None,
 		}
 	}

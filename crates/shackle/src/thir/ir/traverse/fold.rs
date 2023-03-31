@@ -568,7 +568,15 @@ pub fn fold_declaration<F: Folder + ?Sized>(
 			.map(|ann| folder.fold_expression(db, model, ann)),
 	);
 	if let Some(def) = d.definition() {
-		declaration.set_definition(folder.fold_expression(db, model, def));
+		let def = folder.fold_expression(db, model, def);
+		let ty = def.ty();
+		declaration.set_definition(def);
+		assert!(
+			ty.is_subtype_of(db.upcast(), declaration.domain().ty()),
+			"Folded RHS type {} does not match declaration LHS type {}",
+			ty.pretty_print(db.upcast()),
+			declaration.domain().ty().pretty_print(db.upcast())
+		);
 	}
 	declaration
 }
@@ -731,7 +739,14 @@ pub fn fold_function_body<F: Folder + ?Sized>(
 ) {
 	let dst = folder.fold_function_id(db, model, f);
 	let folded = folder.fold_expression(db, model, model[f].body().unwrap());
+	let ty = folded.ty();
 	folder.model()[dst].set_body(folded);
+	assert!(
+		ty.is_subtype_of(db.upcast(), folder.model()[dst].domain().ty()),
+		"Folded function body type {} does not match return type {}",
+		ty.pretty_print(db.upcast()),
+		folder.model()[dst].domain().ty().pretty_print(db.upcast())
+	);
 }
 
 /// Add the folded version of this output item into the destination model.

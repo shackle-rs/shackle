@@ -227,7 +227,7 @@ impl Model {
 		name: FunctionName,
 		args: &[Ty],
 	) -> Result<FunctionLookup, FunctionLookupError> {
-		let overloads = self.all_functions().filter_map(|(i, f)| {
+		let overloads = self.top_level_functions().filter_map(|(i, f)| {
 			if f.name() == name {
 				Some((i, f.function_entry(self)))
 			} else {

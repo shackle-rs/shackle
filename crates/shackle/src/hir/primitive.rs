@@ -53,3 +53,9 @@ impl StringLiteral {
 		db.lookup_intern_string(self.0).into()
 	}
 }
+
+impl From<InternedString> for StringLiteral {
+	fn from(s: InternedString) -> Self {
+		Self(s)
+	}
+}
