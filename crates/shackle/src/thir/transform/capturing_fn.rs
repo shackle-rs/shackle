@@ -12,8 +12,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::thir::{
 	add_function, db::Thir, fold_call, fold_expression, fold_function_body, visit_callable, Call,
 	Callable, Declaration, DeclarationId, Domain, Expression, ExpressionData, Folder, FunctionId,
-	IntegerLiteral, Item, Model, ReplacementMap, ResolvedIdentifier, TupleAccess, TupleLiteral,
-	Visitor,
+	IntegerLiteral, Item, Marker, Model, ReplacementMap, ResolvedIdentifier, TupleAccess,
+	TupleLiteral, Visitor,
 };
 
 /// Computes all globals this function (transitively) refers to
@@ -68,28 +68,28 @@ impl Captures {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Decaptured {
-	declaration: DeclarationId,
-	parameter: DeclarationId,
-	field: FxHashMap<DeclarationId, IntegerLiteral>,
-	captures: Vec<DeclarationId>,
+struct Decaptured<Dst> {
+	declaration: DeclarationId<Dst>,
+	parameter: DeclarationId<Dst>,
+	field: FxHashMap<DeclarationId<Dst>, IntegerLiteral>,
+	captures: Vec<DeclarationId<Dst>>,
 }
 
-struct Decapturer {
-	model: Model,
-	replacement_map: ReplacementMap,
+struct Decapturer<Dst> {
+	model: Model<Dst>,
+	replacement_map: ReplacementMap<Dst>,
 	captures: FxHashMap<FunctionId, FxHashSet<DeclarationId>>,
-	decaptured: FxHashMap<FunctionId, Decaptured>,
-	added_declarations: FxHashMap<Vec<DeclarationId>, DeclarationId>,
+	decaptured: FxHashMap<FunctionId, Decaptured<Dst>>,
+	added_declarations: FxHashMap<Vec<DeclarationId<Dst>>, DeclarationId<Dst>>,
 	current: Option<FunctionId>,
 }
 
-impl Folder for Decapturer {
-	fn model(&mut self) -> &mut Model {
+impl<Dst: Marker> Folder<Dst> for Decapturer<Dst> {
+	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.model
 	}
 
-	fn replacement_map(&mut self) -> &mut ReplacementMap {
+	fn replacement_map(&mut self) -> &mut ReplacementMap<Dst> {
 		&mut self.replacement_map
 	}
 
@@ -141,7 +141,7 @@ impl Folder for Decapturer {
 		db: &dyn Thir,
 		model: &Model,
 		expression: &Expression,
-	) -> Expression {
+	) -> Expression<Dst> {
 		(|| {
 			let current = self.current?;
 			let declaration =
@@ -181,7 +181,7 @@ impl Folder for Decapturer {
 		.unwrap_or_else(|| fold_expression(self, db, model, expression))
 	}
 
-	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call {
+	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call<Dst> {
 		if let Callable::Function(f) = &call.function {
 			if let Some(child) = self.decaptured.get(f).cloned() {
 				let function = self.fold_function_id(db, model, *f);
@@ -269,7 +269,7 @@ impl Folder for Decapturer {
 	}
 }
 
-impl Decapturer {
+impl<Dst: Marker> Decapturer<Dst> {
 	fn decapture_fn(&mut self, db: &dyn Thir, model: &Model, f: FunctionId) {
 		if self.decaptured.contains_key(&f) {
 			return;
@@ -304,7 +304,7 @@ impl Decapturer {
 					TupleLiteral(
 						declarations
 							.iter()
-							.map(|d| Expression::new(db, &self.model, model[*d].origin(), *d))
+							.map(|d| Expression::new(db, &self.model, self.model[*d].origin(), *d))
 							.collect(),
 					),
 				)

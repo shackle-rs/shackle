@@ -24,7 +24,7 @@ pub fn transformer(
 		let mut m = iter
 			.next()
 			.map_or_else(|| model.clone(), |initial| initial(db, model));
-		while let Some(transform) = iter.next() {
+		for transform in iter.by_ref() {
 			m = transform(db, &m);
 		}
 		m

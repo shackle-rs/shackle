@@ -4,108 +4,113 @@ use crate::thir::{db::Thir, source::Origin, *};
 
 /// Replacement map for references to items
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ReplacementMap {
-	annotations: FxHashMap<AnnotationId, AnnotationId>,
-	constraints: FxHashMap<ConstraintId, ConstraintId>,
-	declarations: FxHashMap<DeclarationId, DeclarationId>,
-	enumerations: FxHashMap<EnumerationId, EnumerationId>,
-	functions: FxHashMap<FunctionId, FunctionId>,
-	outputs: FxHashMap<OutputId, OutputId>,
+pub struct ReplacementMap<U, T = ()> {
+	annotations: FxHashMap<AnnotationId<T>, AnnotationId<U>>,
+	constraints: FxHashMap<ConstraintId<T>, ConstraintId<U>>,
+	declarations: FxHashMap<DeclarationId<T>, DeclarationId<U>>,
+	enumerations: FxHashMap<EnumerationId<T>, EnumerationId<U>>,
+	functions: FxHashMap<FunctionId<T>, FunctionId<U>>,
+	outputs: FxHashMap<OutputId<T>, OutputId<U>>,
 }
 
-impl ReplacementMap {
+impl<T: Marker, U: Marker> ReplacementMap<U, T> {
 	/// Get the replacement for this annotation ID if any
-	pub fn get_annotation(&self, src: AnnotationId) -> Option<AnnotationId> {
+	pub fn get_annotation(&self, src: AnnotationId<T>) -> Option<AnnotationId<U>> {
 		self.annotations.get(&src).copied()
 	}
 
 	/// Insert an annotation ID into the replace map
-	pub fn insert_annotation(&mut self, src: AnnotationId, dst: AnnotationId) {
+	pub fn insert_annotation(&mut self, src: AnnotationId<T>, dst: AnnotationId<U>) {
 		self.annotations.insert(src, dst);
 	}
 
 	/// Get the replacement for this constraint ID if any
-	pub fn get_constraint(&self, src: ConstraintId) -> Option<ConstraintId> {
+	pub fn get_constraint(&self, src: ConstraintId<T>) -> Option<ConstraintId<U>> {
 		self.constraints.get(&src).copied()
 	}
 
 	/// Insert an constraint ID into the replace map
-	pub fn insert_constraint(&mut self, src: ConstraintId, dst: ConstraintId) {
+	pub fn insert_constraint(&mut self, src: ConstraintId<T>, dst: ConstraintId<U>) {
 		self.constraints.insert(src, dst);
 	}
 
 	/// Get the replacement for this declaration ID if any
-	pub fn get_declaration(&self, src: DeclarationId) -> Option<DeclarationId> {
+	pub fn get_declaration(&self, src: DeclarationId<T>) -> Option<DeclarationId<U>> {
 		self.declarations.get(&src).copied()
 	}
 
 	/// Insert an declaration ID into the replace map
-	pub fn insert_declaration(&mut self, src: DeclarationId, dst: DeclarationId) {
+	pub fn insert_declaration(&mut self, src: DeclarationId<T>, dst: DeclarationId<U>) {
 		self.declarations.insert(src, dst);
 	}
 
 	/// Get the replacement for this enumeration ID if any
-	pub fn get_enumeration(&self, src: EnumerationId) -> Option<EnumerationId> {
+	pub fn get_enumeration(&self, src: EnumerationId<T>) -> Option<EnumerationId<U>> {
 		self.enumerations.get(&src).copied()
 	}
 
 	/// Insert an enumeration ID into the replace map
-	pub fn insert_enumeration(&mut self, src: EnumerationId, dst: EnumerationId) {
+	pub fn insert_enumeration(&mut self, src: EnumerationId<T>, dst: EnumerationId<U>) {
 		self.enumerations.insert(src, dst);
 	}
 
 	/// Get the replacement for this enum member ID if any
-	pub fn get_enum_member(&self, src: EnumMemberId) -> Option<EnumMemberId> {
+	pub fn get_enum_member(&self, src: EnumMemberId<T>) -> Option<EnumMemberId<U>> {
 		self.get_enumeration(src.enumeration_id())
 			.map(|e| EnumMemberId::new(e, src.member_index()))
 	}
 
 	/// Get the replacement for this function ID if any
-	pub fn get_function(&self, src: FunctionId) -> Option<FunctionId> {
+	pub fn get_function(&self, src: FunctionId<T>) -> Option<FunctionId<U>> {
 		self.functions.get(&src).copied()
 	}
 
 	/// Insert an function ID into the replace map
-	pub fn insert_function(&mut self, src: FunctionId, dst: FunctionId) {
+	pub fn insert_function(&mut self, src: FunctionId<T>, dst: FunctionId<U>) {
 		self.functions.insert(src, dst);
 	}
 
 	/// Get the replacement for this output ID if any
-	pub fn get_output(&self, src: OutputId) -> Option<OutputId> {
+	pub fn get_output(&self, src: OutputId<T>) -> Option<OutputId<U>> {
 		self.outputs.get(&src).copied()
 	}
 
 	/// Insert an output ID into the replace map
-	pub fn insert_output(&mut self, src: OutputId, dst: OutputId) {
+	pub fn insert_output(&mut self, src: OutputId<T>, dst: OutputId<U>) {
 		self.outputs.insert(src, dst);
 	}
 }
 
 /// Trait for folding a model, and adding a transformed version of the items into another model.
-pub trait Folder {
+pub trait Folder<Dst: Marker, Src: Marker = ()> {
 	/// Get the replacement map
-	fn replacement_map(&mut self) -> &mut ReplacementMap;
+	fn replacement_map(&mut self) -> &mut ReplacementMap<Dst, Src>;
 
 	/// Get the destination model into which the nodes are added
-	fn model(&mut self) -> &mut Model;
+	fn model(&mut self) -> &mut Model<Dst>;
 
 	/// Add the items from the model into the destination model
-	fn add_model(&mut self, db: &dyn Thir, model: &Model) {
+	fn add_model(&mut self, db: &dyn Thir, model: &Model<Src>) {
 		add_model(self, db, model)
 	}
 
 	/// Add the folded version of this item to the destination model (and also to the replacement map)
-	fn add_item(&mut self, db: &dyn Thir, model: &Model, item: ItemId) {
+	fn add_item(&mut self, db: &dyn Thir, model: &Model<Src>, item: ItemId<Src>) {
 		add_item(self, db, model, item)
 	}
 
 	/// Add the folded version of this annotation item into the destination model.
-	fn add_annotation(&mut self, db: &dyn Thir, model: &Model, a: AnnotationId) {
+	fn add_annotation(&mut self, db: &dyn Thir, model: &Model<Src>, a: AnnotationId<Src>) {
 		add_annotation(self, db, model, a);
 	}
 
 	/// Fold an annotation item.
-	fn fold_annotation(&mut self, db: &dyn Thir, model: &Model, a: &Annotation) -> Annotation {
+	fn fold_annotation(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		a: &Annotation<Src>,
+	) -> Annotation<Dst> {
 		fold_annotation(self, db, model, a)
 	}
 
@@ -113,19 +118,24 @@ pub trait Folder {
 	fn fold_annotation_id(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		a: AnnotationId,
-	) -> AnnotationId {
+		model: &Model<Src>,
+		a: AnnotationId<Src>,
+	) -> AnnotationId<Dst> {
 		fold_annotation_id(self, db, model, a)
 	}
 
 	/// Add the folded version of this constraint item into the destination model.
-	fn add_constraint(&mut self, db: &dyn Thir, model: &Model, c: ConstraintId) {
+	fn add_constraint(&mut self, db: &dyn Thir, model: &Model<Src>, c: ConstraintId<Src>) {
 		add_constraint(self, db, model, c);
 	}
 
 	/// Fold a constraint item.
-	fn fold_constraint(&mut self, db: &dyn Thir, model: &Model, c: &Constraint) -> Constraint {
+	fn fold_constraint(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		c: &Constraint<Src>,
+	) -> Constraint<Dst> {
 		fold_constraint(self, db, model, c)
 	}
 
@@ -133,19 +143,24 @@ pub trait Folder {
 	fn fold_constraint_id(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		c: ConstraintId,
-	) -> ConstraintId {
+		model: &Model<Src>,
+		c: ConstraintId<Src>,
+	) -> ConstraintId<Dst> {
 		fold_constraint_id(self, db, model, c)
 	}
 
 	/// Add the folded version of this declaration item into the destination model.
-	fn add_declaration(&mut self, db: &dyn Thir, model: &Model, d: DeclarationId) {
+	fn add_declaration(&mut self, db: &dyn Thir, model: &Model<Src>, d: DeclarationId<Src>) {
 		add_declaration(self, db, model, d);
 	}
 
 	/// Fold a declaration item.
-	fn fold_declaration(&mut self, db: &dyn Thir, model: &Model, d: &Declaration) -> Declaration {
+	fn fold_declaration(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		d: &Declaration<Src>,
+	) -> Declaration<Dst> {
 		fold_declaration(self, db, model, d)
 	}
 
@@ -153,19 +168,24 @@ pub trait Folder {
 	fn fold_declaration_id(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		d: DeclarationId,
-	) -> DeclarationId {
+		model: &Model<Src>,
+		d: DeclarationId<Src>,
+	) -> DeclarationId<Dst> {
 		fold_declaration_id(self, db, model, d)
 	}
 
 	/// Add the folded version of this enumeration item into the destination model.
-	fn add_enumeration(&mut self, db: &dyn Thir, model: &Model, e: EnumerationId) {
+	fn add_enumeration(&mut self, db: &dyn Thir, model: &Model<Src>, e: EnumerationId<Src>) {
 		add_enumeration(self, db, model, e);
 	}
 
 	/// Fold an enumeration item.
-	fn fold_enumeration(&mut self, db: &dyn Thir, model: &Model, e: &Enumeration) -> Enumeration {
+	fn fold_enumeration(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		e: &Enumeration<Src>,
+	) -> Enumeration<Dst> {
 		fold_enumeration(self, db, model, e)
 	}
 
@@ -173,9 +193,9 @@ pub trait Folder {
 	fn fold_enumeration_id(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		e: EnumerationId,
-	) -> EnumerationId {
+		model: &Model<Src>,
+		e: EnumerationId<Src>,
+	) -> EnumerationId<Dst> {
 		fold_enumeration_id(self, db, model, e)
 	}
 
@@ -183,19 +203,24 @@ pub trait Folder {
 	fn fold_enum_member_id(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		e: EnumMemberId,
-	) -> EnumMemberId {
+		model: &Model<Src>,
+		e: EnumMemberId<Src>,
+	) -> EnumMemberId<Dst> {
 		fold_enum_member_id(self, db, model, e)
 	}
 
 	/// Fold a constructor
-	fn fold_constructor(&mut self, db: &dyn Thir, model: &Model, c: &Constructor) -> Constructor {
+	fn fold_constructor(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		c: &Constructor<Src>,
+	) -> Constructor<Dst> {
 		fold_constructor(self, db, model, c)
 	}
 
 	/// Add the folded version of this function item into the destination model.
-	fn add_function(&mut self, db: &dyn Thir, model: &Model, f: FunctionId) {
+	fn add_function(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
 		add_function(self, db, model, f);
 	}
 
@@ -203,12 +228,22 @@ pub trait Folder {
 	///
 	/// Note that this doesn't fold the body, which has to be processed at the end
 	/// since it may refer to items which have not been added yet.
-	fn fold_function(&mut self, db: &dyn Thir, model: &Model, f: &Function) -> Function {
+	fn fold_function(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		f: &Function<Src>,
+	) -> Function<Dst> {
 		fold_function(self, db, model, f)
 	}
 
 	/// Fold a function ID.
-	fn fold_function_id(&mut self, db: &dyn Thir, model: &Model, f: FunctionId) -> FunctionId {
+	fn fold_function_id(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		f: FunctionId<Src>,
+	) -> FunctionId<Dst> {
 		fold_function_id(self, db, model, f)
 	}
 
@@ -217,27 +252,27 @@ pub trait Folder {
 	/// This is separate because bodies must be processed once the function items
 	/// have been added, since they can refer to items which have not been added to
 	/// the destination model yet.
-	fn fold_function_body(&mut self, db: &dyn Thir, model: &Model, f: FunctionId) {
+	fn fold_function_body(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
 		fold_function_body(self, db, model, f)
 	}
 
 	/// Add the folded version of this output item into the destination model.
-	fn add_output(&mut self, db: &dyn Thir, model: &Model, o: OutputId) {
+	fn add_output(&mut self, db: &dyn Thir, model: &Model<Src>, o: OutputId<Src>) {
 		add_output(self, db, model, o);
 	}
 
 	/// Fold an output item.
-	fn fold_output(&mut self, db: &dyn Thir, model: &Model, o: &Output) -> Output {
+	fn fold_output(&mut self, db: &dyn Thir, model: &Model<Src>, o: &Output<Src>) -> Output<Dst> {
 		fold_output(self, db, model, o)
 	}
 
 	/// Add the folded version of the solve item into the destination model.
-	fn add_solve(&mut self, db: &dyn Thir, model: &Model) {
+	fn add_solve(&mut self, db: &dyn Thir, model: &Model<Src>) {
 		add_solve(self, db, model)
 	}
 
 	/// Fold the solve item.
-	fn fold_solve(&mut self, db: &dyn Thir, model: &Model, s: &Solve) -> Solve {
+	fn fold_solve(&mut self, db: &dyn Thir, model: &Model<Src>, s: &Solve<Src>) -> Solve<Dst> {
 		fold_solve(self, db, model, s)
 	}
 
@@ -245,9 +280,9 @@ pub trait Folder {
 	fn fold_expression(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		expression: &Expression,
-	) -> Expression {
+		model: &Model<Src>,
+		expression: &Expression<Src>,
+	) -> Expression<Dst> {
 		fold_expression(self, db, model, expression)
 	}
 
@@ -255,7 +290,7 @@ pub trait Folder {
 	fn fold_boolean(
 		&mut self,
 		_db: &dyn Thir,
-		_model: &Model,
+		_model: &Model<Src>,
 		b: BooleanLiteral,
 	) -> BooleanLiteral {
 		b
@@ -265,19 +300,24 @@ pub trait Folder {
 	fn fold_integer(
 		&mut self,
 		_db: &dyn Thir,
-		_model: &Model,
+		_model: &Model<Src>,
 		i: IntegerLiteral,
 	) -> IntegerLiteral {
 		i
 	}
 
 	/// Fold a float literal
-	fn fold_float(&mut self, _db: &dyn Thir, _model: &Model, f: FloatLiteral) -> FloatLiteral {
+	fn fold_float(&mut self, _db: &dyn Thir, _model: &Model<Src>, f: FloatLiteral) -> FloatLiteral {
 		f
 	}
 
 	/// Fold a string literal
-	fn fold_string(&mut self, _db: &dyn Thir, _model: &Model, s: &StringLiteral) -> StringLiteral {
+	fn fold_string(
+		&mut self,
+		_db: &dyn Thir,
+		_model: &Model<Src>,
+		s: &StringLiteral,
+	) -> StringLiteral {
 		s.clone()
 	}
 
@@ -285,14 +325,19 @@ pub trait Folder {
 	fn fold_identifier(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		identifier: &ResolvedIdentifier,
-	) -> ResolvedIdentifier {
+		model: &Model<Src>,
+		identifier: &ResolvedIdentifier<Src>,
+	) -> ResolvedIdentifier<Dst> {
 		fold_identifier(self, db, model, identifier)
 	}
 
 	/// Fold a callable
-	fn fold_callable(&mut self, db: &dyn Thir, model: &Model, function: &Callable) -> Callable {
+	fn fold_callable(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		function: &Callable<Src>,
+	) -> Callable<Dst> {
 		fold_callable(self, db, model, function)
 	}
 
@@ -300,14 +345,19 @@ pub trait Folder {
 	fn fold_array_literal(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		al: &ArrayLiteral,
-	) -> ArrayLiteral {
+		model: &Model<Src>,
+		al: &ArrayLiteral<Src>,
+	) -> ArrayLiteral<Dst> {
 		fold_array_literal(self, db, model, al)
 	}
 
 	/// Fold a set literal
-	fn fold_set_literal(&mut self, db: &dyn Thir, model: &Model, sl: &SetLiteral) -> SetLiteral {
+	fn fold_set_literal(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		sl: &SetLiteral<Src>,
+	) -> SetLiteral<Dst> {
 		fold_set_literal(self, db, model, sl)
 	}
 
@@ -315,9 +365,9 @@ pub trait Folder {
 	fn fold_tuple_literal(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		tl: &TupleLiteral,
-	) -> TupleLiteral {
+		model: &Model<Src>,
+		tl: &TupleLiteral<Src>,
+	) -> TupleLiteral<Dst> {
 		fold_tuple_literal(self, db, model, tl)
 	}
 
@@ -325,9 +375,9 @@ pub trait Folder {
 	fn fold_record_literal(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		rl: &RecordLiteral,
-	) -> RecordLiteral {
+		model: &Model<Src>,
+		rl: &RecordLiteral<Src>,
+	) -> RecordLiteral<Dst> {
 		fold_record_literal(self, db, model, rl)
 	}
 
@@ -335,28 +385,38 @@ pub trait Folder {
 	fn fold_array_comprehension(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		c: &ArrayComprehension,
-	) -> ArrayComprehension {
+		model: &Model<Src>,
+		c: &ArrayComprehension<Src>,
+	) -> ArrayComprehension<Dst> {
 		fold_array_comprehension(self, db, model, c)
 	}
 	/// Fold a set comprehension
 	fn fold_set_comprehension(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		c: &SetComprehension,
-	) -> SetComprehension {
+		model: &Model<Src>,
+		c: &SetComprehension<Src>,
+	) -> SetComprehension<Dst> {
 		fold_set_comprehension(self, db, model, c)
 	}
 
 	/// Fold an array access
-	fn fold_array_access(&mut self, db: &dyn Thir, model: &Model, aa: &ArrayAccess) -> ArrayAccess {
+	fn fold_array_access(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		aa: &ArrayAccess<Src>,
+	) -> ArrayAccess<Dst> {
 		fold_array_access(self, db, model, aa)
 	}
 
 	/// Fold a tuple access
-	fn fold_tuple_access(&mut self, db: &dyn Thir, model: &Model, ta: &TupleAccess) -> TupleAccess {
+	fn fold_tuple_access(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		ta: &TupleAccess<Src>,
+	) -> TupleAccess<Dst> {
 		fold_tuple_access(self, db, model, ta)
 	}
 
@@ -364,59 +424,79 @@ pub trait Folder {
 	fn fold_record_access(
 		&mut self,
 		db: &dyn Thir,
-		model: &Model,
-		ra: &RecordAccess,
-	) -> RecordAccess {
+		model: &Model<Src>,
+		ra: &RecordAccess<Src>,
+	) -> RecordAccess<Dst> {
 		fold_record_access(self, db, model, ra)
 	}
 
 	/// Fold an if-then-else expression
-	fn fold_if_then_else(&mut self, db: &dyn Thir, model: &Model, ite: &IfThenElse) -> IfThenElse {
+	fn fold_if_then_else(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		ite: &IfThenElse<Src>,
+	) -> IfThenElse<Dst> {
 		fold_if_then_else(self, db, model, ite)
 	}
 
 	/// Fold a case expression
-	fn fold_case(&mut self, db: &dyn Thir, model: &Model, c: &Case) -> Case {
+	fn fold_case(&mut self, db: &dyn Thir, model: &Model<Src>, c: &Case<Src>) -> Case<Dst> {
 		fold_case(self, db, model, c)
 	}
 
 	/// Fold a call expression
-	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call {
+	fn fold_call(&mut self, db: &dyn Thir, model: &Model<Src>, call: &Call<Src>) -> Call<Dst> {
 		fold_call(self, db, model, call)
 	}
 
 	/// Fold a let expression
-	fn fold_let(&mut self, db: &dyn Thir, model: &Model, l: &Let) -> Let {
+	fn fold_let(&mut self, db: &dyn Thir, model: &Model<Src>, l: &Let<Src>) -> Let<Dst> {
 		fold_let(self, db, model, l)
 	}
 
 	/// Fold a lambda expression
-	fn fold_lambda(&mut self, db: &dyn Thir, model: &Model, l: &Lambda) -> Lambda {
+	fn fold_lambda(&mut self, db: &dyn Thir, model: &Model<Src>, l: &Lambda<Src>) -> Lambda<Dst> {
 		fold_lambda(self, db, model, l)
 	}
 
 	/// Fold a comprehension generator
-	fn fold_generator(&mut self, db: &dyn Thir, model: &Model, generator: &Generator) -> Generator {
+	fn fold_generator(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		generator: &Generator<Src>,
+	) -> Generator<Dst> {
 		fold_generator(self, db, model, generator)
 	}
 
 	/// Fold a domain
-	fn fold_domain(&mut self, db: &dyn Thir, model: &Model, domain: &Domain) -> Domain {
+	fn fold_domain(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		domain: &Domain<Src>,
+	) -> Domain<Dst> {
 		fold_domain(self, db, model, domain)
 	}
 
 	/// Fold a case pattern
-	fn fold_pattern(&mut self, db: &dyn Thir, model: &Model, pattern: &Pattern) -> Pattern {
+	fn fold_pattern(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		pattern: &Pattern<Src>,
+	) -> Pattern<Dst> {
 		fold_pattern(self, db, model, pattern)
 	}
 }
 
-fn alloc_expression<F: Folder + ?Sized>(
+fn alloc_expression<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	db: &dyn Thir,
 	origin: impl Into<Origin>,
-	value: impl ExpressionBuilder,
+	value: impl ExpressionBuilder<U>,
 	folder: &mut F,
-) -> Expression {
+) -> Expression<U> {
 	Expression::new(db, folder.model(), origin, value)
 }
 
@@ -424,7 +504,11 @@ fn alloc_expression<F: Folder + ?Sized>(
 ///
 /// First, we add each folded item into the destination model, except for function bodies.
 /// The function bodies are then added once all of the items are made available.
-pub fn add_model<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model) {
+pub fn add_model<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
+	folder: &mut F,
+	db: &dyn Thir,
+	model: &Model<T>,
+) {
 	// Add items to the destination model
 	for item in model.top_level_items() {
 		folder.add_item(db, model, item);
@@ -438,7 +522,12 @@ pub fn add_model<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Mode
 }
 
 /// Fold an item
-pub fn add_item<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model, item: ItemId) {
+pub fn add_item<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
+	folder: &mut F,
+	db: &dyn Thir,
+	model: &Model<T>,
+	item: ItemId<T>,
+) {
 	match item {
 		ItemId::Annotation(a) => folder.add_annotation(db, model, a),
 		ItemId::Constraint(c) => folder.add_constraint(db, model, c),
@@ -451,12 +540,12 @@ pub fn add_item<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model
 }
 
 /// Add the folded version of this annotation item into the destination model.
-pub fn add_annotation<F: Folder + ?Sized>(
+pub fn add_annotation<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	a: AnnotationId,
-) -> AnnotationId {
+	model: &Model<T>,
+	a: AnnotationId<T>,
+) -> AnnotationId<U> {
 	let annotation = folder.fold_annotation(db, model, &model[a]);
 	let idx = folder
 		.model()
@@ -466,22 +555,22 @@ pub fn add_annotation<F: Folder + ?Sized>(
 }
 
 /// Fold an annotation item
-pub fn fold_annotation<F: Folder + ?Sized>(
+pub fn fold_annotation<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	a: &Annotation,
-) -> Annotation {
+	model: &Model<T>,
+	a: &Annotation<T>,
+) -> Annotation<U> {
 	folder.fold_constructor(db, model, a).into()
 }
 
 /// Fold an annotation ID
-pub fn fold_annotation_id<F: Folder + ?Sized>(
+pub fn fold_annotation_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	_db: &dyn Thir,
-	_model: &Model,
-	a: AnnotationId,
-) -> AnnotationId {
+	_model: &Model<T>,
+	a: AnnotationId<T>,
+) -> AnnotationId<U> {
 	folder
 		.replacement_map()
 		.get_annotation(a)
@@ -489,12 +578,12 @@ pub fn fold_annotation_id<F: Folder + ?Sized>(
 }
 
 /// Add the folded version of this constraint item into the destination model.
-pub fn add_constraint<F: Folder + ?Sized>(
+pub fn add_constraint<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: ConstraintId,
-) -> ConstraintId {
+	model: &Model<T>,
+	c: ConstraintId<T>,
+) -> ConstraintId<U> {
 	let constraint = folder.fold_constraint(db, model, &model[c]);
 	let idx = folder
 		.model()
@@ -504,12 +593,12 @@ pub fn add_constraint<F: Folder + ?Sized>(
 }
 
 /// Fold a constraint item
-pub fn fold_constraint<F: Folder + ?Sized>(
+pub fn fold_constraint<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: &Constraint,
-) -> Constraint {
+	model: &Model<T>,
+	c: &Constraint<T>,
+) -> Constraint<U> {
 	let mut constraint = Constraint::new(
 		c.top_level(),
 		folder.fold_expression(db, model, c.expression()),
@@ -523,12 +612,12 @@ pub fn fold_constraint<F: Folder + ?Sized>(
 }
 
 /// Fold a constraint ID
-pub fn fold_constraint_id<F: Folder + ?Sized>(
+pub fn fold_constraint_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	_db: &dyn Thir,
-	_model: &Model,
-	a: ConstraintId,
-) -> ConstraintId {
+	_model: &Model<T>,
+	a: ConstraintId<T>,
+) -> ConstraintId<U> {
 	folder
 		.replacement_map()
 		.get_constraint(a)
@@ -536,12 +625,12 @@ pub fn fold_constraint_id<F: Folder + ?Sized>(
 }
 
 /// Add the folded version of this declaration item into the destination model.
-pub fn add_declaration<F: Folder + ?Sized>(
+pub fn add_declaration<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	d: DeclarationId,
-) -> DeclarationId {
+	model: &Model<T>,
+	d: DeclarationId<T>,
+) -> DeclarationId<U> {
 	let declaration = folder.fold_declaration(db, model, &model[d]);
 	let idx = folder
 		.model()
@@ -551,12 +640,12 @@ pub fn add_declaration<F: Folder + ?Sized>(
 }
 
 /// Fold a declaration item
-pub fn fold_declaration<F: Folder + ?Sized>(
+pub fn fold_declaration<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	d: &Declaration,
-) -> Declaration {
+	model: &Model<T>,
+	d: &Declaration<T>,
+) -> Declaration<U> {
 	let mut declaration =
 		Declaration::new(d.top_level(), folder.fold_domain(db, model, d.domain()));
 	if let Some(name) = d.name() {
@@ -582,12 +671,12 @@ pub fn fold_declaration<F: Folder + ?Sized>(
 }
 
 /// Fold a declaration ID
-pub fn fold_declaration_id<F: Folder + ?Sized>(
+pub fn fold_declaration_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	_db: &dyn Thir,
-	_model: &Model,
-	d: DeclarationId,
-) -> DeclarationId {
+	_model: &Model<T>,
+	d: DeclarationId<T>,
+) -> DeclarationId<U> {
 	folder
 		.replacement_map()
 		.get_declaration(d)
@@ -595,12 +684,12 @@ pub fn fold_declaration_id<F: Folder + ?Sized>(
 }
 
 /// Add the folded version of this enumeration item into the destination model.
-pub fn add_enumeration<F: Folder + ?Sized>(
+pub fn add_enumeration<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	e: EnumerationId,
-) -> EnumerationId {
+	model: &Model<T>,
+	e: EnumerationId<T>,
+) -> EnumerationId<U> {
 	let enumeration = folder.fold_enumeration(db, model, &model[e]);
 	let idx = folder
 		.model()
@@ -610,12 +699,12 @@ pub fn add_enumeration<F: Folder + ?Sized>(
 }
 
 /// Fold an enumeration item
-pub fn fold_enumeration<F: Folder + ?Sized>(
+pub fn fold_enumeration<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	e: &Enumeration,
-) -> Enumeration {
+	model: &Model<T>,
+	e: &Enumeration<T>,
+) -> Enumeration<U> {
 	let mut enumeration = Enumeration::new(e.enum_type());
 	enumeration.annotations_mut().extend(
 		e.annotations()
@@ -629,12 +718,12 @@ pub fn fold_enumeration<F: Folder + ?Sized>(
 }
 
 /// Fold an enumeration ID
-pub fn fold_enumeration_id<F: Folder + ?Sized>(
+pub fn fold_enumeration_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	_db: &dyn Thir,
-	_model: &Model,
-	a: EnumerationId,
-) -> EnumerationId {
+	_model: &Model<T>,
+	a: EnumerationId<T>,
+) -> EnumerationId<U> {
 	folder
 		.replacement_map()
 		.get_enumeration(a)
@@ -642,12 +731,12 @@ pub fn fold_enumeration_id<F: Folder + ?Sized>(
 }
 
 /// Fold an enum member ID
-pub fn fold_enum_member_id<F: Folder + ?Sized>(
+pub fn fold_enum_member_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	e: EnumMemberId,
-) -> EnumMemberId {
+	model: &Model<T>,
+	e: EnumMemberId<T>,
+) -> EnumMemberId<U> {
 	EnumMemberId::new(
 		folder.fold_enumeration_id(db, model, e.enumeration_id()),
 		e.member_index(),
@@ -655,12 +744,12 @@ pub fn fold_enum_member_id<F: Folder + ?Sized>(
 }
 
 /// Fold a constructor
-pub fn fold_constructor<F: Folder + ?Sized>(
+pub fn fold_constructor<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: &Constructor,
-) -> Constructor {
+	model: &Model<T>,
+	c: &Constructor<T>,
+) -> Constructor<U> {
 	Constructor {
 		name: c.name,
 		parameters: c.parameters.as_ref().map(|ps| {
@@ -675,12 +764,12 @@ pub fn fold_constructor<F: Folder + ?Sized>(
 }
 
 /// Add the folded version of this function item into the destination model.
-pub fn add_function<F: Folder + ?Sized>(
+pub fn add_function<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	f: FunctionId,
-) -> FunctionId {
+	model: &Model<T>,
+	f: FunctionId<T>,
+) -> FunctionId<U> {
 	let function = folder.fold_function(db, model, &model[f]);
 	let idx = folder
 		.model()
@@ -693,12 +782,12 @@ pub fn add_function<F: Folder + ?Sized>(
 ///
 /// Note that this doesn't fold the body, which has to be processed at the end
 /// since it may refer to items which have not been added yet.
-pub fn fold_function<F: Folder + ?Sized>(
+pub fn fold_function<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	f: &Function,
-) -> Function {
+	model: &Model<T>,
+	f: &Function<T>,
+) -> Function<U> {
 	let mut function = Function::new(f.name(), folder.fold_domain(db, model, f.domain()));
 	function.annotations_mut().extend(
 		f.annotations()
@@ -714,12 +803,12 @@ pub fn fold_function<F: Folder + ?Sized>(
 }
 
 /// Fold an function ID
-pub fn fold_function_id<F: Folder + ?Sized>(
+pub fn fold_function_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	_db: &dyn Thir,
-	_model: &Model,
-	f: FunctionId,
-) -> FunctionId {
+	_model: &Model<T>,
+	f: FunctionId<T>,
+) -> FunctionId<U> {
 	folder
 		.replacement_map()
 		.get_function(f)
@@ -731,11 +820,11 @@ pub fn fold_function_id<F: Folder + ?Sized>(
 /// This is separate because bodies must be processed once the function items
 /// have been added, since they can refer to items which have not been added to
 /// the destination model yet.
-pub fn fold_function_body<F: Folder + ?Sized>(
+pub fn fold_function_body<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	f: FunctionId,
+	model: &Model<T>,
+	f: FunctionId<T>,
 ) {
 	let dst = folder.fold_function_id(db, model, f);
 	let folded = folder.fold_expression(db, model, model[f].body().unwrap());
@@ -750,12 +839,12 @@ pub fn fold_function_body<F: Folder + ?Sized>(
 }
 
 /// Add the folded version of this output item into the destination model.
-pub fn add_output<F: Folder + ?Sized>(
+pub fn add_output<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	o: OutputId,
-) -> OutputId {
+	model: &Model<T>,
+	o: OutputId<T>,
+) -> OutputId<U> {
 	let output = folder.fold_output(db, model, &model[o]);
 	let idx = folder
 		.model()
@@ -765,12 +854,12 @@ pub fn add_output<F: Folder + ?Sized>(
 }
 
 /// Fold an output item
-pub fn fold_output<F: Folder + ?Sized>(
+pub fn fold_output<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	o: &Output,
-) -> Output {
+	model: &Model<T>,
+	o: &Output<T>,
+) -> Output<U> {
 	let mut output = Output::new(folder.fold_expression(db, model, o.expression()));
 	if let Some(section) = o.section() {
 		output.set_section(folder.fold_expression(db, model, section));
@@ -779,12 +868,12 @@ pub fn fold_output<F: Folder + ?Sized>(
 }
 
 /// Fold an output ID
-pub fn fold_output_id<F: Folder + ?Sized>(
+pub fn fold_output_id<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	_db: &dyn Thir,
-	_model: &Model,
-	a: OutputId,
-) -> OutputId {
+	_model: &Model<T>,
+	a: OutputId<T>,
+) -> OutputId<U> {
 	folder
 		.replacement_map()
 		.get_output(a)
@@ -792,7 +881,11 @@ pub fn fold_output_id<F: Folder + ?Sized>(
 }
 
 /// Add the folded version of the solve item into the destination model.
-pub fn add_solve<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model) {
+pub fn add_solve<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
+	folder: &mut F,
+	db: &dyn Thir,
+	model: &Model<T>,
+) {
 	let solve = folder.fold_solve(db, model, model.solve().unwrap());
 	folder
 		.model()
@@ -800,12 +893,12 @@ pub fn add_solve<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Mode
 }
 
 /// Fold the solve item
-pub fn fold_solve<F: Folder + ?Sized>(
+pub fn fold_solve<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	s: &Solve,
-) -> Solve {
+	model: &Model<T>,
+	s: &Solve<T>,
+) -> Solve<U> {
 	let mut solve = match s.goal() {
 		Goal::Maximize { objective } => {
 			Solve::maximize(folder.fold_declaration_id(db, model, *objective))
@@ -824,12 +917,12 @@ pub fn fold_solve<F: Folder + ?Sized>(
 }
 
 /// Fold an identifier
-pub fn fold_identifier<F: Folder + ?Sized>(
+pub fn fold_identifier<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	identifier: &ResolvedIdentifier,
-) -> ResolvedIdentifier {
+	model: &Model<T>,
+	identifier: &ResolvedIdentifier<T>,
+) -> ResolvedIdentifier<U> {
 	match identifier {
 		ResolvedIdentifier::Annotation(idx) => {
 			ResolvedIdentifier::Annotation(folder.fold_annotation_id(db, model, *idx))
@@ -847,12 +940,12 @@ pub fn fold_identifier<F: Folder + ?Sized>(
 }
 
 /// Fold a callable
-pub fn fold_callable<F: Folder + ?Sized>(
+pub fn fold_callable<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	function: &Callable,
-) -> Callable {
+	model: &Model<T>,
+	function: &Callable<T>,
+) -> Callable<U> {
 	match function {
 		Callable::Annotation(a) => Callable::Annotation(folder.fold_annotation_id(db, model, *a)),
 		Callable::AnnotationDestructure(a) => {
@@ -865,19 +958,19 @@ pub fn fold_callable<F: Folder + ?Sized>(
 			Callable::EnumDestructor(folder.fold_enum_member_id(db, model, *e))
 		}
 		Callable::Expression(e) => {
-			Callable::Expression(Box::new(folder.fold_expression(db, model, &e)))
+			Callable::Expression(Box::new(folder.fold_expression(db, model, e)))
 		}
 		Callable::Function(f) => Callable::Function(folder.fold_function_id(db, model, *f)),
 	}
 }
 
 /// Fold an array literal
-pub fn fold_array_literal<F: Folder + ?Sized>(
+pub fn fold_array_literal<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	al: &ArrayLiteral,
-) -> ArrayLiteral {
+	model: &Model<T>,
+	al: &ArrayLiteral<T>,
+) -> ArrayLiteral<U> {
 	ArrayLiteral(
 		al.0.iter()
 			.map(|e| folder.fold_expression(db, model, e))
@@ -886,12 +979,12 @@ pub fn fold_array_literal<F: Folder + ?Sized>(
 }
 
 /// Fold a set literal
-pub fn fold_set_literal<F: Folder + ?Sized>(
+pub fn fold_set_literal<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	sl: &SetLiteral,
-) -> SetLiteral {
+	model: &Model<T>,
+	sl: &SetLiteral<T>,
+) -> SetLiteral<U> {
 	SetLiteral(
 		sl.0.iter()
 			.map(|e| folder.fold_expression(db, model, e))
@@ -900,12 +993,12 @@ pub fn fold_set_literal<F: Folder + ?Sized>(
 }
 
 /// Fold a tuple literal
-pub fn fold_tuple_literal<F: Folder + ?Sized>(
+pub fn fold_tuple_literal<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	tl: &TupleLiteral,
-) -> TupleLiteral {
+	model: &Model<T>,
+	tl: &TupleLiteral<T>,
+) -> TupleLiteral<U> {
 	TupleLiteral(
 		tl.0.iter()
 			.map(|e| folder.fold_expression(db, model, e))
@@ -914,12 +1007,12 @@ pub fn fold_tuple_literal<F: Folder + ?Sized>(
 }
 
 /// Fold a record literal
-pub fn fold_record_literal<F: Folder + ?Sized>(
+pub fn fold_record_literal<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	rl: &RecordLiteral,
-) -> RecordLiteral {
+	model: &Model<T>,
+	rl: &RecordLiteral<T>,
+) -> RecordLiteral<U> {
 	RecordLiteral(
 		rl.0.iter()
 			.map(|(i, e)| (*i, folder.fold_expression(db, model, e)))
@@ -928,12 +1021,12 @@ pub fn fold_record_literal<F: Folder + ?Sized>(
 }
 
 /// Fold an array comprehension
-pub fn fold_array_comprehension<F: Folder + ?Sized>(
+pub fn fold_array_comprehension<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: &ArrayComprehension,
-) -> ArrayComprehension {
+	model: &Model<T>,
+	c: &ArrayComprehension<T>,
+) -> ArrayComprehension<U> {
 	ArrayComprehension {
 		generators: c
 			.generators
@@ -949,12 +1042,12 @@ pub fn fold_array_comprehension<F: Folder + ?Sized>(
 }
 
 /// Fold a set comprehension
-pub fn fold_set_comprehension<F: Folder + ?Sized>(
+pub fn fold_set_comprehension<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: &SetComprehension,
-) -> SetComprehension {
+	model: &Model<T>,
+	c: &SetComprehension<T>,
+) -> SetComprehension<U> {
 	SetComprehension {
 		generators: c
 			.generators
@@ -966,12 +1059,12 @@ pub fn fold_set_comprehension<F: Folder + ?Sized>(
 }
 
 /// Fold an array access expression
-pub fn fold_array_access<F: Folder + ?Sized>(
+pub fn fold_array_access<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	aa: &ArrayAccess,
-) -> ArrayAccess {
+	model: &Model<T>,
+	aa: &ArrayAccess<T>,
+) -> ArrayAccess<U> {
 	ArrayAccess {
 		collection: Box::new(folder.fold_expression(db, model, &aa.collection)),
 		indices: Box::new(folder.fold_expression(db, model, &aa.indices)),
@@ -979,12 +1072,12 @@ pub fn fold_array_access<F: Folder + ?Sized>(
 }
 
 /// Fold a tuple access expression (does not fold the field integer)
-pub fn fold_tuple_access<F: Folder + ?Sized>(
+pub fn fold_tuple_access<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	ta: &TupleAccess,
-) -> TupleAccess {
+	model: &Model<T>,
+	ta: &TupleAccess<T>,
+) -> TupleAccess<U> {
 	TupleAccess {
 		tuple: Box::new(folder.fold_expression(db, model, &ta.tuple)),
 		field: ta.field,
@@ -992,12 +1085,12 @@ pub fn fold_tuple_access<F: Folder + ?Sized>(
 }
 
 /// Fold an record access expression (does not fold the field identifier)
-pub fn fold_record_access<F: Folder + ?Sized>(
+pub fn fold_record_access<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	ra: &RecordAccess,
-) -> RecordAccess {
+	model: &Model<T>,
+	ra: &RecordAccess<T>,
+) -> RecordAccess<U> {
 	RecordAccess {
 		record: Box::new(folder.fold_expression(db, model, &ra.record)),
 		field: ra.field,
@@ -1005,12 +1098,12 @@ pub fn fold_record_access<F: Folder + ?Sized>(
 }
 
 /// Fold an if-then-else expression
-pub fn fold_if_then_else<F: Folder + ?Sized>(
+pub fn fold_if_then_else<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	ite: &IfThenElse,
-) -> IfThenElse {
+	model: &Model<T>,
+	ite: &IfThenElse<T>,
+) -> IfThenElse<U> {
 	IfThenElse {
 		branches: ite
 			.branches
@@ -1027,12 +1120,12 @@ pub fn fold_if_then_else<F: Folder + ?Sized>(
 }
 
 /// Fold a case expression
-pub fn fold_case<F: Folder + ?Sized>(
+pub fn fold_case<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: &Case,
-) -> Case {
+	model: &Model<T>,
+	c: &Case<T>,
+) -> Case<U> {
 	Case {
 		scrutinee: Box::new(folder.fold_expression(db, model, &c.scrutinee)),
 		branches: c
@@ -1049,12 +1142,12 @@ pub fn fold_case<F: Folder + ?Sized>(
 }
 
 /// Fold a call expression
-pub fn fold_call<F: Folder + ?Sized>(
+pub fn fold_call<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	c: &Call,
-) -> Call {
+	model: &Model<T>,
+	c: &Call<T>,
+) -> Call<U> {
 	Call {
 		function: folder.fold_callable(db, model, &c.function),
 		arguments: c
@@ -1066,7 +1159,12 @@ pub fn fold_call<F: Folder + ?Sized>(
 }
 
 /// Fold a let expression
-pub fn fold_let<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model, l: &Let) -> Let {
+pub fn fold_let<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
+	folder: &mut F,
+	db: &dyn Thir,
+	model: &Model<T>,
+	l: &Let<T>,
+) -> Let<U> {
 	Let {
 		items: l
 			.items
@@ -1087,12 +1185,12 @@ pub fn fold_let<F: Folder + ?Sized>(folder: &mut F, db: &dyn Thir, model: &Model
 }
 
 /// Fold a lambda expression
-pub fn fold_lambda<F: Folder + ?Sized>(
+pub fn fold_lambda<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	l: &Lambda,
-) -> Lambda {
+	model: &Model<T>,
+	l: &Lambda<T>,
+) -> Lambda<U> {
 	folder.add_function(db, model, l.0);
 	Lambda(folder.fold_function_id(db, model, l.0))
 }
@@ -1100,12 +1198,12 @@ pub fn fold_lambda<F: Folder + ?Sized>(
 /// Fold an expression.
 ///
 /// First visits annotations and then calls the specific `folder.fold_foo()` method for the kind of expression
-pub fn fold_expression<F: Folder + ?Sized>(
+pub fn fold_expression<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	expression: &Expression,
-) -> Expression {
+	model: &Model<T>,
+	expression: &Expression<T>,
+) -> Expression<U> {
 	let origin = expression.origin();
 	let mut e = match &**expression {
 		ExpressionData::Absent => alloc_expression(db, origin, Absent, folder),
@@ -1187,12 +1285,12 @@ pub fn fold_expression<F: Folder + ?Sized>(
 }
 
 /// Fold a generator
-pub fn fold_generator<F: Folder + ?Sized>(
+pub fn fold_generator<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	generator: &Generator,
-) -> Generator {
+	model: &Model<T>,
+	generator: &Generator<T>,
+) -> Generator<U> {
 	match generator {
 		Generator::Assignment {
 			assignment,
@@ -1227,12 +1325,12 @@ pub fn fold_generator<F: Folder + ?Sized>(
 }
 
 /// Fold a domain
-pub fn fold_domain<F: Folder + ?Sized>(
+pub fn fold_domain<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	domain: &Domain,
-) -> Domain {
+	model: &Model<T>,
+	domain: &Domain<T>,
+) -> Domain<U> {
 	let origin = domain.origin();
 	let ty = domain.ty();
 	match &**domain {
@@ -1272,12 +1370,12 @@ pub fn fold_domain<F: Folder + ?Sized>(
 }
 
 /// Fold a pattern
-pub fn fold_pattern<F: Folder + ?Sized>(
+pub fn fold_pattern<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder: &mut F,
 	db: &dyn Thir,
-	model: &Model,
-	pattern: &Pattern,
-) -> Pattern {
+	model: &Model<T>,
+	pattern: &Pattern<T>,
+) -> Pattern<U> {
 	let origin = pattern.origin();
 	let new_data = match &**pattern {
 		PatternData::AnnotationConstructor { item, args } => PatternData::AnnotationConstructor {

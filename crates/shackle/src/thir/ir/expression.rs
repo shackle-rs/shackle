@@ -2,13 +2,14 @@
 
 use std::{
 	fmt::Debug,
+	marker::PhantomData,
 	ops::{Deref, DerefMut},
 };
 
 use super::{
 	domain::{OptType, VarType},
 	AnnotationId, Annotations, ConstraintId, DeclarationId, EnumerationId, FunctionId,
-	FunctionName, Identifier, Model,
+	FunctionName, Identifier, Marker, Model,
 };
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
@@ -18,29 +19,30 @@ use crate::{
 };
 
 /// Trait for building expressions
-pub trait ExpressionBuilder {
+pub trait ExpressionBuilder<T = ()> {
 	/// Build the expression
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression;
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T>;
 }
 
 /// An expression.
 ///
 /// The data inside an expression is immutable (as modifying the data could invalidate the type).
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Expression {
+pub struct Expression<T = ()> {
 	ty: Ty,
-	data: ExpressionData,
-	annotations: Annotations,
+	data: ExpressionData<T>,
+	annotations: Annotations<T>,
 	origin: Origin,
+	phantom: PhantomData<T>,
 }
 
-impl Expression {
+impl<T: Marker> Expression<T> {
 	/// Create a new expression
 	pub fn new(
 		db: &dyn Thir,
-		model: &Model,
+		model: &Model<T>,
 		origin: impl Into<Origin>,
-		value: impl ExpressionBuilder,
+		value: impl ExpressionBuilder<T>,
 	) -> Self {
 		value.build(db, model, origin.into())
 	}
@@ -48,7 +50,7 @@ impl Expression {
 	/// Create a new expression without checking if the type is correct
 	pub fn new_unchecked(
 		ty: Ty,
-		data: impl Into<ExpressionData>,
+		data: impl Into<ExpressionData<T>>,
 		origin: impl Into<Origin>,
 	) -> Self {
 		Self {
@@ -56,6 +58,7 @@ impl Expression {
 			data: data.into(),
 			annotations: Annotations::default(),
 			origin: origin.into(),
+			phantom: PhantomData,
 		}
 	}
 
@@ -65,12 +68,12 @@ impl Expression {
 	}
 
 	/// Get the annotations attached to this expression
-	pub fn annotations(&self) -> &Annotations {
+	pub fn annotations(&self) -> &Annotations<T> {
 		&self.annotations
 	}
 
 	/// Get a mutable reference to the annotations attached to this expression
-	pub fn annotations_mut(&mut self) -> &mut Annotations {
+	pub fn annotations_mut(&mut self) -> &mut Annotations<T> {
 		&mut self.annotations
 	}
 
@@ -80,13 +83,13 @@ impl Expression {
 	}
 
 	/// Get the inner data
-	pub fn into_inner(self) -> (Ty, ExpressionData, Annotations, Origin) {
+	pub fn into_inner(self) -> (Ty, ExpressionData<T>, Annotations<T>, Origin) {
 		(self.ty, self.data, self.annotations, self.origin)
 	}
 }
 
-impl Deref for Expression {
-	type Target = ExpressionData;
+impl<T: Marker> Deref for Expression<T> {
+	type Target = ExpressionData<T>;
 	fn deref(&self) -> &Self::Target {
 		&self.data
 	}
@@ -94,7 +97,7 @@ impl Deref for Expression {
 
 /// An expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum ExpressionData {
+pub enum ExpressionData<T = ()> {
 	/// Absent `<>`
 	Absent,
 	/// Bool literal
@@ -108,62 +111,62 @@ pub enum ExpressionData {
 	/// Infinity
 	Infinity,
 	/// Identifier
-	Identifier(ResolvedIdentifier),
+	Identifier(ResolvedIdentifier<T>),
 	/// Array literal
-	ArrayLiteral(ArrayLiteral),
+	ArrayLiteral(ArrayLiteral<T>),
 	/// Set literal
-	SetLiteral(SetLiteral),
+	SetLiteral(SetLiteral<T>),
 	/// Tuple literal
-	TupleLiteral(TupleLiteral),
+	TupleLiteral(TupleLiteral<T>),
 	/// Record literal
-	RecordLiteral(RecordLiteral),
+	RecordLiteral(RecordLiteral<T>),
 	/// Array comprehension
-	ArrayComprehension(ArrayComprehension),
+	ArrayComprehension(ArrayComprehension<T>),
 	/// Set comprehension
-	SetComprehension(SetComprehension),
+	SetComprehension(SetComprehension<T>),
 	/// Array access
-	ArrayAccess(ArrayAccess),
+	ArrayAccess(ArrayAccess<T>),
 	/// Tuple access
-	TupleAccess(TupleAccess),
+	TupleAccess(TupleAccess<T>),
 	/// Record access
-	RecordAccess(RecordAccess),
+	RecordAccess(RecordAccess<T>),
 	/// If-then-else
-	IfThenElse(IfThenElse),
+	IfThenElse(IfThenElse<T>),
 	/// Case expression
-	Case(Case),
+	Case(Case<T>),
 	/// Function call
-	Call(Call),
+	Call(Call<T>),
 	/// Let expression
-	Let(Let),
+	Let(Let<T>),
 	/// Lambda function
-	Lambda(Lambda),
+	Lambda(Lambda<T>),
 }
 
-impl_enum_from!(ExpressionData::BooleanLiteral(BooleanLiteral));
-impl_enum_from!(ExpressionData::IntegerLiteral(IntegerLiteral));
-impl_enum_from!(ExpressionData::FloatLiteral(FloatLiteral));
-impl_enum_from!(ExpressionData::StringLiteral(StringLiteral));
-impl_enum_from!(ExpressionData::Identifier(ResolvedIdentifier));
-impl_enum_from!(ExpressionData::ArrayLiteral(ArrayLiteral));
-impl_enum_from!(ExpressionData::SetLiteral(SetLiteral));
-impl_enum_from!(ExpressionData::TupleLiteral(TupleLiteral));
-impl_enum_from!(ExpressionData::RecordLiteral(RecordLiteral));
-impl_enum_from!(ExpressionData::ArrayComprehension(ArrayComprehension));
-impl_enum_from!(ExpressionData::SetComprehension(SetComprehension));
-impl_enum_from!(ExpressionData::ArrayAccess(ArrayAccess));
-impl_enum_from!(ExpressionData::TupleAccess(TupleAccess));
-impl_enum_from!(ExpressionData::RecordAccess(RecordAccess));
-impl_enum_from!(ExpressionData::IfThenElse(IfThenElse));
-impl_enum_from!(ExpressionData::Case(Case));
-impl_enum_from!(ExpressionData::Call(Call));
-impl_enum_from!(ExpressionData::Let(Let));
-impl_enum_from!(ExpressionData::Lambda(Lambda));
-impl From<Absent> for ExpressionData {
+impl_enum_from!(ExpressionData<T>::BooleanLiteral(BooleanLiteral));
+impl_enum_from!(ExpressionData<T>::IntegerLiteral(IntegerLiteral));
+impl_enum_from!(ExpressionData<T>::FloatLiteral(FloatLiteral));
+impl_enum_from!(ExpressionData<T>::StringLiteral(StringLiteral));
+impl_enum_from!(ExpressionData<T>::Identifier(ResolvedIdentifier<T>));
+impl_enum_from!(ExpressionData<T>::ArrayLiteral(ArrayLiteral<T>));
+impl_enum_from!(ExpressionData<T>::SetLiteral(SetLiteral<T>));
+impl_enum_from!(ExpressionData<T>::TupleLiteral(TupleLiteral<T>));
+impl_enum_from!(ExpressionData<T>::RecordLiteral(RecordLiteral<T>));
+impl_enum_from!(ExpressionData<T>::ArrayComprehension(ArrayComprehension<T>));
+impl_enum_from!(ExpressionData<T>::SetComprehension(SetComprehension<T>));
+impl_enum_from!(ExpressionData<T>::ArrayAccess(ArrayAccess<T>));
+impl_enum_from!(ExpressionData<T>::TupleAccess(TupleAccess<T>));
+impl_enum_from!(ExpressionData<T>::RecordAccess(RecordAccess<T>));
+impl_enum_from!(ExpressionData<T>::IfThenElse(IfThenElse<T>));
+impl_enum_from!(ExpressionData<T>::Case(Case<T>));
+impl_enum_from!(ExpressionData<T>::Call(Call<T>));
+impl_enum_from!(ExpressionData<T>::Let(Let<T>));
+impl_enum_from!(ExpressionData<T>::Lambda(Lambda<T>));
+impl<T: Marker> From<Absent> for ExpressionData<T> {
 	fn from(_: Absent) -> Self {
 		ExpressionData::Absent
 	}
 }
-impl From<Infinity> for ExpressionData {
+impl<T: Marker> From<Infinity> for ExpressionData<T> {
 	fn from(_: Infinity) -> Self {
 		ExpressionData::Infinity
 	}
@@ -173,32 +176,32 @@ impl From<Infinity> for ExpressionData {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Absent;
 
-impl ExpressionBuilder for Absent {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Absent {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(db.type_registry().opt_bottom, self, origin)
 	}
 }
 
-impl ExpressionBuilder for BooleanLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for BooleanLiteral {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(db.type_registry().par_bool, self, origin)
 	}
 }
 
-impl ExpressionBuilder for IntegerLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for IntegerLiteral {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(db.type_registry().par_int, self, origin)
 	}
 }
 
-impl ExpressionBuilder for FloatLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for FloatLiteral {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(db.type_registry().par_float, self, origin)
 	}
 }
 
-impl ExpressionBuilder for StringLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for StringLiteral {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(db.type_registry().string, self, origin)
 	}
 }
@@ -207,18 +210,18 @@ impl ExpressionBuilder for StringLiteral {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Infinity;
 
-impl ExpressionBuilder for Infinity {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Infinity {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(db.type_registry().par_int, self, origin)
 	}
 }
 
 /// Array literal
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
-pub struct ArrayLiteral(pub Vec<Expression>);
+pub struct ArrayLiteral<T = ()>(pub Vec<Expression<T>>);
 
-impl ExpressionBuilder for ArrayLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for ArrayLiteral<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let Self(items) = &self;
 		let ty = if items.is_empty() {
 			db.type_registry().array_of_bottom
@@ -235,14 +238,14 @@ impl ExpressionBuilder for ArrayLiteral {
 	}
 }
 
-impl Deref for ArrayLiteral {
-	type Target = Vec<Expression>;
+impl<T: Marker> Deref for ArrayLiteral<T> {
+	type Target = Vec<Expression<T>>;
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-impl DerefMut for ArrayLiteral {
+impl<T: Marker> DerefMut for ArrayLiteral<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
@@ -250,10 +253,10 @@ impl DerefMut for ArrayLiteral {
 
 /// Set literal
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
-pub struct SetLiteral(pub Vec<Expression>);
+pub struct SetLiteral<T = ()>(pub Vec<Expression<T>>);
 
-impl ExpressionBuilder for SetLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for SetLiteral<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let Self(items) = &self;
 		if items.is_empty() {
 			return Expression::new_unchecked(db.type_registry().set_of_bottom, self, origin);
@@ -275,14 +278,14 @@ impl ExpressionBuilder for SetLiteral {
 	}
 }
 
-impl Deref for SetLiteral {
-	type Target = Vec<Expression>;
+impl<T: Marker> Deref for SetLiteral<T> {
+	type Target = Vec<Expression<T>>;
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-impl DerefMut for SetLiteral {
+impl<T: Marker> DerefMut for SetLiteral<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
@@ -290,10 +293,10 @@ impl DerefMut for SetLiteral {
 
 /// Tuple literal
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TupleLiteral(pub Vec<Expression>);
+pub struct TupleLiteral<T = ()>(pub Vec<Expression<T>>);
 
-impl ExpressionBuilder for TupleLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for TupleLiteral<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let TupleLiteral(items) = &self;
 		Expression::new_unchecked(
 			Ty::tuple(db.upcast(), items.iter().map(|e| e.ty())),
@@ -303,14 +306,14 @@ impl ExpressionBuilder for TupleLiteral {
 	}
 }
 
-impl Deref for TupleLiteral {
-	type Target = Vec<Expression>;
+impl<T: Marker> Deref for TupleLiteral<T> {
+	type Target = Vec<Expression<T>>;
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-impl DerefMut for TupleLiteral {
+impl<T: Marker> DerefMut for TupleLiteral<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
@@ -318,24 +321,24 @@ impl DerefMut for TupleLiteral {
 
 /// Record literal
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RecordLiteral(pub Vec<(Identifier, Expression)>);
+pub struct RecordLiteral<T = ()>(pub Vec<(Identifier, Expression<T>)>);
 
-impl ExpressionBuilder for RecordLiteral {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for RecordLiteral<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let RecordLiteral(items) = &self;
 		let ty = Ty::record(db.upcast(), items.iter().map(|(i, e)| (*i, e.ty())));
 		Expression::new_unchecked(ty, self, origin)
 	}
 }
 
-impl Deref for RecordLiteral {
-	type Target = Vec<(Identifier, Expression)>;
+impl<T: Marker> Deref for RecordLiteral<T> {
+	type Target = Vec<(Identifier, Expression<T>)>;
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-impl DerefMut for RecordLiteral {
+impl<T: Marker> DerefMut for RecordLiteral<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
@@ -343,18 +346,21 @@ impl DerefMut for RecordLiteral {
 
 /// Array comprehension
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ArrayComprehension {
+pub struct ArrayComprehension<T = ()> {
 	/// Value of the comprehension
-	pub template: Box<Expression>,
+	pub template: Box<Expression<T>>,
 	/// The indices to generate
-	pub indices: Option<Box<Expression>>,
+	pub indices: Option<Box<Expression<T>>>,
 	/// Generators of the comprehension
-	pub generators: Vec<Generator>,
+	pub generators: Vec<Generator<T>>,
 }
 
-impl ArrayComprehension {
+impl<T: Marker> ArrayComprehension<T> {
 	/// Create an non-indexed array comprehension
-	pub fn new(generators: impl IntoIterator<Item = Generator>, template: Expression) -> Self {
+	pub fn new(
+		generators: impl IntoIterator<Item = Generator<T>>,
+		template: Expression<T>,
+	) -> Self {
 		Self {
 			generators: generators.into_iter().collect(),
 			indices: None,
@@ -364,9 +370,9 @@ impl ArrayComprehension {
 
 	/// Create an indexed array comprehension
 	pub fn indexed(
-		generators: impl IntoIterator<Item = Generator>,
-		indices: Expression,
-		template: Expression,
+		generators: impl IntoIterator<Item = Generator<T>>,
+		indices: Expression<T>,
+		template: Expression<T>,
 	) -> Self {
 		Self {
 			generators: generators.into_iter().collect(),
@@ -376,8 +382,8 @@ impl ArrayComprehension {
 	}
 }
 
-impl ExpressionBuilder for ArrayComprehension {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for ArrayComprehension<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let lift_to_opt = self
 			.generators
 			.iter()
@@ -405,15 +411,15 @@ impl ExpressionBuilder for ArrayComprehension {
 
 /// Set comprehension
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SetComprehension {
+pub struct SetComprehension<T = ()> {
 	/// Value of the comprehension
-	pub template: Box<Expression>,
+	pub template: Box<Expression<T>>,
 	/// Generators of the comprehension
-	pub generators: Vec<Generator>,
+	pub generators: Vec<Generator<T>>,
 }
 
-impl ExpressionBuilder for SetComprehension {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for SetComprehension<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let is_var = self
 			.generators
 			.iter()
@@ -445,15 +451,15 @@ impl ExpressionBuilder for SetComprehension {
 
 /// Array access
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ArrayAccess {
+pub struct ArrayAccess<T = ()> {
 	/// The array being indexed into
-	pub collection: Box<Expression>,
+	pub collection: Box<Expression<T>>,
 	/// The indices
-	pub indices: Box<Expression>,
+	pub indices: Box<Expression<T>>,
 }
 
-impl ExpressionBuilder for ArrayAccess {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for ArrayAccess<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let (mut make_opt, mut ty) = match self.collection.ty().lookup(db.upcast()) {
 			TyData::Array { opt, element, .. } => (opt == OptType::Opt, element),
 			_ => unreachable!("Not an array"),
@@ -490,15 +496,15 @@ impl ExpressionBuilder for ArrayAccess {
 
 /// Tuple access
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TupleAccess {
+pub struct TupleAccess<T = ()> {
 	/// Tuple being accessed
-	pub tuple: Box<Expression>,
+	pub tuple: Box<Expression<T>>,
 	/// Field being accessed
 	pub field: IntegerLiteral,
 }
 
-impl ExpressionBuilder for TupleAccess {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for TupleAccess<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let ty = match self.tuple.ty().lookup(db.upcast()) {
 			TyData::Tuple(opt, fields) => {
 				let field_ty = fields[self.field.0 as usize - 1];
@@ -519,15 +525,15 @@ impl ExpressionBuilder for TupleAccess {
 
 /// Record access
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RecordAccess {
+pub struct RecordAccess<T = ()> {
 	/// Record being accessed
-	pub record: Box<Expression>,
+	pub record: Box<Expression<T>>,
 	/// Field being accessed
 	pub field: Identifier,
 }
 
-impl ExpressionBuilder for RecordAccess {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for RecordAccess<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let ty = match self.record.ty().lookup(db.upcast()) {
 			TyData::Record(opt, fields) => {
 				let field_ty = fields
@@ -551,15 +557,15 @@ impl ExpressionBuilder for RecordAccess {
 
 /// If-then-else
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct IfThenElse {
+pub struct IfThenElse<T = ()> {
 	/// The if-then and elseif-then branches
-	pub branches: Vec<Branch>,
+	pub branches: Vec<Branch<T>>,
 	/// The else result
-	pub else_result: Box<Expression>,
+	pub else_result: Box<Expression<T>>,
 }
 
-impl ExpressionBuilder for IfThenElse {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for IfThenElse<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let types = db.type_registry();
 		let result_ty = Ty::most_specific_supertype(
 			db.upcast(),
@@ -586,15 +592,15 @@ impl ExpressionBuilder for IfThenElse {
 
 /// Case expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Case {
+pub struct Case<T = ()> {
 	/// The expression being matched on
-	pub scrutinee: Box<Expression>,
+	pub scrutinee: Box<Expression<T>>,
 	/// The case match arms
-	pub branches: Vec<CaseBranch>,
+	pub branches: Vec<CaseBranch<T>>,
 }
 
-impl ExpressionBuilder for Case {
-	fn build(self, db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Case<T> {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let make_var = self
 			.scrutinee
 			.ty()
@@ -617,32 +623,32 @@ impl ExpressionBuilder for Case {
 
 /// Target of a function call
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum Callable {
+pub enum Callable<T = ()> {
 	/// Call to a function item
-	Function(FunctionId),
+	Function(FunctionId<T>),
 	/// Call to an annotation constructor function
-	Annotation(AnnotationId),
+	Annotation(AnnotationId<T>),
 	/// Call to an annotation destructor function
-	AnnotationDestructure(AnnotationId),
+	AnnotationDestructure(AnnotationId<T>),
 	/// Call to an enum constructor function
-	EnumConstructor(EnumMemberId),
+	EnumConstructor(EnumMemberId<T>),
 	/// Call to an enum destructor function
-	EnumDestructor(EnumMemberId),
+	EnumDestructor(EnumMemberId<T>),
 	/// Call to a lambda expression
-	Expression(Box<Expression>),
+	Expression(Box<Expression<T>>),
 }
 
 /// A function call
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Call {
+pub struct Call<T = ()> {
 	/// Function being called
-	pub function: Callable,
+	pub function: Callable<T>,
 	/// Call arguments
-	pub arguments: Vec<Expression>,
+	pub arguments: Vec<Expression<T>>,
 }
 
-impl ExpressionBuilder for Call {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Call<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let ty = match &self.function {
 			Callable::Annotation(a) => {
 				let params = model[*a]
@@ -751,16 +757,16 @@ impl ExpressionBuilder for Call {
 /// A call to a function with the given name.
 ///
 /// Used only to build expressions. Becomes a `Call` once built.
-pub struct LookupCall {
+pub struct LookupCall<T = ()> {
 	/// Function name
 	pub function: FunctionName,
 	/// Call arguments
-	pub arguments: Vec<Expression>,
+	pub arguments: Vec<Expression<T>>,
 }
 
-impl LookupCall {
+impl<T: Marker> LookupCall<T> {
 	/// Perform the call lookup and produce a `Call`
-	pub fn resolve(self, db: &dyn Thir, model: &Model) -> (Call, Ty) {
+	pub fn resolve(self, db: &dyn Thir, model: &Model<T>) -> (Call<T>, Ty) {
 		let args: Vec<_> = self.arguments.into_iter().collect();
 		let arg_tys: Vec<_> = args.iter().map(|arg| arg.ty()).collect();
 		let lookup = model
@@ -793,8 +799,8 @@ impl LookupCall {
 	}
 }
 
-impl ExpressionBuilder for LookupCall {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for LookupCall<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let (call, return_ty) = self.resolve(db, model);
 		Expression::new_unchecked(return_ty, call, origin)
 	}
@@ -802,25 +808,25 @@ impl ExpressionBuilder for LookupCall {
 
 /// A let expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Let {
+pub struct Let<T = ()> {
 	/// Items in this let expression
-	pub items: Vec<LetItem>,
+	pub items: Vec<LetItem<T>>,
 	/// Value of the let expression
-	pub in_expression: Box<Expression>,
+	pub in_expression: Box<Expression<T>>,
 }
 
-impl ExpressionBuilder for Let {
-	fn build(self, _db: &dyn Thir, _model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Let<T> {
+	fn build(self, _db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(self.in_expression.ty(), self, origin)
 	}
 }
 
 /// A lambda function
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Lambda(pub FunctionId);
+pub struct Lambda<T = ()>(pub FunctionId<T>);
 
-impl ExpressionBuilder for Lambda {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Lambda<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let fe = model[self.0].function_entry(model);
 		Expression::new_unchecked(
 			Ty::function(
@@ -836,15 +842,15 @@ impl ExpressionBuilder for Lambda {
 	}
 }
 
-impl Deref for Lambda {
-	type Target = FunctionId;
+impl<T: Marker> Deref for Lambda<T> {
+	type Target = FunctionId<T>;
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-impl ExpressionBuilder for AnnotationId {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for AnnotationId<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let ann = db.type_registry().ann;
 		let ty = if let Some(params) = &model[self].parameters {
 			Ty::function(
@@ -861,26 +867,26 @@ impl ExpressionBuilder for AnnotationId {
 	}
 }
 
-impl From<DeclarationId> for ExpressionData {
-	fn from(idx: DeclarationId) -> Self {
+impl<T: Marker> From<DeclarationId<T>> for ExpressionData<T> {
+	fn from(idx: DeclarationId<T>) -> Self {
 		ResolvedIdentifier::Declaration(idx).into()
 	}
 }
 
-impl ExpressionBuilder for DeclarationId {
-	fn build(self, _db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for DeclarationId<T> {
+	fn build(self, _db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		Expression::new_unchecked(model[self].ty(), self, origin)
 	}
 }
 
-impl From<EnumerationId> for ExpressionData {
-	fn from(idx: EnumerationId) -> Self {
+impl<T: Marker> From<EnumerationId<T>> for ExpressionData<T> {
+	fn from(idx: EnumerationId<T>) -> Self {
 		ResolvedIdentifier::Enumeration(idx).into()
 	}
 }
 
-impl ExpressionBuilder for EnumerationId {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for EnumerationId<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let ty = Ty::par_set(
 			db.upcast(),
 			Ty::par_enum(db.upcast(), model[self].enum_type()),
@@ -890,8 +896,8 @@ impl ExpressionBuilder for EnumerationId {
 	}
 }
 
-impl ExpressionBuilder for Identifier {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for Identifier {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let result = model
 			.lookup_identifier(db, self)
 			.expect("Identifier not found");
@@ -901,24 +907,24 @@ impl ExpressionBuilder for Identifier {
 
 /// An identifier which resolves to a declaration
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum ResolvedIdentifier {
+pub enum ResolvedIdentifier<T = ()> {
 	/// Identifier resolves to an annotation atom
-	Annotation(AnnotationId),
+	Annotation(AnnotationId<T>),
 	/// Identifier resolves to a declaration
-	Declaration(DeclarationId),
+	Declaration(DeclarationId<T>),
 	/// Identifier resolves to an enumeration defining set
-	Enumeration(EnumerationId),
+	Enumeration(EnumerationId<T>),
 	/// Identifier resolves to an enumeration member atom with the given index
-	EnumerationMember(EnumMemberId),
+	EnumerationMember(EnumMemberId<T>),
 }
 
-impl_enum_from!(ResolvedIdentifier::Annotation(AnnotationId));
-impl_enum_from!(ResolvedIdentifier::Declaration(DeclarationId));
-impl_enum_from!(ResolvedIdentifier::Enumeration(EnumerationId));
-impl_enum_from!(ResolvedIdentifier::EnumerationMember(EnumMemberId));
+impl_enum_from!(ResolvedIdentifier<T>::Annotation(AnnotationId<T>));
+impl_enum_from!(ResolvedIdentifier<T>::Declaration(DeclarationId<T>));
+impl_enum_from!(ResolvedIdentifier<T>::Enumeration(EnumerationId<T>));
+impl_enum_from!(ResolvedIdentifier<T>::EnumerationMember(EnumMemberId<T>));
 
-impl ExpressionBuilder for ResolvedIdentifier {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for ResolvedIdentifier<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		match self {
 			ResolvedIdentifier::Annotation(i) => i.build(db, model, origin),
 			ResolvedIdentifier::Declaration(i) => i.build(db, model, origin),
@@ -930,14 +936,14 @@ impl ExpressionBuilder for ResolvedIdentifier {
 
 /// Reference to a member of an enum
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EnumMemberId {
-	parent: EnumerationId,
+pub struct EnumMemberId<T = ()> {
+	parent: EnumerationId<T>,
 	index: u32,
 }
 
-impl EnumMemberId {
+impl<T: Marker> EnumMemberId<T> {
 	/// Create a new reference to a enum member
-	pub fn new(enumeration: EnumerationId, index: u32) -> Self {
+	pub fn new(enumeration: EnumerationId<T>, index: u32) -> Self {
 		Self {
 			parent: enumeration,
 			index,
@@ -945,7 +951,7 @@ impl EnumMemberId {
 	}
 
 	/// Get the enumeration id
-	pub fn enumeration_id(&self) -> EnumerationId {
+	pub fn enumeration_id(&self) -> EnumerationId<T> {
 		self.parent
 	}
 
@@ -955,15 +961,15 @@ impl EnumMemberId {
 	}
 }
 
-impl ExpressionBuilder for EnumMemberId {
-	fn build(self, db: &dyn Thir, model: &Model, origin: Origin) -> Expression {
+impl<T: Marker> ExpressionBuilder<T> for EnumMemberId<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
 		let ty = Ty::par_enum(db.upcast(), model[self.enumeration_id()].enum_type());
 		Expression::new_unchecked(ty, self, origin)
 	}
 }
 
-impl From<EnumMemberId> for ExpressionData {
-	fn from(idx: EnumMemberId) -> Self {
+impl<T: Marker> From<EnumMemberId<T>> for ExpressionData<T> {
+	fn from(idx: EnumMemberId<T>) -> Self {
 		ResolvedIdentifier::EnumerationMember(idx).into()
 	}
 }
@@ -1037,26 +1043,26 @@ impl EnumConstructorKind {
 
 /// Comprehension generator
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum Generator {
+pub enum Generator<T = ()> {
 	/// Generator which iterates over a collection
 	Iterator {
 		/// Generator declaration
-		declarations: Vec<DeclarationId>,
+		declarations: Vec<DeclarationId<T>>,
 		/// Expression being iterated over
-		collection: Expression,
+		collection: Expression<T>,
 		/// Where clause
-		where_clause: Option<Expression>,
+		where_clause: Option<Expression<T>>,
 	},
 	/// Generator which is an assignment
 	Assignment {
 		/// The assignment to generate
-		assignment: DeclarationId,
+		assignment: DeclarationId<T>,
 		/// Where clause
-		where_clause: Option<Expression>,
+		where_clause: Option<Expression<T>>,
 	},
 }
 
-impl Generator {
+impl<T: Marker> Generator<T> {
 	/// Whether this generator has a var where clause
 	pub fn var_where(&self, db: &dyn Thir) -> bool {
 		match self {
@@ -1081,7 +1087,7 @@ impl Generator {
 	}
 
 	/// Get the where clause for this generator
-	pub fn where_clause(&self) -> Option<&Expression> {
+	pub fn where_clause(&self) -> Option<&Expression<T>> {
 		match self {
 			Generator::Iterator { where_clause, .. }
 			| Generator::Assignment { where_clause, .. } => where_clause.as_ref(),
@@ -1089,7 +1095,7 @@ impl Generator {
 	}
 
 	/// Set the where clause for this generator
-	pub fn set_where(&mut self, w: Expression) {
+	pub fn set_where(&mut self, w: Expression<T>) {
 		match self {
 			Generator::Iterator { where_clause, .. }
 			| Generator::Assignment { where_clause, .. } => *where_clause = Some(w),
@@ -1097,7 +1103,7 @@ impl Generator {
 	}
 
 	/// Get the declarations/assignment for this generator
-	pub fn declarations(&self) -> impl '_ + Iterator<Item = DeclarationId> {
+	pub fn declarations(&self) -> impl '_ + Iterator<Item = DeclarationId<T>> {
 		match self {
 			Generator::Iterator { declarations, .. } => declarations.clone().into_iter(),
 			Generator::Assignment { assignment, .. } => vec![*assignment].into_iter(),
@@ -1107,16 +1113,16 @@ impl Generator {
 
 /// A branch of an `IfThenElse`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Branch {
+pub struct Branch<T = ()> {
 	/// The boolean condition
-	pub condition: Expression,
+	pub condition: Expression<T>,
 	/// The result if the condition holds
-	pub result: Expression,
+	pub result: Expression<T>,
 }
 
-impl Branch {
+impl<T: Marker> Branch<T> {
 	/// Create a new branch for an if-then-else
-	pub fn new(condition: Expression, result: Expression) -> Self {
+	pub fn new(condition: Expression<T>, result: Expression<T>) -> Self {
 		Self { condition, result }
 	}
 
@@ -1128,16 +1134,16 @@ impl Branch {
 
 /// A branch of a `Case`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CaseBranch {
+pub struct CaseBranch<T = ()> {
 	/// The pattern to match
-	pub pattern: Pattern,
+	pub pattern: Pattern<T>,
 	/// The value if the pattern matches
-	pub result: Expression,
+	pub result: Expression<T>,
 }
 
-impl CaseBranch {
+impl<T: Marker> CaseBranch<T> {
 	/// Create a new case branch
-	pub fn new(pattern: Pattern, result: Expression) -> Self {
+	pub fn new(pattern: Pattern<T>, result: Expression<T>) -> Self {
 		Self { pattern, result }
 	}
 }
@@ -1151,14 +1157,14 @@ impl CaseBranch {
 /// Instead, the anonymous wildcard pattern is used, and destructuring happens
 /// via destructor functions.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Pattern {
-	data: PatternData,
+pub struct Pattern<T = ()> {
+	data: PatternData<T>,
 	origin: Origin,
 }
 
-impl Pattern {
+impl<T: Marker> Pattern<T> {
 	/// Create a new pattern
-	pub fn new(data: PatternData, origin: impl Into<Origin>) -> Self {
+	pub fn new(data: PatternData<T>, origin: impl Into<Origin>) -> Self {
 		Self {
 			data,
 			origin: origin.into(),
@@ -1171,19 +1177,19 @@ impl Pattern {
 	}
 
 	/// Get the inner data
-	pub fn into_inner(self) -> (PatternData, Origin) {
+	pub fn into_inner(self) -> (PatternData<T>, Origin) {
 		(self.data, self.origin)
 	}
 }
 
-impl Deref for Pattern {
-	type Target = PatternData;
+impl<T: Marker> Deref for Pattern<T> {
+	type Target = PatternData<T>;
 	fn deref(&self) -> &Self::Target {
 		&self.data
 	}
 }
 
-impl DerefMut for Pattern {
+impl<T: Marker> DerefMut for Pattern<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.data
 	}
@@ -1191,38 +1197,38 @@ impl DerefMut for Pattern {
 
 /// A pattern for a case expression.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum PatternData {
+pub enum PatternData<T = ()> {
 	/// Enum constructor call
 	EnumConstructor {
 		/// The enum item member
-		member: EnumMemberId,
+		member: EnumMemberId<T>,
 		/// The constructor call arguments
-		args: Vec<Pattern>,
+		args: Vec<Pattern<T>>,
 	},
 	/// Annotation constructor call
 	AnnotationConstructor {
 		/// The annotation item
-		item: AnnotationId,
+		item: AnnotationId<T>,
 		/// The constructor call arguments
-		args: Vec<Pattern>,
+		args: Vec<Pattern<T>>,
 	},
 	/// Tuple
-	Tuple(Vec<Pattern>),
+	Tuple(Vec<Pattern<T>>),
 	/// Record
-	Record(Vec<(Identifier, Pattern)>),
+	Record(Vec<(Identifier, Pattern<T>)>),
 	/// Literal expression (e.g. enum atoms, numbers, strings, <>)
-	Expression(Box<Expression>),
+	Expression(Box<Expression<T>>),
 	/// Wildcard pattern _
 	Anonymous(Ty),
 }
 
 /// An item in a let expression
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum LetItem {
+pub enum LetItem<T = ()> {
 	/// A local constraint item
-	Constraint(ConstraintId),
+	Constraint(ConstraintId<T>),
 	/// A local declaration item
-	Declaration(DeclarationId),
+	Declaration(DeclarationId<T>),
 }
 
 /// Type-inst variable instantiations

@@ -27,20 +27,20 @@ use super::db::Thir;
 
 /// A model
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Model {
-	annotations: Arena<AnnotationItem>,
-	constraints: Arena<ConstraintItem>,
-	declarations: Arena<DeclarationItem>,
-	enumerations: Arena<EnumerationItem>,
-	functions: Arena<FunctionItem>,
-	outputs: Arena<OutputItem>,
-	solve: Option<SolveItem>,
-	items: Vec<ItemId>,
+pub struct Model<T = ()> {
+	annotations: Arena<AnnotationItem<T>>,
+	constraints: Arena<ConstraintItem<T>>,
+	declarations: Arena<DeclarationItem<T>>,
+	enumerations: Arena<EnumerationItem<T>>,
+	functions: Arena<FunctionItem<T>>,
+	outputs: Arena<OutputItem<T>>,
+	solve: Option<SolveItem<T>>,
+	items: Vec<ItemId<T>>,
 }
 
-impl Model {
+impl<T: Marker> Model<T> {
 	/// Get the top-level items
-	pub fn top_level_items(&self) -> impl '_ + Iterator<Item = ItemId> {
+	pub fn top_level_items(&self) -> impl '_ + Iterator<Item = ItemId<T>> {
 		self.all_items()
 			.filter(|idx| match idx {
 				ItemId::Constraint(c) => self[*c].top_level(),
@@ -52,53 +52,57 @@ impl Model {
 	}
 
 	/// Get all items (including local items)
-	pub fn all_items(&self) -> impl '_ + Iterator<Item = ItemId> {
+	pub fn all_items(&self) -> impl '_ + Iterator<Item = ItemId<T>> {
 		self.items.iter().copied()
 	}
 
 	/// Get the top-level annotation items
-	pub fn annotations(&self) -> impl Iterator<Item = (AnnotationId, &AnnotationItem)> {
+	pub fn annotations(&self) -> impl Iterator<Item = (AnnotationId<T>, &AnnotationItem<T>)> {
 		self.annotations.iter()
 	}
 
 	/// Get the top-level annotation items
-	pub fn annotations_mut(&mut self) -> impl Iterator<Item = (AnnotationId, &mut AnnotationItem)> {
+	pub fn annotations_mut(
+		&mut self,
+	) -> impl Iterator<Item = (AnnotationId<T>, &mut AnnotationItem<T>)> {
 		self.annotations.iter_mut()
 	}
 
 	/// Add an annotation item
-	pub fn add_annotation(&mut self, item: AnnotationItem) -> AnnotationId {
+	pub fn add_annotation(&mut self, item: AnnotationItem<T>) -> AnnotationId<T> {
 		let idx = self.annotations.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the top-level constraint items
-	pub fn top_level_constraints(&self) -> impl Iterator<Item = (ConstraintId, &ConstraintItem)> {
+	pub fn top_level_constraints(
+		&self,
+	) -> impl Iterator<Item = (ConstraintId<T>, &ConstraintItem<T>)> {
 		self.all_constraints().filter(|(_, c)| c.top_level())
 	}
 
 	/// Get the top-level constraint items
 	pub fn top_level_constraints_mut(
 		&mut self,
-	) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
+	) -> impl Iterator<Item = (ConstraintId<T>, &mut ConstraintItem<T>)> {
 		self.all_constraints_mut().filter(|(_, c)| c.top_level())
 	}
 
 	/// Get all constraint items (including constraints inside let expressions)
-	pub fn all_constraints(&self) -> impl Iterator<Item = (ConstraintId, &ConstraintItem)> {
+	pub fn all_constraints(&self) -> impl Iterator<Item = (ConstraintId<T>, &ConstraintItem<T>)> {
 		self.constraints.iter()
 	}
 
 	/// Get all constraint items (including constraints inside let expressions)
 	pub fn all_constraints_mut(
 		&mut self,
-	) -> impl Iterator<Item = (ConstraintId, &mut ConstraintItem)> {
+	) -> impl Iterator<Item = (ConstraintId<T>, &mut ConstraintItem<T>)> {
 		self.constraints.iter_mut()
 	}
 
 	/// Add a constraint item
-	pub fn add_constraint(&mut self, item: ConstraintItem) -> ConstraintId {
+	pub fn add_constraint(&mut self, item: ConstraintItem<T>) -> ConstraintId<T> {
 		let idx = self.constraints.insert(item);
 		self.items.push(idx.into());
 		idx
@@ -107,113 +111,117 @@ impl Model {
 	/// Get the top-level declaration items
 	pub fn top_level_declarations(
 		&self,
-	) -> impl Iterator<Item = (DeclarationId, &DeclarationItem)> {
+	) -> impl Iterator<Item = (DeclarationId<T>, &DeclarationItem<T>)> {
 		self.all_declarations().filter(|(_, d)| d.top_level())
 	}
 
 	/// Get the top-level declaration items
 	pub fn top_level_declarations_mut(
 		&mut self,
-	) -> impl Iterator<Item = (DeclarationId, &mut DeclarationItem)> {
+	) -> impl Iterator<Item = (DeclarationId<T>, &mut DeclarationItem<T>)> {
 		self.all_declarations_mut().filter(|(_, d)| d.top_level())
 	}
 
 	/// Get all declaration items (including declarations inside let expressions)
-	pub fn all_declarations(&self) -> impl Iterator<Item = (DeclarationId, &DeclarationItem)> {
+	pub fn all_declarations(
+		&self,
+	) -> impl Iterator<Item = (DeclarationId<T>, &DeclarationItem<T>)> {
 		self.declarations.iter()
 	}
 
 	/// Get all declaration items (including declarations inside let expressions)
 	pub fn all_declarations_mut(
 		&mut self,
-	) -> impl Iterator<Item = (DeclarationId, &mut DeclarationItem)> {
+	) -> impl Iterator<Item = (DeclarationId<T>, &mut DeclarationItem<T>)> {
 		self.declarations.iter_mut()
 	}
 
 	/// Add a declaration item
-	pub fn add_declaration(&mut self, item: DeclarationItem) -> DeclarationId {
+	pub fn add_declaration(&mut self, item: DeclarationItem<T>) -> DeclarationId<T> {
 		let idx = self.declarations.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the enumeration items
-	pub fn enumerations(&self) -> impl Iterator<Item = (EnumerationId, &EnumerationItem)> {
+	pub fn enumerations(&self) -> impl Iterator<Item = (EnumerationId<T>, &EnumerationItem<T>)> {
 		self.enumerations.iter()
 	}
 
 	/// Get the enumeration items
 	pub fn enumerations_mut(
 		&mut self,
-	) -> impl Iterator<Item = (EnumerationId, &mut EnumerationItem)> {
+	) -> impl Iterator<Item = (EnumerationId<T>, &mut EnumerationItem<T>)> {
 		self.enumerations.iter_mut()
 	}
 
 	/// Add an enumeration item
-	pub fn add_enumeration(&mut self, item: EnumerationItem) -> EnumerationId {
+	pub fn add_enumeration(&mut self, item: EnumerationItem<T>) -> EnumerationId<T> {
 		let idx = self.enumerations.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the function items
-	pub fn all_functions(&self) -> impl Iterator<Item = (FunctionId, &FunctionItem)> {
+	pub fn all_functions(&self) -> impl Iterator<Item = (FunctionId<T>, &FunctionItem<T>)> {
 		self.functions.iter()
 	}
 
 	/// Get the function items
-	pub fn all_functions_mut(&mut self) -> impl Iterator<Item = (FunctionId, &mut FunctionItem)> {
+	pub fn all_functions_mut(
+		&mut self,
+	) -> impl Iterator<Item = (FunctionId<T>, &mut FunctionItem<T>)> {
 		self.functions.iter_mut()
 	}
 
 	/// Add a function item
-	pub fn add_function(&mut self, item: FunctionItem) -> FunctionId {
+	pub fn add_function(&mut self, item: FunctionItem<T>) -> FunctionId<T> {
 		let idx = self.functions.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the top-level function items
-	pub fn top_level_functions(&self) -> impl Iterator<Item = (FunctionId, &FunctionItem)> {
+	pub fn top_level_functions(&self) -> impl Iterator<Item = (FunctionId<T>, &FunctionItem<T>)> {
 		self.all_functions().filter(|(_, f)| f.top_level())
 	}
 
 	/// Get the top-level function items
 	pub fn top_level_functions_mut(
 		&mut self,
-	) -> impl Iterator<Item = (FunctionId, &mut FunctionItem)> {
+	) -> impl Iterator<Item = (FunctionId<T>, &mut FunctionItem<T>)> {
 		self.all_functions_mut().filter(|(_, f)| f.top_level())
 	}
 
 	/// Get the output items
-	pub fn outputs(&self) -> impl Iterator<Item = (OutputId, &OutputItem)> {
+	pub fn outputs(&self) -> impl Iterator<Item = (OutputId<T>, &OutputItem<T>)> {
 		self.outputs.iter()
 	}
 
 	/// Get the output item
-	pub fn output_mut(&mut self) -> impl Iterator<Item = (OutputId, &mut OutputItem)> {
+	pub fn output_mut(&mut self) -> impl Iterator<Item = (OutputId<T>, &mut OutputItem<T>)> {
 		self.outputs.iter_mut()
 	}
 
 	/// Add an output item
-	pub fn add_output(&mut self, item: OutputItem) -> OutputId {
+	pub fn add_output(&mut self, item: OutputItem<T>) -> OutputId<T> {
 		let idx = self.outputs.insert(item);
 		self.items.push(idx.into());
 		idx
 	}
 
 	/// Get the solve item
-	pub fn solve(&self) -> Option<&SolveItem> {
+	pub fn solve(&self) -> Option<&SolveItem<T>> {
 		self.solve.as_ref()
 	}
 
 	/// Get the solve item
-	pub fn solve_mut(&mut self) -> Option<&mut SolveItem> {
+	pub fn solve_mut(&mut self) -> Option<&mut SolveItem<T>> {
 		self.solve.as_mut()
 	}
 
 	/// Set the solve item
-	pub fn set_solve(&mut self, solve: SolveItem) -> ItemId {
+	pub fn set_solve(&mut self, solve: SolveItem<T>) -> ItemId<T> {
 		self.solve = Some(solve);
 		ItemId::Solve
 	}
@@ -226,7 +234,7 @@ impl Model {
 		db: &dyn Thir,
 		name: FunctionName,
 		args: &[Ty],
-	) -> Result<FunctionLookup, FunctionLookupError> {
+	) -> Result<FunctionLookup<T>, FunctionLookupError<T>> {
 		let overloads = self.top_level_functions().filter_map(|(i, f)| {
 			if f.name() == name {
 				Some((i, f.function_entry(self)))
@@ -245,7 +253,11 @@ impl Model {
 	/// Lookup a top-level top-level variable or atom
 	///
 	/// Prefer using `ExpressionAllocator::lookup_identifier` to create an identifier expression.
-	pub fn lookup_identifier(&self, db: &dyn Thir, name: Identifier) -> Option<ResolvedIdentifier> {
+	pub fn lookup_identifier(
+		&self,
+		db: &dyn Thir,
+		name: Identifier,
+	) -> Option<ResolvedIdentifier<T>> {
 		self.top_level_declarations()
 			.find_map(|(idx, decl)| {
 				if decl.name() == Some(name) {
@@ -285,16 +297,16 @@ impl Model {
 	}
 }
 
-impl_index!(Model[self, index: AnnotationId] -> AnnotationItem { self.annotations[index] });
-impl_index!(Model[self, index: ConstraintId] -> ConstraintItem { self.constraints[index] });
-impl_index!(Model[self, index: DeclarationId] -> DeclarationItem { self.declarations[index] });
-impl_index!(Model[self, index: EnumerationId] -> EnumerationItem { self.enumerations[index] });
-impl_index!(Model[self, index: FunctionId] -> FunctionItem { self.functions[index] });
-impl_index!(Model[self, index: OutputId] -> OutputItem { self.outputs[index] });
+impl_index!(Model<T>[self, index: AnnotationId<T>] -> AnnotationItem<T> { self.annotations[index] });
+impl_index!(Model<T>[self, index: ConstraintId<T>] -> ConstraintItem<T> { self.constraints[index] });
+impl_index!(Model<T>[self, index: DeclarationId<T>] -> DeclarationItem<T> { self.declarations[index] });
+impl_index!(Model<T>[self, index: EnumerationId<T>] -> EnumerationItem<T> { self.enumerations[index] });
+impl_index!(Model<T>[self, index: FunctionId<T>] -> FunctionItem<T> { self.functions[index] });
+impl_index!(Model<T>[self, index: OutputId<T>] -> OutputItem<T> { self.outputs[index] });
 
-impl Index<EnumMemberId> for Model {
-	type Output = Constructor;
-	fn index(&self, index: EnumMemberId) -> &Self::Output {
+impl<T: Marker> Index<EnumMemberId<T>> for Model<T> {
+	type Output = Constructor<T>;
+	fn index(&self, index: EnumMemberId<T>) -> &Self::Output {
 		&self.enumerations[index.enumeration_id()]
 			.definition()
 			.expect("No definition for enum")[index.member_index() as usize]
@@ -303,9 +315,9 @@ impl Index<EnumMemberId> for Model {
 
 /// Result of looking up a function by its signature
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FunctionLookup {
+pub struct FunctionLookup<T> {
 	/// Id of the resolved function
-	pub function: FunctionId,
+	pub function: FunctionId<T>,
 	/// The function entry (i.e. not instantiated with the call arguments)
 	pub fn_entry: FunctionEntry,
 	/// The instantiated types of the type inst vars (if any)
@@ -313,4 +325,14 @@ pub struct FunctionLookup {
 }
 
 /// Error representing failure to lookup a function
-pub type FunctionLookupError = FunctionResolutionError<FunctionId>;
+pub type FunctionLookupError<T> = FunctionResolutionError<FunctionId<T>>;
+
+/// Trait for THIR marker
+///
+/// Used as a type parameter for THIR nodes, allowing us to have greater
+/// type safety when dealing with multiple THIR models by using different
+/// type parameters for each, so that the IDs from one model can't be used
+/// to access another.
+pub trait Marker: Copy + Clone {}
+
+impl Marker for () {}

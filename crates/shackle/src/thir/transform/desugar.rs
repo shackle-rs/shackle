@@ -11,7 +11,7 @@ use crate::{
 		db::Thir, fold_call, fold_expression, source::Origin, visit_expression, Absent,
 		ArrayComprehension, ArrayLiteral, BooleanLiteral, Branch, Call, Callable, DeclarationId,
 		Expression, ExpressionData, Folder, Generator, IfThenElse, IntegerLiteral, LookupCall,
-		Model, ReplacementMap, ResolvedIdentifier, SetComprehension, VarType, Visitor,
+		Marker, Model, ReplacementMap, ResolvedIdentifier, SetComprehension, VarType, Visitor,
 	},
 };
 
@@ -22,18 +22,18 @@ enum SurroundingCall {
 	Other,
 }
 
-struct Rewriter {
-	result: Model,
-	replacement_map: ReplacementMap,
+struct Rewriter<Dst> {
+	result: Model<Dst>,
+	replacement_map: ReplacementMap<Dst>,
 	ids: Arc<IdentifierRegistry>,
 }
 
-impl Folder for Rewriter {
-	fn model(&mut self) -> &mut Model {
+impl<Dst: Marker> Folder<Dst> for Rewriter<Dst> {
+	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.result
 	}
 
-	fn replacement_map(&mut self) -> &mut ReplacementMap {
+	fn replacement_map(&mut self) -> &mut ReplacementMap<Dst> {
 		&mut self.replacement_map
 	}
 
@@ -42,7 +42,7 @@ impl Folder for Rewriter {
 		db: &dyn Thir,
 		model: &Model,
 		c: &ArrayComprehension,
-	) -> ArrayComprehension {
+	) -> ArrayComprehension<Dst> {
 		self.rewrite_array_comprehension(db, model, c, SurroundingCall::Other)
 	}
 
@@ -51,11 +51,11 @@ impl Folder for Rewriter {
 		db: &dyn Thir,
 		model: &Model,
 		c: &SetComprehension,
-	) -> SetComprehension {
+	) -> SetComprehension<Dst> {
 		self.rewrite_set_comprehension(db, model, c, SurroundingCall::Other)
 	}
 
-	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call {
+	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call<Dst> {
 		if let Callable::Function(f) = &call.function {
 			// forall, exists and sum comprehensions get special treatment
 			let special_cases = [
@@ -64,23 +64,23 @@ impl Folder for Rewriter {
 				(self.ids.sum, SurroundingCall::Sum),
 			];
 			for (ident, surround) in special_cases {
-				if model[*f].name() == ident {
-					if call.arguments.len() == 1 {
-						let arg = &call.arguments[0];
-						if let ExpressionData::ArrayComprehension(c) = &**arg {
-							// May be able to rewrite into non-optional comprehension, so lookup function again
-							return LookupCall {
-								function: ident.into(),
-								arguments: vec![Expression::new(
-									db,
-									model,
-									arg.origin(),
-									self.rewrite_array_comprehension(db, model, c, surround),
-								)],
-							}
-							.resolve(db, &self.result)
-							.0;
+				if model[*f].name() == ident && call.arguments.len() == 1 {
+					let arg = &call.arguments[0];
+					if let ExpressionData::ArrayComprehension(c) = &**arg {
+						// May be able to rewrite into non-optional comprehension, so lookup function again
+						let comprehension =
+							self.rewrite_array_comprehension(db, model, c, surround);
+						return LookupCall {
+							function: ident.into(),
+							arguments: vec![Expression::new(
+								db,
+								&self.result,
+								arg.origin(),
+								comprehension,
+							)],
 						}
+						.resolve(db, &self.result)
+						.0;
 					}
 				}
 			}
@@ -93,7 +93,7 @@ impl Folder for Rewriter {
 		db: &dyn Thir,
 		model: &Model,
 		expression: &Expression,
-	) -> Expression {
+	) -> Expression<Dst> {
 		let folded = fold_expression(self, db, model, expression);
 		if let ExpressionData::IfThenElse(ite) = &*folded {
 			if ite
@@ -114,14 +114,14 @@ impl Folder for Rewriter {
 	}
 }
 
-impl Rewriter {
+impl<Dst: Marker> Rewriter<Dst> {
 	fn rewrite_array_comprehension(
 		&mut self,
 		db: &dyn Thir,
 		model: &Model,
 		c: &ArrayComprehension,
 		surrounding: SurroundingCall,
-	) -> ArrayComprehension {
+	) -> ArrayComprehension<Dst> {
 		let mut generators = c
 			.generators
 			.iter()
@@ -148,7 +148,7 @@ impl Rewriter {
 		model: &Model,
 		c: &SetComprehension,
 		surrounding: SurroundingCall,
-	) -> SetComprehension {
+	) -> SetComprehension<Dst> {
 		let mut generators = c
 			.generators
 			.iter()
@@ -170,10 +170,10 @@ impl Rewriter {
 	fn desugar_comprehension(
 		&mut self,
 		db: &dyn Thir,
-		generators: &mut Vec<Generator>,
-		template: Expression,
+		generators: &mut [Generator<Dst>],
+		template: Expression<Dst>,
 		surrounding: SurroundingCall,
-	) -> Expression {
+	) -> Expression<Dst> {
 		let mut todo = Vec::new();
 		let mut par_where = Vec::new();
 		let mut var_where = Vec::new();
@@ -400,9 +400,9 @@ impl Rewriter {
 		&mut self,
 		db: &dyn Thir,
 		origin: Origin,
-		branches: Vec<Branch>,
-		else_result: Expression,
-	) -> Expression {
+		branches: Vec<Branch<Dst>>,
+		else_result: Expression<Dst>,
+	) -> Expression<Dst> {
 		assert!(!branches.is_empty());
 		let var_condition = branches[0].var_condition(db);
 		let mut bs = Vec::with_capacity(branches.len());
@@ -476,20 +476,20 @@ impl Rewriter {
 	}
 }
 
-struct ScopeTester<'a> {
-	scope: &'a FxHashMap<DeclarationId, bool>,
+struct ScopeTester<'a, T> {
+	scope: &'a FxHashMap<DeclarationId<T>, bool>,
 	ok: bool,
 }
 
-impl<'a> Visitor for ScopeTester<'a> {
-	fn visit_expression(&mut self, model: &Model, expression: &Expression) {
+impl<'a, T: Marker> Visitor<T> for ScopeTester<'a, T> {
+	fn visit_expression(&mut self, model: &Model<T>, expression: &Expression<T>) {
 		if !self.ok {
 			return;
 		}
 		visit_expression(self, model, expression)
 	}
 
-	fn visit_identifier(&mut self, _model: &Model, identifier: &ResolvedIdentifier) {
+	fn visit_identifier(&mut self, _model: &Model<T>, identifier: &ResolvedIdentifier<T>) {
 		if let ResolvedIdentifier::Declaration(idx) = identifier {
 			if let Some(false) = self.scope.get(idx) {
 				self.ok = false;
@@ -498,11 +498,11 @@ impl<'a> Visitor for ScopeTester<'a> {
 	}
 }
 
-impl<'a> ScopeTester<'a> {
+impl<'a, T: Marker> ScopeTester<'a, T> {
 	fn run(
-		model: &Model,
-		scope: &'a FxHashMap<DeclarationId, bool>,
-		expression: &Expression,
+		model: &Model<T>,
+		scope: &'a FxHashMap<DeclarationId<T>, bool>,
+		expression: &Expression<T>,
 	) -> bool {
 		let mut st = Self { scope, ok: true };
 		st.visit_expression(model, expression);

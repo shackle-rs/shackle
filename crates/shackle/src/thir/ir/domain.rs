@@ -7,26 +7,26 @@ use crate::{
 	ty::{Ty, TyData},
 };
 
-use super::Expression;
+use super::{Expression, Marker};
 
 pub use crate::hir::{OptType, VarType};
 
 /// Ascribed domain of a variable
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Domain {
+pub struct Domain<T = ()> {
 	ty: Ty,
-	data: DomainData,
+	data: DomainData<T>,
 	origin: Origin,
 }
 
-impl Deref for Domain {
-	type Target = DomainData;
+impl<T: Marker> Deref for Domain<T> {
+	type Target = DomainData<T>;
 	fn deref(&self) -> &Self::Target {
 		&self.data
 	}
 }
 
-impl Domain {
+impl<T: Marker> Domain<T> {
 	/// The type of the variable this domain is for (not of the domain)
 	pub fn ty(&self) -> Ty {
 		self.ty
@@ -45,7 +45,7 @@ impl Domain {
 		origin: impl Into<Origin>,
 		inst: VarType,
 		opt: OptType,
-		expression: Expression,
+		expression: Expression<T>,
 	) -> Self {
 		let dom_ty = expression.ty();
 		let ty = match dom_ty.lookup(db.upcast()) {
@@ -68,8 +68,8 @@ impl Domain {
 	pub fn array(
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
-		dimensions: Domain,
-		element: Domain,
+		dimensions: Domain<T>,
+		element: Domain<T>,
 	) -> Self {
 		let ty = Ty::array(db.upcast(), dimensions.ty(), element.ty()).expect("Invalid array type");
 		Self {
@@ -87,7 +87,7 @@ impl Domain {
 		origin: impl Into<Origin>,
 		inst: VarType,
 		opt: OptType,
-		element: Domain,
+		element: Domain<T>,
 	) -> Self {
 		let ty = Ty::par_set(db.upcast(), element.ty())
 			.expect("Invalid set element type")
@@ -107,7 +107,7 @@ impl Domain {
 	pub fn tuple(
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
-		fields: impl IntoIterator<Item = Domain>,
+		fields: impl IntoIterator<Item = Domain<T>>,
 	) -> Self {
 		let fields = fields.into_iter().collect::<Vec<_>>();
 		let ty = Ty::tuple(db.upcast(), fields.iter().map(|d| d.ty()));
@@ -124,7 +124,7 @@ impl Domain {
 	pub fn record(
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
-		fields: impl IntoIterator<Item = (Identifier, Domain)>,
+		fields: impl IntoIterator<Item = (Identifier, Domain<T>)>,
 	) -> Self {
 		let fields = fields.into_iter().collect::<Vec<_>>();
 		let ty = Ty::record(db.upcast(), fields.iter().map(|(i, d)| (*i, d.ty())));
@@ -145,24 +145,24 @@ impl Domain {
 	}
 
 	/// Get the inner data
-	pub fn into_inner(self) -> (Ty, DomainData, Origin) {
+	pub fn into_inner(self) -> (Ty, DomainData<T>, Origin) {
 		(self.ty, self.data, self.origin)
 	}
 }
 
 /// Ascribed domain of a variable
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum DomainData {
+pub enum DomainData<T = ()> {
 	/// Bounded by an expression
-	Bounded(Box<Expression>),
+	Bounded(Box<Expression<T>>),
 	/// Array index sets and element domain
-	Array(Box<Domain>, Box<Domain>),
+	Array(Box<Domain<T>>, Box<Domain<T>>),
 	/// Set domain
-	Set(Box<Domain>),
+	Set(Box<Domain<T>>),
 	/// Tuple domain
-	Tuple(Vec<Domain>),
+	Tuple(Vec<Domain<T>>),
 	/// Record domain
-	Record(Vec<(Identifier, Domain)>),
+	Record(Vec<(Identifier, Domain<T>)>),
 	/// Unbounded domain
 	Unbounded,
 }

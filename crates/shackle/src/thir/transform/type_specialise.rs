@@ -14,34 +14,34 @@ use crate::{
 		add_function, db::Thir, fold_call, fold_declaration_id, fold_domain, source::Origin,
 		ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Declaration, DeclarationId,
 		Domain, DomainData, Expression, ExpressionBuilder, Folder, Function, FunctionId, Generator,
-		Identifier, IfThenElse, IntegerLiteral, Item, LookupCall, Model, OptType, RecordAccess,
-		ReplacementMap, StringLiteral, TupleAccess,
+		Identifier, IfThenElse, IntegerLiteral, Item, LookupCall, Marker, Model, OptType,
+		RecordAccess, ReplacementMap, StringLiteral, TupleAccess,
 	},
 	ty::{Ty, TyData, TyParamInstantiations},
 	utils::DebugPrint,
 };
 
-struct SpecialisedFunction {
+struct SpecialisedFunction<Dst> {
 	original: FunctionId,
 	ty_vars: TyParamInstantiations,
-	parameters: FxHashMap<DeclarationId, DeclarationId>,
+	parameters: FxHashMap<DeclarationId, DeclarationId<Dst>>,
 }
 
-struct TypeSpecialiser {
-	specialised_model: Model,
-	replacement_map: ReplacementMap,
-	concrete: FxHashMap<(FunctionId, Vec<Ty>), FunctionId>,
-	specialised: Vec<(FunctionId, SpecialisedFunction)>,
-	todo: Vec<SpecialisedFunction>,
+struct TypeSpecialiser<Dst> {
+	specialised_model: Model<Dst>,
+	replacement_map: ReplacementMap<Dst>,
+	concrete: FxHashMap<(FunctionId, Vec<Ty>), FunctionId<Dst>>,
+	specialised: Vec<(FunctionId<Dst>, SpecialisedFunction<Dst>)>,
+	todo: Vec<SpecialisedFunction<Dst>>,
 	ids: Arc<IdentifierRegistry>,
 }
 
-impl Folder for TypeSpecialiser {
-	fn model(&mut self) -> &mut Model {
+impl<Dst: Marker> Folder<Dst> for TypeSpecialiser<Dst> {
+	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.specialised_model
 	}
 
-	fn replacement_map(&mut self) -> &mut ReplacementMap {
+	fn replacement_map(&mut self) -> &mut ReplacementMap<Dst> {
 		&mut self.replacement_map
 	}
 
@@ -90,7 +90,7 @@ impl Folder for TypeSpecialiser {
 		db: &dyn Thir,
 		model: &Model,
 		d: DeclarationId,
-	) -> DeclarationId {
+	) -> DeclarationId<Dst> {
 		if let Some(sf) = self.todo.last() {
 			if let Some(result) = sf.parameters.get(&d) {
 				// Map to specialised parameter
@@ -100,7 +100,7 @@ impl Folder for TypeSpecialiser {
 		fold_declaration_id(self, db, model, d)
 	}
 
-	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call {
+	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call<Dst> {
 		if let Callable::Function(f) = &call.function {
 			let arguments = call
 				.arguments
@@ -140,7 +140,7 @@ impl Folder for TypeSpecialiser {
 		fold_call(self, db, model, call)
 	}
 
-	fn fold_domain(&mut self, db: &dyn Thir, model: &Model, domain: &Domain) -> Domain {
+	fn fold_domain(&mut self, db: &dyn Thir, model: &Model, domain: &Domain) -> Domain<Dst> {
 		if let Some(s) = self.todo.last() {
 			// Instantiate type-inst vars in param/return types
 			if let DomainData::Unbounded = &**domain {
@@ -154,7 +154,7 @@ impl Folder for TypeSpecialiser {
 	}
 }
 
-impl TypeSpecialiser {
+impl<Dst: Marker> TypeSpecialiser<Dst> {
 	// Get or create the specialised version of a polymorphic function with the given argument types
 	fn instantiate(
 		&mut self,
@@ -162,10 +162,12 @@ impl TypeSpecialiser {
 		model: &Model,
 		f: FunctionId,
 		args: Vec<Ty>,
-	) -> FunctionId {
+	) -> FunctionId<Dst> {
 		assert!(model[f].is_polymorphic());
 		assert!(model[f].top_level());
 		let key = (f, args);
+		// Can't use map entry because we need mutable self
+		#[allow(clippy::map_entry)]
 		if self.concrete.contains_key(&key) {
 			// Already created this function
 			self.concrete[&key]
@@ -223,8 +225,8 @@ impl TypeSpecialiser {
 		&self,
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
-		e: impl ExpressionBuilder,
-	) -> Expression {
+		e: impl ExpressionBuilder<Dst>,
+	) -> Expression<Dst> {
 		Expression::new(db, &self.specialised_model, origin, e)
 	}
 
@@ -233,11 +235,11 @@ impl TypeSpecialiser {
 		&mut self,
 		db: &dyn Thir,
 		model: &Model,
-		arg: DeclarationId,
+		arg: DeclarationId<Dst>,
 		ty: Ty,
-	) -> Expression {
+	) -> Expression<Dst> {
 		let origin = self.specialised_model[arg].origin();
-		let call = |ts: &mut Self, name: Identifier, args: Vec<Expression>| {
+		let call = |ts: &mut Self, name: Identifier, args: Vec<Expression<Dst>>| {
 			let lookup = model
 				.lookup_function(
 					db,

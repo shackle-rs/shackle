@@ -6,177 +6,181 @@ use crate::thir::*;
 /// When overriding a method, you can call the module-level `visit_foo()` functions to invoke
 /// the default traversal behaviour before/after applying your own logic to the node (to achieve
 /// either post-order/pre-order DFS as required).
-pub trait Visitor {
+pub trait Visitor<T: Marker = ()> {
 	/// Visit the model
-	fn visit_model(&mut self, model: &Model) {
+	fn visit_model(&mut self, model: &Model<T>) {
 		visit_model(self, model);
 	}
 
 	/// Visit an item
-	fn visit_item(&mut self, model: &Model, item: ItemId) {
+	fn visit_item(&mut self, model: &Model<T>, item: ItemId<T>) {
 		visit_item(self, model, item);
 	}
 
 	/// Visit an annotation item
-	fn visit_annotation(&mut self, model: &Model, item: AnnotationId) {
+	fn visit_annotation(&mut self, model: &Model<T>, item: AnnotationId<T>) {
 		visit_annotation(self, model, item);
 	}
 
 	/// Visit a constraint item
-	fn visit_constraint(&mut self, model: &Model, constraint: ConstraintId) {
+	fn visit_constraint(&mut self, model: &Model<T>, constraint: ConstraintId<T>) {
 		visit_constraint(self, model, constraint);
 	}
 
 	/// Visit a declaration item
-	fn visit_declaration(&mut self, model: &Model, declaration: DeclarationId) {
+	fn visit_declaration(&mut self, model: &Model<T>, declaration: DeclarationId<T>) {
 		visit_declaration(self, model, declaration);
 	}
 
 	/// Visit an enumeration item
-	fn visit_enumeration(&mut self, model: &Model, enumeration: EnumerationId) {
+	fn visit_enumeration(&mut self, model: &Model<T>, enumeration: EnumerationId<T>) {
 		visit_enumeration(self, model, enumeration);
 	}
 
 	/// Visit a function item
-	fn visit_function(&mut self, model: &Model, function: FunctionId) {
+	fn visit_function(&mut self, model: &Model<T>, function: FunctionId<T>) {
 		visit_function(self, model, function, true);
 	}
 
 	/// Visit an output item
-	fn visit_output(&mut self, model: &Model, output: OutputId) {
+	fn visit_output(&mut self, model: &Model<T>, output: OutputId<T>) {
 		visit_output(self, model, output);
 	}
 
 	/// Visit the solve item
-	fn visit_solve(&mut self, model: &Model) {
+	fn visit_solve(&mut self, model: &Model<T>) {
 		visit_solve(self, model);
 	}
 
 	/// Visit an expression
-	fn visit_expression(&mut self, model: &Model, expression: &Expression) {
+	fn visit_expression(&mut self, model: &Model<T>, expression: &Expression<T>) {
 		visit_expression(self, model, expression);
 	}
 
 	/// Visit an absent literal
-	fn visit_absent(&mut self, _model: &Model, _a: &Absent) {}
+	fn visit_absent(&mut self, _model: &Model<T>, _a: &Absent) {}
 
 	/// Visit a boolean literal
-	fn visit_boolean(&mut self, _model: &Model, _b: &BooleanLiteral) {}
+	fn visit_boolean(&mut self, _model: &Model<T>, _b: &BooleanLiteral) {}
 
 	/// Visit an integer literal
-	fn visit_integer(&mut self, _model: &Model, _i: &IntegerLiteral) {}
+	fn visit_integer(&mut self, _model: &Model<T>, _i: &IntegerLiteral) {}
 
 	/// Visit a float literal
-	fn visit_float(&mut self, _model: &Model, _f: &FloatLiteral) {}
+	fn visit_float(&mut self, _model: &Model<T>, _f: &FloatLiteral) {}
 
 	/// Visit a string literal
-	fn visit_string(&mut self, _model: &Model, _s: &StringLiteral) {}
+	fn visit_string(&mut self, _model: &Model<T>, _s: &StringLiteral) {}
 
 	/// Visit an infinity literal
-	fn visit_infinity(&mut self, _model: &Model, _i: &Infinity) {}
+	fn visit_infinity(&mut self, _model: &Model<T>, _i: &Infinity) {}
 
 	/// Visit an identifier
-	fn visit_identifier(&mut self, _model: &Model, _identifier: &ResolvedIdentifier) {}
+	fn visit_identifier(&mut self, _model: &Model<T>, _identifier: &ResolvedIdentifier<T>) {}
 
 	/// Visit a callable
-	fn visit_callable(&mut self, model: &Model, callable: &Callable) {
+	fn visit_callable(&mut self, model: &Model<T>, callable: &Callable<T>) {
 		visit_callable(self, model, callable);
 	}
 
 	/// Visit an array literal
-	fn visit_array_literal(&mut self, model: &Model, al: &ArrayLiteral) {
+	fn visit_array_literal(&mut self, model: &Model<T>, al: &ArrayLiteral<T>) {
 		visit_array_literal(self, model, al);
 	}
 
 	/// Visit a set literal
-	fn visit_set_literal(&mut self, model: &Model, sl: &SetLiteral) {
+	fn visit_set_literal(&mut self, model: &Model<T>, sl: &SetLiteral<T>) {
 		visit_set_literal(self, model, sl);
 	}
 
 	/// Visit a tuple literal
-	fn visit_tuple_literal(&mut self, model: &Model, tl: &TupleLiteral) {
+	fn visit_tuple_literal(&mut self, model: &Model<T>, tl: &TupleLiteral<T>) {
 		visit_tuple_literal(self, model, tl);
 	}
 
 	/// Visit a record literal
-	fn visit_record_literal(&mut self, model: &Model, rl: &RecordLiteral) {
+	fn visit_record_literal(&mut self, model: &Model<T>, rl: &RecordLiteral<T>) {
 		visit_record_literal(self, model, rl);
 	}
 
 	/// Visit an array comprehension
-	fn visit_array_comprehension(&mut self, model: &Model, c: &ArrayComprehension) {
+	fn visit_array_comprehension(&mut self, model: &Model<T>, c: &ArrayComprehension<T>) {
 		visit_array_comprehension(self, model, c);
 	}
 	/// Visit a set comprehension
-	fn visit_set_comprehension(&mut self, model: &Model, c: &SetComprehension) {
+	fn visit_set_comprehension(&mut self, model: &Model<T>, c: &SetComprehension<T>) {
 		visit_set_comprehension(self, model, c);
 	}
 
 	/// Visit an array access
-	fn visit_array_access(&mut self, model: &Model, aa: &ArrayAccess) {
+	fn visit_array_access(&mut self, model: &Model<T>, aa: &ArrayAccess<T>) {
 		visit_array_access(self, model, aa);
 	}
 
 	/// Visit a tuple access
-	fn visit_tuple_access(&mut self, model: &Model, ta: &TupleAccess) {
+	fn visit_tuple_access(&mut self, model: &Model<T>, ta: &TupleAccess<T>) {
 		visit_tuple_access(self, model, ta);
 	}
 
 	/// Visit a record access
-	fn visit_record_access(&mut self, model: &Model, ra: &RecordAccess) {
+	fn visit_record_access(&mut self, model: &Model<T>, ra: &RecordAccess<T>) {
 		visit_record_access(self, model, ra);
 	}
 
 	/// Visit an if-then-else expression
-	fn visit_if_then_else(&mut self, model: &Model, ite: &IfThenElse) {
+	fn visit_if_then_else(&mut self, model: &Model<T>, ite: &IfThenElse<T>) {
 		visit_if_then_else(self, model, ite);
 	}
 
 	/// Visit a case expression
-	fn visit_case(&mut self, model: &Model, c: &Case) {
+	fn visit_case(&mut self, model: &Model<T>, c: &Case<T>) {
 		visit_case(self, model, c);
 	}
 
 	/// Visit a call expression
-	fn visit_call(&mut self, model: &Model, call: &Call) {
+	fn visit_call(&mut self, model: &Model<T>, call: &Call<T>) {
 		visit_call(self, model, call);
 	}
 
 	/// Visit a let expression
-	fn visit_let(&mut self, model: &Model, l: &Let) {
+	fn visit_let(&mut self, model: &Model<T>, l: &Let<T>) {
 		visit_let(self, model, l);
 	}
 
 	/// Visit a lambda expression
-	fn visit_lambda(&mut self, model: &Model, l: &Lambda) {
+	fn visit_lambda(&mut self, model: &Model<T>, l: &Lambda<T>) {
 		visit_lambda(self, model, l);
 	}
 
 	/// Visit a comprehension generator
-	fn visit_generator(&mut self, model: &Model, generator: &Generator) {
+	fn visit_generator(&mut self, model: &Model<T>, generator: &Generator<T>) {
 		visit_generator(self, model, generator);
 	}
 
 	/// Visit a domain
-	fn visit_domain(&mut self, model: &Model, domain: &Domain) {
+	fn visit_domain(&mut self, model: &Model<T>, domain: &Domain<T>) {
 		visit_domain(self, model, domain);
 	}
 
 	/// Visit a case pattern
-	fn visit_pattern(&mut self, model: &Model, pattern: &Pattern) {
+	fn visit_pattern(&mut self, model: &Model<T>, pattern: &Pattern<T>) {
 		visit_pattern(self, model, pattern);
 	}
 }
 
 /// Visit the top-level items in the model
-pub fn visit_model<V: Visitor + ?Sized>(visitor: &mut V, model: &Model) {
+pub fn visit_model<T: Marker, V: Visitor<T> + ?Sized>(visitor: &mut V, model: &Model<T>) {
 	for item in model.top_level_items().collect::<Vec<_>>() {
 		visitor.visit_item(model, item);
 	}
 }
 
 /// Visit an item
-pub fn visit_item<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: ItemId) {
+pub fn visit_item<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: ItemId<T>,
+) {
 	match node {
 		ItemId::Annotation(item) => visitor.visit_annotation(model, item),
 		ItemId::Constraint(item) => visitor.visit_constraint(model, item),
@@ -189,7 +193,11 @@ pub fn visit_item<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: Ite
 }
 
 /// Visit the children of an annotation item
-pub fn visit_annotation<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: AnnotationId) {
+pub fn visit_annotation<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: AnnotationId<T>,
+) {
 	let annotation = &model[node];
 	if let Some(params) = &annotation.parameters {
 		for param in params.iter() {
@@ -199,7 +207,11 @@ pub fn visit_annotation<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, nod
 }
 
 /// Visit the children of a constraint item
-pub fn visit_constraint<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: ConstraintId) {
+pub fn visit_constraint<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: ConstraintId<T>,
+) {
 	let constraint = &model[node];
 	for ann in constraint.annotations().iter() {
 		visitor.visit_expression(model, ann);
@@ -208,7 +220,11 @@ pub fn visit_constraint<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, nod
 }
 
 /// Visit the children of a declaration item
-pub fn visit_declaration<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: DeclarationId) {
+pub fn visit_declaration<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: DeclarationId<T>,
+) {
 	let declaration = &model[node];
 	visitor.visit_domain(model, declaration.domain());
 	for ann in declaration.annotations().iter() {
@@ -220,7 +236,11 @@ pub fn visit_declaration<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, no
 }
 
 /// Visit the children of an enumeration item
-pub fn visit_enumeration<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: EnumerationId) {
+pub fn visit_enumeration<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: EnumerationId<T>,
+) {
 	let enumeration = &model[node];
 	for ann in enumeration.annotations().iter() {
 		visitor.visit_expression(model, ann);
@@ -228,10 +248,10 @@ pub fn visit_enumeration<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, no
 }
 
 /// Visit the children of a function item
-pub fn visit_function<V: Visitor + ?Sized>(
+pub fn visit_function<T: Marker, V: Visitor<T> + ?Sized>(
 	visitor: &mut V,
-	model: &Model,
-	node: FunctionId,
+	model: &Model<T>,
+	node: FunctionId<T>,
 	visit_body: bool,
 ) {
 	let function = &model[node];
@@ -250,7 +270,11 @@ pub fn visit_function<V: Visitor + ?Sized>(
 }
 
 /// Visit the children of an output item
-pub fn visit_output<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: OutputId) {
+pub fn visit_output<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: OutputId<T>,
+) {
 	let output = &model[node];
 	if let Some(section) = output.section() {
 		visitor.visit_expression(model, section);
@@ -259,7 +283,7 @@ pub fn visit_output<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: O
 }
 
 /// Visit the children of a solve item
-pub fn visit_solve<V: Visitor + ?Sized>(visitor: &mut V, model: &Model) {
+pub fn visit_solve<T: Marker, V: Visitor<T> + ?Sized>(visitor: &mut V, model: &Model<T>) {
 	let solve = model.solve().unwrap();
 	for ann in solve.annotations().iter() {
 		visitor.visit_expression(model, ann);
@@ -270,31 +294,43 @@ pub fn visit_solve<V: Visitor + ?Sized>(visitor: &mut V, model: &Model) {
 }
 
 /// Visit the children of an array literal
-pub fn visit_array_literal<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, al: &ArrayLiteral) {
+pub fn visit_array_literal<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	al: &ArrayLiteral<T>,
+) {
 	for item in al.iter() {
 		visitor.visit_expression(model, item);
 	}
 }
 
 /// Visit the children of a set literal
-pub fn visit_set_literal<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, sl: &SetLiteral) {
+pub fn visit_set_literal<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	sl: &SetLiteral<T>,
+) {
 	for item in sl.iter() {
 		visitor.visit_expression(model, item);
 	}
 }
 
 /// Visit the children of a tuple literal
-pub fn visit_tuple_literal<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, tl: &TupleLiteral) {
+pub fn visit_tuple_literal<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	tl: &TupleLiteral<T>,
+) {
 	for item in tl.iter() {
 		visitor.visit_expression(model, item);
 	}
 }
 
 /// Visit the children of a record literal
-pub fn visit_record_literal<V: Visitor + ?Sized>(
+pub fn visit_record_literal<T: Marker, V: Visitor<T> + ?Sized>(
 	visitor: &mut V,
-	model: &Model,
-	rl: &RecordLiteral,
+	model: &Model<T>,
+	rl: &RecordLiteral<T>,
 ) {
 	for (_, item) in rl.iter() {
 		visitor.visit_expression(model, item);
@@ -302,10 +338,10 @@ pub fn visit_record_literal<V: Visitor + ?Sized>(
 }
 
 /// Visit the children of an array comprehension
-pub fn visit_array_comprehension<V: Visitor + ?Sized>(
+pub fn visit_array_comprehension<T: Marker, V: Visitor<T> + ?Sized>(
 	visitor: &mut V,
-	model: &Model,
-	c: &ArrayComprehension,
+	model: &Model<T>,
+	c: &ArrayComprehension<T>,
 ) {
 	for generator in c.generators.iter() {
 		visitor.visit_generator(model, generator);
@@ -317,10 +353,10 @@ pub fn visit_array_comprehension<V: Visitor + ?Sized>(
 }
 
 /// Visit the children of a set comprehension
-pub fn visit_set_comprehension<V: Visitor + ?Sized>(
+pub fn visit_set_comprehension<T: Marker, V: Visitor<T> + ?Sized>(
 	visitor: &mut V,
-	model: &Model,
-	c: &SetComprehension,
+	model: &Model<T>,
+	c: &SetComprehension<T>,
 ) {
 	for generator in c.generators.iter() {
 		visitor.visit_generator(model, generator);
@@ -329,23 +365,39 @@ pub fn visit_set_comprehension<V: Visitor + ?Sized>(
 }
 
 /// Visit the children of an array access expression
-pub fn visit_array_access<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, aa: &ArrayAccess) {
+pub fn visit_array_access<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	aa: &ArrayAccess<T>,
+) {
 	visitor.visit_expression(model, &aa.collection);
 	visitor.visit_expression(model, &aa.indices);
 }
 
 /// Visit the children of a tuple access expression
-pub fn visit_tuple_access<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, ta: &TupleAccess) {
+pub fn visit_tuple_access<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	ta: &TupleAccess<T>,
+) {
 	visitor.visit_expression(model, &ta.tuple);
 }
 
 /// Visit the children of an record access expression
-pub fn visit_record_access<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, ra: &RecordAccess) {
+pub fn visit_record_access<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	ra: &RecordAccess<T>,
+) {
 	visitor.visit_expression(model, &ra.record);
 }
 
 /// Visit the children of an if-then-else expression
-pub fn visit_if_then_else<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, ite: &IfThenElse) {
+pub fn visit_if_then_else<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	ite: &IfThenElse<T>,
+) {
 	for branch in ite.branches.iter() {
 		visitor.visit_expression(model, &branch.condition);
 		visitor.visit_expression(model, &branch.result);
@@ -354,7 +406,11 @@ pub fn visit_if_then_else<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, i
 }
 
 /// Visit the children of a case expression
-pub fn visit_case<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Case) {
+pub fn visit_case<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	c: &Case<T>,
+) {
 	visitor.visit_expression(model, &c.scrutinee);
 	for branch in c.branches.iter() {
 		visitor.visit_pattern(model, &branch.pattern);
@@ -363,14 +419,22 @@ pub fn visit_case<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Case)
 }
 
 /// Visit the children of a callable
-pub fn visit_callable<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Callable) {
+pub fn visit_callable<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	c: &Callable<T>,
+) {
 	if let Callable::Expression(e) = c {
 		visitor.visit_expression(model, e);
 	}
 }
 
 /// Visit the children of a call expression
-pub fn visit_call<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Call) {
+pub fn visit_call<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	c: &Call<T>,
+) {
 	visitor.visit_callable(model, &c.function);
 	for arg in c.arguments.iter() {
 		visitor.visit_expression(model, arg);
@@ -378,7 +442,7 @@ pub fn visit_call<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, c: &Call)
 }
 
 /// Visit the children of a let expression
-pub fn visit_let<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, l: &Let) {
+pub fn visit_let<T: Marker, V: Visitor<T> + ?Sized>(visitor: &mut V, model: &Model<T>, l: &Let<T>) {
 	for item in l.items.iter() {
 		match item {
 			LetItem::Constraint(c) => visitor.visit_item(model, (*c).into()),
@@ -389,14 +453,22 @@ pub fn visit_let<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, l: &Let) {
 }
 
 /// Visit the children of a lambda expression
-pub fn visit_lambda<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, l: &Lambda) {
+pub fn visit_lambda<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	l: &Lambda<T>,
+) {
 	visitor.visit_function(model, l.0);
 }
 
 /// Visit the children of an expression.
 ///
 /// First visits annotations and then calls the specific `visitor.visit_foo()` method for the kind of expression
-pub fn visit_expression<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, node: &Expression) {
+pub fn visit_expression<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	node: &Expression<T>,
+) {
 	for ann in node.annotations().iter() {
 		visitor.visit_expression(model, ann);
 	}
@@ -427,7 +499,11 @@ pub fn visit_expression<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, nod
 }
 
 /// Visit the children of a comprehension generator
-pub fn visit_generator<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, generator: &Generator) {
+pub fn visit_generator<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	generator: &Generator<T>,
+) {
 	match generator {
 		Generator::Assignment {
 			assignment,
@@ -455,7 +531,11 @@ pub fn visit_generator<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, gene
 }
 
 /// Visit the children of a domain
-pub fn visit_domain<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, domain: &Domain) {
+pub fn visit_domain<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	domain: &Domain<T>,
+) {
 	match &**domain {
 		DomainData::Array(dims, elem) => {
 			visitor.visit_domain(model, dims);
@@ -480,7 +560,11 @@ pub fn visit_domain<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, domain:
 }
 
 /// Visit the children of a pattern
-pub fn visit_pattern<V: Visitor + ?Sized>(visitor: &mut V, model: &Model, pattern: &Pattern) {
+pub fn visit_pattern<T: Marker, V: Visitor<T> + ?Sized>(
+	visitor: &mut V,
+	model: &Model<T>,
+	pattern: &Pattern<T>,
+) {
 	match &**pattern {
 		PatternData::AnnotationConstructor { args, .. }
 		| PatternData::EnumConstructor { args, .. }
