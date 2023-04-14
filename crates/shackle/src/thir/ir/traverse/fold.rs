@@ -1,82 +1,85 @@
 use rustc_hash::FxHashMap;
 
-use crate::thir::{db::Thir, source::Origin, *};
+use crate::{
+	thir::{db::Thir, pretty_print::PrettyPrinter, source::Origin, *},
+	utils::DebugPrint,
+};
 
 /// Replacement map for references to items
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ReplacementMap<U, T = ()> {
-	annotations: FxHashMap<AnnotationId<T>, AnnotationId<U>>,
-	constraints: FxHashMap<ConstraintId<T>, ConstraintId<U>>,
-	declarations: FxHashMap<DeclarationId<T>, DeclarationId<U>>,
-	enumerations: FxHashMap<EnumerationId<T>, EnumerationId<U>>,
-	functions: FxHashMap<FunctionId<T>, FunctionId<U>>,
-	outputs: FxHashMap<OutputId<T>, OutputId<U>>,
+pub struct ReplacementMap<Dst, Src = ()> {
+	annotations: FxHashMap<AnnotationId<Src>, AnnotationId<Dst>>,
+	constraints: FxHashMap<ConstraintId<Src>, ConstraintId<Dst>>,
+	declarations: FxHashMap<DeclarationId<Src>, DeclarationId<Dst>>,
+	enumerations: FxHashMap<EnumerationId<Src>, EnumerationId<Dst>>,
+	functions: FxHashMap<FunctionId<Src>, FunctionId<Dst>>,
+	outputs: FxHashMap<OutputId<Src>, OutputId<Dst>>,
 }
 
-impl<T: Marker, U: Marker> ReplacementMap<U, T> {
+impl<Src: Marker, Dst: Marker> ReplacementMap<Dst, Src> {
 	/// Get the replacement for this annotation ID if any
-	pub fn get_annotation(&self, src: AnnotationId<T>) -> Option<AnnotationId<U>> {
+	pub fn get_annotation(&self, src: AnnotationId<Src>) -> Option<AnnotationId<Dst>> {
 		self.annotations.get(&src).copied()
 	}
 
 	/// Insert an annotation ID into the replace map
-	pub fn insert_annotation(&mut self, src: AnnotationId<T>, dst: AnnotationId<U>) {
+	pub fn insert_annotation(&mut self, src: AnnotationId<Src>, dst: AnnotationId<Dst>) {
 		self.annotations.insert(src, dst);
 	}
 
 	/// Get the replacement for this constraint ID if any
-	pub fn get_constraint(&self, src: ConstraintId<T>) -> Option<ConstraintId<U>> {
+	pub fn get_constraint(&self, src: ConstraintId<Src>) -> Option<ConstraintId<Dst>> {
 		self.constraints.get(&src).copied()
 	}
 
 	/// Insert an constraint ID into the replace map
-	pub fn insert_constraint(&mut self, src: ConstraintId<T>, dst: ConstraintId<U>) {
+	pub fn insert_constraint(&mut self, src: ConstraintId<Src>, dst: ConstraintId<Dst>) {
 		self.constraints.insert(src, dst);
 	}
 
 	/// Get the replacement for this declaration ID if any
-	pub fn get_declaration(&self, src: DeclarationId<T>) -> Option<DeclarationId<U>> {
+	pub fn get_declaration(&self, src: DeclarationId<Src>) -> Option<DeclarationId<Dst>> {
 		self.declarations.get(&src).copied()
 	}
 
 	/// Insert an declaration ID into the replace map
-	pub fn insert_declaration(&mut self, src: DeclarationId<T>, dst: DeclarationId<U>) {
+	pub fn insert_declaration(&mut self, src: DeclarationId<Src>, dst: DeclarationId<Dst>) {
 		self.declarations.insert(src, dst);
 	}
 
 	/// Get the replacement for this enumeration ID if any
-	pub fn get_enumeration(&self, src: EnumerationId<T>) -> Option<EnumerationId<U>> {
+	pub fn get_enumeration(&self, src: EnumerationId<Src>) -> Option<EnumerationId<Dst>> {
 		self.enumerations.get(&src).copied()
 	}
 
 	/// Insert an enumeration ID into the replace map
-	pub fn insert_enumeration(&mut self, src: EnumerationId<T>, dst: EnumerationId<U>) {
+	pub fn insert_enumeration(&mut self, src: EnumerationId<Src>, dst: EnumerationId<Dst>) {
 		self.enumerations.insert(src, dst);
 	}
 
 	/// Get the replacement for this enum member ID if any
-	pub fn get_enum_member(&self, src: EnumMemberId<T>) -> Option<EnumMemberId<U>> {
+	pub fn get_enum_member(&self, src: EnumMemberId<Src>) -> Option<EnumMemberId<Dst>> {
 		self.get_enumeration(src.enumeration_id())
 			.map(|e| EnumMemberId::new(e, src.member_index()))
 	}
 
 	/// Get the replacement for this function ID if any
-	pub fn get_function(&self, src: FunctionId<T>) -> Option<FunctionId<U>> {
+	pub fn get_function(&self, src: FunctionId<Src>) -> Option<FunctionId<Dst>> {
 		self.functions.get(&src).copied()
 	}
 
 	/// Insert an function ID into the replace map
-	pub fn insert_function(&mut self, src: FunctionId<T>, dst: FunctionId<U>) {
+	pub fn insert_function(&mut self, src: FunctionId<Src>, dst: FunctionId<Dst>) {
 		self.functions.insert(src, dst);
 	}
 
 	/// Get the replacement for this output ID if any
-	pub fn get_output(&self, src: OutputId<T>) -> Option<OutputId<U>> {
+	pub fn get_output(&self, src: OutputId<Src>) -> Option<OutputId<Dst>> {
 		self.outputs.get(&src).copied()
 	}
 
 	/// Insert an output ID into the replace map
-	pub fn insert_output(&mut self, src: OutputId<T>, dst: OutputId<U>) {
+	pub fn insert_output(&mut self, src: OutputId<Src>, dst: OutputId<Dst>) {
 		self.outputs.insert(src, dst);
 	}
 }
@@ -1148,14 +1151,40 @@ pub fn fold_call<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	model: &Model<T>,
 	c: &Call<T>,
 ) -> Call<U> {
-	Call {
+	let call = Call {
 		function: folder.fold_callable(db, model, &c.function),
 		arguments: c
 			.arguments
 			.iter()
 			.map(|arg| folder.fold_expression(db, model, arg))
 			.collect(),
+	};
+	if let Callable::Function(f) = &call.function {
+		let m = folder.model();
+		let arg_tys = call
+			.arguments
+			.iter()
+			.map(|arg| arg.ty())
+			.collect::<Vec<_>>();
+		let printer = PrettyPrinter::new(db, m);
+		if let Err(e) = m[*f]
+			.function_entry(m)
+			.overload
+			.instantiate_ty_params(db.upcast(), &arg_tys)
+		{
+			panic!(
+				"Folded call {}({}) is invalid: {}",
+				m[*f].name().pretty_print(db),
+				call.arguments
+					.iter()
+					.map(|e| printer.pretty_print_expression(e))
+					.collect::<Vec<_>>()
+					.join(", "),
+				e.debug_print(db.upcast()),
+			);
+		}
 	}
+	call
 }
 
 /// Fold a let expression
@@ -1206,6 +1235,7 @@ pub fn fold_expression<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 ) -> Expression<U> {
 	let origin = expression.origin();
 	let mut e = match &**expression {
+		ExpressionData::Bottom => alloc_expression(db, origin, Bottom, folder),
 		ExpressionData::Absent => alloc_expression(db, origin, Absent, folder),
 		ExpressionData::BooleanLiteral(b) => {
 			alloc_expression(db, origin, folder.fold_boolean(db, model, *b), folder)
@@ -1335,9 +1365,10 @@ pub fn fold_domain<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	let ty = domain.ty();
 	match &**domain {
 		DomainData::Array(dims, elem) => {
+			let opt = ty.opt(db.upcast()).unwrap();
 			let dimensions = folder.fold_domain(db, model, dims);
 			let element = folder.fold_domain(db, model, elem);
-			Domain::array(db, origin, dimensions, element)
+			Domain::array(db, origin, opt, dimensions, element)
 		}
 		DomainData::Bounded(e) => {
 			let inst = ty.inst(db.upcast()).unwrap();
@@ -1346,11 +1377,12 @@ pub fn fold_domain<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 			Domain::bounded(db, origin, inst, opt, expression)
 		}
 		DomainData::Record(items) => {
+			let opt = ty.opt(db.upcast()).unwrap();
 			let fields = items
 				.iter()
 				.map(|(i, d)| (*i, folder.fold_domain(db, model, d)))
 				.collect::<Vec<_>>();
-			Domain::record(db, origin, fields)
+			Domain::record(db, origin, opt, fields)
 		}
 		DomainData::Set(d) => {
 			let inst = ty.inst(db.upcast()).unwrap();
@@ -1359,13 +1391,14 @@ pub fn fold_domain<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 			Domain::set(db, origin, inst, opt, element)
 		}
 		DomainData::Tuple(items) => {
+			let opt = ty.opt(db.upcast()).unwrap();
 			let fields = items
 				.iter()
 				.map(|d| folder.fold_domain(db, model, d))
 				.collect::<Vec<_>>();
-			Domain::tuple(db, origin, fields)
+			Domain::tuple(db, origin, opt, fields)
 		}
-		DomainData::Unbounded => Domain::unbounded(origin, ty),
+		DomainData::Unbounded => Domain::unbounded(db, origin, ty),
 	}
 }
 

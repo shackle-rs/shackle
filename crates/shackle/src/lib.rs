@@ -5,12 +5,14 @@
 #![warn(variant_size_differences)]
 
 pub mod arena;
+pub mod constants;
 pub mod db;
 pub mod diagnostics;
 pub mod file;
 pub mod hir;
 mod legacy;
 pub mod mir;
+pub mod refmap;
 pub mod syntax;
 pub mod thir;
 pub mod ty;

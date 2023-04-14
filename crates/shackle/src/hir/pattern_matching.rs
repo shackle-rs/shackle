@@ -8,8 +8,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	arena::ArenaIndex,
+	constants::TypeRegistry,
 	diagnostics::{NonExhaustivePatternMatching, UnreachablePattern, Warning},
-	ty::{EnumRef, Ty, TyData, TypeRegistry},
+	ty::{EnumRef, Ty, TyData},
 	Error,
 };
 

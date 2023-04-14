@@ -75,6 +75,11 @@ impl<T: Marker> Model<T> {
 		idx
 	}
 
+	/// Number of annotation items
+	pub fn annotations_len(&self) -> u32 {
+		self.annotations.len()
+	}
+
 	/// Get the top-level constraint items
 	pub fn top_level_constraints(
 		&self,
@@ -106,6 +111,11 @@ impl<T: Marker> Model<T> {
 		let idx = self.constraints.insert(item);
 		self.items.push(idx.into());
 		idx
+	}
+
+	/// Number of constraint items (including non-toplevel)
+	pub fn constraints_len(&self) -> u32 {
+		self.constraints.len()
 	}
 
 	/// Get the top-level declaration items
@@ -143,6 +153,11 @@ impl<T: Marker> Model<T> {
 		idx
 	}
 
+	/// Number of declaration items (including non-toplevel)
+	pub fn declarations_len(&self) -> u32 {
+		self.declarations.len()
+	}
+
 	/// Get the enumeration items
 	pub fn enumerations(&self) -> impl Iterator<Item = (EnumerationId<T>, &EnumerationItem<T>)> {
 		self.enumerations.iter()
@@ -160,6 +175,11 @@ impl<T: Marker> Model<T> {
 		let idx = self.enumerations.insert(item);
 		self.items.push(idx.into());
 		idx
+	}
+
+	/// Number of enumeration items
+	pub fn enumerations_len(&self) -> u32 {
+		self.enumerations.len()
 	}
 
 	/// Get the function items
@@ -193,6 +213,11 @@ impl<T: Marker> Model<T> {
 		self.all_functions_mut().filter(|(_, f)| f.top_level())
 	}
 
+	/// Number of function items
+	pub fn functions_len(&self) -> u32 {
+		self.functions.len()
+	}
+
 	/// Get the output items
 	pub fn outputs(&self) -> impl Iterator<Item = (OutputId<T>, &OutputItem<T>)> {
 		self.outputs.iter()
@@ -208,6 +233,11 @@ impl<T: Marker> Model<T> {
 		let idx = self.outputs.insert(item);
 		self.items.push(idx.into());
 		idx
+	}
+
+	/// Number of output items
+	pub fn outputs_len(&self) -> u32 {
+		self.outputs.len()
 	}
 
 	/// Get the solve item
@@ -333,6 +363,6 @@ pub type FunctionLookupError<T> = FunctionResolutionError<FunctionId<T>>;
 /// type safety when dealing with multiple THIR models by using different
 /// type parameters for each, so that the IDs from one model can't be used
 /// to access another.
-pub trait Marker: Copy + Clone {}
+pub trait Marker: Copy + Clone + std::fmt::Debug {}
 
 impl Marker for () {}

@@ -4,24 +4,24 @@
 use super::db::Thir;
 use super::{
 	AnnotationId, Callable, ConstraintId, DeclarationId, Domain, DomainData, EnumerationId,
-	Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Model, OutputId,
-	Pattern, PatternData, ResolvedIdentifier,
+	Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Marker, Model,
+	OutputId, Pattern, PatternData, ResolvedIdentifier,
 };
 use std::fmt::Write;
 
 /// Pretty prints THIR as MiniZinc
-pub struct PrettyPrinter<'a> {
+pub struct PrettyPrinter<'a, T = ()> {
 	db: &'a dyn Thir,
-	model: &'a Model,
+	model: &'a Model<T>,
 	/// Whether to output a model compatible with old MiniZinc (default `true`)
 	pub old_compat: bool,
 	/// Whether to output `shackle_type("...")` annotations for sanity checking
 	pub debug_types: bool,
 }
 
-impl<'a> PrettyPrinter<'a> {
+impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	/// Create a new pretty printer
-	pub fn new(db: &'a dyn Thir, model: &'a Model) -> Self {
+	pub fn new(db: &'a dyn Thir, model: &'a Model<T>) -> Self {
 		Self {
 			db,
 			model,
@@ -42,7 +42,7 @@ impl<'a> PrettyPrinter<'a> {
 	}
 
 	/// Pretty print an item from a model
-	pub fn pretty_print_item(&self, item: ItemId) -> String {
+	pub fn pretty_print_item(&self, item: ItemId<T>) -> String {
 		match item {
 			ItemId::Annotation(i) => self.pretty_print_annotation(i),
 			ItemId::Constraint(i) => self.pretty_print_constraint(i),
@@ -54,7 +54,7 @@ impl<'a> PrettyPrinter<'a> {
 		}
 	}
 
-	fn pretty_print_annotation(&self, idx: AnnotationId) -> String {
+	fn pretty_print_annotation(&self, idx: AnnotationId<T>) -> String {
 		let annotation = &self.model[idx];
 		let name = annotation
 			.name
@@ -76,7 +76,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_constraint(&self, idx: ConstraintId) -> String {
+	fn pretty_print_constraint(&self, idx: ConstraintId<T>) -> String {
 		let constraint = &self.model[idx];
 		let mut buf = "constraint ".to_owned();
 		for ann in constraint.annotations().iter() {
@@ -91,7 +91,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_declaration(&self, idx: DeclarationId, is_let_item: bool) -> String {
+	fn pretty_print_declaration(&self, idx: DeclarationId<T>, is_let_item: bool) -> String {
 		let declaration = &self.model[idx];
 		let ty = declaration.ty();
 		let mut buf = if is_let_item
@@ -125,7 +125,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_enumeration(&self, idx: EnumerationId) -> String {
+	fn pretty_print_enumeration(&self, idx: EnumerationId<T>) -> String {
 		let enumeration = &self.model[idx];
 		let enum_name = enumeration.enum_type().pretty_print(self.db.upcast());
 		let mut buf = format!("enum {}", enum_name);
@@ -164,7 +164,7 @@ impl<'a> PrettyPrinter<'a> {
 		}
 		buf
 	}
-	fn pretty_print_function(&self, idx: FunctionId) -> String {
+	fn pretty_print_function(&self, idx: FunctionId<T>) -> String {
 		let function = &self.model[idx];
 		let mut buf = String::new();
 		write!(
@@ -227,7 +227,7 @@ impl<'a> PrettyPrinter<'a> {
 		buf
 	}
 
-	fn pretty_print_output(&self, idx: OutputId) -> String {
+	fn pretty_print_output(&self, idx: OutputId<T>) -> String {
 		let output = &self.model[idx];
 		let mut buf = "output ".to_owned();
 		if let Some(s) = output.section() {
@@ -258,7 +258,7 @@ impl<'a> PrettyPrinter<'a> {
 	}
 
 	/// Pretty print a domain
-	pub fn pretty_print_domain(&self, domain: &Domain) -> String {
+	pub fn pretty_print_domain(&self, domain: &Domain<T>) -> String {
 		let ty = domain.ty();
 		match &**domain {
 			DomainData::Array(dim, el) => {
@@ -357,8 +357,9 @@ impl<'a> PrettyPrinter<'a> {
 	}
 
 	/// Pretty print an expression
-	pub fn pretty_print_expression(&self, expression: &Expression) -> String {
+	pub fn pretty_print_expression(&self, expression: &Expression<T>) -> String {
 		let mut out = match &**expression {
+			ExpressionData::Bottom => "⊥".to_owned(),
 			ExpressionData::Absent => "<>".to_owned(),
 			ExpressionData::ArrayAccess(aa) => format!(
 				"({})[{}]",
@@ -640,7 +641,7 @@ impl<'a> PrettyPrinter<'a> {
 		out
 	}
 
-	fn pretty_print_generator(&self, g: &Generator) -> String {
+	fn pretty_print_generator(&self, g: &Generator<T>) -> String {
 		let (mut gen, w) = match g {
 			Generator::Iterator {
 				declarations,
@@ -690,7 +691,7 @@ impl<'a> PrettyPrinter<'a> {
 		gen
 	}
 
-	fn pretty_print_pattern(&self, pat: &Pattern) -> String {
+	fn pretty_print_pattern(&self, pat: &Pattern<T>) -> String {
 		match &**pat {
 			PatternData::Anonymous(_) => "_".to_owned(),
 			PatternData::Expression(e) => self.pretty_print_expression(e),

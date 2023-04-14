@@ -5,14 +5,15 @@
 //! It is the responsibility of implementors to know what constructs are expected to be present at the stage they run.
 
 use self::capturing_fn::decapture_model;
-pub use self::desugar::*;
-pub use self::type_specialise::*;
-
+use self::desugar::desugar_model;
+use self::type_erase::type_erase;
+use self::type_specialise::type_specialise;
 use super::db::Thir;
 use super::Model;
 
 pub mod capturing_fn;
 pub mod desugar;
+pub mod type_erase;
 pub mod type_specialise;
 
 /// Create a transformer which runs the given transforms in order on an initial model
@@ -33,7 +34,12 @@ pub fn transformer(
 
 /// Get the default THIR transformer
 pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
-	transformer(vec![desugar_model, type_specialise, decapture_model])
+	transformer(vec![
+		desugar_model,
+		type_specialise,
+		type_erase,
+		decapture_model,
+	])
 }
 
 #[cfg(test)]

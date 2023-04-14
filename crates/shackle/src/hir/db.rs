@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::constants::IdentifierRegistry;
 use crate::db::{CompilerSettings, FileReader, Interner, Upcast};
 use crate::diagnostics::{Diagnostics, IncludeError, MultipleErrors};
 use crate::file::{FileRef, ModelRef};
@@ -20,7 +21,7 @@ use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
 use super::scope::{ScopeData, ScopeResult};
 use super::source::SourceMap;
 use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
-use super::{Identifier, IdentifierRegistry, Model, Pattern, PatternTy, ScopeCollectorResult};
+use super::{Identifier, Model, Pattern, PatternTy, ScopeCollectorResult};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]

@@ -118,10 +118,12 @@ impl Ty {
 		db: &dyn Interner,
 		fields: impl IntoIterator<Item = (impl Into<InternedString>, Ty)>,
 	) -> Self {
-		db.intern_ty(TyData::Record(
-			OptType::NonOpt,
-			fields.into_iter().map(|(i, t)| (i.into(), t)).collect(),
-		))
+		let mut fields = fields
+			.into_iter()
+			.map(|(i, t)| (i.into(), t))
+			.collect::<Vec<_>>();
+		fields.sort_by_key(|(i, _)| *i);
+		db.intern_ty(TyData::Record(OptType::NonOpt, fields.into_boxed_slice()))
 	}
 
 	/// Create a function type
@@ -329,6 +331,30 @@ impl Ty {
 			.any(|(_, td)| matches!(td, TyData::Function(_, _)))
 	}
 
+	/// Whether this type-inst contains an optional type
+	pub fn contains_opt(&self, db: &dyn Interner) -> bool {
+		self.walk_data(db).any(|(_, td)| {
+			matches!(
+				td,
+				TyData::Boolean(_, OptType::Opt)
+					| TyData::Integer(_, OptType::Opt)
+					| TyData::Float(_, OptType::Opt)
+					| TyData::Enum(_, OptType::Opt, _)
+					| TyData::String(OptType::Opt)
+					| TyData::Annotation(OptType::Opt)
+					| TyData::Bottom(OptType::Opt)
+					| TyData::Function(OptType::Opt, _)
+					| TyData::Set(_, OptType::Opt, _)
+					| TyData::TyVar(_, Some(OptType::Opt), _)
+					| TyData::Array {
+						opt: OptType::Opt,
+						..
+					} | TyData::Tuple(OptType::Opt, _)
+					| TyData::Record(OptType::Opt, _)
+			)
+		})
+	}
+
 	/// Whether this type inst contains something that is par
 	pub fn contains_par(&self, db: &dyn Interner) -> bool {
 		self.known_par(db)
@@ -344,6 +370,12 @@ impl Ty {
 	pub fn contains_error(&self, db: &dyn Interner) -> bool {
 		self.walk_data(db)
 			.any(|(_, td)| matches!(td, TyData::Error))
+	}
+
+	/// Whether this type-inst contains bottom.
+	pub fn contains_bottom(&self, db: &dyn Interner) -> bool {
+		self.walk_data(db)
+			.any(|(_, td)| matches!(td, TyData::Bottom(_)))
 	}
 
 	/// Whether this type contains a type that will be erased
@@ -452,6 +484,16 @@ impl Ty {
 		matches!(self.lookup(db), TyData::Set(_, _, _))
 	}
 
+	/// Whether or not this type is a tuple
+	pub fn is_tuple(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Tuple(_, _))
+	}
+
+	/// Whether or not this type is a record
+	pub fn is_record(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Record(_, _))
+	}
+
 	/// Whether or not this type is a var set
 	pub fn is_var_set(&self, db: &dyn Interner) -> bool {
 		matches!(self.lookup(db), TyData::Set(VarType::Var, _, _))
@@ -460,6 +502,21 @@ impl Ty {
 	/// Whether or not this type is a function
 	pub fn is_function(&self, db: &dyn Interner) -> bool {
 		matches!(self.lookup(db), TyData::Function(_, _))
+	}
+
+	/// Whether or not this type is a boolean type
+	pub fn is_bool(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Boolean(_, _))
+	}
+
+	/// Whether or not this type is an integer type
+	pub fn is_int(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Integer(_, _))
+	}
+
+	/// Whether or not this type is a float type
+	pub fn is_float(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Float(_, _))
 	}
 
 	/// Returns the number of array dimensions if known
@@ -491,6 +548,15 @@ impl Ty {
 		}
 	}
 
+	/// Get the field types if this is a tuple/record type
+	pub fn fields(&self, db: &dyn Interner) -> Option<Vec<Ty>> {
+		match self.lookup(db) {
+			TyData::Tuple(_, fs) => Some(fs.to_vec()),
+			TyData::Record(_, fs) => Some(fs.iter().map(|(_, f)| *f).collect::<Vec<_>>()),
+			_ => None,
+		}
+	}
+
 	/// Get the element type for array/set types (will be par for var sets)
 	pub fn elem_ty(&self, db: &dyn Interner) -> Option<Ty> {
 		match self.lookup(db) {
@@ -506,6 +572,14 @@ impl Ty {
 			TyData::Enum(_, _, e) => Some(e),
 			TyData::Array { element, .. } => element.enum_ty(db),
 			TyData::Set(_, _, e) => e.enum_ty(db),
+			_ => None,
+		}
+	}
+
+	/// Get the types of the parameters if this is a function type
+	pub fn function_params(&self, db: &dyn Interner) -> Option<Vec<Ty>> {
+		match self.lookup(db) {
+			TyData::Function(_, ft) => Some(ft.params.to_vec()),
 			_ => None,
 		}
 	}
@@ -904,10 +978,11 @@ impl Ty {
 			}
 			(TyData::Record(o1, f1), TyData::Record(o2, f2)) => {
 				(o1 == OptType::NonOpt || o1 == o2)
-					&& f2.iter().all(|(i2, t2)| {
-						f1.iter()
-							.any(|(i1, t1)| i1 == i2 && t1.is_subtype_of(db, *t2))
-					})
+					&& f1.len() == f2.len()
+					&& f1
+						.iter()
+						.zip(f2.iter())
+						.all(|((i1, t1), (i2, t2))| i1 == i2 && t1.is_subtype_of(db, *t2))
 			}
 			// Function coercion
 			(TyData::Function(o1, f1), TyData::Function(o2, f2)) => {
@@ -1046,18 +1121,22 @@ impl Ty {
 				)])
 				.collect::<Vec<_>>()
 				.join(" "),
-			TyData::Record(o, fs) => o
-				.pretty_print()
-				.into_iter()
-				.chain([format!(
-					"record({})",
-					fs.iter()
-						.map(|(i, f)| format!("{}: {}", f.pretty_print(db), i.value(db)))
-						.collect::<Vec<_>>()
-						.join(", ")
-				)])
-				.collect::<Vec<_>>()
-				.join(" "),
+			TyData::Record(o, fs) => {
+				let mut fields = fs.to_vec();
+				fields.sort_by_key(|(i, _)| i.value(db));
+				o.pretty_print()
+					.into_iter()
+					.chain([format!(
+						"record({})",
+						fields
+							.iter()
+							.map(|(i, f)| format!("{}: {}", f.pretty_print(db), i.value(db)))
+							.collect::<Vec<_>>()
+							.join(", ")
+					)])
+					.collect::<Vec<_>>()
+					.join(" ")
+			}
 			TyData::Function(o, f) => o
 				.pretty_print()
 				.into_iter()
@@ -1260,53 +1339,6 @@ pub struct TyVar {
 	/// Whether this type-inst var is an index type (enumerable or tuple of enumerable)
 	pub indexable: bool,
 }
-
-macro_rules! type_registry {
-	($struct:ident, $db:ident, $($name:ident: $value:expr),+$(,)?) => {
-		/// Registry for common types
-		#[derive(Clone, Debug, PartialEq, Eq)]
-		pub struct $struct {
-			#[allow(missing_docs)]
-			pub all: Vec<Ty>,
-			$(
-				#[allow(missing_docs)]
-				pub $name: Ty
-			),+
-		}
-
-		impl $struct {
-			/// Create a new type registry
-			pub fn new(db: &dyn Interner) -> Self {
-				let $db = db;
-				let mut all = Vec::new();
-				$(let $name = $value; all.push($name);)+
-				Self {
-					all,
-					$($name),+
-				}
-			}
-		}
-	};
-}
-
-type_registry!(
-	TypeRegistry,
-	db,
-	error: Ty::error(db),
-	par_bool: Ty::par_bool(db),
-	var_bool: par_bool.with_inst(db, VarType::Var).unwrap(),
-	par_int: Ty::par_int(db),
-	var_int: par_int.with_inst(db, VarType::Var).unwrap(),
-	par_float: Ty::par_float(db),
-	var_float: par_float.with_inst(db, VarType::Var).unwrap(),
-	string: Ty::string(db),
-	ann: Ty::ann(db),
-	bottom: Ty::bottom(db),
-	opt_bottom: bottom.with_opt(db, OptType::Opt),
-	set_of_bottom: Ty::par_set(db, bottom).unwrap(),
-	array_of_string: Ty::array(db, par_int, string).unwrap(),
-	array_of_bottom: Ty::array(db, bottom, bottom).unwrap(),
-);
 
 #[cfg(test)]
 mod test;

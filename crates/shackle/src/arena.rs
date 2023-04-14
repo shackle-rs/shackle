@@ -309,6 +309,14 @@ impl<K, V> ArenaMap<K, V> {
 		Self::default()
 	}
 
+	/// Create a new arena map with the given capacity
+	pub fn with_capacity(capacity: usize) -> ArenaMap<K, V> {
+		Self {
+			items: Vec::with_capacity(capacity),
+			phantom: PhantomData,
+		}
+	}
+
 	/// Clear the arena map.
 	pub fn clear(&mut self) {
 		self.items.clear();

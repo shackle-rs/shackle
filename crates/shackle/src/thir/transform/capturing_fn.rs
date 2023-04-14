@@ -1,19 +1,21 @@
-//! Rewriting of capturing functions/lambda expressions into non-capturing ones
+//! Rewriting of capturing functions expressions into non-capturing ones
 //!
-//! - Functions which refer to global variables are rewritten to take those variables a parameter
-//! - Lambda expressions which refer to global variables, or local variables in the enclosing scope
-//!   are rewritten to take them as a parameter.
-//! - Lambda expressions can then be made into top-level functions.
-//! - functions taking lambda expressions as parameters are made to accept a top-level function identifier
-//!   the captured variables.
+//! - Functions which refer to global variables are rewritten to take those variables
+//!   as a tuple parameter
+//! - Each call to the function is changed to pass the tuple literal of captures
+//! - Captures are transitive, so if you call a function A in the body of a function B,
+//!   then function B's captures are a superset of function A's captures
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::thir::{
-	add_function, db::Thir, fold_call, fold_expression, fold_function_body, visit_callable, Call,
-	Callable, Declaration, DeclarationId, Domain, Expression, ExpressionData, Folder, FunctionId,
-	IntegerLiteral, Item, Marker, Model, ReplacementMap, ResolvedIdentifier, TupleAccess,
-	TupleLiteral, Visitor,
+use crate::{
+	hir::OptType,
+	thir::{
+		add_function, db::Thir, fold_call, fold_expression, fold_function_body, visit_callable,
+		Call, Callable, Declaration, DeclarationId, Domain, Expression, ExpressionData, Folder,
+		FunctionId, IntegerLiteral, Item, Marker, Model, ReplacementMap, ResolvedIdentifier,
+		TupleAccess, TupleLiteral, Visitor,
+	},
 };
 
 /// Computes all globals this function (transitively) refers to
@@ -23,7 +25,7 @@ struct Captures {
 	variables: FxHashSet<DeclarationId>,
 }
 
-impl Visitor for Captures {
+impl Visitor<'_> for Captures {
 	fn visit_identifier(&mut self, model: &Model, identifier: &ResolvedIdentifier) {
 		if let ResolvedIdentifier::Declaration(d) = identifier {
 			if model[*d].top_level() {
@@ -47,6 +49,11 @@ impl Captures {
 			return;
 		}
 		self.visited.insert(function);
+		// Domain checks will get moved to the body, so have to capture them as well
+		self.visit_domain(model, model[function].domain());
+		for p in model[function].parameters().iter() {
+			self.visit_domain(model, model[*p].domain());
+		}
 		if let Some(body) = model[function].body() {
 			self.visit_expression(model, body);
 		}
@@ -54,13 +61,11 @@ impl Captures {
 
 	fn get(model: &Model) -> FxHashMap<FunctionId, FxHashSet<DeclarationId>> {
 		let mut captures = FxHashMap::default();
-		for (f, function) in model.all_functions() {
-			if function.body().is_some() {
-				let mut cc = Captures::default();
-				cc.get_function_captures(model, f);
-				if !cc.variables.is_empty() {
-					captures.insert(f, cc.variables);
-				}
+		for (f, _) in model.all_functions() {
+			let mut cc = Captures::default();
+			cc.get_function_captures(model, f);
+			if !cc.variables.is_empty() {
+				captures.insert(f, cc.variables);
 			}
 		}
 		captures
@@ -109,32 +114,6 @@ impl<Dst: Marker> Folder<Dst> for Decapturer<Dst> {
 		fold_function_body(self, db, model, f);
 		self.current = None
 	}
-
-	// fn fold_declaration(&mut self, db: &dyn Thir, model: &Model, d: &Declaration) -> Declaration {
-	// 	if let Some(def) = d.definition() {
-	// 		let mut domain = self.fold_domain(db, model, d.domain());
-	// 		let definition = self.fold_expression(db, model, def);
-
-	// 		if !definition.ty().is_subtype_of(db.upcast(), domain.ty()) {
-	// 			// Must have transformed a lambda
-	// 			domain = Domain::unbounded(domain.origin(), definition.ty());
-	// 		}
-
-	// 		let mut declaration = Declaration::new(d.top_level(), domain);
-	// 		if let Some(name) = d.name() {
-	// 			declaration.set_name(name);
-	// 		}
-	// 		declaration.annotations_mut().extend(
-	// 			d.annotations()
-	// 				.iter()
-	// 				.map(|ann| self.fold_expression(db, model, ann)),
-	// 		);
-	// 		declaration.set_definition(definition);
-	// 		declaration
-	// 	} else {
-	// 		fold_declaration(self, db, model, d)
-	// 	}
-	// }
 
 	fn fold_expression(
 		&mut self,
@@ -287,9 +266,10 @@ impl<Dst: Marker> Decapturer<Dst> {
 				Domain::tuple(
 					db,
 					origin,
+					OptType::NonOpt,
 					declarations
 						.iter()
-						.map(|d| Domain::unbounded(origin, self.model[*d].domain().ty())),
+						.map(|d| Domain::unbounded(db, origin, self.model[*d].domain().ty())),
 				)
 			} else {
 				self.model[declarations[0]].domain().clone()
@@ -312,22 +292,16 @@ impl<Dst: Marker> Decapturer<Dst> {
 				Expression::new(db, &self.model, model[f].origin(), declarations[0])
 			};
 			let decl_idx = if declarations.len() > 1 {
-				if model[f].top_level() {
-					// Top-level functions can reuse first declaration of captures
-					*self
-						.added_declarations
-						.entry(declarations.clone())
-						.or_insert_with(|| {
-							let mut declaration = Declaration::new(true, domain.clone());
-							declaration.set_definition(captured_values);
-							self.model.add_declaration(Item::new(declaration, origin))
-						})
-				} else {
-					// Lambda functions always need new declarations
-					let mut declaration = Declaration::new(false, domain.clone());
-					declaration.set_definition(captured_values);
-					self.model.add_declaration(Item::new(declaration, origin))
-				}
+				assert!(model[f].top_level());
+				// Top-level functions can reuse first declaration of captures
+				*self
+					.added_declarations
+					.entry(declarations.clone())
+					.or_insert_with(|| {
+						let mut declaration = Declaration::new(true, domain.clone());
+						declaration.set_definition(captured_values);
+						self.model.add_declaration(Item::new(declaration, origin))
+					})
 			} else {
 				// Can reuse existing declaration
 				declarations[0]
@@ -402,7 +376,7 @@ mod test {
 			r#"
                 var int: x;
                 var int: y;
-                function var int: qux(var int, var int);
+                function var int: qux(var int: p, var int: q);
                 function var int: bar() = qux(foo(), y);
                 function var int: foo() = x;
                 any: z = bar();
@@ -410,11 +384,34 @@ mod test {
 			expect!([r#"
     var int: x;
     var int: y;
-    function var int: qux(var int: _DECL_3, var int: _DECL_4);
+    function var int: qux(var int: p, var int: q);
     function var int: bar(tuple(var int, var int): _DECL_6) = qux(foo(_DECL_6.1), _DECL_6.2);
     tuple(var int, var int): _DECL_5 = (x, y);
     function var int: foo(var int: _DECL_7) = _DECL_7;
     var int: z = bar(_DECL_5);
+    solve satisfy;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_decapture_domains() {
+		check_no_stdlib(
+			decapture_model,
+			r#"
+				set of int: A;
+				set of int: B;
+				set of int: C;
+				function A: foo(B: x, C: y);
+				any: x = foo(1, 2);
+            "#,
+			expect!([r#"
+    set of int: A;
+    set of int: B;
+    set of int: C;
+    function A: foo(B: x, C: y, tuple(set of int, set of int, set of int): _DECL_7);
+    tuple(set of int, set of int, set of int): _DECL_6 = (A, B, C);
+    int: x = foo(1, 2, _DECL_6);
     solve satisfy;
 "#]),
 		);

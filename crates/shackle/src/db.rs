@@ -6,12 +6,13 @@
 use super::hir::db::HirStorage;
 use super::syntax::db::SourceParserStorage;
 use super::thir::db::ThirStorage;
+use crate::constants::TypeRegistry;
 use crate::diagnostics::FileError;
 use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
 use crate::hir::db::Hir;
 use crate::syntax::db::SourceParser;
 use crate::thir::db::Thir;
-use crate::ty::{NewType, NewTypeData, Ty, TyData, TypeRegistry};
+use crate::ty::{NewType, NewTypeData, Ty, TyData};
 
 use std::fmt::Display;
 use std::path::{Path, PathBuf};

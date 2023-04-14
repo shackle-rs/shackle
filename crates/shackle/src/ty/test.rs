@@ -3,7 +3,7 @@ use std::ops::Deref;
 use rustc_hash::FxHashSet;
 
 use super::*;
-use crate::db::CompilerDatabase;
+use crate::{constants::type_registry, db::CompilerDatabase};
 
 type_registry!(
 	TypeRegistry,

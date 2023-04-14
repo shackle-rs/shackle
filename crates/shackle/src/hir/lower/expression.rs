@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	arena::ArenaIndex,
+	constants::IdentifierRegistry,
 	db::InternedStringData,
 	diagnostics::{InvalidArrayLiteral, SyntaxError},
 	hir::source::Origin,

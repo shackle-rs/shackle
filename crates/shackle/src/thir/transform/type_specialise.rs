@@ -9,7 +9,7 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 
 use crate::{
-	hir::IdentifierRegistry,
+	constants::IdentifierRegistry,
 	thir::{
 		add_function, db::Thir, fold_call, fold_declaration_id, fold_domain, source::Origin,
 		ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Declaration, DeclarationId,
@@ -73,8 +73,28 @@ impl<Dst: Marker> Folder<Dst> for TypeSpecialiser<Dst> {
 					let body = self.generate_show(db, model, p, ty);
 					self.specialised_model[f].set_body(body);
 				}
+			} else {
+				// Call original builtin
+				let origin = self.specialised_model[f].origin();
+				let call = Call {
+					function: Callable::Function(
+						self.replacement_map
+							.get_function(s.original)
+							.unwrap_or_else(|| {
+								panic!("Did not add builtin {:?} to specialised model", s.original);
+							}),
+					),
+					arguments: self.specialised_model[f]
+						.parameters()
+						.iter()
+						.map(|p| self.expr(db, self.specialised_model[*p].origin(), *p))
+						.collect(),
+				};
+				let body = self.expr(db, origin, call);
+				self.specialised_model[f].set_body(body);
 			}
 		}
+
 		assert!(self.todo.is_empty());
 	}
 
@@ -145,6 +165,7 @@ impl<Dst: Marker> Folder<Dst> for TypeSpecialiser<Dst> {
 			// Instantiate type-inst vars in param/return types
 			if let DomainData::Unbounded = &**domain {
 				return Domain::unbounded(
+					db,
 					domain.origin(),
 					domain.ty().instantiate_ty_vars(db.upcast(), &s.ty_vars),
 				);
@@ -288,7 +309,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 		match ty.lookup(db.upcast()) {
 			TyData::Array { element, .. } => {
 				// concat(["[", join(", ", [show(x_i) | x_i in x]), "]"])
-				let gen = Declaration::new(false, Domain::unbounded(origin, element));
+				let gen = Declaration::new(false, Domain::unbounded(db, origin, element));
 				let x_i = self
 					.specialised_model
 					.add_declaration(Item::new(gen, origin));
@@ -330,7 +351,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 			}
 			TyData::Set(_, _, element) => {
 				// concat(["{", join(", ", [show(x_i) | x_i in x]), "}"])
-				let gen = Declaration::new(false, Domain::unbounded(origin, element));
+				let gen = Declaration::new(false, Domain::unbounded(db, origin, element));
 				let x_i = self
 					.specialised_model
 					.add_declaration(Item::new(gen, origin));
@@ -445,24 +466,6 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 
 	fn mangle_names(&mut self, db: &dyn Thir, model: &Model) {
 		for ((o, tys), f) in self.concrete.iter() {
-			if model[*o].body().is_none() {
-				// Call original builtin
-				let origin = self.specialised_model[*f].origin();
-				let call = Call {
-					function: Callable::Function(
-						self.replacement_map.get_function(*o).unwrap_or_else(|| {
-							panic!("Did not add builtin {:?} to specialised model", *o);
-						}),
-					),
-					arguments: self.specialised_model[*f]
-						.parameters()
-						.iter()
-						.map(|p| self.expr(db, self.specialised_model[*p].origin(), *p))
-						.collect(),
-				};
-				let body = self.expr(db, origin, call);
-				self.specialised_model[*f].set_body(body);
-			}
 			// Mangle name
 			let name = model[*o].name().mangled(db, tys.iter().copied());
 			self.specialised_model[*f].set_name(name);
@@ -575,19 +578,19 @@ mod test {
     function string: show(array [$X] of any $T: x);
     function string: concat(array [$T] of string: x);
     function string: join(string: s, array [$T] of string: x);
-    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = show(x);
+    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = 'concat<array [int] of string>'(["(", "a", ": ", 'show<int>'(x.a), ", ", "b", ": ", 'show<int>'(x.b), ")"]);
     output ['show<record(int: a, int: b)>'((a: 1, b: 2))];
     array [int] of tuple(opt int, bool): x;
-    function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = show(x);
+    function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = 'concat<array [int] of string>'(["[", 'join<string, array [int] of string>'(", ", ['show<tuple(opt int, bool)>'(_DECL_11) | _DECL_11 in x]), "]"]);
     output ['show<array [int] of tuple(opt int, bool)>'(x)];
-    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = show(x);
+    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = 'concat<array [int] of string>'(["(", 'show<opt int>'(x.1), ", ", 'show<bool>'(x.2), ")"]);
     function string: 'join<string, array [int] of string>'(string: s, array [int] of string: x) = join(s, x);
     function string: 'concat<array [int] of string>'(array [int] of string: x) = concat(x);
-    function string: 'show<opt int>'(opt int: x) = show(x);
-    function string: 'show<bool>'(bool: x) = show(x);
+    function string: 'show<opt int>'(opt int: x) = if 'occurs<opt int>'(x) then 'show<int>'('deopt<opt int>'(x)) else "<>" endif;
+    function string: 'show<bool>'(bool: x);
     function bool: 'occurs<opt int>'(opt int: x) = occurs(x);
     function int: 'deopt<opt int>'(opt int: x) = deopt(x);
-    function string: 'show<int>'(int: x) = show(x);
+    function string: 'show<int>'(int: x);
     solve satisfy;
 "#]),
 		)

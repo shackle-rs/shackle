@@ -1,8 +1,9 @@
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::{fmt::Write, sync::Arc};
+use rustc_hash::FxHashMap;
+use std::{collections::hash_map::Entry, fmt::Write, sync::Arc};
 
 use crate::{
 	arena::ArenaIndex,
+	constants::{IdentifierRegistry, TypeRegistry},
 	diagnostics::{
 		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
 		NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
@@ -11,13 +12,13 @@ use crate::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, NodeRef, PatternRef},
 		ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, Call, Case, Declaration,
-		Expression, Generator, Identifier, IdentifierRegistry, IfThenElse, IndexedArrayLiteral,
-		ItemData, Lambda, Let, LetItem, MaybeIndexSet, Pattern, PrimitiveType, RecordAccess,
-		RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
+		Expression, Generator, Identifier, IfThenElse, IndexedArrayLiteral, ItemData, Lambda, Let,
+		LetItem, MaybeIndexSet, Pattern, PrimitiveType, RecordAccess, RecordLiteral,
+		SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
 	},
 	ty::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
-		TyData, TypeRegistry, VarType,
+		TyData, VarType,
 	},
 	Error,
 };
@@ -582,15 +583,16 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_record_literal(&mut self, rl: &RecordLiteral) -> Ty {
 		let db = self.db;
-		let mut seen = FxHashSet::default();
-		let mut fields = rl
-			.fields
-			.iter()
-			.map(|(i, f)| {
-				let ident = self.data[*i]
-					.identifier()
-					.expect("Record field name not an identifier");
-				if seen.contains(&ident) {
+		let mut fields = FxHashMap::default();
+		for (i, f) in rl.fields.iter() {
+			let ident = self.data[*i]
+				.identifier()
+				.expect("Record field name not an identifier");
+			match fields.entry(ident) {
+				Entry::Vacant(e) => {
+					e.insert(self.collect_expression(*f));
+				}
+				Entry::Occupied(_) => {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, *i)).source_span(db);
 					self.ctx.add_diagnostic(
@@ -606,12 +608,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						},
 					);
 				}
-				seen.insert(ident);
-				(ident, self.collect_expression(*f))
-			})
-			.collect::<Vec<_>>();
-		fields.sort_by_key(|(i, _)| i.lookup(db));
-		fields.dedup_by_key(|(i, _)| *i);
+			}
+		}
 		Ty::record(db.upcast(), fields)
 	}
 
@@ -2538,15 +2536,17 @@ supported in operation types."
 				)
 				.with_opt(db.upcast(), *opt),
 			},
-			Type::Record { opt, fields } => {
-				let mut seen = FxHashSet::default();
-				let mut fields = fields
-					.iter()
-					.map(|(p, t)| {
-						let i = self.data[*p]
-							.identifier()
-							.expect("Record field not an identifier");
-						if seen.contains(&i) {
+			Type::Record { opt, fields: fs } => {
+				let mut fields = FxHashMap::default();
+				for (p, t) in fs.iter() {
+					let i = self.data[*p]
+						.identifier()
+						.expect("Record field not an identifier");
+					match fields.entry(i) {
+						Entry::Vacant(e) => {
+							e.insert(*t);
+						}
+						Entry::Occupied(_) => {
 							let (src, span) =
 								NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
 							self.ctx.add_diagnostic(
@@ -2562,12 +2562,8 @@ supported in operation types."
 								},
 							);
 						}
-						seen.insert(i);
-						(i, *t)
-					})
-					.collect::<Vec<_>>();
-				fields.sort_by_key(|(i, _)| i.lookup(db));
-				fields.dedup_by_key(|(i, _)| *i);
+					}
+				}
 				Ty::record(
 					db.upcast(),
 					fields.into_iter().map(|(i, f)| {

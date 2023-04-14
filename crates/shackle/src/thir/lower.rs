@@ -16,10 +16,11 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	arena::ArenaIndex,
+	constants::IdentifierRegistry,
 	hir::{
 		self,
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
-		IdentifierRegistry, PatternTy, TypeResult,
+		PatternTy, TypeResult,
 	},
 	ty::{OptType, Ty, TyData, VarType},
 	utils::impl_enum_from,
@@ -536,8 +537,10 @@ impl<'a> ItemCollector<'a> {
 			PatternTy::Variable(ty) => {
 				let objective_origin = EntityRef::new(self.db.upcast(), item, objective);
 				let mut collector = ExpressionCollector::new(self, &s.data, item, &types);
-				let mut declaration =
-					Declaration::new(true, Domain::unbounded(objective_origin, *ty));
+				let mut declaration = Declaration::new(
+					true,
+					Domain::unbounded(collector.parent.db, objective_origin, *ty),
+				);
 				if let Some(name) = s.data[pattern].identifier() {
 					declaration.set_name(name);
 				}
@@ -588,7 +591,7 @@ impl<'a> ItemCollector<'a> {
 				ExpressionCollector::new(self, &ta.data, item, &types).collect_expression(e);
 			let mut decl = Declaration::new(
 				true,
-				Domain::unbounded(expression.origin(), expression.ty()),
+				Domain::unbounded(self.db, expression.origin(), expression.ty()),
 			);
 			decl.set_definition(expression);
 			let idx = self
@@ -679,7 +682,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		let origin: Origin = origin.into();
 		let mut collector = ExpressionCollector::new(self.parent, self.data, self.item, self.types);
 		let def = f(&mut collector);
-		let mut decl = Declaration::new(top_level, Domain::unbounded(origin, def.ty()));
+		let mut decl = Declaration::new(
+			top_level,
+			Domain::unbounded(self.parent.db, origin, def.ty()),
+		);
 		decl.set_definition(def);
 		self.parent.model.add_declaration(Item::new(decl, origin))
 	}
@@ -980,7 +986,9 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				let return_type = l
 					.return_type
 					.map(|r| self.collect_domain(r, fn_type.return_type, false))
-					.unwrap_or_else(|| Domain::unbounded(origin, fn_type.return_type));
+					.unwrap_or_else(|| {
+						Domain::unbounded(self.parent.db, origin, fn_type.return_type)
+					});
 				let mut decls = Vec::new();
 				let parameters = l
 					.parameters
@@ -1523,7 +1531,8 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							PatternTy::Variable(ty) | PatternTy::Destructuring(ty) => *ty,
 							_ => unreachable!(),
 						};
-						let declaration = Declaration::new(false, Domain::unbounded(origin, ty));
+						let declaration =
+							Declaration::new(false, Domain::unbounded(self.parent.db, origin, ty));
 						let decl = self
 							.parent
 							.model
@@ -1619,8 +1628,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			} => {
 				let def = ExpressionCollector::new(self.parent, self.data, self.item, self.types)
 					.collect_expression(*value);
-				let mut assignment =
-					Declaration::new(false, Domain::unbounded(def.origin(), def.ty()));
+				let mut assignment = Declaration::new(
+					false,
+					Domain::unbounded(self.parent.db, def.origin(), def.ty()),
+				);
 				assignment.set_definition(def);
 				if let Some(name) = self.data[*pattern].identifier() {
 					assignment.set_name(name);
@@ -1701,7 +1712,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					match &res_types[res.pattern()] {
 						// Identifier is actually a type, not a domain expression
 						PatternTy::TyVar(_) => {
-							return Domain::unbounded(origin, ty);
+							return Domain::unbounded(self.parent.db, origin, ty);
 						}
 						PatternTy::TypeAlias { .. } => {
 							let model = res.item().model(db.upcast());
@@ -1750,13 +1761,14 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					..
 				},
 				TyData::Array {
+					opt,
 					dim: d,
 					element: el,
-					..
 				},
 			) => Domain::array(
 				db,
 				origin,
+				opt,
 				self.collect_domain(*dimensions, d, is_type_alias),
 				self.collect_domain(*element, el, is_type_alias),
 			),
@@ -1767,17 +1779,19 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				opt,
 				self.collect_domain(*element, e, is_type_alias),
 			),
-			(hir::Type::Tuple { fields, .. }, TyData::Tuple(_, fs)) => Domain::tuple(
+			(hir::Type::Tuple { fields, .. }, TyData::Tuple(opt, fs)) => Domain::tuple(
 				db,
 				origin,
+				opt,
 				fields
 					.iter()
 					.zip(fs.iter())
 					.map(|(f, ty)| self.collect_domain(*f, *ty, is_type_alias)),
 			),
-			(hir::Type::Record { fields, .. }, TyData::Record(_, fs)) => Domain::record(
+			(hir::Type::Record { fields, .. }, TyData::Record(opt, fs)) => Domain::record(
 				db,
 				origin,
+				opt,
 				fs.iter().map(|(i, ty)| {
 					let ident = Identifier(*i);
 					(
@@ -1799,7 +1813,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					)
 				}),
 			),
-			_ => Domain::unbounded(origin, ty),
+			_ => Domain::unbounded(self.parent.db, origin, ty),
 		}
 	}
 

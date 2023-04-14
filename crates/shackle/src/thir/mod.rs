@@ -18,4 +18,27 @@ pub mod transform;
 mod ir;
 
 pub use self::ir::*;
+use self::pretty_print::PrettyPrinter;
+use crate::db::CompilerDatabase;
 pub use crate::hir::Identifier;
+
+/// Print the model for debugging
+#[no_mangle]
+pub fn debug_print_thir_model(db: &CompilerDatabase, model: &Model) {
+	eprintln!("{}", PrettyPrinter::new(db, model).pretty_print());
+}
+
+/// Print an item for debugging
+#[no_mangle]
+pub fn debug_print_thir_item(db: &CompilerDatabase, model: &Model, item: ItemId) {
+	eprintln!("{}", PrettyPrinter::new(db, model).pretty_print_item(item));
+}
+
+/// Print an expression for debugging
+#[no_mangle]
+pub fn debug_print_thir_expression(db: &CompilerDatabase, model: &Model, expression: &Expression) {
+	eprintln!(
+		"{}",
+		PrettyPrinter::new(db, model).pretty_print_expression(expression),
+	);
+}

@@ -37,6 +37,11 @@ impl<T: Marker> Domain<T> {
 		self.origin
 	}
 
+	/// Set the type of this domain without checking if it is valid
+	pub fn set_ty_unchecked(&mut self, ty: Ty) {
+		self.ty = ty;
+	}
+
 	/// Create a domain bounded by an expression
 	///
 	/// E.g. `var 1..3`
@@ -68,10 +73,13 @@ impl<T: Marker> Domain<T> {
 	pub fn array(
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
+		opt: OptType,
 		dimensions: Domain<T>,
 		element: Domain<T>,
 	) -> Self {
-		let ty = Ty::array(db.upcast(), dimensions.ty(), element.ty()).expect("Invalid array type");
+		let ty = Ty::array(db.upcast(), dimensions.ty(), element.ty())
+			.expect("Invalid array type")
+			.with_opt(db.upcast(), opt);
 		Self {
 			ty,
 			data: DomainData::Array(Box::new(dimensions), Box::new(element)),
@@ -107,10 +115,11 @@ impl<T: Marker> Domain<T> {
 	pub fn tuple(
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
+		opt: OptType,
 		fields: impl IntoIterator<Item = Domain<T>>,
 	) -> Self {
 		let fields = fields.into_iter().collect::<Vec<_>>();
-		let ty = Ty::tuple(db.upcast(), fields.iter().map(|d| d.ty()));
+		let ty = Ty::tuple(db.upcast(), fields.iter().map(|d| d.ty())).with_opt(db.upcast(), opt);
 		Self {
 			ty,
 			data: DomainData::Tuple(fields),
@@ -124,10 +133,12 @@ impl<T: Marker> Domain<T> {
 	pub fn record(
 		db: &dyn Thir,
 		origin: impl Into<Origin>,
+		opt: OptType,
 		fields: impl IntoIterator<Item = (Identifier, Domain<T>)>,
 	) -> Self {
 		let fields = fields.into_iter().collect::<Vec<_>>();
-		let ty = Ty::record(db.upcast(), fields.iter().map(|(i, d)| (*i, d.ty())));
+		let ty = Ty::record(db.upcast(), fields.iter().map(|(i, d)| (*i, d.ty())))
+			.with_opt(db.upcast(), opt);
 		Self {
 			ty,
 			data: DomainData::Record(fields),
@@ -136,11 +147,41 @@ impl<T: Marker> Domain<T> {
 	}
 
 	/// Create an unbounded domain
-	pub fn unbounded(origin: impl Into<Origin>, ty: Ty) -> Self {
-		Self {
-			ty,
-			data: DomainData::Unbounded,
-			origin: origin.into(),
+	///
+	/// Normalises structured types, so e.g. providing an array type
+	/// will create an domain with `DomainData::Array`.
+	pub fn unbounded(db: &dyn Thir, origin: impl Into<Origin>, ty: Ty) -> Self {
+		let origin = origin.into();
+		match ty.lookup(db.upcast()) {
+			TyData::Array { opt, dim, element } => Domain::array(
+				db,
+				origin,
+				opt,
+				Domain::unbounded(db, origin, dim),
+				Domain::unbounded(db, origin, element),
+			),
+			TyData::Set(inst, opt, elem) => {
+				Domain::set(db, origin, inst, opt, Domain::unbounded(db, origin, elem))
+			}
+			TyData::Tuple(opt, fields) => Domain::tuple(
+				db,
+				origin,
+				opt,
+				fields.iter().map(|f| Domain::unbounded(db, origin, *f)),
+			),
+			TyData::Record(opt, fields) => Domain::record(
+				db,
+				origin,
+				opt,
+				fields
+					.iter()
+					.map(|(i, f)| (Identifier(*i), Domain::unbounded(db, origin, *f))),
+			),
+			_ => Domain {
+				ty,
+				data: DomainData::Unbounded,
+				origin,
+			},
 		}
 	}
 

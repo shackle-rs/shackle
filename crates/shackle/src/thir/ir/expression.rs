@@ -98,6 +98,8 @@ impl<T: Marker> Deref for Expression<T> {
 /// An expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ExpressionData<T = ()> {
+	/// Bottom
+	Bottom,
 	/// Absent `<>`
 	Absent,
 	/// Bool literal
@@ -161,6 +163,11 @@ impl_enum_from!(ExpressionData<T>::Case(Case<T>));
 impl_enum_from!(ExpressionData<T>::Call(Call<T>));
 impl_enum_from!(ExpressionData<T>::Let(Let<T>));
 impl_enum_from!(ExpressionData<T>::Lambda(Lambda<T>));
+impl<T: Marker> From<Bottom> for ExpressionData<T> {
+	fn from(_: Bottom) -> Self {
+		ExpressionData::Bottom
+	}
+}
 impl<T: Marker> From<Absent> for ExpressionData<T> {
 	fn from(_: Absent) -> Self {
 		ExpressionData::Absent
@@ -172,9 +179,19 @@ impl<T: Marker> From<Infinity> for ExpressionData<T> {
 	}
 }
 
+/// Bottom
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Bottom;
+
 /// Absent `<>`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Absent;
+
+impl<T: Marker> ExpressionBuilder<T> for Bottom {
+	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
+		Expression::new_unchecked(db.type_registry().bottom, self, origin)
+	}
+}
 
 impl<T: Marker> ExpressionBuilder<T> for Absent {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -684,18 +701,15 @@ impl<T: Marker> ExpressionBuilder<T> for Call<T> {
 					.as_ref()
 					.expect("Not an enum constructor");
 				assert_eq!(self.arguments.len(), params.len());
-				let mut kind = None;
+				let kind =
+					EnumConstructorKind::from_tys(db, self.arguments.iter().map(|arg| arg.ty()));
 				for (arg, param) in self.arguments.iter().zip(params.iter()) {
-					let (arg_k, arg_ty) = EnumConstructorKind::from_ty(db, arg.ty());
-					if let Some(k) = kind {
-						assert_eq!(k, arg_k, "Invalid enum constructor arguments");
-					} else {
-						kind = Some(arg_k);
-					}
-					assert!(arg_ty.is_subtype_of(db.upcast(), model[*param].ty()));
+					assert!(arg
+						.ty()
+						.is_subtype_of(db.upcast(), kind.lift(db, model[*param].ty())));
 				}
 				let ty = Ty::par_enum(db.upcast(), model[e.enumeration_id()].enum_type());
-				kind.unwrap().lift(db, ty)
+				kind.lift(db, ty)
 			}
 			Callable::EnumDestructor(e) => {
 				assert_eq!(self.arguments.len(), 1);
@@ -1018,6 +1032,33 @@ impl EnumConstructorKind {
 				EnumConstructorKind::VarSet,
 				ty.elem_ty(db.upcast()).unwrap(),
 			),
+			_ => unreachable!(),
+		}
+	}
+
+	/// Gets the enum constructor kind for the given arguments
+	pub fn from_tys(db: &dyn Thir, tys: impl IntoIterator<Item = Ty>) -> EnumConstructorKind {
+		let (is_var, is_opt, is_set) =
+			tys.into_iter().fold((false, false, None), |(v, o, s), ty| {
+				(
+					v || ty.inst(db.upcast()).unwrap() == VarType::Var,
+					o || ty.opt(db.upcast()).unwrap() == OptType::Opt,
+					if let Some(is_set) = s {
+						assert_eq!(is_set, ty.is_set(db.upcast()));
+						Some(is_set)
+					} else {
+						Some(ty.is_set(db.upcast()))
+					},
+				)
+			});
+
+		match (is_var, is_opt, is_set.unwrap()) {
+			(false, false, false) => EnumConstructorKind::Par,
+			(true, false, false) => EnumConstructorKind::Var,
+			(false, true, false) => EnumConstructorKind::Opt,
+			(true, true, false) => EnumConstructorKind::VarOpt,
+			(false, false, true) => EnumConstructorKind::Set,
+			(true, false, true) => EnumConstructorKind::VarSet,
 			_ => unreachable!(),
 		}
 	}

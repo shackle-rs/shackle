@@ -220,6 +220,11 @@ impl<T: Marker> Declaration<T> {
 		self.definition = None;
 	}
 
+	/// Remove the RHS definition and return it (if there was one)
+	pub fn take_definition(&mut self) -> Option<Expression<T>> {
+		self.definition.take()
+	}
+
 	/// Get the annotations attached to this expression
 	pub fn annotations(&self) -> &Annotations<T> {
 		&self.annotations
@@ -294,7 +299,7 @@ impl<T: Marker> Enumeration<T> {
 		self.definition
 			.as_mut()
 			.expect("No definition for enum")
-			.swap_remove(index);
+			.remove(index);
 	}
 
 	/// Remove the definition of this enum
@@ -371,6 +376,14 @@ impl FunctionName {
 			),
 			db.upcast(),
 		)
+	}
+
+	/// Get this name but inversed
+	pub fn inversed(&self, db: &dyn Thir) -> Self {
+		match *self {
+			FunctionName::Named(i) => FunctionName::Named(i.inversed(db.upcast())),
+			_ => Self::anonymous(),
+		}
 	}
 }
 
@@ -522,6 +535,11 @@ impl<T: Marker> Function<T> {
 	/// Remove RHS definition for this function
 	pub fn remove_body(&mut self) {
 		self.body = None;
+	}
+
+	/// Remove and return RHS definition for this function
+	pub fn take_body(&mut self) -> Option<Expression<T>> {
+		self.body.take()
 	}
 
 	/// Get the annotations attached to this expression

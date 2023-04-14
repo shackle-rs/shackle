@@ -103,6 +103,19 @@ function var bool: '='(any $T: x, any $T: y) ::mzn_internal_representation;
 function var bool: '='(any $T: x, $T: y) ::mzn_internal_representation;
 /** @group stdlib.builtins.compare Return if \a x is equal to \a y */
 function var bool: '='($T: x, any $T: y) ::mzn_internal_representation;
+/** @group stdlib.builtins.compare Return if \a x is equal to \a y */
+function var bool: '='(var opt $T: x, $T: y) = occurs(x) /\ deopt(x) = y;
+/** @group stdlib.builtins.compare Return if \a x is equal to \a y */
+function var bool: '='($T: x, var opt $T: y) = occurs(y) /\ x = deopt(y);
+/** @group stdlib.builtins.compare Return if \a x is equal to \a y */
+function var bool: '='(var opt $T: x, opt $T: y) =
+  absent(x) /\ absent(y) \/ occurs(x) /\ occurs(y) /\ deopt(x) = deopt(y);
+/** @group stdlib.builtins.compare Return if \a x is equal to \a y */
+function var bool: '='(opt $T: x, var opt $T: y) =
+  absent(x) /\ absent(y) \/ occurs(x) /\ occurs(y) /\ deopt(x) = deopt(y);
+/** @group stdlib.builtins.compare Return if \a x is equal to \a y */
+function var bool: '='(var opt $T: x, var opt $T: y) =
+  absent(x) /\ absent(y) \/ occurs(x) /\ occurs(y) /\ deopt(x) = deopt(y);
 
 /** @group stdlib.builtins.compare Weak equality. True if either \a x or \a y are absent, or
 present and equal.*/

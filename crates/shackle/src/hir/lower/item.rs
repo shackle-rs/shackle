@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::constants::IdentifierRegistry;
 use crate::diagnostics::SyntaxError;
 use crate::file::ModelRef;
 use crate::hir::db::Hir;

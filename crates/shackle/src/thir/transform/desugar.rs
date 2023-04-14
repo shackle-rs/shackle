@@ -6,7 +6,7 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 
 use crate::{
-	hir::IdentifierRegistry,
+	constants::IdentifierRegistry,
 	thir::{
 		db::Thir, fold_call, fold_expression, source::Origin, visit_expression, Absent,
 		ArrayComprehension, ArrayLiteral, BooleanLiteral, Branch, Call, Callable, DeclarationId,
@@ -351,18 +351,7 @@ impl<Dst: Marker> Rewriter<Dst> {
 							origin,
 							LookupCall {
 								function: self.ids.times.into(),
-								arguments: vec![
-									Expression::new(
-										db,
-										&self.result,
-										origin,
-										LookupCall {
-											function: self.ids.bool2int.into(),
-											arguments: vec![condition],
-										},
-									),
-									template,
-								],
+								arguments: vec![condition, template],
 							},
 						)
 					} else {
@@ -481,7 +470,7 @@ struct ScopeTester<'a, T> {
 	ok: bool,
 }
 
-impl<'a, T: Marker> Visitor<T> for ScopeTester<'a, T> {
+impl<'a, T: Marker> Visitor<'_, T> for ScopeTester<'a, T> {
 	fn visit_expression(&mut self, model: &Model<T>, expression: &Expression<T>) {
 		if !self.ok {
 			return;
