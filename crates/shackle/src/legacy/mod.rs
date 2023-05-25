@@ -15,7 +15,8 @@ use crate::{
 	diagnostics::{FileError, InternalError},
 	hir::Identifier,
 	ty::{self, Ty, TyData},
-	Array, EnumValue, Index, Message, Program, Record, Set, Status, Value,
+	value::{Array, EnumValue, Index, Record, Set, Value},
+	Message, Program, Status,
 };
 
 fn flatten_array(
@@ -151,7 +152,8 @@ fn deserialize_legacy_value(
 		serde_json::Value::Object(mut obj) => match ty.lookup(db) {
 			TyData::Enum(_, _, _) => Ok(Value::Enum(if obj.contains_key("c") {
 				let e = if let Some(s) = obj["e"].as_str() {
-					Value::Enum(EnumValue::new_ident_member(s.to_string()))
+					todo!()
+				// Value::Enum(EnumValue::new_ident_member(s.to_string()))
 				} else if let Some(x) = obj["e"].as_i64() {
 					Value::Integer(x)
 				} else if let Value::Enum(s) = deserialize_legacy_value(db, ty, obj["e"].clone())? {
@@ -162,16 +164,19 @@ fn deserialize_legacy_value(
 						obj
 					)));
 				};
-				EnumValue::new_constructor_member(obj["c"].as_str().unwrap().to_string(), e)
+				todo!()
+			// EnumValue::new_constructor_member(obj["c"].as_str().unwrap().to_string(), e)
 			} else if obj.contains_key("i") {
 				assert_eq!(obj.len(), 2);
-				EnumValue::new_anon_member(
-					obj["e"].as_str().unwrap().to_string(),
-					obj["i"].as_u64().unwrap() as usize,
-				)
+				todo!()
+			// EnumValue::new_anon_member(
+			// 	obj["e"].as_str().unwrap().to_string(),
+			// 	obj["i"].as_u64().unwrap() as usize,
+			// )
 			} else {
 				assert_eq!(obj.len(), 1);
-				EnumValue::new_ident_member(obj["e"].as_str().unwrap().to_string())
+				todo!()
+				// EnumValue::new_ident_member(obj["e"].as_str().unwrap().to_string())
 			})),
 			TyData::Set(_, _, elem) => {
 				let set = obj.remove("set").unwrap();

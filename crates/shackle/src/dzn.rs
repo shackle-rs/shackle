@@ -4,12 +4,14 @@
 //! These files are often used to provide data for MiniZinc models.
 
 use std::{
+	fmt::Display,
 	fs::read_to_string,
 	path::{Path, PathBuf},
 	str::FromStr,
 	sync::Arc,
 };
 
+use itertools::Itertools;
 use miette::SourceSpan;
 use nom::{
 	branch::alt,
@@ -27,10 +29,86 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	diagnostics::{FileError, ShackleError, SyntaxError},
-	Array, Enum, EnumValue, Index, Polarity, Record, Set, Value,
+	value::{Array, Index, Polarity, Record, Set, Value},
 };
 
 pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
+
+/// Value parsed in a data file.
+///
+/// These values can still contain unmatched enum values or enum constructors,
+/// for which the internal value has not yet been determined.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParsedVal {
+	/// Normal MiniZinc value
+	Val(Value),
+	/// Identifier to be matched to an identifier value
+	EnumVal(EnumVal),
+	/// Constructor used to define an enumerated type, or create a value of an enumerated type.
+	EnumCtor(EnumCtor),
+	/// Set of values of an enumerated type, specified as a list of values
+	EnumSetList(Vec<EnumVal>),
+	/// Set of values of an enumerated type, specified as a range
+	EnumRange((EnumVal, EnumVal)),
+}
+
+impl Display for ParsedVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ParsedVal::Val(v) => write!(f, "{v}"),
+			ParsedVal::EnumVal(v) => write!(f, "{v}"),
+			ParsedVal::EnumCtor(v) => write!(f, "{v}"),
+			ParsedVal::EnumSetList(li) => write!(f, "{{{}}}", li.iter().format(", ")),
+			ParsedVal::EnumRange((from, to)) => write!(f, "{from}..{to}"),
+		}
+	}
+}
+
+/// Constructor for an enumerated type
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnumCtor {
+	/// List of identifiers describing an enumerated type
+	ValueList(Vec<String>),
+	/// Constructor call with a set as an argument
+	SetArg((String, Set)),
+	/// Constructor call with an identifier argument
+	NameArg((String, String)),
+	/// The concatenation of multiple other types of constructors
+	Concat(Vec<EnumCtor>),
+}
+
+impl Display for EnumCtor {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			EnumCtor::ValueList(li) => write!(f, "{{{}}}", li.iter().format(", ")),
+			EnumCtor::SetArg((ident, range)) => write!(f, "{ident}({range})"),
+			EnumCtor::NameArg((ident, arg)) => write!(f, "{ident}({arg})"),
+			EnumCtor::Concat(li) => write!(f, "{}", li.iter().format(" ++ ")),
+		}
+	}
+}
+
+/// Value of an enumerated type, not yet matched to its type in the instance
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnumVal {
+	/// Simple enumerated value
+	Ident(String),
+	/// Constructor call with an integer argument
+	IntArg((String, i64)),
+	/// Constructor call with an identifier argument
+	/// Warning: Could be a type constructor if the argument is an identifier points to enumerated type.
+	EnumArg((String, Box<EnumVal>)),
+}
+
+impl Display for EnumVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			EnumVal::Ident(ident) => write!(f, "{ident}"),
+			EnumVal::IntArg((ident, i)) => write!(f, "{ident}({i})"),
+			EnumVal::EnumArg((ident, arg)) => write!(f, "{ident}({arg})"),
+		}
+	}
+}
 
 // TODO: Use FileError in all the different combinators
 
@@ -42,7 +120,7 @@ pub(crate) type Span<'a> = LocatedSpan<&'a str, (Option<PathBuf>, Arc<String>)>;
 /// these types will only have a valid reference to their type, and integer
 /// value, after it has been fitted to the model. The member declaration of an
 /// enumerated type might be represented as a [`SetList`] of [`EnumValue`]s.
-pub fn parse_dzn_file(path: &Path) -> Result<FxHashMap<String, Value>, ShackleError> {
+pub fn parse_dzn_file(path: &Path) -> Result<FxHashMap<String, ParsedVal>, ShackleError> {
 	let content = read_to_string(path).map_err(|err| FileError {
 		file: path.to_path_buf(),
 		message: err.to_string(),
@@ -59,7 +137,7 @@ pub fn parse_dzn_file(path: &Path) -> Result<FxHashMap<String, Value>, ShackleEr
 pub fn parse_dzn_string(
 	content: Arc<String>,
 	filename: Option<PathBuf>,
-) -> Result<FxHashMap<String, Value>, ShackleError> {
+) -> Result<FxHashMap<String, ParsedVal>, ShackleError> {
 	let span = Span::new_extra(&content, (filename, content.clone()));
 	let result = dzn(span);
 	match result.finish() {
@@ -75,7 +153,7 @@ pub fn parse_dzn_string(
 }
 
 /// Parse given string as DZN definitions
-fn dzn(input: Span) -> IResult<Span, FxHashMap<String, Value>> {
+fn dzn(input: Span) -> IResult<Span, FxHashMap<String, ParsedVal>> {
 	let (input, map) = seperated_fold(
 		assignment,
 		sep(char(';')),
@@ -90,10 +168,10 @@ fn dzn(input: Span) -> IResult<Span, FxHashMap<String, Value>> {
 }
 
 /// Parse DZN assignment item
-pub fn assignment(input: Span) -> IResult<Span, (&str, Value)> {
+pub fn assignment(input: Span) -> IResult<Span, (&str, ParsedVal)> {
 	let (input, ident) = identifier(input)?;
 	let (input, _) = sep(char('='))(input)?;
-	let (input, val) = value(input)?;
+	let (input, val) = value_or_enum(input)?;
 	Ok((input, (ident, val)))
 }
 
@@ -131,8 +209,19 @@ fn identifier(input: Span) -> IResult<Span, &str> {
 	)(input)
 }
 
-/// Parse a [`Value`] that can be placed on right hand side of a DataZinc
-/// assignment item
+/// Parse a [`ParsedVal`], possibly using enums, that can be placed on right
+/// hand side of a DataZinc assignment item
+fn value_or_enum(input: Span) -> IResult<Span, ParsedVal> {
+	alt((
+		map(value, ParsedVal::Val),
+		// WARNING: Should be after values since other identifiers would be matched
+		// (e.g., infinity, array1d, enum constructors)
+		enum_expression,
+	))(input)
+}
+
+/// Parse a non-enum [`Value`] that can be placed on right hand side of a
+/// DataZinc assignment item
 fn value(input: Span) -> IResult<Span, Value> {
 	alt((
 		replace(Value::Absent, tag("<>")),
@@ -141,15 +230,12 @@ fn value(input: Span) -> IResult<Span, Value> {
 		map(string, Value::String),
 		map(array, Value::Array),
 		map(set, Value::Set),
-		map(enum_constructor, |e| Value::Set(Set::Enum(Arc::new(e)))),
 		// WARNING: record should come before tuple
 		map(record, Value::Record),
 		map(tuple_value, Value::Tuple),
 		// WARNING: Float must come before integer
 		map(float, Value::Float),
 		map(integer, Value::Integer),
-		// WARNING: Should be after other usages of words (e.g., infinity, array1d, enum constructors)
-		map(enum_val, Value::Enum),
 	))(input)
 }
 
@@ -308,23 +394,6 @@ fn unicode(input: Span) -> IResult<Span, char> {
 	map_opt(convert_u32, std::char::from_u32)(input)
 }
 
-fn enum_val(input: Span) -> IResult<Span, EnumValue> {
-	let (input, ident) = identifier(input)?;
-	let (input, _) = ws(input)?;
-	if let Ok((input, _)) = char::<_, nom::error::Error<Span>>('(')(input.clone()) {
-		let (input, _) = ws(input)?;
-		let (input, arg) = alt((map(integer, Value::Integer), map(enum_val, Value::Enum)))(input)?;
-		let (input, _) = ws(input)?;
-		let (input, _) = char(')')(input)?;
-		Ok((
-			input,
-			EnumValue::new_constructor_member(ident.to_string(), arg),
-		))
-	} else {
-		Ok((input, EnumValue::new_ident_member(ident.to_string())))
-	}
-}
-
 fn array(input: Span) -> IResult<Span, Array> {
 	let list = seperated_fold(value, sep(char(',')), Vec::new, |mut v, e| {
 		v.push(e);
@@ -365,35 +434,100 @@ fn set(input: Span) -> IResult<Span, Set> {
 	alt((empty_utf8, simple_list, float_range, int_range))(input)
 }
 
-fn enum_constructor(input: Span) -> IResult<Span, Enum> {
-	let constr_or_ident = |input| -> IResult<Span, (String, Option<Index>)> {
-		let (input, ident) = identifier(input)?;
-		if let Ok((inner, _)) = sep(char('('))(input.clone()) {
-			let int_range = map(
-				separated_pair(integer, sep(tag("..")), integer),
-				|(from, to)| Index::Integer(from..=to),
-			);
-			let enum_ident = map(identifier, |name| {
-				Index::Enum(Arc::new(Enum {
-					name: Some(name.to_string()),
-					constructors: Vec::new(),
-				}))
-			});
-			let (inner, index) = alt((int_range, enum_ident))(inner)?;
-			let (inner, _) = sep(char(')'))(inner)?;
-			Ok((inner, (ident.to_string(), Some(index))))
+fn enum_value(input: Span) -> IResult<Span, EnumVal> {
+	let (input, ident) = identifier(input)?;
+	let (input, val) = if let Ok((inner, _)) = sep(char('('))(input.clone()) {
+		if let Ok((inner, i)) = integer(inner.clone()) {
+			(inner, EnumVal::IntArg((ident.to_owned(), i)))
 		} else {
-			Ok((input, (ident.to_string(), None)))
+			let (inner, arg) = enum_value(inner)?;
+			(inner, EnumVal::EnumArg((ident.to_owned(), Box::new(arg))))
 		}
+	} else {
+		return Ok((input, EnumVal::Ident(ident.to_owned())));
 	};
-	let list = seperated_fold(constr_or_ident, sep(char(',')), Vec::new, |mut v, c| {
+	let (input, _) = sep(char(')'))(input)?;
+	Ok((input, val))
+}
+
+fn enum_set_list(input: Span) -> IResult<Span, ParsedVal> {
+	let list = seperated_fold(enum_value, sep(char(',')), Vec::new, |mut v, c| {
 		v.push(c);
 		v
 	});
-	map(delimited(sep(char('{')), list, sep(char('}'))), |l| Enum {
-		name: None,
-		constructors: l,
-	})(input)
+	map(
+		delimited(sep(char('{')), list, sep(char('}'))),
+		ParsedVal::EnumSetList,
+	)(input)
+}
+
+fn enum_ctor(input: Span) -> IResult<Span, EnumCtor> {
+	let ctor_call = |input| -> IResult<_, _> {
+		let (input, ident) = identifier(input)?;
+		let (input, _) = sep(char('('))(input)?;
+		let (input, ctor) = if let Ok((inner, s)) = set(input.clone()) {
+			(inner, EnumCtor::SetArg((ident.to_owned(), s)))
+		} else {
+			let (input, arg) = identifier(input)?;
+			(input, EnumCtor::NameArg((ident.to_owned(), arg.to_owned())))
+		};
+		let (input, _) = sep(char(')'))(input)?;
+		Ok((input, ctor))
+	};
+	alt((
+		map(
+			delimited(
+				sep(char('{')),
+				seperated_fold(identifier, sep(char(',')), Vec::new, |mut v, c| {
+					v.push(c.to_owned());
+					v
+				}),
+				sep(char('}')),
+			),
+			EnumCtor::ValueList,
+		),
+		ctor_call,
+	))(input)
+}
+
+/// Parser for Enum constructors, enum values, and range literals of made up of enum values
+fn enum_expression(input: Span) -> IResult<Span, ParsedVal> {
+	let concat_next = |input| -> bool { sep(tag("++"))(input).is_ok() };
+	if let Ok((inner, val)) = enum_value(input.clone()) {
+		eprintln!("val: {val}");
+		if let Ok((inner, _)) = sep(tag(".."))(inner.clone()) {
+			let (inner, val2) = enum_value(inner)?;
+			return Ok((inner, ParsedVal::EnumRange((val, val2))));
+		}
+		let mut is_ctor = false;
+		if let EnumVal::EnumArg(tup) = &val {
+			if let EnumVal::Ident(_) = *tup.1 {
+				is_ctor = concat_next(inner.clone());
+			}
+		}
+		if !is_ctor {
+			return Ok((inner, ParsedVal::EnumVal(val)));
+		}
+		// Otherwise, start again from original input
+	};
+	if let Ok((inner, val)) = enum_set_list(input.clone()) {
+		if !concat_next(inner.clone()) {
+			return Ok((inner, val));
+		}
+	}
+	let (input, ctors) = seperated_fold(enum_ctor, sep(tag("++")), Vec::new, |mut v, c| {
+		v.push(c);
+		v
+	})(input)?;
+	debug_assert!(!ctors.is_empty());
+	Ok((
+		input,
+		ParsedVal::EnumCtor(if ctors.len() == 1 {
+			ctors[0].clone()
+		} else {
+			EnumCtor::Concat(ctors)
+		}),
+	))
 }
 
 fn tuple_value(input: Span) -> IResult<Span, Vec<Value>> {
@@ -495,7 +629,10 @@ mod tests {
 	use std::sync::Arc;
 
 	use super::{identifier, value, Span};
-	use crate::{Array, Enum, Index, Polarity, Record, Set, Value};
+	use crate::{
+		dzn::{value_or_enum, EnumCtor, EnumVal, ParsedVal},
+		value::{Array, Enum, Index, Polarity, Record, Set, Value},
+	};
 
 	fn span(s: &str) -> Span {
 		Span::new_extra(s, (Some("test.dzn".into()), Arc::new(s.to_string())))
@@ -580,116 +717,68 @@ mod tests {
 
 	#[test]
 	fn test_parse_enum_val() {
-		let (_, out) = value(span("A")).unwrap();
-		if let Value::Enum(v) = out {
-			assert_eq!(v.constructor(), Some("A"));
-			assert_eq!(v.arg(), None);
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
-		let (_, out) = value(span("A(1)")).unwrap();
-		if let Value::Enum(v) = out {
-			assert_eq!(v.constructor(), Some("A"));
-			assert_eq!(v.arg(), Some(Value::Integer(1)));
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
-		let (_, out) = value(span("A(B)")).unwrap();
-		if let Value::Enum(v) = out {
-			assert_eq!(v.constructor(), Some("A"));
-			if let Some(Value::Enum(x)) = v.arg() {
-				assert_eq!(x.constructor(), Some("B"));
-				assert_eq!(x.arg(), None);
-			} else {
-				panic!("enum parsed using the wrong value type")
-			}
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
-		let (_, out) = value(span("A(B(C(D(-60))))")).unwrap();
+		// Simple identifier representing an enum value
+		let (_, out) = value_or_enum(span("A")).unwrap();
+		assert_eq!(out, ParsedVal::EnumVal(EnumVal::Ident("A".to_owned())));
+
+		// Enum value with integer argument
+		let (_, out) = value_or_enum(span("A(1)")).unwrap();
+		assert_eq!(
+			out,
+			ParsedVal::EnumVal(EnumVal::IntArg(("A".to_owned(), 1)))
+		);
+
+		// Enum value with another enum value as argument
+		let (_, out) = value_or_enum(span("A(B)")).unwrap();
+		assert_eq!(
+			out,
+			ParsedVal::EnumVal(EnumVal::EnumArg((
+				"A".to_owned(),
+				Box::new(EnumVal::Ident("B".to_owned()))
+			)))
+		);
+
+		// Complex chain of enum constructors to make value
+		let (_, out) = value_or_enum(span("A(B(C(D(-60))))")).unwrap();
 		assert_eq!(out.to_string(), "A(B(C(D(-60))))");
 	}
 
 	#[test]
 	fn test_parse_enum_members() {
-		// These examples are parsed as set literals, and would have to be converted later.
-		let has_identifiers = |e: Vec<Value>, l: Vec<&str>| {
-			for (v, name) in e.iter().zip(l.iter()) {
-				if let Value::Enum(x) = v {
-					assert_eq!(x.constructor(), Some(*name))
-				} else {
-					panic!("enum identifier {v} parsed using the wrong value type")
-				}
-			}
-		};
+		let (_, out) = value_or_enum(span("{ A }")).unwrap();
+		assert_eq!(
+			out,
+			ParsedVal::EnumSetList(vec![EnumVal::Ident("A".to_owned())])
+		);
 
-		let (_, out) = value(span("{ A }")).unwrap();
-		if let Value::Set(Set::SetList(l)) = out {
-			has_identifiers(l, vec!["A"])
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
+		let (_, out) = value_or_enum(span("{ A, B, C }")).unwrap();
+		assert_eq!(
+			out,
+			ParsedVal::EnumSetList(vec![
+				EnumVal::Ident("A".to_owned()),
+				EnumVal::Ident("B".to_owned()),
+				EnumVal::Ident("C".to_owned())
+			])
+		);
 
-		let (_, out) = value(span("{ A, B, C }")).unwrap();
-		if let Value::Set(Set::SetList(l)) = out {
-			has_identifiers(l, vec!["A", "B", "C"])
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
+		let (_, out) = value_or_enum(span("X(1..6)")).unwrap();
+		assert_eq!(
+			out,
+			ParsedVal::EnumCtor(EnumCtor::SetArg((
+				"X".to_owned(),
+				Set::IntRangeList(vec![1..=6])
+			)))
+		);
 
-		let (_, out) = value(span("{ X(Y) }")).unwrap();
-		if let Value::Set(Set::SetList(l)) = out {
-			assert_eq!(l.len(), 1);
-			if let Value::Enum(v) = &l[0] {
-				assert_eq!(v.constructor(), Some("X"));
-				if let Some(Value::Enum(x)) = v.arg() {
-					assert_eq!(x.constructor(), Some("Y"));
-					assert_eq!(x.arg(), None);
-				} else {
-					panic!("enum parsed using the wrong value type")
-				}
-			} else {
-				panic!("enum parsed using the wrong value type")
-			}
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
-
-		// These examples are parsed as constructors, but will still need fitting to
-		// replace identifiers of enumerated types with actual references
-		let has_constructors = |e: Arc<Enum>, l: Vec<(&str, Option<Index>)>| {
-			for (v, cons) in e.constructors.iter().zip(l.iter()) {
-				assert_eq!(&v.0, cons.0);
-				assert_eq!(v.1, cons.1);
-			}
-		};
-
-		let (_, out) = value(span("{ X(1..6) }")).unwrap();
-		if let Value::Set(Set::Enum(e)) = out {
-			has_constructors(e, vec![("X", Some(Index::Integer(1..=6)))])
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
-
-		let (_, out) = value(span("{ A, Z(-1..1), X(Y) }")).unwrap();
-		if let Value::Set(Set::Enum(e)) = out {
-			has_constructors(
-				e,
-				vec![
-					("A", None),
-					("Z", Some(Index::Integer(-1..=1))),
-					(
-						"X",
-						Some(Index::Enum(Arc::new(Enum {
-							name: Some("Y".to_string()),
-							constructors: Vec::new(),
-						}))),
-					),
-				],
-			)
-		} else {
-			panic!("enum parsed using the wrong value type")
-		}
+		let (_, out) = value_or_enum(span("{ A } ++ Z(-1..1) ++ X(Y)")).unwrap();
+		assert_eq!(
+			out,
+			ParsedVal::EnumCtor(EnumCtor::Concat(vec![
+				EnumCtor::ValueList(vec!["A".to_owned()]),
+				EnumCtor::SetArg(("Z".to_owned(), Set::IntRangeList(vec![-1..=1]))),
+				EnumCtor::NameArg(("X".to_owned(), "Y".to_owned()))
+			]))
+		)
 	}
 
 	#[test]
