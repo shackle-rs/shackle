@@ -10,6 +10,7 @@ pub mod error;
 pub mod file;
 pub mod hir;
 mod legacy;
+pub mod mir;
 pub mod syntax;
 pub mod thir;
 pub mod ty;
