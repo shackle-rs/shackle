@@ -2,4 +2,4 @@
 
 ## Builtin functions
 
-The following functions have been included as builtin functions for 
+The following functions have been included as builtin functions for
