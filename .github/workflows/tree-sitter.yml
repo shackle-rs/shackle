@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: lts/*
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
         working-directory: ${{matrix.parser}}
       - name: Check if generated file are up-to-date
         run: npm run build --if-present && git diff --exit-code
