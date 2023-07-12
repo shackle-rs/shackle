@@ -636,10 +636,7 @@ impl ExpressionCollector<'_> {
 
 	fn collect_call(&mut self, c: ast::Call) -> Call {
 		Call {
-			arguments: c
-				.arguments()
-				.map(|a| self.collect_expression(a))
-				.collect(),
+			arguments: c.arguments().map(|a| self.collect_expression(a)).collect(),
 			function: self.collect_expression(c.function()),
 		}
 	}
