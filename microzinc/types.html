@@ -1,0 +1,529 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Typing Rules - The Shackle Almanac</title>
+
+
+        <!-- Custom HTML head -->
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script
+          id="MathJax-script"
+          async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        ></script>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../process.html"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="../compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="../compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="../compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="../compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="../compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="../compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="../compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="../microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../microzinc/types.html" class="active"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="../microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="../interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="../mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="../error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The Shackle Almanac</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="the-typing-rules-of-microzinc"><a class="header" href="#the-typing-rules-of-microzinc">The Typing Rules of MicroZinc</a></h1>
+<p>The following syntax describes the types available in MicroZinc. The type syntax are used directly in let-expressions and parameter declarations.</p>
+<p>\[
+\begin{array}{lcl}
+\mathit{typeinst} &amp;::=&amp;
+\mathsf{pred} \\&amp;|&amp;
+\mathsf{array}<del>\mathsf{[}\mathit{int}\mathsf{..}\mathit{int} [ \mathsf{,}</del> \mathit{int}\mathsf{..}\mathit{int}]*\mathsf{]}<del>\mathsf{of}</del>\mathit{baseType} \\&amp;|&amp;
+\mathit{baseType} \\
+\mathit{baseType} &amp;::=&amp;
+\mathsf{tuple}<del>\mathsf{(}\mathit{typeinst} [ \mathsf{,}</del> \mathit{typeinst}]*\mathsf{)} \\&amp;|&amp;
+\mathit{domType} \\&amp;|&amp;
+\mathit{primType} \\
+\mathit{domType} &amp;::=&amp;
+\mathsf{var}<del>\mathit{val}\\&amp;|&amp;
+\mathsf{var}</del>\mathsf{set}<del>\mathsf{of}</del>\mathit{val}\\
+\mathit{primType} &amp;::=&amp;
+\mathsf{par}<del>\mathsf{bool}</del>|<del>\mathsf{var}</del>\mathsf{bool}\\&amp;|&amp;
+\mathsf{par}<del>\mathsf{int}</del>|<del>\mathsf{var}</del>\mathsf{int}\\&amp;|&amp;
+\mathsf{par}<del>\mathsf{float}</del>|<del>\mathsf{var}</del>\mathsf{float}\\&amp;|&amp;
+\mathsf{par}<del>\mathsf{set}</del>\mathsf{of}<del>\mathsf{int}</del>|<del>\mathsf{var}</del>\mathsf{set}<del>\mathsf{of}</del>\mathsf{int}\\&amp;|&amp;
+\mathsf{par}<del>\mathsf{set}</del>\mathsf{of}<del>\mathsf{float}</del>|~\mathsf{string}
+\end{array}
+\]</p>
+<p>Importantly, MicroZinc includes two types of sub-typing. When type \( T_1 \) is a sub-type of type \( T_2 \) then \( T_1 \) can be used anywhere where the type \( T_2 \) is required.</p>
+<ul>
+<li>In MicroZinc, \( \mathsf{par}~T \) is a sub-type of \( \mathsf{var}~T \).</li>
+<li>MicroZinc also has numeric subtyping (i.e., \( \mathsf{par~bool} \) is a subtype of \( \mathsf{par~int} \), which is a sub-type of \( \mathsf{par~float} \), and similarly \( \mathsf{var~bool} \) is a sub-type of \( \mathsf{var~int} \), which is a sub-type of \( \mathsf{var~float} \))</li>
+</ul>
+<p>The \( \mathsf{pred} \) type is a special value given to expressions that enforce constraints, but do not return a value. This It should be noted that the</p>
+<p>The following rules describe the conditions under which a MicroZinc program is correctly typed. In these rules the variable \( \Gamma \) will denote the typing context. This context contains known types for identifiers.</p>
+<h3 id="functions-and-calls"><a class="header" href="#functions-and-calls">Functions and calls</a></h3>
+<p>At the top level of the MicroZinc program we find different functions. The program is well-typed if the type of the body of each function matches the declared type of the function given the declared types for the arguments. The types of all functions are available when typing the body expression of a function, allowing for (mutual) recursive functions.</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} T : T^r$}
+\AxiomC{$ \Gamma, f^{id} : (T'_1 \equiv )\langle T^p_1, \dots, T^p_n \rangle \rightarrow T^{r}\vdash{} funcs : \langle T'_2, \dots, T'_m \rangle $}
+\RightLabel{(T-Builtin)}
+\BinaryInfC{$ \vdash{} \mathsf{function}<del>T</del>\mathsf{:}<del>f^{id}</del>\mathsf{(} T^p_1 : x_1\mathsf{,}\dots\mathsf{,}T^p_n : x_n\mathsf{)}~\mathsf{;} funcs : \langle T'_1, \dots, T'_m \rangle $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} T : T^r$}
+\AxiomC{$ \Gamma, f^{id}_1 : (T'_1 \equiv) \langle T^p_1, \dots, T^p_n \rangle \rightarrow T^r \vdash{} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_2, \dots, T'_m \rangle $}
+\noLine{}
+\BinaryInfC{$\Gamma, f^{id}_1 : T'_1, \dots, f^{id}_m : T'_m, x_1 : T^p_1, \dots, x_n : T^p_n \vdash{} E : T^r$}
+\RightLabel{(T-Func)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{function}<del>T</del>\mathsf{:}<del>f^{id}_1</del>\mathsf{(}<del>x_1: T^p_1, \dots, x_n: T^p_n \mathsf{)}</del>\mathsf{=}<del>E</del>\mathsf{;} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_1, \dots, T'_m \rangle $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma, f^{id} : (T'_1 \equiv )\langle T^p_1, \dots, T^p_n \rangle \rightarrow \mathsf{pred}\vdash{} funcs : \langle T'_2, \dots, T'_m \rangle $}
+\RightLabel{(T-Slv-Native)}
+\UnaryInfC{$ \vdash{} \mathsf{predicate}<del>f^{id}</del>\mathsf{(} T^p_1 : x_1\mathsf{,}\dots\mathsf{,}T^p_n : x_n\mathsf{)}~\mathsf{;} funcs : \langle T'_1, \dots, T'_m \rangle $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma, f^{id}_1 : (T'_1 \equiv) \langle T^p_1, \dots, T^p_n \rangle \rightarrow \mathsf{pred} \vdash{} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_2, \dots, T'_m \rangle $}
+\noLine{}
+\UnaryInfC{$\Gamma, f^{id}_1 : T'_1, \dots, f^{id}_m : T'_m, x_1 : T^p_1, \dots, x_n : T^p_n \vdash{} E : \mathsf{par~bool}$}
+\RightLabel{(T-Pred)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{function}<del>T</del>\mathsf{:}<del>f^{id}_1</del>\mathsf{(}<del>x_1: T^p_1, \dots, x_n: T^p_n \mathsf{)}</del>\mathsf{=}<del>E</del>\mathsf{;} f_2 \mathsf{;} \dots \mathsf{;} f_m : \langle T'_1, \dots, T'_m \rangle $}
+\end{prooftree}
+\]</p>
+<p>Calls are defined in both the context of a constraint and on the right hand side of an assignment of a let-expression. In both cases the typing of call is described by the following rule.</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ f^{id} : \langle T^p_1, \dots, T^p_n \rangle \rightarrow T^r \in \Gamma$}
+\AxiomC{$ \Gamma \vdash{} x_1 : T^p_1 ~~ \dots ~~ \Gamma \vdash{} x_n : T^p_n$}
+\RightLabel{(T-Call)}
+\BinaryInfC{$ \Gamma \vdash{} f^{id} ~\mathsf{(}<del>x_1 \mathsf{,} \dots \mathsf{,} x_n</del>\mathsf{)} : T^r $}
+\end{prooftree}
+\]</p>
+<h3 id="let-expressions-and-identifiers"><a class="header" href="#let-expressions-and-identifiers">Let expressions and identifiers</a></h3>
+<p>Identifiers are typed simply using a lookup in the typing context. The typing of the let expression iteratively adds the types of each declaration item to the typing context. The program is well-typed when all expressions on the right-hand side of a declaration match their declared types, and any constraint items are of \( \mathsf{pred} \) type.</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ x : T \in \Gamma $}
+\RightLabel{(T-Ident)}
+\UnaryInfC{$ \Gamma \vdash{} x : T$}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x : T$}
+\RightLabel{(T-Let-Base)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{let}<del>\mathsf{\{}</del>\mathsf{\}}<del>\mathsf{in}</del>\mathit{x} : T$}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} T : T'$}
+\AxiomC{$ \Gamma, x : T' \vdash{} \mathsf{let}<del>\mathsf{\{}<del>items</del>\mathsf{\}}</del>\mathsf{in}<del>y : T''$}
+\RightLabel{(T-Let-Decl1)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{let}</del>\mathsf{\{}<del>T</del>\mathsf{:}<del>x</del>\mathsf{;}<del>items</del>\mathsf{\}}~\mathsf{in}~y : T''$}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} T : T'$}
+\AxiomC{$ \Gamma \vdash{} E : T'$}
+\AxiomC{$ \Gamma, x : T' \vdash{} \mathsf{let}<del>\mathsf{\{}<del>items</del>\mathsf{\}}</del>\mathsf{in}<del>y : T''$}
+\RightLabel{(T-Let-Decl2)}
+\TrinaryInfC{$ \Gamma \vdash{} \mathsf{let}</del>\mathsf{\{}<del>T</del>\mathsf{:}<del>x = E</del>\mathsf{;}<del>items</del>\mathsf{\}}~\mathsf{in}~y : T''$}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} E : \mathsf{pred}$}
+\AxiomC{$ \Gamma, x : T \vdash{} \mathsf{let}<del>\mathsf{\{}<del>items</del>\mathsf{\}}</del>\mathsf{in}<del>y : T'$}
+\RightLabel{(T-Let-Con)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{let}</del>\mathsf{\{}<del>\mathsf{constraint}<del>E</del>\mathsf{;}<del>items</del>\mathsf{\}}</del>\mathsf{in}~y : T'$}
+\end{prooftree}
+\]</p>
+<h3 id="comprehensions-and-generators"><a class="header" href="#comprehensions-and-generators">Comprehensions and Generators</a></h3>
+<p>As shown in the following rules, the \( \mathit{genExpr} \) rules will must have either type \( \mathsf{set~of~int} \) or \( \mathsf{array1d~of}~T \). The \( \text{T_Comp} \) rule, to type array comprehensions, will use the \( elem \) function which maps the former type to \( \mathsf{int} \) and the latter to \( T \).</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma, \vdash{} E : T$}
+\RightLabel{(T-Comp-Expr)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}<del>\mathsf{]} : \mathsf{array1d~of</del>} T $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} I : T$}
+\AxiomC{$ T \in \{ \mathsf{set~of~int}, \mathsf{array1d~of}<del>V \}$}
+\AxiomC{$ \Gamma, x : T \vdash{} \mathsf{[} E</del>\mathsf{|}<del>gens</del>\mathsf{]} : T' $}
+\RightLabel{(T-Comp-In)}
+\TrinaryInfC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}<del>x</del>\mathsf{in}<del>I, gens</del>\mathsf{]} : T' $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} B : \mathsf{par~bool}$}
+\AxiomC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}<del>x</del>\mathsf{in}<del>I, gens</del>\mathsf{]} : T $}
+\RightLabel{(T-Comp-Where)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{[} E~\mathsf{|}<del>x</del>\mathsf{in}<del>I</del>\mathsf{where}<del>B, gens</del>\mathsf{]} : T $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} E_2 : T$}
+\AxiomC{$ \Gamma, x : T \vdash{} \mathsf{[} E_1~\mathsf{|}<del>gens</del>\mathsf{]} : T' $}
+\RightLabel{(T-Comp-Asg)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{[} E_1~\mathsf{|}<del>x</del>\mathsf{=}<del>E_2, gens</del>\mathsf{]} : T' $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma\vdash{} \mathsf{[} I_i~\mathsf{|}<del>gens</del>\mathsf{]} : \mathsf{array1d~of~int}, \forall{} 1 \leq{} i \leq{} X$}
+\AxiomC{$ \Gamma\vdash{} \mathsf{[} E~\mathsf{|}<del>gens</del>\mathsf{]} : \mathsf{array1d~of}<del>T $}
+\RightLabel{(T-Comp-Ind)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{[(}I_1, \dots, I_X \mathsf{):} E</del>\mathsf{|}gens~\mathsf{]} : \mathsf{array}X\mathsf{d~of}~T $}
+\end{prooftree}
+\]</p>
+<h3 id="arrays-sets-and-tuples"><a class="header" href="#arrays-sets-and-tuples">Arrays, Sets, and Tuples</a></h3>
+<p>MicroZinc has three different container types. Arrays can contain multiple, possibly duplicate, elements of the same type, each associated with a unique index with which the element can be retrieved.</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} r_i : \mathsf{par~set~of~int}, \forall{} 1 \leq{} i \leq{} X$}
+\AxiomC{$ \Gamma \vdash{} x_i : T, \forall{} 1 \leq{} i \leq{} n$}
+\RightLabel{(T-Arr)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{array}X\mathsf{d(}~r_1 \mathsf{,} \dots \mathsf{,} r_X \mathsf{,} \mathsf{[} x_1 \mathsf{,} \dots \mathsf{,} x_n \mathsf{])} : \mathsf{array}X\mathsf{d~of}~T $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} v_i : \mathsf{par}~\mathsf{int}, \forall{} 1 \leq{} i \leq{} X$}
+\AxiomC{$ \Gamma \vdash{} x : \mathsf{array}X\mathsf{d~of}~T$}
+\RightLabel{(T-Ind)}
+\BinaryInfC{$ \Gamma \vdash{} x \mathsf{[} v_1 \mathsf{,} \dots \mathsf{,} v_X \mathsf{]} : T $}
+\end{prooftree}
+\]</p>
+<p>Sets contain a certain number of unique elements of the same type. Ranges of elements are also typed as sets.</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x_1 : T, \forall{} 1 \leq{} i \leq{} n$}
+\AxiomC{$ T \in {\mathsf{par~int}, \mathsf{par~float}}$}
+\RightLabel{(T-Set)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{\{} x_1 \mathsf{,} \dots \mathsf{,} x_n \mathsf{\}} : \mathsf{par~set~of}~T $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x_1 : T $}
+\AxiomC{$ \Gamma \vdash{} x_2 : T $}
+\AxiomC{$ T \in {\mathsf{par~int}, \mathsf{par~float}}$}
+\RightLabel{(T-Range)}
+\TrinaryInfC{$ \Gamma \vdash{} x_1 \mathsf{..} x_2 : \mathsf{par~set~of}~T $}
+\end{prooftree}
+\]</p>
+<p>Finally, tuples are collections of elements with possibly different types. The number of elements in a tuple is known during type checking</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x_i : T_i, \forall{} 1 \leq{} i \leq{} n$}
+\RightLabel{(T-Tup)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{(} x_1\mathsf{,} \dots\mathsf{,} x_n \mathsf{)} : \mathsf{tuple(} T_1 \mathsf{,} \dots \mathsf{,} T_n \mathsf{)}$}
+\end{prooftree}
+\]
+\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x : \mathsf{tuple(} T_1 \mathsf{,} \dots \mathsf{,} T_i \mathsf{,} \dots \mathsf{,} T_n \mathsf{)}$}
+\AxiomC{$ i \in 1 \mathsf{..} n $}
+\RightLabel{(T-Acc)}
+\BinaryInfC{$ \Gamma \vdash{} x \mathsf{.} i : T_i $}
+\end{prooftree}
+\]</p>
+<h3 id="if-then-else-expressions"><a class="header" href="#if-then-else-expressions">If-then-else Expressions</a></h3>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x : \mathsf{par}~\mathsf{bool} $}
+\AxiomC{$ \Gamma \vdash{} E_1 : T$}
+\AxiomC{$ \Gamma \vdash{} E_2 : T$}
+\RightLabel{(T-If)}
+\TrinaryInfC{$ \Gamma \vdash{} \mathsf{if}<del>x</del>\mathsf{then}<del>E_1</del>\mathsf{else}<del>E_2</del>\mathsf{endif} : T $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} x_1 : \mathsf{par}~\mathsf{bool} $}
+\AxiomC{$ \Gamma \vdash{} E_1 : T$}
+\AxiomC{$ \Gamma \vdash{} \mathsf{if}<del>x_2</del>\mathsf{then}~E_2 \dots \mathsf{else}<del>E_n</del>\mathsf{endif} : T$}
+\RightLabel{(T-ElseIf)}
+\TrinaryInfC{$ \Gamma \vdash{} \mathsf{if}<del>x_1</del>\mathsf{then}<del>E_1</del>\mathsf{elseif}<del>x_2</del>\mathsf{then}~E_2 \dots \mathsf{else}<del>E_n</del>\mathsf{endif} : T $}
+\end{prooftree}
+\]</p>
+<h3 id="literals"><a class="header" href="#literals">Literals</a></h3>
+<p>The remaining parts of the MicroZinc laguage are simple literals that have an intrinsic type.</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(T-Root)}
+\UnaryInfC{$\vdash{} \mathsf{root} : \mathsf{pred}$}
+\end{prooftree}
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(T-True)}
+\UnaryInfC{$\vdash{} \mathsf{true} : \mathsf{par}<del>\mathsf{bool}$}
+\end{prooftree}
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(T-False)}
+\UnaryInfC{$\vdash{} \mathsf{false} : \mathsf{par}</del>\mathsf{bool}$}
+\end{prooftree}
+\]
+\[
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(T-int)}
+\UnaryInfC{$\vdash{} /\texttt{[0-9]+}/ : \mathsf{par}<del>\mathsf{int}$}
+\end{prooftree}
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(T-Str)}
+\UnaryInfC{$\vdash{} /\texttt{&quot;[^&quot;]*&quot;}/ : \mathsf{string}$}
+\end{prooftree}
+\]
+\[
+\begin{prooftree}
+\AxiomC{}
+\RightLabel{(T-float)}
+\UnaryInfC{$\vdash{} /\texttt{0[xX]([0-9a-fA-F]*\.[0-9a-fA-F]+)|([0-9a-fA-F]+\.?)([pP][+-]?[0-9]+)?}/ : \mathsf{par}</del>\mathsf{float}$}
+\end{prooftree}
+\]</p>
+<h3 id="type-instances"><a class="header" href="#type-instances">Type Instances</a></h3>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} I_i : \mathsf{par}<del>\mathsf{set}</del>\mathsf{of}<del>\mathsf{int}, \forall{} 1 \leq{} i \leq{} X$}
+\AxiomC{$ \Gamma \vdash{} T : T'$}
+\RightLabel{(T-Type-Arr)}
+\BinaryInfC{$ \Gamma \vdash{} \mathsf{array}</del>\mathsf{[}I_1 \mathsf{,} \dots, I_X\mathsf{]}<del>\mathsf{of}</del>\mathit{T} : \mathsf{array}X\mathsf{d~of}~T' $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} T_1 : T'_1 ~~ \dots ~~ \Gamma \vdash{} T_n : T'_n$}
+\RightLabel{(T-Type-Tup)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{tuple}\mathsf{(}\mathit{T_1}\mathsf{,} \dots, T_n\mathsf{)} : \mathsf{tuple(}T'_1, \dots, T'_n\mathsf{)} $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} S : \mathsf{par}<del>\mathsf{set}</del>\mathsf{of}<del>\mathsf{int}$}
+\RightLabel{(T-Int-Dom)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{var}<del>S : \mathsf{var}</del>\mathsf{int} $}
+\end{prooftree}
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} S : \mathsf{par}</del>\mathsf{set}<del>\mathsf{of}</del>\mathsf{float}$}
+\RightLabel{(T-Flt-Dom)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{var}<del>S : \mathsf{var}</del>\mathsf{float} $}
+\end{prooftree}
+\]</p>
+<p>\[
+\begin{prooftree}
+\AxiomC{$ \Gamma \vdash{} S : \mathsf{par}<del>\mathsf{set}</del>\mathsf{of}<del>\mathsf{int}$}
+\RightLabel{(T-Set-Dom)}
+\UnaryInfC{$ \Gamma \vdash{} \mathsf{var}</del>\mathsf{set}<del>\mathsf{of}<del>S : \mathsf{var}</del>\mathsf{set}</del>\mathsf{of}~\mathsf{int} $}
+\end{prooftree}
+\]</p>
+<p>The remaining variants (\( \mathit{primType} \)) are trivial, and their expression directly describes their type.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../microzinc.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../microzinc/semantics.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../microzinc.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../microzinc/semantics.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../theme/mzn-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>

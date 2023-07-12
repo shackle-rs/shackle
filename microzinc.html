@@ -3,8 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Page not found - The Shackle Almanac</title>
-        <base href="/">
+        <title>MicroZinc specification - The Shackle Almanac</title>
 
 
         <!-- Custom HTML head -->
@@ -89,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="microzinc.html" class="active"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -172,14 +171,101 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="document-not-found-404"><a class="header" href="#document-not-found-404">Document not found (404)</a></h1>
-<p>This URL is invalid, sorry. Please use the navigation bar or search to continue.</p>
+                        <h1 id="microzinc-specification"><a class="header" href="#microzinc-specification">MicroZinc specification</a></h1>
+<p>MicroZinc is a simple language used to define transformations to be performed
+by the interpreter. It is a simplified subset of MiniZinc. The transformation
+are represented in the language through the use of function definitions. A
+function of type <code>var bool</code>, describing a relation, can be defined as a
+native constraint. Otherwise, a function body must be provided for
+rewriting. The function body can use a restriction of the MiniZinc expression
+language. An important difference between MiniZinc and MicroZinc is that a
+well-formed <em>MicroZinc does not contain partial expressions</em>. Any partiality in
+the MiniZinc model must be explicitly expressed using total functions in
+MicroZinc. As such, constraints introduced in MicroZinc let expressions can
+be globally enforced. They are guaranteed to only constrain the decision
+variables introduced in the same let expression.</p>
+<h3 id="todo-remaining-questions"><a class="header" href="#todo-remaining-questions">TODO: Remaining questions</a></h3>
+<ul>
+<li>What annotation operations should be allowed in MicroZinc?</li>
+<li>The operational semantics for array access definition only works for 1-dimensional arrays. How can we generalise them for multiple dimensions?</li>
+<li>Add list of built-in functions</li>
+</ul>
+<h2 id="syntax"><a class="header" href="#syntax">Syntax</a></h2>
+<p>MicroZinc is defined using the following syntax,</p>
+<p>\[
+\begin{array}{lcl}
+\mathit{program} &amp;::=&amp;
+\mathit{func}* \\
+\mathit{func} &amp;::=&amp;
+\mathsf{function}<del>\mathit{typeinst}</del>\mathsf{:}<del>\mathit{ident}</del>\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]*\mathsf{)}<del>[\mathsf{=}</del>\mathit{letExpr}]\mathsf{;}\\&amp;|&amp;
+\mathsf{predicate}<del>\mathit{ident}</del>\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]*\mathsf{)}<del>[\mathsf{=}</del>\mathit{letRoot}]\mathsf{;} \\
+\mathit{typing} &amp;::=&amp;
+\mathit{typeinst}<del>\mathsf{:}</del>\mathit{ident} \\
+\\
+\mathit{expr} &amp;::=&amp;
+\mathit{letExpr} \\&amp;|&amp;
+\mathit{ident}<del>\mathsf{(}\mathit{val} [ \mathsf{,}</del> \mathit{val}]*\mathsf{)} \\&amp;|&amp;
+\mathsf{if}<del>\mathit{val}</del>\mathsf{then}<del>\mathit{letExpr}</del>[\mathsf{elseif}<del>\mathit{val}</del>\mathsf{then}<del>\mathit{letExpr}]*</del>\mathsf{else}<del>\mathit{letExpr}</del>\mathsf{endif} \\&amp;|&amp;
+\mathsf{[}[\mathit{tuple}\mathsf{:}]<del>\mathit{letExpr}</del>\mathsf{|}<del>\mathit{genExpr} [ \mathsf{,}</del> \mathit{genExpr}]*\mathsf{]} \\
+\mathit{rootExpr} &amp;::=&amp;
+\mathit{letRoot} \\&amp;|&amp;
+\mathit{ident}<del>\mathsf{(}\mathit{val} [ \mathsf{,}</del> \mathit{val}]*\mathsf{)} \\&amp;|&amp;
+\mathsf{if}<del>\mathit{val}</del>\mathsf{then}<del>\mathit{letRoot}</del>[\mathsf{elseif}<del>\mathit{val}</del>\mathsf{then}<del>\mathit{letRoot}]*</del>\mathsf{else}<del>\mathit{letRoot}</del>\mathsf{endif} \\&amp;|&amp;
+\mathsf{forall<em>root}\mathsf{(}\mathsf{[}\mathit{letRoot}<del>\mathsf{|}</del>\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]*\mathsf{]}\mathsf{)} \\
+\mathit{letExpr} &amp;::=&amp;
+\mathit{val} \\&amp;|&amp;
+\mathsf{let}<del>\mathsf{\{}\mathit{item}*\mathsf{\}}</del>\mathsf{in}<del>\mathit{val} \\
+\mathit{letRoot} &amp;::=&amp;
+\mathsf{let}</del>\mathsf{\{}\mathit{item}*\mathsf{\}}<del>\mathsf{in}</del>\mathsf{root} \\
+\mathit{item} &amp;::=&amp;
+\mathit{typing}<del>\mathsf{;} \\&amp;|&amp;
+\mathit{typing}</del>\mathsf{=}<del>\mathit{expr}</del>\mathsf{;} \\&amp;|&amp;
+\mathsf{constraint}<del>\mathit{rootExpr}</del>\mathsf{;} \\
+\mathit{genExpr} &amp;::=&amp;
+\mathit{ident}<del>\mathsf{in}</del>\mathit{letExpr}<del>[\mathsf{where}</del>\mathit{letExpr}] \\&amp;|&amp;
+\mathit{ident}<del>\mathsf{=}</del>\mathit{letExpr} \\
+\mathit{val} &amp;::=&amp;
+\mathit{lit}<del>|</del>\mathit{range}<del>|</del>\mathit{tuple} \\&amp;|&amp;
+\mathsf{\{}\mathit{lit}<del>\mathsf{,}</del> [\mathit{lit}<del>\mathsf{,}]*\mathsf{\}} \\&amp;|&amp;
+\mathsf{array}\mathit{int}\mathsf{d(}\mathit{range}</del>\mathsf{,}<del>[\mathit{range}</del>\mathsf{,}]*<del>\mathsf{[}\mathit{lit}</del>\mathsf{,}~ [\mathit{lit}<del>\mathsf{,}]*\mathsf{])} \\&amp;|&amp;
+\mathit{ident}</del>\mathsf{.}<del>\mathit{int} \\&amp;|&amp;
+\mathit{ident}</del>\mathsf{[}\mathit{lit}\mathsf{]} \\
+\mathit{tuple} &amp;::=&amp;
+\mathsf{(}\mathit{lit}<del>\mathsf{,}</del> [\mathit{lit}<del>\mathsf{,}]*\mathsf{)} \\
+\mathit{range} &amp;::=&amp;
+\mathit{lit}\mathsf{..}\mathit{lit} \\&amp;|&amp;
+\mathit{ident} \\
+\mathit{lit} &amp;::=&amp;
+\mathit{bool} \\&amp;|&amp;
+\mathit{int} \\&amp;|&amp;
+\mathit{float} \\&amp;|&amp;
+\mathit{str} \\&amp;|&amp;
+\mathit{ident} \\
+\\
+\mathit{bool} &amp;::=&amp;
+\mathsf{true}</del>|~\mathsf{false} \\
+\mathit{int} &amp;::=&amp;
+/\texttt{[0-9]+}/ \\
+\mathit{float} &amp;::=&amp;
+/\texttt{0[xX]([0-9a-fA-F]*\.[0-9a-fA-F]+)|([0-9a-fA-F]+\.?)([pP][+-]?[0-9]+)?}/ \\
+\mathit{str} &amp;::=&amp;
+/\texttt{&quot;[^&quot;]*&quot;}/ \\
+\mathit{ident} &amp;::=&amp;
+/\texttt{[A-Za-z]A-Za-z0-9</em>]*}/ \\
+\end{array}
+\]</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="compilation/interpreter.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
+                            <a rel="next" href="microzinc/types.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -187,7 +273,13 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="compilation/interpreter.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
+                    <a rel="next" href="microzinc/types.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
             </nav>
 
         </div>
