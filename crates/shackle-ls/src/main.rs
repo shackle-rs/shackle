@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 	eprintln!("starting MiniZinc language server");
 	let (connection, io_threads) = Connection::stdio();
 
-	let server_capabilities = serde_json::to_value(&ServerCapabilities {
+	let server_capabilities = serde_json::to_value(ServerCapabilities {
 		definition_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),

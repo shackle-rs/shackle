@@ -92,7 +92,7 @@ impl AnnotationItem {
 					parameters: None,
 				},
 			},
-			data: Box::new(ItemData::default()),
+			data: Box::default(),
 			origin: origin.into(),
 		}
 	}
@@ -166,7 +166,7 @@ pub type DeclarationId = ArenaIndex<DeclarationItem>;
 impl DeclarationItem {
 	/// Create a new declaration item
 	pub fn new(domain: &DomainBuilder, top_level: bool, origin: impl Into<Origin>) -> Self {
-		let mut data = Box::new(ItemData::default());
+		let mut data = Box::default();
 		Item {
 			item: Declaration {
 				domain: domain.finish(&mut data),
@@ -223,7 +223,7 @@ impl EnumerationItem {
 	/// Create a new enumeration item
 	pub fn new(enum_type: EnumRef, origin: impl Into<Origin>) -> Self {
 		Item {
-			data: Box::new(ItemData::default()),
+			data: Box::default(),
 			item: Enumeration {
 				annotations: Vec::new(),
 				definition: None,
@@ -275,7 +275,7 @@ pub type FunctionId = ArenaIndex<FunctionItem>;
 impl FunctionItem {
 	/// Create a new function item
 	pub fn new(name: Identifier, return_type: &DomainBuilder, origin: impl Into<Origin>) -> Self {
-		let mut data = Box::new(ItemData::default());
+		let mut data = Box::default();
 		Item {
 			item: Function {
 				annotations: Vec::new(),
@@ -446,7 +446,7 @@ impl SolveItem {
 				goal: Goal::Satisfy,
 				annotations: Vec::new(),
 			},
-			data: Box::new(ItemData::default()),
+			data: Box::default(),
 			origin: origin.into(),
 		}
 	}

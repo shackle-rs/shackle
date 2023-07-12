@@ -638,7 +638,6 @@ impl ExpressionCollector<'_> {
 		Call {
 			arguments: c
 				.arguments()
-				.into_iter()
 				.map(|a| self.collect_expression(a))
 				.collect(),
 			function: self.collect_expression(c.function()),
