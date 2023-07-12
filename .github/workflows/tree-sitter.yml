@@ -24,3 +24,9 @@ jobs:
       - name: Run parser tests
         run: npm test
         working-directory: ${{matrix.parser}}
+      - name: Upload artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: tree-sitter
+          path: ${{matrix.parser}}/src
