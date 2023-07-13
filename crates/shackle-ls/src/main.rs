@@ -131,6 +131,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 
 	let server_capabilities = serde_json::to_value(ServerCapabilities {
 		definition_provider: Some(OneOf::Left(true)),
+		references_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		completion_provider: Some(CompletionOptions {
@@ -177,6 +178,7 @@ fn main_loop(
 					.on::<ViewScopeHandler, _, _>()
 					.on::<ViewPrettyPrintHandler, _, _>()
 					.on::<GotoDefinitionHandler, _, _>()
+					.on::<ReferencesHandler, _, _>()
 					.on::<HoverHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()
 					.on::<SemanticTokensHandler, _, _>()
