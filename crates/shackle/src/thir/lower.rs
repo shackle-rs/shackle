@@ -946,14 +946,29 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							.source_span(self.parent.db.upcast()),
 					)
 				});
-				alloc_expression(
+				let expr = alloc_expression(
 					match ident {
 						LoweredIdentifier::ResolvedIdentifier(i) => i.clone(),
 						_ => unreachable!(),
 					},
 					self,
 					origin,
-				)
+				);
+
+				if expr.ty() == ty {
+					expr
+				} else {
+					// Need to insert call to fix()
+					assert_eq!(expr.ty().with_inst(db.upcast(), VarType::Par).unwrap(), ty);
+					alloc_expression(
+						LookupCall {
+							function: self.parent.ids.fix.into(),
+							arguments: vec![expr],
+						},
+						self,
+						origin,
+					)
+				}
 			}
 			hir::Expression::IfThenElse(ite) => alloc_expression(
 				IfThenElse {

@@ -101,7 +101,16 @@ impl BodyTypeContext {
 				// Declarations with incomplete types would have been done during signature typing
 				if data[it.declared_type].is_complete(data) {
 					if let Some(e) = it.definition {
-						typer.typecheck_expression(e, expected);
+						let ids = db.identifier_registry();
+						let output_only = it.annotations.iter().any(|ann| match &it.data[*ann] {
+							crate::hir::Expression::Identifier(i) => *i == ids.output_only,
+							_ => false,
+						});
+						if output_only {
+							typer.typecheck_output(e, expected);
+						} else {
+							typer.typecheck_expression(e, expected);
+						}
 					}
 					for ann in it.annotations.iter() {
 						typer.typecheck_declaration_annotation(*ann, expected);
@@ -113,7 +122,7 @@ impl BodyTypeContext {
 				if let Some(s) = &it.section {
 					typer.typecheck_expression(*s, types.string);
 				}
-				typer.typecheck_expression(it.expression, types.array_of_string);
+				typer.typecheck_output(it.expression, types.array_of_string);
 			}
 			LocalItemRef::Constraint(c) => {
 				let it = &model[c];

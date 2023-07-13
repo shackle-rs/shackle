@@ -69,6 +69,7 @@ pub struct Typer<'a, T> {
 	ctx: &'a mut T,
 	item: ItemRef,
 	data: &'a ItemData,
+	in_output_item: bool,
 }
 
 impl<'a, T: TypeContext> Typer<'a, T> {
@@ -81,6 +82,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			ctx,
 			item,
 			data,
+			in_output_item: false,
 		}
 	}
 
@@ -104,6 +106,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				},
 			);
 		}
+	}
+
+	/// Collect the type of an output expression and check that it is a subtype of the expected type.
+	pub fn typecheck_output(&mut self, expr: ArenaIndex<Expression>, expected: Ty) {
+		let prev = self.in_output_item;
+		self.in_output_item = true;
+		self.typecheck_expression(expr, expected);
+		self.in_output_item = prev;
 	}
 
 	/// Get the type of this expression
@@ -194,10 +204,17 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			let expression = ExpressionRef::new(self.item, expr);
 			self.ctx.add_identifier_resolution(expression, p);
 			match self.ctx.type_pattern(db, p) {
-				PatternTy::Variable(ty)
-				| PatternTy::Argument(ty)
-				| PatternTy::Enum(ty)
-				| PatternTy::EnumAtom(ty) => return ty,
+				PatternTy::Variable(ty) => {
+					if self.in_output_item && p.item() != self.item {
+						return ty
+							.with_inst(db.upcast(), VarType::Par)
+							.expect("Failed to make type par");
+					}
+					return ty;
+				}
+				PatternTy::Argument(ty) | PatternTy::Enum(ty) | PatternTy::EnumAtom(ty) => {
+					return ty
+				}
 				PatternTy::AnnotationAtom => return self.types.ann,
 				PatternTy::TypeAlias { .. } => {
 					let (src, span) =
@@ -1528,6 +1545,15 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 			self.typecheck_expression(*ann, self.types.ann);
 		}
+		ty
+	}
+
+	/// Type check a declaration in output mode
+	pub fn collect_output_declaration(&mut self, d: &Declaration) -> Ty {
+		let prev = self.in_output_item;
+		self.in_output_item = true;
+		let ty = self.collect_declaration(d);
+		self.in_output_item = prev;
 		ty
 	}
 

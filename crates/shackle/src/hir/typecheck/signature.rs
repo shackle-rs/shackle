@@ -180,7 +180,7 @@ impl SignatureTypeContext {
 							.iter()
 							.find(|ann| match &it.data[**ann] {
 								crate::hir::Expression::Identifier(i) => {
-									i.lookup(db) == "annotated_expression"
+									*i == db.identifier_registry().annotated_expression
 								}
 								_ => false,
 							})
@@ -299,18 +299,58 @@ impl SignatureTypeContext {
 			}
 			LocalItemRef::Declaration(d) => {
 				let it = &model[d];
+				let ids = db.identifier_registry();
+				let output_only = it
+					.annotations
+					.iter()
+					.find(|ann| match &it.data[**ann] {
+						crate::hir::Expression::Identifier(i) => *i == ids.output_only,
+						_ => false,
+					})
+					.copied();
 				for p in Pattern::identifiers(it.pattern, data) {
 					self.add_declaration(PatternRef::new(item, p), PatternTy::Computing);
 				}
 				let mut typer = Typer::new(db, self, item, data);
-				if data[it.declared_type].is_complete(data) {
+				let ty = if data[it.declared_type].is_complete(data) {
 					// Use LHS type only
 					let expected = typer
 						.complete_type(it.declared_type, None, TypeCompletionMode::Default)
 						.ty;
-					typer.collect_pattern(None, false, it.pattern, expected, false);
+					typer.collect_pattern(None, false, it.pattern, expected, false)
+				} else if output_only.is_some() {
+					typer.collect_output_declaration(it)
 				} else {
-					typer.collect_declaration(it);
+					typer.collect_declaration(it)
+				};
+
+				if let Some(ann) = output_only {
+					if it.definition.is_none() {
+						let (src, span) =
+							NodeRef::from(EntityRef::new(db, item, ann)).source_span(db);
+						self.add_diagnostic(
+							item,
+							SyntaxError {
+								src,
+								span,
+								msg: "'output_only' declarations must have a right-hand side."
+									.to_owned(),
+								other: Vec::new(),
+							},
+						);
+					}
+					if !ty.known_par(db.upcast()) {
+						let (src, span) =
+							NodeRef::from(EntityRef::new(db, item, ann)).source_span(db);
+						self.add_diagnostic(
+							item,
+							TypeMismatch {
+								src,
+								span,
+								msg: "'output_only' declarations must be par.".to_owned(),
+							},
+						);
+					}
 				}
 			}
 			LocalItemRef::Enumeration(e) => {

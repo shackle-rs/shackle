@@ -71,6 +71,7 @@ pub(crate) use id_registry;
 id_registry!(
 	IdentifierRegistry,
 	annotated_expression,
+	output_only,
 	array_nd: "arrayNd",
 	array_xd: "arrayXd",
 	array2d,
@@ -82,6 +83,8 @@ id_registry!(
 	show,
 	show_dzn: "showDzn",
 	show_json: "showJSON",
+	is_fixed,
+	fix,
 	eq: "=",
 	index_set,
 	shackle_type,
