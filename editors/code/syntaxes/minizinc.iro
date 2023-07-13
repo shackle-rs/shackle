@@ -286,14 +286,20 @@ main : context {
 
     : pattern {
         description     = type keyword
-        regex          \= (\b(?:ann|any|array|bool|enum|float|int|list|of|op|par|record|set|string|tuple|var)\b)
+        regex          \= (\b(?:ann|array|bool|enum|float|int|list|of|par|set|string|tuple|var|record|any|opt|op)\b)
         styles []       = .type;
     }
 
     : pattern {
         description     = expression keyword
-        regex          \= (\b(?:for|forall|if|then|elseif|else|endif|where|let|in|case|of|endcase|lambda)\b)
+        regex          \= (\b(?:for|forall|exists|if|then|elseif|else|endif|where|let|in|case|of|endcase|lambda)\b)
         styles []       = .keyword;
+    }
+
+    : pattern {
+        description     = reserved identifiers
+        regex          \= (\b(?:case|op)\b)
+        styles []       = .illegal;
     }
     
     #######################################
