@@ -140,7 +140,8 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		}),
 		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
 			SemanticTokensOptions {
-				full: Some(SemanticTokensFullOptions::Bool(true)),
+				full: Some(SemanticTokensFullOptions::Delta { delta: Some(false) }),
+				range: Some(false),
 				legend: SemanticTokensLegend {
 					token_types: TokenType::legend(),
 					token_modifiers: TokenModifier::legend(),
