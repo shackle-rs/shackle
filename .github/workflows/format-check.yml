@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # Check formatting of Rust files
       - name: Install correct toolchain
@@ -21,6 +21,11 @@ jobs:
           args: -- --check
 
       # Check formatting of other files
-      - uses: actionsx/prettier@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          args: --check .
+          node-version: lts/*
+      - name: Install prettier
+        run: npm ci
+      - name: Run prettier
+        run: npm run format:check

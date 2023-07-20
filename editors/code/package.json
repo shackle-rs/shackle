@@ -1,102 +1,101 @@
 {
-  "name": "vscode-shackle",
-  "description": "A VS Code extension for MiniZinc",
-  "version": "0.1.0",
-  "license": "MPL-2.0",
-  "publisher": "shackle-rs",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/shackle-rs/shackle"
-  },
-  "categories": [],
-  "keywords": [
-    "multi-root ready"
-  ],
-  "engines": {
-    "vscode": "^1.74.0"
-  },
-  "activationEvents": [
-    "onLanguage:minizinc",
-    "onCommand:shackleLanguageServer.viewHir",
-    "onCommand:shackleLanguageServer.viewScope"
-  ],
-  "main": "./out/main",
-  "contributes": {
-    "configuration": {
-      "type": "object",
-      "title": "Shackle language server configuration",
-      "properties": {
-        "shackleLanguageServer.executable": {
-          "scope": "window",
-          "type": "string",
-          "default": "shackle-ls",
-          "description": "Path to the shackle-ls executable."
-        }
-      }
-    },
-    "commands": [
-      {
-        "command": "shackleLanguageServer.viewCst",
-        "title": "MiniZinc: View CST"
-      },
-      {
-        "command": "shackleLanguageServer.viewAst",
-        "title": "MiniZinc: View AST"
-      },
-      {
-        "command": "shackleLanguageServer.viewHir",
-        "title": "MiniZinc: View HIR"
-      },
-      {
-        "command": "shackleLanguageServer.viewScope",
-        "title": "MiniZinc: View Scope"
-      },
-      {
-        "command": "shackleLanguageServer.viewPrettyPrint",
-        "title": "MiniZinc: View Pretty Printed MiniZinc"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "minizinc",
-        "scopeName": "source.MiniZinc",
-        "path": "./syntaxes/minizinc.tmLanguage"
-      }
-    ],
-    "languages": [
-      {
-        "id": "minizinc",
-        "extensions": [
-          ".mzn",
-          ".dzn",
-          ".fzn"
-        ],
-        "aliases": [
-          "MiniZinc",
-          "mzn"
-        ],
-        "configuration": "./language-configuration.json"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -b",
-    "watch": "tsc -b -w",
-    "lint": "eslint ./src --ext .ts,.tsx"
-  },
-  "devDependencies": {
-    "@types/mocha": "^10.0.1",
-    "@types/node": "^18.11.17",
-    "@types/vscode": "^1.74.0",
-    "@typescript-eslint/eslint-plugin": "^5.46.1",
-    "@typescript-eslint/parser": "^5.46.1",
-    "eslint": "^8.30.0",
-    "mocha": "^10.2.0",
-    "prettier": "^2.8.1",
-    "typescript": "^4.9.4"
-  },
-  "dependencies": {
-    "vscode-languageclient": "^8.0.2"
-  }
+	"name": "vscode-shackle",
+	"description": "A VS Code extension for MiniZinc",
+	"version": "0.1.0",
+	"license": "MPL-2.0",
+	"publisher": "shackle-rs",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/shackle-rs/shackle"
+	},
+	"categories": [],
+	"keywords": [
+		"multi-root ready"
+	],
+	"engines": {
+		"vscode": "^1.74.0"
+	},
+	"activationEvents": [
+		"onLanguage:minizinc",
+		"onCommand:shackleLanguageServer.viewHir",
+		"onCommand:shackleLanguageServer.viewScope"
+	],
+	"main": "./out/main",
+	"contributes": {
+		"configuration": {
+			"type": "object",
+			"title": "Shackle language server configuration",
+			"properties": {
+				"shackleLanguageServer.executable": {
+					"scope": "window",
+					"type": "string",
+					"default": "shackle-ls",
+					"description": "Path to the shackle-ls executable."
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "shackleLanguageServer.viewCst",
+				"title": "MiniZinc: View CST"
+			},
+			{
+				"command": "shackleLanguageServer.viewAst",
+				"title": "MiniZinc: View AST"
+			},
+			{
+				"command": "shackleLanguageServer.viewHir",
+				"title": "MiniZinc: View HIR"
+			},
+			{
+				"command": "shackleLanguageServer.viewScope",
+				"title": "MiniZinc: View Scope"
+			},
+			{
+				"command": "shackleLanguageServer.viewPrettyPrint",
+				"title": "MiniZinc: View Pretty Printed MiniZinc"
+			}
+		],
+		"grammars": [
+			{
+				"language": "minizinc",
+				"scopeName": "source.MiniZinc",
+				"path": "./syntaxes/minizinc.tmLanguage"
+			}
+		],
+		"languages": [
+			{
+				"id": "minizinc",
+				"extensions": [
+					".mzn",
+					".dzn",
+					".fzn"
+				],
+				"aliases": [
+					"MiniZinc",
+					"mzn"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run compile",
+		"compile": "tsc -b",
+		"watch": "tsc -b -w",
+		"lint": "eslint ./src --ext .ts,.tsx"
+	},
+	"devDependencies": {
+		"@types/mocha": "^10.0.1",
+		"@types/node": "^18.11.17",
+		"@types/vscode": "^1.74.0",
+		"@typescript-eslint/eslint-plugin": "^5.46.1",
+		"@typescript-eslint/parser": "^5.46.1",
+		"eslint": "^8.30.0",
+		"mocha": "^10.2.0",
+		"typescript": "^4.9.4"
+	},
+	"dependencies": {
+		"vscode-languageclient": "^8.0.2"
+	}
 }

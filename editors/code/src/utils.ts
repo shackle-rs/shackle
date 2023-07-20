@@ -1,9 +1,9 @@
-import { TextEditor } from "vscode";
+import { TextEditor } from "vscode"
 
 export function isMiniZinc(editor: TextEditor) {
-  return (
-    editor &&
-    editor.document.languageId === "minizinc" &&
-    editor.document.uri.scheme === "file"
-  );
+	return (
+		editor &&
+		editor.document.languageId === "minizinc" &&
+		editor.document.uri.scheme === "file"
+	)
 }
