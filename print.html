@@ -10,9 +10,9 @@
         <!-- Custom HTML head -->
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script
-          id="MathJax-script"
-          async
-          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        	id="MathJax-script"
+        	async
+        	src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         ></script>
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -89,7 +89,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html"><strong aria-hidden="true">1.</strong> The Compilation Process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast-gen.html"><strong aria-hidden="true">1.2.</strong> MiniZinc AST generation</a></li><li class="chapter-item expanded "><a href="compilation/typecheck.html"><strong aria-hidden="true">1.3.</strong> Type checking</a></li><li class="chapter-item expanded "><a href="compilation/type-specialise.html"><strong aria-hidden="true">1.4.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/transforms.html"><strong aria-hidden="true">1.5.</strong> MiniZinc AST-to-AST transformations</a></li><li class="chapter-item expanded "><a href="compilation/microzinc-gen.html"><strong aria-hidden="true">1.6.</strong> Compilation to MicroZinc</a></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.7.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.8.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="process.html"><strong aria-hidden="true">1.</strong> The compilation process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="compilation/ast/ast.html"><strong aria-hidden="true">1.2.</strong> Abstract syntax tree</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/ast/includes.html"><strong aria-hidden="true">1.2.1.</strong> Include resolution</a></li></ol></li><li class="chapter-item expanded "><a href="compilation/hir/hir.html"><strong aria-hidden="true">1.3.</strong> High-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/hir/scope.html"><strong aria-hidden="true">1.3.1.</strong> Scope collection</a></li><li class="chapter-item expanded "><a href="compilation/hir/typecheck.html"><strong aria-hidden="true">1.3.2.</strong> Type checking</a></li></ol></li><li class="chapter-item expanded "><a href="compilation/thir/thir.html"><strong aria-hidden="true">1.4.</strong> Typed high-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/thir/transform.html"><strong aria-hidden="true">1.4.1.</strong> Model transformations</a></li><li class="chapter-item expanded "><a href="compilation/thir/type-specialise.html"><strong aria-hidden="true">1.4.2.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="compilation/thir/overloading.html"><strong aria-hidden="true">1.4.3.</strong> Removal of overloading</a></li><li class="chapter-item expanded "><a href="compilation/thir/records.html"><strong aria-hidden="true">1.4.4.</strong> Erasure of records</a></li><li class="chapter-item expanded "><a href="compilation/thir/enums.html"><strong aria-hidden="true">1.4.5.</strong> Erasure of enums</a></li><li class="chapter-item expanded "><a href="compilation/thir/comprehension.html"><strong aria-hidden="true">1.4.6.</strong> Desugaring of comprehensions</a></li><li class="chapter-item expanded "><a href="compilation/thir/option-types.html"><strong aria-hidden="true">1.4.7.</strong> Erasure of option types</a></li><li class="chapter-item expanded "><a href="compilation/thir/captures.html"><strong aria-hidden="true">1.4.8.</strong> Desugaring of capturing</a></li></ol></li><li class="chapter-item expanded "><a href="compilation/mir/mir.html"><strong aria-hidden="true">1.5.</strong> Mid-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compilation/mir/totalise.html"><strong aria-hidden="true">1.5.1.</strong> Totalisation</a></li><li class="chapter-item expanded "><a href="compilation/mir/context.html"><strong aria-hidden="true">1.5.2.</strong> Context analysis</a></li></ol></li><li class="chapter-item expanded "><a href="compilation/bytecode-gen.html"><strong aria-hidden="true">1.6.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="compilation/interpreter.html"><strong aria-hidden="true">1.7.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -179,801 +179,1112 @@ Early research into a design of such a framework was conducted in Jip J. Dekker'
 The intention of this document is to be updated throughout the design process as to both keep a history of the design of this framework and make this a start of the internal documentation of the framework.</p>
 <h2 id="acknowledgements"><a class="header" href="#acknowledgements">Acknowledgements</a></h2>
 <p>This research was partially funded by the Australian Government through the Australian Research Council Industrial Transformation Training Centre in Optimisation Technologies, Integrated Methodologies, and Applications (<a href="https://optima.org.au">OPTIMA</a>), Project ID IC200100009.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="the-compilation-process"><a class="header" href="#the-compilation-process">The Compilation Process</a></h1>
-<p>The compilation process for Shackle is divided into several phases.
-Each phase is described in more detail in its respective section.
-The overall process is divided into two main stages representing development
-milestones.</p>
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-<p><svg
-   version="1.1"
-   id="svg950"
-   xml:space="preserve"
-   width="528.73334"
-   height="565.70667"
-   viewBox="0 0 528.73334 565.70667"
-   sodipodi:docname="compilation-process.svg"
-   inkscape:version="1.1.2 (b8e25be833, 2022-02-05)"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><defs
-     id="defs954"><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath968"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path966" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath984"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path982" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1000"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path998" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1018"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1016" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1036"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1034" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1048"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1046" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1064"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1062" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1076"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1074" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1096"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1094" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1108"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1106" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1120"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1118" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1132"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1130" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1148"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1146" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1164"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1162" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1180"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1178" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1192"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1190" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1216"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1214" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1228"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1226" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1244"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1242" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1256"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1254" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1278"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1276" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1294"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1292" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1312"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1310" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1328"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1326" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1348"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1346" /></clipPath><clipPath
-       clipPathUnits="userSpaceOnUse"
-       id="clipPath1368"><path
-         d="M 1.1802e-5,0 H 792.00001 V 612 H 1.1802e-5 Z"
-         clip-rule="evenodd"
-         id="path1366" /></clipPath></defs>&lt;sodipodi:namedview
-id=&quot;namedview952&quot;
-pagecolor=&quot;#ffffff&quot;
-bordercolor=&quot;#666666&quot;
-borderopacity=&quot;1.0&quot;
-inkscape:pageshadow=&quot;2&quot;
-inkscape:pageopacity=&quot;0.0&quot;
-inkscape:pagecheckerboard=&quot;0&quot;
-showgrid=&quot;false&quot;
-inkscape:zoom=&quot;1.002451&quot;
-inkscape:cx=&quot;442.41565&quot;
-inkscape:cy=&quot;319.2176&quot;
-inkscape:window-width=&quot;1920&quot;
-inkscape:window-height=&quot;1027&quot;
-inkscape:window-x=&quot;-8&quot;
-inkscape:window-y=&quot;-8&quot;
-inkscape:window-maximized=&quot;1&quot;
-inkscape:current-layer=&quot;g956&quot; /&gt;<g
-     id="g956"
-     inkscape:groupmode="layer"
-     inkscape:label="Shackle(1)"
-     transform="matrix(1.3333333,0,0,-1.3333333,-71.893332,727.07332)"><path
-       d="m 188,471.27 h 68.047 v 36.353 H 188 Z"
-       style="fill:#fbe5d5;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path958" /><path
-       d="m 188,471.27 h 68.047 v 36.353 H 188 Z"
-       style="fill:none;stroke:#833c0b;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-       id="path960" /><g
-       id="g962"><g
-         id="g964"
-         clip-path="url(#clipPath968)"><text
-           transform="matrix(1,0,0,-1,201.65,485.7)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#833c0b;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text972"><tspan
-             x="0 9.7643003 14.2857 21.043751 23.316475 30.074526 35.3535"
-             y="0"
-             sodipodi:role="line"
-             id="tspan970">mzn CST</tspan></text></g></g><path
-       d="m 338.05,470.69 h 69.682 v 36.943 H 338.05 Z"
-       style="fill:#fbe5d5;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path974" /><path
-       d="m 338.05,470.69 h 69.682 v 36.943 H 338.05 Z"
-       style="fill:none;stroke:#833c0b;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-       id="path976" /><g
-       id="g978"><g
-         id="g980"
-         clip-path="url(#clipPath984)"><text
-           transform="matrix(1,0,0,-1,352.4,485.4)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#833c0b;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text988"><tspan
-             x="0 9.7643003 14.26165 20.995649 23.244326 29.990351 35.978802"
-             y="0"
-             sodipodi:role="line"
-             id="tspan986">mzn AST</tspan></text></g></g><path
-       d="m 76.972,489.15 c 0,10.2 8.237,18.47 18.399,18.47 10.159,0 18.399,-8.27 18.399,-18.47 0,-10.21 -8.24,-18.48 -18.399,-18.48 -10.162,0 -18.399,8.27 -18.399,18.48 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path990" /><path
-       d="m 76.972,489.15 c 0,10.2 8.237,18.47 18.399,18.47 10.159,0 18.399,-8.27 18.399,-18.47 0,-10.21 -8.24,-18.48 -18.399,-18.48 -10.162,0 -18.399,8.27 -18.399,18.48 z"
-       style="fill:none;stroke:#c8c8c8;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-       id="path992" /><g
-       id="g994"><g
-         id="g996"
-         clip-path="url(#clipPath1000)"><text
-           transform="matrix(1,0,0,-1,85.15,485.4)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#feffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1004"><tspan
-             x="0 9.7402496 14.2376"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1002">mzn</tspan></text></g></g><path
-       d="m 113.77,489.15 h 13.5 v 0.3 h 54.57"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-       id="path1006" /><path
-       d="m 180.96,492.97 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1008" /><g
-       id="g1012"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1014"
-         clip-path="url(#clipPath1018)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,131.77,496.4)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1022"><tspan
-             x="0 6.0004749 11.988925 16.474251 20.9716 23.220276 29.954275"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1020">Parsing</tspan></text></g></g><path
-       d="m 256.04,489.45 h 13.5 v -0.29 h 62.35"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1"
-       id="path1024" /><path
-       d="m 331.01,492.68 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1026" /><g
-       id="g1030"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1032"
-         clip-path="url(#clipPath1036)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,281.98,509.77)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1040"><tspan
-             x="0 5.2549248 8.2371254 17.977375 23.97785 26.960051"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1038">Simple</tspan></text></g></g><g
-       id="g1042"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1044"
-         clip-path="url(#clipPath1048)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,271.63,495.35)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1052"><tspan
-             x="0 6 11.976 17.243999 23.243999 29.232 34.476002 38.964001 41.208 47.952"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1050">desugaring</tspan></text></g></g><path
-       d="m 125.34,395.46 h 62.72 l 6.97,36.95 h -62.72 z"
-       style="fill:#fff2cc;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1054" /><path
-       d="m 125.34,395.46 h 62.72 l 6.97,36.95 h -62.72 z"
-       style="fill:none;stroke:#7f6000;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1056" /><g
-       id="g1058"><g
-         id="g1060"
-         clip-path="url(#clipPath1064)"><text
-           transform="matrix(1,0,0,-1,148.55,417.3)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#7f6000;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1068"><tspan
-             x="0 5.9884501 11.243375 17.243851 23.2323"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1066">Type </tspan></text></g></g><g
-       id="g1070"><g
-         id="g1072"
-         clip-path="url(#clipPath1076)"><text
-           transform="matrix(1,0,0,-1,139.02,402.88)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#7f6000;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1080"><tspan
-             x="0 5.2428999 11.243375 17.231825 22.48675 27.741674 30.723875 36.72435"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1078">checking</tspan></text></g></g><path
-       d="m 407.73,489.16 h 13.5 V 445.91 H 111.84 v -31.97 h 10.83"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1082" /><path
-       d="m 121.79,417.46 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1084" /><path
-       d="m 102.11,327.78 h 104.54 l 11.61,36.95 H 113.72 Z"
-       style="fill:#deebf6;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1086" /><path
-       d="m 102.11,327.78 h 104.54 l 11.61,36.95 H 113.72 Z"
-       style="fill:none;stroke:#3955a3;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1088" /><g
-       id="g1090"><g
-         id="g1092"
-         clip-path="url(#clipPath1096)"><text
-           transform="matrix(1,0,0,-1,140.18,349.52)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#4672c4;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1100"><tspan
-             x="0 6.756 12.744"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1098">AST</tspan></text></g></g><g
-       id="g1102"><g
-         id="g1104"
-         clip-path="url(#clipPath1108)"><text
-           transform="matrix(1,0,0,-1,158.5,349.52)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#4672c4;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1112"><tspan
-             x="0"
-             y="0"
-             id="tspan1110">-</tspan></text></g></g><g
-       id="g1114"><g
-         id="g1116"
-         clip-path="url(#clipPath1120)"><text
-           transform="matrix(1,0,0,-1,162.17,349.52)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#4672c4;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1124"><tspan
-             x="0 6.756 12.744 18"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1122">AST </tspan></text></g></g><g
-       id="g1126"><g
-         id="g1128"
-         clip-path="url(#clipPath1132)"><text
-           transform="matrix(1,0,0,-1,121.02,335.1)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#4672c4;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1136"><tspan
-             x="0 3.744 8.2320004 14.22 20.219999 24.719999 28.452 35.183998 38.928001 48.66 54.647999 58.391998 61.380001 67.379997 73.379997"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1134">transformations</tspan></text></g></g><g
-       id="g1138"
-       style="fill:none;fill-opacity:1;stroke:currentColor;stroke-opacity:1"><path
-         d="m 54.295,305.79 h 395.8 v 239.14 h -395.8 z"
-         style="fill:none;stroke:currentColor;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:6, 3;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
-         id="path1140" /></g><g
-       id="g1142"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1144"
-         clip-path="url(#clipPath1148)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,58.35,530.03)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1152"><tspan
-             x="0 5.256 9.7440004 14.988 20.976 26.952 29.232"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1150">Stage 1</tspan></text></g></g><g
-       id="g1154"
-       style="fill:none;fill-opacity:1;stroke:currentColor;stroke-opacity:1"><path
-         d="m 54.302,121.4 h 395.44 V 275.05 H 54.302 Z"
-         style="fill:none;stroke:currentColor;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:6, 3;stroke-dashoffset:0;stroke-opacity:1;fill-opacity:1"
-         id="path1156" /></g><g
-       id="g1158"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1160"
-         clip-path="url(#clipPath1164)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,58.35,259.83)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1168"><tspan
-             x="0 5.278975 9.7883501 15.067325 21.079824 27.092325 29.341"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1166">Stage 2</tspan></text></g></g><path
-       d="m 293.78,395.47 h 85.85 l 9.54,36.94 h -85.85 z"
-       style="fill:#fff2cc;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1170" /><path
-       d="m 293.78,395.47 h 85.85 l 9.54,36.94 h -85.85 z"
-       style="fill:none;stroke:#7f6000;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1172" /><g
-       id="g1174"><g
-         id="g1176"
-         clip-path="url(#clipPath1180)"><text
-           transform="matrix(1,0,0,-1,330.02,417.3)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#7f6000;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1184"><tspan
-             x="0 5.9884501 11.243375 17.243851 23.2323"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1182">Type </tspan></text></g></g><g
-       id="g1186"><g
-         id="g1188"
-         clip-path="url(#clipPath1192)"><text
-           transform="matrix(1,0,0,-1,308.83,402.88)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#7f6000;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1196"><tspan
-             x="0 4.5 11.244 17.219999 21.743999 24.732 30.719999 32.964001 35.952 40.452 46.439999 50.183998 53.172001 59.172001"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1194">specialisation</tspan></text></g></g><path
-       d="m 191.54,413.94 h 16.99 v 0 h 83.86"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1198" /><path
-       d="m 291.51,417.46 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1200" /><path
-       d="m 336.71,395.47 v -13.5 H 88.607 v -35.71 h 13.143"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1202" /><path
-       d="m 100.87,349.78 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1204" /><path
-       d="m 396.31,346.25 c 0,10.2 8.24,18.47 18.4,18.47 10.16,0 18.4,-8.27 18.4,-18.47 0,-10.2 -8.24,-18.47 -18.4,-18.47 -10.16,0 -18.4,8.27 -18.4,18.47 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1206" /><path
-       d="m 396.31,346.25 c 0,10.2 8.24,18.47 18.4,18.47 10.16,0 18.4,-8.27 18.4,-18.47 0,-10.2 -8.24,-18.47 -18.4,-18.47 -10.16,0 -18.4,8.27 -18.4,18.47 z"
-       style="fill:none;stroke:#c8c8c8;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1208" /><g
-       id="g1210"><g
-         id="g1212"
-         clip-path="url(#clipPath1216)"><text
-           transform="matrix(1,0,0,-1,406.27,342.33)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#feffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1220"><tspan
-             x="0"
-             y="0"
-             id="tspan1218">μ</tspan></text></g></g><g
-       id="g1222"><g
-         id="g1224"
-         clip-path="url(#clipPath1228)"><text
-           transform="matrix(1,0,0,-1,412.88,342.33)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#feffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1232"><tspan
-             x="0 4.5248752"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1230">zn</tspan></text></g></g><path
-       d="m 306.63,327.78 h 69.682 v 36.943 H 306.63 Z"
-       style="fill:#fbe5d5;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1234" /><path
-       d="m 306.63,327.78 h 69.682 v 36.943 H 306.63 Z"
-       style="fill:none;stroke:#833c0b;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1236" /><g
-       id="g1238"><g
-         id="g1240"
-         clip-path="url(#clipPath1244)"><text
-           transform="matrix(1,0,0,-1,322.45,342.33)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#833c0b;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1248"><tspan
-             x="0"
-             y="0"
-             id="tspan1246">μ</tspan></text></g></g><g
-       id="g1250"><g
-         id="g1252"
-         clip-path="url(#clipPath1256)"><text
-           transform="matrix(1,0,0,-1,329.05,342.33)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#833c0b;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1260"><tspan
-             x="0 4.5214 11.27945 13.528125 21.043751 26.322725"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1258">zn AST</tspan></text></g></g><path
-       d="m 376.32,346.26 h 6.75 v -0.01 h 7.08"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1262" /><path
-       d="m 389.27,349.77 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1264" /><path
-       d="m 212.46,346.26 h 88.01"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1266" /><path
-       d="m 299.59,349.78 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1268" /><g
-       id="g1272"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1274"
-         clip-path="url(#clipPath1278)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,230.83,351.58)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1282"><tspan
-             x="0 6.744 12.744 22.511999 28.511999 31.5 34.487999 39.731998 44.220001 46.464001 53.195999"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1280">Compilation</tspan></text></g></g><path
-       d="m 76.972,216.57 c 0,10.2 15.598,18.47 34.838,18.47 19.24,0 34.84,-8.27 34.84,-18.47 0,-10.2 -15.6,-18.47 -34.84,-18.47 -19.24,0 -34.838,8.27 -34.838,18.47 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1284" /><path
-       d="m 76.972,216.57 c 0,10.2 15.598,18.47 34.838,18.47 19.24,0 34.84,-8.27 34.84,-18.47 0,-10.2 -15.6,-18.47 -34.84,-18.47 -19.24,0 -34.838,8.27 -34.838,18.47 z"
-       style="fill:none;stroke:#c8c8c8;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1286" /><g
-       id="g1288"><g
-         id="g1290"
-         clip-path="url(#clipPath1294)"><text
-           transform="matrix(1,0,0,-1,89.2,212.48)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#feffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1298"><tspan
-             x="0 6.0004749 11.988925 15.740725 21.729176 26.9841 32.984573 39.718575"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1296">bytecode</tspan></text></g></g><path
-       d="M 414.71,327.78 V 247.7 H 63.472 v -31.13 h 7.34"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1300" /><path
-       d="m 69.932,220.09 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1302" /><g
-       id="g1306"
-       style="fill:currentColor;fill-opacity:1"><g
-         id="g1308"
-         clip-path="url(#clipPath1312)"
-         style="fill:currentColor;fill-opacity:1"><text
-           transform="matrix(1,0,0,-1,215.58,257.63)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:currentColor;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1316"><tspan
-             x="0 6.7340002 12.734475 18.734949 24.7234 27.717625 32.972549 38.960999 45.707024 51.695477 55.459301 61.44775 65.199547 68.181747 74.915749"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1314">Code generation</tspan></text></g></g><path
-       d="m 193.95,198.08 h 104.54 l 11.62,36.95 H 205.57 Z"
-       style="fill:#deebf6;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1318" /><path
-       d="m 193.95,198.08 h 104.54 l 11.62,36.95 H 205.57 Z"
-       style="fill:none;stroke:#3955a3;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1320" /><g
-       id="g1322"><g
-         id="g1324"
-         clip-path="url(#clipPath1328)"><text
-           transform="matrix(1,0,0,-1,217.68,212.45)"
-           style="font-variant:normal;font-weight:normal;font-size:12px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#4672c4;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1332"><tspan
-             x="0 3.0239999 9 13.488 19.464001 23.232 29.976 33.720001 39.695999 44.208 49.452 53.939999 56.183998 62.916"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1330">Interpretation</tspan></text></g></g><path
-       d="m 146.65,216.57 h 13.5 v -0.02 h 33.45"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1334" /><path
-       d="m 192.72,220.07 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1336" /><path
-       d="m 396.32,216.56 c 0,10.2 8.24,18.47 18.4,18.47 10.16,0 18.4,-8.27 18.4,-18.47 0,-10.2 -8.24,-18.47 -18.4,-18.47 -10.16,0 -18.4,8.27 -18.4,18.47 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1338" /><path
-       d="m 396.32,216.56 c 0,10.2 8.24,18.47 18.4,18.47 10.16,0 18.4,-8.27 18.4,-18.47 0,-10.2 -8.24,-18.47 -18.4,-18.47 -10.16,0 -18.4,8.27 -18.4,18.47 z"
-       style="fill:none;stroke:#c8c8c8;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1340" /><g
-       id="g1342"><g
-         id="g1344"
-         clip-path="url(#clipPath1348)"><text
-           transform="matrix(1,0,0,-1,407.75,212.48)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#feffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1352"><tspan
-             x="0 3.7638249 8.2852249"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1350">fzn</tspan></text></g></g><path
-       d="m 304.3,216.55 h 19.31 v 0.01 h 66.55"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1354" /><path
-       d="m 389.28,220.08 7.04,-3.52 -7.04,-3.52 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1356" /><path
-       d="m 88.535,155.17 c 0,10.21 8.238,18.48 18.395,18.48 10.17,0 18.4,-8.27 18.4,-18.48 0,-10.2 -8.23,-18.47 -18.4,-18.47 -10.157,0 -18.395,8.27 -18.395,18.47 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1358" /><path
-       d="m 88.535,155.17 c 0,10.21 8.238,18.48 18.395,18.48 10.17,0 18.4,-8.27 18.4,-18.48 0,-10.2 -8.23,-18.47 -18.4,-18.47 -10.157,0 -18.395,8.27 -18.395,18.47 z"
-       style="fill:none;stroke:#c8c8c8;stroke-width:0.75;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1360" /><g
-       id="g1362"><g
-         id="g1364"
-         clip-path="url(#clipPath1368)"><text
-           transform="matrix(1,0,0,-1,98.35,151)"
-           style="font-variant:normal;font-weight:normal;font-size:12.025px;font-family:Calibri;-inkscape-font-specification:Calibri;writing-mode:lr-tb;fill:#feffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
-           id="text1372"><tspan
-             x="0 6.0004749 11.243375"
-             y="0"
-             sodipodi:role="line"
-             id="tspan1370">dzn</tspan></text></g></g><path
-       d="m 125.33,155.17 h 120.89 v 36.75"
-       style="fill:none;stroke:#4672c4;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:2;stroke-dasharray:none;stroke-opacity:1"
-       id="path1374" /><path
-       d="m 242.7,191.04 3.52,7.04 3.52,-7.04 z"
-       style="fill:#4672c4;fill-opacity:1;fill-rule:evenodd;stroke:none"
-       id="path1376" /></g></svg></p>
-<h2 id="compilation-phases"><a class="header" href="#compilation-phases">Compilation phases</a></h2>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="the-compilation-process"><a class="header" href="#the-compilation-process">The compilation process</a></h1>
+<p>The Shackle compiler takes a MiniZinc model and compiles it into a bytecode program which is interpreted to produce
+FlatZinc for solvers. Compilation is divided into modules dealing with each of the major source code representations.
+Frontend analysis predominantly uses the <a href="./compilation/hir/hir.html">high-level intermediate representation (HIR)</a>. The
+<a href="./compilation/thir/thir.html">typed high-level (THIR)</a> and <a href="./compilation/mir/mir.html">mid-level (MIR)</a> intermediate
+representations deal with transforming the MiniZinc program into MicroZinc, then finally the
+<a href="./compilation/bytecode-gen.html">bytecode generation</a> step takes place to produce the final compiled program. This
+program is data-independent. The interpreter parses the data runs the bytecode program to generates NanoZinc and
+ultimately FlatZinc for the solver.</p>
+<pre class="mermaid">flowchart TD;
+  mzn>MiniZinc model files]--Parsing-->cst["Parse tree (CST)"]
+
+  cst-->ast["Abstract syntax tree (AST)"]
+  ast--"Lowering (syntactic desugaring)"-->hir["High-level intermediate representation"]
+
+  subgraph parser [Parsing]
+    cst
+    ast
+  end
+
+  hir-->validation[/"Validation (e.g. type checking)"/]
+  validation-->thir["Typed high-level intermediate representation"]
+  validation-->ls["Code tools (e.g. language server)"]
+  thir-->transform[/"Basic transformations"/]
+  transform-->mir["Middle-level intermediate representation"]
+  mir-->analysis[/"Code analysis (e.g. mode analysis)"/]
+  analysis-->rewrite[/"Rewriting"/]
+  rewrite-->uzn[MicroZinc]
+  uzn-->codegen[/"Code generation"/]
+  codegen-->bc[Bytecode]
+
+  subgraph compiler [Data independent compilation]
+    hir
+    thir
+    mir
+    validation
+    transform
+    analysis
+    rewrite
+    uzn
+    codegen
+    bc
+  end
+
+  dzn>Data files]
+  bc--->interpret
+  dzn-->interpret
+  interpret[/Interpretation/]
+  interpret-->nzn[NanoZinc]
+
+  subgraph interpreter [Interpreter]
+    interpret
+    nzn
+  end
+
+  nzn-->solver[FlatZinc solver]
+  solver-->result[Result]
+  result-->heuristic[Search heuristic]
+  heuristic-->solution(Solution)
+  heuristic--->interpret
+
+  subgraph solving [Solving]
+    solver
+    result
+    heuristic
+    solution
+  end
+</pre>
+<h2 id="compilation-stages"><a class="header" href="#compilation-stages">Compilation stages</a></h2>
 <ol>
 <li><a href="./compilation/parsing.html">Parsing</a><br />
 <code>tree-sitter</code> is used to generate a CST from a MiniZinc model.</li>
-<li><a href="./compilation/ast-gen.html">MiniZinc AST generation</a><br />
-A simple desugaring phase which generates an AST linked to CST.</li>
-<li><a href="./compilation/typecheck.html">Type checking</a><br />
-Bottom up typechecking, with an additional unification step for dealing with
-any remaining unresolved types due to <code>_</code> or <code>&lt;&gt;</code>.</li>
-<li><a href="./compilation/type-specialise.html">Type specialisation</a><br />
-Monomorphisation of polymorphic functions.</li>
-<li><a href="./compilation/transforms.html">MiniZinc AST-to-AST transformations</a><br />
-Main desugaring transformation phase.</li>
-<li><a href="./compilation/microzinc-gen.html">Compilation to MicroZinc</a><br />
-The MiniZinc AST is transformed into MicroZinc AST, which involves
-removal of function overloading, rewriting operators into calls,
-replacement of variable conditions with an appropriate decomposition, and
-removing partiality.</li>
+<li><a href="./compilation/ast.html">Abstract syntax tree</a><br />
+Type-safe accessors for the CST, used for include resolution.</li>
+<li><a href="./compilation/hir.html">High-level intermediate representation</a><br />
+A syntactic desugaring phase for the first main intermediate representation.<br />
+Includes scope collection, name resolution, function resolution, type
+checking, and various validation checks.</li>
+<li><a href="./compilation/thir.html">Typed high-level intermediate representation</a><br />
+A semantic desugaring phase which combines the HIR nodes with their computed types.<br />
+Includes type specialisation and removal of optional and enum types, as well as other model-level transformations.</li>
+<li><a href="./compilation/mir.html">Mid-level intermediate representation</a><br />
+The MiniZinc THIR is transformed into a MicroZinc AST.</li>
 <li><a href="./compilation/bytecode-gen.html">Bytecode generation</a><br />
-Code generation of a program which will be interpreted to generate the final
-FlatZinc.</li>
+Code generation of a program which will be interpreted to generate the final FlatZinc.</li>
 <li><a href="./compilation/interpreter.html">Bytecode interpretation</a><br />
-The bytecode along with the data is interpreted to produce NanoZinc and later
-FlatZinc or any other format for solver backends.</li>
+The bytecode along with the data is interpreted to produce NanoZinc and later FlatZinc or any other format for
+solver backends.</li>
 </ol>
-<h2 id="compiler-steps"><a class="header" href="#compiler-steps">Compiler steps</a></h2>
-<p>These steps need to be fit into the phases.</p>
+<h2 id="query-based-architecture"><a class="header" href="#query-based-architecture">Query-based architecture</a></h2>
+<p>The compiler utilises <a href="https://github.com/salsa-rs/salsa"><code>Salsa</code></a> to provide a demand-driven, incremental architecture.
+Salsa tracks the dependencies for queries, and memoises query results to avoid recomputation where possible. This is
+especially useful for the language server. The compiler frontend up to the HIR stage is designed to be incremental
+with respect to changing input files - if a model is changed, then only the changed portion, and anything that depended
+on it will be recomputed.</p>
+<p>This means we use a 'pull' architecture - tasks are done lazily when demanded. The main query produces the compiled
+program, requires the MIR, which in turn requires the THIR, which in turn requires the HIR, which in turn requires
+the parsed model files. The <code>CompilerDatabase</code> is the main query database for the compiler. The actual queries are
+defined in the database trait for the module they belong to.</p>
+<h2 id="development"><a class="header" href="#development">Development</a></h2>
 <ul>
-<li>Changing operators into calls</li>
-<li>Changing generators into comprehensions</li>
-<li>Overloading resolution</li>
-<li>Monomorphisation</li>
-<li>Decomposition of option types</li>
-<li>Removal of partiality</li>
-<li>Decomposition of var if-then-else/comprehensions</li>
-<li>Type erasure for enums</li>
-<li>Closing of functions (need to think about first class functions)</li>
-<li>Converting records into tuples</li>
+<li>THIR can be pretty-printed to produce a model file which can be fed to the old compiler</li>
+<li>MIR should be able to do the same</li>
+<li>This allows us to test the compiler without having to also write the interpreter</li>
 </ul>
-<h2 id="query-structure"><a class="header" href="#query-structure">Query structure</a></h2>
+<h2 id="other-compilers"><a class="header" href="#other-compilers">Other compilers</a></h2>
+<p>Much of the design of the compiler has been influenced by other projects, particularly</p>
 <ul>
-<li>Discuss the design of the Salsa queries for the compiler.</li>
-<li>Think about the level of <a href="https://salsa-rs.github.io/salsa/common_patterns/selection.html">selection queries</a>
-required to avoid unnecessary recomputation</li>
-<li>What needs to be interned (probably most data structures should be interned)</li>
-<li>AST probably needs to use a path as the key to allow for top down queries where the result for a node depends on the
-result of its parents</li>
-</ul>
-<h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
-<ul>
-<li>Compilation to MicroZinc happens without data</li>
-<li>Models are compiled with only declarations of standard library functions.
-Calls are resolved later by the interpreter, allowing the library to be
-swapped out without recompilation.
-<ul>
-<li>TODO: This may not be possible due to type specialisation</li>
-</ul>
-</li>
-<li>The standard library, and solver redefinition libraries can be distributed
-pre-compiled into MicroZinc.
-<ul>
-<li>TODO: This may not be possible due to type specialisation</li>
-</ul>
-</li>
-<li>The new compiler will use <a href="https://github.com/salsa-rs/salsa">Salsa</a> so that
-computed results can be memoised and only updated as needed.</li>
-<li>Salsa allows us to use a query based incremental approach to compilation.
-Compiler operations should ideally be designed to require as little context as
-possible to avoid unnecessary recomputation.</li>
-<li>TODO: More discussion of when certain transformations should happen
-(e.g. when are enums handled, how is output handled).</li>
-<li>Some other compiler projects which may be interesting include
-<ul>
-<li><a href="https://github.com/dada-lang/dada">Dada</a></li>
+<li><a href="https://github.com/rust-analyzer/rust-analyzer">Rust Analyzer</a></li>
+<li><a href="https://rust-lang.org">The Rust compiler</a></li>
 <li><a href="https://github.com/mun-lang/mun">Mun</a></li>
-<li><a href="https://github.com/quench-lang/quench">Quench</a></li>
-<li><a href="https://github.com/Xiulf/shade">Shade</a></li>
-<li><a href="https://github.com/DropDemBits/turse-rs">Turse</a></li>
-<li><a href="https://github.com/tydi-lang/tydi">Tydi</a></li>
+</ul>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true });</script><div style="break-before: page; page-break-before: always;"></div><h1 id="parsing"><a class="header" href="#parsing">Parsing</a></h1>
+<p>Tree-sitter is used to generate a concrete syntax tree from a MiniZinc model. The grammar is located in the
+<code>parsers/tree-sitter-minizinc/grammar.js</code> file. There is also a corpus of tests which can be run to test the parser's
+output.</p>
+<p>Since this concrete syntax tree is too low level to perform most useful compilation steps, an abstract syntax tree will
+be constructed (with the AST nodes linked to the related CST nodes) during <a href="compilation/./ast/ast.html">AST generation</a>.</p>
+<h2 id="example"><a class="header" href="#example">Example</a></h2>
+<p>The model</p>
+<pre><code class="language-mzn">test foo() = true;
+function bool: bar() = true;
+var 1..3: x;
+</code></pre>
+<p>Gives the CST</p>
+<pre><code>kind=&quot;source_file&quot;, named=true, error=false, missing=false, extra=false, field=None
+  kind=&quot;predicate&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
+    kind=&quot;test&quot;, named=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
+    kind=&quot;identifier&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
+    kind=&quot;(&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;)&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;=&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;boolean_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
+      kind=&quot;true&quot;, named=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;;&quot;, named=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;function_item&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
+    kind=&quot;function&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;type_base&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
+      kind=&quot;primitive_type&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
+        kind=&quot;bool&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;:&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;identifier&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
+    kind=&quot;(&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;)&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;=&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;boolean_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
+      kind=&quot;true&quot;, named=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;;&quot;, named=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;declaration&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
+    kind=&quot;type_base&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
+      kind=&quot;var&quot;, named=false, error=false, missing=false, extra=false, field=Some(&quot;var_par&quot;)
+      kind=&quot;infix_operator&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
+        kind=&quot;integer_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;left&quot;)
+        kind=&quot;..&quot;, named=false, error=false, missing=false, extra=false, field=Some(&quot;operator&quot;)
+        kind=&quot;integer_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;right&quot;)
+    kind=&quot;:&quot;, named=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;identifier&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
+  kind=&quot;;&quot;, named=false, error=false, missing=false, extra=false, field=None
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ast-generation"><a class="header" href="#ast-generation">AST generation</a></h1>
+<p>After parsing, a MiniZinc AST is generated from the CST. This provides type-safe accessors to the nodes in the syntax
+tree. No desugaring takes place at this stage, and all semantic nodes are are made available other than parentheses
+(which made explicit in the tree structure). So nodes like whitespace, comments and semicolons from the CST are removed
+in the AST.</p>
+<p>This is still too low level for most analysis, and there several constructs which are semantically the same, but with
+different syntactic representations. Therefore, the next step is to <a href="compilation/ast/includes.html">resolve the <code>include</code> items</a>, and then
+lower each model into <a href="compilation/ast/../hir/hir.html">HIR</a>.</p>
+<h2 id="example-1"><a class="header" href="#example-1">Example</a></h2>
+<p>The model</p>
+<pre><code class="language-mzn">test foo() = true;
+function bool: bar() = true;
+var 1..3: x;
+</code></pre>
+<p>Gives the AST</p>
+<pre><code>Model {
+    items: [
+        Predicate(
+            Predicate {
+                cst_kind: &quot;predicate&quot;,
+                declared_type: Test,
+                id: UnquotedIdentifier(
+                    UnquotedIdentifier {
+                        cst_kind: &quot;identifier&quot;,
+                        name: &quot;foo&quot;,
+                    },
+                ),
+                parameters: [],
+                body: Some(
+                    BooleanLiteral(
+                        BooleanLiteral {
+                            cst_kind: &quot;boolean_literal&quot;,
+                            value: true,
+                        },
+                    ),
+                ),
+                annotations: [],
+            },
+        ),
+        Function(
+            Function {
+                cst_kind: &quot;function_item&quot;,
+                return_type: TypeBase(
+                    TypeBase {
+                        cst_kind: &quot;type_base&quot;,
+                        var_type: None,
+                        opt_type: None,
+                        any_type: false,
+                        domain: Unbounded(
+                            UnboundedDomain {
+                                cst_kind: &quot;primitive_type&quot;,
+                                primitive_type: Bool,
+                            },
+                        ),
+                    },
+                ),
+                id: UnquotedIdentifier(
+                    UnquotedIdentifier {
+                        cst_kind: &quot;identifier&quot;,
+                        name: &quot;bar&quot;,
+                    },
+                ),
+                parameters: [],
+                body: Some(
+                    BooleanLiteral(
+                        BooleanLiteral {
+                            cst_kind: &quot;boolean_literal&quot;,
+                            value: true,
+                        },
+                    ),
+                ),
+                annotations: [],
+            },
+        ),
+        Declaration(
+            Declaration {
+                cst_kind: &quot;declaration&quot;,
+                pattern: Identifier(
+                    UnquotedIdentifier(
+                        UnquotedIdentifier {
+                            cst_kind: &quot;identifier&quot;,
+                            name: &quot;x&quot;,
+                        },
+                    ),
+                ),
+                declared_type: TypeBase(
+                    TypeBase {
+                        cst_kind: &quot;type_base&quot;,
+                        var_type: Some(
+                            Var,
+                        ),
+                        opt_type: None,
+                        any_type: false,
+                        domain: Bounded(
+                            InfixOperator(
+                                InfixOperator {
+                                    cst_kind: &quot;infix_operator&quot;,
+                                    left: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: &quot;integer_literal&quot;,
+                                            value: 1,
+                                        },
+                                    ),
+                                    operator: Operator {
+                                        cst_kind: &quot;..&quot;,
+                                        name: &quot;..&quot;,
+                                    },
+                                    right: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: &quot;integer_literal&quot;,
+                                            value: 3,
+                                        },
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ),
+                definition: None,
+                annotations: [],
+            },
+        ),
+    ],
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="include-resolution"><a class="header" href="#include-resolution">Include resolution</a></h1>
+<p>Include resolution involves recursively going through the <code>include</code> items in a MiniZinc model, and finding the linked
+model files. There are also two 'implied' includes which make the standard library available. These are <code>stdlib.mzn</code>
+and <code>solver_redefinitions.mzn</code>. While this process is described here as part of the AST module, as the include items
+are extracted from the AST, it actually produces <code>ModelRef</code> IDs, which are part of the HIR module.</p>
+<p>Include resolution gives a list of <code>ModelRef</code>s which comprises all of the model files to be lowered into
+<a href="compilation/ast/../hir/hir.html">HIR</a>. Logically these model files get concatenated together, however we don't actually do this until
+the <a href="compilation/ast/../thir/thir.html">THIR</a> stage. The list of models produced is in the order that the models appear.</p>
+<h2 id="resolution-rules"><a class="header" href="#resolution-rules">Resolution rules</a></h2>
+<p>The resolution method used depends on the kind of path used in the include item. Note that relative includes are never
+resolved relative to the process's current directory, only to the current model file (so string models without files
+cannot use <code>./path/to/model.mzn</code> includes).</p>
+<table style="width:100%">
+<tr><th>Include</th><th>Resolution method</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">include &quot;foo.mzn&quot;;
+</code></pre>
+</td>
+<td>
+<ul>
+<li>Resolved relative to include search directories</li>
+<li>If not found, resolved relative to current file</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">include &quot;./foo.mzn&quot;;
+</code></pre>
+</td>
+<td>
+<ul>
+<li>Resolved relative to current file</li>
+</ul>
+</td>
+<tr>
+<td>
+<pre><code class="language-mzn">include &quot;/path/to/foo.mzn&quot;;
+</code></pre>
+</td>
+<td>
+<ul>
+<li>Absolute path used</li>
+</ul>
+</td>
+</tr>
+</table>
+<h2 id="cyclic-includes"><a class="header" href="#cyclic-includes">Cyclic includes</a></h2>
+<p>As all models are locally concatenated together, it actually does not matter if there are includes which are cyclic. We
+only ever add any particular model file to the list of models once, so cycles are simply ignored.</p>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error handling</a></h2>
+<p>Errors during include resolution prevent lowering to HIR from occurring (as without having all of the included files
+available, it is highly likely that uninformative name resolution and type errors will occur). Note that when we fail
+to resolve an include, we actually don't abort include resolution. This way, we can produce errors for as many missing
+files as possible.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="high-level-intermediate-representation-hir"><a class="header" href="#high-level-intermediate-representation-hir">High-level intermediate representation (HIR)</a></h1>
+<p>The HIR is the representation used for validating the input MiniZinc program. Name resolution and type checking results
+are used by the language server to provide type information and diagnostics. This phase of the compiler is incremental
+with respect to changing model code. When an item hasn't changed (e.g. white-space changed, or the change happened in a
+different file), then results of relevant analyses can be reused.</p>
+<h2 id="structure-and-ids"><a class="header" href="#structure-and-ids">Structure and IDs</a></h2>
+<p>HIR nodes are assigned 'IDs' which are generally based on numeric indices which can be used to access the node itself.
+The HIR is structured such that each <code>.mzn</code> file gets its own <code>Model</code>, each of which which gets a <code>ModelRef</code> for its ID.
+Models contain arenas to store each kind of top-level item. Local to each model, items can be referred to using their
+arena index, and the <code>LocalItemRef</code> type can be used to store the index of any item. The <code>ItemRef</code> type includes both
+the <code>ModelRef</code> and the <code>LocalItemRef</code> for an item, meaning it can be used to globally identify any item.</p>
+<p>Expressions, user-ascribed types, and patterns (called HIR 'entities') are stored in arenas inside each item, and can be
+locally referred to using their arena indices. To refer to one of these entities globally, the <code>ExpressionRef</code>,
+<code>TypeRef</code> and <code>PatternRef</code> IDs can be used. <code>EntityRef</code> can be used to store a reference to any of these entities.
+It should be noted that local items inside let expressions use their parent's expression storage and do not themselves
+store their expressions internally like top-level items.</p>
+<p>There is also a <code>NodeRef</code> type for referencing an arbitrary HIR node (i.e. models, items, entities).
+This is mainly useful for tracking origins of nodes.</p>
+<h2 id="types-in-the-hir"><a class="header" href="#types-in-the-hir">Types in the HIR</a></h2>
+<p>The <code>Type</code>s used in the HIR represent user-written types, and may be incomplete. This is in contrast
+to the <code>Ty</code> type, which is type computed by the type-checker, and is always complete.</p>
+<p>Consider:</p>
+<pre><code class="language-mzn">any: x = 1;
+</code></pre>
+<p>In this case, the <code>Type</code> for the declaration of <code>x</code> will be <code>any</code> (set during lowering), but the <code>Ty</code> will be <code>par int</code>
+(computed during type checking).</p>
+<h2 id="lowering-from-the-ast"><a class="header" href="#lowering-from-the-ast">Lowering from the AST</a></h2>
+<p>Lowering from AST is done on a per-model basis, accessed using the <code>db.lookup_model(model_ref)</code> query.
+The actual HIR trees are kept separate from the source-mapping back to AST, which allows analysis queries to ignore the
+source-mapping (unless they are emitting diagnostics) and avoid unnecessary recomputation when source locations change.</p>
+<p>Lowering AST expressions is done by walking the AST and allocating the the HIR expressions bottom up. We also apply some
+syntactic desugarings during this process. Patterns and types are also lowered in a similar way.</p>
+<p>As the HIR nodes are built up, a <code>SourceMap</code> containing the original AST nodes and the type of desugaring which occurred
+(if any) is populated. This source mapping can be accessed with <code>db.lookup_source_map(model_ref)</code>. This should only
+be done if a diagnostic needs to be produced.</p>
+<p>One complication in lowering is that we use different representations for enum assignment items and parameter assignment
+items, even though we cannot distinguish them syntactically. To deal with this, we keep track of the names of the enum
+items in the AST, so that we can detect what kind of assignment item is being used.</p>
+<p>A further complication is that type-inst identifiers in MiniZinc do not get 'pre-declared', and may simply appear in a
+function signature. When lowering function items, we have to keep track of the type-inst identifiers and what positions
+they are used in to obtain the implied type-inst identifier 'declarations'.</p>
+<h3 id="desugarings"><a class="header" href="#desugarings">Desugarings</a></h3>
+<p>The HIR involves several syntactic desugarings from the AST.</p>
+<blockquote>
+<p>Note that only desugarings which cannot cause future errors referring to non-user written constructs to occur are
+permitted, in order to avoid emitting confusing error messages, or needing to track desugarings and specialise error
+messages for them.</p>
+<p>For example, we could desugar 2D array literals into calls to <code>array2d</code> at this point, however, if the user were to
+use an invalid index set type, as in <code>[|&quot;a&quot;: &quot;b&quot;: | 2: x, 3: y |]</code>, we would immediately rewrite that into
+<code>array2d([2, 3], [&quot;a&quot;, &quot;b&quot;], [x, y])</code>, which would give a type error indicating that no overload of <code>array2d</code> exists
+for the given argument types, even though the user has not called <code>array2d</code> at all.</p>
+</blockquote>
+<p>Predicate/test items are rewritten into function items:</p>
+<table style="width:100%">
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">predicate foo();
+test bar();
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">function var bool: foo();
+function bool: bar();
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Unary/binary operators are rewritten as calls:</p>
+<table style="width:100%">
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">a + b
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">'+'(a, b)
+</code></pre>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">-a
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">'-'(a)
+</code></pre>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">a..
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">'..o'(a)
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Generator calls are rewritten as calls with comprehension arguments:</p>
+<table style="width:100%">
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">forall (i in 1..3) (foo(i))
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">forall([foo(i) | i in 1..3])
+</code></pre>
+</td>
+</tr>
+</table>
+<p>String interpolation is rewritten using <code>concat</code> and <code>show</code>:</p>
+<table style="width:100%">
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">&quot;foo\(value)bar&quot;
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">concat([&quot;foo&quot;, show(value), &quot;bar&quot;])
+</code></pre>
+</td>
+</tr>
+</table>
+<h2 id="analysis"><a class="header" href="#analysis">Analysis</a></h2>
+<p>Analysis of the HIR is generally done on a per-item basis. This allows us to avoid recomputation if an item hasn't
+changed (since even after lowering a model again, many items may still be the same). Additionally, analysis at this
+stage is designed to be as robust to errors as possible. For example, scope collection errors do not prevent type
+checking, and the type-checker tries to continue as much as possible in the presence of type errors.</p>
+<h3 id="scope-collection"><a class="header" href="#scope-collection">Scope collection</a></h3>
+<p>Scope collection determines the identifiers in scope for each expression in an item (and also the identifiers in the
+global scope). This can be accessed using the <code>db.lookup_item_scope(item_ref)</code> query.
+Note that this does not perform name resolution - that is done in the type-checker as identifiers in call expressions
+cannot be resolved until the argument types are known (due to overloading).</p>
+<p>We also check to ensure that variable declarations and function parameters only use irrefutable patterns (i.e. those
+which always match every value of the type).</p>
+<p>See <a href="compilation/hir/./scope.html">Scope collection</a> for more detail about the proces.</p>
+<h3 id="type-checking"><a class="header" href="#type-checking">Type checking</a></h3>
+<p>Type checking is done for each HIR item, accessed through the <code>db.lookup_item_types(item_ref)</code> query. It produces:</p>
+<ul>
+<li>A mapping from expression indices to their computed types</li>
+<li>A mapping from pattern indices to their computed types
+<ul>
+<li>Note that these types are augmented to include more information about
+the pattern (e.g. so you can tell the difference between a pattern forming
+a variable declaration and a pattern that forms a type alias).</li>
 </ul>
 </li>
-<li>Need to think about what should actually go into MicroZinc (e.g. need <code>case</code>?, what level of nesting is supported?)</li>
-<li>For tools which suggest changes to user models, it would be useful to have AST
-to CST transformation, so that we can leave the rest of the user model alone
-and insert the suggested transformations in place.</li>
-<li>Need to think about what AST levels we need. Potentially some or all of:
+<li>A mapping from identifier expression indices to their declaring <code>PatternRef</code></li>
+<li>A mapping from identifier pattern indices to their declaring <code>PatternRef</code>
+(e.g. for enum atoms/constructor functions)</li>
+</ul>
+<p>See <a href="compilation/hir/./typecheck.html">Type checking</a> for more detail about the process.</p>
+<h3 id="case-expression-exhaustiveness-checking"><a class="header" href="#case-expression-exhaustiveness-checking">Case expression exhaustiveness checking</a></h3>
+<p>Case expressions inside items are checked to ensure that they are exhaustive.</p>
+<p>For example</p>
+<pre><code class="language-mzn">enum Foo = {A, B, C} ++ D(Bar);
+enum Bar = {E, F};
+var Foo: x;
+any: y = case x of
+    A =&gt; 1,
+    B =&gt; 2,
+    D(E) =&gt; 3,
+endcase;
+</code></pre>
+<p>Is missing the case for the pattern <code>C</code> and the pattern <code>D(F)</code>.</p>
+<p>The algorithm is based on testing whether or not a pattern is 'useful' given a list of other patterns. If the wildcard
+pattern <code>_</code> is still useful given all the patterns that appear in the case arms, then the case expression is
+non-exhaustive. See the documentation in <code>pattern_matching.rs</code> for details.</p>
+<h3 id="topological-sorting"><a class="header" href="#topological-sorting">Topological sorting</a></h3>
+<p>The topological sorter sorts the items so the declarations are not used in definitions/domains (other than function
+bodies) before they appear. This is where cyclic definitions are detected.</p>
+<p>For example:</p>
+<pre><code class="language-mzn">int: y = x + 1;
+int: z = x - 1;
+int: x = 3;
+</code></pre>
+<p>Will be reordered into:</p>
+<pre><code class="language-mzn">int: x = 3;
+int: y = x + 1;
+int: z = x - 1;
+</code></pre>
+<p>Whereas</p>
+<pre><code class="language-mzn">int: x = y;
+int: y = x;
+</code></pre>
+<p>Has no ordering that allows definitions to appear before they are used. Therefore, this is an error.</p>
+<p>However, this is allowed:</p>
+<pre><code class="language-mzn">constraint y = x;
+var int: x = y;
+var int: y;
+</code></pre>
+<p>As it can be reordered into:</p>
+<pre><code class="language-mzn">var int: y;
+var int: x = y;
+constraint y = x;
+</code></pre>
+<p>Which does allow every variable declaration to appear before being used.</p>
+<h3 id="validation"><a class="header" href="#validation">Validation</a></h3>
+<p>Some final validation of the HIR is done at the whole-program level, since some problems may be spread across multiple
+files.</p>
 <ul>
-<li>MiniZinc CST</li>
-<li>MiniZinc AST</li>
-<li>Typed MiniZinc AST</li>
-<li>Type specialised MiniZinc AST</li>
-<li>Intermediate representation (e.g. Static single assignment form)</li>
-<li>MicroZinc AST</li>
+<li>Check for duplicate function definitions
+<ul>
+<li>For each pair of function items <code>f1</code> and <code>f2</code> with the same name, we consider it to be an error if the parameters of
+<code>f1</code> can be used to call <code>f2</code> and vice-versa, and either:
+<ul>
+<li>Both have bodies, or</li>
+<li>They have different return types</li>
 </ul>
 </li>
-<li>Need to think about whether we generate actual data structures for this,
-or use queries to introduce new information to a node.</li>
 </ul>
-<h2 id="project-notes"><a class="header" href="#project-notes">Project notes</a></h2>
+</li>
+<li>Check for duplicate constructors
 <ul>
-<li>Steps 1-6 will be the starting point for the compiler. The current MiniZinc
-interpreter will be extended to handle MicroZinc (e.g. support for tuples)
-to allow for testing of the new frontend.</li>
-<li>Steps 7-8 require more research/discussion.</li>
+<li>Defining two constructor functions with the same name is not allowed</li>
+<li>E.g. <code>enum Foo = A(B) ++ A(C)</code> is illegal since there would be two constructors named <code>A</code>.</li>
+<li>Note that it is legal to overload a constructor function using a normal function. In fact, the function may have
+exactly the same signature as the constructor, and will be used in preference to it.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="parsing"><a class="header" href="#parsing">Parsing</a></h1>
-<p>Tree-sitter is used to generate a concrete syntax tree from a MiniZinc model.</p>
-<p>Since this concrete syntax tree is too low level to perform most useful
-compilation steps, an abstract syntax tree will be constructed (with the AST
-nodes linked to the related CST nodes) during <a href="compilation/ast-gen.html">AST generation</a>.</p>
-<h2 id="notes-1"><a class="header" href="#notes-1">Notes</a></h2>
-<ul>
-<li>Tree-sitter uses the idea of anonymous nodes as a substitute for an AST,
-however, this would not solve the problem of e.g. having different concrete
-syntax for function generators and comprehensions. Code transformations also
-seem to be generally outside the scope of Tree-sitter.</li>
-<li>Tree-sitter uses a query system for searching for patterns in the CST. It's
-unclear how useful this functionality would be, since it seems like we will
-be interacting with an AST we produce be walking the CST instead of with the
-CST directly.</li>
+</li>
+<li>Check for multiple assignments to the same variable (if allowing multiple assignments to the same variable is not
+enabled)</li>
+<li>Check for multiple solve items</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="minizinc-ast-generation"><a class="header" href="#minizinc-ast-generation">MiniZinc AST generation</a></h1>
-<p>After parsing, a MiniZinc AST will be generated from the CST.</p>
-<ul>
-<li>Whitespace and comments are ignored in the AST</li>
-<li>Generators in calls and comprehensions can generate the same AST nodes</li>
-</ul>
-<p>The AST nodes will need to maintain a link to the CST nodes they originated from
-(akin to <code>Location</code>s in the old compiler).</p>
-<h2 id="notes-2"><a class="header" href="#notes-2">Notes</a></h2>
-<ul>
-<li>Using Salsa means that we do not need to include storage for results in the
-AST. Instead, these will be stored in the Salsa database and accessed using
-queries</li>
-<li>When the CST changes, ideally we'd avoid recomputing results about portions of
-the AST which haven't changed (which could potentially be the whole AST in the
-case of editing whitespace/comments).</li>
-<li>Doing this would mean that linking the AST to the CST needs to be considered
-carefully.</li>
-</ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="type-checking"><a class="header" href="#type-checking">Type checking</a></h1>
-<p>The types for each expression will be determined in a bottom-up fashion. That
-is, the types of child nodes are used to determine the type of parent nodes (and
-check for correctness). This stage also matches calls with their declarations.</p>
-<h2 id="unification"><a class="header" href="#unification">Unification</a></h2>
-<p>For literals which have a bottom type (e.g. <code>&lt;&gt;</code>, <code>_</code>, <code>[]</code> and <code>{}</code>), a special
-unification step needs to be performed as bottom up typing is not sufficient.
-Note that this unification does not perform inference across calls.</p>
-<h3 id="variable-assignment-example"><a class="header" href="#variable-assignment-example">Variable assignment example</a></h3>
-<pre><code class="language-mzn">array [int] of var opt int: x = [_];
+<p>If no errors were emitted at all for the HIR module (or the syntax model), then the program is valid and we proceed to
+lower the program into the <a href="compilation/hir/./thir.html">typed high-level intermediate representation (THIR)</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="scope-collection-1"><a class="header" href="#scope-collection-1">Scope collection</a></h1>
+<p>Scope collection gives the identifiers in scope for each expression in an item. Note that at this point, we don't
+perform name resolution, as resolving call identifiers requires the types of the arguments to perform function
+overloading resolution, and resolving record field access requires knowledge of the accessed record's type.</p>
+<p>It would be possible to only keep track of this for expressions which are identifiers, rather than all expressions
+(and we could even perform name resolution for variables and non-overloaded function calls). However, having the scopes
+computed for every expression is useful for providing code completion information in the language server.</p>
+<h2 id="scope-collection-results"><a class="header" href="#scope-collection-results">Scope collection results</a></h2>
+<p>Scope collection results in a data structure containing an arena of <code>Scope</code>s which contain the identifiers defined in
+each scope in an item. Each <code>Scope</code> keeps track of its parent <code>Scope</code> index, so that the chain of scopes can be followed
+to resolve an identifier. Each expression index in an item is mapped to a scope index and generation (see below for
+details on generations).</p>
+<p>The <code>db.lookup_item_scope(item_ref)</code> query produces a <code>ScopeResult</code> which allows for easy lookup of functions and
+variables in scope for an expression. It automatically traverses the item scopes and will bubble up to global scope
+to find an identifier. Note that the result of looking up identifiers is a <code>PatternRef</code> (or list of them for overloaded
+functions). These point to the declaring identifier pattern of the identifier (as there may be several identifiers
+declared in a single item, via destructuring or in a let expression, so it is not sufficient to give only the item).</p>
+<h2 id="scopes-and-generations"><a class="header" href="#scopes-and-generations">Scopes and generations</a></h2>
+<p>A <code>Scope</code> keeps track of the variables and functions declared in a particular scope, along with the the parent scope (if
+any). For example:</p>
+<pre><code class="language-mzn">function foo(int: a) =
+    let {
+        int: x = 3 * a;
+        int: y = x + 2;
+    } in a + y;
 </code></pre>
-<p>Bottom up typing will be unable to determine a concrete type for the <code>[&lt;&gt;, _]</code>
-literal (although it is known to be <code>var</code>). Instead, the left-hand side type
-should be pushed into it, making it an <code>array [int] of var opt int</code>.</p>
-<h3 id="function-call-example"><a class="header" href="#function-call-example">Function call example</a></h3>
-<pre><code class="language-mzn">test foo(array [int] of var opt int: x, int: y) = true;
-test foo(array [int] of var int: x, set of int: y) = false;
-constraint foo([_, _], 1);
+<p>Has two scopes: one created by the function item for its body, and one created by the let item.</p>
+<p>The first scope contains a declaration for the identifier <code>a</code> and its parent scope (assuming this is a top-level item)
+is the global scope. The second scope has declarations for the identifiers <code>x</code> and <code>y</code>, and its parent scope is the
+first scope.</p>
+<p>Then, the scope for the outer let would be computed to be the first scope, while the scope for the RHS of <code>x</code>, the
+RHS of <code>y</code>, and the <code>in</code> expression <code>a + y</code> would be the second scope (and all of their sub-expressions would also
+be assigned to be the second scope).</p>
+<p>Note that items in let expressions are such that they only enter into scope once they appear, so an item cannot refer to
+an item later than itself. For example:</p>
+<pre><code class="language-mzn">let {
+    int: y = 10;
+    int: z = let {
+        int: x = y;
+        int: y = 1;
+    } in x;
+} in z
 </code></pre>
-<p>Bottom up typing will be unable to determine a type for the <code>[_, _]</code> literal.
-In this case, since second argument of the call is an <code>int</code>, only the first
-overload of <code>foo</code> is possible. Therefore the type should be
-<code>array [int] of var opt int</code>.</p>
-<h3 id="ambiguous-types"><a class="header" href="#ambiguous-types">Ambiguous types</a></h3>
-<p>When there is not a single unambiguous type for a value, this is considered a
-type error.</p>
-<pre><code class="language-mzn">test foo(array [int] of var opt $T: x) = true;
-constraint foo([_]);
+<p>Will give <code>z = 10</code> as the let item <code>int: y = 1</code> is not in scope for the declaration of <code>x</code>.</p>
+<p>This is achieved by keeping track of the 'generation' where a let-item identifier has been declared. The generation is
+incremented every time we visit an identifier pattern which creates a new variable. It should also be noted that the
+patterns for a declaration in a let are always visited after processing their RHS. Expressions are then assigned both
+a scope, along with a generation defining the minimum generation an identifier must be to be considered available in
+the expression. Exiting a scope restores the generation the value it had upon entering the scope.</p>
+<p>Following the example:</p>
+<ul>
+<li>The declaration <code>int: y = 10;</code> is visited
+<ul>
+<li>The RHS expression (<code>10</code>) is assigned scope 0, gen 0</li>
+<li>The LHS identifier <code>y</code> is assigned scope 0, gen 1</li>
+</ul>
+</li>
+<li>The declaration <code>int: z = let { int: x = y; int: y = 1; } in x</code> is visited
+<ul>
+<li>The RHS <code>let</code> expression is assigned scope 0, gen 1
+<ul>
+<li>The declaration <code>int: x = y;</code> is visited
+<ul>
+<li>The RHS expression <code>y</code> is assigned scope 1, gen 1</li>
+<li>The LHS identifier <code>x</code> is assigned scope 1, gen 2</li>
+</ul>
+</li>
+<li>The declaration <code>int: y = 1</code> is visited
+<ul>
+<li>The RHS expression <code>1</code> is assigned scope 1, gen 2</li>
+<li>The LHS identifier <code>y</code> is assigned scope 1, gen 3</li>
+</ul>
+</li>
+<li>The <code>in</code> expression <code>x</code> is assigned scope 1, gen 3</li>
+</ul>
+</li>
+<li>The LHS identifier <code>z</code> is assigned scope 0, gen 1 (restored because exited scope 1)</li>
+</ul>
+</li>
+<li>The <code>in</code> expression <code>z</code> is assigned scope 0, gen 1</li>
+</ul>
+<p>From this, we can see that while the RHS of <code>int: x = y</code> is scope 1, since its generation is 1, the <code>y</code> does not refer
+to the <code>y</code> in scope 1 (which is generation 3), and so instead refers to the <code>y</code> in scope 0 (which is generation 1).</p>
+<p>It should be noted that the 'generation' values are an implementation detail - what actually matters in the end is to
+be able to determine whether or not an identifier is in scope or not for a given expression.</p>
+<h2 id="patterns"><a class="header" href="#patterns">Patterns</a></h2>
+<p>Patterns used for variable or parameter declarations are only allowed to contain tuples, records and identifiers.
+Otherwise, the pattern is refutable and may not match all values. Identifiers in variable declarations always create
+new variables, and do not refer to enumeration/annotation atoms (instead they get shadowed).</p>
+<pre><code class="language-mzn">enum Foo = {A, B};
+
+% OK: creates variables `x`, `y` and `z`.
+any: (x, (foo: y, bar: z)) = (1, (foo: 2, bar: 3));
+
+% OK: shadows enum values `A` and `B`
+any: z = let {
+    int: A = 1;
+    int: B = 2;
+} in A + B;
+
+% ERROR: refutable pattern may not match all cases.
+any: (m, 1) = (3, 2);
 </code></pre>
-<p>The type of <code>[_]</code> could be <code>array [int] of var opt int</code> or
-<code>array [int] of var opt float</code>, or many others. Therefore, this would be a
-type error. To get around this, a variable declaration for <code>[_]</code> could be
-used. Otherwise, new syntax for annotating a literal with its type will be
-required.</p>
+<p>In comprehension generators and case expressions, all patterns are allowed, and identifiers can either refer to
+enumeration/annotation atoms, or if none match, they create new variables. A problem with this approach is that
+since we don't have namespacing, a user could create an atom with the same name as a variable binding in a case
+expression or generator in another part of the code, and then that variable binding would instead match that atom,
+changing the behaviour (likely causing the model to fail type checking).</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="type-checking-1"><a class="header" href="#type-checking-1">Type checking</a></h1>
+<p>The type-checker performs bottom-up typing of expressions, and checks that the types are correct. This is performed on a
+per-item basis. The type-checker deals with 'signatures' and 'bodies' of items separately. Signatures give the type
+information needed to compute the type of an expression referring to the item. Typing a body involves typing the rest of
+the item (generally this is the annotations and the RHS).</p>
+<p>Consider the items:</p>
+<pre><code class="language-mzn">function float: foo(int: x :: my_ann) = x + 0.5;
+1..3: a = 23;
+any: b = foo(a);
+</code></pre>
+<ul>
+<li><code>foo</code> has a signature of <code>function float: foo(int)</code>. Its RHS of <code>x + 0.5</code> is typed separately and verified against the
+signature return type, along with the annotation <code>my_ann</code>.</li>
+<li><code>a</code> has a signature of <code>int: a</code>, which is computed using only the LHS of the declaration as the type is complete. The
+RHS of <code>23</code> is typed separately and verified against the signature type.</li>
+<li><code>b</code> uses an <code>any</code> type and so its signature of <code>float: b</code> is computed using the RHS.</li>
+</ul>
+<h2 id="type-checker-results"><a class="header" href="#type-checker-results">Type checker results</a></h2>
+<p>Type checking an item produces several maps containing the computed types. The <code>TypeResult</code> provides access to all types
+for an item, by using the signature types and the body types as needed. This can be obtained using the
+<code>db.lookup_item_types(item_ref)</code> query.</p>
+<ul>
+<li>Indexing using an <code>ArenaIndex&lt;Expression&gt;</code> gives the <code>Ty</code> of the expression.
+<ul>
+<li>E.g. the expression <code>{1, 1.5}</code> will have type <code>set of float</code>.</li>
+</ul>
+</li>
+<li>Indexing using an <code>ArenaIndex&lt;Pattern&gt;</code> gives the <code>PatternTy</code> of the pattern.
+<ul>
+<li>The <code>PatternTy</code> includes information about what the pattern is being used for, rather than just the type of the
+pattern itself (e.g. so we can tell if a pattern is simply for destructuring, or if it actually declares a new
+variable).</li>
+<li>E.g. the declaration <code>any: (x, y) = (1, 1.5)</code> will be such that
+<ul>
+<li><code>(x, y)</code> is a <code>PatternTy::Destructuring(tuple(int, float))</code></li>
+<li><code>x</code> is a <code>PatternTy::Variable(int)</code></li>
+<li><code>y</code> is a <code>PatternTy::Variable(float)</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>The <code>name_resolution(ident)</code> method finds the <code>PatternRef</code> for an expression which is an identifier (e.g. identifier
+pointing to a variable).</li>
+<li>The <code>pattern_resolution(ident)</code> method finds the <code>PatternRef</code> for a pattern which is an identifier (e.g. enum atom
+used in a case expression pattern)</li>
+</ul>
+<h2 id="expressions"><a class="header" href="#expressions">Expressions</a></h2>
+<p>Typing of expressions is done recursively, using the types of child expressions
+to determine the type of the outer expression.</p>
+<p>For example, the expression <code>([1, 2.5], 3)</code> will be typed by:</p>
+<ul>
+<li>The first expression is a tuple, so visit its child fields
+<ul>
+<li>The first tuple field is an array literal so visit the child members
+<ul>
+<li>The first child member is an integer literal, so its type is <code>int</code></li>
+<li>The second child member is a float literal, so its type is <code>float</code></li>
+</ul>
+</li>
+<li>Therefore the array literal is determined to have type
+<code>array [int] of float</code> as float is the most specific supertype of <code>int</code> and
+<code>float</code>.</li>
+<li>The second tuple field is an integer literal, so its type is <code>int</code></li>
+</ul>
+</li>
+<li>Therefore the tuple is of type <code>tuple(array [int] of float, int)</code></li>
+</ul>
+<h3 id="calls"><a class="header" href="#calls">Calls</a></h3>
+<p>One exception to bottom-up typing occurs when dealing with calls, as in order to perform overloading resolution, we
+must specially handle the case of a call with an identifier callee. See the following section on function resolution
+for more detail.</p>
+<p>For example, the call <code>foo(1, &quot;a&quot;)</code> would be typed by:</p>
+<ul>
+<li>Getting the types of each argument (in this case <code>int</code> and <code>string</code>)</li>
+<li>Finding all the function items named <code>foo</code></li>
+<li>Performing overloading resolution given the argument types</li>
+<li><code>foo</code> is given the type of the operation</li>
+<li>The call is given the return type of the operation</li>
+</ul>
+<p>If the call does not have an identifier as its callee, the callee type is determined in the usual bottom-up fashion, and
+no overloading resolution is required.</p>
+<h3 id="identifiers"><a class="header" href="#identifiers">Identifiers</a></h3>
+<p>Identifier expressions cause the type checker to lookup the identifier in the expression's <a href="compilation/hir/./scope.html">scope</a>, and
+fetch the type signature of the retrieve pattern's item to determine the type of the identifier. For bodies, we can
+fetch the signature of the item directly (and reuse the computation of that signature if it's already done), but for
+signatures which depend on other signatures, we do not do this because of the possibility of cycles.</p>
+<p>Instead, the signatures of the dependencies are always computed, and if we reach the initiating signature during this
+process, we can break out of the cycle and return the error type (at that stage, not at the initiating site). Any
+cyclic definition errors will be emitted later during topological sorting. This is important for dealing with function
+signatures that include calls to other overloads of the function, since these should work, but resolving the overloaded
+call would require the type of 'this' signature, which is in the middle of being computed.</p>
+<h2 id="ascribed-types"><a class="header" href="#ascribed-types">Ascribed types</a></h2>
+<p>Typing user-written types (the HIR <code>Type</code>) involves computing the concrete type (<code>Ty</code>) they represent. For example, the
+type <code>var 1..3</code> is typed by computing the type of the domain <code>1..3</code>. Since it is a <code>set of int</code>, then the variable is an
+<code>int</code> type, and since the type has the <code>var</code> modifier, the complete type is computed to be <code>var int</code>.</p>
+<p>Typing these becomes more complex when dealing with incomplete types. In these cases, we always have a RHS expression
+which can be typed first, and then we can use this computed type to fill in the 'holes' in the ascribed type.</p>
+<p>For example, consider the (contrived) declaration:</p>
+<pre><code class="language-mzn">array [_] of var set of any: x = [{1, 2}];
+</code></pre>
+<p>In this case, we start by computing the type of the RHS, and determine it to be of type <code>array [int] of set of int</code>.
+This type is unified with the ascribed type to obtain the type <code>array [int] of var set of int</code> for <code>x</code>.</p>
+<h2 id="patterns-1"><a class="header" href="#patterns-1">Patterns</a></h2>
+<p>Typing of patterns is done top-down, based on an already computed type that the pattern must take. For example, to type
+the declaration</p>
+<pre><code class="language-mzn">tuple(var int, any): (a, b) = (1, 2.5);
+</code></pre>
+<ul>
+<li>The concrete type of the declaration is <code>tuple(var int, float)</code>
+(found by computing the type of the RHS and using it to fill in hole in the
+LHS type)</li>
+<li>Therefore, the root pattern <code>(a, b)</code> has type <code>tuple(var int, float)</code>.</li>
+<li>We then visit the child patterns and set their type to the corresponding tuple
+field type.</li>
+<li>So <code>a</code> has type <code>var int</code></li>
+<li>And <code>b</code> has type <code>float</code></li>
+</ul>
+<p>One complication is that when dealing with constructor calls in patterns, we only know the 'return type' of the call, as
+we know the type of the call pattern itself, but not its arguments. We use this return type to determine the what the
+actual constructor call must be. For example:</p>
+<pre><code class="language-mzn">enum Foo = A(Bar) ++ {B, C};
+enum Bar = {D, E};
+var Foo: x;
+any: y = case x of
+    A(v) =&gt; v,
+    _ =&gt; E
+endcase;
+</code></pre>
+<ul>
+<li>The type of <code>x</code> is <code>var Foo</code></li>
+<li>Therefore the type of the first case pattern <code>A(v)</code> is also <code>var Foo</code>
+<ul>
+<li>So based on that, we must be using the constructor <code>var Foo: A(var Bar)</code>, and so this is the type of the <code>A</code> pattern</li>
+<li>The type of <code>v</code> is therefore <code>var Bar</code></li>
+<li>So the result for the first case arm is <code>var Bar</code></li>
+</ul>
+</li>
+<li>The second case pattern <code>_</code> should also match the type of <code>x</code> (<code>var Bar</code>)
+<ul>
+<li>Its result type is <code>E</code>, which is the type <code>Bar</code></li>
+<li>So the case expression is of type <code>var Bar</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="function-resolution"><a class="header" href="#function-resolution">Function resolution</a></h2>
+<p>Function resolution involves determining a call identifier and a list of argument <code>Ty</code>s, the best matching overload to
+use (if there is one). The algorithm used is:</p>
+<ul>
+<li>If there is a variable which is an <code>op</code> function with the correct name, use it.</li>
+<li>If not, then find the function items in scope with the correct name.</li>
+<li>Remove any candidates which have an incorrect number of arguments.</li>
+<li>Remove any candidates which cannot be instantiated with the argument <code>Ty</code>s</li>
+<li>For every pair of candidates <code>a</code>, and <code>b</code> remaining, eliminate the 'less specific' function
+<ul>
+<li>Instantiate <code>a</code> and <code>b</code> with our call's argument types</li>
+<li>If the instantiated argument types of <code>a</code> are all subtypes of the instantiated argument types of <code>b</code>, but not the
+other way around, then eliminate <code>b</code> (and vice-versa).</li>
+<li>If both instantiated argument types are equivalent, then
+<ul>
+<li>If <code>a</code> is polymorphic but <code>b</code> is a concrete function, then eliminate <code>a</code> (and vice-versa)</li>
+<li>If both candidates are polymorphic, then
+<ul>
+<li>If <code>a</code> can be instantiated with <code>b</code>'s (original) parameter types, but not the other way around, eliminate <code>a</code>
+(and vice-versa)</li>
+</ul>
+</li>
+<li>If <code>a</code> has a body but <code>b</code> doesn't, eliminate <code>b</code> (and vice-versa)</li>
+</ul>
+</li>
+<li>Otherwise arbitrarily eliminate <code>a</code></li>
+</ul>
+</li>
+</ul>
+<p>Essentially, we choose such that:</p>
+<ul>
+<li>More specific parameter types are preferred: <code>bool</code> over <code>int</code>, <code>int</code> over <code>var int</code>. We take the instantiated
+argument types into account, so a function taking <code>$$E</code> will be preferred over a function taking <code>float</code> if called
+with an <code>int</code> argument.</li>
+<li>Where two candidates would instantiate to the same types, prefer <code>$$E</code> functions over <code>$T</code> functions, and prefer
+concrete types over either of those.</li>
+</ul>
+<p>It is an error if we are left with more than one candidate, or no candidates at the end of the process. Additionally,
+it should be noted that in the case of two identical functions which have bodies, we will simply arbitrarily choose one
+at this stage to allow type checking to continue with a reasonable return type. The duplicate function error will be
+emitted during final validation of the HIR.</p>
+<h2 id="output-typing"><a class="header" href="#output-typing">Output typing</a></h2>
+<p>The expressions of output items, and definitions of <code>:: output_only</code> declarations are type-checked in a special mode
+where the types of top-level identifiers are assumed to be par. This alleviates the need to manually insert calls to
+<code>fix()</code>.</p>
+<p>In this example, if we don't consider <code>p</code> in the output statement to be <code>par</code>, then the if-then-else will cause will
+trigger a type error as it will return the illegal type <code>var string</code>.</p>
+<pre><code class="language-mzn">var bool: p;
+output [if p then &quot;Yes&quot; else &quot;No&quot; endif];
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="typed-high-level-intermediate-representation-thir"><a class="header" href="#typed-high-level-intermediate-representation-thir">Typed high-level intermediate representation (THIR)</a></h1>
+<p>The THIR is used as a transition phase between the HIR and the MIR. It progressively rewrites the IR into lower-level
+constructs until it can be readily lowered into MIR. Compared to HIR, the THIR is:</p>
+<ul>
+<li>Combined (there is only one <code>Model</code> which contains all of the items from all model files)</li>
+<li>Fully typed (expressions always have full, correct types - we abort compilation if there were errors)</li>
+<li>Destructured - declaration items can only declare a single identifier</li>
+<li>Fully resolved (identifiers do not have their own names, they simply point to the item they are for)</li>
+<li>Desugared (since type information is now available, we can perform more desugarings)</li>
+<li>All items have their own data, so declarations/constraint items in let expressions now have their own arenas for their
+expressions</li>
+</ul>
+<p>The language constructs made available in THIR are an attempt to provide rewriting stages with a convenient
+representation which is not too high-level and complex to process, but not so low-level as to be cumbersome to use.</p>
+<h2 id="structure"><a class="header" href="#structure">Structure</a></h2>
+<p>The root THIR node is the <code>Model</code> which contains arenas for each kind of item. Since there is only one <code>Model</code>, the
+item indices now globally identify the items in the program. Each item contains storage for the expressions it owns in
+its <code>ExpressionAllocator</code>. Expressions contain their types, which are computed during construction. A builder API is
+provided (<code>ExpressionBuilder</code>) for creating expressions.</p>
+<h2 id="lowering-from-hir"><a class="header" href="#lowering-from-hir">Lowering from HIR</a></h2>
+<p>Lowering involves adding the items from the HIR into the THIR model. This is done in topologically sorted order, so
+we only have to visit each item once. One exception is that functions with bodies are lowered in two stages: first,
+the function signature is added, then the body is added to it after all items have been processed. Otherwise identifiers
+in the function bodies could refer to items not yet added to the THIR.</p>
+<h3 id="desugarings-1"><a class="header" href="#desugarings-1">Desugarings</a></h3>
+<p>The THIR involves several semantic desugarings from the HIR.</p>
+<p>Destructuring variable declarations are rewritten using multiple declarations:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">any: (x, (y, z)) =
+  (1, (2, 3));
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">tuple(int, tuple(int, int)): A =
+  (1, (2, 3));
+int: x = A.1;
+tuple(int, int): B = A.2;
+int: y = B.1;
+int: z = B.2;
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Type aliases are removed as they are resolved:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">type Foo = tuple('..'(1, 3), '..'(2, 4));
+var Foo: x;
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">set of int: A = '..'(2, 4);
+set of int: B = '..'(1, 3);
+tuple(var A, var B): x;
+</code></pre>
+</td>
+</tr>
+</table>
+<p>2D array literals are rewritten using <code>array2d</code>:</p>
+<table style="width:100%">
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">[| 1, 2
+ | 3, 4 |]
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">array2d(1..2, 1..2, [1, 2, 3, 4])
+</code></pre>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">[|    c: d:
+ | a: 1, 2
+ | b: 3, 4 |]
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">array2d([a, b], [c, d], [1, 2, 3, 4])
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Indexed array literals are rewritten using <code>arrayNd</code>:</p>
+<table style="width:100%">
+<tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">[3: a, b, c]
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">arrayNd(3, [a, b, c])
+</code></pre>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">[3: a, 4: b, 5: c]
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">arrayNd([3, 4, 5], [a, b, c])
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Slicing is rewritten using <code>slice_xd</code> function calls:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">any: x = [1, 2, 3];
+any: y = x['..'(1, 2)];
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">array [int] of int: x = [1, 2, 3];
+array [int] of int: y = let {
+  set of int: A = '..'(1, 2);
+} in slice_1d(x, [A], A);
+</code></pre>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">any: x = [1, 2, 3];
+any: y = x[..&lt;];
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">array [int] of int: x = [1, 2, 3];
+array [int] of int: y = let {
+  set of int: A = '..&lt;'(index_set(x));
+} in slice_1d(x, [A], A);
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Case expressions are rewritten such that the destructuring is moved into the branch RHS, and pattern identifiers which
+create new variables are replaced with the wildcard <code>_</code> pattern:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">enum Foo = A(Bar);
+enum Bar = {B};
+var Foo: x;
+any: y = case x of
+  A(v) =&gt; v
+endcase;
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">enum Bar = { B };
+enum Foo = A(Bar);
+var Foo: x;
+var Bar: y = case x of
+  A(_) =&gt; let {
+    var Bar: v = A⁻¹(x);
+  } in v
+endcase;
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Pattern matching in comprehension generators is rewritten using a case expression in the generator's <code>where</code> clause.
+Destructuring is rewritten as assignment generators:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">enum Foo = A(Bar);
+enum Bar = {B};
+any: x = [v | A(v) in Foo];
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">enum Bar = { B };
+enum Foo = A(Bar);
+array [int] of Bar: x = [
+  v | i in Foo
+      where case i of
+              A(_) =&gt; true,
+              _ =&gt; false
+            endcase,
+        v = A⁻¹(i)
+];
+</code></pre>
+</td>
+</tr>
+</table>
+<h2 id="model-transformations"><a class="header" href="#model-transformations">Model transformations</a></h2>
+<p>At the THIR level, several model-to-model transformations occur which progressively remove language
+constructs which do not exist in the <a href="compilation/thir/../mir/mir.html">mid-level intermediate representation</a>.</p>
+<p>The order of these transforms is often important as certain information or language constructs
+may be removed in one transform, and so cannot be used in subsequent transforms.</p>
+<p>The transforms which occur are:</p>
+<ul>
+<li><a href="compilation/thir/./type-specialise.html">Type specialisation</a></li>
+<li><a href="compilation/thir/./overloading.html">Removal of overloading</a></li>
+<li><a href="compilation/thir/./records.html">Erasure of records</a></li>
+<li><a href="compilation/thir/./enums.html">Erasure of enums</a></li>
+<li><a href="compilation/thir/./comprehension.html">Desugaring of comprehensions</a></li>
+<li><a href="compilation/thir/./option-types.html">Erasure of option types</a></li>
+<li><a href="compilation/thir/./captures.html">Desugaring of capturing</a></li>
+</ul>
+<p>See <a href="compilation/thir/./transform.html">Model transformations</a> for more details.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="model-transformations-1"><a class="header" href="#model-transformations-1">Model transformations</a></h1>
+<ul>
+<li>THIR seems to be a good fit for model level transformations.</li>
+<li>The idea would be to perform some sort of rewriting of the THIR tree to produce a new tree</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="type-specialisation"><a class="header" href="#type-specialisation">Type specialisation</a></h1>
-<p>Calls to polymorphic functions are monomorphised into versions which use
-concrete types. Name mangling is used to produce the new declarations (and
-allow recovery of the original name).</p>
-<h2 id="notes-3"><a class="header" href="#notes-3">Notes</a></h2>
-<ul>
-<li>If we want to pre-compile the standard library, we will have to monomorphise
-any polymorphic functions based on what the possible types for the call
-arguments are.
-<ul>
-<li>Actually this may not be possible because we need monomorphisation to
-specialise calls involving enums - and user enums which can be used with
-stdlib won't be available if precompiled</li>
-<li>Could we compile the model + stdlib separately from the solver library?
-Probably not because decompositions in the solver library may use library
-functions which need to be specialised</li>
-</ul>
-</li>
-<li>Alternatively we could leave polymorphic functions un-compiled and instead
-compile them on the fly.</li>
-<li>To start with, the initial implementation should probably just require
-compiling the library along with the model.</li>
-</ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="minizinc-ast-to-ast-transformations"><a class="header" href="#minizinc-ast-to-ast-transformations">MiniZinc AST-to-AST transformations</a></h1>
-<p>In this phase, more complex desugaring operations are performed.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="removal-of-overloading"><a class="header" href="#removal-of-overloading">Removal of overloading</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="erasure-of-records"><a class="header" href="#erasure-of-records">Erasure of records</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="erasure-of-enums"><a class="header" href="#erasure-of-enums">Erasure of enums</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="desugaring-of-comprehensions"><a class="header" href="#desugaring-of-comprehensions">Desugaring of comprehensions</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="erasure-of-option-types"><a class="header" href="#erasure-of-option-types">Erasure of option types</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="desugaring-of-capturing"><a class="header" href="#desugaring-of-capturing">Desugaring of capturing</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compilation-to-microzinc"><a class="header" href="#compilation-to-microzinc">Compilation to MicroZinc</a></h1>
-<p>Compilation of the MiniZinc AST to MicroZinc will involve transformation to
-a new AST for MicroZinc.</p>
-<h2 id="replacing-operators-by-function-calls"><a class="header" href="#replacing-operators-by-function-calls">Replacing operators by function calls</a></h2>
-<p>Operators need to be replaced by calls.</p>
+<p>Compilation of the MiniZinc THIR to MicroZinc will involve transformation to
+a new IR for MicroZinc.</p>
 <h2 id="decomposition-of-variable-conditionals"><a class="header" href="#decomposition-of-variable-conditionals">Decomposition of variable conditionals</a></h2>
 <p><code>if-then-else</code> expressions with a variable condition need to be rewritten into
 function calls.</p>
@@ -989,6 +1300,88 @@ transformed such that these variables are passed as arguments to the function.</
 <p>MicroZinc uses a top-level function <code>main</code> as its entrypoint for the interpreter.</p>
 <p>The top-level decision variable and constraints are added as a <code>let</code> expression
 in this function, taking the model parameters as arguments.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="totalisation"><a class="header" href="#totalisation">Totalisation</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>A function is <em>total</em> iff it is <em>defined</em> for any argument in its domain. In MiniZinc, the domain of a function is determined by the <em>type-insts</em> of its arguments, but not by any <em>constraints</em> on its arguments.</p>
+<p>A function is <em>partial</em> iff it is <em>undefined</em> for certain arguments in its domain. In MiniZinc, a function is partial if its return type is not a subtype of <code>var opt bool</code>, and at least one of these conditions holds:</p>
+<ul>
+<li>If at least one of its arguments has a constrained type. E.g., <code>function int: foo(1..3: x) = x + 1;</code> is partial, because its argument <code>x</code> is constrained.</li>
+<li>If its body is a partially defined expression</li>
+<li>If it is a built-in function that is known to be partial (e.g. integer division, modulo etc.)</li>
+</ul>
+<p>A function that is partial according to the rules above can be annotated as <code>::promise_total</code> if it can be guaranteed that it will return a value for any input in its domain.</p>
+<p>An expression is <em>partially defined</em> if its type is not a subtype of <code>var opt bool</code> and it does not evaluate to a value for all possible evaluations of its free variables. At least one of the following conditions needs to hold for an expression to be partially defined:</p>
+<ul>
+<li>It is a call to a partial function or built-in operator</li>
+<li>It is a <code>let</code> expression with a type that is not a subtype of <code>var opt bool</code>, and one of the cases in the <code>let</code> is a <code>constraint</code>, or one of the variables in the <code>let</code> has a constrained type-inst</li>
+<li>One of its immediate subexpressions is partially defined</li>
+</ul>
+<h2 id="array-types"><a class="header" href="#array-types">Array types</a></h2>
+<p>Two options:</p>
+<ol>
+<li>An undefined element in an array makes the entire array undefined (MiniZinc 2 semantics)</li>
+<li>An undefined element in an array only causes undefinedness if the element is accessed (Stuckey/Frisch paper)</li>
+</ol>
+<p>Issues with option 2: Passing an array to a function now means that all arrays have to be arrays of tuples (even if all elements are statically known to be defined); or, we have to generate different versions (tuple and non-tuple) for each function, for all array argument types.</p>
+<h2 id="transformation"><a class="header" href="#transformation">Transformation</a></h2>
+<p>The basic idea of the transformation is to turn any partially defined expression into a pair of expressions <code>(b,e)</code> where <code>b</code> is a Boolean that is true iff the expression is defined, and <code>e</code> is the value of the expression if it is defined, and <code>⊥</code> otherwise.</p>
+<ol>
+<li>The return type of a partial function returning type <code>T</code> is changed to <code>tuple(bool, T)</code>.</li>
+<li>Any variable declaration of type <code>T</code> whose right hand side is a partially defined expression is changed into a variable declaration of type <code>tuple(bool, T)</code>. <strong>NOTE:</strong> What about array types? Do they capture definedness for each element, or for the array?</li>
+<li>Set literals (containing partially defined expressions)
+The type is transformed from <code>set of T</code> into <code>tuple(bool, set of T)</code> as follows.
+<code>{ e1, e2, pde1, ..., pdek, ... }</code> into
+<code>let { any: (b1,tmp1) = pde1; any: (bk,tmpk) = pdek; } in (forall([b1,...,bk]), {e1, e2, tmp1, ..., tmpk ...})</code></li>
+<li>Array literals (containing partially defined expressions)
+<del>Change type <code>array[...] of T</code> into <code>array[...] of tuple(bool, T)</code> and change
+<code>[ e1, ..., pde1, ... pdek, ... en]</code> into
+<code>[ (true, e1), ..., pde1, ... pdek, ... (true,en) ]</code></del>
+Change type <code>array[...] of T</code> into <code>tuple(bool, array [...] of T</code> and change <code>[ e1, ..., (b1, pde1), ... (bk, pdek), ... en]</code> into <code>(b1 /\ ... /\ bk, [e1, pde1, ... pdek, ... en])</code></li>
+<li>Array comprehensions
+<ul>
+<li>Partially defined generators are not permitted (static type error).</li>
+<li>Partially defined generated expressions are fine. The resulting type changes from <code>array[...] of T</code> into <code>tuple(bool, array[...] of T)</code> (like array literals). May need to create <code>array [...] of tuple(bool, T)</code> first, then extract the definedness from that.****</li>
+<li>Partially defined where clauses are fine (they are their own Boolean context)</li>
+<li>These examples show why it would be a bad idea to allow partial generators. - par comprehensions
+<code>[ pde | i in 0..10, j in x[i] ]</code>
+<code>[ pde | i in 0..10, (b,e)=x[i] where b, j in e ]</code> - var generator comprehensions:
+<code>var 0..10: x</code>
+<code>[ pde | i in 0..10, j in i div x..100]</code>
+<code>[ let { any: (b,t) = i div x..100; any: (eb, et) = pde } in if eb /\ b /\ j in t..100 then (true,et) else (b,&lt;&gt;) endif) | i in 0..10, j in ub(i div x..100) ]</code></li>
+</ul>
+</li>
+<li>Set comprehensions
+These are transformed into array comprehensions and <code>array2set</code> in a previous compiler phase.</li>
+<li>Array access<br />
+<code>var</code> array access turns into <code>element()</code> which has the right semantics.
+<code>function tuple(bool, any $T): element(array [int, ...] of any $T: x, int: i, ...)</code> where the boolean is</li>
+<li><code>if then else endif</code><br />
+Can't use a normal function since the arguments would escape into the boolean context outside, so instead define the function which returns the pair:<br />
+<code>function tuple(var bool, var $T): if_then_else(array [int] of var bool: c, array [int] of tuple(var bool, var $T): r)</code></li>
+<li>Tuple field access<br />
+Same as for arrays, so undefined inside a tuple makes the whole tuple undefined</li>
+<li>Calls
+Transformed to return a tuple if not known to be total</li>
+<li><code>let { ... } in</code>
+If not in <code>::promise_total</code>/root context and non-boolean then the conjunction of the constraints and the variable definedness becomes the let's definedness
+<pre><code>let {
+    var int: x = e1;
+    constraint c;
+} in e2
+</code></pre>
+becomes
+<pre><code>let {
+    tuple(var bool, var int): x' = (de1, e1');
+    var bool: c' = c;
+} in (de1 /\ c' /\ de2, e2')
+</code></pre>
+</li>
+<li>Annotations
+Annotations are compiled in the root context.</li>
+<li>Output
+The expression in an output statement must be total. It is a static type error if it isn't. Users can use <code>default</code> to make all expressions total.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="context-analysis"><a class="header" href="#context-analysis">Context analysis</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="bytecode-generation"><a class="header" href="#bytecode-generation">Bytecode generation</a></h1>
 <h2 id="output-generation"><a class="header" href="#output-generation">Output generation</a></h2>
 <p>Some kind of code which maps from FlatZinc output variables to user model
@@ -1038,7 +1431,7 @@ variables introduced in the same let expression.</p>
 \mathit{letRoot} \\&amp;|&amp;
 \mathit{ident}<del>\mathsf{(}\mathit{val} [ \mathsf{,}</del> \mathit{val}]*\mathsf{)} \\&amp;|&amp;
 \mathsf{if}<del>\mathit{val}</del>\mathsf{then}<del>\mathit{letRoot}</del>[\mathsf{elseif}<del>\mathit{val}</del>\mathsf{then}<del>\mathit{letRoot}]*</del>\mathsf{else}<del>\mathit{letRoot}</del>\mathsf{endif} \\&amp;|&amp;
-\mathsf{forall<em>root}\mathsf{(}\mathsf{[}\mathit{letRoot}<del>\mathsf{|}</del>\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]*\mathsf{]}\mathsf{)} \\
+\mathsf{forall*root}\mathsf{(}\mathsf{[}\mathit{letRoot}<del>\mathsf{|}</del>\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]*\mathsf{]}\mathsf{)} \\
 \mathit{letExpr} &amp;::=&amp;
 \mathit{val} \\&amp;|&amp;
 \mathsf{let}<del>\mathsf{\{}\mathit{item}*\mathsf{\}}</del>\mathsf{in}<del>\mathit{val} \\
@@ -1078,7 +1471,7 @@ variables introduced in the same let expression.</p>
 \mathit{str} &amp;::=&amp;
 /\texttt{&quot;[^&quot;]*&quot;}/ \\
 \mathit{ident} &amp;::=&amp;
-/\texttt{[A-Za-z]A-Za-z0-9</em>]*}/ \\
+/\texttt{[A-Za-z]A-Za-z0-9*]*}/ \\
 \end{array}
 \]</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-typing-rules-of-microzinc"><a class="header" href="#the-typing-rules-of-microzinc">The Typing Rules of MicroZinc</a></h1>
@@ -1552,7 +1945,7 @@ variables introduced in the same let expression.</p>
 <li>Function type syntax</li>
 <li>Module syntax</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="error-handling"><a class="header" href="#error-handling">Error handling</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="error-handling-1"><a class="header" href="#error-handling-1">Error handling</a></h1>
 <p>Good error reporting should be integral to the compiler.</p>
 <p>We need to think about what errors could be encountered and what information is
 needed to generate a useful message.</p>

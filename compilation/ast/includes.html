@@ -1,0 +1,282 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Include resolution - The Shackle Almanac</title>
+
+
+        <!-- Custom HTML head -->
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script
+        	id="MathJax-script"
+        	async
+        	src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        ></script>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../../process.html"><strong aria-hidden="true">1.</strong> The compilation process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="../../compilation/ast/ast.html"><strong aria-hidden="true">1.2.</strong> Abstract syntax tree</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/ast/includes.html" class="active"><strong aria-hidden="true">1.2.1.</strong> Include resolution</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/hir/hir.html"><strong aria-hidden="true">1.3.</strong> High-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/hir/scope.html"><strong aria-hidden="true">1.3.1.</strong> Scope collection</a></li><li class="chapter-item expanded "><a href="../../compilation/hir/typecheck.html"><strong aria-hidden="true">1.3.2.</strong> Type checking</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/thir/thir.html"><strong aria-hidden="true">1.4.</strong> Typed high-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/thir/transform.html"><strong aria-hidden="true">1.4.1.</strong> Model transformations</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/type-specialise.html"><strong aria-hidden="true">1.4.2.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/overloading.html"><strong aria-hidden="true">1.4.3.</strong> Removal of overloading</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/records.html"><strong aria-hidden="true">1.4.4.</strong> Erasure of records</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/enums.html"><strong aria-hidden="true">1.4.5.</strong> Erasure of enums</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/comprehension.html"><strong aria-hidden="true">1.4.6.</strong> Desugaring of comprehensions</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/option-types.html"><strong aria-hidden="true">1.4.7.</strong> Erasure of option types</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/captures.html"><strong aria-hidden="true">1.4.8.</strong> Desugaring of capturing</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/mir/mir.html"><strong aria-hidden="true">1.5.</strong> Mid-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/mir/totalise.html"><strong aria-hidden="true">1.5.1.</strong> Totalisation</a></li><li class="chapter-item expanded "><a href="../../compilation/mir/context.html"><strong aria-hidden="true">1.5.2.</strong> Context analysis</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/bytecode-gen.html"><strong aria-hidden="true">1.6.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="../../compilation/interpreter.html"><strong aria-hidden="true">1.7.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="../../microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="../../microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="../../interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="../../mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="../../error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The Shackle Almanac</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="include-resolution"><a class="header" href="#include-resolution">Include resolution</a></h1>
+<p>Include resolution involves recursively going through the <code>include</code> items in a MiniZinc model, and finding the linked
+model files. There are also two 'implied' includes which make the standard library available. These are <code>stdlib.mzn</code>
+and <code>solver_redefinitions.mzn</code>. While this process is described here as part of the AST module, as the include items
+are extracted from the AST, it actually produces <code>ModelRef</code> IDs, which are part of the HIR module.</p>
+<p>Include resolution gives a list of <code>ModelRef</code>s which comprises all of the model files to be lowered into
+<a href="../hir/hir.html">HIR</a>. Logically these model files get concatenated together, however we don't actually do this until
+the <a href="../thir/thir.html">THIR</a> stage. The list of models produced is in the order that the models appear.</p>
+<h2 id="resolution-rules"><a class="header" href="#resolution-rules">Resolution rules</a></h2>
+<p>The resolution method used depends on the kind of path used in the include item. Note that relative includes are never
+resolved relative to the process's current directory, only to the current model file (so string models without files
+cannot use <code>./path/to/model.mzn</code> includes).</p>
+<table style="width:100%">
+<tr><th>Include</th><th>Resolution method</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">include &quot;foo.mzn&quot;;
+</code></pre>
+</td>
+<td>
+<ul>
+<li>Resolved relative to include search directories</li>
+<li>If not found, resolved relative to current file</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td>
+<pre><code class="language-mzn">include &quot;./foo.mzn&quot;;
+</code></pre>
+</td>
+<td>
+<ul>
+<li>Resolved relative to current file</li>
+</ul>
+</td>
+<tr>
+<td>
+<pre><code class="language-mzn">include &quot;/path/to/foo.mzn&quot;;
+</code></pre>
+</td>
+<td>
+<ul>
+<li>Absolute path used</li>
+</ul>
+</td>
+</tr>
+</table>
+<h2 id="cyclic-includes"><a class="header" href="#cyclic-includes">Cyclic includes</a></h2>
+<p>As all models are locally concatenated together, it actually does not matter if there are includes which are cyclic. We
+only ever add any particular model file to the list of models once, so cycles are simply ignored.</p>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error handling</a></h2>
+<p>Errors during include resolution prevent lowering to HIR from occurring (as without having all of the included files
+available, it is highly likely that uninformative name resolution and type errors will occur). Note that when we fail
+to resolve an include, we actually don't abort include resolution. This way, we can produce errors for as many missing
+files as possible.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../compilation/ast/ast.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../../compilation/hir/hir.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../compilation/ast/ast.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../../compilation/hir/hir.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../theme/mzn-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>
