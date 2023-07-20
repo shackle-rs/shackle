@@ -6,6 +6,7 @@ use crate::{db::FileReader, diagnostics::FileError};
 use miette::{MietteSpanContents, SourceCode};
 use std::{
 	ops::Deref,
+	panic::{RefUnwindSafe, UnwindSafe},
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -242,7 +243,7 @@ pub fn input_models(db: &dyn FileReader) -> Arc<Vec<ModelRef>> {
 /// Trait for handling filesystem queries.
 ///
 /// The `DefaultFileHandler` provides a default implementation which reads directly from the filesystem.
-pub trait FileHandler: Send {
+pub trait FileHandler: Send + UnwindSafe {
 	/// Whether the results are durable (return false if file contents may change)
 	fn durable(&self) -> bool {
 		true
@@ -252,7 +253,7 @@ pub trait FileHandler: Send {
 	fn read_file(&self, path: &Path) -> Result<Arc<String>, FileError>;
 
 	/// Create a snapshot of the file handler
-	fn snapshot(&self) -> Box<dyn FileHandler>;
+	fn snapshot(&self) -> Box<dyn FileHandler + RefUnwindSafe>;
 }
 
 /// Default file handler which reads from filesystem
@@ -270,7 +271,7 @@ impl FileHandler for DefaultFileHandler {
 			})
 	}
 
-	fn snapshot(&self) -> Box<dyn FileHandler> {
+	fn snapshot(&self) -> Box<dyn FileHandler + RefUnwindSafe> {
 		Box::new(self.clone())
 	}
 }

@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	panic::RefUnwindSafe,
 	path::{Path, PathBuf},
 	sync::{Arc, Mutex},
 };
@@ -55,7 +56,7 @@ impl FileHandler for Vfs {
 			})
 	}
 
-	fn snapshot(&self) -> Box<dyn FileHandler> {
+	fn snapshot(&self) -> Box<dyn FileHandler + RefUnwindSafe> {
 		Box::new(self.clone())
 	}
 }

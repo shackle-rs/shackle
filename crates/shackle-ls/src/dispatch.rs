@@ -1,4 +1,8 @@
-use lsp_server::{ExtractError, Message, Notification, Request, Response, ResponseError};
+use std::panic::{catch_unwind, UnwindSafe};
+
+use lsp_server::{
+	ErrorCode, ExtractError, Message, Notification, Request, Response, ResponseError,
+};
 use shackle::db::CompilerDatabase;
 
 use crate::LanguageServerDatabase;
@@ -30,7 +34,7 @@ impl<'a> DispatchRequest<'a> {
 	where
 		R: lsp_types::request::Request,
 		H: RequestHandler<R, T>,
-		T: Send + 'static,
+		T: Send + UnwindSafe + 'static,
 	{
 		match self.0 {
 			RequestState::Unhandled { request, db } => {
@@ -53,20 +57,23 @@ impl<'a> DispatchRequest<'a> {
 								}
 							};
 							db.execute_async(move |db, sender| {
-								let response = match H::execute(db, value) {
-									Ok(value) => Response {
+								let result = catch_unwind(|| H::execute(db, value));
+								let response = match result {
+									Ok(Ok(value)) => Response::new_ok(
 										id,
-										result: Some(
-											serde_json::to_value(&value)
-												.expect("Failed to serialize response"),
-										),
-										error: None,
-									},
-									Err(err) => Response {
+										serde_json::to_value(&value)
+											.expect("Failed to serialize response"),
+									),
+									Ok(Err(err)) => Response {
 										id,
 										result: None,
 										error: Some(err),
 									},
+									_ => Response::new_err(
+										id,
+										ErrorCode::ContentModified as i32,
+										"Thread panicked".to_owned(),
+									),
 								};
 								sender
 									.send(Message::Response(response))
