@@ -988,26 +988,26 @@ mod test {
     int: A = 1;
     int: B = 2;
     int: C = 3;
-    function Foo: D(Bar: _DECL_2293) = mzn_enum_constructor([], [(Bar, _DECL_2293)]);
-    function var Foo: D(var Bar: _DECL_2294) = mzn_enum_constructor([], [(Bar, _DECL_2294)]);
-    function opt Foo: D(opt Bar: _DECL_2295) = mzn_enum_constructor([], [(Bar, _DECL_2295)]);
-    function var opt Foo: D(var opt Bar: _DECL_2296) = mzn_enum_constructor([], [(Bar, _DECL_2296)]);
-    function set of Foo: D(set of Bar: _DECL_2297) = {D(_DECL_2298) | _DECL_2298 in _DECL_2297};
-    function var set of Foo: D(var set of Bar: _DECL_2299) = {D(_DECL_2300) | _DECL_2300 in _DECL_2297};
-    function Bar: D⁻¹(Foo: _DECL_2301) = let {
-      array [int] of int: _DECL_2302 = mzn_enum_destructor([], [Foo], _DECL_2301);
-    } in (_DECL_2302)[1];
-    function tuple(var Bar): D⁻¹(var Foo: _DECL_2303) = let {
-      array [int] of var int: _DECL_2304 = mzn_enum_destructor([], [Foo], _DECL_2303);
-    } in (_DECL_2304)[1];
-    function tuple(opt Bar): D⁻¹(opt Foo: _DECL_2305) = let {
-      array [int] of opt int: _DECL_2306 = mzn_enum_destructor([], [Foo], _DECL_2305);
+    function Foo: D(Bar: _DECL_2297) = mzn_enum_constructor([], [(Bar, _DECL_2297)]);
+    function var Foo: D(var Bar: _DECL_2298) = mzn_enum_constructor([], [(Bar, _DECL_2298)]);
+    function opt Foo: D(opt Bar: _DECL_2299) = mzn_enum_constructor([], [(Bar, _DECL_2299)]);
+    function var opt Foo: D(var opt Bar: _DECL_2300) = mzn_enum_constructor([], [(Bar, _DECL_2300)]);
+    function set of Foo: D(set of Bar: _DECL_2301) = {D(_DECL_2302) | _DECL_2302 in _DECL_2301};
+    function var set of Foo: D(var set of Bar: _DECL_2303) = {D(_DECL_2304) | _DECL_2304 in _DECL_2301};
+    function Bar: D⁻¹(Foo: _DECL_2305) = let {
+      array [int] of int: _DECL_2306 = mzn_enum_destructor([], [Foo], _DECL_2305);
     } in (_DECL_2306)[1];
-    function tuple(var opt Bar): D⁻¹(var opt Foo: _DECL_2307) = let {
-      array [int] of var opt int: _DECL_2308 = mzn_enum_destructor([], [Foo], _DECL_2307);
+    function tuple(var Bar): D⁻¹(var Foo: _DECL_2307) = let {
+      array [int] of var int: _DECL_2308 = mzn_enum_destructor([], [Foo], _DECL_2307);
     } in (_DECL_2308)[1];
-    function tuple(set of Bar): D⁻¹(set of Foo: _DECL_2309);
-    function tuple(var set of Bar): D⁻¹(var set of Foo: _DECL_2310);
+    function tuple(opt Bar): D⁻¹(opt Foo: _DECL_2309) = let {
+      array [int] of opt int: _DECL_2310 = mzn_enum_destructor([], [Foo], _DECL_2309);
+    } in (_DECL_2310)[1];
+    function tuple(var opt Bar): D⁻¹(var opt Foo: _DECL_2311) = let {
+      array [int] of var opt int: _DECL_2312 = mzn_enum_destructor([], [Foo], _DECL_2311);
+    } in (_DECL_2312)[1];
+    function tuple(set of Bar): D⁻¹(set of Foo: _DECL_2313);
+    function tuple(var set of Bar): D⁻¹(var set of Foo: _DECL_2314);
     int: x = B;
     int: y = D(E);
 "#]),

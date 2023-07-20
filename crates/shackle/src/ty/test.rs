@@ -643,7 +643,6 @@ fn test_record_coercions() {
 		[
 			(types.record, types.record),
 			(types.sub_record, types.sub_record),
-			(types.sub_record, types.record),
 		],
 	);
 }

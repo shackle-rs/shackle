@@ -274,7 +274,7 @@ fn test_lower_function() {
 	check_lower_item(
 		"function var $$E: foo($T: x, $$E: y);",
 		expect!([r#"
-    Item: Function { return_type: <Type::1>, pattern: <Pattern::1>, type_inst_vars: [TypeInstIdentifierDeclaration { name: <Pattern::2>, anonymous: false, is_enum: true, is_varifiable: true, is_indexable: false }, TypeInstIdentifierDeclaration { name: <Pattern::3>, anonymous: false, is_enum: false, is_varifiable: false, is_indexable: false }], parameters: [Parameter { declared_type: <Type::2>, pattern: Some(<Pattern::4>), annotations: [] }, Parameter { declared_type: <Type::3>, pattern: Some(<Pattern::6>), annotations: [] }], body: None, annotations: [] }
+    Item: Function { return_type: <Type::1>, pattern: <Pattern::1>, type_inst_vars: [TypeInstIdentifierDeclaration { name: <Pattern::3>, anonymous: false, is_enum: false, is_varifiable: false, is_indexable: false }, TypeInstIdentifierDeclaration { name: <Pattern::2>, anonymous: false, is_enum: true, is_varifiable: true, is_indexable: false }], parameters: [Parameter { declared_type: <Type::2>, pattern: Some(<Pattern::4>), annotations: [] }, Parameter { declared_type: <Type::3>, pattern: Some(<Pattern::6>), annotations: [] }], body: None, annotations: [] }
       Expressions:
         <Expression::1>: Identifier("$$E")
         <Expression::2>: Identifier("$T")
