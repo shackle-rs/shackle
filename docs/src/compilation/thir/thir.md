@@ -305,15 +305,20 @@ array [int] of Bar: x = [
 
 ## Model transformations
 
-- Insertion of coercion functions
-- Decomposition of `var` if-then-else conditionals
-- Decomposition of `var` where-clause comprehensions
-- Decomposition of lambda functions
+At the THIR level, several model-to-model transformations occur which progressively remove language
+constructs which do not exist in the [mid-level intermediate representation](../mir/mir.md).
 
-## Type specialisation
+The order of these transforms is often important as certain information or language constructs
+may be removed in one transform, and so cannot be used in subsequent transforms.
 
-See [Type specialisation](./type-specialise.md) for more detail about the process.
+The transforms which occur are:
 
-## Type erasure
+- [Type specialisation](./type-specialise.md)
+- [Removal of overloading](./overloading.md)
+- [Erasure of records](./records.md)
+- [Erasure of enums](./enums.md)
+- [Desugaring of comprehensions](./comprehension.md)
+- [Erasure of option types](./option-types.md)
+- [Desugaring of capturing](./captures.md)
 
-See [Type erasure](./type-erasure.md) for more detail about the process.
+See [Model transformations](./transform.md) for more details.

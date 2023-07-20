@@ -179,3 +179,17 @@ It is an error if we are left with more than one candidate, or no candidates at 
 it should be noted that in the case of two identical functions which have bodies, we will simply arbitrarily choose one
 at this stage to allow type checking to continue with a reasonable return type. The duplicate function error will be
 emitted during final validation of the HIR.
+
+## Output typing
+
+The expressions of output items, and definitions of `:: output_only` declarations are type-checked in a special mode
+where the types of top-level identifiers are assumed to be par. This alleviates the need to manually insert calls to
+`fix()`.
+
+In this example, if we don't consider `p` in the output statement to be `par`, then the if-then-else will cause will
+trigger a type error as it will return the illegal type `var string`.
+
+```mzn
+var bool: p;
+output [if p then "Yes" else "No" endif];
+```

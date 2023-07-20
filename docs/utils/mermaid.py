@@ -75,7 +75,7 @@ if __name__ == "__main__":
             output.append(content[pos:])
             if had_match:
                 output.append(
-                    '\n<script src="https://cdn.jsdelivr.net/npm/mermaid"></script>'
+                    '\n<script src="https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.min.js"></script>'
                 )
                 output.append(
                     "\n<script>mermaid.initialize({ startOnLoad: true });</script>"
