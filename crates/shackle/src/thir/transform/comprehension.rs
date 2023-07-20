@@ -1,4 +1,7 @@
-//! Transforms var if-then-else into predicate, var comprehensions into comprehensions over optional values.
+//! Desugars comprehensions
+//! - Move where clauses as early as possible
+//! - Turn var comprehensions into comprehensions over optional values
+//! - Change set comprehensions into array comprehensions surrounded by `array2set`.
 //!
 
 use std::sync::Arc;
@@ -8,10 +11,11 @@ use rustc_hash::FxHashMap;
 use crate::{
 	constants::IdentifierRegistry,
 	thir::{
-		db::Thir, fold_call, fold_expression, source::Origin, visit_expression, Absent,
-		ArrayComprehension, ArrayLiteral, BooleanLiteral, Branch, Call, Callable, DeclarationId,
-		Expression, ExpressionData, Folder, Generator, IfThenElse, IntegerLiteral, LookupCall,
-		Marker, Model, ReplacementMap, ResolvedIdentifier, SetComprehension, VarType, Visitor,
+		db::Thir,
+		traverse::{fold_call, fold_expression, visit_expression, Folder, ReplacementMap, Visitor},
+		Absent, ArrayComprehension, ArrayLiteral, Branch, Call, Callable, DeclarationId,
+		Expression, ExpressionData, Generator, IfThenElse, IntegerLiteral, LookupCall, Marker,
+		Model, ResolvedIdentifier, SetComprehension, VarType,
 	},
 };
 
@@ -22,13 +26,13 @@ enum SurroundingCall {
 	Other,
 }
 
-struct Rewriter<Dst> {
+struct ComprehensionRewriter<Dst> {
 	result: Model<Dst>,
 	replacement_map: ReplacementMap<Dst>,
 	ids: Arc<IdentifierRegistry>,
 }
 
-impl<Dst: Marker> Folder<Dst> for Rewriter<Dst> {
+impl<Dst: Marker> Folder<Dst> for ComprehensionRewriter<Dst> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.result
 	}
@@ -44,15 +48,6 @@ impl<Dst: Marker> Folder<Dst> for Rewriter<Dst> {
 		c: &ArrayComprehension,
 	) -> ArrayComprehension<Dst> {
 		self.rewrite_array_comprehension(db, model, c, SurroundingCall::Other)
-	}
-
-	fn fold_set_comprehension(
-		&mut self,
-		db: &dyn Thir,
-		model: &Model,
-		c: &SetComprehension,
-	) -> SetComprehension<Dst> {
-		self.rewrite_set_comprehension(db, model, c, SurroundingCall::Other)
 	}
 
 	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call<Dst> {
@@ -94,27 +89,29 @@ impl<Dst: Marker> Folder<Dst> for Rewriter<Dst> {
 		model: &Model,
 		expression: &Expression,
 	) -> Expression<Dst> {
-		let folded = fold_expression(self, db, model, expression);
-		if let ExpressionData::IfThenElse(ite) = &*folded {
-			if ite
-				.branches
-				.iter()
-				.any(|b| matches!(b.condition.ty().inst(db.upcast()), Some(VarType::Var)))
-			{
-				// Rewrite as if_then_else function
-				return self.desugar_if_then_else(
-					db,
-					expression.origin(),
-					ite.branches.clone(),
-					*(ite.else_result).clone(),
-				);
-			}
+		if let ExpressionData::SetComprehension(c) = &**expression {
+			// Set comprehensions are turned into array comprehensions surrounded by array2set()
+			let array = self.rewrite_set_comprehension(db, model, c, SurroundingCall::Other);
+			return Expression::new(
+				db,
+				&self.result,
+				expression.origin(),
+				LookupCall {
+					function: self.ids.array2set.into(),
+					arguments: vec![Expression::new(
+						db,
+						&self.result,
+						expression.origin(),
+						array,
+					)],
+				},
+			);
 		}
-		folded
+		fold_expression(self, db, model, expression)
 	}
 }
 
-impl<Dst: Marker> Rewriter<Dst> {
+impl<Dst: Marker> ComprehensionRewriter<Dst> {
 	fn rewrite_array_comprehension(
 		&mut self,
 		db: &dyn Thir,
@@ -148,7 +145,7 @@ impl<Dst: Marker> Rewriter<Dst> {
 		model: &Model,
 		c: &SetComprehension,
 		surrounding: SurroundingCall,
-	) -> SetComprehension<Dst> {
+	) -> ArrayComprehension<Dst> {
 		let mut generators = c
 			.generators
 			.iter()
@@ -158,8 +155,9 @@ impl<Dst: Marker> Rewriter<Dst> {
 		let template =
 			self.desugar_comprehension(db, &mut generators, folded_template, surrounding);
 
-		SetComprehension {
+		ArrayComprehension {
 			generators,
+			indices: None,
 			template: Box::new(template),
 		}
 	}
@@ -356,112 +354,48 @@ impl<Dst: Marker> Rewriter<Dst> {
 						)
 					} else {
 						// Rewrite var where clauses into if-then-else
-						self.desugar_if_then_else(
+						Expression::new(
 							db,
+							&self.result,
 							origin,
-							vec![Branch {
-								condition,
-								result: template,
-							}],
-							Expression::new(db, &self.result, origin, IntegerLiteral(0)),
+							IfThenElse {
+								branches: vec![Branch {
+									condition,
+									result: template,
+								}],
+								else_result: Box::new(Expression::new(
+									db,
+									&self.result,
+									origin,
+									IntegerLiteral(0),
+								)),
+							},
 						)
 					}
 				}
 				SurroundingCall::Other => {
 					// Rewrite var where clauses into optionality
-					self.desugar_if_then_else(
+					Expression::new(
 						db,
+						&self.result,
 						origin,
-						vec![Branch {
-							condition,
-							result: template,
-						}],
-						Expression::new(db, &self.result, origin, Absent),
+						IfThenElse {
+							branches: vec![Branch {
+								condition,
+								result: template,
+							}],
+							else_result: Box::new(Expression::new(
+								db,
+								&self.result,
+								origin,
+								Absent,
+							)),
+						},
 					)
 				}
 			};
 		}
 		template
-	}
-
-	/// Rewrite var if-then-else into if_then_else call
-	fn desugar_if_then_else(
-		&mut self,
-		db: &dyn Thir,
-		origin: Origin,
-		branches: Vec<Branch<Dst>>,
-		else_result: Expression<Dst>,
-	) -> Expression<Dst> {
-		assert!(!branches.is_empty());
-		let var_condition = branches[0].var_condition(db);
-		let mut bs = Vec::with_capacity(branches.len());
-		let mut rest = Vec::new();
-		let mut done = false;
-		for b in branches {
-			if !done && b.var_condition(db) == var_condition {
-				bs.push(b);
-			} else {
-				done = true;
-				rest.push(b);
-			}
-		}
-		let tail = if rest.is_empty() {
-			else_result
-		} else {
-			self.desugar_if_then_else(db, origin, rest, else_result)
-		};
-
-		if var_condition {
-			// Create if_then_else call
-			let mut conditions = Vec::with_capacity(bs.len() + 1);
-			let mut results = Vec::with_capacity(bs.len() + 1);
-
-			for b in bs {
-				conditions.push(b.condition);
-				results.push(b.result);
-			}
-			conditions.push(Expression::new(
-				db,
-				&self.result,
-				tail.origin(),
-				BooleanLiteral(true),
-			));
-			results.push(tail);
-
-			Expression::new(
-				db,
-				&self.result,
-				origin,
-				LookupCall {
-					function: self.ids.if_then_else.into(),
-					arguments: vec![
-						Expression::new(
-							db,
-							&self.result,
-							conditions.last().unwrap().origin(),
-							ArrayLiteral(conditions),
-						),
-						Expression::new(
-							db,
-							&self.result,
-							results.last().unwrap().origin(),
-							ArrayLiteral(results),
-						),
-					],
-				},
-			)
-		} else {
-			// Keep as if-then-else
-			Expression::new(
-				db,
-				&self.result,
-				origin,
-				IfThenElse {
-					branches: bs,
-					else_result: Box::new(tail),
-				},
-			)
-		}
 	}
 }
 
@@ -499,9 +433,9 @@ impl<'a, T: Marker> ScopeTester<'a, T> {
 	}
 }
 
-/// Desugar var if-then-else and comprehensions
-pub fn desugar_model(db: &dyn Thir, model: &Model) -> Model {
-	let mut r = Rewriter {
+/// Desugar comprehensions
+pub fn desugar_comprehension(db: &dyn Thir, model: &Model) -> Model {
+	let mut r = ComprehensionRewriter {
 		ids: db.identifier_registry(),
 		replacement_map: ReplacementMap::default(),
 		result: Model::default(),
@@ -515,12 +449,12 @@ mod test {
 	use crate::thir::transform::test::check;
 	use expect_test::expect;
 
-	use super::desugar_model;
+	use super::desugar_comprehension;
 
 	#[test]
 	fn test_desugar_array_comprehension_var_where() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				predicate foo(var int: x);
 				array [int] of var int: x;
@@ -529,7 +463,7 @@ mod test {
 			expect!([r#"
     function var bool: foo(var int: x);
     array [int] of var int: x;
-    array [int] of var opt int: y = [if_then_else([foo(x_i), true], [x_i, <>]) | x_i in x];
+    array [int] of var opt int: y = [if foo(x_i) then x_i else <> endif | x_i in x];
 "#]),
 		)
 	}
@@ -537,14 +471,14 @@ mod test {
 	#[test]
 	fn test_desugar_array_comprehension_var_set() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				var set of int: x;
 				any: y = [x_i | x_i in x];
 			"#,
 			expect!([r#"
     var set of int: x;
-    array [int] of var opt int: y = [if_then_else(['in'(x_i, x), true], [x_i, <>]) | x_i in ub(x)];
+    array [int] of var opt int: y = [if 'in'(x_i, x) then x_i else <> endif | x_i in ub(x)];
 "#]),
 		)
 	}
@@ -552,7 +486,7 @@ mod test {
 	#[test]
 	fn test_desugar_array_comprehension_complex() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				var set of int: x;
 				predicate foo(var int: x);
@@ -563,7 +497,7 @@ mod test {
     var set of int: x;
     function var bool: foo(var int: x);
     function bool: bar(int: x);
-    array [int] of var opt int: y = [if_then_else([forall(['in'(x_i, x), 'in'(x_j, x), foo(x_i)]), true], [x_i, <>]) | x_i in ub(x) where bar(x_i), x_j in ub(x) where bar(x_j)];
+    array [int] of var opt int: y = [if forall(['in'(x_i, x), 'in'(x_j, x), foo(x_i)]) then x_i else <> endif | x_i in ub(x) where bar(x_i), x_j in ub(x) where bar(x_j)];
 "#]),
 		)
 	}
@@ -571,7 +505,7 @@ mod test {
 	#[test]
 	fn test_desugar_array_comprehension_forall() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				predicate foo(var int: x);
 				var set of int: S;
@@ -588,7 +522,7 @@ mod test {
 	#[test]
 	fn test_desugar_array_comprehension_exists() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				predicate foo(var int: x);
 				var set of int: S;
@@ -605,14 +539,14 @@ mod test {
 	#[test]
 	fn test_desugar_array_comprehension_sum_par() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				var set of int: S;
 				any: x = sum (i in S) (i);
 			"#,
 			expect!([r#"
     var set of int: S;
-    var int: x = sum(['*'(bool2int('in'(i, S)), i) | i in ub(S)]);
+    var int: x = sum(['*'('in'(i, S), i) | i in ub(S)]);
 "#]),
 		)
 	}
@@ -620,7 +554,7 @@ mod test {
 	#[test]
 	fn test_desugar_array_comprehension_sum_var() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
 				var set of int: S;
 				function var int: foo(int: x);
@@ -629,58 +563,41 @@ mod test {
 			expect!([r#"
     var set of int: S;
     function var int: foo(int: x);
-    var int: x = sum([if_then_else(['in'(i, S), true], [foo(i), 0]) | i in ub(S)]);
+    var int: x = sum([if 'in'(i, S) then foo(i) else 0 endif | i in ub(S)]);
 "#]),
 		)
 	}
 
 	#[test]
-	fn test_desugar_var_if_then_else_1() {
+	fn test_desugar_set_comprehension() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
-				var bool: p;
-				any: x = if p then 1 else 2 endif;
-			"#,
+				set of int: S;
+				function var int: foo(int: x);
+				any: x = { foo(i) | i in S };
+				"#,
 			expect!([r#"
-    var bool: p;
-    var int: x = if_then_else([p, true], [1, 2]);
+    set of int: S;
+    function var int: foo(int: x);
+    var set of int: x = array2set([foo(i) | i in S]);
 "#]),
 		)
 	}
 
 	#[test]
-	fn test_desugar_var_if_then_else_2() {
+	fn test_desugar_var_set_comprehension() {
 		check(
-			desugar_model,
+			desugar_comprehension,
 			r#"
-				var bool: p;
-				var bool: q;
-				any: x = if p then 1 elseif q then 2 else 3 endif;
-			"#,
+				var set of int: S;
+				function var int: foo(int: x);
+				any: x = { foo(i) | i in S };
+				"#,
 			expect!([r#"
-    var bool: p;
-    var bool: q;
-    var int: x = if_then_else([p, q, true], [1, 2, 3]);
-"#]),
-		)
-	}
-
-	#[test]
-	fn test_desugar_if_then_else_mixed() {
-		check(
-			desugar_model,
-			r#"
-				var bool: p;
-				var bool: q;
-				var bool: r;
-				any: x = if p then 1 elseif true then 2 elseif q then 3 elseif r then 4 elseif false then 5 elseif true then 6 else 7 endif;
-			"#,
-			expect!([r#"
-    var bool: p;
-    var bool: q;
-    var bool: r;
-    var int: x = if_then_else([p, true], [1, if true then 2 else if_then_else([q, r, true], [3, 4, if false then 5 elseif true then 6 else 7 endif]) endif]);
+    var set of int: S;
+    function var int: foo(int: x);
+    var set of int: x = array2set([if 'in'(i, S) then foo(i) else <> endif | i in ub(S)]);
 "#]),
 		)
 	}

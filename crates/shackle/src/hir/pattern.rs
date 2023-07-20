@@ -195,6 +195,12 @@ impl Identifier {
 	}
 }
 
+impl From<InternedString> for Identifier {
+	fn from(value: InternedString) -> Self {
+		Self(value)
+	}
+}
+
 impl From<Identifier> for InternedString {
 	fn from(ident: Identifier) -> Self {
 		ident.0

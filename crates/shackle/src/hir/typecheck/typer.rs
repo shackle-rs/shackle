@@ -120,7 +120,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	pub fn collect_expression(&mut self, expr: ArenaIndex<Expression>) -> Ty {
 		let db = self.db;
 		let result = match &self.data[expr] {
-			Expression::Absent => self.types.bottom.with_opt(db.upcast(), OptType::Opt),
+			Expression::Absent => self.types.bottom.make_opt(db.upcast()),
 			Expression::BooleanLiteral(_) => self.types.par_bool,
 			Expression::IntegerLiteral(_) => self.types.par_int,
 			Expression::FloatLiteral(_) => self.types.par_float,
@@ -206,9 +206,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			match self.ctx.type_pattern(db, p) {
 				PatternTy::Variable(ty) => {
 					if self.in_output_item && p.item() != self.item {
-						return ty
-							.with_inst(db.upcast(), VarType::Par)
-							.expect("Failed to make type par");
+						return ty.make_par(db.upcast());
 					}
 					return ty;
 				}
@@ -544,9 +542,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		});
 		match ty.inst(db.upcast()) {
 			Some(VarType::Var) => {
-				let ty = ty.with_inst(db.upcast(), VarType::Par).unwrap();
+				let ty = ty.make_par(db.upcast());
 				Ty::par_set(db.upcast(), ty)
-					.and_then(|t| t.with_inst(db.upcast(), VarType::Var))
+					.and_then(|t| t.make_var(db.upcast()))
 					.unwrap_or_else(|| {
 						let (src, span) =
 							NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -642,8 +640,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		let el = self.collect_expression(c.template);
 		let element = if lift_to_opt {
-			el.with_opt(db.upcast(), OptType::Opt)
-				.with_inst(db.upcast(), VarType::Var)
+			el.make_opt(db.upcast())
+				.make_var(db.upcast())
 				.unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -717,22 +715,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			}
 		};
 
-		let element = el
-			.with_opt(db.upcast(), OptType::NonOpt)
-			.with_inst(db.upcast(), VarType::Par)
-			.unwrap_or_else(|| {
-				let (src, span) =
-					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
-				panic!(
-					"Failed to make type '{}' par for element of '{}'",
-					el.pretty_print(db.upcast()),
-					&src.contents()[span.offset()..span.offset() + span.len()]
-				);
-			});
+		let element = el.make_par(db.upcast()).make_occurs(db.upcast());
 		Ty::par_set(db.upcast(), element)
 			.and_then(|ty| {
 				if is_var {
-					ty.with_inst(db.upcast(), VarType::Var)
+					ty.make_var(db.upcast())
 				} else {
 					Some(ty)
 				}
@@ -881,8 +868,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 			if !index.is_subtype_of(
 				db.upcast(),
-				dim.with_opt(db.upcast(), OptType::Opt)
-					.with_inst(db.upcast(), VarType::Var)
+				dim.make_opt(db.upcast())
+					.make_var(db.upcast())
 					.unwrap_or_else(|| {
 						panic!(
 							"Array dimension {} should be varifiable",
@@ -1024,7 +1011,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 		if slices.is_empty() {
 			let result = if make_var {
-				el.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
+				el.make_var(db.upcast()).unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 					self.ctx.add_diagnostic(
@@ -1041,7 +1028,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				el
 			};
 			if make_opt {
-				result.with_opt(db.upcast(), OptType::Opt)
+				result.make_opt(db.upcast())
 			} else {
 				result
 			}
@@ -1071,7 +1058,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			)
 			.unwrap();
 			if make_opt {
-				result.with_opt(db.upcast(), OptType::Opt)
+				result.make_opt(db.upcast())
 			} else {
 				result
 			}
@@ -1103,7 +1090,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				let ty = fields[(i - 1) as usize];
 				if let OptType::Opt = opt {
-					ty.with_opt(db.upcast(), OptType::Opt)
+					ty.make_opt(db.upcast())
 				} else {
 					ty
 				}
@@ -1134,7 +1121,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					let el = fields[(i - 1) as usize];
 					let ty = if let OptType::Opt = o1.max(o2) {
-						el.with_opt(db.upcast(), OptType::Opt)
+						el.make_opt(db.upcast())
 					} else {
 						el
 					};
@@ -1211,7 +1198,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						self.types.error
 					});
 				if let OptType::Opt = opt {
-					ty.with_opt(db.upcast(), OptType::Opt)
+					ty.make_opt(db.upcast())
 				} else {
 					ty
 				}
@@ -1244,7 +1231,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							self.types.error
 						});
 					let ty = if let OptType::Opt = o1.max(o2) {
-						el.with_opt(db.upcast(), OptType::Opt)
+						el.make_opt(db.upcast())
 					} else {
 						el
 					};
@@ -1387,7 +1374,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.unwrap_or(VarType::Par)
 		{
 			// Var condition means var result
-			ty.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
+			ty.make_var(db.upcast()).unwrap_or_else(|| {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 				self.ctx.add_diagnostic(
@@ -1457,7 +1444,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			return self.types.error;
 		}
 		if let Some(VarType::Var) = scrutinee.inst(db.upcast()) {
-			ty.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
+			ty.make_var(db.upcast()).unwrap_or_else(|| {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 				self.ctx.add_diagnostic(
@@ -2037,7 +2024,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 					// Find the enum constructor via its return type
 					// If this type is opt, make it non opt as if this call pattern is matched, the value occurs
-					let non_opt = expected.with_opt(db.upcast(), OptType::NonOpt);
+					let non_opt = expected.make_occurs(db.upcast());
 					let c = cs
 						.iter()
 						.find(|c| non_opt.is_subtype_of(db.upcast(), c.overload.return_type()))

@@ -959,7 +959,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 					expr
 				} else {
 					// Need to insert call to fix()
-					assert_eq!(expr.ty().with_inst(db.upcast(), VarType::Par).unwrap(), ty);
+					assert_eq!(expr.ty().make_par(db.upcast()), ty);
 					alloc_expression(
 						LookupCall {
 							function: self.parent.ids.fix.into(),

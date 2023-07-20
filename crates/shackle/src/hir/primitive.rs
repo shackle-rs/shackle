@@ -2,7 +2,7 @@
 //!
 use crate::db::{InternedString, InternedStringData};
 
-use super::db::Hir;
+use super::{db::Hir, Identifier};
 use std::fmt;
 
 /// An integer literal
@@ -57,5 +57,11 @@ impl StringLiteral {
 impl From<InternedString> for StringLiteral {
 	fn from(s: InternedString) -> Self {
 		Self(s)
+	}
+}
+
+impl From<Identifier> for StringLiteral {
+	fn from(s: Identifier) -> Self {
+		Self(s.0)
 	}
 }

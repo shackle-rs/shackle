@@ -13,8 +13,8 @@ use crate::{
 		Constructor, ConstructorParameter, EnumConstructor, Goal, ItemData, Pattern, Type,
 	},
 	ty::{
-		EnumRef, FunctionEntry, FunctionType, OptType, OverloadedFunction, PolymorphicFunctionType,
-		Ty, TyData, TyVar, TyVarRef, VarType,
+		EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty,
+		TyData, TyVar, TyVarRef,
 	},
 	Error,
 };
@@ -525,35 +525,29 @@ impl SignatureTypeContext {
 					if !had_error {
 						// C(var a, var b, ..) -> var E
 						add_ctor(
-							ty.with_inst(db.upcast(), VarType::Var).unwrap(),
+							ty.make_var(db.upcast()).unwrap(),
 							param_types
 								.iter()
-								.map(|t| t.with_inst(db.upcast(), VarType::Var).unwrap())
+								.map(|t| t.make_var(db.upcast()).unwrap())
 								.collect::<Box<_>>(),
 							false,
 						);
 
 						// C(opt a, opt b, ..) -> opt E
 						add_ctor(
-							ty.with_opt(db.upcast(), OptType::Opt),
+							ty.make_opt(db.upcast()),
 							param_types
 								.iter()
-								.map(|t| t.with_opt(db.upcast(), OptType::Opt))
+								.map(|t| t.make_opt(db.upcast()))
 								.collect::<Box<_>>(),
 							true,
 						);
 						// C(var opt a, var opt b, ..) -> var opt E
 						add_ctor(
-							ty.with_inst(db.upcast(), VarType::Var)
-								.unwrap()
-								.with_opt(db.upcast(), OptType::Opt),
+							ty.make_var(db.upcast()).unwrap().make_opt(db.upcast()),
 							param_types
 								.iter()
-								.map(|t| {
-									t.with_inst(db.upcast(), VarType::Var)
-										.unwrap()
-										.with_opt(db.upcast(), OptType::Opt)
-								})
+								.map(|t| t.make_var(db.upcast()).unwrap().make_opt(db.upcast()))
 								.collect(),
 							true,
 						);
@@ -570,14 +564,14 @@ impl SignatureTypeContext {
 						add_ctor(
 							Ty::par_set(db.upcast(), ty)
 								.unwrap()
-								.with_inst(db.upcast(), VarType::Var)
+								.make_var(db.upcast())
 								.unwrap(),
 							param_types
 								.iter()
 								.map(|t| {
 									Ty::par_set(db.upcast(), *t)
 										.unwrap()
-										.with_inst(db.upcast(), VarType::Var)
+										.make_var(db.upcast())
 										.unwrap()
 								})
 								.collect(),

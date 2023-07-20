@@ -539,9 +539,10 @@ impl FunctionType {
 
 	/// Get human readable representation of type as an item
 	pub fn pretty_print_item(&self, db: &dyn Interner, name: impl Into<InternedString>) -> String {
-		let prefix = if self.return_type == Ty::par_bool(db) {
+		let tys = db.type_registry();
+		let prefix = if self.return_type == tys.par_bool {
 			"test".to_owned()
-		} else if self.return_type == Ty::par_bool(db).with_inst(db, VarType::Var).unwrap() {
+		} else if self.return_type == tys.var_bool {
 			"predicate".to_owned()
 		} else {
 			format!("function {}:", self.return_type.pretty_print(db))
@@ -739,10 +740,10 @@ impl PolymorphicFunctionType {
 					return false;
 				}
 				if let Some(VarType::Var) = i {
-					ty = ty.with_inst(db, VarType::Par).expect("Failed to make par!");
+					ty = ty.make_par(db);
 				}
 				if let Some(OptType::Opt) = o {
-					ty = ty.with_opt(db, OptType::NonOpt);
+					ty = ty.make_occurs(db);
 				}
 				if !ty.known_varifiable(db) && t.varifiable
 					|| !ty.known_enumerable(db) && t.enumerable

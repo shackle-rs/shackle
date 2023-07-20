@@ -11,10 +11,13 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
 	hir::OptType,
 	thir::{
-		add_function, db::Thir, fold_call, fold_expression, fold_function_body, visit_callable,
-		Call, Callable, Declaration, DeclarationId, Domain, Expression, ExpressionData, Folder,
-		FunctionId, IntegerLiteral, Item, Marker, Model, ReplacementMap, ResolvedIdentifier,
-		TupleAccess, TupleLiteral, Visitor,
+		db::Thir,
+		traverse::{
+			add_function, fold_call, fold_expression, fold_function_body, visit_callable, Folder,
+			ReplacementMap, Visitor,
+		},
+		Call, Callable, Declaration, DeclarationId, Domain, Expression, ExpressionData, FunctionId,
+		IntegerLiteral, Item, Marker, Model, ResolvedIdentifier, TupleAccess, TupleLiteral,
 	},
 };
 

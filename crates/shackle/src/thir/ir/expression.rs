@@ -179,6 +179,46 @@ impl<T: Marker> From<Infinity> for ExpressionData<T> {
 	}
 }
 
+/// Creates a dummy value of a given type
+pub struct DummyValue(pub Ty);
+
+impl<T: Marker> ExpressionBuilder<T> for DummyValue {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
+		if self.0.opt(db.upcast()) == Some(OptType::Opt) {
+			return Absent.build(db, model, origin);
+		}
+		let ids = db.identifier_registry();
+		match self.0.lookup(db.upcast()) {
+			TyData::Annotation(_) => model
+				.lookup_identifier(db, ids.empty_annotation)
+				.unwrap()
+				.build(db, model, origin),
+			TyData::Array { .. } => ArrayLiteral(Vec::new()).build(db, model, origin),
+			TyData::Boolean(_, _) => BooleanLiteral(false).build(db, model, origin),
+			TyData::Float(_, _) => FloatLiteral::new(0.0).build(db, model, origin),
+			TyData::Integer(_, _) => IntegerLiteral(0).build(db, model, origin),
+			TyData::Record(_, fs) => RecordLiteral(
+				fs.iter()
+					.map(|(i, ty)| ((*i).into(), DummyValue(*ty).build(db, model, origin)))
+					.collect(),
+			)
+			.build(db, model, origin),
+			TyData::Set(_, _, _) => SetLiteral(Vec::new()).build(db, model, origin),
+			TyData::String(_) => StringLiteral::from(ids.empty_string).build(db, model, origin),
+			TyData::Tuple(_, fs) => TupleLiteral(
+				fs.iter()
+					.map(|ty| DummyValue(*ty).build(db, model, origin))
+					.collect(),
+			)
+			.build(db, model, origin),
+			_ => panic!(
+				"Cannot create dummy value for type {}",
+				self.0.pretty_print(db.upcast())
+			),
+		}
+	}
+}
+
 /// Bottom
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Bottom;
@@ -281,13 +321,10 @@ impl<T: Marker> ExpressionBuilder<T> for SetLiteral<T> {
 		let elem_ty = Ty::most_specific_supertype(db.upcast(), items.iter().map(|e| e.ty()))
 			.expect("Non uniform set literal");
 		let ty = if let VarType::Var = elem_ty.inst(db.upcast()).expect("No inst for set literal") {
-			Ty::par_set(
-				db.upcast(),
-				elem_ty.with_inst(db.upcast(), VarType::Par).unwrap(),
-			)
-			.unwrap()
-			.with_inst(db.upcast(), VarType::Var)
-			.expect("Cannot make set var")
+			Ty::par_set(db.upcast(), elem_ty.make_par(db.upcast()))
+				.unwrap()
+				.make_var(db.upcast())
+				.expect("Cannot make set var")
 		} else {
 			Ty::par_set(db.upcast(), elem_ty).expect("Invalid set type")
 		};
@@ -414,9 +451,9 @@ impl<T: Marker> ExpressionBuilder<T> for ArrayComprehension<T> {
 			if lift_to_opt {
 				self.template
 					.ty()
-					.with_inst(db.upcast(), VarType::Var)
+					.make_var(db.upcast())
 					.unwrap()
-					.with_opt(db.upcast(), OptType::Opt)
+					.make_opt(db.upcast())
 			} else {
 				self.template.ty()
 			},
@@ -441,23 +478,19 @@ impl<T: Marker> ExpressionBuilder<T> for SetComprehension<T> {
 			.generators
 			.iter()
 			.any(|g| g.var_where(db) || g.var_set(db));
-		let elem_ty = self.template.ty().with_opt(db.upcast(), OptType::NonOpt);
+		let elem_ty = self.template.ty().make_occurs(db.upcast());
 		let ty = if let VarType::Var = elem_ty
 			.inst(db.upcast())
 			.expect("Invalid template inst for set comprehension")
 		{
-			Ty::par_set(
-				db.upcast(),
-				elem_ty.with_inst(db.upcast(), VarType::Par).unwrap(),
-			)
-			.expect("Invalid set type")
-			.with_inst(db.upcast(), VarType::Var)
-			.expect("Cannot make set var")
+			Ty::par_set(db.upcast(), elem_ty.make_par(db.upcast()))
+				.expect("Invalid set type")
+				.make_var(db.upcast())
+				.expect("Cannot make set var")
 		} else {
 			let st = Ty::par_set(db.upcast(), elem_ty).expect("Invalid set type");
 			if is_var {
-				st.with_inst(db.upcast(), VarType::Var)
-					.expect("Cannot make set var")
+				st.make_var(db.upcast()).expect("Cannot make set var")
 			} else {
 				st
 			}
@@ -500,12 +533,10 @@ impl<T: Marker> ExpressionBuilder<T> for ArrayAccess<T> {
 			}
 		}
 		if make_var {
-			ty = ty
-				.with_inst(db.upcast(), VarType::Var)
-				.expect("Cannot make var");
+			ty = ty.make_var(db.upcast()).expect("Cannot make var");
 		}
 		if make_opt {
-			ty = ty.with_opt(db.upcast(), OptType::Opt);
+			ty = ty.make_opt(db.upcast());
 		}
 		Expression::new_unchecked(ty, self, origin)
 	}
@@ -526,7 +557,7 @@ impl<T: Marker> ExpressionBuilder<T> for TupleAccess<T> {
 			TyData::Tuple(opt, fields) => {
 				let field_ty = fields[self.field.0 as usize - 1];
 				if opt == OptType::Opt {
-					field_ty.with_opt(db.upcast(), OptType::Opt)
+					field_ty.make_opt(db.upcast())
 				} else {
 					field_ty
 				}
@@ -558,7 +589,7 @@ impl<T: Marker> ExpressionBuilder<T> for RecordAccess<T> {
 					.find_map(|(i, f)| if *i == self.field.0 { Some(*f) } else { None })
 					.expect("Record field doesn't exist");
 				if opt == OptType::Opt {
-					field_ty.with_opt(db.upcast(), OptType::Opt)
+					field_ty.make_opt(db.upcast())
 				} else {
 					field_ty
 				}
@@ -581,6 +612,16 @@ pub struct IfThenElse<T = ()> {
 	pub else_result: Box<Expression<T>>,
 }
 
+impl<T: Marker> IfThenElse<T> {
+	/// Whether or not this if-then-else has a var condition
+	pub fn has_var_condition(&self, db: &dyn Thir) -> bool {
+		let tys = db.type_registry();
+		self.branches
+			.iter()
+			.any(|b| b.condition.ty() == tys.var_bool)
+	}
+}
+
 impl<T: Marker> ExpressionBuilder<T> for IfThenElse<T> {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
 		let types = db.type_registry();
@@ -597,9 +638,7 @@ impl<T: Marker> ExpressionBuilder<T> for IfThenElse<T> {
 			.iter()
 			.any(|b| b.condition.ty() == types.var_bool);
 		let ty = if make_var {
-			result_ty
-				.with_inst(db.upcast(), VarType::Var)
-				.expect("Cannot make var")
+			result_ty.make_var(db.upcast()).expect("Cannot make var")
 		} else {
 			result_ty
 		};
@@ -628,9 +667,7 @@ impl<T: Marker> ExpressionBuilder<T> for Case<T> {
 			Ty::most_specific_supertype(db.upcast(), self.branches.iter().map(|b| b.result.ty()))
 				.expect("Invalid case result type");
 		let ty = if make_var {
-			result_ty
-				.with_inst(db.upcast(), VarType::Var)
-				.expect("Cannot make var")
+			result_ty.make_var(db.upcast()).expect("Cannot make var")
 		} else {
 			result_ty
 		};
@@ -1013,19 +1050,11 @@ impl EnumConstructorKind {
 		let is_set = ty.is_set(db.upcast());
 		match (is_var, is_opt, is_set) {
 			(false, false, false) => (EnumConstructorKind::Par, ty),
-			(true, false, false) => (
-				EnumConstructorKind::Var,
-				ty.with_inst(db.upcast(), VarType::Par).unwrap(),
-			),
-			(false, true, false) => (
-				EnumConstructorKind::Opt,
-				ty.with_opt(db.upcast(), OptType::NonOpt),
-			),
+			(true, false, false) => (EnumConstructorKind::Var, ty.make_par(db.upcast())),
+			(false, true, false) => (EnumConstructorKind::Opt, ty.make_occurs(db.upcast())),
 			(true, true, false) => (
 				EnumConstructorKind::VarOpt,
-				ty.with_inst(db.upcast(), VarType::Par)
-					.unwrap()
-					.with_opt(db.upcast(), OptType::NonOpt),
+				ty.make_par(db.upcast()).make_occurs(db.upcast()),
 			),
 			(false, false, true) => (EnumConstructorKind::Set, ty.elem_ty(db.upcast()).unwrap()),
 			(true, false, true) => (
@@ -1067,16 +1096,13 @@ impl EnumConstructorKind {
 	pub fn lift(&self, db: &dyn Thir, ty: Ty) -> Ty {
 		match self {
 			EnumConstructorKind::Par => ty,
-			EnumConstructorKind::Var => ty.with_inst(db.upcast(), VarType::Var).unwrap(),
-			EnumConstructorKind::Opt => ty.with_opt(db.upcast(), OptType::Opt),
-			EnumConstructorKind::VarOpt => ty
-				.with_inst(db.upcast(), VarType::Var)
-				.unwrap()
-				.with_opt(db.upcast(), OptType::Opt),
+			EnumConstructorKind::Var => ty.make_var(db.upcast()).unwrap(),
+			EnumConstructorKind::Opt => ty.make_opt(db.upcast()),
+			EnumConstructorKind::VarOpt => ty.make_var(db.upcast()).unwrap().make_opt(db.upcast()),
 			EnumConstructorKind::Set => Ty::par_set(db.upcast(), ty).unwrap(),
 			EnumConstructorKind::VarSet => Ty::par_set(db.upcast(), ty)
 				.unwrap()
-				.with_inst(db.upcast(), VarType::Var)
+				.make_var(db.upcast())
 				.unwrap(),
 		}
 	}

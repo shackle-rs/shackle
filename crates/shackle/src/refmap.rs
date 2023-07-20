@@ -1,11 +1,10 @@
 //! `HashMap` using pointers as keys
 
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::Index;
 use std::ptr;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// `HashMap` using pointers as keys
 pub struct RefMap<'a, K, V> {
@@ -23,9 +22,7 @@ impl<'a, K, V> Default for RefMap<'a, K, V> {
 impl<'a, K, V> RefMap<'a, K, V> {
 	/// Create a new `RefMap`
 	pub fn new() -> Self {
-		Self {
-			map: HashMap::default(),
-		}
+		Self::default()
 	}
 
 	/// The number of entries in the map
@@ -90,6 +87,57 @@ impl<'a, K, V> Index<&'a K> for RefMap<'a, K, V> {
 	type Output = V;
 	fn index(&self, index: &'a K) -> &Self::Output {
 		&self.map[&KeyRef(index)]
+	}
+}
+
+/// `HashSet` of pointers
+pub struct RefSet<'a, K> {
+	set: FxHashSet<KeyRef<'a, K>>,
+}
+
+impl<'a, K> Default for RefSet<'a, K> {
+	fn default() -> Self {
+		Self {
+			set: FxHashSet::default(),
+		}
+	}
+}
+
+impl<'a, K> RefSet<'a, K> {
+	/// Create a new `RefMap`
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	/// The number of entries in the map
+	pub fn len(&self) -> usize {
+		self.set.len()
+	}
+
+	/// Whether this map is empty
+	pub fn is_empty(&self) -> bool {
+		self.set.is_empty()
+	}
+
+	/// Whether this map contains the given value
+	pub fn contains(&self, key: &'a K) -> bool {
+		self.set.contains(&KeyRef(key))
+	}
+
+	/// Insert a value into the map
+	pub fn insert(&mut self, key: &'a K) {
+		self.set.insert(KeyRef(key));
+	}
+
+	/// Get an iterator over the values in the set
+	pub fn iter(&self) -> impl Iterator<Item = &'a K> + '_ {
+		self.set.iter().map(|k| k.0)
+	}
+}
+
+impl<'a, K> Extend<&'a K> for RefSet<'a, K> {
+	fn extend<T: IntoIterator<Item = &'a K>>(&mut self, iter: T) {
+		self.set.extend(iter.into_iter().map(|k| KeyRef(k)))
 	}
 }
 

@@ -140,23 +140,15 @@ impl Ty {
 	///
 	/// Some types e.g. var arrays are not possible.
 	pub fn with_inst(&self, db: &dyn Interner, inst: VarType) -> Option<Ty> {
+		if inst == VarType::Par {
+			return Some(self.make_par(db));
+		}
 		let result = match self.lookup(db) {
 			TyData::Boolean(_, o) => TyData::Boolean(inst, o),
 			TyData::Integer(_, o) => TyData::Integer(inst, o),
 			TyData::Float(_, o) => TyData::Float(inst, o),
 			TyData::Enum(_, o, e) => TyData::Enum(inst, o, e),
-			TyData::String(_) | TyData::Annotation(_) | TyData::Bottom(_)
-				if inst == VarType::Par =>
-			{
-				return Some(*self)
-			}
-			TyData::Array { .. } => return None,
-			TyData::Set(_, o, e) => {
-				if inst == VarType::Var && !e.known_enumerable(db) {
-					return None;
-				}
-				TyData::Set(inst, o, e)
-			}
+			TyData::Set(_, o, e) if e.known_enumerable(db) => TyData::Set(inst, o, e),
 			TyData::Tuple(o, fs) => TyData::Tuple(
 				o,
 				fs.iter()
@@ -170,20 +162,20 @@ impl Ty {
 					.collect::<Option<_>>()?,
 			),
 			TyData::Function(_, _) if inst == VarType::Par => return Some(*self),
-			TyData::TyVar(_, o, t) => {
-				if inst == VarType::Var && !t.varifiable {
-					return None;
-				}
-				TyData::TyVar(Some(inst), o, t)
-			}
+			TyData::TyVar(_, o, t) if t.varifiable => TyData::TyVar(Some(inst), o, t),
 			TyData::Bottom(_) | TyData::Error => return Some(*self),
 			_ => return None,
 		};
 		Some(db.intern_ty(result))
 	}
 
+	/// Make this type var if possible.
+	pub fn make_var(&self, db: &dyn Interner) -> Option<Ty> {
+		self.with_inst(db, VarType::Var)
+	}
+
 	/// Returns the fixed version of this type
-	pub fn make_fixed(&self, db: &dyn Interner) -> Ty {
+	pub fn make_par(&self, db: &dyn Interner) -> Ty {
 		db.intern_ty(match self.lookup(db) {
 			TyData::Boolean(_, o) => TyData::Boolean(VarType::Par, o),
 			TyData::Integer(_, o) => TyData::Integer(VarType::Par, o),
@@ -192,12 +184,12 @@ impl Ty {
 			TyData::Array { opt, dim, element } => TyData::Array {
 				opt,
 				dim,
-				element: element.make_fixed(db),
+				element: element.make_par(db),
 			},
 			TyData::Set(_, o, e) => TyData::Set(VarType::Par, o, e),
-			TyData::Tuple(o, fs) => TyData::Tuple(o, fs.iter().map(|f| f.make_fixed(db)).collect()),
+			TyData::Tuple(o, fs) => TyData::Tuple(o, fs.iter().map(|f| f.make_par(db)).collect()),
 			TyData::Record(o, fs) => {
-				TyData::Record(o, fs.iter().map(|(i, f)| (*i, f.make_fixed(db))).collect())
+				TyData::Record(o, fs.iter().map(|(i, f)| (*i, f.make_par(db))).collect())
 			}
 			TyData::TyVar(_, o, t) => TyData::TyVar(Some(VarType::Par), o, t),
 			_ => return *self,
@@ -222,6 +214,16 @@ impl Ty {
 			TyData::TyVar(i, _, t) => TyData::TyVar(i, Some(opt), t),
 			TyData::Error => return *self,
 		})
+	}
+
+	/// Make this type optional
+	pub fn make_opt(&self, db: &dyn Interner) -> Ty {
+		self.with_opt(db, OptType::Opt)
+	}
+
+	/// Make this type non-optional
+	pub fn make_occurs(&self, db: &dyn Interner) -> Ty {
+		self.with_opt(db, OptType::NonOpt)
 	}
 
 	/// Whether this type-inst is known to be completely par.
@@ -512,6 +514,11 @@ impl Ty {
 	/// Whether or not this type is an integer type
 	pub fn is_int(&self, db: &dyn Interner) -> bool {
 		matches!(self.lookup(db), TyData::Integer(_, _))
+	}
+
+	/// Whether or not this type is an enum type
+	pub fn is_enum(&self, db: &dyn Interner) -> bool {
+		matches!(self.lookup(db), TyData::Enum(_, _, _))
 	}
 
 	/// Whether or not this type is a float type

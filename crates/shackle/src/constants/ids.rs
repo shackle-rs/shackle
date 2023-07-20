@@ -70,6 +70,7 @@ pub(crate) use id_registry;
 
 id_registry!(
 	IdentifierRegistry,
+	empty_string: "",
 	annotated_expression,
 	output_only,
 	array_nd: "arrayNd",
@@ -79,6 +80,7 @@ id_registry!(
 	join,
 	plus_plus: "++",
 	dot_dot: "..",
+	array2set,
 	objective: "_objective",
 	show,
 	show_dzn: "showDzn",
@@ -102,7 +104,9 @@ id_registry!(
 	to_enum,
 	occurs,
 	deopt,
+	mzn_absent_zero,
 	ub,
+	set2iter,
 	in_: "in",
 	conj: "/\\",
 	disj: "\\/",

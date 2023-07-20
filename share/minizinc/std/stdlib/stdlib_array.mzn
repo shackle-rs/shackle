@@ -196,32 +196,41 @@ predicate has_element($T: e, array[$X] of any $T: x) = exists (x_i in x) (x_i = 
 
 /** @group stdlib.builtins.array Return the set containing the elements of \a x */
 function var set of $$T: array2set(array[int] of var $$T: x) ::promise_total =
+  to_enum(enum_of(x), array2set(erase_enum(x)));
+function var set of int: array2set(array[int] of var int: x) ::promise_total =
   if length(x) = 0 then {}
   else let {
-      set of $$T: D = dom_array(x);
-      constraint assert(erase_enum(min(D)) > -infinity /\ erase_enum(max(D)) < infinity, "array2set needs finite bounds on argument array");
+      set of int: D = dom_array(x);
+      constraint assert(min(D) > -infinity /\ max(D) < infinity, "array2set needs finite bounds on argument array");
       var set of D: y;
-      constraint fzn_array_int_union(erase_enum(x), erase_enum(y));
+      constraint fzn_array_int_union(x, y);
   } in y
   endif;
 
 function var set of $$T: array2set(array[int] of var opt $$T: x) ::promise_total =
+  to_enum(enum_of(x), array2set(erase_enum(x)));
+function var set of int: array2set(array[int] of var opt int: x) ::promise_total =
   if length(x) = 0 then {}
   else let {
-      set of $$T: D = dom_array_occurring(x);
-      constraint assert(erase_enum(min(D)) > -infinity /\ erase_enum(max(D)) < infinity, "array2set needs finite bounds on argument array");
+      set of int: D = dom_array_occurring(x);
+      constraint assert(min(D) > -infinity /\ max(D) < infinity, "array2set needs finite bounds on argument array");
       var set of D: y;
-      constraint fzn_array_opt_int_union(erase_enum(x), erase_enum(y));
+      constraint fzn_array_opt_int_union(x, y);
   } in y
   endif;
 
 /** @group stdlib.builtins.array Return the set containing the elements of \a x */
 function set of $$T: array2set(array[int] of $$T: x) =
   { x[i] | i in index_set(x) };
+function set of int: array2set(array[int] of int: x) =
+  { x[i] | i in index_set(x) };
 
 /** @group stdlib.builtins.array Return the set containing the elements of \a x */
 function set of $$T: array2set(array[int] of opt $$T: x) =
   { deopt(x[i]) | i in index_set(x) where occurs(x[i]) };
+function set of int: array2set(array[int] of opt int: x) =
+  { deopt(x[i]) | i in index_set(x) where occurs(x[i]) };
+
 
 /** @group stdlib.builtins.array Return the set containing the elements of \a x */
 function set of bool: array2set(array[int] of bool: x) =

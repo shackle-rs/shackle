@@ -835,9 +835,10 @@ pub fn fold_function_body<T: Marker, U: Marker, F: Folder<U, T> + ?Sized>(
 	folder.model()[dst].set_body(folded);
 	assert!(
 		ty.is_subtype_of(db.upcast(), folder.model()[dst].domain().ty()),
-		"Folded function body type {} does not match return type {}",
+		"Folded function body type {} does not match return type {} for {}",
 		ty.pretty_print(db.upcast()),
-		folder.model()[dst].domain().ty().pretty_print(db.upcast())
+		folder.model()[dst].domain().ty().pretty_print(db.upcast()),
+		model[f].name().pretty_print(db)
 	);
 }
 

@@ -61,3 +61,12 @@ function bool: had_zero(opt int: x) = not mzn_check_absent_zero() \/ (x = 0);
     Returns true if absent zero representation is disabled or if it is possible
     that \( \text{occurs}(x) \wedge \text{deopt}(x) = 0 \) */
 function bool: had_zero(array [int] of var opt int: x) = exists (xi in x) (had_zero(xi));
+
+predicate mzn_absent_zero(var opt int: x) =
+  if mzn_check_absent_zero() then
+    if had_zero(x) then
+      occurs(x) \/ deopt(x) = 0
+    else
+      occurs(x) <-> deopt(x) != 0
+    endif
+  endif;

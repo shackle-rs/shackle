@@ -11,11 +11,15 @@ use rustc_hash::FxHashMap;
 use crate::{
 	constants::IdentifierRegistry,
 	thir::{
-		add_function, db::Thir, fold_call, fold_declaration_id, fold_domain, source::Origin,
+		db::Thir,
+		source::Origin,
+		traverse::{
+			add_function, fold_call, fold_declaration_id, fold_domain, Folder, ReplacementMap,
+		},
 		ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Declaration, DeclarationId,
-		Domain, DomainData, Expression, ExpressionBuilder, Folder, Function, FunctionId, Generator,
+		Domain, DomainData, Expression, ExpressionBuilder, Function, FunctionId, Generator,
 		Identifier, IfThenElse, IntegerLiteral, Item, LookupCall, Marker, Model, OptType,
-		RecordAccess, ReplacementMap, StringLiteral, TupleAccess,
+		RecordAccess, StringLiteral, TupleAccess,
 	},
 	ty::{Ty, TyData, TyParamInstantiations},
 	utils::DebugPrint,
@@ -66,10 +70,10 @@ impl<Dst: Marker> Folder<Dst> for TypeSpecialiser<Dst> {
 				self.todo.pop();
 				self.specialised_model[f].set_body(body);
 			} else if model[s.original].name() == self.ids.show {
-				// Create specialised show function for types which will be erased
+				// Create specialised show function for types which will be erased, except show on direct enum which will be generated later
 				let p = self.specialised_model[f].parameter(0);
 				let ty = self.specialised_model[p].ty();
-				if ty.contains_erased_type(db.upcast()) {
+				if ty.contains_erased_type(db.upcast()) && !ty.is_enum(db.upcast()) {
 					let body = self.generate_show(db, model, p, ty);
 					self.specialised_model[f].set_body(body);
 				}
@@ -455,10 +459,6 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 					vec![self.expr(db, origin, ArrayLiteral(fields))],
 				);
 				self.expr(db, origin, concat)
-			}
-			TyData::Enum(_, _, _) => {
-				// enum_to_string()
-				todo!()
 			}
 			_ => unreachable!(),
 		}

@@ -15,13 +15,12 @@ mod annotations;
 mod domain;
 mod expression;
 mod item;
-mod traverse;
+pub mod traverse;
 
 pub use self::annotations::*;
 pub use self::domain::*;
 pub use self::expression::*;
 pub use self::item::*;
-pub use self::traverse::*;
 
 use super::db::Thir;
 

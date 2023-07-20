@@ -42,7 +42,7 @@ MicroZinc is defined using the following syntax,
 \mathit{letRoot} \\\\&|&
 \mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]\*\mathsf{)} \\\\&|&
 \mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letRoot}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letRoot}]\*~\mathsf{else}~\mathit{letRoot}~\mathsf{endif} \\\\&|&
-\mathsf{forall*root}\mathsf{(}\mathsf{[}\mathit{letRoot}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]}\mathsf{)} \\\\
+\mathsf{forall\*root}\mathsf{(}\mathsf{[}\mathit{letRoot}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]}\mathsf{)} \\\\
 \mathit{letExpr} &::=&
 \mathit{val} \\\\&|&
 \mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathit{val} \\\\
@@ -82,6 +82,6 @@ MicroZinc is defined using the following syntax,
 \mathit{str} &::=&
 /\texttt{"[\^\"]\*"}/ \\\\
 \mathit{ident} &::=&
-/\texttt{[A-Za-z]A-Za-z0-9*]\*}/ \\\\
+/\texttt{[A-Za-z]A-Za-z0-9\*]\*}/ \\\\
 \end{array}
 \\]
