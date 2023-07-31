@@ -463,7 +463,11 @@ mod test {
 			expect!([r#"
     function var bool: foo(var int: x);
     array [int] of var int: x;
-    array [int] of var opt int: y = [if foo(x_i) then x_i else <> endif | x_i in x];
+    array [int] of var opt int: y = [if foo(x_i) then let {
+      var opt int: _DECL_2324 = x_i;
+    } in _DECL_2324 else let {
+      var opt int: _DECL_2323 = <>;
+    } in _DECL_2323 endif | x_i in x];
 "#]),
 		)
 	}
@@ -478,7 +482,11 @@ mod test {
 			"#,
 			expect!([r#"
     var set of int: x;
-    array [int] of var opt int: y = [if 'in'(x_i, x) then x_i else <> endif | x_i in ub(x)];
+    array [int] of var opt int: y = [if 'in'(x_i, x) then let {
+      opt int: _DECL_2323 = x_i;
+    } in _DECL_2323 else let {
+      opt int: _DECL_2322 = <>;
+    } in _DECL_2322 endif | x_i in ub(x)];
 "#]),
 		)
 	}
@@ -497,7 +505,11 @@ mod test {
     var set of int: x;
     function var bool: foo(var int: x);
     function bool: bar(int: x);
-    array [int] of var opt int: y = [if forall(['in'(x_i, x), 'in'(x_j, x), foo(x_i)]) then x_i else <> endif | x_i in ub(x) where bar(x_i), x_j in ub(x) where bar(x_j)];
+    array [int] of var opt int: y = [if forall(['in'(x_i, x), 'in'(x_j, x), foo(x_i)]) then let {
+      opt int: _DECL_2326 = x_i;
+    } in _DECL_2326 else let {
+      opt int: _DECL_2325 = <>;
+    } in _DECL_2325 endif | x_i in ub(x) where bar(x_i), x_j in ub(x) where bar(x_j)];
 "#]),
 		)
 	}
@@ -597,7 +609,11 @@ mod test {
 			expect!([r#"
     var set of int: S;
     function var int: foo(int: x);
-    var set of int: x = array2set([if 'in'(i, S) then foo(i) else <> endif | i in ub(S)]);
+    var set of int: x = array2set([if 'in'(i, S) then let {
+      var opt int: _DECL_2324 = foo(i);
+    } in _DECL_2324 else let {
+      var opt int: _DECL_2323 = <>;
+    } in _DECL_2323 endif | i in ub(S)]);
 "#]),
 		)
 	}

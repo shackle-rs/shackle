@@ -499,11 +499,11 @@ mod test {
 					any: y = foo(10);
 					"#,
 			expect!([r#"
-    function var bool: bar(var bool: p) = 'foo<var bool>'(p);
+    function var bool: bar(var bool: p) = foo(p);
     constraint bar(true);
-    function int: 'foo<int>'(int: x) = x;
-    int: y = 'foo<int>'(10);
-    function var bool: 'foo<var bool>'(var bool: x) = x;
+    function int: foo(int: x) = x;
+    int: y = foo(10);
+    function var bool: foo(var bool: x) = x;
     solve satisfy;
 "#]),
 		)
@@ -519,10 +519,10 @@ mod test {
 			any: b = foo((p: 1, q: 2));
 			"#,
 			expect!([r#"
-    function bool: 'foo<tuple(int, int)>'(tuple(int, int): x) = true;
-    bool: a = 'foo<tuple(int, int)>'((1, 2));
-    function bool: 'foo<record(int: p, int: q)>'(record(int: p, int: q): x) = true;
-    bool: b = 'foo<record(int: p, int: q)>'((p: 1, q: 2));
+    function bool: foo(tuple(int, int): x) = true;
+    bool: a = foo((1, 2));
+    function bool: foo(record(int: p, int: q): x) = true;
+    bool: b = foo((p: 1, q: 2));
     solve satisfy;
 "#]),
 		)
@@ -540,8 +540,8 @@ mod test {
 			"#,
 			expect!([r#"
     function bool: bar(int: x) = false;
-    function bool: 'foo<int>'(int: x) = bar(x);
-    bool: a = 'foo<int>'(1);
+    function bool: foo(int: x) = bar(x);
+    bool: a = foo(1);
     solve satisfy;
 "#]),
 		)
@@ -569,19 +569,19 @@ mod test {
     function string: show(array [$X] of any $T: x);
     function string: concat(array [$T] of string: x);
     function string: join(string: s, array [$T] of string: x);
-    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = 'concat<array [int] of string>'(["(", "a", ": ", 'show<int>'(x.a), ", ", "b", ": ", 'show<int>'(x.b), ")"]);
-    output ['show<record(int: a, int: b)>'((a: 1, b: 2))];
+    function string: show(record(int: a, int: b): x) = concat(["(", "a", ": ", show(x.a), ", ", "b", ": ", show(x.b), ")"]);
+    output [show((a: 1, b: 2))];
     array [int] of tuple(opt int, bool): x;
-    function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = 'concat<array [int] of string>'(["[", 'join<string, array [int] of string>'(", ", ['show<tuple(opt int, bool)>'(_DECL_11) | _DECL_11 in x]), "]"]);
-    output ['show<array [int] of tuple(opt int, bool)>'(x)];
-    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = 'concat<array [int] of string>'(["(", 'show<opt int>'(x.1), ", ", 'show<bool>'(x.2), ")"]);
-    function string: 'join<string, array [int] of string>'(string: s, array [int] of string: x) = join(s, x);
-    function string: 'concat<array [int] of string>'(array [int] of string: x) = concat(x);
-    function string: 'show<opt int>'(opt int: x) = if 'occurs<opt int>'(x) then 'show<int>'('deopt<opt int>'(x)) else "<>" endif;
-    function string: 'show<bool>'(bool: x);
-    function bool: 'occurs<opt int>'(opt int: x) = occurs(x);
-    function int: 'deopt<opt int>'(opt int: x) = deopt(x);
-    function string: 'show<int>'(int: x);
+    function string: show(array [int] of tuple(opt int, bool): x) = concat(["[", join(", ", [show(_DECL_11) | _DECL_11 in x]), "]"]);
+    output [show(x)];
+    function string: show(tuple(opt int, bool): x) = concat(["(", show(x.1), ", ", show(x.2), ")"]);
+    function string: join(string: s, array [int] of string: x) = join(s, x);
+    function string: concat(array [int] of string: x) = concat(x);
+    function string: show(opt int: x) = if occurs(x) then show(deopt(x)) else "<>" endif;
+    function string: show(bool: x);
+    function bool: occurs(opt int: x) = occurs(x);
+    function int: deopt(opt int: x) = deopt(x);
+    function string: show(int: x);
     solve satisfy;
 "#]),
 		)
