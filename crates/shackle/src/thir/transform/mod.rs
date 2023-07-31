@@ -10,6 +10,7 @@ use self::erase_enum::erase_enum;
 use self::erase_opt::erase_opt;
 use self::erase_record::erase_record;
 use self::function_dispatch::function_dispatch;
+pub use self::name_mangle::mangle_names;
 use self::top_down_type::top_down_type;
 use self::type_specialise::type_specialise;
 use super::db::Thir;
@@ -21,6 +22,7 @@ pub mod erase_enum;
 pub mod erase_opt;
 pub mod erase_record;
 pub mod function_dispatch;
+pub mod name_mangle;
 pub mod top_down_type;
 pub mod type_specialise;
 
@@ -51,6 +53,7 @@ pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
 		desugar_comprehension,
 		erase_opt,
 		decapture_model,
+		mangle_names,
 	])
 }
 
