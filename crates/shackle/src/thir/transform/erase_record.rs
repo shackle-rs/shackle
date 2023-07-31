@@ -3,11 +3,11 @@
 //! Records should already have been sorted, so we can just turn them directly into tuples.
 
 use crate::{
-	hir::OptType,
+	hir::{IntegerLiteral, OptType},
 	thir::{
 		db::Thir,
 		traverse::{fold_domain, fold_expression, Folder, ReplacementMap},
-		Domain, DomainData, Expression, ExpressionData, Marker, Model, TupleLiteral,
+		Domain, DomainData, Expression, ExpressionData, Marker, Model, TupleAccess, TupleLiteral,
 	},
 };
 
@@ -46,6 +46,29 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for RecordEraser<Dst, Src> {
 						.map(|ann| self.fold_expression(db, model, ann)),
 				);
 				e
+			}
+			ExpressionData::RecordAccess(ra) => {
+				let field_tys = ra.record.ty().record_fields(db.upcast()).unwrap();
+				let tuple = self.fold_expression(db, model, &ra.record);
+				Expression::new(
+					db,
+					&self.model,
+					origin,
+					TupleAccess {
+						tuple: Box::new(tuple),
+						field: field_tys
+							.iter()
+							.enumerate()
+							.find_map(|(n, (i, _))| {
+								if *i == ra.field.0 {
+									Some(IntegerLiteral(n as i64 + 1))
+								} else {
+									None
+								}
+							})
+							.unwrap(),
+					},
+				)
 			}
 			_ => fold_expression(self, db, model, expression),
 		}
@@ -95,9 +118,13 @@ mod test {
 			erase_record,
 			r#"
                 record(int: foo, float: bar): x = (foo: 1, bar: 2.5);
+				int: y = x.foo;
+				float: z = x.bar;
             "#,
 			expect!([r#"
     tuple(int, float): x = (1, 2.5);
+    int: y = x.1;
+    float: z = x.2;
     solve satisfy;
 "#]),
 		);
