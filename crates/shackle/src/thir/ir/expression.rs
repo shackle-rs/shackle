@@ -1250,10 +1250,169 @@ pub struct Pattern<T = ()> {
 }
 
 impl<T: Marker> Pattern<T> {
-	/// Create a new pattern
-	pub fn new(data: PatternData<T>, origin: impl Into<Origin>) -> Self {
+	/// Create an enum constructor pattern
+	pub fn enum_constructor(
+		db: &dyn Thir,
+		model: &Model<T>,
+		origin: impl Into<Origin>,
+		member: EnumMemberId<T>,
+		args: impl IntoIterator<Item = Pattern<T>>,
+	) -> Self {
+		let origin = origin.into();
+		let args = args.into_iter().collect::<Vec<_>>();
+		if args
+			.iter()
+			.all(|arg| matches!(&**arg, PatternData::Expression(_)))
+		{
+			let arguments = args
+				.into_iter()
+				.map(|arg| match arg.data {
+					PatternData::Expression(e) => *e,
+					_ => unreachable!(),
+				})
+				.collect();
+			return Self {
+				data: PatternData::Expression(Box::new(Expression::new(
+					db,
+					model,
+					origin,
+					Call {
+						function: Callable::EnumConstructor(member),
+						arguments,
+					},
+				))),
+				origin,
+			};
+		}
 		Self {
-			data,
+			data: PatternData::EnumConstructor { member, args },
+			origin,
+		}
+	}
+
+	/// Create an annotation constructor pattern
+	pub fn annotation_constructor(
+		db: &dyn Thir,
+		model: &Model<T>,
+		origin: impl Into<Origin>,
+		item: AnnotationId<T>,
+		args: impl IntoIterator<Item = Pattern<T>>,
+	) -> Self {
+		let origin = origin.into();
+		let args = args.into_iter().collect::<Vec<_>>();
+		if args
+			.iter()
+			.all(|arg| matches!(&**arg, PatternData::Expression(_)))
+		{
+			let arguments = args
+				.into_iter()
+				.map(|arg| match arg.data {
+					PatternData::Expression(e) => *e,
+					_ => unreachable!(),
+				})
+				.collect();
+			return Self {
+				data: PatternData::Expression(Box::new(Expression::new(
+					db,
+					model,
+					origin,
+					Call {
+						function: Callable::Annotation(item),
+						arguments,
+					},
+				))),
+				origin,
+			};
+		}
+		Self {
+			data: PatternData::AnnotationConstructor { item, args },
+			origin,
+		}
+	}
+
+	/// Create a tuple pattern
+	pub fn tuple(
+		db: &dyn Thir,
+		model: &Model<T>,
+		origin: impl Into<Origin>,
+		fields: impl IntoIterator<Item = Pattern<T>>,
+	) -> Self {
+		let origin = origin.into();
+		let fields = fields.into_iter().collect::<Vec<_>>();
+		if fields
+			.iter()
+			.all(|field| matches!(&**field, PatternData::Expression(_)))
+		{
+			let fields = fields
+				.into_iter()
+				.map(|field| match field.data {
+					PatternData::Expression(e) => *e,
+					_ => unreachable!(),
+				})
+				.collect();
+			return Self {
+				data: PatternData::Expression(Box::new(Expression::new(
+					db,
+					model,
+					origin,
+					TupleLiteral(fields),
+				))),
+				origin,
+			};
+		}
+		Self {
+			data: PatternData::Tuple(fields),
+			origin,
+		}
+	}
+
+	/// Create a record pattern
+	pub fn record(
+		db: &dyn Thir,
+		model: &Model<T>,
+		origin: impl Into<Origin>,
+		fields: impl IntoIterator<Item = (Identifier, Pattern<T>)>,
+	) -> Self {
+		let origin = origin.into();
+		let fields = fields.into_iter().collect::<Vec<_>>();
+		if fields.iter().all(|(_, field): &(Identifier, Pattern<T>)| {
+			matches!(&**field, PatternData::Expression(_))
+		}) {
+			let fields = fields
+				.into_iter()
+				.map(|(i, field)| match field.data {
+					PatternData::Expression(e) => (i, *e),
+					_ => unreachable!(),
+				})
+				.collect();
+			return Self {
+				data: PatternData::Expression(Box::new(Expression::new(
+					db,
+					model,
+					origin,
+					RecordLiteral(fields),
+				))),
+				origin,
+			};
+		}
+		Self {
+			data: PatternData::Record(fields),
+			origin,
+		}
+	}
+
+	/// Create a pattern which matches a value
+	pub fn expression(expression: Expression<T>, origin: impl Into<Origin>) -> Self {
+		Self {
+			data: PatternData::Expression(Box::new(expression)),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create a wildcard pattern
+	pub fn anonymous(ty: Ty, origin: impl Into<Origin>) -> Self {
+		Self {
+			data: PatternData::Anonymous(ty),
 			origin: origin.into(),
 		}
 	}

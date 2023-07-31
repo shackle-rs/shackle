@@ -1636,11 +1636,11 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 											alloc_expression(BooleanLiteral(true), self, origin),
 										),
 										CaseBranch::new(
-											Pattern::new(
-												PatternData::Anonymous(match &self.types[*p] {
+											Pattern::anonymous(
+												match &self.types[*p] {
 													PatternTy::Destructuring(ty) => *ty,
 													_ => unreachable!(),
-												}),
+												},
 												origin,
 											),
 											alloc_expression(BooleanLiteral(false), self, origin),
@@ -2082,70 +2082,42 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		let ty = match &self.types[pattern] {
 			PatternTy::Destructuring(ty) => *ty,
 			PatternTy::Variable(ty) | PatternTy::Argument(ty) => {
-				return Pattern::new(PatternData::Anonymous(*ty), origin);
+				return Pattern::anonymous(*ty, origin);
 			}
 			_ => unreachable!(),
 		};
-		Pattern::new(
-			match &self.data[pattern] {
-				hir::Pattern::Absent => {
-					PatternData::Expression(Box::new(alloc_expression(Absent, self, origin)))
-				}
-				hir::Pattern::Anonymous => PatternData::Anonymous(ty),
-				hir::Pattern::Boolean(b) => {
-					PatternData::Expression(Box::new(alloc_expression(*b, self, origin)))
-				}
-				hir::Pattern::Call {
-					function,
-					arguments,
-				} => {
-					let args = arguments.iter().map(|a| self.collect_pattern(*a)).collect();
-					let pat = self.types.pattern_resolution(*function).unwrap();
-					let res = &self.parent.resolutions[&pat];
-					match res {
-						LoweredIdentifier::Callable(Callable::Annotation(ann)) => {
-							PatternData::AnnotationConstructor { item: *ann, args }
-						}
-						LoweredIdentifier::Callable(Callable::EnumConstructor(member)) => {
-							PatternData::EnumConstructor {
-								member: *member,
-								args,
-							}
-						}
-						_ => unreachable!(),
+		match &self.data[pattern] {
+			hir::Pattern::Absent => {
+				Pattern::expression(alloc_expression(Absent, self, origin), origin)
+			}
+			hir::Pattern::Anonymous => Pattern::anonymous(ty, origin),
+			hir::Pattern::Boolean(b) => {
+				Pattern::expression(alloc_expression(*b, self, origin), origin)
+			}
+			hir::Pattern::Call {
+				function,
+				arguments,
+			} => {
+				let args = arguments
+					.iter()
+					.map(|a| self.collect_pattern(*a))
+					.collect::<Vec<_>>();
+				let pat = self.types.pattern_resolution(*function).unwrap();
+				let res = &self.parent.resolutions[&pat];
+				match res {
+					LoweredIdentifier::Callable(Callable::Annotation(ann)) => {
+						Pattern::annotation_constructor(db, &self.parent.model, origin, *ann, args)
 					}
-				}
-				hir::Pattern::Float { negated, value } => {
-					let v = alloc_expression(*value, self, origin);
-					PatternData::Expression(Box::new(if *negated {
-						alloc_expression(
-							LookupCall {
-								function: self.parent.ids.minus.into(),
-								arguments: vec![v],
-							},
-							self,
-							origin,
-						)
-					} else {
-						v
-					}))
-				}
-				hir::Pattern::Identifier(_) => {
-					let pat = self.types.pattern_resolution(pattern).unwrap();
-					let res = &self.parent.resolutions[&pat];
-					match res {
-						LoweredIdentifier::ResolvedIdentifier(ResolvedIdentifier::Annotation(
-							a,
-						)) => PatternData::Expression(Box::new(alloc_expression(*a, self, origin))),
-						LoweredIdentifier::ResolvedIdentifier(
-							ResolvedIdentifier::EnumerationMember(m),
-						) => PatternData::Expression(Box::new(alloc_expression(*m, self, origin))),
-						_ => unreachable!(),
+					LoweredIdentifier::Callable(Callable::EnumConstructor(member)) => {
+						Pattern::enum_constructor(db, &self.parent.model, origin, *member, args)
 					}
+					_ => unreachable!(),
 				}
-				hir::Pattern::Infinity { negated } => {
-					let v = alloc_expression(Infinity, self, origin);
-					PatternData::Expression(Box::new(if *negated {
+			}
+			hir::Pattern::Float { negated, value } => {
+				let v = alloc_expression(*value, self, origin);
+				Pattern::expression(
+					if *negated {
 						alloc_expression(
 							LookupCall {
 								function: self.parent.ids.minus.into(),
@@ -2156,11 +2128,27 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						)
 					} else {
 						v
-					}))
+					},
+					origin,
+				)
+			}
+			hir::Pattern::Identifier(_) => {
+				let pat = self.types.pattern_resolution(pattern).unwrap();
+				let res = &self.parent.resolutions[&pat];
+				match res {
+					LoweredIdentifier::ResolvedIdentifier(ResolvedIdentifier::Annotation(a)) => {
+						Pattern::expression(alloc_expression(*a, self, origin), origin)
+					}
+					LoweredIdentifier::ResolvedIdentifier(
+						ResolvedIdentifier::EnumerationMember(m),
+					) => Pattern::expression(alloc_expression(*m, self, origin), origin),
+					_ => unreachable!(),
 				}
-				hir::Pattern::Integer { negated, value } => {
-					let v = alloc_expression(*value, self, origin);
-					PatternData::Expression(Box::new(if *negated {
+			}
+			hir::Pattern::Infinity { negated } => {
+				let v = alloc_expression(Infinity, self, origin);
+				Pattern::expression(
+					if *negated {
 						alloc_expression(
 							LookupCall {
 								function: self.parent.ids.minus.into(),
@@ -2171,24 +2159,47 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						)
 					} else {
 						v
-					}))
-				}
-				hir::Pattern::Missing => unreachable!(),
-				hir::Pattern::Record { fields } => PatternData::Record(
-					fields
-						.iter()
-						.map(|(i, p)| (*i, self.collect_pattern(*p)))
-						.collect(),
-				),
-				hir::Pattern::String(s) => {
-					PatternData::Expression(Box::new(alloc_expression(s.clone(), self, origin)))
-				}
-				hir::Pattern::Tuple { fields } => {
-					PatternData::Tuple(fields.iter().map(|f| self.collect_pattern(*f)).collect())
-				}
-			},
-			origin,
-		)
+					},
+					origin,
+				)
+			}
+			hir::Pattern::Integer { negated, value } => {
+				let v = alloc_expression(*value, self, origin);
+				Pattern::expression(
+					if *negated {
+						alloc_expression(
+							LookupCall {
+								function: self.parent.ids.minus.into(),
+								arguments: vec![v],
+							},
+							self,
+							origin,
+						)
+					} else {
+						v
+					},
+					origin,
+				)
+			}
+			hir::Pattern::Missing => unreachable!(),
+			hir::Pattern::Record { fields } => {
+				let fields = fields
+					.iter()
+					.map(|(i, p)| (*i, self.collect_pattern(*p)))
+					.collect::<Vec<_>>();
+				Pattern::record(db, &self.parent.model, origin, fields)
+			}
+			hir::Pattern::String(s) => {
+				Pattern::expression(alloc_expression(s.clone(), self, origin), origin)
+			}
+			hir::Pattern::Tuple { fields } => {
+				let fields = fields
+					.iter()
+					.map(|f| self.collect_pattern(*f))
+					.collect::<Vec<_>>();
+				Pattern::tuple(db, &self.parent.model, origin, fields)
+			}
+		}
 	}
 }
 
