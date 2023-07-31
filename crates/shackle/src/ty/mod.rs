@@ -564,6 +564,14 @@ impl Ty {
 		}
 	}
 
+	/// Get the field types if this is a record type
+	pub fn record_fields(&self, db: &dyn Interner) -> Option<Vec<(InternedString, Ty)>> {
+		match self.lookup(db) {
+			TyData::Record(_, fs) => Some(fs.to_vec()),
+			_ => None,
+		}
+	}
+
 	/// Get the element type for array/set types (will be par for var sets)
 	pub fn elem_ty(&self, db: &dyn Interner) -> Option<Ty> {
 		match self.lookup(db) {
