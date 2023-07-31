@@ -363,7 +363,7 @@ impl ItemCollector<'_> {
 				}
 			})
 			.collect();
-		let type_inst_vars = tiids.into_values().collect();
+		let type_inst_vars = tiids.into_vec().into_boxed_slice();
 		let (data, source_map) = ctx.finish();
 		let index = self.model.functions.insert(Item::new(
 			Function {
@@ -433,7 +433,7 @@ impl ItemCollector<'_> {
 				}
 			})
 			.collect();
-		let type_inst_vars = tiids.into_values().collect();
+		let type_inst_vars = tiids.into_vec().into_boxed_slice();
 		let (data, source_map) = ctx.finish();
 		let index = self.model.functions.insert(Item::new(
 			Function {

@@ -324,6 +324,22 @@ impl SignatureTypeContext {
 					typer.collect_declaration(it)
 				};
 
+				if it.definition.is_none()
+					&& (ty.contains_var(db.upcast()) && ty.contains_par(db.upcast())
+						|| ty.contains_function(db.upcast()))
+				{
+					let (src, span) = NodeRef::from(item).source_span(db);
+					self.add_diagnostic(
+						item,
+						SyntaxError {
+							src,
+							span,
+							msg: "declaration must have a right-hand side.".to_owned(),
+							other: Vec::new(),
+						},
+					);
+				}
+
 				if let Some(ann) = output_only {
 					if it.definition.is_none() {
 						let (src, span) =

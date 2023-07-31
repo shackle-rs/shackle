@@ -846,7 +846,13 @@ pub struct TypeInstIdentifiers {
 
 impl TypeInstIdentifiers {
 	/// Get the `TypeInstIdentifierDeclaration`s
-	pub fn into_values(self) -> impl Iterator<Item = TypeInstIdentifierDeclaration> {
-		self.tiids.into_values().chain(self.anons)
+	pub fn into_vec(self) -> Vec<TypeInstIdentifierDeclaration> {
+		let mut tiids = self
+			.tiids
+			.into_values()
+			.chain(self.anons)
+			.collect::<Vec<_>>();
+		tiids.sort_by_key(|tiid| tiid.name);
+		tiids
 	}
 }

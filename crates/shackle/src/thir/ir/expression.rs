@@ -709,9 +709,26 @@ impl<T: Marker> Call<T> {
 					.iter()
 					.map(|p| model[*p].ty())
 					.collect::<Box<_>>();
-				assert_eq!(params.len(), self.arguments.len());
+				assert_eq!(
+					params.len(),
+					self.arguments.len(),
+					"Wrong number of arguments for annotation constructor {}",
+					model[*a]
+						.name
+						.map(|i| i.pretty_print(db.upcast()))
+						.unwrap_or_default()
+				);
 				for (arg, param) in self.arguments.iter().zip(params.iter()) {
-					assert!(arg.ty().is_subtype_of(db.upcast(), *param));
+					assert!(
+						arg.ty().is_subtype_of(db.upcast(), *param),
+						"Argument {} not a subtype of {} for annotation constructor {}",
+						arg.ty().pretty_print(db.upcast()),
+						param.pretty_print(db.upcast()),
+						model[*a]
+							.name
+							.map(|i| i.pretty_print(db.upcast()))
+							.unwrap_or_default()
+					);
 				}
 				FunctionType {
 					params,
@@ -749,9 +766,26 @@ impl<T: Marker> Call<T> {
 					.iter()
 					.map(|p| kind.lift(db, model[*p].ty()))
 					.collect::<Box<_>>();
-				assert_eq!(self.arguments.len(), params.len());
+				assert_eq!(
+					self.arguments.len(),
+					params.len(),
+					"Wrong number of arguments for enum constructor {}",
+					model[*e]
+						.name
+						.map(|i| i.pretty_print(db.upcast()))
+						.unwrap_or_default()
+				);
 				for (arg, param) in self.arguments.iter().zip(params.iter()) {
-					assert!(arg.ty().is_subtype_of(db.upcast(), *param));
+					assert!(
+						arg.ty().is_subtype_of(db.upcast(), *param),
+						"Argument {} not a subtype of {} for enum constructor {}",
+						arg.ty().pretty_print(db.upcast()),
+						param.pretty_print(db.upcast()),
+						model[*e]
+							.name
+							.map(|i| i.pretty_print(db.upcast()))
+							.unwrap_or_default()
+					);
 				}
 				let ty = Ty::par_enum(db.upcast(), model[e.enumeration_id()].enum_type());
 				let return_type = kind.lift(db, ty);
@@ -791,10 +825,9 @@ impl<T: Marker> Call<T> {
 						.iter()
 						.map(|arg| arg.ty())
 						.collect::<Vec<_>>();
-					assert!(
-						ft.matches(db.upcast(), &tys).is_ok(),
-						"Function does not accept argument types"
-					);
+					ft.matches(db.upcast(), &tys).unwrap_or_else(|e| {
+						panic!("Function does not match: {}", e.debug_print(db.upcast()))
+					});
 					ft
 				}
 				_ => unreachable!("Invalid function type"),

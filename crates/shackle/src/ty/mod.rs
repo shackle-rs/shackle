@@ -368,6 +368,11 @@ impl Ty {
 			}
 	}
 
+	/// Whether this type-inst contains a var type
+	pub fn contains_var(&self, db: &dyn Interner) -> bool {
+		self.walk(db).any(|ty| ty.inst(db) == Some(VarType::Var))
+	}
+
 	/// Whether this type-inst contains an error.
 	pub fn contains_error(&self, db: &dyn Interner) -> bool {
 		self.walk_data(db)
@@ -588,6 +593,15 @@ impl Ty {
 			TyData::Array { element, .. } => element.enum_ty(db),
 			TyData::Set(_, _, e) => e.enum_ty(db),
 			_ => None,
+		}
+	}
+
+	/// Get the type-inst var for this type if it is one
+	pub fn ty_var(&self, db: &dyn Interner) -> Option<TyVar> {
+		if let TyData::TyVar(_, _, tv) = self.lookup(db) {
+			Some(tv)
+		} else {
+			None
 		}
 	}
 

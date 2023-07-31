@@ -280,3 +280,7 @@ function array [int] of tuple(array [int] of int): mzn_cartesian_product(array [
   endif;
 
 function array [int] of tuple(array [int] of int): mzn_cartesian_product(array [int] of set of int: x) = mzn_cartesian_product(x, 1);
+
+function int: mzn_to_enum(set of int: X, int: x) = let {
+  constraint mzn_assert_warn(x in X, "The value \(x) is outside the enum range.");
+} in x;

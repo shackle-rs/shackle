@@ -20,7 +20,7 @@ use crate::{
 	},
 };
 
-use super::top_down_type::wrap_in_let;
+use super::top_down_type::add_coercion;
 
 enum SurroundingCall {
 	Forall,
@@ -381,8 +381,8 @@ impl<Dst: Marker> ComprehensionRewriter<Dst> {
 					// Optionality coercion already done, so requires explicit types
 					let opt_ty = template.ty().with_opt(db.upcast(), OptType::Opt);
 					let literal = Expression::new(db, &self.result, origin, Absent);
-					let absent = wrap_in_let(db, &mut self.result, opt_ty, literal);
-					let result = wrap_in_let(db, &mut self.result, opt_ty, template);
+					let absent = add_coercion(db, &mut self.result, opt_ty, literal);
+					let result = add_coercion(db, &mut self.result, opt_ty, template);
 					Expression::new(
 						db,
 						&self.result,
@@ -464,10 +464,10 @@ mod test {
     function var bool: foo(var int: x);
     array [int] of var int: x;
     array [int] of var opt int: y = [if foo(x_i) then let {
-      var opt int: _DECL_2324 = x_i;
-    } in _DECL_2324 else let {
-      var opt int: _DECL_2323 = <>;
-    } in _DECL_2323 endif | x_i in x];
+      var opt int: _DECL_1 = x_i;
+    } in _DECL_1 else let {
+      var opt int: _DECL_2 = <>;
+    } in _DECL_2 endif | x_i in x];
 "#]),
 		)
 	}
@@ -483,10 +483,10 @@ mod test {
 			expect!([r#"
     var set of int: x;
     array [int] of var opt int: y = [if 'in'(x_i, x) then let {
-      opt int: _DECL_2323 = x_i;
-    } in _DECL_2323 else let {
-      opt int: _DECL_2322 = <>;
-    } in _DECL_2322 endif | x_i in ub(x)];
+      opt int: _DECL_1 = x_i;
+    } in _DECL_1 else let {
+      opt int: _DECL_2 = <>;
+    } in _DECL_2 endif | x_i in ub(x)];
 "#]),
 		)
 	}
@@ -506,10 +506,10 @@ mod test {
     function var bool: foo(var int: x);
     function bool: bar(int: x);
     array [int] of var opt int: y = [if forall(['in'(x_i, x), 'in'(x_j, x), foo(x_i)]) then let {
-      opt int: _DECL_2326 = x_i;
-    } in _DECL_2326 else let {
-      opt int: _DECL_2325 = <>;
-    } in _DECL_2325 endif | x_i in ub(x) where bar(x_i), x_j in ub(x) where bar(x_j)];
+      opt int: _DECL_1 = x_i;
+    } in _DECL_1 else let {
+      opt int: _DECL_2 = <>;
+    } in _DECL_2 endif | x_i in ub(x) where bar(x_i), x_j in ub(x) where bar(x_j)];
 "#]),
 		)
 	}
@@ -610,10 +610,10 @@ mod test {
     var set of int: S;
     function var int: foo(int: x);
     var set of int: x = array2set([if 'in'(i, S) then let {
-      var opt int: _DECL_2324 = foo(i);
-    } in _DECL_2324 else let {
-      var opt int: _DECL_2323 = <>;
-    } in _DECL_2323 endif | i in ub(S)]);
+      var opt int: _DECL_1 = foo(i);
+    } in _DECL_1 else let {
+      var opt int: _DECL_2 = <>;
+    } in _DECL_2 endif | i in ub(S)]);
 "#]),
 		)
 	}

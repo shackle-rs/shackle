@@ -10,19 +10,23 @@ use self::erase_enum::erase_enum;
 use self::erase_opt::erase_opt;
 use self::erase_record::erase_record;
 use self::function_dispatch::function_dispatch;
-pub use self::name_mangle::mangle_names;
+use self::name_mangle::mangle_names;
+use self::output::generate_output;
 use self::top_down_type::top_down_type;
 use self::type_specialise::type_specialise;
 use super::db::Thir;
 use super::Model;
 
 pub mod capturing_fn;
+pub mod case;
 pub mod comprehension;
+pub mod domain_constraint;
 pub mod erase_enum;
 pub mod erase_opt;
 pub mod erase_record;
 pub mod function_dispatch;
 pub mod name_mangle;
+pub mod output;
 pub mod top_down_type;
 pub mod type_specialise;
 
@@ -48,12 +52,13 @@ pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
 		top_down_type,
 		type_specialise,
 		function_dispatch,
+		generate_output,
 		erase_record,
 		erase_enum,
 		desugar_comprehension,
 		erase_opt,
-		decapture_model,
 		mangle_names,
+		decapture_model,
 	])
 }
 
@@ -62,12 +67,18 @@ pub mod test {
 	use std::sync::Arc;
 
 	use expect_test::Expect;
+	use rustc_hash::FxHashMap;
 
 	use crate::{
 		db::{CompilerDatabase, FileReader, Inputs},
-		file::InputFile,
-		hir::ids::NodeRef,
-		thir::{db::Thir, pretty_print::PrettyPrinter, ItemId, Model},
+		file::{InputFile, ModelRef},
+		hir::{ids::NodeRef, Identifier},
+		thir::{
+			db::Thir,
+			pretty_print::PrettyPrinter,
+			traverse::{visit_annotation, visit_declaration, Visitor},
+			AnnotationId, DeclarationId, ItemId, Model, ResolvedIdentifier,
+		},
 	};
 
 	/// Perform a transform on the THIR, and verify the result matches an expected value.
@@ -82,26 +93,8 @@ pub mod test {
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
 		let model_ref = db.input_models()[0];
 		let model = db.model_thir();
-		let result = transform(&db, &model);
-		let to_print = result
-			.top_level_items()
-			.filter(|it| {
-				let origin = match it {
-					ItemId::Annotation(idx) => result[*idx].origin(),
-					ItemId::Constraint(idx) => result[*idx].origin(),
-					ItemId::Declaration(idx) => result[*idx].origin(),
-					ItemId::Enumeration(idx) => result[*idx].origin(),
-					ItemId::Function(idx) => result[*idx].origin(),
-					ItemId::Output(idx) => result[*idx].origin(),
-					ItemId::Solve => result.solve().unwrap().origin(),
-				};
-				if let NodeRef::Item(item) = *origin {
-					item.model_ref(&db) == model_ref
-				} else {
-					false
-				}
-			})
-			.collect::<Vec<_>>();
+		let mut result = transform(&db, &model);
+		let to_print = NameMapper::default().run(&db, model_ref, &mut result);
 		let printer = PrettyPrinter::new(&db, &result);
 		let mut pretty = String::new();
 		for item in to_print {
@@ -126,5 +119,69 @@ pub mod test {
 		let result = transform(&db, &model);
 		let pretty = PrettyPrinter::new(&db, &result).pretty_print();
 		expected.assert_eq(&pretty);
+	}
+
+	#[derive(Default)]
+	struct NameMapper {
+		annotation: FxHashMap<AnnotationId, usize>,
+		declaration: FxHashMap<DeclarationId, usize>,
+	}
+
+	impl Visitor<'_> for NameMapper {
+		fn visit_annotation(&mut self, model: &Model, annotation: AnnotationId) {
+			if model[annotation].name.is_none() {
+				let count = self.annotation.len();
+				self.annotation.entry(annotation).or_insert(count);
+			}
+			visit_annotation(self, model, annotation)
+		}
+		fn visit_declaration(&mut self, model: &Model, declaration: DeclarationId) {
+			if model[declaration].name().is_none() {
+				let count = self.declaration.len();
+				self.declaration.entry(declaration).or_insert(count);
+			}
+			visit_declaration(self, model, declaration);
+		}
+		fn visit_identifier(&mut self, model: &Model, identifier: &ResolvedIdentifier) {
+			match identifier {
+				ResolvedIdentifier::Annotation(ann) => self.visit_annotation(model, *ann),
+				ResolvedIdentifier::Declaration(decl) => self.visit_declaration(model, *decl),
+				_ => (),
+			}
+		}
+	}
+
+	impl NameMapper {
+		fn run(&mut self, db: &dyn Thir, model_ref: ModelRef, model: &mut Model) -> Vec<ItemId> {
+			let to_print: Vec<ItemId> = model
+				.top_level_items()
+				.filter(|it| {
+					let origin = match it {
+						ItemId::Annotation(idx) => model[*idx].origin(),
+						ItemId::Constraint(idx) => model[*idx].origin(),
+						ItemId::Declaration(idx) => model[*idx].origin(),
+						ItemId::Enumeration(idx) => model[*idx].origin(),
+						ItemId::Function(idx) => model[*idx].origin(),
+						ItemId::Output(idx) => model[*idx].origin(),
+						ItemId::Solve => model.solve().unwrap().origin(),
+					};
+					match origin.node() {
+						Some(NodeRef::Item(item)) => item.model_ref(db.upcast()) == model_ref,
+						None => true,
+						_ => false,
+					}
+				})
+				.collect::<Vec<_>>();
+			for item in to_print.iter() {
+				self.visit_item(model, *item);
+			}
+			for (ann, n) in self.annotation.iter() {
+				model[*ann].name = Some(Identifier::new(format!("_ANN_{}", *n + 1), db.upcast()));
+			}
+			for (decl, n) in self.declaration.iter() {
+				model[*decl].set_name(Identifier::new(format!("_DECL_{}", *n + 1), db.upcast()));
+			}
+			to_print
+		}
 	}
 }
