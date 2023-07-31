@@ -8,7 +8,8 @@
 //! - 2D array literals are re-written using `array2d` calls
 //! - Indexed array literals are re-written using `arrayNd` calls
 //! - Array slicing is re-written using calls to `slice_Xd`
-//!
+//! - Tuple/record access into arrays of structs are rewritten using a
+//!   comprehension accessing the inner value
 
 use std::sync::Arc;
 
@@ -1062,14 +1063,51 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				self,
 				origin,
 			),
-			hir::Expression::RecordAccess(ra) => alloc_expression(
-				RecordAccess {
-					record: Box::new(self.collect_expression(ra.record)),
-					field: ra.field,
-				},
-				self,
-				origin,
-			),
+			hir::Expression::RecordAccess(ra) => {
+				let record = self.collect_expression(ra.record);
+				if self.types[ra.record].is_array(self.parent.db.upcast()) {
+					// Lift to comprehension
+					let record_ty = record.ty().elem_ty(self.parent.db.upcast()).unwrap();
+					let declaration = Declaration::new(
+						false,
+						Domain::unbounded(self.parent.db, origin, record_ty),
+					);
+					let idx = self
+						.parent
+						.model
+						.add_declaration(Item::new(declaration, origin));
+					let g = Generator::Iterator {
+						declarations: vec![idx],
+						collection: record,
+						where_clause: None,
+					};
+					alloc_expression(
+						ArrayComprehension {
+							generators: vec![g],
+							template: Box::new(alloc_expression(
+								RecordAccess {
+									record: Box::new(alloc_expression(idx, self, origin)),
+									field: ra.field,
+								},
+								self,
+								origin,
+							)),
+							indices: None,
+						},
+						self,
+						origin,
+					)
+				} else {
+					alloc_expression(
+						RecordAccess {
+							record: Box::new(self.collect_expression(ra.record)),
+							field: ra.field,
+						},
+						self,
+						origin,
+					)
+				}
+			}
 			hir::Expression::RecordLiteral(rl) => alloc_expression(
 				RecordLiteral(
 					rl.fields
@@ -1113,14 +1151,51 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				unreachable!("Slice used outside of array access")
 			}
 			hir::Expression::StringLiteral(sl) => alloc_expression(sl.clone(), self, origin),
-			hir::Expression::TupleAccess(ta) => alloc_expression(
-				TupleAccess {
-					tuple: Box::new(self.collect_expression(ta.tuple)),
-					field: ta.field,
-				},
-				self,
-				origin,
-			),
+			hir::Expression::TupleAccess(ta) => {
+				let tuple = self.collect_expression(ta.tuple);
+				if self.types[ta.tuple].is_array(self.parent.db.upcast()) {
+					// Lift to comprehension
+					let tuple_ty = tuple.ty().elem_ty(self.parent.db.upcast()).unwrap();
+					let declaration = Declaration::new(
+						false,
+						Domain::unbounded(self.parent.db, origin, tuple_ty),
+					);
+					let idx = self
+						.parent
+						.model
+						.add_declaration(Item::new(declaration, origin));
+					let g = Generator::Iterator {
+						declarations: vec![idx],
+						collection: tuple,
+						where_clause: None,
+					};
+					alloc_expression(
+						ArrayComprehension {
+							generators: vec![g],
+							template: Box::new(alloc_expression(
+								TupleAccess {
+									tuple: Box::new(alloc_expression(idx, self, origin)),
+									field: ta.field,
+								},
+								self,
+								origin,
+							)),
+							indices: None,
+						},
+						self,
+						origin,
+					)
+				} else {
+					alloc_expression(
+						TupleAccess {
+							tuple: Box::new(tuple),
+							field: ta.field,
+						},
+						self,
+						origin,
+					)
+				}
+			}
 			hir::Expression::TupleLiteral(tl) => alloc_expression(
 				TupleLiteral(
 					tl.fields
