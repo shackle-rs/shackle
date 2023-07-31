@@ -1,6 +1,9 @@
+//! Values types used for input and output for Programs
+
 use std::{
 	fmt::{self, Display},
 	ops::RangeInclusive,
+	rc::Rc,
 	sync::Arc,
 };
 
@@ -20,9 +23,11 @@ pub enum Value {
 	/// Floating point
 	Float(f64),
 	/// String
-	String(String),
+	String(Rc<str>),
 	/// Identifier of a value of an enumerated type
 	Enum(EnumValue),
+	/// Annotation
+	Ann(Rc<str>, Vec<Value>),
 	/// An array of values
 	/// All values are of the same type
 	Array(Array),
@@ -61,6 +66,13 @@ impl Display for Value {
 			Value::Float(v) => write!(f, "{v}"),
 			Value::String(v) => write!(f, "{:?}", v),
 			Value::Enum(v) => write!(f, "{v}"),
+			Value::Ann(ann, args) => {
+				if args.is_empty() {
+					write!(f, "{ann}")
+				} else {
+					write!(f, "{ann}({})", args.iter().format(", "))
+				}
+			}
 			Value::Array(arr) => {
 				write!(f, "{arr}")
 			}

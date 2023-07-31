@@ -14,6 +14,7 @@ use shackle::{Message, Model, Solver, Status};
 
 use std::ffi::OsStr;
 use std::fs::File;
+use std::ops::Deref;
 use std::panic;
 use std::path::PathBuf;
 
@@ -227,15 +228,14 @@ impl Compile {
 	/// the corresponding functions in the modelling libraries.
 	pub fn dispatch(&self) -> Result<()> {
 		let (model, data) = self.sort_files()?;
-		if !data.is_empty() {
-			warn!("compilation only considers a model, the data files provided are ignored.")
-		}
 
 		let filename = model.with_extension("shackle.mzn");
 
 		let slv = self.solver()?;
 		let model = Model::from_file(model);
-		let prg = model.compile(&slv)?;
+		let mut prg = model.compile(&slv)?;
+
+		prg.add_data_files(data.iter().map(|f| f.deref()))?;
 
 		let mut file = File::create(filename).into_diagnostic()?;
 		prg.write(&mut file).into_diagnostic()

@@ -6,9 +6,9 @@
 
 pub mod arena;
 pub mod constants;
+mod data;
 pub mod db;
 pub mod diagnostics;
-pub mod dzn;
 pub mod file;
 pub mod hir;
 mod legacy;
@@ -20,19 +20,32 @@ pub mod ty;
 pub mod utils;
 pub mod value;
 
+use data::{
+	dzn::{parse_dzn, typecheck_dzn},
+	ParserVal,
+};
 use db::{CompilerDatabase, Inputs};
-use diagnostics::{InternalError, ShackleError};
-use file::InputFile;
+use diagnostics::{FileError, IdentifierAlreadyDefined, InternalError, ShackleError};
+use file::{InputFile, SourceFile};
+use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use serde_json::Map;
+use syntax::ast::{AstNode, Identifier};
 use ty::{Ty, TyData};
 use value::Enum;
 
 use std::{
-	collections::BTreeMap, fmt::Display, io::Write, path::PathBuf, sync::Arc, time::Duration,
+	collections::BTreeMap,
+	ffi::OsStr,
+	fmt::Display,
+	io::Write,
+	path::{Path, PathBuf},
+	sync::Arc,
+	time::Duration,
 };
 
 use crate::{
+	diagnostics::UndefinedIdentifier,
 	hir::db::Hir,
 	thir::{db::Thir, pretty_print::PrettyPrinter},
 	value::Value,
@@ -141,6 +154,7 @@ pub struct Program {
 	db: CompilerDatabase,
 	code: Arc<thir::Model>,
 	slv: Solver,
+
 	// Model instance data
 	_input_types: FxHashMap<String, Type>,
 	_input_data: FxHashMap<String, Value>,
@@ -272,6 +286,57 @@ impl Type {
 			.into()),
 		}
 	}
+
+	fn is_opt(&self) -> bool {
+		matches!(
+			self,
+			Type::Boolean(OptType::Opt)
+				| Type::Integer(OptType::Opt)
+				| Type::Float(OptType::Opt)
+				| Type::Enum(OptType::Opt, _)
+				| Type::String(OptType::Opt)
+				| Type::Array {
+					opt: OptType::Opt,
+					dim: _,
+					element: _
+				} | Type::Set(OptType::Opt, _)
+				| Type::Tuple(OptType::Opt, _)
+				| Type::Record(OptType::Opt, _)
+		)
+	}
+}
+
+impl Display for Type {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let opt_str = |opt| if opt == &OptType::Opt { "opt " } else { "" };
+		match self {
+			Type::Boolean(opt) => write!(f, "{}bool", opt_str(opt)),
+			Type::Integer(opt) => write!(f, "{}int", opt_str(opt)),
+			Type::Float(opt) => write!(f, "{}float", opt_str(opt)),
+			Type::Enum(_opt, _e) => todo!(),
+			Type::String(opt) => write!(f, "{}string", opt_str(opt)),
+			Type::Annotation(opt) => write!(f, "{}ann", opt_str(opt)),
+			Type::Array { opt, dim, element } => {
+				write!(
+					f,
+					"{}array[{}] of {}",
+					opt_str(opt),
+					dim.iter().format(", "),
+					element
+				)
+			}
+			Type::Set(opt, element) => write!(f, "{}set of {}", opt_str(opt), element),
+			Type::Tuple(opt, members) => {
+				write!(f, "{}tuple({})", opt_str(opt), members.iter().format(", "))
+			}
+			Type::Record(opt, members) => {
+				let mty = members
+					.iter()
+					.format_with(", ", |(k, ty), f| f(&format_args!("{}: {}", ty, k)));
+				write!(f, "{}record({})", opt_str(opt), mty)
+			}
+		}
+	}
 }
 
 /// Intermediate messages emitted by shackle in processing and solving a program
@@ -323,6 +388,85 @@ impl Program {
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
 		let printer = PrettyPrinter::new_compat(&self.db, &self.code);
 		out.write_all(printer.pretty_print().as_bytes())
+	}
+
+	/// Add and parse data to be used by the program.
+	pub fn add_data_files<'a>(
+		&mut self,
+		files: impl Iterator<Item = &'a Path>,
+	) -> Result<(), ShackleError> {
+		// First parse all files:
+		// - most values will be simple values that can be directly assigned
+		// - some values will be values of enumerated types, possible part of tuples, records, or indices.
+		// - files can also contain the constructors for enumerated types.
+		let mut data = Vec::new();
+		let mut names = FxHashMap::default();
+		for f in files {
+			let src = SourceFile::try_from(f)?;
+			match f.extension().and_then(OsStr::to_str) {
+				Some("dzn") => {
+					// Parse the DZN file
+					let assignments = parse_dzn(&src)?;
+					data.reserve(assignments.len());
+					names.reserve(assignments.len());
+					// Match the parser
+					for asg in assignments {
+						let ident = asg.assignee().cast::<Identifier>().unwrap();
+						if let Some((k, ty)) = self._input_types.get_key_value::<str>(&ident.name())
+						{
+							let val = typecheck_dzn(&src, &ident.name(), &asg.definition(), ty)?;
+							data.push((k, ty, val));
+							// Identifier already seen
+							if names.contains_key(k) || self._input_data.contains_key(k) {
+								return Err(IdentifierAlreadyDefined {
+									src,
+									span: asg.cst_node().as_ref().byte_range().into(),
+									identifier: k.to_string(),
+								}
+								.into());
+							}
+							names.insert(k, ());
+						} else {
+							// Unknown identifier
+							return Err(UndefinedIdentifier {
+								src,
+								span: ident.cst_node().as_ref().byte_range().into(),
+								identifier: ident.name().to_string(),
+							}
+							.into());
+						}
+					}
+				}
+				Some("json") => todo!(),
+				_ => {
+					return Err(FileError {
+						file: f.into(),
+						message: format!(
+							"Attempting to read data file using unknown extension \"{}\"",
+							f.display()
+						),
+						other: vec![],
+					}
+					.into());
+				}
+			};
+		}
+		// Topologically sort the constructors to allow us to resolve the dependencies
+		// data.sort_by(|_a, _b| todo!());
+
+		// Itererate between initializing the enumerated types and creating the final values for the interpreter
+		for (key, ty, val) in data {
+			if let ParserVal::EnumCtor(_) = val {
+				todo!()
+			} else {
+				let _none = self
+					._input_data
+					.insert(key.to_string(), self.resolve_value(ty, val)?);
+				debug_assert_eq!(_none, None);
+			}
+		}
+
+		Ok(())
 	}
 }
 

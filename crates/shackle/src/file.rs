@@ -2,9 +2,10 @@
 //!
 //! `FileRef` is an interned data structure used to represent a pointer to a file (or inline string).
 
-use crate::{db::FileReader, diagnostics::FileError, dzn::Span};
+use crate::{db::FileReader, diagnostics::FileError};
 use miette::{MietteSpanContents, SourceCode};
 use std::{
+	fs::read_to_string,
 	ops::Deref,
 	panic::{RefUnwindSafe, UnwindSafe},
 	path::{Path, PathBuf},
@@ -103,6 +104,28 @@ impl<'a> From<Span<'a>> for SourceFile {
 			name: span.extra.0,
 			source: span.extra.1,
 		})
+	}
+}
+
+impl TryFrom<&Path> for SourceFile {
+	type Error = FileError;
+
+	fn try_from(path: &Path) -> Result<Self, Self::Error> {
+		let content = read_to_string(path).map_err(|err| FileError {
+			file: path.to_path_buf(),
+			message: err.to_string(),
+			other: Vec::new(),
+		})?;
+		Ok(Self {
+			name: Some(path.to_owned()),
+			source: content.into(),
+		})
+	}
+}
+
+impl From<Arc<String>> for SourceFile {
+	fn from(source: Arc<String>) -> Self {
+		Self { name: None, source }
 	}
 }
 

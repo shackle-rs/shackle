@@ -11,7 +11,7 @@ ast_node!(
 
 impl TupleLiteral {
 	/// Get the values in this tuple literal
-	pub fn members(&self) -> Children<'_, Expression> {
+	pub fn members<'a>(&'a self) -> Children<'a, Expression> {
 		children_with_field_name(self, "member")
 	}
 }

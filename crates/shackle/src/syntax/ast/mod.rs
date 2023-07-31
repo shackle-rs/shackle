@@ -81,6 +81,22 @@ pub struct Children<'a, T> {
 	phantom: PhantomData<T>,
 }
 
+impl<'a, T: From<CstNode>> Children<'a, T> {
+	pub(crate) fn from_cst(parent: &'a CstNode, field: &str) -> Self {
+		let tree = parent.cst();
+		let id = tree.language().field_id_for_name(field).unwrap();
+		let mut cursor = parent.as_ref().walk();
+		let done = !cursor.goto_first_child();
+		Children {
+			field: id,
+			tree,
+			cursor,
+			done,
+			phantom: PhantomData,
+		}
+	}
+}
+
 impl<'a, T: From<CstNode>> Iterator for Children<'a, T> {
 	type Item = T;
 	fn next(&mut self) -> Option<T> {
