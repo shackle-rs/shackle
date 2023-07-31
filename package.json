@@ -2,8 +2,10 @@
 	"name": "shackle",
 	"private": true,
 	"scripts": {
-		"parser:build": "npm run build -w tree-sitter-minizinc",
-		"parser:test": "npm run test -w tree-sitter-minizinc",
+		"parser:minizinc:build": "npm run build -w tree-sitter-minizinc",
+		"parser:minizinc:test": "npm run test -w tree-sitter-minizinc",
+		"parser:datazinc:build": "npm run build -w tree-sitter-datazinc",
+		"parser:datazinc:test": "npm run test -w tree-sitter-datazinc",
 		"vscode:build": "npm run compile -w vscode-shackle",
 		"vscode:watch": "npm run watch -w vscode-shackle",
 		"vscode:lint": "npm run lint -w vscode-shackle",
@@ -11,6 +13,7 @@
 		"format:check": "prettier -c ."
 	},
 	"workspaces": [
+		"parsers/tree-sitter-datazinc",
 		"parsers/tree-sitter-minizinc",
 		"editors/code"
 	],
