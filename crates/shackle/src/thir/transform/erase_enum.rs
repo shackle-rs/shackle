@@ -14,18 +14,18 @@ use crate::{
 	thir::{
 		db::Thir,
 		traverse::{
-			add_item, fold_call, fold_domain, fold_function, fold_identifier, Folder,
-			ReplacementMap,
+			add_function, add_item, fold_call, fold_domain, fold_expression, fold_function,
+			fold_function_body, fold_identifier, Folder, ReplacementMap,
 		},
 		ArrayLiteral, Call, Callable, Declaration, DeclarationId, Domain, DomainData, EnumMemberId,
-		EnumerationId, EnumerationItem, Expression, Function, FunctionName, Item, ItemId,
-		LookupCall, Marker, Model, ResolvedIdentifier, TupleLiteral,
+		EnumerationId, EnumerationItem, Expression, ExpressionData, Function, FunctionId,
+		FunctionName, Item, ItemId, LookupCall, Marker, Model, ResolvedIdentifier, TupleLiteral,
 	},
 	ty::EnumRef,
 };
 use std::sync::Arc;
 
-use super::top_down_type::wrap_in_let;
+use super::top_down_type::add_coercion;
 
 struct EnumEraser<Dst, Src = ()> {
 	model: Model<Dst>,
@@ -54,6 +54,22 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 		} else {
 			add_item(self, db, model, item);
 		}
+	}
+
+	fn add_function(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
+		if model[f].name() == self.ids.erase_enum && model[f].body().is_some() {
+			// Remove unnecessary functions
+			return;
+		}
+		add_function(self, db, model, f);
+	}
+
+	fn fold_function_body(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
+		if model[f].name() == self.ids.erase_enum && model[f].body().is_some() {
+			// Remove unnecessary functions
+			return;
+		}
+		fold_function_body(self, db, model, f);
 	}
 
 	fn fold_function(
@@ -152,8 +168,38 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 				.resolve(db, &self.model)
 				.0
 			}
+			Callable::Function(f)
+				if model[*f].name() == self.ids.to_enum && model[*f].body().is_none() =>
+			{
+				LookupCall {
+					function: self.ids.mzn_to_enum.into(),
+					arguments: call
+						.arguments
+						.iter()
+						.map(|arg| self.fold_expression(db, model, arg))
+						.collect(),
+				}
+				.resolve(db, &self.model)
+				.0
+			}
 			_ => fold_call(self, db, model, call),
 		}
+	}
+
+	fn fold_expression(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		expression: &Expression<Src>,
+	) -> Expression<Dst> {
+		if let ExpressionData::Call(c) = &**expression {
+			if let Callable::Function(f) = &c.function {
+				if model[*f].name() == self.ids.erase_enum {
+					return self.fold_expression(db, model, &c.arguments[0]);
+				}
+			}
+		}
+		fold_expression(self, db, model, expression)
 	}
 
 	fn fold_domain(
@@ -233,7 +279,7 @@ impl<Src: Marker, Dst: Marker> EnumEraser<Dst, Src> {
 					let name = constructor.name.unwrap();
 					let empty_array =
 						Expression::new(db, &self.model, origin, ArrayLiteral(vec![]));
-					let ctor_params = wrap_in_let(
+					let ctor_params = add_coercion(
 						db,
 						&mut self.model,
 						self.tys.array_of_tuple_int_set_of_int,
@@ -366,14 +412,14 @@ pub fn erase_enum(db: &dyn Thir, model: &Model) -> Model {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check;
+	use crate::thir::transform::{test::check, transformer, type_specialise::type_specialise};
 
 	use super::erase_enum;
 
 	#[test]
 	fn test_enum_type_erasure() {
 		check(
-			erase_enum,
+			transformer(vec![type_specialise, erase_enum]),
 			r#"
                 enum Foo = {A, B, C} ++ D(Bar);
 				enum Bar = {E, F};
@@ -381,27 +427,27 @@ mod test {
 				any: y = D(E);
             "#,
 			expect!([r#"
-    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_2322 = mzn_get_enum([("E", let {
-      array [int] of tuple(int, set of int): _DECL_2320 = [];
-    } in _DECL_2320), ("F", let {
-      array [int] of tuple(int, set of int): _DECL_2321 = [];
-    } in _DECL_2321)]);
-    set of int: Bar = mzn_defining_set(_DECL_2322);
-    int: E = mzn_construct_enum(_DECL_2322, 1);
-    int: F = mzn_construct_enum(_DECL_2322, 2);
-    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_2329 = mzn_get_enum([("A", let {
-      array [int] of tuple(int, set of int): _DECL_2326 = [];
-    } in _DECL_2326), ("B", let {
-      array [int] of tuple(int, set of int): _DECL_2327 = [];
-    } in _DECL_2327), ("C", let {
-      array [int] of tuple(int, set of int): _DECL_2328 = [];
-    } in _DECL_2328), ("D", [(1, Bar)])]);
-    set of int: Foo = mzn_defining_set(_DECL_2329);
-    int: A = mzn_construct_enum(_DECL_2329, 1);
-    int: B = mzn_construct_enum(_DECL_2329, 2);
-    int: C = mzn_construct_enum(_DECL_2329, 3);
+    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_1 = mzn_get_enum([("E", let {
+      array [int] of tuple(int, set of int): _DECL_2 = [];
+    } in _DECL_2), ("F", let {
+      array [int] of tuple(int, set of int): _DECL_3 = [];
+    } in _DECL_3)]);
+    set of int: Bar = mzn_defining_set(_DECL_1);
+    int: E = mzn_construct_enum(_DECL_1, 1);
+    int: F = mzn_construct_enum(_DECL_1, 2);
+    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_4 = mzn_get_enum([("A", let {
+      array [int] of tuple(int, set of int): _DECL_5 = [];
+    } in _DECL_5), ("B", let {
+      array [int] of tuple(int, set of int): _DECL_6 = [];
+    } in _DECL_6), ("C", let {
+      array [int] of tuple(int, set of int): _DECL_7 = [];
+    } in _DECL_7), ("D", [(1, Bar)])]);
+    set of int: Foo = mzn_defining_set(_DECL_4);
+    int: A = mzn_construct_enum(_DECL_4, 1);
+    int: B = mzn_construct_enum(_DECL_4, 2);
+    int: C = mzn_construct_enum(_DECL_4, 3);
     int: x = B;
-    int: y = mzn_construct_enum(_DECL_2329, 4, [E]);
+    int: y = mzn_construct_enum(_DECL_4, 4, [E]);
 "#]),
 		);
 	}
@@ -409,7 +455,7 @@ mod test {
 	#[test]
 	fn test_enum_show() {
 		check(
-			erase_enum,
+			transformer(vec![type_specialise, erase_enum]),
 			r#"
                 enum Foo = {A, B, C} ++ D(Bar);
 				enum Bar = {E, F};
@@ -417,27 +463,48 @@ mod test {
 				function string: show(Bar: x);
             "#,
 			expect!([r#"
-    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_2322 = mzn_get_enum([("E", let {
-      array [int] of tuple(int, set of int): _DECL_2320 = [];
-    } in _DECL_2320), ("F", let {
-      array [int] of tuple(int, set of int): _DECL_2321 = [];
-    } in _DECL_2321)]);
-    set of int: Bar = mzn_defining_set(_DECL_2322);
-    int: E = mzn_construct_enum(_DECL_2322, 1);
-    int: F = mzn_construct_enum(_DECL_2322, 2);
-    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_2329 = mzn_get_enum([("A", let {
-      array [int] of tuple(int, set of int): _DECL_2326 = [];
-    } in _DECL_2326), ("B", let {
-      array [int] of tuple(int, set of int): _DECL_2327 = [];
-    } in _DECL_2327), ("C", let {
-      array [int] of tuple(int, set of int): _DECL_2328 = [];
-    } in _DECL_2328), ("D", [(1, Bar)])]);
-    set of int: Foo = mzn_defining_set(_DECL_2329);
-    int: A = mzn_construct_enum(_DECL_2329, 1);
-    int: B = mzn_construct_enum(_DECL_2329, 2);
-    int: C = mzn_construct_enum(_DECL_2329, 3);
-    function string: show(Foo: x) = mzn_show_enum([_DECL_2322, _DECL_2329], 2, x);
-    function string: show(Bar: x) = mzn_show_enum([_DECL_2322], 1, x);
+    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_1 = mzn_get_enum([("E", let {
+      array [int] of tuple(int, set of int): _DECL_2 = [];
+    } in _DECL_2), ("F", let {
+      array [int] of tuple(int, set of int): _DECL_3 = [];
+    } in _DECL_3)]);
+    set of int: Bar = mzn_defining_set(_DECL_1);
+    int: E = mzn_construct_enum(_DECL_1, 1);
+    int: F = mzn_construct_enum(_DECL_1, 2);
+    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_4 = mzn_get_enum([("A", let {
+      array [int] of tuple(int, set of int): _DECL_5 = [];
+    } in _DECL_5), ("B", let {
+      array [int] of tuple(int, set of int): _DECL_6 = [];
+    } in _DECL_6), ("C", let {
+      array [int] of tuple(int, set of int): _DECL_7 = [];
+    } in _DECL_7), ("D", [(1, Bar)])]);
+    set of int: Foo = mzn_defining_set(_DECL_4);
+    int: A = mzn_construct_enum(_DECL_4, 1);
+    int: B = mzn_construct_enum(_DECL_4, 2);
+    int: C = mzn_construct_enum(_DECL_4, 3);
+    function string: show(Foo: x) = mzn_show_enum([_DECL_1, _DECL_4], 2, x);
+    function string: show(Bar: x) = mzn_show_enum([_DECL_1], 1, x);
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_erase_to_enum() {
+		check(
+			transformer(vec![type_specialise, erase_enum]),
+			r#"
+                enum Foo = {A};
+				Foo: x = to_enum(Foo, 1);
+				int: y = erase_enum(A);
+            "#,
+			expect!([r#"
+    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_1 = mzn_get_enum([("A", let {
+      array [int] of tuple(int, set of int): _DECL_2 = [];
+    } in _DECL_2)]);
+    set of int: Foo = mzn_defining_set(_DECL_1);
+    int: A = mzn_construct_enum(_DECL_1, 1);
+    Foo: x = to_enum(Foo, 1);
+    int: y = A;
 "#]),
 		);
 	}

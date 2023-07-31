@@ -239,6 +239,13 @@ impl<T: Marker> Model<T> {
 		self.outputs.len()
 	}
 
+	/// Remove the output items and return them
+	pub fn take_outputs(&mut self) -> Vec<OutputItem<T>> {
+		let outputs = std::mem::take(&mut self.outputs);
+		self.items.retain(|it| !matches!(it, ItemId::Output(_)));
+		outputs.into_vec()
+	}
+
 	/// Get the solve item
 	pub fn solve(&self) -> Option<&SolveItem<T>> {
 		self.solve.as_ref()
@@ -363,7 +370,15 @@ pub type FunctionLookupError<T> = FunctionResolutionError<FunctionId<T>>;
 /// type parameters for each, so that the IDs from one model can't be used
 /// to access another.
 pub trait Marker:
-	Copy + Clone + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash + std::fmt::Debug
+	Copy
+	+ Clone
+	+ PartialEq
+	+ Eq
+	+ PartialOrd
+	+ Ord
+	+ std::hash::Hash
+	+ std::fmt::Debug
+	+ std::default::Default
 {
 }
 

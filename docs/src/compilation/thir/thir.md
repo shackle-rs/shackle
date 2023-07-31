@@ -8,8 +8,7 @@ constructs until it can be readily lowered into MIR. Compared to HIR, the THIR i
 - Destructured - declaration items can only declare a single identifier
 - Fully resolved (identifiers do not have their own names, they simply point to the item they are for)
 - Desugared (since type information is now available, we can perform more desugarings)
-- All items have their own data, so declarations/constraint items in let expressions now have their own arenas for their
-  expressions
+- Expressions are boxed rather than arena allocated
 
 The language constructs made available in THIR are an attempt to provide rewriting stages with a convenient
 representation which is not too high-level and complex to process, but not so low-level as to be cumbersome to use.

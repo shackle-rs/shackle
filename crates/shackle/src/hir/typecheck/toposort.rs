@@ -321,7 +321,7 @@ mod test {
 		for item in items.iter().copied() {
 			let origin = sm.get_origin(item.into()).unwrap();
 			let (source, span) = origin.source_span(&db);
-			actual.push_str(&source.as_str()[span.offset()..span.offset() + span.len()]);
+			actual.push_str(&source.contents()[span.offset()..span.offset() + span.len()]);
 			actual.push_str(";\n");
 		}
 		expected.assert_eq(&actual);

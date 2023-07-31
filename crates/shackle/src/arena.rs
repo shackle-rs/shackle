@@ -88,7 +88,6 @@ impl<T> From<ArenaIndex<T>> for u32 {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Arena<T> {
 	items: Vec<T>,
-	forbidden: Option<ArenaIndex<T>>,
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Arena<T> {
@@ -102,10 +101,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Arena<T> {
 
 impl<T> std::default::Default for Arena<T> {
 	fn default() -> Self {
-		Self {
-			items: Vec::new(),
-			forbidden: None,
-		}
+		Self { items: Vec::new() }
 	}
 }
 
@@ -175,6 +171,11 @@ impl<T> Arena<T> {
 			.iter_mut()
 			.enumerate()
 			.map(|(idx, o)| (ArenaIndex::new((idx + 1) as u32), o))
+	}
+
+	/// Consume this arena, getting the values
+	pub fn into_vec(self) -> Vec<T> {
+		self.items
 	}
 
 	/// Shrink arena so capacity is minimized.

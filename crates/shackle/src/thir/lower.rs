@@ -27,11 +27,7 @@ use crate::{
 	utils::impl_enum_from,
 };
 
-use super::{
-	db::Thir,
-	source::{DesugarKind, Origin},
-	*,
-};
+use super::{db::Thir, source::Origin, *};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum DeclOrConstraint {
@@ -547,10 +543,7 @@ impl<'a> ItemCollector<'a> {
 				}
 				let obj = collector.collect_expression(objective);
 				declaration.set_definition(obj);
-				let idx = self.model.add_declaration(Item::new(
-					declaration,
-					Origin::from(item).with_desugaring(DesugarKind::Objective),
-				));
+				let idx = self.model.add_declaration(Item::new(declaration, item));
 				self.resolutions.insert(
 					PatternRef::new(item, pattern),
 					LoweredIdentifier::ResolvedIdentifier(idx.into()),

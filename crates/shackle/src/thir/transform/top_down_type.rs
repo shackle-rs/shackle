@@ -18,12 +18,17 @@ use crate::{
 /// Create a let wrapping an expression into a declaration.
 ///
 /// Helper to to make opt coercions explicit.
-pub fn wrap_in_let<T: Marker>(
+pub fn add_coercion<T: Marker>(
 	db: &dyn Thir,
 	model: &mut Model<T>,
 	ty: Ty,
 	expression: Expression<T>,
 ) -> Expression<T> {
+	if !expression.ty().contains_bottom(db.upcast())
+		&& !is_opt_subtype_of(db.upcast(), expression.ty(), ty)
+	{
+		return expression;
+	}
 	let origin = expression.origin();
 	let mut declaration = Declaration::new(false, Domain::unbounded(db, origin, ty));
 	declaration.set_definition(expression);
@@ -162,11 +167,7 @@ impl<'a, Src: Marker, Dst: Marker> Folder<'a, Dst, Src> for TopDownTyper<'a, Dst
 		let folded = fold_expression(self, db, model, expression);
 		if !enter_expression {
 			if let Some(ty) = self.get(expression) {
-				if expression.ty().contains_bottom(db.upcast())
-					|| is_opt_subtype_of(db.upcast(), expression.ty(), ty)
-				{
-					return wrap_in_let(db, &mut self.result, ty, folded);
-				}
+				return add_coercion(db, &mut self.result, ty, folded);
 			}
 		}
 		folded

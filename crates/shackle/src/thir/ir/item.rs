@@ -47,6 +47,11 @@ impl<T> Item<T> {
 	pub fn origin(&self) -> Origin {
 		self.origin
 	}
+
+	/// Get the inner origin and value
+	pub fn into_inner(self) -> (Origin, T) {
+		(self.origin, self.item)
+	}
 }
 
 /// Annotation item
@@ -658,6 +663,11 @@ impl<T: Marker> Output<T> {
 	/// Set the expression of the output item
 	pub fn set_expression(&mut self, expression: Expression<T>) {
 		self.expression = expression;
+	}
+
+	/// Unwrap the underlying section and expression
+	pub fn into_inner(self) -> (Option<Expression<T>>, Expression<T>) {
+		(self.section, self.expression)
 	}
 }
 

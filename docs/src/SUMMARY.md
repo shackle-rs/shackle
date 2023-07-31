@@ -16,6 +16,7 @@
     - [Erasure of records](./compilation/thir/records.md)
     - [Erasure of enums](./compilation/thir/enums.md)
     - [Desugaring of comprehensions](./compilation/thir/comprehension.md)
+    - [Rewriting of domains to constraints](./compilation/thir/domains.md)
     - [Erasure of option types](./compilation/thir/option-types.md)
     - [Desugaring of capturing](./compilation/thir/captures.md)
   - [Mid-level intermediate representation](./compilation/mir/mir.md)

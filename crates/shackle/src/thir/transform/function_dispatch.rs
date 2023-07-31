@@ -1,5 +1,4 @@
-//! Generate function dispatch headers and mangle names
-//!
+//! Generate function preambles to dispatch to par versions of functions.
 //!
 
 use std::sync::Arc;
@@ -13,6 +12,8 @@ use crate::{
 		Marker, Model,
 	},
 };
+
+use super::top_down_type::add_coercion;
 struct DispatchRewriter<Dst, Src = ()> {
 	model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst, Src>,
@@ -76,6 +77,16 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DispatchRewriter<Dst, Sr
 						}
 					}
 
+					let call = Expression::new(
+						db,
+						&self.model,
+						self.model[dst].origin(),
+						Call {
+							function: Callable::Function(f.function),
+							arguments,
+						},
+					);
+
 					let condition = if is_fixed.len() > 1 {
 						Expression::new(
 							db,
@@ -94,15 +105,7 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DispatchRewriter<Dst, Sr
 					} else {
 						is_fixed.pop().unwrap()
 					};
-					let result = Expression::new(
-						db,
-						&self.model,
-						self.model[dst].origin(),
-						Call {
-							function: Callable::Function(f.function),
-							arguments,
-						},
-					);
+					let result = add_coercion(db, &mut self.model, folded.ty(), call);
 
 					let body = Expression::new(
 						db,

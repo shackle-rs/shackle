@@ -1474,7 +1474,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				LetItem::Declaration(d) => {
 					let ty = self.collect_declaration(d);
-					if ty.contains_par(db.upcast()) && d.definition.is_none() {
+					if (ty.contains_par(db.upcast()) || ty.contains_function(db.upcast()))
+						&& d.definition.is_none()
+					{
 						let (src, span) =
 							NodeRef::from(EntityRef::new(self.db, self.item, d.pattern))
 								.source_span(db);
