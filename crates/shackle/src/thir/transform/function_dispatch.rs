@@ -19,7 +19,7 @@ struct DispatchRewriter<Dst, Src = ()> {
 	ids: Arc<IdentifierRegistry>,
 }
 
-impl<Dst: Marker, Src: Marker> Folder<Dst, Src> for DispatchRewriter<Dst, Src> {
+impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DispatchRewriter<Dst, Src> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.model
 	}

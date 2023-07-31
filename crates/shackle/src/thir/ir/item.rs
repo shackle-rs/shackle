@@ -161,13 +161,6 @@ pub type DeclarationItem<T = ()> = Item<Declaration<T>>;
 /// ID of a declaration item
 pub type DeclarationId<T = ()> = ArenaIndex<DeclarationItem<T>>;
 
-impl<T: Marker> DeclarationItem<T> {
-	/// Get the type of this declaration
-	pub fn ty(&self) -> Ty {
-		self.domain().ty()
-	}
-}
-
 impl<T: Marker> Declaration<T> {
 	/// Create a new declaration item.
 	pub fn new(top_level: bool, domain: Domain<T>) -> Self {
@@ -175,6 +168,17 @@ impl<T: Marker> Declaration<T> {
 			domain,
 			name: None,
 			definition: None,
+			annotations: Annotations::default(),
+			top_level,
+		}
+	}
+
+	/// Create a new declaration to hold an expression
+	pub fn from_expression(db: &dyn Thir, top_level: bool, expression: Expression<T>) -> Self {
+		Self {
+			domain: Domain::unbounded(db, expression.origin(), expression.ty()),
+			name: None,
+			definition: Some(expression),
 			annotations: Annotations::default(),
 			top_level,
 		}
@@ -188,6 +192,11 @@ impl<T: Marker> Declaration<T> {
 	/// Set the domain of this declaration
 	pub fn set_domain(&mut self, domain: Domain<T>) {
 		self.domain = domain
+	}
+
+	/// Get the type of this declaration
+	pub fn ty(&self) -> Ty {
+		self.domain().ty()
 	}
 
 	/// Get declaration name
@@ -243,6 +252,19 @@ impl<T: Marker> Declaration<T> {
 	/// Set whether or not this declaration is top-level
 	pub fn set_top_level(&mut self, top_level: bool) {
 		self.top_level = top_level;
+	}
+
+	/// Validate that the RHS is valid for this declaration
+	pub fn validate(&self, db: &dyn Thir) {
+		if let Some(rhs) = self.definition() {
+			let ty = rhs.ty();
+			assert!(
+				ty.is_subtype_of(db.upcast(), self.ty()),
+				"RHS type {} does not match declaration LHS type {}",
+				ty.pretty_print(db.upcast()),
+				self.ty().pretty_print(db.upcast())
+			);
+		}
 	}
 }
 
@@ -522,6 +544,11 @@ impl<T: Marker> Function<T> {
 		self.domain = value;
 	}
 
+	/// Get the return type of this function
+	pub fn return_type(&self) -> Ty {
+		self.domain().ty()
+	}
+
 	/// Get the RHS definition of this function
 	pub fn body(&self) -> Option<&Expression<T>> {
 		self.body.as_ref()
@@ -551,31 +578,35 @@ impl<T: Marker> Function<T> {
 	pub fn annotations_mut(&mut self) -> &mut Annotations<T> {
 		&mut self.annotations
 	}
-}
 
-impl<T: Marker> FunctionItem<T> {
+	/// Validate that the body of this function is valid
+	pub fn validate(&self, db: &dyn Thir) {
+		if let Some(body) = self.body() {
+			let ty = body.ty();
+			assert!(
+				ty.is_subtype_of(db.upcast(), self.return_type()),
+				"Function body type {} does not match return type {} for {}",
+				ty.pretty_print(db.upcast()),
+				self.return_type().pretty_print(db.upcast()),
+				self.name().pretty_print(db)
+			);
+		}
+	}
+
 	/// Convert to a function entry
 	pub fn function_entry(&self, model: &Model<T>) -> FunctionEntry {
 		FunctionEntry {
 			has_body: self.body.is_some(),
 			overload: if self.type_inst_vars.is_empty() {
 				OverloadedFunction::Function(FunctionType {
-					params: self
-						.parameters
-						.iter()
-						.map(|p| model[*p].domain().ty())
-						.collect(),
-					return_type: self.domain().ty(),
+					params: self.parameters.iter().map(|p| model[*p].ty()).collect(),
+					return_type: self.return_type(),
 				})
 			} else {
 				OverloadedFunction::PolymorphicFunction(PolymorphicFunctionType {
 					ty_params: self.type_inst_vars.iter().map(|t| t.ty_var).collect(),
-					params: self
-						.parameters
-						.iter()
-						.map(|p| model[*p].domain().ty())
-						.collect(),
-					return_type: self.domain().ty(),
+					params: self.parameters.iter().map(|p| model[*p].ty()).collect(),
+					return_type: self.return_type(),
 				})
 			},
 		}

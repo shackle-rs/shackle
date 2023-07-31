@@ -589,11 +589,7 @@ impl<'a> ItemCollector<'a> {
 			// Create a declaration with the value of each expression used in a type alias
 			let expression =
 				ExpressionCollector::new(self, &ta.data, item, &types).collect_expression(e);
-			let mut decl = Declaration::new(
-				true,
-				Domain::unbounded(self.db, expression.origin(), expression.ty()),
-			);
-			decl.set_definition(expression);
+			let decl = Declaration::from_expression(self.db, true, expression);
 			let idx = self
 				.model
 				.add_declaration(Item::new(decl, EntityRef::new(self.db.upcast(), item, e)));
@@ -1643,11 +1639,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			} => {
 				let def = ExpressionCollector::new(self.parent, self.data, self.item, self.types)
 					.collect_expression(*value);
-				let mut assignment = Declaration::new(
-					false,
-					Domain::unbounded(self.parent.db, def.origin(), def.ty()),
-				);
-				assignment.set_definition(def);
+				let mut assignment = Declaration::from_expression(self.parent.db, false, def);
 				if let Some(name) = self.data[*pattern].identifier() {
 					assignment.set_name(name);
 				}

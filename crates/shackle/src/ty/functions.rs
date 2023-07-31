@@ -620,7 +620,14 @@ impl PolymorphicFunctionType {
 		for (i, (arg, param)) in args.iter().zip(self.params.iter()).enumerate() {
 			if !PolymorphicFunctionType::collect_instantiations(
 				db,
-				&mut instantiations,
+				&mut |tv, ty| {
+					if let Some(is) = instantiations.get_mut(&tv) {
+						is.push(ty);
+						true
+					} else {
+						false
+					}
+				},
 				*arg,
 				*param,
 			) {
@@ -650,9 +657,9 @@ impl PolymorphicFunctionType {
 	}
 
 	/// Collects the types to instantiate unbound type-inst variables with.
-	fn collect_instantiations(
+	pub fn collect_instantiations(
 		db: &dyn Interner,
-		instantiations: &mut FxHashMap<TyVarRef, Vec<Ty>>,
+		add_instantiation: &mut impl FnMut(TyVarRef, Ty) -> bool,
 		arg: Ty,
 		param: Ty,
 	) -> bool {
@@ -670,13 +677,22 @@ impl PolymorphicFunctionType {
 				},
 			) => {
 				(o1 == o2 || o1 == OptType::NonOpt)
-					&& PolymorphicFunctionType::collect_instantiations(db, instantiations, d1, d2)
-					&& PolymorphicFunctionType::collect_instantiations(db, instantiations, e1, e2)
+					&& PolymorphicFunctionType::collect_instantiations(
+						db,
+						add_instantiation,
+						d1,
+						d2,
+					) && PolymorphicFunctionType::collect_instantiations(db, add_instantiation, e1, e2)
 			}
 			(TyData::Set(i1, o1, e1), TyData::Set(i2, o2, e2)) => {
 				(i1 == i2 || i1 == VarType::Par)
 					&& (o1 == o2 || o1 == OptType::NonOpt)
-					&& PolymorphicFunctionType::collect_instantiations(db, instantiations, e1, e2)
+					&& PolymorphicFunctionType::collect_instantiations(
+						db,
+						add_instantiation,
+						e1,
+						e2,
+					)
 			}
 			(TyData::Tuple(o1, f1), TyData::Tuple(o2, f2)) => {
 				(o1 == o2 || o1 == OptType::NonOpt)
@@ -684,7 +700,7 @@ impl PolymorphicFunctionType {
 					&& f1.iter().zip(f2.iter()).all(|(t1, t2)| {
 						PolymorphicFunctionType::collect_instantiations(
 							db,
-							instantiations,
+							add_instantiation,
 							*t1,
 							*t2,
 						)
@@ -697,7 +713,7 @@ impl PolymorphicFunctionType {
 							i1 == i2
 								&& PolymorphicFunctionType::collect_instantiations(
 									db,
-									instantiations,
+									add_instantiation,
 									*t1,
 									*t2,
 								)
@@ -708,14 +724,14 @@ impl PolymorphicFunctionType {
 				(o1 == OptType::NonOpt || o1 == o2)
 					&& PolymorphicFunctionType::collect_instantiations(
 						db,
-						instantiations,
+						add_instantiation,
 						f1.return_type,
 						f2.return_type,
 					) && f1.params.len() == f2.params.len()
 					&& f1.params.iter().zip(f2.params.iter()).all(|(t1, t2)| {
 						PolymorphicFunctionType::collect_instantiations(
 							db,
-							instantiations,
+							add_instantiation,
 							*t2,
 							*t1,
 						)
@@ -751,11 +767,7 @@ impl PolymorphicFunctionType {
 				{
 					return false;
 				}
-				if let Some(is) = instantiations.get_mut(&t.ty_var) {
-					is.push(ty);
-					return true;
-				}
-				false
+				add_instantiation(t.ty_var, ty)
 			}
 			_ => arg.is_subtype_of(db, param),
 		}

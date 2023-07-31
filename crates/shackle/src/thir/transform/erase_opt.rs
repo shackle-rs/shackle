@@ -13,137 +13,24 @@ use rustc_hash::FxHashMap;
 use crate::{
 	constants::{IdentifierRegistry, TypeRegistry},
 	hir::{BooleanLiteral, IntegerLiteral, OptType, VarType},
-	refmap::RefMap,
 	thir::{
 		db::Thir,
-		traverse::{
-			fold_domain, fold_expression, visit_declaration, visit_expression, visit_function,
-			Folder, ReplacementMap, Visitor,
-		},
-		ArrayComprehension, Bottom, Callable, Declaration, DeclarationId, Domain,
-		EnumConstructorKind, Expression, ExpressionData, FunctionId, Generator, Item, Let, LetItem,
-		LookupCall, Marker, Model, TupleAccess, TupleLiteral,
+		traverse::{fold_domain, Folder, ReplacementMap},
+		ArrayComprehension, Call, Declaration, Domain, DummyValue, Expression, ExpressionData,
+		Generator, Item, Let, LetItem, LookupCall, Marker, Model, TupleAccess, TupleLiteral,
 	},
 	ty::{Ty, TyData},
 };
 
-struct TopDownTyper<'a, T> {
-	db: &'a dyn Thir,
-	types: RefMap<'a, Expression<T>, Ty>,
-}
-
-impl<'a, T: Marker> Visitor<'a, T> for TopDownTyper<'a, T> {
-	fn visit_declaration(&mut self, model: &'a Model<T>, declaration: DeclarationId<T>) {
-		if let Some(def) = model[declaration].definition() {
-			self.insert(def, model[declaration].ty());
-		}
-		visit_declaration(self, model, declaration)
-	}
-
-	fn visit_function(&mut self, model: &'a Model<T>, function: FunctionId<T>) {
-		if let Some(body) = model[function].body() {
-			self.insert(body, model[function].domain().ty());
-		}
-		visit_function(self, model, function, true)
-	}
-
-	fn visit_expression(&mut self, model: &'a Model<T>, expression: &'a Expression<T>) {
-		let ty = self.get(expression).unwrap_or_else(|| expression.ty());
-		match &**expression {
-			ExpressionData::ArrayLiteral(al) => self.extend(
-				al.iter()
-					.map(|e| (e, ty.elem_ty(self.db.upcast()).unwrap())),
-			),
-			ExpressionData::ArrayComprehension(c) => {
-				self.insert(&*c.template, ty.elem_ty(self.db.upcast()).unwrap())
-			}
-			ExpressionData::SetLiteral(sl) => self.extend(sl.iter().map(|e| {
-				(
-					e,
-					ty.elem_ty(self.db.upcast())
-						.unwrap()
-						.with_inst(self.db.upcast(), ty.inst(self.db.upcast()).unwrap())
-						.unwrap(),
-				)
-			})),
-			ExpressionData::SetComprehension(c) => self.insert(
-				&*c.template,
-				ty.elem_ty(self.db.upcast())
-					.unwrap()
-					.with_inst(self.db.upcast(), ty.inst(self.db.upcast()).unwrap())
-					.unwrap(),
-			),
-			ExpressionData::IfThenElse(ite) => self.extend(
-				ite.branches
-					.iter()
-					.map(|b| &b.result)
-					.chain([&*ite.else_result])
-					.map(|e| (e, ty)),
-			),
-			ExpressionData::Case(c) => self.extend(c.branches.iter().map(|b| (&b.result, ty))),
-			ExpressionData::TupleLiteral(tl) => {
-				self.extend(tl.iter().zip(ty.fields(self.db.upcast()).unwrap()))
-			}
-			ExpressionData::Call(c) => {
-				let params = match &c.function {
-					Callable::Annotation(a) => model[*a]
-						.parameters
-						.as_ref()
-						.unwrap()
-						.iter()
-						.map(|p| model[*p].ty())
-						.collect::<Vec<_>>(),
-					Callable::AnnotationDestructure(_) => vec![self.db.type_registry().ann],
-					Callable::EnumConstructor(e) => model[*e]
-						.parameters
-						.as_ref()
-						.unwrap()
-						.iter()
-						.map(|p| model[*p].ty())
-						.collect::<Vec<_>>(),
-					Callable::EnumDestructor(_) => {
-						let (_, ty) = EnumConstructorKind::from_ty(self.db, c.arguments[0].ty());
-						vec![ty]
-					}
-					Callable::Expression(e) => e.ty().function_params(self.db.upcast()).unwrap(),
-					Callable::Function(f) => model[*f]
-						.parameters()
-						.iter()
-						.map(|p| model[*p].ty())
-						.collect::<Vec<_>>(),
-				};
-				self.extend(c.arguments.iter().zip(params))
-			}
-			_ => (),
-		}
-		visit_expression(self, model, expression)
-	}
-}
-
-impl<'a, T: Marker> TopDownTyper<'a, T> {
-	fn insert(&mut self, e: &'a Expression<T>, ty: Ty) {
-		self.types.insert(e, ty);
-	}
-
-	fn extend(&mut self, iter: impl Iterator<Item = (&'a Expression<T>, Ty)>) {
-		self.types.extend(iter);
-	}
-
-	fn get(&self, e: &'a Expression<T>) -> Option<Ty> {
-		self.types.get(e).copied()
-	}
-}
-
-struct OptEraser<'a, Dst, Src = ()> {
+struct OptEraser<Dst, Src = ()> {
 	model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst, Src>,
 	ids: Arc<IdentifierRegistry>,
 	tys: Arc<TypeRegistry>,
-	top_down_types: TopDownTyper<'a, Src>,
 	needs_opt_erase: FxHashMap<(Ty, Ty), bool>,
 }
 
-impl<Dst: Marker, Src: Marker> Folder<Dst, Src> for OptEraser<'_, Dst, Src> {
+impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.model
 	}
@@ -203,42 +90,29 @@ impl<Dst: Marker, Src: Marker> Folder<Dst, Src> for OptEraser<'_, Dst, Src> {
 		}
 	}
 
-	fn fold_expression(
+	fn fold_declaration(
 		&mut self,
-		db: &dyn Thir,
-		model: &Model<Src>,
-		expression: &Expression<Src>,
-	) -> Expression<Dst> {
-		let origin = expression.origin();
-		let folded = match &**expression {
-			ExpressionData::Absent => {
-				// Transform `<>` into `(false, ⊥)`
-				let bool_false = Expression::new(db, &self.model, origin, BooleanLiteral(false));
-				let bottom = Expression::new(db, &self.model, origin, Bottom);
-				let mut e = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleLiteral(vec![bool_false, bottom]),
-				);
-				e.annotations_mut().extend(
-					expression
-						.annotations()
-						.iter()
-						.map(|ann| self.fold_expression(db, model, ann)),
-				);
-				return e;
-			}
-			_ => fold_expression(self, db, model, expression),
-		};
-		self.erase_opt(
-			db,
-			self.top_down_types
-				.get(expression)
-				.unwrap_or_else(|| expression.ty()),
-			expression.ty(),
-			folded,
-		)
+		db: &'_ dyn Thir,
+		model: &'_ Model<Src>,
+		d: &'_ Declaration<Src>,
+	) -> Declaration<Dst> {
+		let mut declaration =
+			Declaration::new(d.top_level(), self.fold_domain(db, model, d.domain()));
+		if let Some(name) = d.name() {
+			declaration.set_name(name);
+		}
+		declaration.annotations_mut().extend(
+			d.annotations()
+				.iter()
+				.map(|ann| self.fold_expression(db, model, ann)),
+		);
+		if let Some(def) = d.definition() {
+			let folded = self.fold_expression(db, model, def);
+			let erased = self.erase_opt(db, d.ty(), def.ty(), folded);
+			declaration.set_definition(erased);
+			declaration.validate(db);
+		}
+		declaration
 	}
 
 	fn fold_domain(
@@ -267,9 +141,26 @@ impl<Dst: Marker, Src: Marker> Folder<Dst, Src> for OptEraser<'_, Dst, Src> {
 		}
 		fold_domain(self, db, model, domain)
 	}
+
+	fn fold_call(&mut self, db: &dyn Thir, model: &Model<Src>, call: &Call<Src>) -> Call<Dst> {
+		let fe = call.function_type(db, model);
+		let call = Call {
+			function: self.fold_callable(db, model, &call.function),
+			arguments: call
+				.arguments
+				.iter()
+				.zip(fe.params.iter())
+				.map(|(arg, param_ty)| {
+					let folded = self.fold_expression(db, model, arg);
+					self.erase_opt(db, *param_ty, arg.ty(), folded)
+				})
+				.collect(),
+		};
+		call
+	}
 }
 
-impl<Src: Marker, Dst: Marker> OptEraser<'_, Dst, Src> {
+impl<Src: Marker, Dst: Marker> OptEraser<Dst, Src> {
 	fn needs_opt_erase(&mut self, db: &dyn Thir, top_down: Ty, bottom_up: Ty) -> bool {
 		if let Some(b) = self.needs_opt_erase.get(&(top_down, bottom_up)) {
 			return *b;
@@ -298,7 +189,7 @@ impl<Src: Marker, Dst: Marker> OptEraser<'_, Dst, Src> {
 		db: &dyn Thir,
 		top_down_ty: Ty,
 		bottom_up_ty: Ty,
-		e: Expression<Dst>,
+		mut e: Expression<Dst>,
 	) -> Expression<Dst> {
 		let origin = e.origin();
 		if top_down_ty.opt(db.upcast()) == Some(OptType::Opt)
@@ -307,6 +198,24 @@ impl<Src: Marker, Dst: Marker> OptEraser<'_, Dst, Src> {
 			// Known to occur, transform `x` into `(true, x)`
 			let bool_true = Expression::new(db, &self.model, origin, BooleanLiteral(true));
 			return Expression::new(db, &self.model, origin, TupleLiteral(vec![bool_true, e]));
+		}
+		if let ExpressionData::Absent = &*e {
+			// Transform `<>` into `(false, ...)`
+			let bool_false = Expression::new(db, &self.model, origin, BooleanLiteral(false));
+			let bottom = Expression::new(
+				db,
+				&self.model,
+				origin,
+				DummyValue(top_down_ty.with_opt(db.upcast(), OptType::NonOpt)),
+			);
+			let mut tl = Expression::new(
+				db,
+				&self.model,
+				origin,
+				TupleLiteral(vec![bool_false, bottom]),
+			);
+			tl.annotations_mut().extend(e.annotations_mut().drain(..));
+			return tl;
 		}
 
 		if self.needs_opt_erase(db, top_down_ty, bottom_up_ty) {
@@ -415,17 +324,11 @@ impl<Src: Marker, Dst: Marker> OptEraser<'_, Dst, Src> {
 
 /// Erase types which are not present in MicroZinc
 pub fn erase_opt(db: &dyn Thir, model: &Model) -> Model {
-	let mut top_down_types = TopDownTyper {
-		db,
-		types: RefMap::default(),
-	};
-	top_down_types.visit_model(model);
 	let mut c = OptEraser {
 		model: Model::default(),
 		replacement_map: ReplacementMap::default(),
 		ids: db.identifier_registry(),
 		tys: db.type_registry(),
-		top_down_types,
 		needs_opt_erase: FxHashMap::default(),
 	};
 	c.add_model(db, model);
@@ -436,14 +339,14 @@ pub fn erase_opt(db: &dyn Thir, model: &Model) -> Model {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check_no_stdlib;
+	use crate::thir::transform::{test::check_no_stdlib, top_down_type, transformer};
 
 	use super::erase_opt;
 
 	#[test]
 	fn test_option_type_erasure() {
 		check_no_stdlib(
-			erase_opt,
+			transformer(vec![top_down_type, erase_opt]),
 			r#"
                 opt int: x = 2;
 				opt bool: y = <>;
@@ -457,14 +360,26 @@ mod test {
             "#,
 			expect!([r#"
     tuple(bool, int): x = (true, 2);
-    tuple(bool, bool): y = (false, ⊥);
+    tuple(bool, bool): y = (false, false);
     tuple(var bool, var {1, 2, 3}): a;
-    tuple(bool, int): b = if true then (true, 1) else (false, ⊥) endif;
-    array [int] of tuple(bool, int): c = [(true, 1), (false, ⊥)];
+    tuple(bool, int): b = if true then let {
+      tuple(bool, int): _DECL_4 = (true, 1);
+    } in _DECL_4 else let {
+      tuple(bool, int): _DECL_5 = (false, 0);
+    } in _DECL_5 endif;
+    array [int] of tuple(bool, int): c = [let {
+      tuple(bool, int): _DECL_7 = (true, 1);
+    } in _DECL_7, let {
+      tuple(bool, int): _DECL_8 = (false, 0);
+    } in _DECL_8];
     tuple(int, tuple(bool, int)): d;
     tuple(tuple(bool, int), tuple(bool, int)): e = ((true, d.1), d.2);
-    function tuple(bool, int): foo(tuple(bool, int): x) = (true, 1);
-    tuple(bool, int): f = foo((true, 1));
+    function tuple(bool, int): foo(tuple(bool, int): x) = let {
+      tuple(bool, int): _DECL_15 = (true, 1);
+    } in _DECL_15;
+    tuple(bool, int): f = foo(let {
+      tuple(bool, int): _DECL_13 = (true, 1);
+    } in _DECL_13);
     solve satisfy;
 "#]),
 		);
@@ -473,7 +388,7 @@ mod test {
 	#[test]
 	fn test_option_type_erasure_2() {
 		check_no_stdlib(
-			erase_opt,
+			transformer(vec![top_down_type, erase_opt]),
 			r#"
 			function array [int] of tuple(bool, var int): arrayXd(array [int] of var int: a, array [int] of tuple(bool, var int): b);
 			function int: foo(array [int] of var opt int: x);

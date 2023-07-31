@@ -10,6 +10,7 @@ use self::erase_enum::erase_enum;
 use self::erase_opt::erase_opt;
 use self::erase_record::erase_record;
 use self::function_dispatch::function_dispatch;
+use self::top_down_type::top_down_type;
 use self::type_specialise::type_specialise;
 use super::db::Thir;
 use super::Model;
@@ -20,6 +21,7 @@ pub mod erase_enum;
 pub mod erase_opt;
 pub mod erase_record;
 pub mod function_dispatch;
+pub mod top_down_type;
 pub mod type_specialise;
 
 /// Create a transformer which runs the given transforms in order on an initial model
@@ -41,6 +43,7 @@ pub fn transformer(
 /// Get the default THIR transformer
 pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
 	transformer(vec![
+		top_down_type,
 		type_specialise,
 		function_dispatch,
 		erase_record,

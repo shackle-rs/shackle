@@ -98,8 +98,6 @@ impl<T: Marker> Deref for Expression<T> {
 /// An expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ExpressionData<T = ()> {
-	/// Bottom
-	Bottom,
 	/// Absent `<>`
 	Absent,
 	/// Bool literal
@@ -163,11 +161,6 @@ impl_enum_from!(ExpressionData<T>::Case(Case<T>));
 impl_enum_from!(ExpressionData<T>::Call(Call<T>));
 impl_enum_from!(ExpressionData<T>::Let(Let<T>));
 impl_enum_from!(ExpressionData<T>::Lambda(Lambda<T>));
-impl<T: Marker> From<Bottom> for ExpressionData<T> {
-	fn from(_: Bottom) -> Self {
-		ExpressionData::Bottom
-	}
-}
 impl<T: Marker> From<Absent> for ExpressionData<T> {
 	fn from(_: Absent) -> Self {
 		ExpressionData::Absent
@@ -219,19 +212,9 @@ impl<T: Marker> ExpressionBuilder<T> for DummyValue {
 	}
 }
 
-/// Bottom
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Bottom;
-
 /// Absent `<>`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Absent;
-
-impl<T: Marker> ExpressionBuilder<T> for Bottom {
-	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
-		Expression::new_unchecked(db.type_registry().bottom, self, origin)
-	}
-}
 
 impl<T: Marker> ExpressionBuilder<T> for Absent {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -563,8 +546,9 @@ impl<T: Marker> ExpressionBuilder<T> for TupleAccess<T> {
 				}
 			}
 			_ => unreachable!(
-				"Tried to perform tuple access on {}",
-				self.tuple.ty().pretty_print(db.upcast())
+				"Tried to perform tuple access on {} at {:?}",
+				self.tuple.ty().pretty_print(db.upcast()),
+				origin.debug_print(db)
 			),
 		};
 		Expression::new_unchecked(ty, self, origin)
@@ -632,7 +616,19 @@ impl<T: Marker> ExpressionBuilder<T> for IfThenElse<T> {
 				.map(|b| b.result.ty())
 				.chain([self.else_result.ty()]),
 		)
-		.expect("Invalid if-then-else type");
+		.unwrap_or_else(|| {
+			panic!(
+				"Invalid if-then-else branch types {} at {}",
+				self.branches
+					.iter()
+					.map(|b| b.result.ty())
+					.chain([self.else_result.ty()])
+					.map(|t| t.pretty_print(db.upcast()))
+					.collect::<Vec<_>>()
+					.join(", "),
+				origin.debug_print(db),
+			)
+		});
 		let make_var = self
 			.branches
 			.iter()
@@ -701,19 +697,26 @@ pub struct Call<T = ()> {
 	pub arguments: Vec<Expression<T>>,
 }
 
-impl<T: Marker> ExpressionBuilder<T> for Call<T> {
-	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
-		let ty = match &self.function {
+impl<T: Marker> Call<T> {
+	/// Get the function type for this call, validating it in the process
+	pub fn function_type(&self, db: &dyn Thir, model: &Model<T>) -> FunctionType {
+		match &self.function {
 			Callable::Annotation(a) => {
 				let params = model[*a]
 					.parameters
 					.as_ref()
-					.expect("Not an annotation function");
+					.expect("Not an annotation function")
+					.iter()
+					.map(|p| model[*p].ty())
+					.collect::<Box<_>>();
 				assert_eq!(params.len(), self.arguments.len());
 				for (arg, param) in self.arguments.iter().zip(params.iter()) {
-					assert!(arg.ty().is_subtype_of(db.upcast(), model[*param].ty()));
+					assert!(arg.ty().is_subtype_of(db.upcast(), *param));
 				}
-				db.type_registry().ann
+				FunctionType {
+					params,
+					return_type: db.type_registry().ann,
+				}
 			}
 			Callable::AnnotationDestructure(a) => {
 				assert_eq!(self.arguments.len(), 1);
@@ -726,27 +729,36 @@ impl<T: Marker> ExpressionBuilder<T> for Call<T> {
 					!params.is_empty(),
 					"Cannot destructure parameterless annotation function"
 				);
-				if params.len() == 1 {
+				let return_type = if params.len() == 1 {
 					model[params[0]].ty()
 				} else {
 					Ty::tuple(db.upcast(), params.iter().map(|p| model[*p].ty()))
+				};
+				FunctionType {
+					params: Box::new([db.type_registry().ann]),
+					return_type,
 				}
 			}
 			Callable::EnumConstructor(e) => {
+				let kind =
+					EnumConstructorKind::from_tys(db, self.arguments.iter().map(|arg| arg.ty()));
 				let params = model[*e]
 					.parameters
 					.as_ref()
-					.expect("Not an enum constructor");
+					.expect("Not an enum constructor")
+					.iter()
+					.map(|p| kind.lift(db, model[*p].ty()))
+					.collect::<Box<_>>();
 				assert_eq!(self.arguments.len(), params.len());
-				let kind =
-					EnumConstructorKind::from_tys(db, self.arguments.iter().map(|arg| arg.ty()));
 				for (arg, param) in self.arguments.iter().zip(params.iter()) {
-					assert!(arg
-						.ty()
-						.is_subtype_of(db.upcast(), kind.lift(db, model[*param].ty())));
+					assert!(arg.ty().is_subtype_of(db.upcast(), *param));
 				}
 				let ty = Ty::par_enum(db.upcast(), model[e.enumeration_id()].enum_type());
-				kind.lift(db, ty)
+				let return_type = kind.lift(db, ty);
+				FunctionType {
+					params,
+					return_type,
+				}
 			}
 			Callable::EnumDestructor(e) => {
 				assert_eq!(self.arguments.len(), 1);
@@ -759,13 +771,17 @@ impl<T: Marker> ExpressionBuilder<T> for Call<T> {
 					.parameters
 					.as_ref()
 					.expect("Not an enum constructor function");
-				if params.len() == 1 {
+				let return_type = if params.len() == 1 {
 					kind.lift(db, model[params[0]].ty())
 				} else {
 					Ty::tuple(
 						db.upcast(),
 						params.iter().map(|p| kind.lift(db, model[*p].ty())),
 					)
+				};
+				FunctionType {
+					params: Box::new([ty]),
+					return_type,
 				}
 			}
 			Callable::Expression(e) => match e.ty().lookup(db.upcast()) {
@@ -779,7 +795,7 @@ impl<T: Marker> ExpressionBuilder<T> for Call<T> {
 						ft.matches(db.upcast(), &tys).is_ok(),
 						"Function does not accept argument types"
 					);
-					ft.return_type
+					ft
 				}
 				_ => unreachable!("Invalid function type"),
 			},
@@ -797,11 +813,15 @@ impl<T: Marker> ExpressionBuilder<T> for Call<T> {
 							e.debug_print(db.upcast())
 						);
 					});
-				let ft = fe.overload.instantiate(db.upcast(), &ty_params);
-				ft.return_type
+				fe.overload.instantiate(db.upcast(), &ty_params)
 			}
-		};
-		Expression::new_unchecked(ty, self, origin)
+		}
+	}
+}
+
+impl<T: Marker> ExpressionBuilder<T> for Call<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
+		Expression::new_unchecked(self.function_type(db, model).return_type, self, origin)
 	}
 }
 

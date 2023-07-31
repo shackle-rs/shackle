@@ -57,9 +57,6 @@ pub trait Visitor<'a, T: Marker = ()> {
 		visit_expression(self, model, expression);
 	}
 
-	/// Visit an bottom literal
-	fn visit_bottom(&mut self, _model: &'a Model<T>, _b: &'a Bottom) {}
-
 	/// Visit an absent literal
 	fn visit_absent(&mut self, _model: &'a Model<T>, _a: &'a Absent) {}
 
@@ -487,7 +484,6 @@ pub fn visit_expression<'a, T: Marker, V: Visitor<'a, T> + ?Sized>(
 	}
 
 	match &**node {
-		ExpressionData::Bottom => visitor.visit_bottom(model, &Bottom),
 		ExpressionData::Absent => visitor.visit_absent(model, &Absent),
 		ExpressionData::BooleanLiteral(b) => visitor.visit_boolean(model, b),
 		ExpressionData::IntegerLiteral(i) => visitor.visit_integer(model, i),

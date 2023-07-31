@@ -113,6 +113,9 @@ id_registry!(
 	imp: "->",
 	if_then_else,
 	card,
-	mzn_enum_constructor,
-	mzn_enum_destructor,
+	mzn_get_enum,
+	mzn_defining_set,
+	mzn_construct_enum,
+	mzn_destruct_enum,
+	mzn_show_enum,
 );
