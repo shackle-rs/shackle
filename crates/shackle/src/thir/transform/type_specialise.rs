@@ -463,14 +463,6 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 			_ => unreachable!(),
 		}
 	}
-
-	fn mangle_names(&mut self, db: &dyn Thir, model: &Model) {
-		for ((o, tys), f) in self.concrete.iter() {
-			// Mangle name
-			let name = model[*o].name().mangled(db, tys.iter().copied());
-			self.specialised_model[*f].set_name(name);
-		}
-	}
 }
 
 /// Type specialise a model
@@ -485,7 +477,6 @@ pub fn type_specialise(db: &dyn Thir, model: &Model) -> Model {
 		ids,
 	};
 	ts.add_model(db, model);
-	ts.mangle_names(db, model);
 	ts.specialised_model
 }
 
