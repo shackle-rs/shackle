@@ -1399,35 +1399,40 @@ pub fn fold_pattern<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	pattern: &'a Pattern<T>,
 ) -> Pattern<U> {
 	let origin = pattern.origin();
-	let new_data = match &**pattern {
-		PatternData::AnnotationConstructor { item, args } => PatternData::AnnotationConstructor {
-			item: folder.fold_annotation_id(db, model, *item),
-			args: args
+	match &**pattern {
+		PatternData::AnnotationConstructor { item, args } => {
+			let item = folder.fold_annotation_id(db, model, *item);
+			let args = args
 				.iter()
 				.map(|arg| folder.fold_pattern(db, model, arg))
-				.collect(),
-		},
-		PatternData::Anonymous(ty) => PatternData::Anonymous(*ty),
-		PatternData::EnumConstructor { member, args } => PatternData::EnumConstructor {
-			member: folder.fold_enum_member_id(db, model, *member),
-			args: args
-				.iter()
-				.map(|arg| folder.fold_pattern(db, model, arg))
-				.collect(),
-		},
-		PatternData::Expression(e) => {
-			PatternData::Expression(Box::new(folder.fold_expression(db, model, e)))
+				.collect::<Vec<_>>();
+			Pattern::annotation_constructor(db, folder.model(), origin, item, args)
 		}
-		PatternData::Record(fs) => PatternData::Record(
-			fs.iter()
+		PatternData::Anonymous(ty) => Pattern::anonymous(*ty, origin),
+		PatternData::EnumConstructor { member, args } => {
+			let member = folder.fold_enum_member_id(db, model, *member);
+			let args = args
+				.iter()
+				.map(|arg| folder.fold_pattern(db, model, arg))
+				.collect::<Vec<_>>();
+			Pattern::enum_constructor(db, folder.model(), origin, member, args)
+		}
+		PatternData::Expression(e) => {
+			Pattern::expression(folder.fold_expression(db, model, e), origin)
+		}
+		PatternData::Record(fs) => {
+			let fields = fs
+				.iter()
 				.map(|(i, p)| (*i, folder.fold_pattern(db, model, p)))
-				.collect(),
-		),
-		PatternData::Tuple(fs) => PatternData::Tuple(
-			fs.iter()
+				.collect::<Vec<_>>();
+			Pattern::record(db, folder.model(), origin, fields)
+		}
+		PatternData::Tuple(fs) => {
+			let fields = fs
+				.iter()
 				.map(|p| folder.fold_pattern(db, model, p))
-				.collect(),
-		),
-	};
-	Pattern::new(new_data, origin)
+				.collect::<Vec<_>>();
+			Pattern::tuple(db, folder.model(), origin, fields)
+		}
+	}
 }
