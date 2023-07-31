@@ -359,7 +359,6 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	/// Pretty print an expression
 	pub fn pretty_print_expression(&self, expression: &Expression<T>) -> String {
 		let mut out = match &**expression {
-			ExpressionData::Bottom => "⊥".to_owned(),
 			ExpressionData::Absent => "<>".to_owned(),
 			ExpressionData::ArrayAccess(aa) => format!(
 				"({})[{}]",

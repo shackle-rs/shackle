@@ -40,7 +40,7 @@ struct TypeSpecialiser<Dst> {
 	ids: Arc<IdentifierRegistry>,
 }
 
-impl<Dst: Marker> Folder<Dst> for TypeSpecialiser<Dst> {
+impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.specialised_model
 	}

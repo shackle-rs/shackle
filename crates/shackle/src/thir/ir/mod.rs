@@ -362,6 +362,9 @@ pub type FunctionLookupError<T> = FunctionResolutionError<FunctionId<T>>;
 /// type safety when dealing with multiple THIR models by using different
 /// type parameters for each, so that the IDs from one model can't be used
 /// to access another.
-pub trait Marker: Copy + Clone + std::fmt::Debug {}
+pub trait Marker:
+	Copy + Clone + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash + std::fmt::Debug
+{
+}
 
 impl Marker for () {}

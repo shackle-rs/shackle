@@ -16,7 +16,7 @@ struct RecordEraser<Dst, Src = ()> {
 	replacement_map: ReplacementMap<Dst, Src>,
 }
 
-impl<Dst: Marker, Src: Marker> Folder<Dst, Src> for RecordEraser<Dst, Src> {
+impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for RecordEraser<Dst, Src> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.model
 	}

@@ -92,7 +92,7 @@ struct Decapturer<Dst> {
 	current: Option<FunctionId>,
 }
 
-impl<Dst: Marker> Folder<Dst> for Decapturer<Dst> {
+impl<Dst: Marker> Folder<'_, Dst> for Decapturer<Dst> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.model
 	}
@@ -272,7 +272,7 @@ impl<Dst: Marker> Decapturer<Dst> {
 					OptType::NonOpt,
 					declarations
 						.iter()
-						.map(|d| Domain::unbounded(db, origin, self.model[*d].domain().ty())),
+						.map(|d| Domain::unbounded(db, origin, self.model[*d].ty())),
 				)
 			} else {
 				self.model[declarations[0]].domain().clone()

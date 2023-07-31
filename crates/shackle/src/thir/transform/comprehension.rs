@@ -10,6 +10,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	constants::IdentifierRegistry,
+	hir::OptType,
 	thir::{
 		db::Thir,
 		traverse::{fold_call, fold_expression, visit_expression, Folder, ReplacementMap, Visitor},
@@ -18,6 +19,8 @@ use crate::{
 		Model, ResolvedIdentifier, SetComprehension, VarType,
 	},
 };
+
+use super::top_down_type::wrap_in_let;
 
 enum SurroundingCall {
 	Forall,
@@ -32,7 +35,7 @@ struct ComprehensionRewriter<Dst> {
 	ids: Arc<IdentifierRegistry>,
 }
 
-impl<Dst: Marker> Folder<Dst> for ComprehensionRewriter<Dst> {
+impl<Dst: Marker> Folder<'_, Dst> for ComprehensionRewriter<Dst> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.result
 	}
@@ -375,21 +378,18 @@ impl<Dst: Marker> ComprehensionRewriter<Dst> {
 				}
 				SurroundingCall::Other => {
 					// Rewrite var where clauses into optionality
+					// Optionality coercion already done, so requires explicit types
+					let opt_ty = template.ty().with_opt(db.upcast(), OptType::Opt);
+					let literal = Expression::new(db, &self.result, origin, Absent);
+					let absent = wrap_in_let(db, &mut self.result, opt_ty, literal);
+					let result = wrap_in_let(db, &mut self.result, opt_ty, template);
 					Expression::new(
 						db,
 						&self.result,
 						origin,
 						IfThenElse {
-							branches: vec![Branch {
-								condition,
-								result: template,
-							}],
-							else_result: Box::new(Expression::new(
-								db,
-								&self.result,
-								origin,
-								Absent,
-							)),
+							branches: vec![Branch { condition, result }],
+							else_result: Box::new(absent),
 						},
 					)
 				}

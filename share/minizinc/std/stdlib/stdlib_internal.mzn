@@ -1309,3 +1309,5 @@ function int: mzn_min_or_0(set of int: X) =
 
 test mzn_set_is_contiguous(set of int: X) =
   card(X) = 0 \/ card(X)=(max(X)-min(X)+1);
+
+function bool: mzn_assert_warn(bool: b, string: msg);

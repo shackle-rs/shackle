@@ -6,6 +6,8 @@ use std::ops::Deref;
 
 use crate::hir::ids::{EntityRef, ItemRef, NodeRef};
 
+use super::db::Thir;
+
 /// The HIR node which produced a THIR node
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Origin {
@@ -48,6 +50,13 @@ impl Origin {
 			desugar_kind: kind,
 			hir_node: self.hir_node,
 		}
+	}
+
+	/// Debug print this origin
+	pub fn debug_print(&self, db: &dyn Thir) -> String {
+		let (src, span) = self.source_span(db.upcast());
+		let name = src.name().unwrap_or_else(|| "<unnamed file>".to_owned());
+		format!("{}[{}:{}]", name, span.offset(), span.len(),)
 	}
 }
 
