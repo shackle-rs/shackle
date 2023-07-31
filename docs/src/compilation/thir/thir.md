@@ -228,6 +228,60 @@ array [int] of int: y = let {
 
 </table>
 
+Performing a tuple/record access on an array is rewritten to perform the field access on each element of the array
+using a comprehension:
+
+<table style="width:100%">
+
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+
+<tr>
+<td>
+
+```mzn
+any: x = [(1, "a"), (2, "b")];
+any: y = x.1;
+```
+
+</td>
+<td>
+
+```mzn
+array [int] of tuple(int, string): x =
+  [(1, "a"), (2, "b")];
+array [int] of int: y = [v.1 | v in x];
+```
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+```mzn
+any: x = [
+  (a: 1, b: "hello"),
+  (a: 2, b: "world")
+];
+any: y = x.a;
+```
+
+</td>
+<td>
+
+```mzn
+array [int] of record(int: a, string: b): x =[
+  (a: 1, b: "hello"),
+  (a: 2, b: "world")
+];
+array [int] of int: y = [v.a | v in x];
+```
+
+</td>
+</tr>
+
+</table>
+
 Case expressions are rewritten such that the destructuring is moved into the branch RHS, and pattern identifiers which
 create new variables are replaced with the wildcard `_` pattern:
 
