@@ -402,7 +402,11 @@ mod test {
     function int: foo(array [int] of tuple(var bool, var int): x);
     function set of int: bar(int: a, int: b);
     function var int: qux(array [int] of var int: x) = let {
-      var bar(foo(arrayXd(x, [(true, _DECL_7) | _DECL_7 in x])), foo(arrayXd(x, [(true, _DECL_8) | _DECL_8 in x]))): r;
+      var bar(foo(let {
+      array [int] of tuple(var bool, var int): _DECL_8 = arrayXd(x, [(true, _DECL_7) | _DECL_7 in x]);
+    } in _DECL_8), foo(let {
+      array [int] of tuple(var bool, var int): _DECL_10 = arrayXd(x, [(true, _DECL_9) | _DECL_9 in x]);
+    } in _DECL_10)): r;
     } in r;
     solve satisfy;
 "#]),
