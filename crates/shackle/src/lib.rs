@@ -22,13 +22,15 @@ pub mod value;
 
 use data::{
 	dzn::{parse_dzn, typecheck_dzn},
+	serde::SerdeFileVisitor,
 	ParserVal,
 };
 use db::{CompilerDatabase, Inputs};
 use diagnostics::{FileError, IdentifierAlreadyDefined, InternalError, ShackleError};
 use file::{InputFile, SourceFile};
 use itertools::Itertools;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+use serde::Deserializer;
 use serde_json::Map;
 use syntax::ast::{AstNode, Identifier};
 use ty::{Ty, TyData};
@@ -211,9 +213,9 @@ pub enum Type {
 	/// Set type
 	Set(OptType, Box<Type>),
 	/// Tuple type
-	Tuple(OptType, Box<[Type]>),
+	Tuple(OptType, Arc<[Type]>),
 	/// Record type
-	Record(OptType, Box<[(String, Type)]>),
+	Record(OptType, Arc<Vec<(String, Type)>>),
 }
 
 impl Type {
@@ -267,7 +269,8 @@ impl Type {
 				li.iter()
 					.map(|ty| Type::from_compiler(db, *ty))
 					.collect::<Result<Vec<_>, _>>()?
-					.into_boxed_slice(),
+					.into_boxed_slice()
+					.into(),
 			)),
 			TyData::Record(opt, li) => Ok(Type::Record(
 				opt,
@@ -277,7 +280,7 @@ impl Type {
 						Err(e) => Err(e),
 					})
 					.collect::<Result<Vec<_>, _>>()?
-					.into_boxed_slice(),
+					.into(),
 			)),
 			_ => Err(InternalError::new(format!(
 				"Unable to create user facing type from {:?}",
@@ -400,7 +403,7 @@ impl Program {
 		// - some values will be values of enumerated types, possible part of tuples, records, or indices.
 		// - files can also contain the constructors for enumerated types.
 		let mut data = Vec::new();
-		let mut names = FxHashMap::default();
+		let mut names = FxHashSet::default();
 		for f in files {
 			let src = SourceFile::try_from(f)?;
 			match f.extension().and_then(OsStr::to_str) {
@@ -417,7 +420,7 @@ impl Program {
 							let val = typecheck_dzn(&src, &ident.name(), &asg.definition(), ty)?;
 							data.push((k, ty, val));
 							// Identifier already seen
-							if names.contains_key(k) || self._input_data.contains_key(k) {
+							if names.contains(k) || self._input_data.contains_key(k) {
 								return Err(IdentifierAlreadyDefined {
 									src,
 									span: asg.cst_node().as_ref().byte_range().into(),
@@ -425,7 +428,7 @@ impl Program {
 								}
 								.into());
 							}
-							names.insert(k, ());
+							names.insert(k);
 						} else {
 							// Unknown identifier
 							return Err(UndefinedIdentifier {
@@ -437,7 +440,27 @@ impl Program {
 						}
 					}
 				}
-				Some("json") => todo!(),
+				Some("json") => {
+					let assignments = serde_json::Deserializer::from_str(src.as_str())
+						.deserialize_map(SerdeFileVisitor(&self._input_types))
+						.map_err(|_| InternalError::new("TODO: JSON parsing error"))?;
+
+					data.reserve(assignments.len());
+					names.reserve(assignments.len());
+					for asg in assignments {
+						// Identifier already seen
+						if names.contains(asg.0) || self._input_data.contains_key(asg.0) {
+							return Err(IdentifierAlreadyDefined {
+								src,
+								span: (0, 0).into(), // TODO: actual byte range
+								identifier: asg.0.to_string(),
+							}
+							.into());
+						}
+						names.insert(asg.0);
+						data.push(asg);
+					}
+				}
 				_ => {
 					return Err(FileError {
 						file: f.into(),

@@ -2,6 +2,7 @@
 
 pub(crate) mod dzn;
 pub(crate) mod json;
+pub(crate) mod serde;
 
 use std::ops::RangeInclusive;
 
