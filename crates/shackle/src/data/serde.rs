@@ -1,8 +1,9 @@
+use itertools::Itertools;
 use rustc_hash::FxHashMap;
-use serde::de::{DeserializeSeed, Error, Unexpected, Visitor};
+use serde::de::{DeserializeSeed, Error, IgnoredAny, Unexpected, Visitor};
 
 use super::ParserVal;
-use crate::Type;
+use crate::{OptType, Type};
 
 pub(crate) struct SerdeValueVisitor<'a>(pub &'a Type);
 
@@ -48,16 +49,20 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 	}
 
 	fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
-		let ty = self.0;
-		if matches!(ty, Type::String(_)) {
-			Ok(ParserVal::String(v.to_string()))
-		} else {
-			Err(Error::invalid_type(Unexpected::Str(v), &self))
-		}
+		self.visit_string(v.to_string())
 	}
-
 	fn visit_borrowed_str<E: Error>(self, v: &'de str) -> Result<Self::Value, E> {
 		self.visit_str(v) // TODO: avoid copying when possible
+	}
+
+	fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
+		let ty = self.0;
+		match ty {
+			Type::Enum(_, _) => Ok(ParserVal::Enum(v, Vec::new())),
+			Type::String(_) => Ok(ParserVal::String(v)),
+			Type::Annotation(_) => Ok(ParserVal::Ann(v, Vec::new())),
+			_ => Err(Error::invalid_type(Unexpected::Str(v.as_str()), &self)),
+		}
 	}
 
 	fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
@@ -69,9 +74,56 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 		}
 	}
 
-	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, seq: A) -> Result<Self::Value, A::Error> {
-		let _ = seq;
-		Err(Error::invalid_type(Unexpected::Seq, &self))
+	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+		let ty = self.0;
+		match ty {
+			Type::Array {
+				opt: _,
+				dim,
+				element,
+			} => {
+				let mut sizes = Vec::with_capacity(dim.len());
+				let mut data = Vec::new();
+				let visitor = SerdeArrayVisitor {
+					data: &mut data,
+					size: &mut sizes,
+					element: &element,
+					dim: dim.len() as u8,
+					depth: 1,
+				};
+				visitor.visit_seq(seq)?;
+				if data.is_empty() {
+					return Ok(ParserVal::SimpleArray(Vec::new(), Vec::new()));
+				}
+				debug_assert_eq!(dim.len(), sizes.len());
+				let mut indices = Vec::with_capacity(sizes.capacity());
+				for (ty, len) in dim.iter().zip_eq(sizes.into_iter()) {
+					match ty {
+						Type::Integer(OptType::NonOpt) => {
+							indices.push((ParserVal::Integer(1), ParserVal::Integer(len)))
+						}
+						Type::Enum(_, _) => todo!(),
+						_ => unreachable!("invalid index type"),
+					}
+				}
+				Ok(ParserVal::SimpleArray(indices, data))
+			}
+			Type::Tuple(_, members) => {
+				let mut tup = Vec::with_capacity(members.len());
+				for ty in members.iter() {
+					let Some(m) = seq.next_element_seed(SerdeValueVisitor(ty))? else { return Err(Error::invalid_length(tup.len(), &members.len().to_string().as_str())) };
+					tup.push(m);
+				}
+				if let Some(_) = seq.next_element::<IgnoredAny>()? {
+					return Err(Error::invalid_length(
+						tup.len(),
+						&members.len().to_string().as_str(),
+					));
+				}
+				Ok(ParserVal::Tuple(tup))
+			}
+			_ => Err(Error::invalid_type(Unexpected::Seq, &self)),
+		}
 	}
 
 	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
@@ -97,12 +149,8 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 				}
 				Ok(ParserVal::Record(rec))
 			}
-			Type::Set(_, _) => {
-				todo!()
-			}
-			Type::Enum(_, _) => {
-				todo!()
-			}
+			Type::Set(_, _) => todo!(),
+			Type::Enum(_, _) => todo!(),
 			_ => Err(Error::invalid_type(Unexpected::Map, &self)),
 		}
 	}
@@ -116,6 +164,67 @@ impl<'a, 'de> DeserializeSeed<'de> for SerdeValueVisitor<'a> {
 		deserializer: D,
 	) -> Result<Self::Value, D::Error> {
 		deserializer.deserialize_any(self)
+	}
+}
+
+struct SerdeArrayVisitor<'a> {
+	data: &'a mut Vec<ParserVal>,
+	size: &'a mut Vec<i64>,
+	element: &'a Type,
+	dim: u8,
+	depth: u8,
+}
+
+impl<'a, 'de> DeserializeSeed<'de> for SerdeArrayVisitor<'a> {
+	type Value = ();
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_seq(self)
+	}
+}
+
+impl<'de, 'a> Visitor<'de> for SerdeArrayVisitor<'a> {
+	type Value = ();
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "an array literal")
+	}
+
+	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+		let mut i = 0;
+		debug_assert!(self.depth <= self.dim);
+		if self.depth >= self.dim {
+			// Parse elements
+			while let Some(elt) = seq.next_element_seed(SerdeValueVisitor(self.element))? {
+				self.data.push(elt);
+				i += 1;
+			}
+		} else {
+			// Recurse with one less dimension
+			while let Some(_) = seq.next_element_seed(SerdeArrayVisitor {
+				data: self.data,
+				size: self.size,
+				element: self.element,
+				dim: self.dim,
+				depth: self.depth + 1,
+			})? {
+				// values already added to data
+				i += 1
+			}
+		}
+		if self.size.len() < self.depth as usize {
+			debug_assert_eq!(self.size.len() + 1, self.depth as usize);
+			self.size.push(i);
+		} else if self.size[self.depth as usize - 1] != i {
+			return Err(Error::invalid_length(
+				i as usize,
+				&self.size[self.depth as usize - 1].to_string().as_str(),
+			));
+		}
+		Ok(())
 	}
 }
 
