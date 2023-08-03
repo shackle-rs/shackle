@@ -6,9 +6,11 @@ pub(crate) mod serde;
 
 use std::ops::RangeInclusive;
 
+use itertools::Itertools;
+
 use crate::{
 	diagnostics::ShackleError,
-	value::{Polarity, Value},
+	value::{Array, EnumRangeInclusive, Index, Polarity, Value},
 	Program, Type,
 };
 
@@ -66,6 +68,60 @@ impl Program {
 	///
 	/// This is the final step in the parsing of data files, resolving enumerated types and creating
 	pub(crate) fn resolve_value(&self, ty: &Type, v: ParserVal) -> Result<Value, ShackleError> {
-		Ok(Value::Absent)
+		match v {
+			ParserVal::Absent => Ok(Value::Absent),
+			ParserVal::Infinity(v) => Ok(Value::Infinity(v)),
+			ParserVal::Boolean(v) => Ok(v.into()),
+			ParserVal::Integer(v) => Ok(v.into()),
+			ParserVal::Float(v) => Ok(v.into()),
+			ParserVal::String(v) => Ok(Value::String(v.into())),
+			ParserVal::Enum(_, _) => todo!(),
+			ParserVal::Ann(_, _) => todo!(),
+			ParserVal::SimpleArray(ranges, elements) => {
+				let Type::Array { opt: _, dim, element } = ty else { unreachable!() };
+				let indices = ranges
+					.into_iter()
+					.zip_eq(dim.iter())
+					.map(|(range, ty)| match range {
+						(ParserVal::Integer(from), ParserVal::Integer(to)) => {
+							Ok::<_, ShackleError>(Index::Integer(from..=to))
+						}
+						(from @ ParserVal::Enum(_, _), to @ ParserVal::Enum(_, _)) => {
+							let Value::Enum(_) = self.resolve_value(ty, from)? else {unreachable!()};
+							let Value::Enum(_) = self.resolve_value(ty, to)? else {unreachable!()};
+							todo!()
+						}
+						_ => unreachable!("invalid index range parsed"),
+					})
+					.collect::<Result<Vec<_>, _>>()?;
+				let elements = elements
+					.into_iter()
+					.map(|el| self.resolve_value(&element, el))
+					.collect::<Result<Vec<_>, _>>()?;
+				Ok(Array::new(indices, elements).into())
+			}
+			ParserVal::IndexedArray(_, _) => todo!(),
+			ParserVal::SetList(_) => todo!(),
+			ParserVal::Range(a, b) => Ok(Value::Set(match (*a, *b) {
+				(ParserVal::Integer(from), ParserVal::Integer(to)) => (from..=to).into(),
+				(from @ ParserVal::Enum(_, _), to @ ParserVal::Enum(_, _)) => {
+					let Value::Enum(a) = self.resolve_value(ty, from)? else {unreachable!()};
+					let Value::Enum(b) = self.resolve_value(ty, to)? else {unreachable!()};
+					EnumRangeInclusive::new(a, b).into()
+				}
+				_ => unreachable!("invalid ParserVal::Range arguments"),
+			})),
+			ParserVal::Tuple(v) => {
+				let Type::Tuple(_, ty) = ty else {unreachable!()};
+				let members = v
+					.into_iter()
+					.zip_eq(ty.iter())
+					.map(|(m, ty)| self.resolve_value(ty, m))
+					.collect::<Result<Vec<_>, _>>()?;
+				Ok(Value::Tuple(members))
+			}
+			ParserVal::Record(_) => todo!(),
+			ParserVal::EnumCtor(_) => unreachable!("not a value"),
+		}
 	}
 }

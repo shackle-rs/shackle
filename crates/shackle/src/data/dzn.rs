@@ -147,7 +147,7 @@ pub(crate) fn typecheck_dzn(
 			}
 		}
 		Expression::StringLiteral(s) => {
-			if matches!(ty, Type::Float(_)) {
+			if matches!(ty, Type::String(_)) {
 				Ok(ParserVal::String(s.value()))
 			} else {
 				type_err("a string literal")

@@ -1,7 +1,9 @@
 //! Values types used for input and output for Programs
 
 use std::{
+	cmp::max,
 	fmt::{self, Display},
+	iter::FusedIterator,
 	ops::RangeInclusive,
 	rc::Rc,
 	sync::Arc,
@@ -38,6 +40,37 @@ pub enum Value {
 	Tuple(Vec<Value>),
 	/// A record of values
 	Record(Record),
+}
+
+impl From<bool> for Value {
+	fn from(value: bool) -> Self {
+		Self::Boolean(value)
+	}
+}
+impl From<i64> for Value {
+	fn from(value: i64) -> Self {
+		Self::Integer(value)
+	}
+}
+impl From<f64> for Value {
+	fn from(value: f64) -> Self {
+		Self::Float(value)
+	}
+}
+impl From<Array> for Value {
+	fn from(value: Array) -> Self {
+		Self::Array(value)
+	}
+}
+impl From<Set> for Value {
+	fn from(value: Set) -> Self {
+		Self::Set(value)
+	}
+}
+impl From<Record> for Value {
+	fn from(value: Record) -> Self {
+		Self::Record(value)
+	}
 }
 
 /// Whether an value is negative or positive
@@ -136,17 +169,17 @@ impl std::ops::Index<&[Value]> for Array {
 				}
 				Index::Enum(e) => {
 					if let Value::Enum(val) = ii {
-						if e == &val.set {
+						if e.set == val.set {
 							idx += val.val
 						} else {
 							panic!("incorrect index type: using value of type {} for an index of type {}", 
-							if let Some(name) = &e.name {name.as_str()} else{"anonymous enum"},
+							if let Some(name) = &e.set.name {name.as_str()} else{"anonymous enum"},
 							if let Some(name) = &val.set.name {name.as_str()} else{"anonymous enum"},)
 						}
 					} else {
 						panic!(
 							"incorrect index type: using {ii} for an index of type {}",
-							if let Some(name) = &e.name {
+							if let Some(name) = &e.set.name {
 								name.as_str()
 							} else {
 								"anonymous enum"
@@ -216,7 +249,7 @@ pub enum Index {
 	/// Closed integer range index
 	Integer(RangeInclusive<i64>),
 	/// Enumerated type used as an index
-	Enum(Arc<Enum>),
+	Enum(EnumRangeInclusive),
 }
 
 impl Index {
@@ -245,7 +278,7 @@ impl Index {
 	fn iter(&self) -> IndexIter {
 		match self {
 			Index::Integer(x) => IndexIter::Integer(x.clone()),
-			Index::Enum(e) => IndexIter::Enum(e.clone(), 1..=e.len()),
+			Index::Enum(e) => IndexIter::Enum(e.clone()),
 		}
 	}
 }
@@ -253,7 +286,7 @@ impl Index {
 #[derive(Debug, Clone)]
 enum IndexIter {
 	Integer(RangeInclusive<i64>),
-	Enum(Arc<Enum>, RangeInclusive<usize>),
+	Enum(EnumRangeInclusive),
 }
 
 impl Iterator for IndexIter {
@@ -261,13 +294,26 @@ impl Iterator for IndexIter {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
-			IndexIter::Integer(r) => r.next().map(Value::Integer),
-			IndexIter::Enum(e, r) => r.next().map(|v| {
-				Value::Enum(EnumValue {
-					set: e.clone(),
-					val: v,
-				})
-			}),
+			IndexIter::Integer(it) => it.next().map(Value::Integer),
+			IndexIter::Enum(it) => it.next().map(Value::Enum),
+		}
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(0, None)
+	}
+
+	fn count(self) -> usize {
+		match self {
+			IndexIter::Integer(it) => it.count(),
+			IndexIter::Enum(it) => it.count(),
+		}
+	}
+
+	fn last(self) -> Option<Self::Item> {
+		match self {
+			IndexIter::Integer(it) => it.last().map(Value::Integer),
+			IndexIter::Enum(it) => it.last().map(Value::Enum),
 		}
 	}
 }
@@ -353,11 +399,11 @@ impl EnumValue {
 	pub fn arg(&self) -> Option<Value> {
 		let (_, index, i) = self.constructor_and_pos();
 		match index {
-			Some(Index::Enum(e)) => Some(Value::Enum(EnumValue {
-				set: e.clone(),
+			Some(Index::Enum(idx)) => Some(Value::Enum(EnumValue {
+				set: idx.set.clone(),
 				val: i,
 			})),
-			Some(Index::Integer(range)) => Some(Value::Integer(range.start() + i as i64 - 1)),
+			Some(Index::Integer(idx)) => Some(Value::Integer(idx.start() + i as i64 - 1)),
 			None => {
 				debug_assert!(i == 1);
 				None
@@ -387,17 +433,156 @@ impl Display for EnumValue {
 	}
 }
 
+/// A range of values of a single enumerated type bounded inclusively below and above
+///
+/// The `EnumRangeInclusive::new(start, end)` contains all values with `x >= start`
+/// and `x <= end`. It is empty unless `start <= end`.
+///
+/// This iterator is [fused], but the specific values of `start` and `end` after
+/// iteration has finished are **unspecified** other than that [`.is_empty()`]
+/// will return `true` once no more values will be produced.
+///
+/// [fused]: crate::iter::FusedIterator
+/// [`.is_empty()`]: EnumRangeInclusive::is_empty
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumRangeInclusive {
+	set: Arc<Enum>,
+	start: usize,
+	end: usize,
+}
+
+impl EnumRangeInclusive {
+	/// Create a new EnumRangeInclusive
+	///
+	/// ## Warning
+	/// This function will panic if the arguments contained are of two different Enum types
+	pub fn new(start: EnumValue, end: EnumValue) -> Self {
+		if start.set != end.set {
+			panic!("creating EnumRangeInclusive using two different enum types")
+		}
+		EnumRangeInclusive {
+			set: start.set,
+			start: start.val,
+			end: end.val,
+		}
+	}
+
+	/// Returns `true` if item is contained in the range.
+	pub fn contains(&self, item: EnumValue) -> bool {
+		if item.set != self.set {
+			false
+		} else {
+			item.val >= self.start && item.val <= self.end
+		}
+	}
+
+	/// Returns `true' if the iterator is empty.
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+}
+
+impl Display for EnumRangeInclusive {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"{}..={}",
+			EnumValue {
+				set: self.set.clone(),
+				val: self.start,
+			},
+			EnumValue {
+				set: self.set.clone(),
+				val: self.end,
+			},
+		)
+	}
+}
+
+impl Iterator for EnumRangeInclusive {
+	type Item = EnumValue;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.start > self.end {
+			None
+		} else {
+			let val = EnumValue {
+				set: self.set.clone(),
+				val: self.start,
+			};
+			self.start += 1;
+			Some(val)
+		}
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let len = max(self.end - self.start + 1, 0);
+		(len, Some(len))
+	}
+
+	fn count(self) -> usize {
+		return self.len();
+	}
+
+	fn last(self) -> Option<Self::Item> {
+		if self.is_empty() {
+			None
+		} else {
+			Some(EnumValue {
+				set: self.set,
+				val: self.end,
+			})
+		}
+	}
+}
+impl DoubleEndedIterator for EnumRangeInclusive {
+	fn next_back(&mut self) -> Option<Self::Item> {
+		if self.start > self.end {
+			None
+		} else {
+			let val = EnumValue {
+				set: self.set.clone(),
+				val: self.end,
+			};
+			self.end -= 1;
+			Some(val)
+		}
+	}
+}
+impl ExactSizeIterator for EnumRangeInclusive {
+	fn len(&self) -> usize {
+		self.end - self.start + 1
+	}
+}
+impl FusedIterator for EnumRangeInclusive {}
+
 /// Different representations used to represent sets in [`Value`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Set {
 	/// List of (unique) Value elements
 	SetList(Vec<Value>),
 	/// Set that spans all members of an enumerated type
-	EnumRangeList(Vec<(EnumValue, EnumValue)>),
+	EnumRangeList(Vec<EnumRangeInclusive>),
 	/// Sorted list of non-overlapping inclusive integer ranges
 	IntRangeList(Vec<RangeInclusive<i64>>),
 	/// Sorted list of non-overlapping inclusive floating point ranges
 	FloatRangeList(Vec<RangeInclusive<f64>>),
+}
+
+impl From<EnumRangeInclusive> for Set {
+	fn from(value: EnumRangeInclusive) -> Self {
+		Self::EnumRangeList(vec![value])
+	}
+}
+impl From<RangeInclusive<i64>> for Set {
+	fn from(value: RangeInclusive<i64>) -> Self {
+		Self::IntRangeList(vec![value])
+	}
+}
+impl From<RangeInclusive<f64>> for Set {
+	fn from(value: RangeInclusive<f64>) -> Self {
+		Self::FloatRangeList(vec![value])
+	}
 }
 
 impl Display for Set {
@@ -410,20 +595,10 @@ impl Display for Set {
 				write!(f, "{{{}}}", v.iter().format(", "))
 			}
 			Set::EnumRangeList(ranges) => {
-				if ranges.is_empty()
-					|| (ranges.len() == 1
-						&& ranges.last().unwrap().0.val > ranges.last().unwrap().1.val)
-				{
+				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}
-				write!(
-					f,
-					"{}",
-					ranges
-						.iter()
-						.map(|range| format!("{}..{}", range.0, range.1))
-						.format(" union ")
-				)
+				write!(f, "{}", ranges.iter().format(" union "))
 			}
 			Set::IntRangeList(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
@@ -434,8 +609,11 @@ impl Display for Set {
 					"{}",
 					ranges
 						.iter()
-						.map(|range| format!("{}..{}", range.start(), range.end()))
-						.format(" union ")
+						.format_with(" union ", |range, f| f(&format_args!(
+							"{}..{}",
+							range.start(),
+							range.end()
+						)))
 				)
 			}
 			Set::FloatRangeList(ranges) => {
@@ -447,8 +625,11 @@ impl Display for Set {
 					"{}",
 					ranges
 						.iter()
-						.map(|range| format!("{}..{}", range.start(), range.end()))
-						.format(" union ")
+						.format_with(" union ", |range, f| f(&format_args!(
+							"{}..{}",
+							range.start(),
+							range.end()
+						)))
 				)
 			}
 		}
