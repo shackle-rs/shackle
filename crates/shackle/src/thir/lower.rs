@@ -1617,7 +1617,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							.model
 							.add_declaration(Item::new(declaration, origin));
 						let asgs = self.collect_destructuring(decl, false, *p);
-						if !asgs.is_empty() {
+						if !asgs.is_empty() && hir::Pattern::is_refutable(*p, self.data) {
 							// Turn destructuring into where clause of case matching pattern
 							let pattern = self.collect_pattern(*p);
 							let case = alloc_expression(
