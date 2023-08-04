@@ -106,6 +106,20 @@ impl Pattern {
 		}
 		true
 	}
+
+	/// Get whether this pattern is refutable (i.e. may not always match)
+	pub fn is_refutable(pattern: ArenaIndex<Pattern>, data: &ItemData) -> bool {
+		let mut todo = vec![pattern];
+		while let Some(p) = todo.pop() {
+			match &data[p] {
+				Pattern::Identifier(_) | Pattern::Anonymous => (),
+				Pattern::Tuple { fields } => todo.extend(fields.iter().copied()),
+				Pattern::Record { fields } => todo.extend(fields.iter().map(|(_, p)| *p)),
+				_ => return true,
+			}
+		}
+		false
+	}
 }
 
 /// Identifier
