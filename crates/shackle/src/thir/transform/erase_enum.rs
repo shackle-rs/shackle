@@ -503,7 +503,7 @@ mod test {
     } in _DECL_2)]);
     set of int: Foo = mzn_defining_set(_DECL_1);
     int: A = mzn_construct_enum(_DECL_1, 1);
-    Foo: x = to_enum(Foo, 1);
+    Foo: x = mzn_to_enum(Foo, 1);
     int: y = A;
 "#]),
 		);

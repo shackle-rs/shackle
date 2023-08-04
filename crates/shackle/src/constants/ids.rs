@@ -122,4 +122,6 @@ id_registry!(
 	output,
 	no_output,
 	dzn,
+	mzn_construct_opt,
+	mzn_destruct_opt,
 );

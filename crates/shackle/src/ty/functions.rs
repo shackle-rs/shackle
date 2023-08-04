@@ -129,6 +129,7 @@ struct Candidate<T> {
 	data: T,
 	entry: FunctionEntry,
 	ty_params: TyParamInstantiations,
+	function_type: FunctionType,
 }
 
 /// An overloaded function entry
@@ -169,15 +170,23 @@ impl FunctionEntry {
 
 		let mut candidates = matches
 			.into_iter()
-			.map(|(data, overload, ty_params)| Candidate {
-				is_candidate: true,
-				has_error: overload.overload.contains_error(db),
-				data,
-				entry: overload,
-				ty_params: ty_params.unwrap(),
+			.map(|(data, overload, instantiation)| {
+				let (ty_params, function_type) = instantiation.unwrap();
+				Candidate {
+					is_candidate: true,
+					has_error: overload.overload.contains_error(db),
+					data,
+					entry: overload,
+					ty_params,
+					function_type,
+				}
 			})
 			.collect::<Vec<_>>();
 
+		log::debug!(
+			"Overload resolution found {} matching candidates",
+			candidates.len()
+		);
 		for i in 1..candidates.len() {
 			// For each pair, eliminate the less specific function (based on instantiated signature if there were candidate polymorphic functions)
 			// e.g. prefer 'bool' over 'int', prefer 'int' over 'var int'
@@ -189,7 +198,7 @@ impl FunctionEntry {
 			if !c1.is_candidate {
 				continue;
 			}
-			for c2 in right {
+			for (j, c2) in right.iter_mut().enumerate() {
 				if !c2.is_candidate {
 					continue;
 				}
@@ -200,10 +209,29 @@ impl FunctionEntry {
 					c2.is_candidate = false;
 					continue;
 				}
-				let f1 = c1.entry.overload.instantiate(db, &c1.ty_params);
-				let f2 = c2.entry.overload.instantiate(db, &c2.ty_params);
+				let f1 = &c1.function_type;
+				let f2 = &c2.function_type;
 				let m1 = f1.matches(db, &f2.params).is_ok();
 				let m2 = f2.matches(db, &f1.params).is_ok();
+
+				log::debug!(
+					"Candidate {}: {} instantiates to {}",
+					i,
+					c1.entry.overload.pretty_print(db),
+					f1.pretty_print(db)
+				);
+				log::debug!(
+					"Candidate {}: {} instantiates to {}",
+					i + j + 1,
+					c2.entry.overload.pretty_print(db),
+					f2.pretty_print(db)
+				);
+				log::debug!("Candidate {} accepts candidate 2's parameters? {:?}", i, m1);
+				log::debug!(
+					"Candidate {} accepts candidate 1's parameters? {:?}",
+					i + j + 1,
+					m2
+				);
 				if m1 && !m2 {
 					// We accept their args, but they don't accept ours, so they're more specific
 					c1.is_candidate = false;
@@ -233,6 +261,16 @@ impl FunctionEntry {
 						) => {
 							let m1 = p1.instantiate_ty_params(db, &p2.params).is_ok();
 							let m2 = p2.instantiate_ty_params(db, &p1.params).is_ok();
+							log::debug!(
+								"Polymorphic candidate {} accepts candidate 2's polymorphic parameters? {:?}",
+								i,
+								m1
+							);
+							log::debug!(
+								"Polymorphic candidate {} accepts candidate 1's polymorphic parameters? {:?}",
+								i + j + 1,
+								m2
+							);
 							if m1 && !m2 {
 								// We accept their args, but they don't accept ours, so they're more specific
 								c1.is_candidate = false;
@@ -264,6 +302,12 @@ impl FunctionEntry {
 						}
 					}
 				}
+				if !c1.is_candidate {
+					log::debug!("Eliminated candidate {}", i);
+				}
+				if !c2.is_candidate {
+					log::debug!("Eliminated candidate {}", i + j + 1);
+				}
 			}
 		}
 		candidates.retain(|c| c.is_candidate);
@@ -292,29 +336,23 @@ impl FunctionEntry {
 		// TODO: Make less horrible
 		for (i, (_, a)) in overloads.iter().enumerate() {
 			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
-				if let Ok(tpa) = a.overload.instantiate_ty_params(db, b.overload.params()) {
+				if let Ok((_, fta)) = a.overload.instantiate_ty_params(db, b.overload.params()) {
 					if b.overload
 						.instantiate_ty_params(db, a.overload.params())
 						.is_ok() && (a.has_body && b.has_body
-						|| a.overload.instantiate(db, &tpa).return_type != b.overload.return_type())
+						|| fta.return_type != b.overload.return_type())
 					{
 						// Same function with multiple definitions
 						same_fns[i + j + 1] = Some(i);
 					}
-					if !b
-						.overload
-						.return_type()
-						.is_subtype_of(db, a.overload.instantiate(db, &tpa).return_type)
-					{
+					if !b.overload.return_type().is_subtype_of(db, fta.return_type) {
 						// Functions have incompatible return types
 						incompat_fns[i + j + 1] = Some(i);
 					}
-				} else if let Ok(tpb) = b.overload.instantiate_ty_params(db, a.overload.params()) {
-					if !a
-						.overload
-						.return_type()
-						.is_subtype_of(db, b.overload.instantiate(db, &tpb).return_type)
-					{
+				} else if let Ok((_, ftb)) =
+					b.overload.instantiate_ty_params(db, a.overload.params())
+				{
+					if !a.overload.return_type().is_subtype_of(db, ftb.return_type) {
 						// Functions have incompatible return types
 						incompat_fns[i + j + 1] = Some(i);
 					}
@@ -424,11 +462,11 @@ impl OverloadedFunction {
 		&self,
 		db: &dyn Interner,
 		args: &[Ty],
-	) -> Result<TyParamInstantiations, InstantiationError> {
+	) -> Result<(TyParamInstantiations, FunctionType), InstantiationError> {
 		match self {
 			OverloadedFunction::Function(f) => {
 				f.matches(db, args)?;
-				Ok(TyParamInstantiations::default())
+				Ok((TyParamInstantiations::default(), f.clone()))
 			}
 			OverloadedFunction::PolymorphicFunction(p) => p.instantiate_ty_params(db, args),
 		}
@@ -606,7 +644,7 @@ impl PolymorphicFunctionType {
 		&self,
 		db: &dyn Interner,
 		args: &[Ty],
-	) -> Result<TyParamInstantiations, InstantiationError> {
+	) -> Result<(TyParamInstantiations, FunctionType), InstantiationError> {
 		if args.len() != self.params.len() {
 			return Err(InstantiationError::ArgumentCountMismatch {
 				expected: self.params.len(),
@@ -653,7 +691,9 @@ impl PolymorphicFunctionType {
 			}
 		}
 		resolved.shrink_to_fit();
-		Ok(resolved)
+		let ft = self.instantiate(db, &resolved);
+		ft.matches(db, args)?;
+		Ok((resolved, ft))
 	}
 
 	/// Collects the types to instantiate unbound type-inst variables with.
@@ -740,34 +780,18 @@ impl PolymorphicFunctionType {
 			// Type-inst vars don't accept functions/arrays currently
 			(TyData::Function(_, _), TyData::TyVar(_, _, _)) => false,
 			(TyData::Array { .. }, TyData::TyVar(_, _, _)) => false,
-			(_, TyData::TyVar(i, o, t)) => {
-				let mut ty = arg;
-				if !matches!(
-					// Check that inst is compatible
-					(ty.inst(db), i),
-					(_, None) | (_, Some(VarType::Var)) | (Some(VarType::Par), _)
-				) || !matches!(
-					// Check that optionality is compatible
-					(ty.opt(db), o),
-					(_, None) | (_, Some(OptType::Opt)) | (Some(OptType::NonOpt), _)
-				) || ty.contains_function(db)
-				// $T doesn't accept functions
+			(_, TyData::TyVar(_, _, t)) => {
+				if arg.contains_function(db) {
+					// $T doesn't accept functions
+					return false;
+				}
+				if !arg.known_varifiable(db) && t.varifiable
+					|| !arg.known_enumerable(db) && t.enumerable
+					|| !arg.known_indexable(db) && t.indexable
 				{
 					return false;
 				}
-				if let Some(VarType::Var) = i {
-					ty = ty.make_par(db);
-				}
-				if let Some(OptType::Opt) = o {
-					ty = ty.make_occurs(db);
-				}
-				if !ty.known_varifiable(db) && t.varifiable
-					|| !ty.known_enumerable(db) && t.enumerable
-					|| !ty.known_indexable(db) && t.indexable
-				{
-					return false;
-				}
-				add_instantiation(t.ty_var, ty)
+				add_instantiation(t.ty_var, arg)
 			}
 			_ => arg.is_subtype_of(db, param),
 		}

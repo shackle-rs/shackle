@@ -7,6 +7,7 @@ use crate::arena::Arena;
 use crate::hir::Identifier;
 use crate::ty::FunctionEntry;
 use crate::ty::FunctionResolutionError;
+use crate::ty::OverloadedFunction;
 use crate::ty::Ty;
 use crate::ty::TyParamInstantiations;
 use crate::utils::impl_index;
@@ -288,14 +289,34 @@ impl<T: Marker> Model<T> {
 		name: FunctionName,
 		args: &[Ty],
 	) -> Result<FunctionLookup<T>, FunctionLookupError<T>> {
-		let overloads = self.top_level_functions().filter_map(|(i, f)| {
-			if f.name() == name {
-				Some((i, f.function_entry(self)))
-			} else {
-				None
-			}
-		});
+		let (specialised, overloads) = self
+			.top_level_functions()
+			.filter_map(|(i, f)| {
+				if f.name() == name {
+					Some((i, f.function_entry(self)))
+				} else {
+					None
+				}
+			})
+			.partition::<Vec<_>, _>(|(i, _)| self[*i].is_specialisation());
+
 		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
+
+		if fn_entry.overload.is_polymorphic() {
+			let overload =
+				OverloadedFunction::Function(fn_entry.overload.instantiate(db.upcast(), &ty_vars));
+			let concrete = specialised
+				.into_iter()
+				.find(|(_, fe)| fe.overload == overload);
+			if let Some((f, fe)) = concrete {
+				return Ok(FunctionLookup {
+					function: f,
+					fn_entry: fe,
+					ty_vars: TyParamInstantiations::default(),
+				});
+			}
+		}
+
 		Ok(FunctionLookup {
 			function,
 			fn_entry,
