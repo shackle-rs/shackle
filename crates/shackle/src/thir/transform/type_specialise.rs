@@ -18,7 +18,7 @@ use crate::{
 		},
 		ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Declaration, DeclarationId,
 		Domain, DomainData, Expression, ExpressionBuilder, Function, FunctionId, Generator,
-		Identifier, IfThenElse, IntegerLiteral, Item, LookupCall, Marker, Model, OptType,
+		Identifier, IfThenElse, IntegerLiteral, Item, ItemId, LookupCall, Marker, Model, OptType,
 		RecordAccess, StringLiteral, TupleAccess,
 	},
 	ty::{Ty, TyData, TyParamInstantiations},
@@ -38,6 +38,7 @@ struct TypeSpecialiser<Dst> {
 	specialised: Vec<(FunctionId<Dst>, SpecialisedFunction<Dst>)>,
 	todo: Vec<SpecialisedFunction<Dst>>,
 	ids: Arc<IdentifierRegistry>,
+	position: FxHashMap<FunctionId, ItemId<Dst>>,
 }
 
 impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
@@ -69,40 +70,49 @@ impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 				let body = self.fold_expression(db, model, b);
 				self.todo.pop();
 				self.specialised_model[f].set_body(body);
-			} else if model[s.original].name() == self.ids.show {
+				continue;
+			}
+			if model[s.original].name() == self.ids.show {
 				// Create specialised show function for types which will be erased, except show on direct enum which will be generated later
 				let p = self.specialised_model[f].parameter(0);
 				let ty = self.specialised_model[p].ty();
-				if ty.contains_erased_type(db.upcast()) && !ty.is_enum(db.upcast()) {
-					let body = self.generate_show(db, model, p, ty);
-					self.specialised_model[f].set_body(body);
+				if ty.contains_erased_type(db.upcast()) {
+					if !ty.is_enum(db.upcast()) {
+						let body = self.generate_show(db, model, p, ty);
+						self.specialised_model[f].set_body(body);
+					}
+					continue;
 				}
-			} else {
-				// Call original builtin
-				let origin = self.specialised_model[f].origin();
-				let call = Call {
-					function: Callable::Function(
-						self.replacement_map
-							.get_function(s.original)
-							.unwrap_or_else(|| {
-								panic!("Did not add builtin {:?} to specialised model", s.original);
-							}),
-					),
-					arguments: self.specialised_model[f]
-						.parameters()
-						.iter()
-						.map(|p| self.expr(db, self.specialised_model[*p].origin(), *p))
-						.collect(),
-				};
-				let body = self.expr(db, origin, call);
-				self.specialised_model[f].set_body(body);
 			}
+			// Call original builtin
+			let origin = self.specialised_model[f].origin();
+			let call = Call {
+				function: Callable::Function(
+					self.replacement_map
+						.get_function(s.original)
+						.unwrap_or_else(|| {
+							panic!("Did not add builtin {:?} to specialised model", s.original);
+						}),
+				),
+				arguments: self.specialised_model[f]
+					.parameters()
+					.iter()
+					.map(|p| self.expr(db, self.specialised_model[*p].origin(), *p))
+					.collect(),
+			};
+			let body = self.expr(db, origin, call);
+			self.specialised_model[f].set_body(body);
 		}
 
 		assert!(self.todo.is_empty());
 	}
 
 	fn add_function(&mut self, db: &dyn Thir, model: &Model, f: FunctionId) {
+		if model[f].is_polymorphic() {
+			if let Some(last) = self.specialised_model.all_items().last() {
+				self.position.insert(f, last);
+			}
+		}
 		if !model[f].is_polymorphic() || model[f].body().is_none() {
 			// Remove non-builtin polymorphic functions
 			add_function(self, db, model, f);
@@ -146,7 +156,7 @@ impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 						db,
 						model,
 						*f,
-						arguments.iter().map(|e| e.ty()).collect(),
+						&arguments.iter().map(|e| e.ty()).collect::<Vec<_>>(),
 					)),
 					arguments,
 				};
@@ -186,64 +196,78 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 		db: &dyn Thir,
 		model: &Model,
 		f: FunctionId,
-		args: Vec<Ty>,
+		args: &[Ty],
 	) -> FunctionId<Dst> {
 		assert!(model[f].is_polymorphic());
 		assert!(model[f].top_level());
-		let key = (f, args);
-		// Can't use map entry because we need mutable self
-		#[allow(clippy::map_entry)]
-		if self.concrete.contains_key(&key) {
-			// Already created this function
-			self.concrete[&key]
-		} else {
-			let fn_match = model
-				.lookup_function(db, model[f].name(), &key.1)
-				.unwrap_or_else(|e| panic!("{}", e.debug_print(db.upcast())));
-			if fn_match.fn_entry.overload.is_polymorphic() {
-				// Create specialised version of polymorphic function
-				let ty_vars = model[f]
-					.function_entry(model)
-					.overload
-					.instantiate_ty_params(db.upcast(), &key.1)
-					.unwrap();
-				self.todo.push(SpecialisedFunction {
-					original: f,
-					ty_vars,
-					parameters: FxHashMap::default(),
-				});
-				let mut function = Function::new(
-					model[f].name(),
-					self.fold_domain(db, model, model[f].domain()),
-				);
-				function.annotations_mut().extend(
-					model[f]
-						.annotations()
-						.iter()
-						.map(|ann| self.fold_expression(db, model, ann)),
-				);
-				function.set_parameters(model[f].parameters().iter().map(|p| {
-					self.add_declaration(db, model, *p);
-					self.fold_declaration_id(db, model, *p)
-				}));
-				let mut specialised = self.todo.pop().unwrap();
-				specialised.parameters = model[f]
-					.parameters()
-					.iter()
-					.copied()
-					.zip(function.parameters().iter().copied())
-					.collect();
-				let idx = self
-					.specialised_model
-					.add_function(Item::new(function, model[f].origin()));
-				self.concrete.insert(key, idx);
-				self.specialised.push((idx, specialised));
-				idx
-			} else {
-				// Already have existing concrete version, no need to create
-				self.fold_function_id(db, model, fn_match.function)
-			}
+
+		let ty_vars = model[f]
+			.function_entry(model)
+			.overload
+			.instantiate_ty_params(db.upcast(), args)
+			.unwrap();
+
+		let key = (
+			f,
+			model[f]
+				.type_inst_vars()
+				.iter()
+				.map(|tv| ty_vars[&tv.ty_var])
+				.collect::<Vec<_>>(),
+		);
+
+		let concrete = self.concrete.get(&key);
+		if let Some(concrete) = concrete {
+			// Already instantiated this version
+			return *concrete;
 		}
+
+		let fn_match = model
+			.lookup_function(db, model[f].name(), args)
+			.unwrap_or_else(|e| panic!("{}", e.debug_print(db.upcast())));
+		if !fn_match.fn_entry.overload.is_polymorphic() {
+			// Already have existing concrete version, no need to create
+			return self.fold_function_id(db, model, fn_match.function);
+		}
+
+		// Create specialised version of polymorphic function
+		self.todo.push(SpecialisedFunction {
+			original: f,
+			ty_vars,
+			parameters: FxHashMap::default(),
+		});
+		let mut function = Function::new(
+			model[f].name(),
+			self.fold_domain(db, model, model[f].domain()),
+		);
+		function.annotations_mut().extend(
+			model[f]
+				.annotations()
+				.iter()
+				.map(|ann| self.fold_expression(db, model, ann)),
+		);
+		function.set_parameters(model[f].parameters().iter().map(|p| {
+			self.add_declaration(db, model, *p);
+			self.fold_declaration_id(db, model, *p)
+		}));
+
+		let mut specialised = self.todo.pop().unwrap();
+		specialised.parameters = model[f]
+			.parameters()
+			.iter()
+			.copied()
+			.zip(function.parameters().iter().copied())
+			.collect();
+		let idx = if let Some(p) = self.position.get(&f) {
+			self.specialised_model
+				.add_function_after(Item::new(function, model[f].origin()), *p)
+		} else {
+			self.specialised_model
+				.prepend_function(Item::new(function, model[f].origin()))
+		};
+		self.concrete.insert(key, idx);
+		self.specialised.push((idx, specialised));
+		idx
 	}
 
 	fn expr(
@@ -277,7 +301,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 					db,
 					model,
 					lookup.function,
-					args.iter().map(|arg| arg.ty()).collect(),
+					&args.iter().map(|arg| arg.ty()).collect::<Vec<_>>(),
 				)
 			} else {
 				ts.fold_function_id(db, model, lookup.function)
@@ -475,6 +499,7 @@ pub fn type_specialise(db: &dyn Thir, model: &Model) -> Model {
 		specialised: Vec::new(),
 		todo: Vec::new(),
 		ids,
+		position: FxHashMap::default(),
 	};
 	ts.add_model(db, model);
 	ts.specialised_model
@@ -484,14 +509,14 @@ pub fn type_specialise(db: &dyn Thir, model: &Model) -> Model {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check_no_stdlib;
+	use crate::thir::transform::{name_mangle::mangle_names, test::check_no_stdlib, transformer};
 
 	use super::type_specialise;
 
 	#[test]
 	fn test_type_specialisation_basic_1() {
 		check_no_stdlib(
-			type_specialise,
+			transformer(vec![type_specialise, mangle_names]),
 			r#"
 					function any $T: foo(any $T: x) = x;
 					predicate bar(var bool: p) = foo(p);
@@ -499,11 +524,11 @@ mod test {
 					any: y = foo(10);
 					"#,
 			expect!([r#"
-    function var bool: bar(var bool: p) = foo(p);
+    function var bool: 'foo<var bool>'(var bool: x) = x;
+    function int: 'foo<int>'(int: x) = x;
+    function var bool: bar(var bool: p) = 'foo<var bool>'(p);
     constraint bar(true);
-    function int: foo(int: x) = x;
-    int: y = foo(10);
-    function var bool: foo(var bool: x) = x;
+    int: y = 'foo<int>'(10);
     solve satisfy;
 "#]),
 		)
@@ -512,17 +537,17 @@ mod test {
 	#[test]
 	fn test_type_specialisation_basic_2() {
 		check_no_stdlib(
-			type_specialise,
+			transformer(vec![type_specialise, mangle_names]),
 			r#"
 			test foo(any $T: x) = true;
 			any: a = foo((1, 2));
 			any: b = foo((p: 1, q: 2));
 			"#,
 			expect!([r#"
-    function bool: foo(tuple(int, int): x) = true;
-    bool: a = foo((1, 2));
-    function bool: foo(record(int: p, int: q): x) = true;
-    bool: b = foo((p: 1, q: 2));
+    function bool: 'foo<record(int: p, int: q)>'(record(int: p, int: q): x) = true;
+    function bool: 'foo<tuple(int, int)>'(tuple(int, int): x) = true;
+    bool: a = 'foo<tuple(int, int)>'((1, 2));
+    bool: b = 'foo<record(int: p, int: q)>'((p: 1, q: 2));
     solve satisfy;
 "#]),
 		)
@@ -531,7 +556,7 @@ mod test {
 	#[test]
 	fn test_type_specialisation_overloading() {
 		check_no_stdlib(
-			type_specialise,
+			transformer(vec![type_specialise, mangle_names]),
 			r#"
 			test foo(any $T: x) = bar(x);
 			test bar(any $T: x) = true;
@@ -539,8 +564,8 @@ mod test {
 			any: a = foo(1);
 			"#,
 			expect!([r#"
-    function bool: bar(int: x) = false;
     function bool: foo(int: x) = bar(x);
+    function bool: bar(int: x) = false;
     bool: a = foo(1);
     solve satisfy;
 "#]),
@@ -550,7 +575,7 @@ mod test {
 	#[test]
 	fn test_type_specialisation_show() {
 		check_no_stdlib(
-			type_specialise,
+			transformer(vec![type_specialise, mangle_names]),
 			r#"
 			test occurs(opt $T: x);
 			function $T: deopt(opt $T: x);
@@ -563,25 +588,25 @@ mod test {
 			output [show(x)];
 			"#,
 			expect!([r#"
+    function bool: 'occurs<opt int>'(opt int: x) = occurs(x);
     function bool: occurs(opt $T: x);
+    function int: 'deopt<opt int>'(opt int: x) = deopt(x);
     function $T: deopt(opt $T: x);
+    function string: 'show<int>'(int: x) = show(x);
+    function string: 'show<bool>'(bool: x) = show(x);
+    function string: 'show<opt int>'(opt int: x) = if 'occurs<opt int>'(x) then 'show<int>'('deopt<opt int>'(x)) else "<>" endif;
+    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = 'concat<array [int] of string>'(["(", 'show<opt int>'(x.1), ", ", 'show<bool>'(x.2), ")"]);
+    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = 'concat<array [int] of string>'(["(", "a", ": ", 'show<int>'(x.a), ", ", "b", ": ", 'show<int>'(x.b), ")"]);
     function string: show(any $T: x);
+    function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = 'concat<array [int] of string>'(["[", 'join<string, array [int] of string>'(", ", ['show<tuple(opt int, bool)>'(_DECL_11) | _DECL_11 in x]), "]"]);
     function string: show(array [$X] of any $T: x);
+    function string: 'concat<array [int] of string>'(array [int] of string: x) = concat(x);
     function string: concat(array [$T] of string: x);
+    function string: 'join<string, array [int] of string>'(string: s, array [int] of string: x) = join(s, x);
     function string: join(string: s, array [$T] of string: x);
-    function string: show(record(int: a, int: b): x) = concat(["(", "a", ": ", show(x.a), ", ", "b", ": ", show(x.b), ")"]);
-    output [show((a: 1, b: 2))];
+    output ['show<record(int: a, int: b)>'((a: 1, b: 2))];
     array [int] of tuple(opt int, bool): x;
-    function string: show(array [int] of tuple(opt int, bool): x) = concat(["[", join(", ", [show(_DECL_11) | _DECL_11 in x]), "]"]);
-    output [show(x)];
-    function string: show(tuple(opt int, bool): x) = concat(["(", show(x.1), ", ", show(x.2), ")"]);
-    function string: join(string: s, array [int] of string: x) = join(s, x);
-    function string: concat(array [int] of string: x) = concat(x);
-    function string: show(opt int: x) = if occurs(x) then show(deopt(x)) else "<>" endif;
-    function string: show(bool: x);
-    function bool: occurs(opt int: x) = occurs(x);
-    function int: deopt(opt int: x) = deopt(x);
-    function string: show(int: x);
+    output ['show<array [int] of tuple(opt int, bool)>'(x)];
     solve satisfy;
 "#]),
 		)
