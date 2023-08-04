@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Include resolution - The Shackle Almanac</title>
+        <title>Rewriting of domains to constraints - The Shackle Almanac</title>
 
 
         <!-- Custom HTML head -->
@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../../process.html"><strong aria-hidden="true">1.</strong> The compilation process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="../../compilation/ast/ast.html"><strong aria-hidden="true">1.2.</strong> Abstract syntax tree</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/ast/includes.html" class="active"><strong aria-hidden="true">1.2.1.</strong> Include resolution</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/hir/hir.html"><strong aria-hidden="true">1.3.</strong> High-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/hir/scope.html"><strong aria-hidden="true">1.3.1.</strong> Scope collection</a></li><li class="chapter-item expanded "><a href="../../compilation/hir/typecheck.html"><strong aria-hidden="true">1.3.2.</strong> Type checking</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/thir/thir.html"><strong aria-hidden="true">1.4.</strong> Typed high-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/thir/transform.html"><strong aria-hidden="true">1.4.1.</strong> Model transformations</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/type-specialise.html"><strong aria-hidden="true">1.4.2.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/overloading.html"><strong aria-hidden="true">1.4.3.</strong> Removal of overloading</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/records.html"><strong aria-hidden="true">1.4.4.</strong> Erasure of records</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/enums.html"><strong aria-hidden="true">1.4.5.</strong> Erasure of enums</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/comprehension.html"><strong aria-hidden="true">1.4.6.</strong> Desugaring of comprehensions</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/domains.html"><strong aria-hidden="true">1.4.7.</strong> Rewriting of domains to constraints</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/option-types.html"><strong aria-hidden="true">1.4.8.</strong> Erasure of option types</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/captures.html"><strong aria-hidden="true">1.4.9.</strong> Desugaring of capturing</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/mir/mir.html"><strong aria-hidden="true">1.5.</strong> Mid-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/mir/totalise.html"><strong aria-hidden="true">1.5.1.</strong> Totalisation</a></li><li class="chapter-item expanded "><a href="../../compilation/mir/context.html"><strong aria-hidden="true">1.5.2.</strong> Context analysis</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/bytecode-gen.html"><strong aria-hidden="true">1.6.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="../../compilation/interpreter.html"><strong aria-hidden="true">1.7.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="../../microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="../../microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="../../interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="../../mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="../../error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../../process.html"><strong aria-hidden="true">1.</strong> The compilation process</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item expanded "><a href="../../compilation/ast/ast.html"><strong aria-hidden="true">1.2.</strong> Abstract syntax tree</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/ast/includes.html"><strong aria-hidden="true">1.2.1.</strong> Include resolution</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/hir/hir.html"><strong aria-hidden="true">1.3.</strong> High-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/hir/scope.html"><strong aria-hidden="true">1.3.1.</strong> Scope collection</a></li><li class="chapter-item expanded "><a href="../../compilation/hir/typecheck.html"><strong aria-hidden="true">1.3.2.</strong> Type checking</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/thir/thir.html"><strong aria-hidden="true">1.4.</strong> Typed high-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/thir/transform.html"><strong aria-hidden="true">1.4.1.</strong> Model transformations</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/type-specialise.html"><strong aria-hidden="true">1.4.2.</strong> Type specialisation</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/overloading.html"><strong aria-hidden="true">1.4.3.</strong> Removal of overloading</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/records.html"><strong aria-hidden="true">1.4.4.</strong> Erasure of records</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/enums.html"><strong aria-hidden="true">1.4.5.</strong> Erasure of enums</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/comprehension.html"><strong aria-hidden="true">1.4.6.</strong> Desugaring of comprehensions</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/domains.html" class="active"><strong aria-hidden="true">1.4.7.</strong> Rewriting of domains to constraints</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/option-types.html"><strong aria-hidden="true">1.4.8.</strong> Erasure of option types</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/captures.html"><strong aria-hidden="true">1.4.9.</strong> Desugaring of capturing</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/mir/mir.html"><strong aria-hidden="true">1.5.</strong> Mid-level intermediate representation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../compilation/mir/totalise.html"><strong aria-hidden="true">1.5.1.</strong> Totalisation</a></li><li class="chapter-item expanded "><a href="../../compilation/mir/context.html"><strong aria-hidden="true">1.5.2.</strong> Context analysis</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/bytecode-gen.html"><strong aria-hidden="true">1.6.</strong> Bytecode generation</a></li><li class="chapter-item expanded "><a href="../../compilation/interpreter.html"><strong aria-hidden="true">1.7.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item expanded "><a href="../../microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item expanded "><a href="../../microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item expanded "><a href="../../interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item expanded "><a href="../../mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item expanded "><a href="../../error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -171,72 +171,17 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="include-resolution"><a class="header" href="#include-resolution">Include resolution</a></h1>
-<p>Include resolution involves recursively going through the <code>include</code> items in a MiniZinc model, and finding the linked
-model files. There are also two 'implied' includes which make the standard library available. These are <code>stdlib.mzn</code>
-and <code>solver_redefinitions.mzn</code>. While this process is described here as part of the AST module, as the include items
-are extracted from the AST, it actually produces <code>ModelRef</code> IDs, which are part of the HIR module.</p>
-<p>Include resolution gives a list of <code>ModelRef</code>s which comprises all of the model files to be lowered into
-<a href="../hir/hir.html">HIR</a>. Logically these model files get concatenated together, however we don't actually do this until
-the <a href="../thir/thir.html">THIR</a> stage. The list of models produced is in the order that the models appear.</p>
-<h2 id="resolution-rules"><a class="header" href="#resolution-rules">Resolution rules</a></h2>
-<p>The resolution method used depends on the kind of path used in the include item. Note that relative includes are never
-resolved relative to the process's current directory, only to the current model file (so string models without files
-cannot use <code>./path/to/model.mzn</code> includes).</p>
-<table style="width:100%">
-<tr><th>Include</th><th>Resolution method</th></tr>
-<tr>
-<td>
-<pre><code class="language-mzn">include &quot;foo.mzn&quot;;
-</code></pre>
-</td>
-<td>
-<ul>
-<li>Resolved relative to include search directories</li>
-<li>If not found, resolved relative to current file</li>
-</ul>
-</td>
-</tr>
-<tr>
-<td>
-<pre><code class="language-mzn">include &quot;./foo.mzn&quot;;
-</code></pre>
-</td>
-<td>
-<ul>
-<li>Resolved relative to current file</li>
-</ul>
-</td>
-<tr>
-<td>
-<pre><code class="language-mzn">include &quot;/path/to/foo.mzn&quot;;
-</code></pre>
-</td>
-<td>
-<ul>
-<li>Absolute path used</li>
-</ul>
-</td>
-</tr>
-</table>
-<h2 id="cyclic-includes"><a class="header" href="#cyclic-includes">Cyclic includes</a></h2>
-<p>As all models are locally concatenated together, it actually does not matter if there are includes which are cyclic. We
-only ever add any particular model file to the list of models once, so cycles are simply ignored.</p>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error handling</a></h2>
-<p>Errors during include resolution prevent lowering to HIR from occurring (as without having all of the included files
-available, it is highly likely that uninformative name resolution and type errors will occur). Note that when we fail
-to resolve an include, we actually don't abort include resolution. This way, we can produce errors for as many missing
-files as possible.</p>
+                        <h1 id="rewriting-of-domains-to-constraints"><a class="header" href="#rewriting-of-domains-to-constraints">Rewriting of domains to constraints</a></h1>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../compilation/ast/ast.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../compilation/thir/comprehension.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next" href="../../compilation/hir/hir.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next" href="../../compilation/thir/option-types.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -246,11 +191,11 @@ files as possible.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../compilation/ast/ast.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../compilation/thir/comprehension.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next" href="../../compilation/hir/hir.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next" href="../../compilation/thir/option-types.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
