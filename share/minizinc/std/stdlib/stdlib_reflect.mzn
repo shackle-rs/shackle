@@ -6,13 +6,13 @@
 */
 
 /** @group stdlib.reflect Return lower bound of \a x */
-function $$E: lb(var opt $$E: x);
+function $$E: lb(var opt $$E: x) = lb(mzn_destruct_opt(x).2);
 /** @group stdlib.reflect Return upper bound of \a x */
-function $$E: ub(var opt $$E: x);
+function $$E: ub(var opt $$E: x) = ub(mzn_destruct_opt(x).2);
 /** @group stdlib.reflect Return lower bound of \a x */
-function float: lb(var opt float: x);
+function float: lb(var opt float: x) = lb(mzn_destruct_opt(x).2);
 /** @group stdlib.reflect Return upper bound of \a x */
-function float: ub(var opt float: x);
+function float: ub(var opt float: x) = ub(mzn_destruct_opt(x).2);
 /** @group stdlib.reflect Return lower bound of \a x */
 function set of $$E: lb(var set of $$E: x);
 /** @group stdlib.reflect Return upper bound of \a x */
@@ -36,13 +36,21 @@ function array[$U] of set of $$E: lb(array[$U] of var set of $$E: x) =
 function array[$U] of set of $$E: ub(array[$U] of var set of $$E: x) =
   arrayXd(x,[ub(xx) | xx in array1d(x)]);
 /** @group stdlib.reflect Return minimum of all lower bounds of the elements in array \a x */
-function $$E: lb_array(array[$U] of var opt $$E: x);
-/** @group stdlib.reflect Return maximum of all upper bounds of the elements in array \a x */
-function $$E: ub_array(array[$U] of var opt $$E: x);
+function $$E: lb_array(array[$U] of var opt $$E: x) = lb_array([mzn_destruct_opt(x_i).2 | x_i in x]);
 /** @group stdlib.reflect Return minimum of all lower bounds of the elements in array \a x */
-function float: lb_array(array[$U] of var opt float: x);
+function $$E: lb_array(array[$U] of var $$E: x);
 /** @group stdlib.reflect Return maximum of all upper bounds of the elements in array \a x */
-function float: ub_array(array[$U] of var opt float: x);
+function $$E: ub_array(array[$U] of var opt $$E: x) = ub_array([mzn_destruct_opt(x_i).2 | x_i in x]);
+/** @group stdlib.reflect Return maximum of all upper bounds of the elements in array \a x */
+function $$E: ub_array(array[$U] of var $$E: x);
+/** @group stdlib.reflect Return minimum of all lower bounds of the elements in array \a x */
+function float: lb_array(array[$U] of var opt float: x) = lb_array([mzn_destruct_opt(x_i).2 | x_i in x]);
+/** @group stdlib.reflect Return minimum of all lower bounds of the elements in array \a x */
+function float: lb_array(array[$U] of var float: x);
+/** @group stdlib.reflect Return maximum of all upper bounds of the elements in array \a x */
+function float: ub_array(array[$U] of var opt float: x) = ub_array([mzn_destruct_opt(x_i).2 | x_i in x]);
+/** @group stdlib.reflect Return maximum of all upper bounds of the elements in array \a x */
+function float: ub_array(array[$U] of var float: x);
 /** @group stdlib.reflect Return intersection of all lower bounds of the elements in array \a x */
 function set of $$E: lb_array(array[$U] of var set of $$E: x);
 /** @group stdlib.reflect Return union of all upper bounds of the elements in array \a x */
@@ -50,17 +58,21 @@ function set of $$E: ub_array(array[$U] of var set of $$E: x);
 /** @group stdlib.reflect Return domain of \a x */
 function set of $$E: dom(var $$E: x);
 /** @group stdlib.reflect Return domain of \a x */
-function set of $$E: dom(var opt $$E: x);
+function set of $$E: dom(var opt $$E: x) = dom(mzn_destruct_opt(x).2);
 function set of bool: dom(var bool: b) =
   if is_fixed(b) then {fix(b)} else {true, false} endif;
 
 /** @group stdlib.reflect Return union of all domains of the elements in array \a x */
-function set of $$E: dom_array(array[$T] of var opt $$E: x);
+function set of $$E: dom_array(array[$T] of var opt $$E: x) = dom_array([mzn_destruct_opt(x_i).2 | x_i in x]);
+/** @group stdlib.reflect Return union of all domains of the elements in array \a x */
+function set of $$E: dom_array(array[$T] of var $$E: x);
 /** @group stdlib.reflect Return union of all domains of the elements in array \a x, ignoring absent elements */
 function set of $$E: dom_array_occurring(array[$T] of var opt $$E: x) =
   array_union([if is_fixed(xi) /\ absent(fix(xi)) then {} else dom(xi) endif | xi in array1d(x)]);
 /** @group stdlib.reflect Return approximation of union of all domains of the elements in array \a x */
-function set of $$E: dom_bounds_array(array[$T] of var opt $$E: x);
+function set of $$E: dom_bounds_array(array[$T] of var opt $$E: x) = dom_bounds_array([mzn_destruct_opt(x_i).2 | x_i in x]);
+/** @group stdlib.reflect Return approximation of union of all domains of the elements in array \a x */
+function set of $$E: dom_bounds_array(array[$T] of var $$E: x);
 /** @group stdlib.reflect Return cardinality of the domain of \a x */
 function int: dom_size(var $$E: x) = card(dom(x));
 

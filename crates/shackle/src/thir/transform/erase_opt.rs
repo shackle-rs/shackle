@@ -15,9 +15,12 @@ use crate::{
 	hir::{BooleanLiteral, IntegerLiteral, OptType, VarType},
 	thir::{
 		db::Thir,
-		traverse::{fold_domain, Folder, ReplacementMap},
-		ArrayComprehension, Call, Declaration, Domain, DummyValue, Expression, ExpressionData,
-		Generator, Item, Let, LetItem, LookupCall, Marker, Model, TupleAccess, TupleLiteral,
+		traverse::{
+			add_function, fold_domain, fold_expression, fold_function_body, Folder, ReplacementMap,
+		},
+		ArrayComprehension, Call, Callable, Declaration, Domain, DummyValue, Expression,
+		ExpressionData, FunctionId, Generator, Item, Let, LetItem, LookupCall, Marker, Model,
+		TupleAccess, TupleLiteral,
 	},
 	ty::{Ty, TyData},
 };
@@ -39,62 +42,31 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 		&mut self.replacement_map
 	}
 
-	fn add_model(&mut self, db: &dyn Thir, model: &Model<Src>) {
-		// Add items to the destination model
-		for item in model.top_level_items() {
-			self.add_item(db, model, item);
+	fn add_function(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
+		if model[f].name() == self.ids.mzn_construct_opt
+			|| model[f].name() == self.ids.mzn_destruct_opt
+		{
+			// Remove mzn_construct_opt/mzn_destruct_opt
+			return;
 		}
-		// Now that all items have been added, we can process function bodies
-		for (f, i) in model.all_functions() {
-			if i.body().is_some() {
-				self.fold_function_body(db, model, f);
-			} else if i.name() == self.ids.occurs {
-				// Add body to occurs which accesses boolean from tuple
-				let idx = self.replacement_map.get_function(f).unwrap();
-				let origin = self.model[idx].origin();
-				let body = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(Expression::new(
-							db,
-							&self.model,
-							origin,
-							self.model[idx].parameter(0),
-						)),
-						field: IntegerLiteral(1),
-					},
-				);
-				self.model[idx].set_body(body);
-			} else if i.name() == self.ids.deopt {
-				// Add body to deopt which accesses value from tuple
-				let idx = self.replacement_map.get_function(f).unwrap();
-				let origin = self.model[idx].origin();
-				let body = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(Expression::new(
-							db,
-							&self.model,
-							origin,
-							self.model[idx].parameter(0),
-						)),
-						field: IntegerLiteral(2),
-					},
-				);
-				self.model[idx].set_body(body);
-			}
+		add_function(self, db, model, f);
+	}
+
+	fn fold_function_body(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
+		if model[f].name() == self.ids.mzn_construct_opt
+			|| model[f].name() == self.ids.mzn_destruct_opt
+		{
+			// Remove mzn_construct_opt/mzn_destruct_opt
+			return;
 		}
+		fold_function_body(self, db, model, f)
 	}
 
 	fn fold_declaration(
 		&mut self,
-		db: &'_ dyn Thir,
-		model: &'_ Model<Src>,
-		d: &'_ Declaration<Src>,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		d: &Declaration<Src>,
 	) -> Declaration<Dst> {
 		let mut declaration =
 			Declaration::new(d.top_level(), self.fold_domain(db, model, d.domain()));
@@ -157,6 +129,25 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 				.collect(),
 		};
 		call
+	}
+
+	fn fold_expression(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		expression: &Expression<Src>,
+	) -> Expression<Dst> {
+		if let ExpressionData::Call(c) = &**expression {
+			// Remove calls to mzn_construct_opt/mzn_destruct_opt
+			if let Callable::Function(f) = &c.function {
+				if model[*f].name() == self.ids.mzn_construct_opt
+					|| model[*f].name() == self.ids.mzn_destruct_opt
+				{
+					return self.fold_expression(db, model, &c.arguments[0]);
+				}
+			}
+		}
+		fold_expression(self, db, model, expression)
 	}
 }
 

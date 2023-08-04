@@ -835,7 +835,7 @@ impl<T: Marker> Call<T> {
 			Callable::Function(f) => {
 				let arg_tys = self.arguments.iter().map(|e| e.ty()).collect::<Vec<_>>();
 				let fe = model[*f].function_entry(model);
-				let ty_params = fe
+				let (_, ft) = fe
 					.overload
 					.instantiate_ty_params(db.upcast(), &arg_tys)
 					.unwrap_or_else(|e| {
@@ -846,7 +846,7 @@ impl<T: Marker> Call<T> {
 							e.debug_print(db.upcast())
 						);
 					});
-				fe.overload.instantiate(db.upcast(), &ty_params)
+				ft
 			}
 		}
 	}

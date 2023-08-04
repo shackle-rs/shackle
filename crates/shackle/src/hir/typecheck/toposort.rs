@@ -18,6 +18,7 @@ use crate::{
 		Expression, Goal, Pattern, Type,
 	},
 	ty::FunctionEntry,
+	utils::DebugPrint,
 	Error,
 };
 
@@ -173,7 +174,7 @@ impl<'a> TopoSorter<'a> {
 							overloads,
 							f.overload.params(),
 						)
-						.unwrap();
+						.unwrap_or_else(|e| panic!("{}", e.debug_print(self.db.upcast())));
 						if !is_self {
 							// Ignore this function since it has been subsumed by another
 							return;

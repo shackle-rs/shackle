@@ -42,13 +42,26 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	}
 
 	/// Pretty print an item from a model
+	pub fn pretty_print_signature(&self, item: ItemId<T>) -> String {
+		match item {
+			ItemId::Annotation(i) => self.pretty_print_annotation(i),
+			ItemId::Constraint(i) => self.pretty_print_constraint(i),
+			ItemId::Declaration(i) => self.pretty_print_declaration(i, false, true),
+			ItemId::Enumeration(i) => self.pretty_print_enumeration(i, true),
+			ItemId::Function(i) => self.pretty_print_function(i, true),
+			ItemId::Output(i) => self.pretty_print_output(i),
+			ItemId::Solve => self.pretty_print_solve(),
+		}
+	}
+
+	/// Pretty print an item from a model
 	pub fn pretty_print_item(&self, item: ItemId<T>) -> String {
 		match item {
 			ItemId::Annotation(i) => self.pretty_print_annotation(i),
 			ItemId::Constraint(i) => self.pretty_print_constraint(i),
-			ItemId::Declaration(i) => self.pretty_print_declaration(i, false),
-			ItemId::Enumeration(i) => self.pretty_print_enumeration(i),
-			ItemId::Function(i) => self.pretty_print_function(i),
+			ItemId::Declaration(i) => self.pretty_print_declaration(i, false, false),
+			ItemId::Enumeration(i) => self.pretty_print_enumeration(i, false),
+			ItemId::Function(i) => self.pretty_print_function(i, false),
 			ItemId::Output(i) => self.pretty_print_output(i),
 			ItemId::Solve => self.pretty_print_solve(),
 		}
@@ -67,7 +80,7 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 				"({})",
 				params
 					.iter()
-					.map(|p| self.pretty_print_declaration(*p, false))
+					.map(|p| self.pretty_print_declaration(*p, false, true))
 					.collect::<Vec<_>>()
 					.join(", ")
 			)
@@ -91,7 +104,12 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 		buf
 	}
 
-	fn pretty_print_declaration(&self, idx: DeclarationId<T>, is_let_item: bool) -> String {
+	fn pretty_print_declaration(
+		&self,
+		idx: DeclarationId<T>,
+		is_let_item: bool,
+		signature_only: bool,
+	) -> String {
 		let declaration = &self.model[idx];
 		let ty = declaration.ty();
 		let mut buf = if is_let_item
@@ -119,52 +137,56 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 		for ann in declaration.annotations().iter() {
 			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
 		}
-		if let Some(def) = declaration.definition() {
-			write!(&mut buf, " = {}", self.pretty_print_expression(def)).unwrap();
+		if !signature_only {
+			if let Some(def) = declaration.definition() {
+				write!(&mut buf, " = {}", self.pretty_print_expression(def)).unwrap();
+			}
 		}
 		buf
 	}
 
-	fn pretty_print_enumeration(&self, idx: EnumerationId<T>) -> String {
+	fn pretty_print_enumeration(&self, idx: EnumerationId<T>, signature_only: bool) -> String {
 		let enumeration = &self.model[idx];
 		let enum_name = enumeration.enum_type().pretty_print(self.db.upcast());
 		let mut buf = format!("enum {}", enum_name);
 		for ann in enumeration.annotations().iter() {
 			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
 		}
-		if let Some(cases) = enumeration.definition() {
-			write!(
-				&mut buf,
-				" = {}",
-				cases
-					.iter()
-					.enumerate()
-					.map(|(i, c)| {
-						let name = c
-							.name
-							.map(|n| n.pretty_print(self.db.upcast()))
-							.unwrap_or_else(|| format!("_EM_{}_{}", enum_name, i));
+		if !signature_only {
+			if let Some(cases) = enumeration.definition() {
+				write!(
+					&mut buf,
+					" = {}",
+					cases
+						.iter()
+						.enumerate()
+						.map(|(i, c)| {
+							let name = c
+								.name
+								.map(|n| n.pretty_print(self.db.upcast()))
+								.unwrap_or_else(|| format!("_EM_{}_{}", enum_name, i));
 
-						match &c.parameters {
-							Some(ps) => {
-								let params = ps
-									.iter()
-									.map(|d| self.pretty_print_domain(self.model[*d].domain()))
-									.collect::<Vec<_>>()
-									.join(", ");
-								format!("{}({})", name, params)
+							match &c.parameters {
+								Some(ps) => {
+									let params = ps
+										.iter()
+										.map(|d| self.pretty_print_domain(self.model[*d].domain()))
+										.collect::<Vec<_>>()
+										.join(", ");
+									format!("{}({})", name, params)
+								}
+								None => format!("{{ {} }}", name),
 							}
-							None => format!("{{ {} }}", name),
-						}
-					})
-					.collect::<Vec<_>>()
-					.join(" ++ ")
-			)
-			.unwrap();
+						})
+						.collect::<Vec<_>>()
+						.join(" ++ ")
+				)
+				.unwrap();
+			}
 		}
 		buf
 	}
-	fn pretty_print_function(&self, idx: FunctionId<T>) -> String {
+	fn pretty_print_function(&self, idx: FunctionId<T>, signature_only: bool) -> String {
 		let function = &self.model[idx];
 		let mut buf = String::new();
 		write!(
@@ -175,7 +197,7 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 			function
 				.parameters()
 				.iter()
-				.map(|p| self.pretty_print_declaration(*p, false))
+				.map(|p| self.pretty_print_declaration(*p, false, signature_only))
 				.collect::<Vec<_>>()
 				.join(", ")
 		)
@@ -183,46 +205,49 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 		for ann in function.annotations().iter() {
 			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
 		}
-		if let Some(body) = function.body() {
-			if self.old_compat
-				&& function.name() == self.db.identifier_registry().deopt
-				&& !function.type_inst_vars().is_empty()
-				&& function.parameters().len() == 1
-				&& {
-					let ty = self.model[function.parameter(0)].ty();
-					!ty.known_par(self.db.upcast()) && !ty.known_occurs(self.db.upcast())
-				} {
-				// For compatibility with old minizinc, we can just directly coerce
-				match &**body {
-					ExpressionData::Call(c) => match &c.function {
-						Callable::Function(idx) => {
-							assert_eq!(
-								self.model[*idx].name(),
-								self.db.identifier_registry().to_enum
-							);
-							assert_eq!(c.arguments.len(), 2);
-							write!(
-								&mut buf,
-								" = {}",
-								self.pretty_print_expression(&c.arguments[1])
-							)
-							.unwrap();
-						}
+		if !signature_only {
+			if let Some(body) = function.body() {
+				if self.old_compat
+					&& function.name() == self.db.identifier_registry().deopt
+					&& !function.type_inst_vars().is_empty()
+					&& function.parameters().len() == 1
+					&& {
+						let ty = self.model[function.parameter(0)].ty();
+						!ty.known_par(self.db.upcast()) && !ty.known_occurs(self.db.upcast())
+					} {
+					// For compatibility with old minizinc, we can just directly coerce
+					match &**body {
+						ExpressionData::Call(c) => match &c.function {
+							Callable::Function(idx) => {
+								assert_eq!(
+									self.model[*idx].name(),
+									self.db.identifier_registry().to_enum
+								);
+								assert_eq!(c.arguments.len(), 2);
+								write!(
+									&mut buf,
+									" = {}",
+									self.pretty_print_expression(&c.arguments[1])
+								)
+								.unwrap();
+							}
+							_ => unreachable!(),
+						},
 						_ => unreachable!(),
-					},
-					_ => unreachable!(),
+					}
+				} else {
+					write!(&mut buf, " = {}", self.pretty_print_expression(body)).unwrap();
 				}
-			} else {
-				write!(&mut buf, " = {}", self.pretty_print_expression(body)).unwrap();
+			} else if self.old_compat && function.name() == self.db.identifier_registry().erase_enum
+			{
+				// For compatibility with old minizinc, we can just directly coerce
+				let d = function.parameter(0);
+				let ident = self.model[d]
+					.name()
+					.map(|n| n.pretty_print(self.db.upcast()))
+					.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)));
+				write!(&mut buf, " = {}", ident).unwrap();
 			}
-		} else if self.old_compat && function.name() == self.db.identifier_registry().erase_enum {
-			// For compatibility with old minizinc, we can just directly coerce
-			let d = function.parameter(0);
-			let ident = self.model[d]
-				.name()
-				.map(|n| n.pretty_print(self.db.upcast()))
-				.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)));
-			write!(&mut buf, " = {}", ident).unwrap();
 		}
 		buf
 	}
@@ -542,7 +567,7 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 				self.model[**l]
 					.parameters()
 					.iter()
-					.map(|p| self.pretty_print_declaration(*p, false))
+					.map(|p| self.pretty_print_declaration(*p, false, true))
 					.collect::<Vec<_>>()
 					.join(", "),
 				self.pretty_print_expression(self.model[**l].body().unwrap())
@@ -555,10 +580,12 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 						LetItem::Constraint(c) => {
 							writeln!(&mut buf, "  {};", self.pretty_print_constraint(*c)).unwrap()
 						}
-						LetItem::Declaration(d) => {
-							writeln!(&mut buf, "  {};", self.pretty_print_declaration(*d, true))
-								.unwrap()
-						}
+						LetItem::Declaration(d) => writeln!(
+							&mut buf,
+							"  {};",
+							self.pretty_print_declaration(*d, true, false)
+						)
+						.unwrap(),
 					}
 				}
 				write!(

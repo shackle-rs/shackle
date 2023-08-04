@@ -265,7 +265,8 @@ impl<'a, Src: Marker, Dst: Marker> TopDownTyper<'a, Dst, Src> {
 							let overload = model[*f].function_entry(model).overload;
 							let mut ty_vars = overload
 								.instantiate_ty_params(db.upcast(), &bottom_up_tys)
-								.unwrap();
+								.unwrap()
+								.0;
 							if model[*f].return_type().contains_type_inst_var(db.upcast()) {
 								// Also instantiate with top-down return type
 								PolymorphicFunctionType::collect_instantiations(
