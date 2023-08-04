@@ -14,6 +14,19 @@ pub struct ReplacementMap<Dst, Src = ()> {
 }
 
 impl<Src: Marker, Dst: Marker> ReplacementMap<Dst, Src> {
+	/// Get the replacement for an item
+	pub fn get_item(&self, src: ItemId<Src>) -> Option<ItemId<Dst>> {
+		match src {
+			ItemId::Annotation(a) => self.get_annotation(a).map(ItemId::from),
+			ItemId::Constraint(c) => self.get_constraint(c).map(ItemId::from),
+			ItemId::Declaration(d) => self.get_declaration(d).map(ItemId::from),
+			ItemId::Enumeration(e) => self.get_enumeration(e).map(ItemId::from),
+			ItemId::Function(f) => self.get_function(f).map(ItemId::from),
+			ItemId::Output(o) => self.get_output(o).map(ItemId::from),
+			ItemId::Solve => Some(ItemId::Solve),
+		}
+	}
+
 	/// Get the replacement for this annotation ID if any
 	pub fn get_annotation(&self, src: AnnotationId<Src>) -> Option<AnnotationId<Dst>> {
 		self.annotations.get(&src).copied()

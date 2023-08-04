@@ -200,6 +200,23 @@ impl<T: Marker> Model<T> {
 		idx
 	}
 
+	/// Add a function item after the given item
+	pub fn add_function_after(&mut self, item: FunctionItem<T>, after: ItemId<T>) -> FunctionId<T> {
+		let idx: crate::arena::ArenaIndex<Item<Function<T>>> = self.functions.insert(item);
+		self.items.insert(
+			self.items.iter().position(|it| *it == after).unwrap() + 1,
+			idx.into(),
+		);
+		idx
+	}
+
+	/// Add a function item at the start of the model
+	pub fn prepend_function(&mut self, item: FunctionItem<T>) -> FunctionId<T> {
+		let idx: crate::arena::ArenaIndex<Item<Function<T>>> = self.functions.insert(item);
+		self.items.insert(0, idx.into());
+		idx
+	}
+
 	/// Get the top-level function items
 	pub fn top_level_functions(&self) -> impl Iterator<Item = (FunctionId<T>, &FunctionItem<T>)> {
 		self.all_functions().filter(|(_, f)| f.top_level())

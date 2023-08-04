@@ -9,19 +9,21 @@ pub fn mangle_names(db: &dyn Thir, model: &Model) -> Model {
 	let mut model = model.clone();
 	let mut overloaded: FxHashMap<_, Vec<FunctionId>> = FxHashMap::default();
 	for (idx, function) in model.top_level_functions() {
-		if function.body().is_some() {
-			if let FunctionName::Named(ident) = function.name() {
-				overloaded.entry(ident).or_default().push(idx);
-			}
+		if let FunctionName::Named(ident) = function.name() {
+			overloaded.entry(ident).or_default().push(idx);
 		}
 	}
 	for (name, functions) in overloaded {
-		for function in functions {
-			let mangled = FunctionName::Named(name).mangled(
-				db,
-				model[function].parameters().iter().map(|p| model[*p].ty()),
-			);
-			model[function].set_name(mangled);
+		if functions.len() > 1 {
+			for function in functions {
+				if model[function].body().is_some() {
+					let mangled = FunctionName::Named(name).mangled(
+						db,
+						model[function].parameters().iter().map(|p| model[*p].ty()),
+					);
+					model[function].set_name(mangled);
+				}
+			}
 		}
 	}
 	model
@@ -42,6 +44,9 @@ mod test {
 			r#"
                 function int: builtin(int: x);
                 function int: builtin(string: x);
+				function int: mixed(string: x);
+				function int: mixed(int: x) = 1;
+				function int: mixed(float: x) = 1;
                 function int: foo(int: x) = 1;
                 function int: bar(int: x) = 1;
                 function int: bar(string: x) = 1;
@@ -49,7 +54,10 @@ mod test {
 			expect!([r#"
     function int: builtin(int: x);
     function int: builtin(string: x);
-    function int: 'foo<int>'(int: x) = 1;
+    function int: mixed(string: x);
+    function int: 'mixed<int>'(int: x) = 1;
+    function int: 'mixed<float>'(float: x) = 1;
+    function int: foo(int: x) = 1;
     function int: 'bar<int>'(int: x) = 1;
     function int: 'bar<string>'(string: x) = 1;
     solve satisfy;
