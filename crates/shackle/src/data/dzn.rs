@@ -29,7 +29,7 @@ pub(crate) fn parse_dzn(src: &SourceFile) -> Result<Vec<Assignment>, ShackleErro
 		.set_language(tree_sitter_datazinc::language())
 		.expect("Failed to set Tree Sitter parser language");
 	let tree = parser
-		.parse(src.as_bytes(), None)
+		.parse(src.contents().as_bytes(), None)
 		.expect("DataZinc Tree Sitter parser did not return tree object");
 
 	let cst = Cst::from_str(tree, src.contents());

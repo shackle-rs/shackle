@@ -116,16 +116,16 @@ impl TryFrom<&Path> for SourceFile {
 			message: err.to_string(),
 			other: Vec::new(),
 		})?;
-		Ok(Self {
+		Ok(Self(SourceFileInner::Text {
 			name: Some(path.to_owned()),
 			source: content.into(),
-		})
+		}))
 	}
 }
 
 impl From<Arc<String>> for SourceFile {
 	fn from(source: Arc<String>) -> Self {
-		Self { name: None, source }
+		Self(SourceFileInner::Text { name: None, source })
 	}
 }
 

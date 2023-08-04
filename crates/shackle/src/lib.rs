@@ -441,7 +441,7 @@ impl Program {
 					}
 				}
 				Some("json") => {
-					let assignments = serde_json::Deserializer::from_str(src.as_str())
+					let assignments = serde_json::Deserializer::from_str(src.contents())
 						.deserialize_map(SerdeFileVisitor(&self._input_types))
 						.map_err(|_| InternalError::new("TODO: JSON parsing error"))?;
 
