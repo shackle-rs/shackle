@@ -11,7 +11,7 @@ use tempfile::Builder;
 
 use crate::{
 	data::json::deserialize_legacy_value,
-	diagnostics::{FileError, InternalError},
+	diagnostics::{FileError, InternalError, ShackleError},
 	hir::Identifier,
 	ty::{self},
 	Message, Program, Status,
@@ -20,30 +20,29 @@ use crate::{
 impl Program {
 	/// Run the program in the current state
 	/// Solutions are emitted to the callback, and the resulting status is returned.
-	pub fn run<F: Fn(&Message) -> bool>(&mut self, msg_callback: F) -> Status {
+	pub fn run<F: Fn(&Message) -> bool>(
+		&mut self,
+		msg_callback: F,
+	) -> Result<Status, ShackleError> {
 		let tmpfile = Builder::new().suffix(".shackle.mzn").tempfile();
 		let mut tmpfile = match tmpfile {
 			Err(err) => {
-				return Status::Err(
-					FileError {
-						file: PathBuf::from("tempfile"),
-						message: err.to_string(),
-						other: Vec::new(),
-					}
-					.into(),
-				);
+				return Err(FileError {
+					file: PathBuf::from("tempfile"),
+					message: err.to_string(),
+					other: Vec::new(),
+				}
+				.into());
 			}
 			Ok(file) => file,
 		};
 		if let Err(err) = self.write(tmpfile.as_file_mut()) {
-			return Status::Err(
-				FileError {
-					file: PathBuf::from(tmpfile.path()),
-					message: format!("unable to write model to temporary file: {}", err),
-					other: vec![],
-				}
-				.into(),
-			);
+			return Err(FileError {
+				file: PathBuf::from(tmpfile.path()),
+				message: format!("unable to write model to temporary file: {}", err),
+				other: vec![],
+			}
+			.into());
 		}
 
 		let mut cmd = Command::new("minizinc");
@@ -79,7 +78,7 @@ impl Program {
 		for line in BufReader::new(stdout).lines() {
 			match line {
 				Err(err) => {
-					return Status::Err(
+					return Err(
 						InternalError::new(format!("minizinc output error: {}", err)).into(),
 					);
 				}
@@ -92,13 +91,11 @@ impl Program {
 							if let serde_json::Value::Object(map) = &obj["statistics"] {
 								msg_callback(&Message::Statistic(map));
 							} else {
-								return Status::Err(
-									InternalError::new(format!(
-										"minizinc invalid statistics message: {}",
-										obj["statistics"]
-									))
-									.into(),
-								);
+								return Err(InternalError::new(format!(
+									"minizinc invalid statistics message: {}",
+									obj["statistics"]
+								))
+								.into());
 							}
 						}
 						"solution" => {
@@ -115,7 +112,7 @@ impl Program {
 
 									let val = match deserialize_legacy_value(&self.db, ty, v) {
 										Ok(val) => val,
-										Err(e) => return Status::Err(e.into()),
+										Err(e) => return Err(e.into()),
 									};
 									sol.insert(k, val);
 								}
@@ -138,28 +135,25 @@ impl Program {
 							"UNSAT_OR_UNBOUNDED" => todo!(),
 							"UNKNOWN" => status = Status::Unknown,
 							"ERROR" => {
-								status = Status::Err(
-									InternalError::new(
-										"Error occurred, but no message was provided",
-									)
-									.into(),
+								return Err(InternalError::new(
+									"Error occurred, but no message was provided",
 								)
+								.into())
 							}
 							s => {
-								return Status::Err(
-									InternalError::new(format!(
-										"minizinc unknown status type: {}",
-										s
-									))
-									.into(),
-								);
+								return Err(InternalError::new(format!(
+									"minizinc unknown status type: {}",
+									s
+								))
+								.into());
 							}
 						},
 						"error" => {
-							return Status::Err(
-								InternalError::new(format!("minizinc error: {}", obj["message"]))
-									.into(),
-							);
+							return Err(InternalError::new(format!(
+								"minizinc error: {}",
+								obj["message"]
+							))
+							.into());
 						}
 						"warning" => {
 							msg_callback(&Message::Warning(
@@ -169,10 +163,11 @@ impl Program {
 							));
 						}
 						s => {
-							return Status::Err(
-								InternalError::new(format!("minizinc unknown message type: {}", s))
-									.into(),
-							);
+							return Err(InternalError::new(format!(
+								"minizinc unknown message type: {}",
+								s
+							))
+							.into());
 						}
 					}
 				}
@@ -186,9 +181,9 @@ impl Program {
 						code.code().unwrap()
 					)
 				};
-				status
+				Ok(status)
 			}
-			Err(e) => Status::Err(InternalError::new(format!("process error: {}", e)).into()),
+			Err(e) => Err(InternalError::new(format!("process error: {}", e)).into()),
 		}
 	}
 }

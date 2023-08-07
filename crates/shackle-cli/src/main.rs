@@ -126,13 +126,12 @@ impl Solve {
 			print!("{}", x);
 			true
 		};
-		let status = program.run(display_fn);
+		let status = program.run(display_fn)?;
 		match status {
 			Status::Infeasible => println!("=====UNSATISFIABLE====="),
 			Status::Satisfied => {}
 			Status::Optimal | Status::AllSolutions => println!("=========="),
 			Status::Unknown => println!("=====UNKNOWN====="),
-			Status::Err(err) => return Err(err.into()),
 		}
 
 		// Compilation succeeded

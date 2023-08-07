@@ -180,8 +180,6 @@ pub enum Status {
 	AllSolutions,
 	/// No result reached within the given limits
 	Unknown,
-	/// An error occurred
-	Err(ShackleError),
 }
 
 /// An type of the input or output of a Shackle model
