@@ -14,8 +14,7 @@
 	"keywords": [
 		"parser",
 		"minizinc",
-		"datazinc",
-		"dzn"
+		"datazinc"
 	],
 	"author": "Jip J. Dekker <jip.dekker@monash.edu> (https://dekker.one/)",
 	"license": "MPL-2.0",
@@ -29,5 +28,13 @@
 	"devDependencies": {
 		"tree-sitter-cli": "^0.20.8",
 		"tree-sitter-minizinc": "file:../tree-sitter-minizinc"
-	}
+	},
+	"tree-sitter": [
+		{
+			"scope": "source.datazinc",
+			"file-types": [
+				"dzn"
+			]
+		}
+	]
 }
