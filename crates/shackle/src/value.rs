@@ -144,6 +144,27 @@ impl Array {
 			members: elements.into_boxed_slice(),
 		}
 	}
+
+	/// Returns whether the array contains any members
+	pub fn is_empty(&self) -> bool {
+		self.members.is_empty()
+	}
+
+	/// Returns the number of dimensions used to index the Array
+	pub fn dim(&self) -> u8 {
+		self.indexes.len() as u8
+	}
+
+	/// Returns an iterator over the array and its indices.
+	///
+	/// The iterator yields all items from start to end.
+	pub fn iter(&self) -> impl Iterator<Item = (Vec<Value>, &Value)> {
+		self.indexes
+			.iter()
+			.map(|ii| ii.iter())
+			.multi_cartesian_product()
+			.zip_eq(self.members.iter())
+	}
 }
 
 impl std::ops::Index<&[Value]> for Array {
@@ -196,50 +217,25 @@ impl std::ops::Index<&[Value]> for Array {
 
 impl Display for Array {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let it = self
-			.indexes
-			.iter()
-			.map(|ii| ii.iter())
-			.multi_cartesian_product()
-			.zip_eq(self.members.iter());
-
+		if self.is_empty() {
+			return write!(f, "[]");
+		}
+		if let [Index::Integer(ii)] = &(*self.indexes) {
+			return write!(f, "[{}: {}]", ii.start(), self.members.iter().format(", "));
+		}
 		write!(
 			f,
 			"[{}]",
-			it.map(|(ii, x)| {
-				let ii_str = match &ii[..] {
-					[i] => format!("{i}"),
-					ii => format!("({})", ii.iter().format(", ")),
-				};
-				format!("{ii_str}: {x}")
-			})
-			.format(", ")
+			self.iter()
+				.map(|(ii, x)| {
+					let ii_str = match &ii[..] {
+						[i] => format!("{i}"),
+						ii => format!("({})", ii.iter().format(", ")),
+					};
+					format!("{ii_str}: {x}")
+				})
+				.format(", ")
 		)
-		// let mut first = true;
-		// write!(f, "[")?;
-		// for (ii, x) in it {
-		// 	if !first {
-		// 		write!(f, ", ")?;
-		// 	}
-		// 	match &ii[..] {
-		// 		[i] => write!(f, "{i}: "),
-		// 		ii => {
-		// 			write!(f, "(")?;
-		// 			let mut tup_first = true;
-		// 			for i in ii {
-		// 				if !tup_first {
-		// 					write!(f, ",")?;
-		// 				}
-		// 				write!(f, "{i}")?;
-		// 				tup_first = false;
-		// 			}
-		// 			write!(f, "): ")
-		// 		}
-		// 	}?;
-		// 	write!(f, "{x}")?;
-		// 	first = false;
-		// }
-		// write!(f, "]")
 	}
 }
 
@@ -410,6 +406,12 @@ impl EnumValue {
 			}
 		}
 	}
+
+	/// Returns the integer value that is internally used to represent the value
+	/// of the enumerated types after enumerated types have been type erased.
+	pub(crate) fn int_val(&self) -> usize {
+		self.val
+	}
 }
 
 impl Display for EnumValue {
@@ -480,6 +482,43 @@ impl EnumRangeInclusive {
 	pub fn is_empty(&self) -> bool {
 		self.len() == 0
 	}
+
+	/// Returns the lower bound of the EnumRangeInclusive
+	///
+	/// When using an inclusive range for iteration, the values of `start()` and
+	/// [`end()`] are unspecified after the iteration ended. To determine
+	/// whether the inclusive range is empty, use the [`is_empty()`] method
+	/// instead of comparing `start() > end()`.
+	///
+	/// Note: the value returned by this method is unspecified after the range
+	/// has been iterated to exhaustion.
+	///
+	/// [`end()`]: EnumRangeInclusive::end
+	/// [`is_empty()`]: EnumRangeInclusive::is_empty
+	pub fn start(&self) -> EnumValue {
+		EnumValue {
+			set: self.set.clone(),
+			val: self.start,
+		}
+	}
+	/// Returns the upper bound of the EnumRangeInclusive
+	///
+	/// When using an inclusive range for iteration, the values of [`start()`]
+	/// and `end()` are unspecified after the iteration ended. To determine
+	/// whether the inclusive range is empty, use the [`is_empty()`] method
+	/// instead of comparing `start() > end()`.
+	///
+	/// Note: the value returned by this method is unspecified after the range
+	/// has been iterated to exhaustion.
+	///
+	/// [`start()`]: EnumRangeInclusive::start
+	/// [`is_empty()`]: EnumRangeInclusive::is_empty
+	pub fn end(&self) -> EnumValue {
+		EnumValue {
+			set: self.set.clone(),
+			val: self.end,
+		}
+	}
 }
 
 impl Display for EnumRangeInclusive {
@@ -521,7 +560,7 @@ impl Iterator for EnumRangeInclusive {
 	}
 
 	fn count(self) -> usize {
-		return self.len();
+		self.len()
 	}
 
 	fn last(self) -> Option<Self::Item> {
@@ -640,31 +679,43 @@ impl Display for Set {
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Record {
 	// fields are hidden to possibly replace inner implementation in the future
-	fields: Vec<(Arc<String>, Value)>,
+	fields: Vec<(Arc<str>, Value)>,
 }
 
-impl FromIterator<(Arc<String>, Value)> for Record {
-	fn from_iter<T: IntoIterator<Item = (Arc<String>, Value)>>(iter: T) -> Self {
-		let mut fields: Vec<(Arc<String>, Value)> = iter.into_iter().collect();
-		fields.sort_by(|(k1, _), (k2, _)| k1.as_str().cmp(k2.as_str()));
+impl Record {
+	/// Returns an iterator over the array and its indices.
+	///
+	/// The iterator yields all items from start to end.
+	pub fn iter(&self) -> impl Iterator<Item = (Arc<str>, &Value)> {
+		self.fields.iter().map(|(k, v)| (k.clone(), v))
+	}
+
+	/// Returns the number of fields of the record literal
+	pub fn len(&self) -> usize {
+		self.fields.len()
+	}
+
+	/// Returns whether the record literal contains any fields
+	pub fn is_empty(&self) -> bool {
+		false
+	}
+}
+
+impl FromIterator<(Arc<str>, Value)> for Record {
+	fn from_iter<T: IntoIterator<Item = (Arc<str>, Value)>>(iter: T) -> Self {
+		let mut fields: Vec<(Arc<str>, Value)> = iter.into_iter().collect();
+		fields.sort_by(|(k1, _), (k2, _)| k1.as_ref().cmp(k2.as_ref()));
+		assert!(!fields.is_empty(), "empty record literals are not allowed");
 		Self { fields }
 	}
 }
-impl<'a> IntoIterator for &'a Record {
-	type Item = &'a (Arc<String>, Value);
-	type IntoIter = std::slice::Iter<'a, (Arc<String>, Value)>;
 
-	#[inline]
-	fn into_iter(self) -> Self::IntoIter {
-		self.fields.iter()
-	}
-}
 impl std::ops::Index<&str> for Record {
 	type Output = Value;
 
 	fn index(&self, index: &str) -> &Self::Output {
 		for (k, v) in &self.fields {
-			if k.as_str() == index {
+			if k.as_ref() == index {
 				return v;
 			}
 		}

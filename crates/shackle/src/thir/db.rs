@@ -113,7 +113,7 @@ fn output_type_map(db: &dyn Thir) -> Arc<FxHashMap<Identifier, ty::Ty>> {
 			should_output = Some(false)
 		}
 		if should_output == Some(true)
-			|| (should_output == None
+			|| (should_output.is_none()
 				&& decl.top_level()
 				&& !decl.domain().ty().known_par(db.upcast())
 				&& decl.definition().is_none())

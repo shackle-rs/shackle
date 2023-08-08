@@ -108,12 +108,14 @@ impl Solve {
 	/// The dispatch method checks the validity of the user input and then call
 	/// the corresponding functions in the modelling libraries.
 	pub fn dispatch(&self) -> Result<()> {
-		let (model, _data) = self.base.sort_files()?;
+		let (model, data) = self.base.sort_files()?;
 		let slv = self.base.solver()?;
 
 		// Construct model, typecheck, and compile into program
 		let model = Model::from_file(model);
 		let mut program = model.compile(&slv)?;
+
+		program.add_data_files(data.iter().map(|f| f.deref()))?;
 
 		// Set program options
 		if let Some(time_limit) = self.time_limit {
@@ -196,11 +198,11 @@ impl Compile {
 						model_file = Some(f.clone())
 					}
 				}
-				Some("json") => data.push(f.clone()),
+				Some("json") | Some("dzn") => data.push(f.clone()),
 				_ => {
 					return Err(Report::msg(format!(
-						"file `{:?}' has an unsupported file type",
-						model_file
+						"file `{}' has an unsupported file type",
+						f.to_str().unwrap_or_default()
 					)));
 				}
 			}
@@ -226,15 +228,13 @@ impl Compile {
 	/// The dispatch method checks the validity of the user input and then call
 	/// the corresponding functions in the modelling libraries.
 	pub fn dispatch(&self) -> Result<()> {
-		let (model, data) = self.sort_files()?;
+		let (model, _data) = self.sort_files()?;
 
 		let filename = model.with_extension("shackle.mzn");
 
 		let slv = self.solver()?;
 		let model = Model::from_file(model);
-		let mut prg = model.compile(&slv)?;
-
-		prg.add_data_files(data.iter().map(|f| f.deref()))?;
+		let prg = model.compile(&slv)?;
 
 		let mut file = File::create(filename).into_diagnostic()?;
 		prg.write(&mut file).into_diagnostic()

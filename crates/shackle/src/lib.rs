@@ -213,7 +213,7 @@ pub enum Type {
 	/// Tuple type
 	Tuple(OptType, Arc<[Type]>),
 	/// Record type
-	Record(OptType, Arc<Vec<(String, Type)>>),
+	Record(OptType, Arc<Vec<(Arc<str>, Type)>>),
 }
 
 impl Type {
@@ -274,7 +274,7 @@ impl Type {
 				opt,
 				li.iter()
 					.map(|(name, ty)| match Type::from_compiler(db, *ty) {
-						Ok(nty) => Ok((name.value(db), nty)),
+						Ok(nty) => Ok((name.value(db).into(), nty)),
 						Err(e) => Err(e),
 					})
 					.collect::<Result<Vec<_>, _>>()?
@@ -482,7 +482,7 @@ impl Program {
 			} else {
 				let _none = self
 					._input_data
-					.insert(key.to_string(), self.resolve_value(ty, val)?);
+					.insert(key.to_string(), val.resolve_value(ty)?);
 				debug_assert_eq!(_none, None);
 			}
 		}

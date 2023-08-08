@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
 	db::CompilerDatabase,
 	diagnostics::InternalError,
@@ -207,7 +205,7 @@ pub fn deserialize_legacy_value(
 					.map(|(name, tt)| {
 						let name = name.value(db);
 						match deserialize_legacy_value(db, *tt, obj.remove(&name).unwrap()) {
-							Ok(val) => Ok((Arc::new(name), val)),
+							Ok(val) => Ok((name.into(), val)),
 							Err(err) => Err(err),
 						}
 					})

@@ -102,7 +102,8 @@ pub(crate) fn typecheck_dzn(
 				// the names do not match, then one of the keys is missing from the data
 				let mut vals = Vec::with_capacity(elem_tys.len());
 				for i in 0..elem_tys.len() {
-					if exprs.len() <= i || exprs[i].name().name() != elem_tys[i].0 {
+					if exprs.len() <= i || exprs[i].name().name().as_ref() != elem_tys[i].0.as_ref()
+					{
 						return Err(TypeMismatch {
 							src: file.clone(),
 							msg: format!("The parameter variable '{}' is declared in the model as type '{}', but the assigned record literal does not contain the key '{}'", name, ty, elem_tys[i].0),
@@ -133,7 +134,7 @@ pub(crate) fn typecheck_dzn(
 			Type::Set(_, elem_ty) => {
 				let c = sl
 					.members()
-					.map(|elem| typecheck_dzn(file, name, &elem, &elem_ty))
+					.map(|elem| typecheck_dzn(file, name, &elem, elem_ty))
 					.collect::<Result<_, _>>()?;
 				Ok(ParserVal::SetList(c))
 			}
@@ -197,7 +198,7 @@ pub(crate) fn typecheck_dzn(
 						if m.indices().is_some() {
 							todo!()
 						}
-						elems.push(typecheck_dzn(file, name, &m.value(), &element)?);
+						elems.push(typecheck_dzn(file, name, &m.value(), element)?);
 					}
 					Ok(ParserVal::SimpleArray(
 						vec![(

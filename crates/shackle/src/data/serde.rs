@@ -87,7 +87,7 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 				let visitor = SerdeArrayVisitor {
 					data: &mut data,
 					size: &mut sizes,
-					element: &element,
+					element,
 					dim: dim.len() as u8,
 					depth: 1,
 				};
@@ -114,7 +114,7 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 					let Some(m) = seq.next_element_seed(SerdeValueVisitor(ty))? else { return Err(Error::invalid_length(tup.len(), &members.len().to_string().as_str())) };
 					tup.push(m);
 				}
-				if let Some(_) = seq.next_element::<IgnoredAny>()? {
+				if seq.next_element::<IgnoredAny>()?.is_some() {
 					return Err(Error::invalid_length(
 						tup.len(),
 						&members.len().to_string().as_str(),
@@ -131,11 +131,11 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 		match ty {
 			Type::Record(_, ty) => {
 				let mut rec = Vec::with_capacity(ty.len());
-				let mut types = FxHashMap::from_iter(ty.iter().map(|(a, b)| (a.as_str(), b)));
+				let mut types = FxHashMap::from_iter(ty.iter().map(|(a, b)| (a.clone(), b)));
 				while let Some(k) = map.next_key::<&str>()? {
-					if let Some(ty) = types.remove(k) {
+					if let Some((k, ty)) = types.remove_entry(k) {
 						let val = map.next_value_seed(SerdeValueVisitor(ty))?;
-						rec.push((k.to_string(), val))
+						rec.push((k, val))
 					} else {
 						return Err(Error::unknown_field(
 							k,
@@ -204,13 +204,16 @@ impl<'de, 'a> Visitor<'de> for SerdeArrayVisitor<'a> {
 			}
 		} else {
 			// Recurse with one less dimension
-			while let Some(_) = seq.next_element_seed(SerdeArrayVisitor {
-				data: self.data,
-				size: self.size,
-				element: self.element,
-				dim: self.dim,
-				depth: self.depth + 1,
-			})? {
+			while seq
+				.next_element_seed(SerdeArrayVisitor {
+					data: self.data,
+					size: self.size,
+					element: self.element,
+					dim: self.dim,
+					depth: self.depth + 1,
+				})?
+				.is_some()
+			{
 				// values already added to data
 				i += 1
 			}
