@@ -138,6 +138,56 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DispatchRewriter<Dst, Sr
 }
 
 impl<Src: Marker, Dst: Marker> DispatchRewriter<Dst, Src> {
+	fn call(&self, db: &dyn Thir, name: Identifier, arg: Expression<Dst>) -> Expression<Dst> {
+		Expression::new(
+			db,
+			&self.model,
+			arg.origin(),
+			LookupCall {
+				function: name.into(),
+				arguments: vec![arg],
+			},
+		)
+	}
+
+	fn occurs(&self, db: &dyn Thir, e: Expression<Dst>) -> Expression<Dst> {
+		Expression::new(
+			db,
+			&self.model,
+			e.origin(),
+			TupleAccess {
+				tuple: Box::new(e),
+				field: IntegerLiteral(1),
+			},
+		)
+	}
+
+	fn deopt(&self, db: &dyn Thir, e: Expression<Dst>) -> Expression<Dst> {
+		Expression::new(
+			db,
+			&self.model,
+			e.origin(),
+			TupleAccess {
+				tuple: Box::new(e),
+				field: IntegerLiteral(2),
+			},
+		)
+	}
+
+	fn pair(
+		&self,
+		db: &dyn Thir,
+		occurs: Expression<Dst>,
+		deopt: Expression<Dst>,
+	) -> Expression<Dst> {
+		Expression::new(
+			db,
+			&self.model,
+			deopt.origin(),
+			TupleLiteral(vec![occurs, deopt]),
+		)
+	}
+
 	fn dispatch_param(
 		&mut self,
 		db: &dyn Thir,
@@ -161,146 +211,36 @@ impl<Src: Marker, Dst: Marker> DispatchRewriter<Dst, Src> {
 			(VarType::Var, OptType::Opt, VarType::Var, OptType::Opt)
 			| (VarType::Par, OptType::Opt, VarType::Par, OptType::Opt) => {
 				// var opt T -> var opt U, opt T -> opt U
-				let destruct_ce = Expression::new(
-					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.mzn_destruct_opt.into(),
-						arguments: vec![ce],
-					},
-				);
-				let destruct_ve = Expression::new(
-					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.mzn_destruct_opt.into(),
-						arguments: vec![ve],
-					},
-				);
+				let destruct_ce = self.call(db, self.ids.mzn_destruct_opt, ce);
+				let destruct_ve = self.call(db, self.ids.mzn_destruct_opt, ve);
+				let deopt_ce = self.deopt(db, destruct_ce);
+				let deopt_ve = self.deopt(db, destruct_ve.clone());
 				let deopt_dispatch = self.dispatch_param(
 					db,
-					Expression::new(
-						db,
-						&self.model,
-						origin,
-						TupleAccess {
-							tuple: Box::new(destruct_ce),
-							field: IntegerLiteral(2),
-						},
-					),
-					Expression::new(
-						db,
-						&self.model,
-						origin,
-						TupleAccess {
-							tuple: Box::new(destruct_ve.clone()),
-							field: IntegerLiteral(2),
-						},
-					),
+					deopt_ce,
+					deopt_ve,
 					a.make_occurs(db.upcast()),
 					b.make_occurs(db.upcast()),
 					condition,
 				);
-				return Expression::new(
+				return self.call(
 					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.mzn_construct_opt.into(),
-						arguments: vec![Expression::new(
-							db,
-							&self.model,
-							origin,
-							TupleLiteral(vec![
-								Expression::new(
-									db,
-									&self.model,
-									origin,
-									TupleAccess {
-										tuple: Box::new(destruct_ve),
-										field: IntegerLiteral(1),
-									},
-								),
-								deopt_dispatch,
-							]),
-						)],
-					},
+					self.ids.mzn_construct_opt,
+					self.pair(db, self.occurs(db, destruct_ve), deopt_dispatch),
 				);
 			}
 			(VarType::Var, OptType::Opt, VarType::Var, OptType::NonOpt) => {
 				// var opt T -> var U
-				let destruct_ce = Expression::new(
+				let destruct_ce = self.call(db, self.ids.mzn_destruct_opt, ce);
+				let destruct_ve = self.call(db, self.ids.mzn_destruct_opt, ve);
+				condition.push(self.call(
 					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.mzn_destruct_opt.into(),
-						arguments: vec![ce],
-					},
-				);
-				let destruct_ve = Expression::new(
-					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.mzn_destruct_opt.into(),
-						arguments: vec![ve],
-					},
-				);
-				condition.push(Expression::new(
-					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.is_fixed.into(),
-						arguments: vec![Expression::new(
-							db,
-							&self.model,
-							origin,
-							TupleAccess {
-								tuple: Box::new(destruct_ce.clone()),
-								field: IntegerLiteral(1),
-							},
-						)],
-					},
+					self.ids.is_fixed,
+					self.occurs(db, destruct_ce.clone()),
 				));
-				condition.push(Expression::new(
-					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.fix.into(),
-						arguments: vec![Expression::new(
-							db,
-							&self.model,
-							origin,
-							TupleAccess {
-								tuple: Box::new(destruct_ce.clone()),
-								field: IntegerLiteral(1),
-							},
-						)],
-					},
-				));
-				let deopt_ce = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(destruct_ce),
-						field: IntegerLiteral(2),
-					},
-				);
-				let deopt_ve = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(destruct_ve),
-						field: IntegerLiteral(2),
-					},
-				);
+				condition.push(self.call(db, self.ids.fix, self.occurs(db, destruct_ce.clone())));
+				let deopt_ce = self.deopt(db, destruct_ce);
+				let deopt_ve = self.deopt(db, destruct_ve);
 				return self.dispatch_param(
 					db,
 					deopt_ce,
@@ -310,35 +250,20 @@ impl<Src: Marker, Dst: Marker> DispatchRewriter<Dst, Src> {
 					condition,
 				);
 			}
-			(VarType::Var, OptType::Opt, VarType::Par, _)
-			| (VarType::Var, OptType::NonOpt, VarType::Par, OptType::NonOpt) => {
-				// var opt T -> opt U, var opt T -> U, var T -> U
-				condition.push(Expression::new(
+			(VarType::Var, OptType::Opt, VarType::Par, _) => {
+				// var opt T -> opt U, var opt T -> U
+				let destruct_ce = self.call(db, self.ids.mzn_destruct_opt, ce);
+				let destruct_ve = self.call(db, self.ids.mzn_destruct_opt, ve);
+				condition.push(self.call(db, self.ids.is_fixed, destruct_ce.clone()));
+				let fixed_ce = self.call(
 					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.is_fixed.into(),
-						arguments: vec![ce.clone()],
-					},
-				));
-				let fixed_ce = Expression::new(
-					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.fix.into(),
-						arguments: vec![ce],
-					},
+					self.ids.mzn_construct_opt,
+					self.call(db, self.ids.fix, destruct_ce),
 				);
-				let fixed_ve = Expression::new(
+				let fixed_ve = self.call(
 					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.fix.into(),
-						arguments: vec![ve],
-					},
+					self.ids.mzn_construct_opt,
+					self.call(db, self.ids.fix, destruct_ve),
 				);
 				return self.dispatch_param(
 					db,
@@ -349,59 +274,27 @@ impl<Src: Marker, Dst: Marker> DispatchRewriter<Dst, Src> {
 					condition,
 				);
 			}
+			(VarType::Var, OptType::NonOpt, VarType::Par, OptType::NonOpt) => {
+				// var T -> U
+				condition.push(self.call(db, self.ids.is_fixed, ce.clone()));
+				let fix_ce = self.call(db, self.ids.fix, ce);
+				let fix_ve = self.call(db, self.ids.fix, ve);
+				return self.dispatch_param(
+					db,
+					fix_ce,
+					fix_ve,
+					a.make_par(db.upcast()),
+					b,
+					condition,
+				);
+			}
 			(VarType::Par, OptType::Opt, VarType::Par, OptType::NonOpt) => {
 				// opt T -> U
-				condition.push(Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(Expression::new(
-							db,
-							&self.model,
-							origin,
-							LookupCall {
-								function: self.ids.mzn_destruct_opt.into(),
-								arguments: vec![ce.clone()],
-							},
-						)),
-						field: IntegerLiteral(1),
-					},
-				));
-				let deopt_ce = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(Expression::new(
-							db,
-							&self.model,
-							origin,
-							LookupCall {
-								function: self.ids.mzn_destruct_opt.into(),
-								arguments: vec![ce],
-							},
-						)),
-						field: IntegerLiteral(2),
-					},
-				);
-				let deopt_ve = Expression::new(
-					db,
-					&self.model,
-					origin,
-					TupleAccess {
-						tuple: Box::new(Expression::new(
-							db,
-							&self.model,
-							origin,
-							LookupCall {
-								function: self.ids.mzn_destruct_opt.into(),
-								arguments: vec![ve],
-							},
-						)),
-						field: IntegerLiteral(2),
-					},
-				);
+				let destruct_ce = self.call(db, self.ids.mzn_destruct_opt, ce);
+				let destruct_ve = self.call(db, self.ids.mzn_destruct_opt, ve);
+				condition.push(self.occurs(db, destruct_ce.clone()));
+				let deopt_ce = self.deopt(db, destruct_ce);
+				let deopt_ve = self.deopt(db, destruct_ve);
 				return self.dispatch_param(
 					db,
 					deopt_ce,
@@ -412,7 +305,7 @@ impl<Src: Marker, Dst: Marker> DispatchRewriter<Dst, Src> {
 				);
 			}
 			(VarType::Par, OptType::NonOpt, _, _) => (),
-			_ => unreachable!(),
+			(a, b, c, d) => unreachable!("Invalid dispatch {:?}, {:?} to {:?}, {:?}", a, b, c, d),
 		}
 		match (a.lookup(db.upcast()), b.lookup(db.upcast())) {
 			(TyData::Array { element: e1, .. }, TyData::Array { element: e2, .. }) => {
@@ -426,44 +319,31 @@ impl<Src: Marker, Dst: Marker> DispatchRewriter<Dst, Src> {
 
 				let mut cs = Vec::new();
 				let template = Box::new(self.dispatch_param(db, c_exp, v_exp, e1, e2, &mut cs));
-				condition.push(Expression::new(
+				condition.push(self.call(
 					db,
-					&self.model,
-					origin,
-					LookupCall {
-						function: self.ids.forall.into(),
-						arguments: vec![Expression::new(
-							db,
-							&self.model,
-							origin,
-							ArrayComprehension {
-								generators: vec![Generator::Iterator {
-									declarations: vec![c_idx],
-									collection: ce,
-									where_clause: None,
-								}],
-								indices: None,
-								template: Box::new(if cs.len() == 1 {
-									cs.pop().unwrap()
-								} else {
-									Expression::new(
-										db,
-										&self.model,
-										origin,
-										LookupCall {
-											function: self.ids.forall.into(),
-											arguments: vec![Expression::new(
-												db,
-												&self.model,
-												origin,
-												ArrayLiteral(cs),
-											)],
-										},
-									)
-								}),
-							},
-						)],
-					},
+					self.ids.forall,
+					Expression::new(
+						db,
+						&self.model,
+						origin,
+						ArrayComprehension {
+							generators: vec![Generator::Iterator {
+								declarations: vec![c_idx],
+								collection: ce,
+								where_clause: None,
+							}],
+							indices: None,
+							template: Box::new(if cs.len() == 1 {
+								cs.pop().unwrap()
+							} else {
+								self.call(
+									db,
+									self.ids.forall,
+									Expression::new(db, &self.model, origin, ArrayLiteral(cs)),
+								)
+							}),
+						},
+					),
 				));
 
 				let array = Expression::new(
@@ -767,7 +647,7 @@ mod test {
             predicate foo(int: x) = true;
             "#,
 			expect!([r#"
-    function var bool: foo(var opt int: x) = if forall([is_fixed(mzn_destruct_opt(x).1), fix(mzn_destruct_opt(x).1)]) then foo(mzn_destruct_opt(x).2) elseif is_fixed(x) then foo(fix(x)) else true endif;
+    function var bool: foo(var opt int: x) = if forall([is_fixed(mzn_destruct_opt(x).1), fix(mzn_destruct_opt(x).1)]) then foo(mzn_destruct_opt(x).2) elseif is_fixed(mzn_destruct_opt(x)) then foo(mzn_construct_opt(fix(mzn_destruct_opt(x)))) else true endif;
     function var bool: foo(var int: x) = if is_fixed(x) then foo(fix(x)) else true endif;
     function var bool: foo(opt int: x) = if mzn_destruct_opt(x).1 then foo(mzn_destruct_opt(x).2) else true endif;
     function var bool: foo(int: x) = true;
