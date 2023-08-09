@@ -9,6 +9,8 @@ use super::{
 };
 use std::fmt::Write;
 
+static MINIZINC_COMPAT: &str = include_str!("../../../../share/minizinc/compat.mzn");
+
 /// Pretty prints THIR as MiniZinc
 pub struct PrettyPrinter<'a, T = ()> {
 	db: &'a dyn Thir,
@@ -25,18 +27,37 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 		Self {
 			db,
 			model,
-			old_compat: true,
+			old_compat: false,
 			debug_types: false,
 		}
 	}
+
+	/// Create a new pretty printer which prints output compatible with old MiniZinc
+	pub fn new_compat(db: &'a dyn Thir, model: &'a Model<T>) -> Self {
+		let mut printer = Self::new(db, model);
+		printer.old_compat = true;
+		printer
+	}
+
 	/// Pretty print the model
 	pub fn pretty_print(&self) -> String {
+		let ids = self.db.identifier_registry();
 		let mut buf = String::new();
 		for item in self.model.top_level_items() {
+			if self.old_compat {
+				if let ItemId::Function(f) = item {
+					if self.model[f].name() == ids.default {
+						continue;
+					}
+				}
+			}
 			writeln!(&mut buf, "{};", self.pretty_print_item(item)).unwrap();
 		}
 		if self.model.solve().is_none() {
 			writeln!(&mut buf, "solve satisfy;").unwrap();
+		}
+		if self.old_compat {
+			writeln!(&mut buf, "{}", MINIZINC_COMPAT).unwrap();
 		}
 		buf
 	}
@@ -464,7 +485,7 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 							)
 						}),
 					Callable::Function(f) => self.model[*f].name().pretty_print(self.db),
-					Callable::Expression(e) => self.pretty_print_expression(e),
+					Callable::Expression(e) => format!("({})", self.pretty_print_expression(e)),
 				};
 				let args = c
 					.arguments
@@ -472,11 +493,7 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 					.map(|a| self.pretty_print_expression(a))
 					.collect::<Vec<_>>()
 					.join(", ");
-				if self.old_compat {
-					format!("{}({})", f, args)
-				} else {
-					format!("({})({})", f, args)
-				}
+				format!("{}({})", f, args)
 			}
 			ExpressionData::Case(c) => {
 				let branches = c

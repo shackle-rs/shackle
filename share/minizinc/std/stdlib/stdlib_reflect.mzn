@@ -88,7 +88,7 @@ function par bool: has_ub_set(var set of $$E: x);
 function $T: fix(var $T: x);
 /** @group stdlib.reflect Check if the value of \a x is fixed at this point
   in evaluation. If it is fixed, return its value, otherwise abort. */
-function opt $T: fix(var opt $T: x);
+function opt $T: fix(var opt $T: x) = mzn_construct_opt(fix(mzn_destruct_opt(x)));
 function $T: fix($T: x) = x;
 function opt $T: fix(opt $T: x) = x;
 /** @group stdlib.reflect Check if the value of every element of the array \a x is fixed
@@ -96,7 +96,7 @@ at this point in evaluation. If all are fixed, return an array of their values, 
 function array[$U] of $T: fix(array[$U] of var $T: x);
 /** @group stdlib.reflect Check if the value of every element of the array \a x is fixed
 at this point in evaluation. If all are fixed, return an array of their values, otherwise abort. */
-function array[$U] of opt $T: fix(array[$U] of var opt $T: x);
+function array[$U] of opt $T: fix(array[$U] of var opt $T: x) = arrayXd(x, [mzn_construct_opt(fix(mzn_destruct_opt(x_i))) | x_i in x]);
 /** @group stdlib.reflect Test if \a x is fixed */
 function bool: is_fixed(any $T: x);
 /** @group stdlib.reflect Test if every element of array \a x is fixed */

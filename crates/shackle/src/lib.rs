@@ -295,7 +295,7 @@ impl Program {
 	}
 	/// Output the [`Pogram`] using the given output interface, using the [`Write`] trait
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
-		let printer = PrettyPrinter::new(&self.db, &self.code);
+		let printer = PrettyPrinter::new_compat(&self.db, &self.code);
 		out.write_all(printer.pretty_print().as_bytes())
 	}
 }
