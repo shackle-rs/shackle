@@ -9,38 +9,6 @@ function array[$U] of opt $T: 'default'(array[$U] of opt $T:x, array[$U] of opt 
 function array[$U] of var $T: 'default'(array[$U] of var $T:x, array[$U] of var $T: y);
 function array[$U] of var opt $T: 'default'(array[$U] of var opt $T:x, array[$U] of var opt $T: y);
 
-function $T: 'default'(tuple(bool, $T): x, $T: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function var $T: 'default'(tuple(var bool, var $T): x, var $T: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function bool: 'default'(tuple(bool, bool): x, bool: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function var bool: 'default'(tuple(var bool, var bool): x, var bool: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function int: 'default'(tuple(bool, int): x, int: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function var int: 'default'(tuple(var bool, var int): x, var int: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function float: 'default'(tuple(bool, float): x, float: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
-function var float: 'default'(tuple(var bool, var float): x, var float: y) = let {
-    any: z = x default (true, y);
-} in if z.1 then z.2 else y endif;
-
 function set of $$E: enum_of(var opt $$E: x) ::mzn_internal_representation;
 function set of $$E: enum_of(array[$T] of var opt $$E: x) ::mzn_internal_representation;
 
@@ -56,12 +24,38 @@ function set of $$E: dom(var opt $$E: x);
 function set of $$E: dom_array(array[$T] of var opt $$E: x);
 function set of int: dom_bounds_array(array[$T] of var opt int: x);
 
+function $$E: lb_array(array[$U] of var $$E: x) = let {
+    array [int] of var opt int: xx = array1d(x);
+} in to_enum(enum_of(x), lb_array(xx));
+
+function $$E: ub_array(array[$U] of var $$E: x) = let {
+    array [int] of var opt int: xx = array1d(x);
+} in to_enum(enum_of(x), ub_array(xx));
+
+function float: lb_array(array[$U] of var float: x) = let {
+    array [int] of var opt float: xx = array1d(x);
+} in lb_array(xx);
+
+function float: ub_array(array[$U] of var float: x) = let {
+    array [int] of var opt float: xx = array1d(x);
+} in ub_array(xx);
+
 function opt $T: fix(var opt $T: x);
 function array[$U] of opt $T: fix(array[$U] of var opt $T: x);
 
 function $$T: deopt(opt $$T: x);
 function $T: deopt(opt $T: x);
 test occurs(opt $T: x);
+
+function set of $$E: enum_of_internal(set of $$E: e) = e;
+
+function bool: mzn_assert_warn(bool: b, string: msg) = b;
+
+test mzn_check_only_range_domains() = if mzn_opt_only_range_domains.1 then mzn_opt_only_range_domains.2 else false endif;
+test mzn_check_annotate_defines_var() = if mzn_opt_annotate_defines_var.1 then mzn_opt_annotate_defines_var.2 else true endif;
+test mzn_check_ignore_symmetry_breaking_constraints() = if mzn_ignore_symmetry_breaking_constraints.1 then mzn_ignore_symmetry_breaking_constraints.2 else false endif;
+test mzn_check_ignore_redundant_constraints() = if mzn_ignore_redundant_constraints.1 then mzn_ignore_redundant_constraints.2 else false endif;
+test mzn_check_absent_zero() = if mzn_absent_zero.1 then mzn_absent_zero.2 else true endif;
 
 mzn_absent_zero = (false, false);
 mzn_min_version_required = (false, 0);
