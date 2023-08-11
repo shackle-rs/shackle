@@ -123,6 +123,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		.format_module_path(true)
 		.filter_level(log::LevelFilter::Trace)
 		.filter_module("salsa", log::LevelFilter::Warn)
+		.filter_module("shackle", log::LevelFilter::Warn)
 		.parse_default_env()
 		.init();
 
