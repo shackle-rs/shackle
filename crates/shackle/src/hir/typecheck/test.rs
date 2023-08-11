@@ -27,6 +27,25 @@ impl TypeTester {
 		expected.assert_eq(&pretty);
 	}
 
+	fn check_error(&mut self, model: &str, expected: Expect) {
+		self.db
+			.set_input_files(Arc::new(vec![InputFile::ModelString(model.to_owned())]));
+		let mut errors = Vec::new();
+		for m in self.db.resolve_includes().unwrap().iter() {
+			for i in self.db.lookup_items(*m).iter() {
+				for e in self.db.lookup_item_type_errors(*i).outer_iter() {
+					errors.extend(e.iter().cloned());
+				}
+			}
+		}
+		let result = errors
+			.iter()
+			.map(|e| e.to_string())
+			.collect::<Vec<_>>()
+			.join("\n");
+		expected.assert_eq(&result);
+	}
+
 	fn type_expression(&mut self, preamble: &str, expr: &str) -> Ty {
 		self.db.set_input_files(Arc::new(vec![
 			InputFile::ModelString(format!("any: _TEST_EXPR = {};", expr)),
@@ -221,5 +240,40 @@ fn test_function_resolution() {
         "#,
 		"foo(1, 1)",
 		expect!("error"),
+	);
+}
+
+#[test]
+fn test_type_errors() {
+	let mut tester = TypeTester::default();
+	tester.check_error(
+		r#"
+		int: x = 1.5;
+		"#,
+		expect!("Type mismatch"),
+	);
+	tester.check_error(
+		r#"
+		array [float] of int: x;
+		"#,
+		expect!("Illegal type"),
+	);
+	tester.check_error(
+		r#"
+		[1]: x;
+		"#,
+		expect!("Type mismatch"),
+	);
+	tester.check_error(
+		r#"
+		any: x = [1, "two"];
+		"#,
+		expect!("Invalid array literal"),
+	);
+	tester.check_error(
+		r#"
+		any: x = nope;
+		"#,
+		expect!("Undefined identifier"),
 	);
 }

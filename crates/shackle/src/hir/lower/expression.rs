@@ -327,18 +327,22 @@ impl ExpressionCollector<'_> {
 				tiids
 					.tiids
 					.entry(ident)
-					.and_modify(|tiid| {
+					.and_modify(|(in_param, tiid)| {
 						tiid.is_varifiable =
 							tiid.is_varifiable || inst == Some(VarType::Var) || is_array_dim;
 						tiid.is_indexable = tiid.is_indexable || is_array_dim;
+						*in_param = *in_param || is_fn_parameter;
 					})
-					.or_insert(TypeInstIdentifierDeclaration {
-						name: self.alloc_pattern(origin.clone(), ident),
-						anonymous: false,
-						is_enum: false,
-						is_varifiable: inst == Some(VarType::Var) || is_array_dim,
-						is_indexable: is_array_dim,
-					});
+					.or_insert((
+						is_fn_parameter,
+						TypeInstIdentifierDeclaration {
+							name: self.alloc_pattern(origin.clone(), ident),
+							anonymous: false,
+							is_enum: false,
+							is_varifiable: inst == Some(VarType::Var) || is_array_dim,
+							is_indexable: is_array_dim,
+						},
+					));
 				Type::Bounded {
 					inst,
 					opt,
@@ -351,14 +355,20 @@ impl ExpressionCollector<'_> {
 				tiids
 					.tiids
 					.entry(ident)
-					.or_insert(TypeInstIdentifierDeclaration {
-						name: self.alloc_pattern(origin.clone(), ident),
-						anonymous: false,
-						is_enum: true,
-						is_varifiable: true,
-						is_indexable: false,
+					.and_modify(|(in_param, tiid)| {
+						tiid.is_enum = true;
+						*in_param = *in_param || is_fn_parameter;
 					})
-					.is_enum = true;
+					.or_insert((
+						is_fn_parameter,
+						TypeInstIdentifierDeclaration {
+							name: self.alloc_pattern(origin.clone(), ident),
+							anonymous: false,
+							is_enum: true,
+							is_varifiable: true,
+							is_indexable: false,
+						},
+					));
 				let (inst, opt) = match (b.any_type(), b.var_type(), b.opt_type()) {
 					(true, _, _) => (None, None), // Unrestricted
 					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
@@ -839,7 +849,7 @@ impl ExpressionCollector<'_> {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TypeInstIdentifiers {
 	/// The named type-inst ids
-	pub tiids: FxHashMap<Identifier, TypeInstIdentifierDeclaration>,
+	pub tiids: FxHashMap<Identifier, (bool, TypeInstIdentifierDeclaration)>,
 	/// Anonymous type-inst ids
 	pub anons: Vec<TypeInstIdentifierDeclaration>,
 }
@@ -850,6 +860,7 @@ impl TypeInstIdentifiers {
 		let mut tiids = self
 			.tiids
 			.into_values()
+			.filter_map(|(ok, d)| if ok { Some(d) } else { None })
 			.chain(self.anons)
 			.collect::<Vec<_>>();
 		tiids.sort_by_key(|tiid| tiid.name);
