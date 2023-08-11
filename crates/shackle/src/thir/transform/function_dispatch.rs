@@ -49,7 +49,8 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DispatchRewriter<Dst, Sr
 
 	fn fold_function_body(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
 		fold_function_body(self, db, model, f);
-		if let Some(dispatch_to) = self.dispatch_to.remove(&f) {
+		if let Some(mut dispatch_to) = self.dispatch_to.remove(&f) {
+			dispatch_to.sort();
 			let mut branches = Vec::with_capacity(dispatch_to.len());
 			for target in dispatch_to {
 				log::debug!(
