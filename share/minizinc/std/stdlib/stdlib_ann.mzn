@@ -25,10 +25,7 @@ annotation add_to_output;
 
 /** @group stdlib.annotations.general Declare that the annotated variable \a x should be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
-function ann: 'output'(any $T: x :: annotated_expression);
-/** @group stdlib.annotations.general Declare that the annotated variable \a x should be added to the output
-of the model. This annotation only has an effect when the model does not have an output item. */
-function ann: 'output'(array [$U] of any $T: x :: annotated_expression);
+annotation 'output';
 
 /** @group stdlib.annotations.general Declare that the annotated variable should not be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
