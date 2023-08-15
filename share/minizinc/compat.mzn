@@ -75,9 +75,3 @@ predicate if_then_else(array[int] of var bool: c, array[int] of set of int: x, v
     fzn_if_then_else_set(c, x, y);
 predicate if_then_else(array[int] of var bool: c, array[int] of var set of int: x, var set of int: y) =
     fzn_if_then_else_var_set(c, x, y);
-
-mzn_min_version_required = (false, 0);
-mzn_opt_only_range_domains = (false, false);
-mzn_opt_annotate_defines_var = (false, false);
-mzn_ignore_symmetry_breaking_constraints = (false, false);
-mzn_ignore_redundant_constraints = (false, false);
