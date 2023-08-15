@@ -920,7 +920,16 @@ pub struct Let<T = ()> {
 }
 
 impl<T: Marker> ExpressionBuilder<T> for Let<T> {
-	fn build(self, _db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
+		let types = db.type_registry();
+		if self.in_expression.ty() == types.par_bool
+			&& self.items.iter().any(|item| match item {
+				LetItem::Constraint(idx) => model[*idx].expression().ty() == types.var_bool,
+				LetItem::Declaration(idx) => !model[*idx].ty().known_par(db.upcast()),
+			}) {
+			// Becomes var because any var partiality bubbles up to this point
+			return Expression::new_unchecked(types.var_bool, self, origin);
+		}
 		Expression::new_unchecked(self.in_expression.ty(), self, origin)
 	}
 }

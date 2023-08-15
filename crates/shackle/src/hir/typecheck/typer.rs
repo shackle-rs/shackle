@@ -87,7 +87,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	}
 
 	/// Collect the type of an expression and check that it is a subtype of the expected type.
-	pub fn typecheck_expression(&mut self, expr: ArenaIndex<Expression>, expected: Ty) {
+	pub fn typecheck_expression(&mut self, expr: ArenaIndex<Expression>, expected: Ty) -> Ty {
 		let db = self.db;
 		let actual = self.collect_expression(expr);
 		if !actual.is_subtype_of(self.db.upcast(), expected) {
@@ -106,6 +106,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				},
 			);
 		}
+		actual
 	}
 
 	/// Collect the type of an output expression and check that it is a subtype of the expected type.
@@ -1464,13 +1465,17 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_let(&mut self, l: &Let) -> Ty {
 		let db = self.db;
+		let mut is_var = false;
 		for item in l.items.iter() {
 			match item {
 				LetItem::Constraint(c) => {
 					for ann in c.annotations.iter() {
 						self.typecheck_expression(*ann, self.types.ann);
 					}
-					self.typecheck_expression(c.expression, self.types.var_bool);
+					let ty = self.typecheck_expression(c.expression, self.types.var_bool);
+					if ty == self.types.var_bool {
+						is_var = true;
+					}
 				}
 				LetItem::Declaration(d) => {
 					let ty = self.collect_declaration(d);
@@ -1490,10 +1495,19 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							},
 						);
 					}
+					if !ty.known_par(db.upcast()) {
+						is_var = true;
+					}
 				}
 			}
 		}
-		self.collect_expression(l.in_expression)
+		let ty = self.collect_expression(l.in_expression);
+		if ty == self.types.par_bool && is_var {
+			// Becomes var because any var partiality bubbles up to this point
+			self.types.var_bool
+		} else {
+			ty
+		}
 	}
 
 	/// Type check a declaration
