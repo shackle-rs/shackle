@@ -1,7 +1,6 @@
 //! Functionality related to the input and output of data
 
 pub(crate) mod dzn;
-pub(crate) mod json;
 pub(crate) mod serde;
 
 use std::{ops::RangeInclusive, sync::Arc};

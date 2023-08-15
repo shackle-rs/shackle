@@ -1,5 +1,4 @@
 use std::{
-	collections::BTreeMap,
 	io::{BufRead, BufReader, Write},
 	path::PathBuf,
 	process::{Command, Stdio},
@@ -7,14 +6,15 @@ use std::{
 
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
-use serde_json::Map;
+use serde::{
+	de::{DeserializeSeed, Error, IgnoredAny, Visitor},
+	Deserializer,
+};
 use tempfile::Builder;
 
 use crate::{
-	data::json::deserialize_legacy_value,
+	data::serde::SerdeValueVisitor,
 	diagnostics::{FileError, InternalError, ShackleError},
-	hir::Identifier,
-	ty::{self},
 	value::{Polarity, Set, Value},
 	Message, Program, Status, Type,
 };
@@ -22,7 +22,7 @@ use crate::{
 impl Program {
 	/// Run the program in the current state
 	/// Solutions are emitted to the callback, and the resulting status is returned.
-	pub fn run<F: Fn(&Message) -> bool>(
+	pub fn run<F: Fn(&Message) -> Result<(), ShackleError>>(
 		&mut self,
 		msg_callback: F,
 	) -> Result<Status, ShackleError> {
@@ -66,13 +66,12 @@ impl Program {
 		cmd.stdin(Stdio::null())
 			.stdout(Stdio::piped())
 			.stderr(Stdio::inherit())
-			.arg(tmpfile.path())
+			.arg(&tmp_path)
 			.args([
 				"--output-mode",
 				"json",
 				"--json-stream",
 				"--ignore-stdlib",
-				"--output-time",
 				"--output-objective",
 				"--output-output-item",
 				"--intermediate-solutions",
@@ -89,103 +88,31 @@ impl Program {
 		let mut child = cmd.spawn().unwrap(); // TODO: fix unwrap
 		let stdout = child.stdout.take().unwrap();
 
-		// let ty_map = self.db.variable_type_map();
-		let ty_map: FxHashMap<Identifier, ty::Ty> = FxHashMap::default(); // TODO!!
 		let mut status = Status::Unknown;
 		for line in BufReader::new(stdout).lines() {
 			match line {
-				Err(err) => {
-					return Err(
-						InternalError::new(format!("minizinc output error: {}", err)).into(),
-					);
+				Err(e) => {
+					return Err(InternalError::new(format!(
+						"Unable to read interpreter output: “{e}”"
+					))
+					.into())
 				}
 				Ok(line) => {
-					let mut obj = serde_json::from_str::<Map<String, serde_json::Value>>(&line)
-						.expect("bad message in mzn json");
-					let ty = obj["type"].as_str().expect("bad type field in mzn json");
-					match ty {
-						"statistics" => {
-							if let serde_json::Value::Object(map) = &obj["statistics"] {
-								msg_callback(&Message::Statistic(map));
-							} else {
-								return Err(InternalError::new(format!(
-									"minizinc invalid statistics message: {}",
-									obj["statistics"]
-								))
-								.into());
-							}
-						}
-						"solution" => {
-							let mut sol = BTreeMap::new();
-							if let serde_json::Value::Object(map) = obj["output"]
-								.as_object_mut()
-								.unwrap()
-								.remove("json")
-								.unwrap()
-							{
-								for (k, v) in map {
-									let ident = Identifier::new(&k, &self.db);
-									let ty = ty_map[&ident];
-
-									let val = match deserialize_legacy_value(&self.db, ty, v) {
-										Ok(val) => val,
-										Err(e) => return Err(e.into()),
-									};
-									sol.insert(k, val);
+					match serde_json::Deserializer::from_str(&line)
+						.deserialize_map(SerdeMessageVisitor(&self._output_types))
+						.map_err(|e| {
+							InternalError::new(format!("failed to parse json message: “{e}”"))
+						})? {
+						LegacyOutput::Status(s) => status = s,
+						LegacyOutput::Msg(msg) => {
+							if let Message::Solution(_) = msg {
+								if status == Status::Unknown {
+									status = Status::Satisfied
 								}
-							} else {
-								panic!("invalid output.json field in mzn json")
 							}
-							msg_callback(&Message::Solution(sol));
-							if let Status::Unknown = status {
-								status = Status::Satisfied;
-							}
+							msg_callback(&msg)?
 						}
-						"status" => match obj["status"]
-							.as_str()
-							.expect("bad status field in mzn json")
-						{
-							"ALL_SOLUTIONS" => status = Status::AllSolutions,
-							"OPTIMAL_SOLUTION" => status = Status::Optimal,
-							"UNSATISFIABLE" => status = Status::Infeasible,
-							"UNBOUNDED" => todo!(),
-							"UNSAT_OR_UNBOUNDED" => todo!(),
-							"UNKNOWN" => status = Status::Unknown,
-							"ERROR" => {
-								return Err(InternalError::new(
-									"Error occurred, but no message was provided",
-								)
-								.into())
-							}
-							s => {
-								return Err(InternalError::new(format!(
-									"minizinc unknown status type: {}",
-									s
-								))
-								.into());
-							}
-						},
-						"error" => {
-							return Err(InternalError::new(format!(
-								"minizinc error: {}",
-								obj["message"]
-							))
-							.into());
-						}
-						"warning" => {
-							msg_callback(&Message::Warning(
-								obj["message"]
-									.as_str()
-									.expect("invalid message field in mzn json object"),
-							));
-						}
-						s => {
-							return Err(InternalError::new(format!(
-								"minizinc unknown message type: {}",
-								s
-							))
-							.into());
-						}
+						LegacyOutput::Error(err) => return Err(err),
 					}
 				}
 			}
@@ -346,6 +273,224 @@ fn write_legacy_dummy_value<W: Write>(out: &mut W, ty: &Type) -> Result<(), std:
 				write!(out, ",")?;
 			}
 			write!(out, ")")
+		}
+	}
+}
+
+struct SerdeMessageVisitor<'a>(pub &'a FxHashMap<String, Type>);
+
+enum LegacyOutput<'a> {
+	Status(Status),
+	Msg(Message<'a>),
+	Error(ShackleError),
+}
+
+impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
+	type Value = LegacyOutput<'de>;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "minizinc interpreter message")
+	}
+
+	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+		const FIELDS: &[&str] = &[
+			"type",
+			"statistics",
+			"output",
+			"status",
+			"message",
+			"location",
+			"stack",
+			"sections",
+		];
+		let type_map = self.0;
+
+		let mut msg_type = None;
+		let mut statistics = None;
+		let mut message = None;
+		let mut status = None;
+		let mut solution = None;
+
+		while let Some(k) = map.next_key::<&str>()? {
+			match k {
+				"type" => {
+					if msg_type.is_some() {
+						return Err(Error::duplicate_field("type"));
+					}
+					msg_type = Some(map.next_value()?);
+				}
+				"message" => {
+					if message.is_some() {
+						return Err(Error::duplicate_field("message"));
+					}
+					message = Some(map.next_value::<&str>()?);
+				}
+				"output" => {
+					if solution.is_some() {
+						return Err(Error::duplicate_field("output"));
+					}
+					match map.next_value_seed(SerdeWrappedName {
+						name: "json",
+						seed: SerdeOutputVisitor(type_map),
+					})? {
+						Ok(sol) => solution = Some(sol),
+						Err(e) => return Ok(LegacyOutput::Error(e)),
+					}
+				}
+				"statistics" => {
+					if statistics.is_some() {
+						return Err(Error::duplicate_field("statistics"));
+					}
+					statistics = Some(map.next_value()?);
+				}
+				"status" => {
+					if status.is_some() {
+						return Err(Error::duplicate_field("status"));
+					}
+					status = Some(match map.next_value()? {
+						"ALL_SOLUTIONS" => Status::AllSolutions,
+						"OPTIMAL_SOLUTION" => Status::Optimal,
+						"UNSATISFIABLE" => Status::Infeasible,
+						"UNBOUNDED" => Status::Infeasible, // TODO: Should this be seperate?
+						"UNSAT_OR_UNBOUNDED" => Status::Infeasible,
+						"UNKNOWN" => Status::Unknown,
+						"ERROR" => {
+							return Ok(LegacyOutput::Error(
+								InternalError::new("Error occurred, but no message was provided")
+									.into(),
+							))
+						} // TODO: Probably should do something, but we now rely on another error message type
+						s => {
+							return Err(Error::unknown_variant(
+								s,
+								&[
+									"ALL_SOLUTIONS",
+									"OPTIMAL_SOLUTION",
+									"UNSATISFIABLE",
+									"UNBOUNDED",
+									"UNSAT_OR_UNBOUNDED",
+									"UNKNOWN",
+									"ERROR",
+								],
+							));
+						}
+					})
+				}
+				"location" | "stack" | "sections" => {
+					map.next_value::<IgnoredAny>()?; // TODO: parse additional error/warning information
+				}
+				_ => return Err(Error::unknown_field(k, FIELDS)),
+			}
+		}
+
+		match msg_type {
+			Some("solution") => match solution {
+				None => Err(Error::missing_field("output")),
+				Some(x) => Ok(LegacyOutput::Msg(Message::Solution(x))),
+			},
+			Some("statistics") => match statistics {
+				None => Err(Error::missing_field("statistics")),
+				Some(x) => Ok(LegacyOutput::Msg(Message::Statistic(x))),
+			},
+			Some("error") => match message {
+				None => Err(Error::missing_field("message")),
+				Some(msg) => Ok(LegacyOutput::Error(
+					InternalError::new(format!("minizinc error: {msg}")).into(),
+				)),
+			},
+			Some("warning") => match message {
+				None => Err(Error::missing_field("message")),
+				Some(msg) => Ok(LegacyOutput::Msg(Message::Warning(msg))),
+			},
+			Some("status") => match status {
+				None => Err(Error::missing_field("status")),
+				Some(s) => Ok(LegacyOutput::Status(s)),
+			},
+			None => Err(Error::missing_field("type")),
+			Some(ty) => Err(Error::unknown_variant(ty, &["statistics", "status", ""])),
+		}
+	}
+}
+
+#[derive(Clone)]
+struct SerdeOutputVisitor<'a>(pub &'a FxHashMap<String, Type>);
+
+impl<'de, 'a> Visitor<'de> for SerdeOutputVisitor<'a> {
+	type Value = Result<FxHashMap<&'de str, Value>, ShackleError>;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "minizinc output assignment")
+	}
+
+	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+		let type_map = self.0;
+
+		let mut sol = FxHashMap::default();
+		sol.reserve(type_map.len());
+		while let Some(k) = map.next_key()? {
+			if let Some(ty) = type_map.get(k) {
+				let v = map.next_value_seed(SerdeValueVisitor(ty))?;
+				match v.resolve_value(ty) {
+					Ok(v) => {
+						sol.insert(k, v);
+					}
+					Err(e) => return Ok(Err(e)),
+				}
+			} else {
+				map.next_value::<IgnoredAny>()?; // Ignore unknown
+			}
+		}
+		Ok(Ok(sol))
+	}
+}
+
+impl<'a, 'de> DeserializeSeed<'de> for SerdeOutputVisitor<'a> {
+	type Value = Result<FxHashMap<&'de str, Value>, ShackleError>;
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_map(self)
+	}
+}
+
+struct SerdeWrappedName<X: Clone> {
+	name: &'static str,
+	seed: X,
+}
+
+impl<'de, X: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SerdeWrappedName<X> {
+	type Value = X::Value;
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_map(self)
+	}
+}
+
+impl<'de, X: DeserializeSeed<'de> + Clone> Visitor<'de> for SerdeWrappedName<X> {
+	type Value = X::Value;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "map with {} identifier", self.name)
+	}
+
+	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+		let mut ret = None;
+
+		while let Some(k) = map.next_key::<&str>()? {
+			if k == self.name {
+				ret = Some(map.next_value_seed(self.seed.clone())?);
+			} else {
+				map.next_value::<IgnoredAny>()?; // Ignore unknown
+			}
+		}
+		match ret {
+			None => Err(Error::missing_field(self.name)),
+			Some(x) => Ok(x),
 		}
 	}
 }

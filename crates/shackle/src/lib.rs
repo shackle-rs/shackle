@@ -31,13 +31,11 @@ use file::{InputFile, SourceFile};
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserializer;
-use serde_json::Map;
 use syntax::ast::{AstNode, Identifier};
 use ty::{Ty, TyData};
 use value::Enum;
 
 use std::{
-	collections::BTreeMap,
 	ffi::OsStr,
 	fmt::Display,
 	io::Write,
@@ -168,7 +166,7 @@ pub struct Program {
 }
 
 /// Status of running and solving a Program
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
 	/// No solutions exist
 	Infeasible,
@@ -344,9 +342,9 @@ impl Display for Type {
 #[derive(Debug)]
 pub enum Message<'a> {
 	/// (Intermediate) solution emitted in the process
-	Solution(BTreeMap<String, Value>),
+	Solution(FxHashMap<&'a str, Value>),
 	/// Statistical information of the shackle or solving process
-	Statistic(&'a Map<String, serde_json::Value>),
+	Statistic(Vec<(&'a str, serde_json::Value)>),
 	/// Trace messages emitted during the shackle process
 	Trace(&'a str),
 	/// Warning messages emitted by shackle or the solver
@@ -363,13 +361,13 @@ impl<'a> Display for Message<'a> {
 				writeln!(f, "----------")
 			}
 			Message::Statistic(map) => {
-				for (name, val) in *map {
+				for (name, val) in map {
 					writeln!(f, "%%%mzn-stat: {}={}", name, val)?;
 				}
 				writeln!(f, "%%%mzn-stat-end")
 			}
-			Message::Trace(msg) => write!(f, "% mzn-trace: {}", msg),
-			Message::Warning(msg) => write!(f, "% WARNING: {}", msg),
+			Message::Trace(msg) => writeln!(f, "% mzn-trace: {}", msg),
+			Message::Warning(msg) => writeln!(f, "% WARNING: {}", msg),
 		}
 	}
 }

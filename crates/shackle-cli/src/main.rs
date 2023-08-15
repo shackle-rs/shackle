@@ -126,7 +126,7 @@ impl Solve {
 		// Run resulting program and show results
 		let display_fn = |x: &Message| {
 			print!("{}", x);
-			true
+			Ok(())
 		};
 		let status = program.run(display_fn)?;
 		match status {
