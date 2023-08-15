@@ -45,10 +45,14 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 		let mut buf = String::new();
 		for item in self.model.top_level_items() {
 			if self.old_compat {
-				if let ItemId::Function(f) = item {
-					if self.model[f].name() == ids.default {
+				match item {
+					ItemId::Function(f) if self.model[f].name() == ids.default => {
 						continue;
 					}
+					ItemId::Annotation(a) if self.model[a].name == Some(ids.output) => {
+						continue;
+					}
+					_ => (),
 				}
 			}
 			writeln!(&mut buf, "{};", self.pretty_print_item(item)).unwrap();

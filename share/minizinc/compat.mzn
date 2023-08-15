@@ -57,6 +57,9 @@ test mzn_check_ignore_symmetry_breaking_constraints() = if mzn_ignore_symmetry_b
 test mzn_check_ignore_redundant_constraints() = if mzn_ignore_redundant_constraints.1 then mzn_ignore_redundant_constraints.2 else false endif;
 test mzn_check_absent_zero() = if mzn_absent_zero.1 then mzn_absent_zero.2 else true endif;
 
+function ann: 'output'(any $T: x :: annotated_expression);
+function ann: 'output'(array [$U] of any $T: x :: annotated_expression);
+
 mzn_absent_zero = (false, false);
 mzn_min_version_required = (false, 0);
 mzn_opt_only_range_domains = (false, false);
