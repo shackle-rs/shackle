@@ -20,6 +20,10 @@
         "named": true
       },
       {
+        "type": "call",
+        "named": true
+      },
+      {
         "type": "float_literal",
         "named": true
       },
@@ -32,7 +36,15 @@
         "named": true
       },
       {
+        "type": "infix_operator",
+        "named": true
+      },
+      {
         "type": "integer_literal",
+        "named": true
+      },
+      {
+        "type": "quoted_identifier",
         "named": true
       },
       {
@@ -490,7 +502,27 @@
         "required": false,
         "types": [
           {
-            "type": "_expression",
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "set_literal",
             "named": true
           }
         ]
@@ -500,39 +532,11 @@
         "required": true,
         "types": [
           {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "generator_call",
-            "named": true
-          },
-          {
             "type": "identifier",
             "named": true
           },
           {
-            "type": "indexed_access",
-            "named": true
-          },
-          {
-            "type": "inversed_identifier",
-            "named": true
-          },
-          {
-            "type": "parenthesised_expression",
-            "named": true
-          },
-          {
             "type": "quoted_identifier",
-            "named": true
-          },
-          {
-            "type": "record_access",
-            "named": true
-          },
-          {
-            "type": "tuple_access",
             "named": true
           }
         ]
@@ -1963,27 +1967,7 @@
         "required": true,
         "types": [
           {
-            "type": "!=",
-            "named": false
-          },
-          {
-            "type": "*",
-            "named": false
-          },
-          {
-            "type": "+",
-            "named": false
-          },
-          {
             "type": "++",
-            "named": false
-          },
-          {
-            "type": "-",
-            "named": false
-          },
-          {
-            "type": "->",
             "named": false
           },
           {
@@ -1991,207 +1975,11 @@
             "named": false
           },
           {
-            "type": "..<",
-            "named": false
-          },
-          {
-            "type": "/",
-            "named": false
-          },
-          {
-            "type": "/\\",
-            "named": false
-          },
-          {
-            "type": "<",
-            "named": false
-          },
-          {
-            "type": "<-",
-            "named": false
-          },
-          {
-            "type": "<->",
-            "named": false
-          },
-          {
-            "type": "<..",
-            "named": false
-          },
-          {
-            "type": "<..<",
-            "named": false
-          },
-          {
-            "type": "<=",
-            "named": false
-          },
-          {
-            "type": "=",
-            "named": false
-          },
-          {
-            "type": "==",
-            "named": false
-          },
-          {
-            "type": ">",
-            "named": false
-          },
-          {
-            "type": ">=",
-            "named": false
-          },
-          {
-            "type": "\\/",
-            "named": false
-          },
-          {
-            "type": "^",
-            "named": false
-          },
-          {
-            "type": "default",
-            "named": false
-          },
-          {
-            "type": "diff",
-            "named": false
-          },
-          {
-            "type": "div",
-            "named": false
-          },
-          {
-            "type": "in",
-            "named": false
-          },
-          {
-            "type": "intersect",
-            "named": false
-          },
-          {
-            "type": "mod",
-            "named": false
-          },
-          {
-            "type": "subset",
-            "named": false
-          },
-          {
-            "type": "superset",
-            "named": false
-          },
-          {
-            "type": "symdiff",
-            "named": false
-          },
-          {
             "type": "union",
             "named": false
           },
           {
-            "type": "xor",
-            "named": false
-          },
-          {
-            "type": "~!=",
-            "named": false
-          },
-          {
-            "type": "~*",
-            "named": false
-          },
-          {
-            "type": "~+",
-            "named": false
-          },
-          {
-            "type": "~-",
-            "named": false
-          },
-          {
-            "type": "~/",
-            "named": false
-          },
-          {
-            "type": "~=",
-            "named": false
-          },
-          {
-            "type": "~div",
-            "named": false
-          },
-          {
-            "type": "←",
-            "named": false
-          },
-          {
-            "type": "→",
-            "named": false
-          },
-          {
-            "type": "⇐",
-            "named": false
-          },
-          {
-            "type": "⇒",
-            "named": false
-          },
-          {
-            "type": "⇔",
-            "named": false
-          },
-          {
-            "type": "∈",
-            "named": false
-          },
-          {
-            "type": "∖",
-            "named": false
-          },
-          {
-            "type": "∧",
-            "named": false
-          },
-          {
-            "type": "∨",
-            "named": false
-          },
-          {
-            "type": "∩",
-            "named": false
-          },
-          {
             "type": "∪",
-            "named": false
-          },
-          {
-            "type": "≠",
-            "named": false
-          },
-          {
-            "type": "≤",
-            "named": false
-          },
-          {
-            "type": "≥",
-            "named": false
-          },
-          {
-            "type": "⊆",
-            "named": false
-          },
-          {
-            "type": "⊇",
-            "named": false
-          },
-          {
-            "type": "⊻",
-            "named": false
-          },
-          {
-            "type": "⟷",
             "named": false
           }
         ]
@@ -3774,10 +3562,6 @@
     "named": false
   },
   {
-    "type": "!=",
-    "named": false
-  },
-  {
     "type": "\"",
     "named": false
   },
@@ -3794,14 +3578,6 @@
     "named": false
   },
   {
-    "type": "*",
-    "named": false
-  },
-  {
-    "type": "+",
-    "named": false
-  },
-  {
     "type": "++",
     "named": false
   },
@@ -3811,10 +3587,6 @@
   },
   {
     "type": "-",
-    "named": false
-  },
-  {
-    "type": "->",
     "named": false
   },
   {
@@ -3830,14 +3602,6 @@
     "named": false
   },
   {
-    "type": "/",
-    "named": false
-  },
-  {
-    "type": "/\\",
-    "named": false
-  },
-  {
     "type": ":",
     "named": false
   },
@@ -3850,18 +3614,6 @@
     "named": false
   },
   {
-    "type": "<",
-    "named": false
-  },
-  {
-    "type": "<-",
-    "named": false
-  },
-  {
-    "type": "<->",
-    "named": false
-  },
-  {
     "type": "<..",
     "named": false
   },
@@ -3870,27 +3622,11 @@
     "named": false
   },
   {
-    "type": "<=",
-    "named": false
-  },
-  {
     "type": "=",
     "named": false
   },
   {
-    "type": "==",
-    "named": false
-  },
-  {
     "type": "=>",
-    "named": false
-  },
-  {
-    "type": ">",
-    "named": false
-  },
-  {
-    "type": ">=",
     "named": false
   },
   {
@@ -3910,10 +3646,6 @@
     "named": false
   },
   {
-    "type": "\\/",
-    "named": false
-  },
-  {
     "type": "\\U",
     "named": false
   },
@@ -3927,10 +3659,6 @@
   },
   {
     "type": "]",
-    "named": false
-  },
-  {
-    "type": "^",
     "named": false
   },
   {
@@ -3975,18 +3703,6 @@
   },
   {
     "type": "constraint",
-    "named": false
-  },
-  {
-    "type": "default",
-    "named": false
-  },
-  {
-    "type": "diff",
-    "named": false
-  },
-  {
-    "type": "div",
     "named": false
   },
   {
@@ -4058,10 +3774,6 @@
     "named": true
   },
   {
-    "type": "intersect",
-    "named": false
-  },
-  {
     "type": "lambda",
     "named": false
   },
@@ -4079,10 +3791,6 @@
   },
   {
     "type": "minimize",
-    "named": false
-  },
-  {
-    "type": "mod",
     "named": false
   },
   {
@@ -4146,18 +3854,6 @@
     "named": true
   },
   {
-    "type": "subset",
-    "named": false
-  },
-  {
-    "type": "superset",
-    "named": false
-  },
-  {
-    "type": "symdiff",
-    "named": false
-  },
-  {
     "type": "test",
     "named": false
   },
@@ -4198,10 +3894,6 @@
     "named": false
   },
   {
-    "type": "xor",
-    "named": false
-  },
-  {
     "type": "{",
     "named": false
   },
@@ -4218,55 +3910,7 @@
     "named": false
   },
   {
-    "type": "~!=",
-    "named": false
-  },
-  {
-    "type": "~*",
-    "named": false
-  },
-  {
-    "type": "~+",
-    "named": false
-  },
-  {
-    "type": "~-",
-    "named": false
-  },
-  {
-    "type": "~/",
-    "named": false
-  },
-  {
-    "type": "~=",
-    "named": false
-  },
-  {
-    "type": "~div",
-    "named": false
-  },
-  {
     "type": "¬",
-    "named": false
-  },
-  {
-    "type": "←",
-    "named": false
-  },
-  {
-    "type": "→",
-    "named": false
-  },
-  {
-    "type": "⇐",
-    "named": false
-  },
-  {
-    "type": "⇒",
-    "named": false
-  },
-  {
-    "type": "⇔",
     "named": false
   },
   {
@@ -4274,59 +3918,11 @@
     "named": false
   },
   {
-    "type": "∈",
-    "named": false
-  },
-  {
-    "type": "∖",
-    "named": false
-  },
-  {
     "type": "∞",
     "named": false
   },
   {
-    "type": "∧",
-    "named": false
-  },
-  {
-    "type": "∨",
-    "named": false
-  },
-  {
-    "type": "∩",
-    "named": false
-  },
-  {
     "type": "∪",
-    "named": false
-  },
-  {
-    "type": "≠",
-    "named": false
-  },
-  {
-    "type": "≤",
-    "named": false
-  },
-  {
-    "type": "≥",
-    "named": false
-  },
-  {
-    "type": "⊆",
-    "named": false
-  },
-  {
-    "type": "⊇",
-    "named": false
-  },
-  {
-    "type": "⊻",
-    "named": false
-  },
-  {
-    "type": "⟷",
     "named": false
   }
 ]
