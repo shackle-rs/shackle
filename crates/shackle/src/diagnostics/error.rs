@@ -1,6 +1,6 @@
 //! Error handling
 
-use miette::{Diagnostic, SourceSpan};
+use miette::{Diagnostic, SourceOffset, SourceSpan};
 use thiserror::Error;
 
 use std::fmt::{Display, Formatter};
@@ -626,6 +626,37 @@ impl TryFrom<Diagnostics<ShackleError>> for ShackleError {
 				errors: value.iter().cloned().collect(),
 			}
 			.into()),
+		}
+	}
+}
+
+impl ShackleError {
+	pub(crate) fn from_serde_json(err: serde_json::Error, src: &SourceFile) -> Self {
+		use serde_json::error::Category;
+
+		match err.classify() {
+			Category::Io => FileError {
+				file: src
+					.path()
+					.expect("I/O error can only occur when source is a file")
+					.to_owned(),
+				message: err.to_string(),
+				other: Vec::new(),
+			}
+			.into(),
+			Category::Syntax | Category::Eof => SyntaxError {
+				src: src.clone(),
+				span: SourceOffset::from_location(src.contents(), err.line(), err.column()).into(),
+				msg: err.to_string(),
+				other: Vec::new(),
+			}
+			.into(),
+			Category::Data => TypeMismatch {
+				src: src.clone(),
+				msg: err.to_string(),
+				span: SourceOffset::from_location(src.contents(), err.line(), err.column()).into(),
+			}
+			.into(),
 		}
 	}
 }

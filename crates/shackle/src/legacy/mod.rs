@@ -2,6 +2,7 @@ use std::{
 	io::{BufRead, BufReader, Write},
 	path::PathBuf,
 	process::{Command, Stdio},
+	sync::Arc,
 };
 
 use itertools::Itertools;
@@ -101,7 +102,7 @@ impl Program {
 					match serde_json::Deserializer::from_str(&line)
 						.deserialize_map(SerdeMessageVisitor(&self._output_types))
 						.map_err(|e| {
-							InternalError::new(format!("failed to parse json message: “{e}”"))
+							ShackleError::from_serde_json(e, &Arc::new(line.clone()).into())
 						})? {
 						LegacyOutput::Status(s) => status = s,
 						LegacyOutput::Msg(msg) => {
@@ -313,6 +314,7 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 			"location",
 			"stack",
 			"sections",
+			"what",
 		];
 		let type_map = self.0;
 
@@ -387,7 +389,7 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 						}
 					})
 				}
-				"location" | "stack" | "sections" => {
+				"location" | "stack" | "sections" | "what" => {
 					map.next_value::<IgnoredAny>()?; // TODO: parse additional error/warning information
 				}
 				_ => return Err(Error::unknown_field(k, FIELDS)),
