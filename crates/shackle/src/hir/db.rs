@@ -11,7 +11,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::constants::IdentifierRegistry;
 use crate::db::{CompilerSettings, FileReader, Interner, Upcast};
 use crate::diagnostics::{Diagnostics, IncludeError, MultipleErrors};
-use crate::file::{FileRef, ModelRef};
+use crate::file::{FileRef, ModelRef, SourceFile};
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::db::SourceParser;
 use crate::ty::EnumRef;
@@ -511,7 +511,12 @@ fn syntax_errors(db: &dyn Hir) -> Arc<Vec<Error>> {
 		.resolve_includes()
 		.expect("Can't get syntax errors when resolving includes failed")
 		.iter()
-		.filter_map(|m| db.cst(**m).unwrap().error(db.upcast()))
+		.filter_map(|m| {
+			db.cst(**m)
+				.unwrap()
+				.error(|file_ref| SourceFile::new(file_ref.unwrap(), db.upcast()))
+				.err()
+		})
 		.map(|e| e.into())
 		.collect::<Vec<_>>();
 	Arc::new(errors)

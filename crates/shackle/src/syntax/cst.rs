@@ -64,11 +64,14 @@ impl Cst {
 	}
 
 	/// Get the syntax error(s) if any
-	pub fn error(&self, db: &dyn FileReader) -> Option<SyntaxError> {
+	pub fn error<F: Fn(Option<FileRef>) -> SourceFile>(
+		&self,
+		get_source: F,
+	) -> Result<(), SyntaxError> {
 		// This would be ideal, but (MISSING) is currently not allowed.
 		// let q =
 		// 	Query::new(tree_sitter_minizinc::language(), "[(ERROR) (MISSING)] @err").unwrap();
-		let mut result: Option<SyntaxError> = None;
+		let mut result: Result<(), SyntaxError> = Ok(());
 		let mut cursor = self.walk();
 		let next_node = |c: &mut TreeCursor| {
 			c.goto_next_sibling() || (c.goto_parent() && c.goto_next_sibling())
@@ -77,7 +80,7 @@ impl Cst {
 			let node = cursor.node();
 			if node.is_error() || node.is_missing() {
 				let error = SyntaxError {
-					src: SourceFile::new(self.file(), db),
+					src: get_source(self.inner.file),
 					span: node.byte_range().into(),
 					msg: if node.is_missing() {
 						format!("Missing {}", node.kind())
@@ -91,11 +94,11 @@ impl Cst {
 					},
 					other: Vec::new(),
 				};
-				match result {
-					Some(ref mut e) => {
+				match &mut result {
+					Err(e) => {
 						e.other.push(error);
 					}
-					None => result = Some(error),
+					Ok(()) => result = Err(error),
 				};
 				if !next_node(&mut cursor) {
 					break;

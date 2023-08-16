@@ -33,8 +33,7 @@ pub(crate) fn parse_dzn(src: &SourceFile) -> Result<Vec<Assignment>, ShackleErro
 		.expect("DataZinc Tree Sitter parser did not return tree object");
 
 	let cst = Cst::from_str(tree, src.contents());
-
-	// TODO: Check for syntax errors
+	cst.error(|_| src.clone())?; // Check for any syntax errors
 
 	let root = cst.node(cst.root_node());
 	let it = Children::from_cst(&root, "item");
@@ -218,6 +217,8 @@ pub(crate) fn typecheck_dzn(
 			_ => type_err("an array literal"),
 		},
 		Expression::ArrayLiteral2D(_) => todo!(),
+		Expression::Call(_) => todo!(),
+		Expression::InfixOperator(_) => todo!(),
 		_ => unreachable!(), // Should not be accepted by the parser
 	}
 }
