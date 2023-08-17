@@ -5,6 +5,7 @@ use serde::de::{DeserializeSeed, Error, IgnoredAny, Unexpected, Visitor};
 use super::ParserVal;
 use crate::{OptType, Type};
 
+#[derive(Clone)]
 pub(crate) struct SerdeValueVisitor<'a>(pub &'a Type);
 
 impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
@@ -142,20 +143,52 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 						let val = map.next_value_seed(SerdeValueVisitor(ty))?;
 						rec.push((k, val))
 					} else {
-						return Err(Error::unknown_field(
-							k,
-							&[], //TODO: Can this be made to work?
-						));
+						map.next_value::<IgnoredAny>()?; // Ignore unknown
 					}
 				}
 				if !types.is_empty() {
 					let field = types.into_iter().next().unwrap().0.to_string();
 					return Err(Error::missing_field(Box::leak(field.into_boxed_str()))); // TODO: Can we avoid leaking memory here?
 				}
+				rec.sort_by(|x, y| x.0.cmp(&y.0));
 				Ok(ParserVal::Record(rec))
 			}
-			Type::Set(_, _) => todo!(),
-			Type::Enum(_, _) => todo!(),
+			Type::Set(_, ty) => {
+				// Map is expected to have a single key "set" that is assigned an sequence of elements, these elements may be pairs to suggest list of elements.
+
+				// NOTE: The SerdeMaybePairVisitor will not work for types represented usin sequences
+				debug_assert!(!matches!(
+					**ty,
+					Type::Tuple(_, _)
+						| Type::Array {
+							opt: _,
+							dim: _,
+							element: _
+						}
+				));
+
+				let li = match map.next_key::<&str>()? {
+					Some("set") => {
+						let seed = SerdeSeqVisitor(SerdeMaybePairVisitor(SerdeValueVisitor(ty)));
+						map.next_value_seed(seed)?
+					}
+					Some(k) => return Err(Error::unknown_field(k, &["set"])),
+					None => return Err(Error::missing_field("set")),
+				};
+				if let Some(k) = map.next_key::<&str>()? {
+					return Err(Error::unknown_field(k, &["set"]));
+				}
+
+				Ok(ParserVal::SetRangeList(
+					li.into_iter()
+						.map(|(a, b)| {
+							let b = b.unwrap_or_else(|| a.clone());
+							(a, b)
+						})
+						.collect(),
+				))
+			}
+			Type::Enum(_, _) => SerdeEnumVisitor.visit_map(map),
 			_ => Err(Error::invalid_type(Unexpected::Map, &self)),
 		}
 	}
@@ -169,6 +202,66 @@ impl<'a, 'de> DeserializeSeed<'de> for SerdeValueVisitor<'a> {
 		deserializer: D,
 	) -> Result<Self::Value, D::Error> {
 		deserializer.deserialize_any(self)
+	}
+}
+
+#[derive(Clone)]
+struct SerdeEnumVisitor;
+
+impl<'de> DeserializeSeed<'de> for SerdeEnumVisitor {
+	type Value = ParserVal;
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_any(self)
+	}
+}
+
+impl<'de> Visitor<'de> for SerdeEnumVisitor {
+	type Value = ParserVal;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "an enumerated type argument")
+	}
+
+	fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
+		Ok(ParserVal::Integer(v))
+	}
+
+	fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
+		Ok(ParserVal::Enum(v, Vec::new()))
+	}
+
+	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+		const FIELDS: &[&str] = &["e", "a"];
+		let mut e = None;
+		let mut a = None;
+
+		while let Some(k) = map.next_key::<&str>()? {
+			match k {
+				"e" => {
+					if e.is_some() {
+						return Err(Error::duplicate_field("e"));
+					}
+					e = Some(map.next_value()?);
+				}
+				"a" => {
+					if a.is_some() {
+						return Err(Error::duplicate_field("a"));
+					}
+					a = Some(map.next_value_seed(SerdeSeqVisitor(self.clone()))?);
+				}
+				_ => return Err(Error::unknown_field(k, FIELDS)),
+			}
+		}
+
+		match (e, a) {
+			(None, _) => Err(Error::missing_field("e")),
+			(Some(e), Some(a)) => Ok(ParserVal::Enum(e, a)),
+			(Some(e), None) => Ok(ParserVal::Enum(e, Vec::new())),
+		}
 	}
 }
 
@@ -253,9 +346,176 @@ impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
 			if let Some((ident, ty)) = type_map.get_key_value(k) {
 				let value = map.next_value_seed(SerdeValueVisitor(ty))?;
 				assignments.push((ident, ty, value));
+			} else {
+				map.next_value::<IgnoredAny>()?; // Ignore unknown
 			}
-			// Ignore unknown
 		}
 		Ok(assignments)
+	}
+}
+
+struct SerdeSeqVisitor<X: Clone>(X);
+
+impl<'de, X: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SerdeSeqVisitor<X> {
+	type Value = Vec<X::Value>;
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_seq(self)
+	}
+}
+
+impl<'de, X: DeserializeSeed<'de> + Clone> Visitor<'de> for SerdeSeqVisitor<X> {
+	type Value = Vec<X::Value>;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "sequence")
+	}
+
+	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+		let mut v = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+		while let Some(x) = seq.next_element_seed(self.0.clone())? {
+			v.push(x);
+		}
+		Ok(v)
+	}
+}
+
+#[derive(Clone)]
+struct SerdeMaybePairVisitor<X: Clone>(X);
+
+impl<
+		'de,
+		X: DeserializeSeed<'de> + Visitor<'de, Value = <X as DeserializeSeed<'de>>::Value> + Clone,
+	> DeserializeSeed<'de> for SerdeMaybePairVisitor<X>
+{
+	type Value = (
+		<X as Visitor<'de>>::Value,
+		Option<<X as Visitor<'de>>::Value>,
+	);
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_any(self)
+	}
+}
+
+impl<
+		'de,
+		X: DeserializeSeed<'de> + Visitor<'de, Value = <X as DeserializeSeed<'de>>::Value> + Clone,
+	> Visitor<'de> for SerdeMaybePairVisitor<X>
+{
+	type Value = (
+		<X as Visitor<'de>>::Value,
+		Option<<X as Visitor<'de>>::Value>,
+	);
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "maybe a pair")
+	}
+
+	// A sequence is expected to be a pair
+	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+		let Some(first) = seq.next_element_seed(self.0.clone())? else { return Err(Error::invalid_length(0, &"2"))};
+		let Some(second) = seq.next_element_seed(self.0.clone())? else { return Err(Error::invalid_length(1, &"2"))};
+
+		let mut i = 0;
+		while let Some(_) = seq.next_element::<IgnoredAny>()? {
+			i += 1;
+		}
+		if i > 0 {
+			return Err(Error::invalid_length(2 + i, &"2"));
+		}
+		Ok((first, Some(second)))
+	}
+
+	// Defer to inner visitor
+	fn visit_bool<E: Error>(self, v: bool) -> Result<Self::Value, E> {
+		Ok((self.0.visit_bool(v)?, None))
+	}
+	fn visit_i8<E: Error>(self, v: i8) -> Result<Self::Value, E> {
+		Ok((self.0.visit_i8(v)?, None))
+	}
+	fn visit_i16<E: Error>(self, v: i16) -> Result<Self::Value, E> {
+		Ok((self.0.visit_i16(v)?, None))
+	}
+	fn visit_i32<E: Error>(self, v: i32) -> Result<Self::Value, E> {
+		Ok((self.0.visit_i32(v)?, None))
+	}
+	fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
+		Ok((self.0.visit_i64(v)?, None))
+	}
+	fn visit_i128<E: Error>(self, v: i128) -> Result<Self::Value, E> {
+		Ok((self.0.visit_i128(v)?, None))
+	}
+	fn visit_u8<E: Error>(self, v: u8) -> Result<Self::Value, E> {
+		Ok((self.0.visit_u8(v)?, None))
+	}
+	fn visit_u16<E: Error>(self, v: u16) -> Result<Self::Value, E> {
+		Ok((self.0.visit_u16(v)?, None))
+	}
+	fn visit_u32<E: Error>(self, v: u32) -> Result<Self::Value, E> {
+		Ok((self.0.visit_u32(v)?, None))
+	}
+	fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
+		Ok((self.0.visit_u64(v)?, None))
+	}
+	fn visit_u128<E: Error>(self, v: u128) -> Result<Self::Value, E> {
+		Ok((self.0.visit_u128(v)?, None))
+	}
+	fn visit_f32<E: Error>(self, v: f32) -> Result<Self::Value, E> {
+		Ok((self.0.visit_f32(v)?, None))
+	}
+	fn visit_f64<E: Error>(self, v: f64) -> Result<Self::Value, E> {
+		Ok((self.0.visit_f64(v)?, None))
+	}
+	fn visit_char<E: Error>(self, v: char) -> Result<Self::Value, E> {
+		Ok((self.0.visit_char(v)?, None))
+	}
+	fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+		Ok((self.0.visit_str(v)?, None))
+	}
+	fn visit_borrowed_str<E: Error>(self, v: &'de str) -> Result<Self::Value, E> {
+		Ok((self.0.visit_borrowed_str(v)?, None))
+	}
+	fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
+		Ok((self.0.visit_string(v)?, None))
+	}
+	fn visit_bytes<E: Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+		Ok((self.0.visit_bytes(v)?, None))
+	}
+	fn visit_borrowed_bytes<E: Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
+		Ok((self.0.visit_borrowed_bytes(v)?, None))
+	}
+	fn visit_byte_buf<E: Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+		Ok((self.0.visit_byte_buf(v)?, None))
+	}
+	fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+		Ok((self.0.visit_none()?, None))
+	}
+	fn visit_some<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		Ok((self.0.visit_some(deserializer)?, None))
+	}
+	fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+		Ok((self.0.visit_unit()?, None))
+	}
+	fn visit_newtype_struct<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		Ok((self.0.visit_newtype_struct(deserializer)?, None))
+	}
+	fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+		Ok((self.0.visit_map(map)?, None))
+	}
+	fn visit_enum<A: serde::de::EnumAccess<'de>>(self, data: A) -> Result<Self::Value, A::Error> {
+		Ok((self.0.visit_enum(data)?, None))
 	}
 }

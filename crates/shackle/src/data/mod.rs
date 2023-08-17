@@ -9,8 +9,8 @@ use itertools::Itertools;
 
 use crate::{
 	diagnostics::ShackleError,
-	value::{Array, EnumRangeInclusive, Index, Polarity, Value},
-	Type,
+	value::{Array, EnumRangeInclusive, Index, Polarity, Set, Value},
+	OptType, Type,
 };
 
 /// Value parsed in a data file.
@@ -42,7 +42,8 @@ pub(crate) enum ParserVal {
 	IndexedArray(u64, Vec<ParserVal>),
 	/// A set of values
 	SetList(Vec<ParserVal>),
-	Range(Box<ParserVal>, Box<ParserVal>),
+	SetRangeList(Vec<(ParserVal, ParserVal)>),
+	Range(Box<(ParserVal, ParserVal)>),
 	/// A tuple of values
 	Tuple(Vec<ParserVal>),
 	/// A record of values
@@ -112,7 +113,36 @@ impl ParserVal {
 			}
 			ParserVal::IndexedArray(_, _) => todo!(),
 			ParserVal::SetList(_) => todo!(),
-			ParserVal::Range(a, b) => Ok(Value::Set(match (*a, *b) {
+			ParserVal::SetRangeList(li) => Ok(match ty {
+				Type::Integer(OptType::NonOpt) => Set::from_iter(li.into_iter().map(|r| {
+					let (ParserVal::Integer(a), ParserVal::Integer(b)) = r else { unreachable!("invalid integer set")};
+					a..=b
+				}))
+				.into(),
+				Type::Float(OptType::NonOpt) => Set::from_iter(li.into_iter().map(|r| {
+					let (ParserVal::Float(a), ParserVal::Float(b)) = r else { unreachable!("invalid integer set")};
+					a..=b
+				}))
+				.into(),
+				e @ Type::Enum(OptType::NonOpt, _) => Set::from_iter(
+					li.into_iter()
+						.map(|(a, b)| match a.resolve_value(e) {
+							Ok(a) => match b.resolve_value(e) {
+								Ok(b) => {
+									let (Value::Enum(a), Value::Enum(b)) = (a, b) else { unreachable!("invalid enum set")};
+									Ok(EnumRangeInclusive::new(a, b))
+								}
+								Err(e) => Err(e),
+							},
+							Err(e) => Err(e),
+						})
+						.collect::<Result<Vec<EnumRangeInclusive>, _>>()?
+						.into_iter(),
+				)
+				.into(),
+				_ => unreachable!("invalid set type"),
+			}),
+			ParserVal::Range(range) => Ok(Value::Set(match *range {
 				(ParserVal::Integer(from), ParserVal::Integer(to)) => (from..=to).into(),
 				(from @ ParserVal::Enum(_, _), to @ ParserVal::Enum(_, _)) => {
 					let Value::Enum(a) = from.resolve_value(ty)? else {

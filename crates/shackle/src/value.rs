@@ -598,14 +598,12 @@ impl FusedIterator for EnumRangeInclusive {}
 /// Different representations used to represent sets in [`Value`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Set {
-	/// List of (unique) Value elements
-	SetList(Vec<Value>),
 	/// Set that spans all members of an enumerated type
 	EnumRangeList(Vec<EnumRangeInclusive>),
-	/// Sorted list of non-overlapping inclusive integer ranges
-	IntRangeList(Vec<RangeInclusive<i64>>),
 	/// Sorted list of non-overlapping inclusive floating point ranges
 	FloatRangeList(Vec<RangeInclusive<f64>>),
+	/// Sorted list of non-overlapping inclusive integer ranges
+	IntRangeList(Vec<RangeInclusive<i64>>),
 }
 
 impl From<EnumRangeInclusive> for Set {
@@ -613,26 +611,94 @@ impl From<EnumRangeInclusive> for Set {
 		Self::EnumRangeList(vec![value])
 	}
 }
+impl FromIterator<EnumRangeInclusive> for Set {
+	fn from_iter<T: IntoIterator<Item = EnumRangeInclusive>>(iter: T) -> Self {
+		// Eliminate empty ranges & sort ranges by starting value
+		let mut iter = iter
+			.into_iter()
+			.filter(|r| r.start <= r.end)
+			.sorted_by_key(|r| r.start);
+		if let Some(r) = iter.next() {
+			let mut ranges = vec![r];
+			// Combine overlapping ranges
+			while let Some(r) = iter.next() {
+				let last = ranges.last().unwrap();
+				if last.end >= r.start {
+					(*ranges.last_mut().unwrap()).end = r.end
+				} else {
+					ranges.push(r)
+				}
+			}
+			Self::EnumRangeList(ranges)
+		} else {
+			Self::EnumRangeList(Vec::new())
+		}
+	}
+}
+
+impl From<RangeInclusive<f64>> for Set {
+	fn from(value: RangeInclusive<f64>) -> Self {
+		Self::FloatRangeList(vec![value])
+	}
+}
+impl FromIterator<RangeInclusive<f64>> for Set {
+	fn from_iter<T: IntoIterator<Item = RangeInclusive<f64>>>(iter: T) -> Self {
+		// Eliminate empty ranges & sort ranges by starting value
+		let mut iter = iter
+			.into_iter()
+			.filter(|r| r.start() <= r.end())
+			.sorted_by(|a, b| a.start().partial_cmp(b.start()).unwrap());
+		if let Some(r) = iter.next() {
+			let mut ranges = vec![r];
+			// Combine overlapping ranges
+			while let Some(r) = iter.next() {
+				let last = ranges.last().unwrap();
+				if last.end() >= r.start() {
+					*ranges.last_mut().unwrap() = *last.start()..=*r.end()
+				} else {
+					ranges.push(r)
+				}
+			}
+			Self::FloatRangeList(ranges)
+		} else {
+			Self::FloatRangeList(Vec::new())
+		}
+	}
+}
+
 impl From<RangeInclusive<i64>> for Set {
 	fn from(value: RangeInclusive<i64>) -> Self {
 		Self::IntRangeList(vec![value])
 	}
 }
-impl From<RangeInclusive<f64>> for Set {
-	fn from(value: RangeInclusive<f64>) -> Self {
-		Self::FloatRangeList(vec![value])
+impl FromIterator<RangeInclusive<i64>> for Set {
+	fn from_iter<T: IntoIterator<Item = RangeInclusive<i64>>>(iter: T) -> Self {
+		// Eliminate empty ranges & sort ranges by starting value
+		let mut iter = iter
+			.into_iter()
+			.filter(|r| r.start() <= r.end())
+			.sorted_by_key(|r| *r.start());
+		if let Some(r) = iter.next() {
+			let mut ranges = vec![r];
+			// Combine overlapping ranges
+			while let Some(r) = iter.next() {
+				let last = ranges.last().unwrap();
+				if last.end() >= r.start() {
+					*ranges.last_mut().unwrap() = *last.start()..=*r.end()
+				} else {
+					ranges.push(r)
+				}
+			}
+			Self::IntRangeList(ranges)
+		} else {
+			Self::IntRangeList(Vec::new())
+		}
 	}
 }
 
 impl Display for Set {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Set::SetList(v) => {
-				if v.is_empty() {
-					return write!(f, "∅");
-				}
-				write!(f, "{{{}}}", v.iter().format(", "))
-			}
 			Set::EnumRangeList(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");

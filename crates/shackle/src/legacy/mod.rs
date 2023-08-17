@@ -198,7 +198,6 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 			}
 		}
 		Value::Set(s) => match s {
-			Set::SetList(s) => write!(out, "{{{}}}", s.iter().format(", "))?,
 			Set::EnumRangeList(s) => write!(
 				out,
 				"{}",
