@@ -125,8 +125,8 @@ impl Display for Value {
 /// Representation of an (multidimensional) indexed array
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Array {
-	indexes: Box<[Index]>,
-	members: Box<[Value]>,
+	pub(crate) indices: Box<[Index]>,
+	pub(crate) members: Box<[Value]>,
 }
 
 impl Array {
@@ -140,7 +140,7 @@ impl Array {
 			elements.len()
 		);
 		Self {
-			indexes: indexes.into_boxed_slice(),
+			indices: indexes.into_boxed_slice(),
 			members: elements.into_boxed_slice(),
 		}
 	}
@@ -152,14 +152,14 @@ impl Array {
 
 	/// Returns the number of dimensions used to index the Array
 	pub fn dim(&self) -> u8 {
-		self.indexes.len() as u8
+		self.indices.len() as u8
 	}
 
 	/// Returns an iterator over the array and its indices.
 	///
 	/// The iterator yields all items from start to end.
 	pub fn iter(&self) -> impl Iterator<Item = (Vec<Value>, &Value)> {
-		self.indexes
+		self.indices
 			.iter()
 			.map(|ii| ii.iter())
 			.multi_cartesian_product()
@@ -172,7 +172,7 @@ impl std::ops::Index<&[Value]> for Array {
 	fn index(&self, index: &[Value]) -> &Self::Output {
 		let mut idx = 0;
 		let mut mult = 1;
-		for (ii, ctx) in index.iter().zip_eq(self.indexes.iter()) {
+		for (ii, ctx) in index.iter().zip_eq(self.indices.iter()) {
 			idx *= mult;
 			match ctx {
 				Index::Integer(r) => {
@@ -220,7 +220,7 @@ impl Display for Array {
 		if self.is_empty() {
 			return write!(f, "[]");
 		}
-		if let [Index::Integer(ii)] = &(*self.indexes) {
+		if let [Index::Integer(ii)] = &(*self.indices) {
 			return write!(f, "[{}: {}]", ii.start(), self.members.iter().format(", "));
 		}
 		write!(

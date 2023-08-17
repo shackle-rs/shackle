@@ -1,9 +1,16 @@
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
-use serde::de::{DeserializeSeed, Error, IgnoredAny, Unexpected, Visitor};
+use serde::{
+	de::{DeserializeSeed, Error, IgnoredAny, Unexpected, Visitor},
+	ser::{SerializeMap, SerializeSeq},
+	Serialize,
+};
 
 use super::ParserVal;
-use crate::{OptType, Type};
+use crate::{
+	value::{Array, EnumValue, Index, Record, Set},
+	OptType, Type, Value,
+};
 
 #[derive(Clone)]
 pub(crate) struct SerdeValueVisitor<'a>(pub &'a Type);
@@ -517,5 +524,115 @@ impl<
 	}
 	fn visit_enum<A: serde::de::EnumAccess<'de>>(self, data: A) -> Result<Self::Value, A::Error> {
 		Ok((self.0.visit_enum(data)?, None))
+	}
+}
+
+impl Serialize for Value {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		match self {
+			Value::Absent => serializer.serialize_none(),
+			Value::Infinity(_) => todo!(),
+			Value::Boolean(v) => serializer.serialize_bool(*v),
+			Value::Integer(v) => serializer.serialize_i64(*v),
+			Value::Float(v) => serializer.serialize_f64(*v),
+			Value::String(v) => serializer.serialize_str(&*v),
+			Value::Enum(v) => v.serialize(serializer),
+			Value::Ann(_, _) => todo!(),
+			Value::Array(v) => v.serialize(serializer),
+			Value::Set(v) => v.serialize(serializer),
+			Value::Tuple(v) => {
+				let mut seq = serializer.serialize_seq(Some(v.len()))?;
+				for i in v {
+					seq.serialize_element(i)?;
+				}
+				seq.end()
+			}
+			Value::Record(v) => v.serialize(serializer),
+		}
+	}
+}
+impl Serialize for Array {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		ArraySliceSerializer::new(&self.indices[..], &self.members[..]).serialize(serializer)
+	}
+}
+impl Serialize for Record {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		let mut map = serializer.serialize_map(Some(self.len()))?;
+		for (k, v) in self.iter() {
+			map.serialize_entry(&*k, v)?;
+		}
+		map.end()
+	}
+}
+impl Serialize for Set {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		let mut map = serializer.serialize_map(Some(1))?;
+		// Note: constructing the vector might not be very efficient. Might be worthwhile implementing Serialize on a "SetInner"/"RangeList" type
+		match self {
+			Set::EnumRangeList(v) => {
+				map.serialize_entry("set", &v.iter().map(|v| (v.start(), v.end())).collect_vec())?
+			}
+			Set::FloatRangeList(v) => {
+				map.serialize_entry("set", &v.iter().map(|v| (v.start(), v.end())).collect_vec())?
+			}
+			Set::IntRangeList(v) => {
+				map.serialize_entry("set", &v.iter().map(|v| (v.start(), v.end())).collect_vec())?
+			}
+		}
+		map.end()
+	}
+}
+impl Serialize for EnumValue {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		let mut map = serializer.serialize_map(Some(if self.arg().is_some() { 2 } else { 1 }))?;
+		map.serialize_entry("e", self.constructor().unwrap())?;
+		if let Some(arg) = self.arg() {
+			map.serialize_entry("a", &[arg])?
+		}
+		map.end()
+	}
+}
+
+struct ArraySliceSerializer<'a> {
+	indices: &'a [Index],
+	members: &'a [Value],
+	step: usize,
+}
+impl<'a> ArraySliceSerializer<'a> {
+	fn new(indices: &'a [Index], members: &'a [Value]) -> Self {
+		Self {
+			indices,
+			members,
+			step: indices.iter().skip(1).fold(1, |cur, idx| cur * idx.len()),
+		}
+	}
+}
+impl<'a> Serialize for ArraySliceSerializer<'a> {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		debug_assert!(self.indices.len() > 0);
+		let idx = &self.indices[0];
+		debug_assert_eq!(self.step * idx.len(), self.members.len());
+		let mut seq = serializer.serialize_seq(Some(idx.len()))?;
+		if self.indices.len() <= 1 {
+			debug_assert_eq!(self.step, 1);
+			debug_assert_eq!(self.members.len(), idx.len());
+			for v in self.members {
+				seq.serialize_element(v)?;
+			}
+		} else {
+			debug_assert_eq!(self.step % self.indices[1].len(), 0);
+			let step = self.step / self.indices[1].len();
+			let mut v = Self {
+				indices: &self.indices[1..],
+				members: self.members,
+				step,
+			};
+			for i in 0..idx.len() {
+				v.members = &self.members[i * self.step..(i + 1) * self.step];
+				seq.serialize_element(&v)?;
+			}
+		}
+		seq.end()
 	}
 }
