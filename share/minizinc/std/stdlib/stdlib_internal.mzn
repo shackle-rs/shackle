@@ -6,81 +6,97 @@
 %
 
 % domain constraints
-predicate var_dom(var int:x, set of int: s) =
+test mzn_domain_constraint(string: name, $$E: x, set of $$E: s) =
+  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, opt $$E: x, set of $$E: s) =
+  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, set of $$E: x, set of $$E: s) =
+  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, float: x, set of float: s) =
+  mzn_assert_warn(var_dom(x, s), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, opt float: x, set of float: s) =
+  mzn_assert_warn(var_dom(x, s), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, set of float: x, set of float: s) =
+  mzn_assert_warn(var_dom(x, s), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+
+predicate mzn_domain_constraint(string: name, var $$E: x, set of $$E: s) =
+  var_dom(erase_enum(x), erase_enum(s));
+predicate mzn_domain_constraint(string: name, var opt $$E: x, set of $$E: s) =
+  var_dom(erase_enum(x), erase_enum(s));
+predicate mzn_domain_constraint(string: name, var set of $$E: x, set of $$E: s) =
+  var_dom(erase_enum(x), erase_enum(s));
+predicate mzn_domain_constraint(string: name, var float: x, set of float: s) =
+  var_dom(x, s);
+predicate mzn_domain_constraint(string: name, var opt float: x, set of float: s) =
+  var_dom(x, s);
+
+test var_dom(int: x, set of int: s) = x in s;
+predicate var_dom(var int: x, set of int: s) =
   if has_bounds(x) /\ dom(x) subset s then true
   else x in s
   endif;
-predicate var_dom(var opt int:x, set of int: s) =
-  if is_fixed(x) /\ absent(fix(x)) then true else
-  let {
-    var int: dx = deopt(x);
-    set of int: new_dom = dom(dx) intersect s;
-  } in if new_dom = {} then absent(x)
-    else dx in new_dom union if mzn_check_absent_zero() then {0} else {} endif
-    endif
-  endif;
-predicate var_dom(array[$T] of var opt int: x, set of int: d) =
-    let { array[int] of var opt int: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],d));
 
-test var_dom(opt int:x, set of int: s) =
+test var_dom(opt int: x, set of int: s) =
   absent(x) \/ deopt(x) in s;
-test var_dom(array[$T] of opt int: x, set of int: d) =
-  forall (xx in array1d(x)) (var_dom(xx,d));
+predicate var_dom(var opt int: x, set of int: s) =
+  var_dom(deopt(x), s union {0});
 
-
+test var_dom(set of int: x, set of int: s) =
+  x subset s;
 predicate var_dom(var set of int: x, set of int: s) =
   if has_ub_set(x) /\ ub(x) subset s then true
   else set_subset(x,s)
   endif;
 
-predicate var_dom(var float:x, float: l, float: u) =
+test var_dom(array [int] of int: x, set of int: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+predicate var_dom(array [int] of var int: x, set of int: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+test var_dom(array [int] of opt int: x, set of int: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+predicate var_dom(array [int] of var opt int: x, set of int: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+test var_dom(array [int] of set of int: x, set of int: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+predicate var_dom(array [int] of var set of int: x, set of int: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+
+test var_dom(float:x, float: l, float: u) =
+  x >= l /\ x <= u;
+predicate var_dom(var float: x, float: l, float: u) =
   if has_bounds(x) /\ lb(x) >= l /\ ub(x) <= u then true
   else x >= l /\ x <= u
   endif;
 
-predicate var_dom(var float:x, set of float: d) =
-  x in d;
+test var_dom(float:x, set of float: s) =
+  x in s;
+predicate var_dom(var float: x, set of float: s) =
+  x in s;
 
-test var_dom(float:x, float: l, float: u) =
-  x >= l /\ x <= u;
+test var_dom(opt float: x, set of float: s) =
+  absent(x) \/ deopt(x) in s;
+predicate var_dom(var opt float: x, set of float: s) =
+  var_dom(deopt(x), s union {0.0});
 
-test var_dom(float:x, set of float: d) =
-  x in d;
+test var_dom(set of float: x, set of float: s) =
+  x subset s;
 
-predicate var_dom(array[$T] of var set of int: x, set of int: d) =
-    let { array[int] of var set of int: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],d));
-predicate var_dom(array[$T] of var int: x, set of int: d) =
-    let { array[int] of var int: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],d));
-predicate var_dom(array[$T] of var float: x, float: l, float: u) =
-    let { array[int] of var float: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],l,u));
-predicate var_dom(array[$T] of var float: x, set of float: d) =
-    let { array[int] of var float: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],d));
+test var_dom(array[int] of float: x, float: l, float: u) =
+  forall (x_i in x) (var_dom(x_i, l, u));
+predicate var_dom(array[int] of var float: x, float: l, float: u) =
+  forall (x_i in x) (var_dom(x_i, l, u));
+test var_dom(array[int] of float: x, set of float: d) =
+  forall (x_i in x) (var_dom(x_i, d));
+predicate var_dom(array[int] of var float: x, set of float: d) =
+  forall (x_i in x) (var_dom(x_i, d));
 
-test var_dom(array[$T] of set of int: x, set of int: d) =
-    let { array[int] of set of int: xx = array1d(x) }
-    in forall (i in index_set(xx)) (xx[i] subset d);
-test var_dom(array[$T] of int: x, set of int: d) =
-    let { array[int] of int: xx = array1d(x) }
-    in forall (i in index_set(xx)) (xx[i] in d);
-test var_dom(array[$T] of float: x, float: l, float: u) =
-    let { array[int] of float: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],l,u));
-test var_dom(array[$T] of float: x, set of float: d) =
-    let { array[int] of float: xx = array1d(x) }
-    in forall (i in index_set(xx)) (var_dom(xx[i],d));
-
-predicate set_in(array[$T] of var int: X, set of int: s) = forall(x in array1d(X)) (x in s);
-predicate int_eq(array[$T] of var int: X, int: s) = forall(x in array1d(X)) (x = s);
-predicate float_eq(array[$T] of var int: X, float: s) = forall(x in array1d(X)) (x = s);
-predicate int_le(array[$T] of var int: X, int: s) = forall(x in array1d(X)) (x <= s);
-predicate int_le(int:s, array[$T] of var int: X) = forall(x in array1d(X)) (x >= s);
-predicate float_le(array[$T] of var float: X, float: s) = forall(x in array1d(X)) (x <= s);
-predicate float_le(float:s, array[$T] of var float: X) = forall(x in array1d(X)) (x >= s);
+predicate set_in(array[$T] of var int: X, set of int: s) = forall(x in X) (x in s);
+predicate int_eq(array[$T] of var int: X, int: s) = forall(x in X) (x = s);
+predicate float_eq(array[$T] of var int: X, float: s) = forall(x in X) (x = s);
+predicate int_le(array[$T] of var int: X, int: s) = forall(x in X) (x <= s);
+predicate int_le(int:s, array[$T] of var int: X) = forall(x in X) (x >= s);
+predicate float_le(array[$T] of var float: X, float: s) = forall(x in X) (x <= s);
+predicate float_le(float:s, array[$T] of var float: X) = forall(x in X) (x >= s);
 
 predicate array_var_int_element(var int: x, array[int] of int: y, var int: z) =
   array_int_element(x,y,z);
@@ -1310,4 +1326,29 @@ function int: mzn_min_or_0(set of int: X) =
 test mzn_set_is_contiguous(set of int: X) =
   card(X) = 0 \/ card(X)=(max(X)-min(X)+1);
 
-function bool: mzn_assert_warn(bool: b, string: msg);
+function bool: mzn_add_warning(string: msg);
+function bool: mzn_assert_warn(bool: b, string: msg) = let {
+  bool: condition = b;
+  constraint if condition then true else mzn_add_warning(msg) endif;
+} in condition;
+
+function string: mzn_show_tuple_access(string: x, int: i) = x ++ ".\(i)";
+function string: mzn_show_record_access(string: x, string: f) = x ++ "." ++ f;
+
+function string: mzn_show_array_access(string: x, $$E: i) = x ++ "[" ++ show(i) ++ "]";
+function string: mzn_show_array_access(string: x, tuple($$E): i) = x ++ "[" ++ show(i.1) ++ "]";
+function string: mzn_show_array_access(string: x, tuple($$E, $$F): i) =
+  x ++ "[" ++ show(i.1) ++ "," ++ show(i.2) ++ "]";
+function string: mzn_show_array_access(string: x, tuple($$E, $$F, $$G): i) =
+  x ++ "[" ++ show(i.1) ++ "," ++ show(i.2) ++ "," ++ show(i.3) ++ "]";
+function string: mzn_show_array_access(string: x, tuple($$E, $$F, $$G, $$H): i) =
+  x ++ "[" ++ show(i.1) ++ "," ++ show(i.2) ++ "," ++ show(i.3) ++ "," ++ show(i.4) ++ "]";
+function string: mzn_show_array_access(string: x, tuple($$E, $$F, $$G, $$H, $$I): i) =
+  x ++ "[" ++ show(i.1) ++ "," ++ show(i.2) ++ "," ++ show(i.3) ++ "," ++ show(i.4) ++ "," ++ show(i.5) ++ "]";
+function string: mzn_show_array_access(string: x, tuple($$E, $$F, $$G, $$H, $$I, $$J): i) =
+  x ++ "[" ++ show(i.1) ++ "," ++ show(i.2) ++ "," ++ show(i.3) ++ "," ++ show(i.4) ++ "," ++ show(i.5) ++ "," ++ show(i.6) ++ "]";
+
+test mzn_check_index_set(string: name, set of $$E: actual, set of $$E: expected) =
+  mzn_check_index_set(name, 1, 1, actual, expected);
+test mzn_check_index_set(string: name, int: d, int: dims, set of $$E: actual, set of $$E: expected) =
+  assert(actual = expected, "Index set " ++ if dims > 1 then "\(d) " endif ++ "of '" ++ name ++ "' is \(expected), but is assigned an array with " ++ if dims > 1 then "the corresponding " endif ++ "index set \(actual). You may need to coerce the index sets using the array\(dims)d function.");
