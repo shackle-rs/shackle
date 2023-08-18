@@ -89,6 +89,7 @@ id_registry!(
 	fix,
 	eq: "=",
 	index_set,
+	index_sets,
 	shackle_type,
 	empty_annotation,
 	minus: "-",
@@ -124,4 +125,10 @@ id_registry!(
 	dzn,
 	mzn_construct_opt,
 	mzn_destruct_opt,
+	mzn_domain_constraint,
+	mzn_check_index_set,
+	mzn_show_array_access,
+	mzn_show_tuple_access,
+	mzn_show_record_access,
+	return_value: "<return value>"
 );

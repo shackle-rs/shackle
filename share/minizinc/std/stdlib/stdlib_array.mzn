@@ -72,6 +72,24 @@ function set of $$E: index_set_5of6(array[_,_,_,_,$$E,_] of any $U: x);
 /** @group stdlib.builtins.array Return index set of sixth dimension of 6-dimensional array \a x */
 function set of $$E: index_set_6of6(array[_,_,_,_,_,$$E] of any $U: x);
 
+/** @group stdlib.builtins.array Return index sets of the array \a x */
+function tuple(set of $$E): index_sets(array[$$E] of any $U: x) = (index_set(x),);
+/** @group stdlib.builtins.array Return index sets of the array \a x */
+function tuple(set of $$E, set of $$F): index_sets(array[$$E, $$F] of any $U: x) =
+  (index_set_1of2(x), index_set_2of2(x));
+/** @group stdlib.builtins.array Return index sets of the array \a x */
+function tuple(set of $$E, set of $$F, set of $$G): index_sets(array[$$E, $$F, $$G] of any $U: x) =
+  (index_set_1of3(x), index_set_2of3(x), index_set_3of3(x));
+/** @group stdlib.builtins.array Return index sets of the array \a x */
+function tuple(set of $$E, set of $$F, set of $$G, set of $$H): index_sets(array[$$E, $$F, $$G, $$H] of any $U: x) =
+  (index_set_1of4(x), index_set_2of4(x), index_set_3of4(x), index_set_4of4(x));
+/** @group stdlib.builtins.array Return index sets of the array \a x */
+function tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): index_sets(array[$$E, $$F, $$G, $$H, $$I] of any $U: x) =
+  (index_set_1of5(x), index_set_2of5(x), index_set_3of5(x), index_set_4of5(x), index_set_5of5(x));
+/** @group stdlib.builtins.array Return index sets of the array \a x */
+function tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): index_sets(array[$$E, $$F, $$G, $$H, $$I, $$J] of any $U: x) =
+  (index_set_1of6(x), index_set_2of6(x), index_set_3of6(x), index_set_4of6(x), index_set_5of6(x), index_set_6of6(x));
+
 /** @group stdlib.builtins.array Return array \a x coerced to index set 1..length(\a x).
   Coercions are performed by considering the array \a x in row-major order. */
 function array[int] of any $V: array1d(array[$U] of any $V: x);

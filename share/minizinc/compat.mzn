@@ -49,7 +49,7 @@ test occurs(opt $T: x);
 
 function set of $$E: enum_of_internal(set of $$E: e) = e;
 
-function bool: mzn_assert_warn(bool: b, string: msg) = b;
+function bool: mzn_add_warning(string: msg) = true;
 
 test mzn_check_only_range_domains() = if mzn_opt_only_range_domains.1 then mzn_opt_only_range_domains.2 else false endif;
 test mzn_check_annotate_defines_var() = if mzn_opt_annotate_defines_var.1 then mzn_opt_annotate_defines_var.2 else true endif;

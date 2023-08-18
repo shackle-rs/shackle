@@ -6,6 +6,7 @@
 
 use self::capturing_fn::decapture_model;
 use self::comprehension::desugar_comprehension;
+use self::domain_constraint::rewrite_domains;
 use self::erase_enum::erase_enum;
 use self::erase_opt::erase_opt;
 use self::erase_record::erase_record;
@@ -49,6 +50,7 @@ pub fn transformer(
 /// Get the default THIR transformer
 pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
 	transformer(vec![
+		rewrite_domains,
 		top_down_type,
 		type_specialise,
 		function_dispatch,
@@ -167,8 +169,11 @@ pub mod test {
 					};
 					match origin.node() {
 						Some(NodeRef::Item(item)) => item.model_ref(db.upcast()) == model_ref,
+						Some(NodeRef::Entity(entity)) => {
+							entity.item(db.upcast()).model_ref(db.upcast()) == model_ref
+						}
+						Some(NodeRef::Model(m)) => m == model_ref,
 						None => true,
-						_ => false,
 					}
 				})
 				.collect::<Vec<_>>();

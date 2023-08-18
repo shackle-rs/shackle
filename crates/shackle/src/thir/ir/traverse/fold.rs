@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::thir::{db::Thir, source::Origin, *};
+use crate::thir::{db::Thir, pretty_print::PrettyPrinter, source::Origin, *};
 
 /// Replacement map for references to items
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -710,14 +710,20 @@ pub fn fold_declaration<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 /// Fold a declaration ID
 pub fn fold_declaration_id<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	folder: &mut F,
-	_db: &'a dyn Thir,
-	_model: &'a Model<T>,
+	db: &'a dyn Thir,
+	model: &'a Model<T>,
 	d: DeclarationId<T>,
 ) -> DeclarationId<U> {
 	folder
 		.replacement_map()
 		.get_declaration(d)
-		.expect("Declaration has not been added to destination model")
+		.unwrap_or_else(|| {
+			panic!(
+				"Declaration {} at {} has not been added to destination model",
+				PrettyPrinter::new(db, model).pretty_print_signature(d.into()),
+				model[d].origin().debug_print(db)
+			)
+		})
 }
 
 /// Add the folded version of this enumeration item into the destination model.
@@ -757,14 +763,20 @@ pub fn fold_enumeration<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 /// Fold an enumeration ID
 pub fn fold_enumeration_id<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	folder: &mut F,
-	_db: &'a dyn Thir,
-	_model: &'a Model<T>,
+	db: &'a dyn Thir,
+	model: &'a Model<T>,
 	a: EnumerationId<T>,
 ) -> EnumerationId<U> {
 	folder
 		.replacement_map()
 		.get_enumeration(a)
-		.expect("Enumeration has not been added to destination model")
+		.unwrap_or_else(|| {
+			panic!(
+				"Enumeration {} at {} has not been added to destination model",
+				PrettyPrinter::new(db, model).pretty_print_signature(a.into()),
+				model[a].origin().debug_print(db)
+			)
+		})
 }
 
 /// Fold an enum member ID
@@ -843,14 +855,17 @@ pub fn fold_function<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 /// Fold an function ID
 pub fn fold_function_id<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	folder: &mut F,
-	_db: &'a dyn Thir,
-	_model: &'a Model<T>,
+	db: &'a dyn Thir,
+	model: &'a Model<T>,
 	f: FunctionId<T>,
 ) -> FunctionId<U> {
-	folder
-		.replacement_map()
-		.get_function(f)
-		.expect("Function has not been added to destination model")
+	folder.replacement_map().get_function(f).unwrap_or_else(|| {
+		panic!(
+			"Function {} at {} has not been added to destination model",
+			PrettyPrinter::new(db, model).pretty_print_signature(f.into()),
+			model[f].origin().debug_print(db)
+		)
+	})
 }
 
 /// Fold the body of a function.
@@ -903,14 +918,17 @@ pub fn fold_output<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 /// Fold an output ID
 pub fn fold_output_id<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	folder: &mut F,
-	_db: &'a dyn Thir,
-	_model: &'a Model<T>,
+	db: &'a dyn Thir,
+	model: &'a Model<T>,
 	a: OutputId<T>,
 ) -> OutputId<U> {
-	folder
-		.replacement_map()
-		.get_output(a)
-		.expect("Output item has not been added to destination model")
+	folder.replacement_map().get_output(a).unwrap_or_else(|| {
+		panic!(
+			"Output item {} at {} has not been added to destination model",
+			PrettyPrinter::new(db, model).pretty_print_signature(a.into()),
+			model[a].origin().debug_print(db)
+		)
+})
 }
 
 /// Add the folded version of the solve item into the destination model.
