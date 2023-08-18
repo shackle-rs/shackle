@@ -55,6 +55,17 @@ pub fn generate_output(db: &dyn Thir, model: &Model) -> Model {
 					},
 				)
 			})
+			.map(|arg| {
+				Expression::new(
+					db,
+					&model,
+					origin,
+					LookupCall {
+						function: ids.concat.into(),
+						arguments: vec![arg],
+					},
+				)
+			})
 			.unwrap_or_else(|| {
 				Expression::new(db, &model, origin, StringLiteral::from(ids.empty_string))
 			});
@@ -91,9 +102,9 @@ mod test {
 				output :: "one" ["C"];
             "#,
 			expect!([r#"
-    string: mzn_output_default :: (output_only) = ["Hello, world"];
-    string: mzn_output_one :: (output_only) = '++'(["A"], ["C"]);
-    string: mzn_output_two :: (output_only) = ["B"];
+    string: mzn_output_default :: (output_only) = concat(["Hello, world"]);
+    string: mzn_output_one :: (output_only) = concat('++'(["A"], ["C"]));
+    string: mzn_output_two :: (output_only) = concat(["B"]);
 "#]),
 		);
 	}

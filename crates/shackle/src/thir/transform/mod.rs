@@ -50,11 +50,11 @@ pub fn transformer(
 /// Get the default THIR transformer
 pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
 	transformer(vec![
+		generate_output,
 		rewrite_domains,
 		top_down_type,
 		type_specialise,
 		function_dispatch,
-		generate_output,
 		erase_record,
 		erase_enum,
 		desugar_comprehension,
