@@ -15,13 +15,12 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	constants::IdentifierRegistry,
-	hir::{Identifier, IntegerLiteral, StringLiteral, VarType},
+	hir::{Identifier, IntegerLiteral, OptType, StringLiteral, VarType},
 	thir::{
 		db::Thir,
 		source::Origin,
 		traverse::{
-			add_declaration, add_function, fold_domain, fold_function_body, fold_let, Folder,
-			ReplacementMap,
+			add_declaration, add_function, fold_function_body, fold_let, Folder, ReplacementMap,
 		},
 		ArrayAccess, ArrayComprehension, ArrayLiteral, Constraint, Declaration, DeclarationId,
 		Domain, DomainData, Expression, FunctionId, Generator, Item, Let, LetItem, LookupCall,
@@ -62,51 +61,65 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DomainRewriter<Dst, Src>
 		&mut self.model
 	}
 
-	fn add_declaration(&mut self, db: &dyn Thir, model: &Model<Src>, d: DeclarationId<Src>) {
-		if !model[d].top_level() {
-			add_declaration(self, db, model, d);
-			return;
+	fn add_variable_declaration(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model<Src>,
+		d: DeclarationId<Src>,
+	) {
+		if model[d].definition().is_none() && !model[d].ty().known_par(db.upcast()) {
+			let array_of_opt = if let DomainData::Array(_, elem) = &**model[d].domain() {
+				elem.ty().inst(db.upcast()) == Some(VarType::Var)
+					&& elem.ty().opt(db.upcast()) == Some(OptType::Opt)
+			} else {
+				false
+			};
+			if array_of_opt
+				|| model[d]
+					.domain()
+					.walk()
+					.any(|d| matches!(&**d, DomainData::Tuple(_) | DomainData::Record(_)))
+			{
+				// Struct has no RHS, so unpack
+				let definition = self.unpack_struct(db, model, model[d].domain());
+				let idx = add_declaration(self, db, model, d);
+				self.model[idx].set_definition(definition);
+				let unbounded =
+					Domain::unbounded(db, self.model[idx].origin(), self.model[idx].ty());
+				self.model[idx].set_domain(unbounded);
+				return;
+			}
+		} else if model[d].top_level() {
+			// Ignore local declarations, they're processed separately
+			if let Some(dom) =
+				self.collect_domain_constraints(db, model, model[d].domain(), &mut Vec::new(), true)
+			{
+				// Has a right-hand side already, or is par, so create constraints for domains
+				let name = Expression::new(
+					db,
+					&self.model,
+					model[d].origin(),
+					StringLiteral::new(
+						model[d]
+							.name()
+							.map(|n| n.pretty_print(db.upcast()))
+							.unwrap_or_else(|| "<unnamed>".to_owned()),
+						db.upcast(),
+					),
+				);
+				let idx = add_declaration(self, db, model, d);
+				let variable = Expression::new(db, &self.model, model[d].origin(), idx);
+				let constraint =
+					Constraint::new(true, self.make_domain_constraint(db, name, variable, dom));
+				self.model
+					.add_constraint(Item::new(constraint, model[d].origin()));
+				let unbounded =
+					Domain::unbounded(db, self.model[idx].origin(), self.model[idx].ty());
+				self.model[idx].set_domain(unbounded);
+				return;
+			}
 		}
-
-		let needs_domain_constraints =
-			model[d].definition().is_some() || model[d].ty().contains_par(db.upcast());
-
-		let dom_constraints = if needs_domain_constraints {
-			// Has a right-hand side already, or is par, so create constraints for domains
-			self.collect_domain_constraints(db, model, model[d].domain(), &mut Vec::new(), true)
-		} else {
-			None
-		};
-
-		let idx = add_declaration(self, db, model, d);
-		if let Some(dom) = dom_constraints {
-			let name = Expression::new(
-				db,
-				&self.model,
-				model[d].origin(),
-				StringLiteral::new(
-					model[d]
-						.name()
-						.map(|n| n.pretty_print(db.upcast()))
-						.unwrap_or_else(|| "<unnamed>".to_owned()),
-					db.upcast(),
-				),
-			);
-			let variable = Expression::new(db, &self.model, model[d].origin(), idx);
-			let constraint =
-				Constraint::new(true, self.make_domain_constraint(db, name, variable, dom));
-			self.model
-				.add_constraint(Item::new(constraint, model[d].origin()));
-		} else if !needs_domain_constraints
-			&& model[d]
-				.domain()
-				.walk()
-				.any(|d| matches!(&**d, DomainData::Tuple(_) | DomainData::Record(_)))
-		{
-			// Struct has no RHS, so unpack
-			let definition = self.unpack_struct(db, model, model[d].domain());
-			self.model[idx].set_definition(definition);
-		}
+		add_declaration(self, db, model, d);
 	}
 
 	fn add_function(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
@@ -175,9 +188,7 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DomainRewriter<Dst, Src>
 				.take_body()
 				.expect("Domain constraints cannot be added to function without body");
 			let origin = return_value.origin();
-			let mut decl =
-				Declaration::new(false, Domain::unbounded(db, origin, return_value.ty()));
-			decl.set_definition(return_value);
+			let decl = Declaration::from_expression(db, false, return_value);
 			let idx = self.model.add_declaration(Item::new(decl, origin));
 			let variable = Expression::new(db, &self.model, origin, idx);
 			let name = Expression::new(
@@ -223,13 +234,17 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DomainRewriter<Dst, Src>
 		folded.items.reserve(folded_items.len());
 		for (folded_item, item) in folded_items.into_iter().zip(l.items.iter()) {
 			if let (LetItem::Declaration(f), LetItem::Declaration(d)) = (folded_item, item) {
-				let domain_constraint = self.collect_domain_constraints(
-					db,
-					model,
-					model[*d].domain(),
-					&mut folded.items,
-					false,
-				);
+				let domain_constraint = if model[*d].definition().is_some() {
+					self.collect_domain_constraints(
+						db,
+						model,
+						model[*d].domain(),
+						&mut folded.items,
+						false,
+					)
+				} else {
+					None
+				};
 				if let Some(dom) = domain_constraint {
 					let name = Expression::new(
 						db,
@@ -253,42 +268,15 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for DomainRewriter<Dst, Src>
 						.add_constraint(Item::new(constraint, model[*d].origin()));
 					folded.items.push(folded_item);
 					folded.items.push(LetItem::Constraint(idx));
+					let unbounded =
+						Domain::unbounded(db, self.model[f].origin(), self.model[f].ty());
+					self.model[f].set_domain(unbounded);
 					continue;
 				}
 			}
 			folded.items.push(folded_item);
 		}
 		folded
-	}
-
-	fn fold_domain(
-		&mut self,
-		db: &dyn Thir,
-		model: &Model<Src>,
-		domain: &Domain<Src>,
-	) -> Domain<Dst> {
-		match &**domain {
-			DomainData::Tuple(_) | DomainData::Record(_) => {
-				// Struct domains will be unpacked or turned into constraints
-				Domain::unbounded(db, domain.origin(), domain.ty())
-			}
-			DomainData::Bounded(_) if domain.ty().contains_par(db.upcast()) => {
-				// Par domains will turn into constraints
-				Domain::unbounded(db, domain.origin(), domain.ty())
-			}
-			DomainData::Set(d) => {
-				let ty = domain.ty();
-				let inst = ty.inst(db.upcast()).unwrap();
-				if inst == VarType::Par {
-					Domain::unbounded(db, domain.origin(), domain.ty())
-				} else {
-					let opt = ty.opt(db.upcast()).unwrap();
-					let element = fold_domain(self, db, model, d);
-					Domain::set(db, domain.origin(), inst, opt, element)
-				}
-			}
-			_ => fold_domain(self, db, model, domain),
-		}
 	}
 }
 
@@ -305,11 +293,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 			DomainData::Unbounded => None,
 			DomainData::Bounded(e) => {
 				let folded = self.fold_expression(db, model, e);
-				let mut decl = Declaration::new(
-					top_level,
-					Domain::unbounded(db, domain.origin(), folded.ty()),
-				);
-				decl.set_definition(folded);
+				let decl = Declaration::from_expression(db, top_level, folded);
 				let idx = self.model.add_declaration(Item::new(decl, domain.origin()));
 				if !top_level {
 					decls.push(LetItem::Declaration(idx));
@@ -320,11 +304,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 				let idx_set = match &***dim {
 					DomainData::Bounded(d) => {
 						let folded = self.fold_expression(db, model, d);
-						let mut decl = Declaration::new(
-							top_level,
-							Domain::unbounded(db, domain.origin(), folded.ty()),
-						);
-						decl.set_definition(folded);
+						let decl = Declaration::from_expression(db, top_level, folded);
 						let idx = self.model.add_declaration(Item::new(decl, domain.origin()));
 						if !top_level {
 							decls.push(LetItem::Declaration(idx));
@@ -338,11 +318,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 							.filter_map(|(i, f)| match &**f {
 								DomainData::Bounded(d) => {
 									let folded = self.fold_expression(db, model, d);
-									let mut decl = Declaration::new(
-										top_level,
-										Domain::unbounded(db, domain.origin(), folded.ty()),
-									);
-									decl.set_definition(folded);
+									let decl = Declaration::from_expression(db, top_level, folded);
 									let idx = self
 										.model
 										.add_declaration(Item::new(decl, domain.origin()));
@@ -473,15 +449,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 							},
 						);
 						let dims = variable.ty().dims(db.upcast()).unwrap();
-						let mut decl = Declaration::new(
-							false,
-							Domain::unbounded(
-								db,
-								actual_index_sets.origin(),
-								actual_index_sets.ty(),
-							),
-						);
-						decl.set_definition(actual_index_sets);
+						let decl = Declaration::from_expression(db, false, actual_index_sets);
 						let idx = self.model.add_declaration(Item::new(decl, origin));
 						let idx_expr = Expression::new(db, &self.model, origin, idx);
 						let mut checks = Vec::with_capacity(dims);
@@ -552,9 +520,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 							arguments: vec![variable.clone()],
 						},
 					);
-					let mut index_sets_decl =
-						Declaration::new(false, Domain::unbounded(db, origin, index_sets.ty()));
-					index_sets_decl.set_definition(index_sets);
+					let index_sets_decl = Declaration::from_expression(db, false, index_sets);
 					let dim_count = variable.ty().dims(db.upcast()).unwrap();
 					let index_sets_decl_idx = self
 						.model
@@ -765,15 +731,19 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 	) -> Expression<Dst> {
 		let mut let_items = Vec::new();
 		let in_expression = self.unpack_struct_inner(db, model, domain, &mut let_items);
-		Expression::new(
-			db,
-			&self.model,
-			in_expression.origin(),
-			Let {
-				items: let_items,
-				in_expression: Box::new(in_expression),
-			},
-		)
+		if let_items.is_empty() {
+			in_expression
+		} else {
+			Expression::new(
+				db,
+				&self.model,
+				in_expression.origin(),
+				Let {
+					items: let_items,
+					in_expression: Box::new(in_expression),
+				},
+			)
+		}
 	}
 
 	fn unpack_struct_inner(
@@ -788,7 +758,8 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 				if matches!(
 					&***elem,
 					DomainData::Tuple(_) | DomainData::Record(_) | DomainData::Array(_, _)
-				) =>
+				) || elem.ty().inst(db.upcast()) == Some(VarType::Var)
+					&& elem.ty().opt(db.upcast()) == Some(OptType::Opt) =>
 			{
 				self.unpack_array(db, model, domain.origin(), dim, elem)
 			}
@@ -849,27 +820,30 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 			_ => unreachable!(),
 		};
 
-		let mut decls = Vec::with_capacity(dims.len());
-		let mut generators = Vec::with_capacity(dims.len());
+		let count = dims.len();
+		let index_sets = Expression::new(db, &self.model, origin, TupleLiteral(dims));
+		let index_sets_decl = Declaration::from_expression(db, false, index_sets);
+		let index_sets_idx = self
+			.model
+			.add_declaration(Item::new(index_sets_decl, origin));
+		let index_sets_expr = Expression::new(db, &self.model, origin, index_sets_idx);
 
-		for dim in dims {
-			let origin = dim.origin();
-			let mut decl = Declaration::new(false, Domain::unbounded(db, origin, dim.ty()));
-			decl.set_definition(dim);
-			let idx = self.model.add_declaration(Item::new(decl, origin));
-			decls.push(idx);
-		}
-
-		for idx in decls.iter().copied() {
-			let decl = &self.model[idx];
-			let collection = Expression::new(db, &self.model, decl.origin(), idx);
+		let mut generators = Vec::with_capacity(count);
+		for i in 1..=count {
+			let collection = Expression::new(
+				db,
+				&self.model,
+				origin,
+				TupleAccess {
+					tuple: Box::new(index_sets_expr.clone()),
+					field: IntegerLiteral(i as i64),
+				},
+			);
 			let gen_decl = Declaration::new(
 				false,
-				Domain::unbounded(db, decl.origin(), decl.ty().elem_ty(db.upcast()).unwrap()),
+				Domain::unbounded(db, origin, collection.ty().elem_ty(db.upcast()).unwrap()),
 			);
-			let gen_idx = self
-				.model
-				.add_declaration(Item::new(gen_decl, decl.origin()));
+			let gen_idx = self.model.add_declaration(Item::new(gen_decl, origin));
 			generators.push(Generator::Iterator {
 				declarations: vec![gen_idx],
 				collection,
@@ -878,7 +852,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 		}
 
 		let template = self.unpack_struct(db, model, elem);
-		let in_expression = Expression::new(
+		let comprehension = Expression::new(
 			db,
 			&self.model,
 			origin,
@@ -893,8 +867,16 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 			&self.model,
 			origin,
 			Let {
-				items: decls.into_iter().map(LetItem::Declaration).collect(),
-				in_expression: Box::new(in_expression),
+				items: vec![LetItem::Declaration(index_sets_idx)],
+				in_expression: Box::new(Expression::new(
+					db,
+					&self.model,
+					origin,
+					LookupCall {
+						function: self.ids.mzn_array_kd.into(),
+						arguments: vec![index_sets_expr, comprehension],
+					},
+				)),
 			},
 		)
 	}
@@ -933,6 +915,7 @@ mod test {
                     tuple(var 1..2): m;
                     record(var 1..3: n): o;
                 } in m.1;
+				array [1..2] of var opt 1..2: p;
 			"#,
 			expect!([r#"
     tuple(var int, var int): x = let {
@@ -944,28 +927,30 @@ mod test {
       var '..'(2, 4): _DECL_4;
     } in (a: _DECL_3, b: _DECL_4);
     array [int] of tuple(var int, record(var int: a)): z = let {
-    } in let {
-      set of int: _DECL_5 = '..'(1, 2);
-    } in [let {
+      tuple(set of int): _DECL_5 = ('..'(1, 2),);
+    } in mzn_array_kd(_DECL_5, [let {
       var '..'(1, 3): _DECL_7;
       var '..'(2, 4): _DECL_8;
-    } in (_DECL_7, (a: _DECL_8)) | _DECL_6 in _DECL_5];
+    } in (_DECL_7, (a: _DECL_8)) | _DECL_6 in _DECL_5.1]);
     array [int, int] of tuple(var int, var int): w = let {
-    } in let {
-      set of int: _DECL_9 = '..'(1, 2);
-      set of int: _DECL_10 = '..'(2, 3);
-    } in [let {
-      var '..'(1, 3): _DECL_13;
-      var '..'(2, 4): _DECL_14;
-    } in (_DECL_13, _DECL_14) | _DECL_11 in _DECL_9, _DECL_12 in _DECL_10];
+      tuple(set of int, set of int): _DECL_9 = ('..'(1, 2), '..'(2, 3));
+    } in mzn_array_kd(_DECL_9, [let {
+      var '..'(1, 3): _DECL_12;
+      var '..'(2, 4): _DECL_13;
+    } in (_DECL_12, _DECL_13) | _DECL_10 in _DECL_9.1, _DECL_11 in _DECL_9.2]);
     var int: v = let {
-      set of int: _DECL_15 = '..'(1, 2);
-      tuple(var int): m;
-      constraint mzn_domain_constraint(mzn_show_tuple_access("m", 1), m.1, _DECL_15);
-      set of int: _DECL_16 = '..'(1, 3);
-      record(var int: n): o;
-      constraint mzn_domain_constraint(mzn_show_record_access("o", "n"), o.n, _DECL_16);
+      tuple(var int): m = let {
+      var '..'(1, 2): _DECL_14;
+    } in (_DECL_14,);
+      record(var int: n): o = let {
+      var '..'(1, 3): _DECL_15;
+    } in (n: _DECL_15);
     } in m.1;
+    array [int] of var opt int: p = let {
+      tuple(set of int): _DECL_16 = ('..'(1, 2),);
+    } in mzn_array_kd(_DECL_16, [let {
+      var opt '..'(1, 2): _DECL_18;
+    } in _DECL_18 | _DECL_17 in _DECL_16.1]);
 "#]),
 		)
 	}
@@ -1028,13 +1013,19 @@ mod test {
 				var 1..3: a;
 				var set of 1..3: b;
 				array [1..2] of var 1..3: c;
-				array [1..2] of var set of 1..3: d; 
+				array [1..2] of var set of 1..3: d;
+				any: e = let {
+					var 1..3: x;
+				} in x;
 			"#,
 			expect!([r#"
     var '..'(1, 3): a;
     var set of '..'(1, 3): b;
-    array [int] of var '..'(1, 3): c;
-    array [int] of var set of '..'(1, 3): d;
+    array ['..'(1, 2)] of var '..'(1, 3): c;
+    array ['..'(1, 2)] of var set of '..'(1, 3): d;
+    var int: e = let {
+      var '..'(1, 3): x;
+    } in x;
 "#]),
 		)
 	}

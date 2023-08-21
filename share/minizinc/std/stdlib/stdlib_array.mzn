@@ -283,3 +283,10 @@ function bool: 'in'(set of $X: x, array[$T] of set of $X: y) =
 /** @group stdlib.builtins.array Return if \a y contains \a x */
 function var bool: 'in'(var set of $$X: x, array[$T] of var set of $$X: y) =
   exists (z in array1d(y)) (z=x);
+
+function array [$$E] of any $V: mzn_array_kd(tuple(set of $$E): i, array [$U] of any $V: x) = array1d(i.1, x);
+function array [$$E, $$F] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F): i, array [$U] of any $V: x) = array2d(i.1, i.2, x);
+function array [$$E, $$F, $$G] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F, set of $$G): i, array [$U] of any $V: x) = array3d(i.1, i.2, i.3, x);
+function array [$$E, $$F, $$G, $$H] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F, set of $$G, set of $$H): i, array [$U] of any $V: x) = array4d(i.1, i.2, i.3, i.4, x);
+function array [$$E, $$F, $$G, $$H, $$I] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): i, array [$U] of any $V: x) = array5d(i.1, i.2, i.3, i.4, i.5, x);
+function array [$$E, $$F, $$G, $$H, $$I, $$J] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): i, array [$U] of any $V: x) = array6d(i.1, i.2, i.3, i.4, i.5, i.6, x);

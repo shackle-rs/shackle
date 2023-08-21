@@ -282,7 +282,7 @@ impl<T: Marker> Model<T> {
 
 	/// Lookup a function by its signature
 	///
-	/// Prefer using `ExpressionAllocator::lookup_call` to create an call expression.
+	/// Prefer using `LookupCall` to create a call expression.
 	pub fn lookup_function(
 		&self,
 		db: &dyn Thir,
@@ -326,7 +326,7 @@ impl<T: Marker> Model<T> {
 
 	/// Lookup a top-level top-level variable or atom
 	///
-	/// Prefer using `ExpressionAllocator::lookup_identifier` to create an identifier expression.
+	/// Prefer using `LookupIdentifier` to create an identifier expression.
 	pub fn lookup_identifier(
 		&self,
 		db: &dyn Thir,

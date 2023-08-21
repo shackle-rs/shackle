@@ -162,6 +162,16 @@ pub trait Folder<'a, Dst: Marker, Src: Marker = ()> {
 		fold_constraint_id(self, db, model, c)
 	}
 
+	/// Add the folded version of this variable declaration item into the destination model.
+	fn add_variable_declaration(
+		&mut self,
+		db: &'a dyn Thir,
+		model: &'a Model<Src>,
+		d: DeclarationId<Src>,
+	) {
+		self.add_declaration(db, model, d);
+	}
+
 	/// Add the folded version of this declaration item into the destination model.
 	fn add_declaration(&mut self, db: &'a dyn Thir, model: &'a Model<Src>, d: DeclarationId<Src>) {
 		add_declaration(self, db, model, d);
@@ -235,6 +245,16 @@ pub trait Folder<'a, Dst: Marker, Src: Marker = ()> {
 	/// Add the folded version of this function item into the destination model.
 	fn add_function(&mut self, db: &'a dyn Thir, model: &'a Model<Src>, f: FunctionId<Src>) {
 		add_function(self, db, model, f);
+	}
+
+	/// Add the folded version of this parameter declaration item into the destination model.
+	fn add_parameter_declaration(
+		&mut self,
+		db: &'a dyn Thir,
+		model: &'a Model<Src>,
+		d: DeclarationId<Src>,
+	) {
+		self.add_declaration(db, model, d);
 	}
 
 	/// Fold a function item.
@@ -513,6 +533,16 @@ pub trait Folder<'a, Dst: Marker, Src: Marker = ()> {
 		fold_generator(self, db, model, generator)
 	}
 
+	/// Add the folded version of this generator iterator declaration item into the destination model.
+	fn add_iterator_declaration(
+		&mut self,
+		db: &'a dyn Thir,
+		model: &'a Model<Src>,
+		d: DeclarationId<Src>,
+	) {
+		self.add_declaration(db, model, d);
+	}
+
 	/// Fold a domain
 	fn fold_domain(
 		&mut self,
@@ -574,7 +604,7 @@ pub fn add_item<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	match item {
 		ItemId::Annotation(a) => folder.add_annotation(db, model, a),
 		ItemId::Constraint(c) => folder.add_constraint(db, model, c),
-		ItemId::Declaration(d) => folder.add_declaration(db, model, d),
+		ItemId::Declaration(d) => folder.add_variable_declaration(db, model, d),
 		ItemId::Enumeration(e) => folder.add_enumeration(db, model, e),
 		ItemId::Function(f) => folder.add_function(db, model, f),
 		ItemId::Output(o) => folder.add_output(db, model, o),
@@ -804,7 +834,7 @@ pub fn fold_constructor<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 		parameters: c.parameters.as_ref().map(|ps| {
 			ps.iter()
 				.map(|p| {
-					folder.add_declaration(db, model, *p);
+					folder.add_parameter_declaration(db, model, *p);
 					folder.fold_declaration_id(db, model, *p)
 				})
 				.collect()
@@ -844,7 +874,7 @@ pub fn fold_function<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 			.map(|ann| folder.fold_expression(db, model, ann)),
 	);
 	function.set_parameters(f.parameters().iter().map(|p| {
-		folder.add_declaration(db, model, *p);
+		folder.add_parameter_declaration(db, model, *p);
 		folder.fold_declaration_id(db, model, *p)
 	}));
 	function.set_type_inst_vars(f.type_inst_vars().iter().cloned());
@@ -928,7 +958,7 @@ pub fn fold_output_id<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 			PrettyPrinter::new(db, model).pretty_print_signature(a.into()),
 			model[a].origin().debug_print(db)
 		)
-})
+	})
 }
 
 /// Add the folded version of the solve item into the destination model.
@@ -1226,7 +1256,7 @@ pub fn fold_let<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 					LetItem::Constraint(folder.fold_constraint_id(db, model, *c))
 				}
 				LetItem::Declaration(d) => {
-					folder.add_declaration(db, model, *d);
+					folder.add_variable_declaration(db, model, *d);
 					LetItem::Declaration(folder.fold_declaration_id(db, model, *d))
 				}
 			})
@@ -1347,7 +1377,7 @@ pub fn fold_generator<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 			assignment,
 			where_clause,
 		} => {
-			folder.add_declaration(db, model, *assignment);
+			folder.add_variable_declaration(db, model, *assignment);
 			Generator::Assignment {
 				assignment: folder.fold_declaration_id(db, model, *assignment),
 				where_clause: where_clause
@@ -1363,7 +1393,7 @@ pub fn fold_generator<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 			declarations: declarations
 				.iter()
 				.map(|d| {
-					folder.add_declaration(db, model, *d);
+					folder.add_iterator_declaration(db, model, *d);
 					folder.fold_declaration_id(db, model, *d)
 				})
 				.collect(),

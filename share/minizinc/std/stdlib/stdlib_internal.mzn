@@ -39,8 +39,7 @@ predicate var_dom(var int: x, set of int: s) =
 test var_dom(opt int: x, set of int: s) =
   absent(x) \/ deopt(x) in s;
 predicate var_dom(var opt int: x, set of int: s) =
-  var_dom(deopt(x), s union {0});
-
+  var_dom(deopt(x), mzn_opt_domain(s)) /\ mzn_opt_channel(x, s);
 test var_dom(set of int: x, set of int: s) =
   x subset s;
 predicate var_dom(var set of int: x, set of int: s) =
@@ -76,7 +75,7 @@ predicate var_dom(var float: x, set of float: s) =
 test var_dom(opt float: x, set of float: s) =
   absent(x) \/ deopt(x) in s;
 predicate var_dom(var opt float: x, set of float: s) =
-  var_dom(deopt(x), s union {0.0});
+  var_dom(deopt(x), mzn_opt_domain(s)) /\ mzn_opt_channel(x, s);
 
 test var_dom(set of float: x, set of float: s) =
   x subset s;

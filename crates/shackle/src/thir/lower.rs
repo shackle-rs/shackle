@@ -672,11 +672,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		let origin: Origin = origin.into();
 		let mut collector = ExpressionCollector::new(self.parent, self.data, self.item, self.types);
 		let def = f(&mut collector);
-		let mut decl = Declaration::new(
-			top_level,
-			Domain::unbounded(self.parent.db, origin, def.ty()),
-		);
-		decl.set_definition(def);
+		let decl = Declaration::from_expression(self.parent.db, top_level, def);
 		self.parent.model.add_declaration(Item::new(decl, origin))
 	}
 
@@ -1419,6 +1415,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			decls.push(decl);
 			decl
 		};
+		let mut index_sets_for_infinite_slice = None;
 		let array_dims = self.types[collection]
 			.dims(self.parent.db.upcast())
 			.unwrap();
@@ -1432,21 +1429,39 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 						let decl = self.introduce_declaration(false, index_entity, |collector| {
 							if let hir::Expression::Slice(s) = &collector.data[*e] {
 								// Rewrite infinite slice .. into `'..'(index_set_mofn(c))`
+								if index_sets_for_infinite_slice.is_none() {
+									let decl = collector.introduce_declaration(
+										false,
+										origin,
+										|collector| {
+											alloc_expression(
+												LookupCall {
+													function: self.parent.ids.index_sets.into(),
+													arguments: vec![alloc_expression(
+														collection_decl,
+														collector,
+														collection_entity,
+													)],
+												},
+												collector,
+												origin,
+											)
+										},
+									);
+									decls.push(decl);
+									index_sets_for_infinite_slice = Some(decl);
+								}
 								alloc_expression(
 									LookupCall {
 										function: (*s).into(),
 										arguments: vec![alloc_expression(
-											LookupCall {
-												function: Identifier::new(
-													format!("index_set_{}of{}", i + 1, array_dims),
-													collector.parent.db.upcast(),
-												)
-												.into(),
-												arguments: vec![alloc_expression(
-													collection_decl,
+											TupleAccess {
+												tuple: Box::new(alloc_expression(
+													index_sets_for_infinite_slice.unwrap(),
 													collector,
-													collection_entity,
-												)],
+													index_entity,
+												)),
+												field: IntegerLiteral(i as i64 + 1),
 											},
 											collector,
 											index_entity,

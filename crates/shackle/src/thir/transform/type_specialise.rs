@@ -244,7 +244,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 				.map(|ann| self.fold_expression(db, model, ann)),
 		);
 		function.set_parameters(model[f].parameters().iter().map(|p| {
-			self.add_declaration(db, model, *p);
+			self.add_parameter_declaration(db, model, *p);
 			self.fold_declaration_id(db, model, *p)
 		}));
 

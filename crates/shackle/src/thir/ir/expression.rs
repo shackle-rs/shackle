@@ -8,8 +8,8 @@ use std::{
 
 use super::{
 	domain::{OptType, VarType},
-	AnnotationId, Annotations, ConstraintId, DeclarationId, EnumerationId, FunctionId,
-	FunctionName, Identifier, Marker, Model,
+	AnnotationId, Annotations, ConstraintId, Declaration, DeclarationId, Domain, EnumerationId,
+	FunctionId, FunctionName, Identifier, Item, Marker, Model,
 };
 pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral};
 use crate::{
@@ -910,6 +910,18 @@ impl<T: Marker> ExpressionBuilder<T> for LookupCall<T> {
 	}
 }
 
+/// A top-level identifier with the given name
+pub struct LookupIdentifier(pub Identifier);
+
+impl<T: Marker> ExpressionBuilder<T> for LookupIdentifier {
+	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
+		model
+			.lookup_identifier(db, self.0)
+			.unwrap_or_else(|| panic!("Undefined variable '{}'", self.0.pretty_print(db.upcast())))
+			.build(db, model, origin)
+	}
+}
+
 /// A let expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Let<T = ()> {
@@ -1192,6 +1204,28 @@ pub enum Generator<T = ()> {
 }
 
 impl<T: Marker> Generator<T> {
+	/// Create a generator that iterates over the given collection
+	pub fn iterator(
+		db: &dyn Thir,
+		count: usize,
+		collection: Expression<T>,
+		model: &mut Model<T>,
+	) -> Self {
+		let mut declarations = Vec::with_capacity(count);
+		let elem = collection.ty().elem_ty(db.upcast()).unwrap();
+		for _ in 0..count {
+			declarations.push(model.add_declaration(Item::new(
+				Declaration::new(false, Domain::unbounded(db, collection.origin(), elem)),
+				collection.origin(),
+			)));
+		}
+		Self::Iterator {
+			declarations,
+			collection,
+			where_clause: None,
+		}
+	}
+
 	/// Whether this generator has a var where clause
 	pub fn var_where(&self, db: &dyn Thir) -> bool {
 		match self {
