@@ -1,0 +1,502 @@
+====================
+Car Sequencing
+====================
+language ESSENCE' 1.0
+given numcars : int(1..)
+given numclasses : int(1..)
+given numoptions : int(1..)
+given optMax : matrix indexed by [ int(1..numoptions) ] of int(0..)
+given windowSize : matrix indexed by [ int(1..numoptions) ] of int(0..)
+given optionsRequired : matrix indexed by [ int(1..numclasses), int(1..numoptions) ] of bool
+given numberPerClass : matrix indexed by [ int(1..numclasses) ] of int(1..)
+
+$ Decision variables
+find seq: matrix indexed by [ int(1..numcars) ] of int(1..numclasses) 
+such that
+forAll option : int(1..numoptions) .
+    forAll windowStart : int(1..numcars-windowSize[option]+1) .
+        (sum pos : int(windowStart..windowStart+windowSize[option]-1) .
+            seq[pos] in toSet([ class | class : int(1..numclasses), optionsRequired[class, option]])
+        )<=optMax[option],
+        
+forAll option : int(1..numoptions) .
+    (sum pos : int(1..numcars) .
+        seq[pos] in toSet([ class | class : int(1..numclasses), optionsRequired[class, option]])
+    )=
+    (
+        sum class : int(1..numclasses) . optionsRequired[class, option]*numberPerClass[class]
+    ),
+ 
+gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
+---
+
+(source_file)
+
+====================
+All-Interval Series 
+====================
+
+$ Model created by Hakan Kjellerstrand, hakank@gmail.com
+$ See also my Essence'/Tailor page: http://www.hakank.org/savile_row/
+$ Licenced under CC-BY-4.0 : http://creativecommons.org/licenses/by/4.0/
+ 
+language ESSENCE' 1.0
+ 
+letting n be 12
+letting range be domain int(1..n)
+letting range2 be domain int(1..n-1)
+find x: matrix indexed by [range] of range
+find diffs: matrix indexed by [range2] of range2
+ 
+such that
+   allDiff(diffs),
+   allDiff(x),
+   forall k : range2 . diffs[k] = |x[k+1]-x[k]|,
+   x
+   x[1] < x[n-1],
+   diffs[1] < diffs[2]
+---
+
+(source_file
+(line_comment)
+(line_comment)
+(line_comment)
+(lang_version)
+(const_def
+(identifier)
+(integer_literal))
+(domain_alias
+(identifier)
+(integer_domain
+    (range_literal
+    (integer_literal)
+    (identifier))))
+(domain_alias
+(identifier)
+(integer_domain
+    (range_literal
+    (integer_literal)
+    (infix_operator
+        (identifier)
+        (integer_literal)))))
+(decision_decl
+(identifier)
+(matrix_domain
+    (identifier)
+    (identifier)))
+(decision_decl
+(identifier)
+(matrix_domain
+    (identifier)
+    (identifier)))
+(constraint
+(call
+    (identifier)
+    (identifier))
+(call
+    (identifier)
+    (identifier))
+(quantification
+    (identifier)
+    (generator
+    (identifier)
+    (identifier))
+    (infix_operator
+    (indexed_access
+        (identifier)
+        (identifier))
+    (absolute_operator
+        (infix_operator
+        (indexed_access
+            (identifier)
+            (infix_operator
+            (identifier)
+            (integer_literal)))
+        (indexed_access
+            (identifier)
+            (identifier))))))
+(infix_operator
+    (indexed_access
+    (identifier)
+    (ERROR
+        (identifier))
+    (integer_literal))
+    (indexed_access
+    (identifier)
+    (infix_operator
+        (identifier)
+        (integer_literal))))
+(infix_operator
+    (indexed_access
+    (identifier)
+    (integer_literal))
+    (indexed_access
+    (identifier)
+    (integer_literal)))))
+
+====================
+Number Partitioning
+====================
+$ This Essence' model was created by Hakan Kjellerstrand, hakank@gmail.com .
+$ See also my Tailor/Essence' page: http://www.hakank.org/savile_row/ .
+$ Licenced under CC-BY-4.0 : http://creativecommons.org/licenses/by/4.0/
+ 
+language ESSENCE' 1.0
+ 
+letting n be 16
+letting num_sets be 2
+find a: matrix indexed by [int(1..n)] of int(1..num_sets)
+ 
+find sums: matrix indexed by [int(1..num_sets)] of int(0..n*n)
+find sums_squared: matrix indexed by [int(1..num_sets)] of int(0..n*n*n*n)
+ 
+such that
+   forall i: int(1..num_sets) .
+       sums[i] = (sum j: int(1..n) . j*(a[j]=i)) /\
+       sums_squared[i] = sum j: int(1..n) . j**2*(a[j]=i)
+   ,
+   $ same cardinality and sums
+   forall i: int(2..num_sets) .
+      (sum j: int(1..n) . a[j]=i-1) = (sum j: int(1..n) . a[j]=i) /\
+      sums[i-1] = sums[i] /\
+      sums_squared[i-1] = sums_squared[i]
+   ,
+   $ summetry breaking
+   a[1] = 1
+
+---
+(source_file
+      (line_comment)
+      (line_comment)
+      (line_comment)
+      (lang_version)
+      (const_def
+        (identifier)
+        (integer_literal))
+      (const_def
+        (identifier)
+        (integer_literal))
+      (decision_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (identifier)))))
+      (decision_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (infix_operator
+                (identifier)
+                (identifier))))))
+      (decision_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (infix_operator
+                (infix_operator
+                  (infix_operator
+                    (identifier)
+                    (identifier))
+                  (identifier))
+                (identifier))))))
+      (constraint
+        (quantification
+          (identifier)
+          (generator
+            (identifier)
+            (integer_domain
+              (range_literal
+                (integer_literal)
+                (identifier))))
+          (infix_operator
+            (infix_operator
+              (indexed_access
+                (identifier)
+                (identifier))
+              (quantification
+                (identifier)
+                (generator
+                  (identifier)
+                  (integer_domain
+                    (range_literal
+                      (integer_literal)
+                      (identifier))))
+                (infix_operator
+                  (identifier)
+                  (infix_operator
+                    (indexed_access
+                      (identifier)
+                      (identifier))
+                    (identifier)))))
+            (infix_operator
+              (indexed_access
+                (identifier)
+                (identifier))
+              (quantification
+                (identifier)
+                (generator
+                  (identifier)
+                  (integer_domain
+                    (range_literal
+                      (integer_literal)
+                      (identifier))))
+                (infix_operator
+                  (infix_operator
+                    (identifier)
+                    (integer_literal))
+                  (infix_operator
+                    (indexed_access
+                      (identifier)
+                      (identifier))
+                    (identifier)))))))
+        (line_comment)
+        (quantification
+          (identifier)
+          (generator
+            (identifier)
+            (integer_domain
+              (range_literal
+                (integer_literal)
+                (identifier))))
+          (infix_operator
+            (infix_operator
+              (infix_operator
+                (quantification
+                  (identifier)
+                  (generator
+                    (identifier)
+                    (integer_domain
+                      (range_literal
+                        (integer_literal)
+                        (identifier))))
+                  (infix_operator
+                    (indexed_access
+                      (identifier)
+                      (identifier))
+                    (infix_operator
+                      (identifier)
+                      (integer_literal))))
+                (quantification
+                  (identifier)
+                  (generator
+                    (identifier)
+                    (integer_domain
+                      (range_literal
+                        (integer_literal)
+                        (identifier))))
+                  (infix_operator
+                    (indexed_access
+                      (identifier)
+                      (identifier))
+                    (identifier))))
+              (infix_operator
+                (indexed_access
+                  (identifier)
+                  (infix_operator
+                    (identifier)
+                    (integer_literal)))
+                (indexed_access
+                  (identifier)
+                  (identifier))))
+            (infix_operator
+              (indexed_access
+                (identifier)
+                (infix_operator
+                  (identifier)
+                  (integer_literal)))
+              (indexed_access
+                (identifier)
+                (identifier)))))
+        (line_comment)
+        (infix_operator
+          (indexed_access
+            (identifier)
+            (integer_literal))
+          (integer_literal))))
+
+====================
+Car Sequencing
+====================
+
+
+---
+
+(source_file)
+
+======
+Sudoku
+======
+
+language ESSENCE’ 1.0
+find M : matrix indexed by [int(1..9), int(1..9)] of int(1..9)
+such that
+M[1,1]=5,
+M[1,2]=3,
+M[1,5]=7,
+....
+M[9,9]=9,
+forAll row : int(1..9) .
+forAll col1 : int(1..9) .
+forAll col2: int(col1+1..9) . M[row, col1]!=M[row, col2],
+forAll col : int(1..9) .
+forAll row1 : int(1..9) .
+forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
+
+
+---
+
+(source_file
+      (lang_version)
+      (decision_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (integer_literal)))
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (integer_literal)))
+          (integer_domain
+            (range_literal
+              (integer_literal)
+              (integer_literal)))))
+      (constraint
+        (infix_operator
+          (indexed_access
+            (identifier)
+            (integer_literal)
+            (integer_literal))
+          (integer_literal))
+        (infix_operator
+          (indexed_access
+            (identifier)
+            (integer_literal)
+            (integer_literal))
+          (integer_literal))
+        (infix_operator
+          (indexed_access
+            (identifier)
+            (integer_literal)
+            (integer_literal))
+          (integer_literal))
+        (ERROR)
+        (infix_operator
+          (indexed_access
+            (identifier)
+            (integer_literal)
+            (integer_literal))
+          (integer_literal))
+        (quantification
+          (identifier)
+          (generator
+            (identifier)
+            (integer_domain
+              (range_literal
+                (integer_literal)
+                (integer_literal))))
+          (quantification
+            (identifier)
+            (generator
+              (identifier)
+              (integer_domain
+                (range_literal
+                  (integer_literal)
+                  (integer_literal))))
+            (quantification
+              (identifier)
+              (generator
+                (identifier)
+                (integer_domain
+                  (range_literal
+                    (infix_operator
+                      (identifier)
+                      (integer_literal))
+                    (integer_literal))))
+              (infix_operator
+                (indexed_access
+                  (identifier)
+                  (identifier)
+                  (identifier))
+                (indexed_access
+                  (identifier)
+                  (identifier)
+                  (identifier))))))
+        (quantification
+          (identifier)
+          (generator
+            (identifier)
+            (integer_domain
+              (range_literal
+                (integer_literal)
+                (integer_literal))))
+          (quantification
+            (identifier)
+            (generator
+              (identifier)
+              (integer_domain
+                (range_literal
+                  (integer_literal)
+                  (integer_literal))))
+            (quantification
+              (identifier)
+              (generator
+                (identifier)
+                (integer_domain
+                  (range_literal
+                    (infix_operator
+                      (identifier)
+                      (integer_literal))
+                    (integer_literal))))
+              (infix_operator
+                (indexed_access
+                  (identifier)
+                  (identifier)
+                  (identifier))
+                (indexed_access
+                  (identifier)
+                  (identifier)
+                  (identifier))))))))
+
+====================
+Test
+====================
+
+$such that
+$ 
+$forAll option : int(1..numoptions) .
+$    forAll windowStart : int(1..numcars-windowSize[option]+1) .
+$        (sum pos : int(windowStart..windowStart+windowSize[option]-1) .
+$            seq[pos] in toSet([ class | class : int(1..numclasses), optionsRequired[class, option]])
+$        )<=optMax[option],
+        
+$ forAll option : int(1..numoptions) .
+$     (sum pos : int(1..numcars) .
+$         seq[pos] in toSet([ class | class : int(1..numclasses), optionsRequired[class, option]])
+$     )=
+$     (
+$         sum class : int(1..numclasses) . optionsRequired[class, option]*numberPerClass[class]
+$     ),
+
+---
+
+(source_file)

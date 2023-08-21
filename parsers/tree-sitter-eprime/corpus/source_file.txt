@@ -48,11 +48,13 @@ Constrant Definition
 ====================
 
 letting x = 10
+letting x be 10
 letting cmatrix: matrix indexed by [ int(1..2), int(1..4) ] of int(1..10) = [ [2,8,5,1], [3,7,9,4] ]
 
 ---
 
 (source_file 
+  (const_def name: (identifier) definition: (integer_literal))
   (const_def name: (identifier) definition: (integer_literal))
   (const_def name: (identifier) 
     domain: (matrix_domain 

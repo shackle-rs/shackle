@@ -79,7 +79,10 @@ module.exports = grammar({
 				"letting",
 				field("name", $.identifier),
 				optional(seq(":", field("domain", $._domain))),
-				"=",
+				choice (
+					"=",
+					"be"
+				),
 				field("definition", $._expression)
 			),
 
@@ -131,6 +134,7 @@ module.exports = grammar({
 				$.prefix_operator,
 				$.quantification,
 				$.matrix_comprehension,
+				$.absolute_operator,
 				seq("(", $._expression, ")")
 			),
 
@@ -218,6 +222,16 @@ module.exports = grammar({
 					field("left", $._expression),
 					field("operator", "in"),
 					field("right", $._base_domain)
+				)
+			),
+		
+		abs_operator: ($) =>
+			prec(
+				PREC.absolute,
+				seq(
+					"|",
+					field("operand", $._expression),
+					"|"
 				)
 			),
 

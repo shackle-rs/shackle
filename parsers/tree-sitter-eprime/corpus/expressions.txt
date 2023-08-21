@@ -56,6 +56,21 @@ letting negated_ident = !y
   (const_def name: (identifier) definition: (prefix_operator operand: (boolean_literal)))
   (const_def name: (identifier) definition: (prefix_operator operand: (identifier))))
 
+========
+Absolute
+========
+
+letting absolute = | x |
+
+---
+
+(source_file
+  (const_def
+    (identifier)
+    (absolute_operator
+      (identifier))))
+
+
 ===============
 Infix Operators
 ===============
