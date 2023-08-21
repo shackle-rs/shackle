@@ -55,12 +55,27 @@ test mzn_check_only_range_domains() = if mzn_opt_only_range_domains.1 then mzn_o
 test mzn_check_annotate_defines_var() = if mzn_opt_annotate_defines_var.1 then mzn_opt_annotate_defines_var.2 else true endif;
 test mzn_check_ignore_symmetry_breaking_constraints() = if mzn_ignore_symmetry_breaking_constraints.1 then mzn_ignore_symmetry_breaking_constraints.2 else false endif;
 test mzn_check_ignore_redundant_constraints() = if mzn_ignore_redundant_constraints.1 then mzn_ignore_redundant_constraints.2 else false endif;
-test mzn_check_absent_zero() = if mzn_absent_zero.1 then mzn_absent_zero.2 else true endif;
 
 function ann: 'output'(any $T: x :: annotated_expression);
 function ann: 'output'(array [$U] of any $T: x :: annotated_expression);
 
-mzn_absent_zero = (false, false);
+predicate if_then_else(array[int] of var bool: c, array[int] of int: x, var int: y) =
+    fzn_if_then_else_int(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of var int: x, var int: y) =
+    fzn_if_then_else_var_int(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of bool: x, var bool: y) =
+    fzn_if_then_else_bool(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of var bool: x, var bool: y) =
+    fzn_if_then_else_var_bool(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of float: x, var float: y) =
+    fzn_if_then_else_float(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of var float: x, var float: y) =
+    fzn_if_then_else_var_float(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of set of int: x, var set of int: y) =
+    fzn_if_then_else_set(c, x, y);
+predicate if_then_else(array[int] of var bool: c, array[int] of var set of int: x, var set of int: y) =
+    fzn_if_then_else_var_set(c, x, y);
+
 mzn_min_version_required = (false, 0);
 mzn_opt_only_range_domains = (false, false);
 mzn_opt_annotate_defines_var = (false, false);

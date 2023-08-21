@@ -48,32 +48,41 @@ function array [$U] of var $T: deopt(array [$U] of var $T: x) = x;
 /** @group stdlib.optiontypes Return array of the value of \a x[i] (assumes that \a x[i] is not absent). */
 function array [$U] of var $T : deopt(array [$U] of var opt $T : x) = arrayXd(x, [deopt(x_i) | x_i in x]);
 
-/** @group stdlib.optiontypes.int True if \a x had zero in its original domain.
-
-    Returns true if absent zero representation is disabled or if it is possible
-    that \( \text{occurs}(x) \wedge \text{deopt}(x) = 0 \) */
-function bool: had_zero(var opt int: x) :: cache_result = not mzn_check_absent_zero() \/ (0 in dom(x));
-/** @group stdlib.optiontypes.int True if \a x had zero in its original domain.
-
-    Returns true if absent zero representation is disabled or if it is possible
-    that \( \text{occurs}(x) \wedge \text{deopt}(x) = 0 \) */
-function bool: had_zero(opt int: x) = not mzn_check_absent_zero() \/ (x = 0);
-/** @group stdlib.optiontypes.int True if \a x had zero in its original domain.
-
-    Returns true if absent zero representation is disabled or if it is possible
-    that \( \text{occurs}(x) \wedge \text{deopt}(x) = 0 \) */
+/** @group stdlib.optiontypes.int True if \a x had zero in its original domain. */
+function bool: had_zero(var opt int: x) :: cache_result = not (
+  is_fixed(mzn_opt_absent_iff_zero(x)) /\ 
+  fix(mzn_opt_absent_iff_zero(x))
+);
+/** @group stdlib.optiontypes.int True if \a x had zero in its original domain. */
+function bool: had_zero(opt int: x) = x = 0;
+/** @group stdlib.optiontypes.int True if \a x had zero in its original domain. */
 function bool: had_zero(array [int] of var opt int: x) = exists (xi in x) (had_zero(xi));
-
-predicate mzn_absent_zero(var opt int: x) =
-  if mzn_check_absent_zero() then
-    if had_zero(x) then
-      occurs(x) \/ deopt(x) = 0
-    else
-      occurs(x) <-> deopt(x) != 0
-    endif
-  endif;
 
 function var opt $T: mzn_construct_opt(tuple(var bool, var $T));
 function opt $T: mzn_construct_opt(tuple(bool, $T));
 function tuple(var bool, var $T): mzn_destruct_opt(var opt $T);
 function tuple(bool, $T): mzn_destruct_opt(opt $T);
+
+function set of int: mzn_opt_domain(set of int: x) = x union {0};
+function set of float: mzn_opt_domain(set of float: x) = x union {0.0};
+
+predicate mzn_opt_channel(var opt int: x, set of int: s) =
+  if 0 in s then
+    mzn_opt_absent_then_zero(x)
+  else
+    mzn_opt_absent_iff_zero(x)
+  endif;
+
+predicate mzn_opt_channel(var opt float: x, set of float: s) =
+  if 0.0 in s then
+    mzn_opt_absent_then_zero(x)
+  else
+    mzn_opt_absent_iff_zero(x)
+  endif;
+
+predicate mzn_opt_absent_iff_zero(var opt int: x) = absent(x) <-> deopt(x) = 0;
+predicate mzn_opt_absent_then_zero(var opt int: x) = absent(x) -> deopt(x) = 0;
+
+predicate mzn_opt_absent_iff_zero(var opt float: x) = absent(x) <-> deopt(x) = 0.0;
+predicate mzn_opt_absent_then_zero(var opt float: x) = absent(x) -> deopt(x) = 0.0;
+
