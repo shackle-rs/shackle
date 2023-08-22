@@ -148,3 +148,15 @@ $
   (line_comment)
   (line_comment)
   (line_comment))
+
+=========
+Heuristics
+=========
+
+heuristic conflict
+
+---
+
+(source_file
+  (heuristic
+    (heuristicType)))

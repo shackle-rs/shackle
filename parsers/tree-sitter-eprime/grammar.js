@@ -52,6 +52,7 @@ module.exports = grammar({
 						$.decision_decl,
 						$.objective,
 						$.branching,
+						$.heuristic,
 						$.constraint
 					)
 				)
@@ -120,6 +121,15 @@ module.exports = grammar({
 
 		constraint: ($) =>
 			seq("such", "that", sepBy1(",", field("expression", $._expression))),
+
+		heuristic: ($) =>
+			seq("heuristic", optional(field("name", $.heuristicType))),
+		heuristicType : ($) => choice(
+			"static",
+			"sdf",
+			"srf",
+			"conflict"
+		),
 
 		_expression: ($) =>
 			choice(

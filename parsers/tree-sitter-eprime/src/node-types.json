@@ -585,6 +585,27 @@
     }
   },
   {
+    "type": "heuristic",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "heuristicType",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "heuristicType",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "indexed_access",
     "named": true,
     "fields": {
@@ -837,6 +858,10 @@
             "named": false
           },
           {
+            "type": "<=>",
+            "named": false
+          },
+          {
             "type": "<=lex",
             "named": false
           },
@@ -846,6 +871,10 @@
           },
           {
             "type": "=",
+            "named": false
+          },
+          {
+            "type": "=>",
             "named": false
           },
           {
@@ -1968,6 +1997,10 @@
           "named": true
         },
         {
+          "type": "heuristic",
+          "named": true
+        },
+        {
           "type": "lang_version",
           "named": true
         },
@@ -2063,6 +2096,10 @@
     "named": false
   },
   {
+    "type": "<=>",
+    "named": false
+  },
+  {
     "type": "<=lex",
     "named": false
   },
@@ -2072,6 +2109,10 @@
   },
   {
     "type": "=",
+    "named": false
+  },
+  {
+    "type": "=>",
     "named": false
   },
   {
@@ -2123,6 +2164,10 @@
     "named": false
   },
   {
+    "type": "conflict",
+    "named": false
+  },
+  {
     "type": "domain",
     "named": false
   },
@@ -2136,6 +2181,10 @@
   },
   {
     "type": "given",
+    "named": false
+  },
+  {
+    "type": "heuristic",
     "named": false
   },
   {
@@ -2192,6 +2241,18 @@
   },
   {
     "type": "on",
+    "named": false
+  },
+  {
+    "type": "sdf",
+    "named": false
+  },
+  {
+    "type": "srf",
+    "named": false
+  },
+  {
+    "type": "static",
     "named": false
   },
   {

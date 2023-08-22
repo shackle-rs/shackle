@@ -94,11 +94,15 @@ letting and = x /\ y
 letting or = x \/ y
 letting impl = x -> y
 letting equiv = x <-> y
+letting impl = x => y
+letting equiv = x <=> y
 letting set_in = x in y
 
 ---
 
 (source_file
+  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
   (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
   (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
   (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
