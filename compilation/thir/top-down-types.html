@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Desugaring of capturing - The Shackle Almanac</title>
+        <title>Top-down typing - The Shackle Almanac</title>
 
 
         <!-- Custom HTML head -->
@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item affix "><a href="../../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../../process.html"><strong aria-hidden="true">1.</strong> The compilation process</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item "><a href="../../compilation/ast/ast.html"><strong aria-hidden="true">1.2.</strong> Abstract syntax tree</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/ast/includes.html"><strong aria-hidden="true">1.2.1.</strong> Include resolution</a></li></ol></li><li class="chapter-item "><a href="../../compilation/hir/hir.html"><strong aria-hidden="true">1.3.</strong> High-level intermediate representation</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/hir/scope.html"><strong aria-hidden="true">1.3.1.</strong> Scope collection</a></li><li class="chapter-item "><a href="../../compilation/hir/typecheck.html"><strong aria-hidden="true">1.3.2.</strong> Type checking</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/thir/thir.html"><strong aria-hidden="true">1.4.</strong> Typed high-level intermediate representation</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/thir/transform.html"><strong aria-hidden="true">1.4.1.</strong> Model transformations</a></li><li class="chapter-item "><a href="../../compilation/thir/output.html"><strong aria-hidden="true">1.4.2.</strong> Output item removal</a></li><li class="chapter-item "><a href="../../compilation/thir/domains.html"><strong aria-hidden="true">1.4.3.</strong> Generating constraints for domains</a></li><li class="chapter-item "><a href="../../compilation/thir/top-down-types.html"><strong aria-hidden="true">1.4.4.</strong> Top-down typing</a></li><li class="chapter-item "><a href="../../compilation/thir/type-specialise.html"><strong aria-hidden="true">1.4.5.</strong> Type specialisation</a></li><li class="chapter-item "><a href="../../compilation/thir/dispatch.html"><strong aria-hidden="true">1.4.6.</strong> Generation of function dispatch preambles</a></li><li class="chapter-item "><a href="../../compilation/thir/records.html"><strong aria-hidden="true">1.4.7.</strong> Erasure of records</a></li><li class="chapter-item "><a href="../../compilation/thir/enums.html"><strong aria-hidden="true">1.4.8.</strong> Erasure of enums</a></li><li class="chapter-item "><a href="../../compilation/thir/comprehension.html"><strong aria-hidden="true">1.4.9.</strong> Desugaring of comprehensions</a></li><li class="chapter-item "><a href="../../compilation/thir/option-types.html"><strong aria-hidden="true">1.4.10.</strong> Erasure of option types</a></li><li class="chapter-item "><a href="../../compilation/thir/overloading.html"><strong aria-hidden="true">1.4.11.</strong> Removal of overloading</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/captures.html" class="active"><strong aria-hidden="true">1.4.12.</strong> Desugaring of capturing</a></li></ol></li><li class="chapter-item "><a href="../../compilation/mir/mir.html"><strong aria-hidden="true">1.5.</strong> Mid-level intermediate representation</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/mir/totalise.html"><strong aria-hidden="true">1.5.1.</strong> Totalisation</a></li><li class="chapter-item "><a href="../../compilation/mir/context.html"><strong aria-hidden="true">1.5.2.</strong> Context analysis</a></li></ol></li><li class="chapter-item "><a href="../../compilation/bytecode-gen.html"><strong aria-hidden="true">1.6.</strong> Bytecode generation</a></li><li class="chapter-item "><a href="../../compilation/interpreter.html"><strong aria-hidden="true">1.7.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item "><a href="../../microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item "><a href="../../microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item "><a href="../../interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item "><a href="../../mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item "><a href="../../error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
+                <ol class="chapter"><li class="chapter-item affix "><a href="../../foreword.html">The Shackle Almanac</a></li><li class="chapter-item expanded "><a href="../../process.html"><strong aria-hidden="true">1.</strong> The compilation process</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/parsing.html"><strong aria-hidden="true">1.1.</strong> Parsing</a></li><li class="chapter-item "><a href="../../compilation/ast/ast.html"><strong aria-hidden="true">1.2.</strong> Abstract syntax tree</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/ast/includes.html"><strong aria-hidden="true">1.2.1.</strong> Include resolution</a></li></ol></li><li class="chapter-item "><a href="../../compilation/hir/hir.html"><strong aria-hidden="true">1.3.</strong> High-level intermediate representation</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/hir/scope.html"><strong aria-hidden="true">1.3.1.</strong> Scope collection</a></li><li class="chapter-item "><a href="../../compilation/hir/typecheck.html"><strong aria-hidden="true">1.3.2.</strong> Type checking</a></li></ol></li><li class="chapter-item expanded "><a href="../../compilation/thir/thir.html"><strong aria-hidden="true">1.4.</strong> Typed high-level intermediate representation</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/thir/transform.html"><strong aria-hidden="true">1.4.1.</strong> Model transformations</a></li><li class="chapter-item "><a href="../../compilation/thir/output.html"><strong aria-hidden="true">1.4.2.</strong> Output item removal</a></li><li class="chapter-item "><a href="../../compilation/thir/domains.html"><strong aria-hidden="true">1.4.3.</strong> Generating constraints for domains</a></li><li class="chapter-item expanded "><a href="../../compilation/thir/top-down-types.html" class="active"><strong aria-hidden="true">1.4.4.</strong> Top-down typing</a></li><li class="chapter-item "><a href="../../compilation/thir/type-specialise.html"><strong aria-hidden="true">1.4.5.</strong> Type specialisation</a></li><li class="chapter-item "><a href="../../compilation/thir/dispatch.html"><strong aria-hidden="true">1.4.6.</strong> Generation of function dispatch preambles</a></li><li class="chapter-item "><a href="../../compilation/thir/records.html"><strong aria-hidden="true">1.4.7.</strong> Erasure of records</a></li><li class="chapter-item "><a href="../../compilation/thir/enums.html"><strong aria-hidden="true">1.4.8.</strong> Erasure of enums</a></li><li class="chapter-item "><a href="../../compilation/thir/comprehension.html"><strong aria-hidden="true">1.4.9.</strong> Desugaring of comprehensions</a></li><li class="chapter-item "><a href="../../compilation/thir/option-types.html"><strong aria-hidden="true">1.4.10.</strong> Erasure of option types</a></li><li class="chapter-item "><a href="../../compilation/thir/overloading.html"><strong aria-hidden="true">1.4.11.</strong> Removal of overloading</a></li><li class="chapter-item "><a href="../../compilation/thir/captures.html"><strong aria-hidden="true">1.4.12.</strong> Desugaring of capturing</a></li></ol></li><li class="chapter-item "><a href="../../compilation/mir/mir.html"><strong aria-hidden="true">1.5.</strong> Mid-level intermediate representation</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../compilation/mir/totalise.html"><strong aria-hidden="true">1.5.1.</strong> Totalisation</a></li><li class="chapter-item "><a href="../../compilation/mir/context.html"><strong aria-hidden="true">1.5.2.</strong> Context analysis</a></li></ol></li><li class="chapter-item "><a href="../../compilation/bytecode-gen.html"><strong aria-hidden="true">1.6.</strong> Bytecode generation</a></li><li class="chapter-item "><a href="../../compilation/interpreter.html"><strong aria-hidden="true">1.7.</strong> Bytecode interpretation</a></li></ol></li><li class="chapter-item "><a href="../../microzinc.html"><strong aria-hidden="true">2.</strong> MicroZinc specification</a><a class="toggle"><div>❱</div></a></li><li><ol class="section"><li class="chapter-item "><a href="../../microzinc/types.html"><strong aria-hidden="true">2.1.</strong> Typing Rules</a></li><li class="chapter-item "><a href="../../microzinc/semantics.html"><strong aria-hidden="true">2.2.</strong> Operational Semantics</a></li></ol></li><li class="chapter-item "><a href="../../interpreter.html"><strong aria-hidden="true">3.</strong> The MicroZinc Interpreter</a></li><li class="chapter-item "><a href="../../mzn-syntax.html"><strong aria-hidden="true">4.</strong> MiniZinc Syntax Changes</a></li><li class="chapter-item "><a href="../../error-handling.html"><strong aria-hidden="true">5.</strong> Error handling</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -171,17 +171,70 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="desugaring-of-capturing"><a class="header" href="#desugaring-of-capturing">Desugaring of capturing</a></h1>
+                        <h1 id="top-down-typing"><a class="header" href="#top-down-typing">Top-down typing</a></h1>
+<p>Top-down typing of the model involves pushing types from enclosing expressions into their subexpressions.
+This allows us to determine a real type for every type found to be <code>bottom</code> during bottom-up type-checking.</p>
+<p>For example, in the expression <code>[1, &lt;&gt;]</code>, bottom-up typing would give:</p>
+<ul>
+<li><code>1</code> is an <code>int</code></li>
+<li><code>&lt;&gt;</code> is an <code>opt bottom</code></li>
+<li><code>[1, &lt;&gt;]</code>: is an <code>array [int] of opt int</code></li>
+</ul>
+<p>In top-down typing, we start from the outer-most expression and work inwards:</p>
+<ul>
+<li><code>[1, &lt;&gt;]</code>: is an <code>array [int] of opt int</code> (found from bottom-up typing)</li>
+<li><code>1</code>: is an <code>opt int</code> (because the element type of the enclosing array is <code>opt int</code>)</li>
+<li><code>&lt;&gt;</code>: is an <code>opt int</code> (because the element type of the enclosing array is <code>opt int</code>)</li>
+</ul>
+<p>This allows us to remove the <code>bottom</code> from the <a href="../mir/mir.html">MIR</a> entirely.</p>
+<p>For a declaration item, the top-down type of the outer-most RHS expression is taken to be the declared
+LHS type from the declaration.</p>
+<p>For example, in <code>tuple(opt int, float): x = (3, 5)</code>:</p>
+<ul>
+<li><code>(3, 5)</code> is a <code>tuple(opt int, float)</code> (taken from LHS)</li>
+<li><code>3</code> is an <code>opt int</code> (first field of tuple)</li>
+<li><code>5</code> is a <code>float</code> (second field of tuple)</li>
+</ul>
+<p>The top-down type of a call argument is taken to be the declared type of the parameter.</p>
+<p>For example:</p>
+<pre><code class="language-mzn">function int: foo(opt int: x);
+int: y = foo(3);
+</code></pre>
+<ul>
+<li><code>foo(3)</code> is an <code>int</code> (taken from the LHS of <code>y</code>)</li>
+<li><code>3</code> is an <code>opt int</code> (taken from the parameter <code>x</code> of the function <code>foo</code>)</li>
+</ul>
+<h2 id="polymorphic-types"><a class="header" href="#polymorphic-types">Polymorphic types</a></h2>
+<p>For a polymorphic function which with a type-inst variable in the return type, we may need to use the return type to
+determine the type of the parameters:</p>
+<p>For example;</p>
+<pre><code class="language-mzn">function array [$X] of any $T: foo(array [$X] of any $T: x);
+array [int] of int: y = foo([]);
+</code></pre>
+<ul>
+<li><code>foo([])</code> is an <code>array [int] of int</code> (taken from the LHS of <code>y</code>)</li>
+<li>For this call, the return type <code>array [$X] of any $T</code> is therefore <code>array [int] of int</code>
+<ul>
+<li>So <code>$X = int</code> and <code>$T = int</code></li>
+<li>Therefore the parameter <code>x</code> is <code>array [int] of int</code></li>
+</ul>
+</li>
+<li><code>[]</code> is an <code>array [int] of int</code> (taken from the parameter <code>x</code> of the function <code>foo</code>)</li>
+</ul>
+<h2 id="making-coercion-to-option-types-explicit"><a class="header" href="#making-coercion-to-option-types-explicit">Making coercion to option types explicit</a></h2>
+<p>Since option types are going to be <a href="./option-types.html">transformed into tuples</a>, we must keep track of values which are
+known to occur, but are used as optional values. These coercions must be made explicit since one the option types become
+tuples, the non-tuple occurring type will no longer be a subtype of the optional one.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../compilation/thir/overloading.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../compilation/thir/domains.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next" href="../../compilation/mir/mir.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next" href="../../compilation/thir/type-specialise.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -191,11 +244,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../compilation/thir/overloading.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../compilation/thir/domains.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next" href="../../compilation/mir/mir.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next" href="../../compilation/thir/type-specialise.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
