@@ -12,9 +12,10 @@ use std::{collections::hash_map::Entry, sync::Arc};
 use rustc_hash::FxHashMap;
 
 use crate::{
-	error::{
+	diagnostics::{
 		AdditionalSolveItem, ConstructorAlreadyDefined, DuplicateAssignment, DuplicateConstructor,
-		DuplicateFunction, FunctionAlreadyDefined, MultipleAssignments, MultipleSolveItems,
+		DuplicateFunction, FunctionAlreadyDefined, IllegalOverload, IllegalOverloading,
+		MultipleAssignments, MultipleSolveItems,
 	},
 	hir::ids::{ItemRef, NodeRef},
 	ty::{FunctionEntry, OverloadingError},
@@ -39,7 +40,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 		for p in ps.iter() {
 			let signature = db.lookup_item_signature(p.item());
 			match &signature.patterns[p] {
-				PatternTy::Function(f) => {
+				PatternTy::Function(f) | PatternTy::AnnotationDestructure(f) => {
 					overloads.push((*p, *f.clone()));
 				}
 				PatternTy::AnnotationConstructor(f) => {
@@ -48,11 +49,14 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 					}
 					annotation_constructors.push(*p);
 				}
-				PatternTy::EnumConstructor(fs) => {
+				PatternTy::EnumConstructor(ecs) => {
 					if enum_constructors.is_empty() {
-						overloads.extend(fs.iter().map(|f| (*p, f.clone())));
+						overloads.extend(ecs.iter().map(|f| (*p, f.constructor.clone())));
 					}
 					enum_constructors.push(*p);
+				}
+				PatternTy::EnumDestructure(fs) => {
+					overloads.extend(fs.iter().map(|f| (*p, f.clone())));
 				}
 				_ => unreachable!(),
 			}
@@ -60,10 +64,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 		if annotation_constructors.len() > 1 {
 			let mut iter = annotation_constructors.into_iter();
 			let first = iter.next().unwrap();
-			let item = first.item();
-			let model = item.model(db);
-			let data = item.local_item_ref(db).data(&model);
-			let name = data[first.pattern()].identifier().unwrap();
+			let name = first.identifier(db).unwrap();
 			let (src, span) = NodeRef::from(first.into_entity(db)).source_span(db);
 			let others = iter
 				.map(|c| {
@@ -96,10 +97,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 				first: (first_pat, first_fn),
 				others,
 			} => {
-				let item = first_pat.item();
-				let model = item.model(db);
-				let data = item.local_item_ref(db).data(&model);
-				let name = data[first_pat.pattern()].identifier().unwrap();
+				let name = first_pat.identifier(db).unwrap();
 				let signature = first_fn
 					.overload
 					.pretty_print_call_signature(db.upcast(), name);
@@ -113,6 +111,24 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 						.map(|(p, _)| {
 							let (src, span) = NodeRef::from(p.into_entity(db)).source_span(db);
 							DuplicateFunction { src, span }
+						})
+						.collect(),
+				}
+				.into()
+			}
+			OverloadingError::IncompatibleReturnType {
+				first: (first_pat, _),
+				others,
+			} => {
+				let (src, span) = NodeRef::from(first_pat.into_entity(db)).source_span(db);
+				IllegalOverloading {
+					src,
+					span,
+					others: others
+						.iter()
+						.map(|(p, _)| {
+							let (src, span) = NodeRef::from(p.into_entity(db)).source_span(db);
+							IllegalOverload { src, span }
 						})
 						.collect(),
 				}
@@ -174,11 +190,7 @@ pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
 	}
 	for (p, asgs) in assignments {
 		if asgs.len() > 1 {
-			let model = p.item().model(db);
-			let variable = p.item().local_item_ref(db).data(&model)[p.pattern()]
-				.identifier()
-				.unwrap()
-				.pretty_print(db);
+			let variable = p.identifier(db).unwrap().pretty_print(db);
 			let mut asgs = asgs.into_iter();
 			let (src, span) = asgs.next().unwrap().source_span(db);
 			let others = asgs

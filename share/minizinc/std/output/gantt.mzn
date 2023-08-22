@@ -12,7 +12,7 @@ function string: show_gantt(array[$$T] of int: start, array[$$T] of int: dur, ar
         array[0..n_dots] of int: thresholds = array1d(0..n_dots, [ceil(min(start) + i * card(span) / n_dots) | i in 0..n_dots-1] ++ [final]);
         
         int: name_len = max([string_length(name[i]) | i in index_set(start) ]);
-        array[$$T] of $$T: sort = arg_sort(start);
+        array[_] of $$T: sort = arg_sort(start);
         
         string: dot_line = concat(i in 1..name_len + 1)(" ") ++ concat(i in 1..n_dots) (dot);
         string: legend = concat(i in 1..name_len + 1)(" ") ++ concat(iv in [thresholds[i*10] | i in 0..n_dots div 10 -1]) (show_int(-10, iv)) ++ "\(final)";

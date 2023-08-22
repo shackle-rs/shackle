@@ -2,23 +2,27 @@
 //!
 //! Tracks desugarings performed when lowering HIR to THIR.
 
-use std::ops::Deref;
+use miette::SourceSpan;
 
-use crate::hir::ids::{EntityRef, ItemRef, NodeRef};
+use crate::{
+	file::SourceFile,
+	hir::ids::{EntityRef, ItemRef, NodeRef},
+};
+
+use super::db::Thir;
 
 /// The HIR node which produced a THIR node
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Origin {
-	desugar_kind: DesugarKind,
-	hir_node: NodeRef,
+pub enum Origin {
+	/// Comes from a real HIR node
+	HirNode(NodeRef),
+	/// Is introduced, and does not have a location
+	Introduced(&'static str),
 }
 
 impl From<NodeRef> for Origin {
 	fn from(node: NodeRef) -> Self {
-		Self {
-			desugar_kind: DesugarKind::None,
-			hir_node: node,
-		}
+		Self::HirNode(node)
 	}
 }
 
@@ -34,32 +38,30 @@ impl From<EntityRef> for Origin {
 	}
 }
 
-impl Deref for Origin {
-	type Target = NodeRef;
-	fn deref(&self) -> &Self::Target {
-		&self.hir_node
-	}
-}
-
 impl Origin {
-	/// Create a copy of this origin with the given desugaring
-	pub fn with_desugaring(self, kind: DesugarKind) -> Self {
-		Self {
-			desugar_kind: kind,
-			hir_node: self.hir_node,
+	/// Get the underlying HIR node
+	pub fn node(&self) -> Option<NodeRef> {
+		match self {
+			Origin::HirNode(node) => Some(*node),
+			_ => None,
 		}
 	}
-}
 
-/// Desugaring from lowering HIR to THIR (or from THIR to THIR)
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum DesugarKind {
-	/// Not desugared, direct lowering
-	None,
-	/// Desugaring infinite array slicing
-	ArraySlice,
-	/// Destructuring into separate items
-	Destructuring,
-	/// Desugared from objective value
-	Objective,
+	/// Get the source file and span of this origin
+	pub fn source_span(&self, db: &dyn Thir) -> (SourceFile, SourceSpan) {
+		match self {
+			Origin::HirNode(node) => node.source_span(db.upcast()),
+			Origin::Introduced(name) => (
+				SourceFile::introduced(name),
+				SourceSpan::new(0.into(), 0.into()),
+			),
+		}
+	}
+
+	/// Debug print this origin
+	pub fn debug_print(&self, db: &dyn Thir) -> String {
+		let (src, span) = self.source_span(db);
+		let name = src.name().unwrap_or_else(|| "<unnamed file>".to_owned());
+		format!("{}[{}:{}]", name, span.offset(), span.len(),)
+	}
 }

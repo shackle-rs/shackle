@@ -78,12 +78,6 @@ pub enum Type {
 		opt: Option<OptType>,
 		/// The pattern for this type-inst var
 		pattern: ArenaIndex<Pattern>,
-		/// Whether this type-inst var is varifiable
-		varifiable: bool,
-		/// Whether this type-inst var is enumerable
-		enumerable: bool,
-		/// Whether this type-inst var is an index type (enumerable or tuple of enumerable)
-		indexable: bool,
 	},
 	/// Type inferred from RHS
 	Any,
@@ -136,6 +130,14 @@ impl Type {
 		data: &ItemData,
 	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
 		Type::walk(t, data).filter(|t| matches!(data[*t], Type::AnonymousTypeInstVar { .. }))
+	}
+
+	/// Return the operation types in the given type.
+	pub fn operations(
+		t: ArenaIndex<Type>,
+		data: &ItemData,
+	) -> impl '_ + Iterator<Item = ArenaIndex<Type>> {
+		Type::walk(t, data).filter(|t| matches!(data[*t], Type::Operation { .. }))
 	}
 
 	/// Get the unbounded primitive types in this type

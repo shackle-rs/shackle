@@ -3,43 +3,55 @@ use std::ops::Deref;
 use rustc_hash::FxHashSet;
 
 use super::*;
-use crate::db::CompilerDatabase;
+use crate::{constants::type_registry, db::CompilerDatabase};
 
 type_registry!(
 	TypeRegistry,
 	db,
 	par_bool: Ty::par_bool(db),
-	var_bool: par_bool.with_inst(db, VarType::Var).unwrap(),
-	par_opt_bool: par_bool.with_opt(db, OptType::Opt),
-	var_opt_bool: var_bool.with_opt(db, OptType::Opt),
+	var_bool: par_bool.make_var(db).unwrap(),
+	par_opt_bool: par_bool.make_opt(db),
+	var_opt_bool: var_bool.make_opt(db),
 	par_int: Ty::par_int(db),
-	var_int: par_int.with_inst(db, VarType::Var).unwrap(),
-	par_opt_int: par_int.with_opt(db, OptType::Opt),
-	var_opt_int: var_int.with_opt(db, OptType::Opt),
+	var_int: par_int.make_var(db).unwrap(),
+	par_opt_int: par_int.make_opt(db),
+	var_opt_int: var_int.make_opt(db),
 	par_float: Ty::par_float(db),
-	var_float: par_float.with_inst(db, VarType::Var).unwrap(),
-	par_opt_float: par_float.with_opt(db, OptType::Opt),
-	var_opt_float: var_float.with_opt(db, OptType::Opt),
+	var_float: par_float.make_var(db).unwrap(),
+	par_opt_float: par_float.make_opt(db),
+	var_opt_float: var_float.make_opt(db),
 	string: Ty::string(db),
-	opt_string: string.with_opt(db, OptType::Opt),
+	opt_string: string.make_opt(db),
 	ann: Ty::ann(db),
-	opt_ann: ann.with_opt(db, OptType::Opt),
+	opt_ann: ann.make_opt(db),
 	bottom: Ty::bottom(db),
-	opt_bottom: bottom.with_opt(db, OptType::Opt),
+	opt_bottom: bottom.make_opt(db),
 	array_int_of_par_int: Ty::array(db, par_int, par_int).unwrap(),
 	array_int_of_var_int: Ty::array(db, par_int, var_int).unwrap(),
+	set_of_int: Ty::par_set(db, par_int).unwrap(),
+	set_of_float: Ty::par_set(db, par_float).unwrap(),
 	tuple_of_int: Ty::tuple(db, vec![par_int, par_int]),
+	tuple_of_float: Ty::tuple(db, vec![par_float, par_float]),
+	record: Ty::record(db, vec![(InternedString::new("a", db), var_int)]),
+	sub_record: Ty::record(db, vec![(InternedString::new("a", db), par_int), (InternedString::new("b", db), par_bool)]),
 	par_enum: Ty::par_enum(db, EnumRef::introduce(db, InternedString::new("Foo", db))),
-	var_enum: par_enum.with_inst(db, VarType::Var).unwrap(),
-	par_opt_enum: par_enum.with_opt(db, OptType::Opt),
-	var_opt_enum: var_enum.with_opt(db, OptType::Opt),
+	var_enum: par_enum.make_var(db).unwrap(),
+	par_opt_enum: par_enum.make_opt(db),
+	var_opt_enum: var_enum.make_opt(db),
+	function: Ty::function(db, FunctionType {
+		params: Box::new([par_int, var_bool]),
+		return_type: var_int
+	}),
+	sub_function: Ty::function(db, FunctionType {
+		params: Box::new([par_float, var_int]),
+		return_type: var_bool
+	}),
 	ty_var: Ty::type_inst_var(db, TyVar {
 		ty_var: TyVarRef::introduce(db, InternedString::new("$T", db)),
 		enumerable: false,
 		indexable: false,
 		varifiable: false
 	}),
-
 );
 
 struct Types {
@@ -458,8 +470,18 @@ fn test_bottom_coercions() {
 			// Bottom to array
 			(types.bottom, types.array_int_of_par_int),
 			(types.bottom, types.array_int_of_var_int),
+			// Bottom to set
+			(types.bottom, types.set_of_int),
+			(types.bottom, types.set_of_float),
 			// Bottom to tuple
 			(types.bottom, types.tuple_of_int),
+			(types.bottom, types.tuple_of_float),
+			// Bottom to record
+			(types.bottom, types.record),
+			(types.bottom, types.sub_record),
+			// Bottom to function
+			(types.bottom, types.function),
+			(types.bottom, types.sub_function),
 			// Bottom to tyvar
 			(types.bottom, types.ty_var),
 		],
@@ -494,6 +516,256 @@ fn test_array() {
 	assert!(!types.array_int_of_var_int.known_par(db));
 	assert!(!types.array_int_of_var_int.known_varifiable(db));
 	assert!(!types.array_int_of_var_int.known_enumerable(db));
+}
+
+#[test]
+fn test_array_coercions() {
+	let types = Types::new();
+	check_coercions(
+		&types,
+		[
+			(types.array_int_of_par_int, types.array_int_of_par_int),
+			(types.array_int_of_var_int, types.array_int_of_var_int),
+			(types.array_int_of_par_int, types.array_int_of_var_int),
+		],
+	);
+}
+
+#[test]
+fn test_set() {
+	let types = Types::new();
+	let db = &types.db;
+
+	assert_eq!(
+		types.set_of_int.lookup(db),
+		TyData::Set(VarType::Par, OptType::NonOpt, types.par_int)
+	);
+	assert!(types.set_of_int.known_par(db));
+	assert!(types.set_of_int.known_varifiable(db));
+	assert!(!types.set_of_int.known_enumerable(db));
+
+	assert_eq!(
+		types.set_of_float.lookup(db),
+		TyData::Set(VarType::Par, OptType::NonOpt, types.par_float)
+	);
+	assert!(types.set_of_float.known_par(db));
+	assert!(!types.set_of_float.known_varifiable(db));
+	assert!(!types.set_of_float.known_enumerable(db));
+}
+
+#[test]
+fn test_set_coercions() {
+	let types = Types::new();
+	check_coercions(
+		&types,
+		[
+			(types.set_of_int, types.set_of_int),
+			(types.set_of_float, types.set_of_float),
+			(types.set_of_int, types.set_of_float),
+		],
+	);
+}
+
+#[test]
+fn test_tuple() {
+	let types = Types::new();
+	let db = &types.db;
+
+	assert_eq!(
+		types.tuple_of_int.lookup(db),
+		TyData::Tuple(OptType::NonOpt, Box::new([types.par_int, types.par_int]))
+	);
+	assert!(types.tuple_of_int.known_par(db));
+	assert!(types.tuple_of_int.known_varifiable(db));
+	assert!(!types.tuple_of_int.known_enumerable(db));
+
+	assert_eq!(
+		types.tuple_of_float.lookup(db),
+		TyData::Tuple(
+			OptType::NonOpt,
+			Box::new([types.par_float, types.par_float])
+		)
+	);
+	assert!(types.tuple_of_float.known_par(db));
+	assert!(types.tuple_of_float.known_varifiable(db));
+	assert!(!types.tuple_of_float.known_enumerable(db));
+}
+
+#[test]
+fn test_tuple_coercions() {
+	let types = Types::new();
+	check_coercions(
+		&types,
+		[
+			(types.tuple_of_int, types.tuple_of_int),
+			(types.tuple_of_float, types.tuple_of_float),
+			(types.tuple_of_int, types.tuple_of_float),
+		],
+	);
+}
+
+#[test]
+fn test_record() {
+	let types = Types::new();
+	let db = &types.db;
+
+	assert_eq!(
+		types.record.lookup(db),
+		TyData::Record(
+			OptType::NonOpt,
+			Box::new([(InternedString::new("a", db), types.var_int),])
+		)
+	);
+	assert!(!types.record.known_par(db));
+	assert!(types.record.known_varifiable(db));
+	assert!(!types.record.known_enumerable(db));
+
+	assert_eq!(
+		types.sub_record.lookup(db),
+		TyData::Record(
+			OptType::NonOpt,
+			Box::new([
+				(InternedString::new("a", db), types.par_int),
+				(InternedString::new("b", db), types.par_bool)
+			])
+		)
+	);
+	assert!(types.sub_record.known_par(db));
+	assert!(types.sub_record.known_varifiable(db));
+	assert!(!types.sub_record.known_enumerable(db));
+}
+
+#[test]
+fn test_record_coercions() {
+	let types = Types::new();
+	check_coercions(
+		&types,
+		[
+			(types.record, types.record),
+			(types.sub_record, types.sub_record),
+		],
+	);
+}
+
+#[test]
+fn test_enum() {
+	let types = Types::new();
+	let db = &types.db;
+	assert!(matches!(
+		types.par_enum.lookup(db),
+		TyData::Enum(VarType::Par, OptType::NonOpt, _)
+	));
+	assert!(types.par_enum.known_par(db));
+	assert!(types.par_enum.known_varifiable(db));
+	assert!(types.par_enum.known_enumerable(db));
+	assert_eq!(types.par_enum.pretty_print(db), "Foo");
+
+	assert!(matches!(
+		types.var_enum.lookup(db),
+		TyData::Enum(VarType::Var, OptType::NonOpt, _)
+	));
+	assert!(!types.var_enum.known_par(db));
+	assert!(types.var_enum.known_varifiable(db));
+	assert!(types.var_enum.known_enumerable(db));
+	assert_eq!(types.var_enum.pretty_print(db), "var Foo");
+
+	assert!(matches!(
+		types.par_opt_enum.lookup(db),
+		TyData::Enum(VarType::Par, OptType::Opt, _)
+	));
+	assert!(types.par_opt_enum.known_par(db));
+	assert!(types.par_opt_enum.known_varifiable(db));
+	assert!(types.par_opt_enum.known_enumerable(db));
+	assert_eq!(types.par_opt_enum.pretty_print(db), "opt Foo");
+
+	assert!(matches!(
+		types.var_opt_enum.lookup(db),
+		TyData::Enum(VarType::Var, OptType::Opt, _)
+	));
+	assert!(!types.var_opt_enum.known_par(db));
+	assert!(types.var_opt_enum.known_varifiable(db));
+	assert!(types.var_opt_enum.known_enumerable(db));
+	assert_eq!(types.var_opt_enum.pretty_print(db), "var opt Foo");
+}
+
+#[test]
+fn test_enum_coercion() {
+	let types = Types::new();
+	check_coercions(
+		&types,
+		[
+			(types.par_enum, types.par_enum),
+			(types.par_enum, types.var_enum),
+			(types.par_enum, types.par_opt_enum),
+			(types.par_enum, types.var_opt_enum),
+			(types.var_enum, types.var_enum),
+			(types.var_enum, types.var_opt_enum),
+			(types.par_opt_enum, types.par_opt_enum),
+			(types.par_opt_enum, types.var_opt_enum),
+			(types.var_opt_enum, types.var_opt_enum),
+		],
+	);
+}
+
+#[test]
+fn test_function() {
+	let types = Types::new();
+	let db = &types.db;
+
+	assert_eq!(
+		types.function.lookup(db),
+		TyData::Function(
+			OptType::NonOpt,
+			FunctionType {
+				params: Box::new([types.par_int, types.var_bool]),
+				return_type: types.var_int
+			}
+		)
+	);
+	assert!(types.function.known_par(db));
+	assert!(!types.function.known_varifiable(db));
+	assert!(!types.function.known_enumerable(db));
+
+	assert_eq!(
+		types.sub_function.lookup(db),
+		TyData::Function(
+			OptType::NonOpt,
+			FunctionType {
+				params: Box::new([types.par_float, types.var_int]),
+				return_type: types.var_bool
+			}
+		)
+	);
+	assert!(types.sub_function.known_par(db));
+	assert!(!types.sub_function.known_varifiable(db));
+	assert!(!types.sub_function.known_enumerable(db));
+}
+
+#[test]
+fn test_function_coercions() {
+	let types = Types::new();
+	check_coercions(
+		&types,
+		[
+			(types.function, types.function),
+			(types.sub_function, types.sub_function),
+			(types.sub_function, types.function),
+		],
+	);
+}
+
+#[test]
+fn test_ty_var() {
+	let types = Types::new();
+	let db = &types.db;
+
+	assert!(matches!(
+		types.ty_var.lookup(db),
+		TyData::TyVar(None, None, _)
+	));
+	assert!(!types.ty_var.known_par(db));
+	assert!(!types.ty_var.known_varifiable(db));
+	assert!(!types.ty_var.known_enumerable(db));
 }
 
 #[test]
@@ -534,10 +806,4 @@ fn test_most_general_subtype() {
 		Ty::most_general_subtype(db, [types.var_opt_bool, types.var_int, types.par_opt_float]),
 		Some(types.par_bool)
 	);
-}
-
-#[test]
-fn test_parameter_type_substitution() {
-	// let types = Types::new();
-	// let db = &types.db;
 }

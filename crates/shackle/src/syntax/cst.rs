@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tree_sitter::{Node, Tree, TreeCursor};
 
 use crate::db::FileReader;
-use crate::error::SyntaxError;
+use crate::diagnostics::SyntaxError;
 use crate::file::{FileRef, SourceFile};
 
 use super::db::SourceParser;
@@ -261,5 +261,42 @@ where
 {
 	fn as_mut(&mut self) -> &mut Node<'a> {
 		unsafe { std::mem::transmute(&mut self.node) }
+	}
+}
+
+impl<'a> From<CstNode> for Node<'a>
+where
+	CstNode: 'a,
+{
+	fn from(x: CstNode) -> Self {
+		x.node
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use expect_test::{expect_file, ExpectFile};
+	use tree_sitter::Parser;
+
+	use super::Cst;
+
+	fn check_cst_file(source: &str, expected: ExpectFile) {
+		let mut parser = Parser::new();
+		parser
+			.set_language(tree_sitter_minizinc::language())
+			.unwrap();
+		let tree = parser.parse(source.as_bytes(), None).unwrap();
+		let cst = Cst::from_str(tree, source);
+		let mut buf = String::new();
+		cst.debug_print(&mut buf);
+		expected.assert_eq(&buf);
+	}
+
+	#[test]
+	fn test_doc_simple_model() {
+		check_cst_file(
+			include_str!("../../../../docs/src/examples/simple-model.mzn"),
+			expect_file!("../../../../docs/src/examples/simple-model-cst.txt"),
+		)
 	}
 }

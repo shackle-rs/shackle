@@ -1,7 +1,8 @@
 use crossbeam_channel::{SendError, Sender};
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf,
+	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, SemanticTokensFullOptions,
+	SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
 	ServerCapabilities, TextDocumentIdentifier, TextDocumentSyncKind,
 };
 use std::ops::Deref;
@@ -62,6 +63,7 @@ impl LanguageServerDatabase {
 	}
 
 	pub fn manage_file(&mut self, file: &Path, contents: &str) {
+		log::info!("detected file changed for file {:?}", file);
 		self.vfs.manage_file(file, contents);
 		self.db.on_file_change(file);
 		self.set_active_file(file);
@@ -69,6 +71,7 @@ impl LanguageServerDatabase {
 
 	pub fn unmanage_file(&mut self, file: &Path) {
 		self.vfs.unmanage_file(file);
+		log::info!("detected file changed for file {:?}", file);
 		self.db.on_file_change(file);
 	}
 
@@ -115,11 +118,21 @@ impl Deref for LanguageServerDatabase {
 }
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
-	eprintln!("starting MiniZinc language server");
+	env_logger::Builder::new()
+		.format_target(false)
+		.format_module_path(true)
+		.filter_level(log::LevelFilter::Trace)
+		.filter_module("salsa", log::LevelFilter::Warn)
+		.filter_module("shackle", log::LevelFilter::Warn)
+		.parse_default_env()
+		.init();
+
+	log::info!("starting MiniZinc language server");
 	let (connection, io_threads) = Connection::stdio();
 
 	let server_capabilities = serde_json::to_value(ServerCapabilities {
 		definition_provider: Some(OneOf::Left(true)),
+		references_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
 		rename_provider: Some(OneOf::Left(true)),
@@ -127,13 +140,24 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 			trigger_characters: Some(vec![".".to_owned()]),
 			..Default::default()
 		}),
+		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+			SemanticTokensOptions {
+				full: Some(SemanticTokensFullOptions::Delta { delta: Some(false) }),
+				range: Some(false),
+				legend: SemanticTokensLegend {
+					token_types: TokenType::legend(),
+					token_modifiers: TokenModifier::legend(),
+				},
+				..Default::default()
+			},
+		)),
 		..Default::default()
 	})
 	.unwrap();
 	let initialization_params = connection.initialize(server_capabilities)?;
 	main_loop(connection, initialization_params)?;
 	io_threads.join()?;
-	eprintln!("shutting down server");
+	log::info!("shutting down server");
 	Ok(())
 }
 
@@ -157,21 +181,23 @@ fn main_loop(
 					.on::<ViewScopeHandler, _, _>()
 					.on::<ViewPrettyPrintHandler, _, _>()
 					.on::<GotoDefinitionHandler, _, _>()
+					.on::<ReferencesHandler, _, _>()
 					.on::<RenameHandler, _, _>()
 					.on::<HoverHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()
+					.on::<SemanticTokensHandler, _, _>()
 					.finish();
 
 				match result {
 					Ok(_) => (),
 					Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
 					Err(ExtractError::MethodMismatch(req)) => {
-						eprintln!("unhandled {}", req.method)
+						log::warn!("unhandled {}", req.method)
 					}
 				};
 			}
 			Message::Response(resp) => {
-				eprintln!("got response: {:?}", resp);
+				log::info!("got response: {:?}", resp);
 			}
 			Message::Notification(not) => {
 				let result = DispatchNotification::new(not, &mut db)
@@ -188,7 +214,9 @@ fn main_loop(
 				match result {
 					Ok(()) => (),
 					Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-					Err(ExtractError::MethodMismatch(not)) => eprintln!("unhandled {}", not.method),
+					Err(ExtractError::MethodMismatch(not)) => {
+						log::warn!("unhandled {}", not.method)
+					}
 				}
 			}
 		}

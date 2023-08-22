@@ -126,7 +126,7 @@ pub trait TryCastFrom<T>: Sized {
 /// Model (wrapper for a CST).
 ///
 /// A model is a single `.mzn` file.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Model {
 	cst: Cst,
 }
@@ -158,14 +158,36 @@ impl Model {
 	}
 }
 
+impl Debug for Model {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Model")
+			.field("items", &self.items())
+			.finish()
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
+	use expect_test::{expect, expect_file};
 
 	#[test]
 	fn test_model() {
-		let model = parse_model(r#"% Line comment"#);
-		let items: Vec<_> = model.items().collect();
-		assert_eq!(items.len(), 0);
+		check_ast(
+			r#"% Line comment"#,
+			expect!([r#"
+    Model {
+        items: [],
+    }
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_doc_simple_model() {
+		check_ast_file(
+			include_str!("../../../../../docs/src/examples/simple-model.mzn"),
+			expect_file!("../../../../../docs/src/examples/simple-model-ast.txt"),
+		);
 	}
 }

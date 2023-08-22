@@ -6,14 +6,16 @@
 use super::hir::db::HirStorage;
 use super::syntax::db::SourceParserStorage;
 use super::thir::db::ThirStorage;
-use crate::error::FileError;
+use crate::constants::TypeRegistry;
+use crate::diagnostics::FileError;
 use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
 use crate::hir::db::Hir;
 use crate::syntax::db::SourceParser;
 use crate::thir::db::Thir;
-use crate::ty::{NewType, NewTypeData, Ty, TyData, TypeRegistry};
+use crate::ty::{NewType, NewTypeData, Ty, TyData};
 
 use std::fmt::Display;
+use std::panic::RefUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -182,7 +184,7 @@ impl From<InternedStringData> for String {
 )]
 pub struct CompilerDatabase {
 	storage: salsa::Storage<CompilerDatabase>,
-	file_handler: Box<dyn FileHandler>,
+	file_handler: Box<dyn FileHandler + RefUnwindSafe>,
 }
 
 impl Default for CompilerDatabase {
@@ -193,7 +195,7 @@ impl Default for CompilerDatabase {
 
 impl CompilerDatabase {
 	/// Create a new compiler database with the given file handler
-	pub fn with_file_handler(file_handler: Box<dyn FileHandler>) -> Self {
+	pub fn with_file_handler(file_handler: Box<dyn FileHandler + RefUnwindSafe>) -> Self {
 		let mut db = Self {
 			storage: Default::default(),
 			file_handler,

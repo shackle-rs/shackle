@@ -173,6 +173,11 @@ impl<T> Arena<T> {
 			.map(|(idx, o)| (ArenaIndex::new((idx + 1) as u32), o))
 	}
 
+	/// Consume this arena, getting the values
+	pub fn into_vec(self) -> Vec<T> {
+		self.items
+	}
+
 	/// Shrink arena so capacity is minimized.
 	pub fn shrink_to_fit(&mut self) {
 		self.items.shrink_to_fit();
@@ -305,6 +310,14 @@ impl<K, V> ArenaMap<K, V> {
 		Self::default()
 	}
 
+	/// Create a new arena map with the given capacity
+	pub fn with_capacity(capacity: usize) -> ArenaMap<K, V> {
+		Self {
+			items: Vec::with_capacity(capacity),
+			phantom: PhantomData,
+		}
+	}
+
 	/// Clear the arena map.
 	pub fn clear(&mut self) {
 		self.items.clear();
@@ -339,6 +352,31 @@ impl<K, V> ArenaMap<K, V> {
 		}
 	}
 
+	/// Get a mutable reference to a value in the arena map, inserting the default
+	/// value if it is not present.
+	pub fn get_mut_or_default(&mut self, idx: ArenaIndex<K>) -> &mut V
+	where
+		V: Default,
+	{
+		if self.items.get((idx.index.get() - 1) as usize).is_none() {
+			self.insert(idx, V::default());
+		}
+		self.get_mut(idx).unwrap()
+	}
+
+	/// Remove a value from the map and return it if it was present
+	pub fn remove(&mut self, idx: ArenaIndex<K>) -> Option<V> {
+		self.items
+			.get_mut((idx.index.get() - 1) as usize)
+			.unwrap()
+			.take()
+	}
+
+	/// Get the keys in the arena map
+	pub fn keys(&self) -> impl '_ + Iterator<Item = ArenaIndex<K>> {
+		self.iter().map(|(k, _)| k)
+	}
+
 	/// Get an iterator over the values in the map.
 	pub fn values(&self) -> impl Iterator<Item = &V> {
 		self.items.iter().filter_map(|v| v.as_ref())
@@ -355,6 +393,14 @@ impl<K, V> ArenaMap<K, V> {
 			.iter()
 			.enumerate()
 			.filter_map(|(idx, o)| o.as_ref().map(|v| (ArenaIndex::new((idx + 1) as u32), v)))
+	}
+
+	/// Get an iterator of pairs of `ArenaIndex` and mutable values allocated in this arena.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = (ArenaIndex<K>, &mut V)> {
+		self.items
+			.iter_mut()
+			.enumerate()
+			.filter_map(|(idx, o)| o.as_mut().map(|v| (ArenaIndex::new((idx + 1) as u32), v)))
 	}
 
 	/// Consume and iterate

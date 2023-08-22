@@ -5,15 +5,14 @@ use std::ops::{Deref, DerefMut};
 use crate::{
 	arena::{Arena, ArenaIndex, ArenaMap},
 	ty::{
-		EnumRef, FunctionEntry, FunctionResolutionError, FunctionType, OverloadedFunction,
-		PolymorphicFunctionType, Ty, TyVarRef,
+		EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, TyVarRef,
 	},
 	utils::impl_enum_from,
 };
 
 use super::{
-	db::Thir, source::Origin, CallBuilder, Domain, DomainBuilder, Expression, ExpressionBuilder,
-	Identifier, IdentifierBuilder, Model, ResolvedIdentifier,
+	source::Origin, Domain, DomainBuilder, Expression, ExpressionBuilder, Identifier, Model,
+	ResolvedIdentifier,
 };
 
 /// An item of type `T`.
@@ -337,58 +336,6 @@ impl FunctionItem {
 			},
 		}
 	}
-}
-
-/// Result of looking up a function by its signature
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionLookup {
-	/// Id of the resolved function
-	pub function: FunctionId,
-	/// The function entry (i.e. not instantiated with the call arguments)
-	pub fn_entry: FunctionEntry,
-	/// The type of the resolved function (i.e. instantiated with the call arguments)
-	pub fn_type: FunctionType,
-}
-
-impl FunctionLookup {
-	/// Create a call to this function (does not have arguments set).
-	pub fn into_call(self, db: &dyn Thir, origin: impl Into<Origin>) -> Box<CallBuilder> {
-		let origin = origin.into();
-		CallBuilder::new(
-			self.fn_type.return_type,
-			IdentifierBuilder::new(
-				Ty::function(db.upcast(), self.fn_type),
-				ResolvedIdentifier::Function(self.function),
-				origin,
-			),
-			origin,
-		)
-	}
-}
-
-/// Error representing failure to lookup a function
-pub type FunctionLookupError = FunctionResolutionError<FunctionId>;
-
-/// Lookup a function by its signature
-pub fn lookup_function(
-	db: &dyn Thir,
-	model: &Model,
-	name: Identifier,
-	args: &[Ty],
-) -> Result<FunctionLookup, FunctionLookupError> {
-	let overloads = model.functions().filter_map(|(i, f)| {
-		if f.name == name {
-			Some((i, f.function_entry(model)))
-		} else {
-			None
-		}
-	});
-	let (i, fe, ft) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
-	Ok(FunctionLookup {
-		function: i,
-		fn_entry: fe,
-		fn_type: ft,
-	})
 }
 
 /// Output item

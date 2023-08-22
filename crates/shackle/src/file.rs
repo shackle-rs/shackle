@@ -2,10 +2,11 @@
 //!
 //! `FileRef` is an interned data structure used to represent a pointer to a file (or inline string).
 
-use crate::{db::FileReader, error::FileError};
+use crate::{db::FileReader, diagnostics::FileError};
 use miette::{MietteSpanContents, SourceCode};
 use std::{
 	ops::Deref,
+	panic::{RefUnwindSafe, UnwindSafe},
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -25,16 +26,25 @@ pub enum InputFile {
 
 /// Source file/text for error reporting
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SourceFile {
-	name: Option<PathBuf>,
-	source: Arc<String>,
+pub struct SourceFile(SourceFileInner);
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum SourceFileInner {
+	Text {
+		name: Option<PathBuf>,
+		source: Arc<String>,
+	},
+	Introduced(&'static str),
 }
 
 impl std::fmt::Debug for SourceFile {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("SourceFile")
-			.field("name", &self.name)
-			.field("source", &format!("<{} byte string>", self.source.len()));
+			.field("name", &self.name())
+			.field(
+				"source",
+				&format!("<{} byte string>", self.contents().len()),
+			);
 		Ok(())
 	}
 }
@@ -42,41 +52,48 @@ impl std::fmt::Debug for SourceFile {
 impl SourceFile {
 	/// Create a new source file from a `FileRef`
 	pub fn new(file: FileRef, db: &dyn FileReader) -> Self {
-		Self {
+		Self(SourceFileInner::Text {
 			name: file.path(db).and_then(|p| p.canonicalize().ok()),
 			source: file.contents(db).unwrap_or_default(),
-		}
+		})
+	}
+
+	/// Create a new introduced source file
+	pub fn introduced(name: &'static str) -> Self {
+		Self(SourceFileInner::Introduced(name))
 	}
 
 	/// Get the path for this source file if any
 	pub fn path(&self) -> Option<&Path> {
-		self.name.as_deref()
+		match &self.0 {
+			SourceFileInner::Text { name, .. } => name.as_deref(),
+			_ => None,
+		}
 	}
 
 	/// Get the pretty name of this source file if any
 	pub fn name(&self) -> Option<String> {
-		self.path()
-			.map(|p| {
-				std::env::current_dir()
-					.ok()
-					.and_then(|c| c.canonicalize().ok())
-					.and_then(move |c| p.strip_prefix(c).ok().map(|p| p.to_owned()))
-					.unwrap_or_else(|| p.to_owned())
-			})
-			.map(|p| p.to_string_lossy().to_string())
+		match &self.0 {
+			SourceFileInner::Text { name, .. } => name
+				.as_deref()
+				.map(|p| {
+					std::env::current_dir()
+						.ok()
+						.and_then(|c| c.canonicalize().ok())
+						.and_then(move |c| p.strip_prefix(c).ok().map(|p| p.to_owned()))
+						.unwrap_or_else(|| p.to_owned())
+				})
+				.map(|p| p.to_string_lossy().to_string()),
+			SourceFileInner::Introduced(name) => Some(name.to_string()),
+		}
 	}
 
 	/// Get the contents of this source file
 	pub fn contents(&self) -> &str {
-		&self.source
-	}
-}
-
-impl std::ops::Deref for SourceFile {
-	type Target = String;
-
-	fn deref(&self) -> &Self::Target {
-		&self.source
+		match &self.0 {
+			SourceFileInner::Text { source, .. } => source,
+			SourceFileInner::Introduced(_) => "",
+		}
 	}
 }
 
@@ -87,9 +104,9 @@ impl SourceCode for SourceFile {
 		context_lines_before: usize,
 		context_lines_after: usize,
 	) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
-		let contents = self
-			.source
-			.read_span(span, context_lines_before, context_lines_after)?;
+		let contents =
+			self.contents()
+				.read_span(span, context_lines_before, context_lines_after)?;
 
 		Ok(Box::new(match self.name() {
 			Some(name) => MietteSpanContents::new_named(
@@ -242,7 +259,7 @@ pub fn input_models(db: &dyn FileReader) -> Arc<Vec<ModelRef>> {
 /// Trait for handling filesystem queries.
 ///
 /// The `DefaultFileHandler` provides a default implementation which reads directly from the filesystem.
-pub trait FileHandler: Send {
+pub trait FileHandler: Send + UnwindSafe {
 	/// Whether the results are durable (return false if file contents may change)
 	fn durable(&self) -> bool {
 		true
@@ -252,7 +269,7 @@ pub trait FileHandler: Send {
 	fn read_file(&self, path: &Path) -> Result<Arc<String>, FileError>;
 
 	/// Create a snapshot of the file handler
-	fn snapshot(&self) -> Box<dyn FileHandler>;
+	fn snapshot(&self) -> Box<dyn FileHandler + RefUnwindSafe>;
 }
 
 /// Default file handler which reads from filesystem
@@ -270,7 +287,7 @@ impl FileHandler for DefaultFileHandler {
 			})
 	}
 
-	fn snapshot(&self) -> Box<dyn FileHandler> {
+	fn snapshot(&self) -> Box<dyn FileHandler + RefUnwindSafe> {
 		Box::new(self.clone())
 	}
 }

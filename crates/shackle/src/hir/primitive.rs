@@ -2,7 +2,7 @@
 //!
 use crate::db::{InternedString, InternedStringData};
 
-use super::db::Hir;
+use super::{db::Hir, Identifier};
 use std::fmt;
 
 /// An integer literal
@@ -51,5 +51,17 @@ impl StringLiteral {
 	/// Get the value of this string literal
 	pub fn value(&self, db: &dyn Hir) -> String {
 		db.lookup_intern_string(self.0).into()
+	}
+}
+
+impl From<InternedString> for StringLiteral {
+	fn from(s: InternedString) -> Self {
+		Self(s)
+	}
+}
+
+impl From<Identifier> for StringLiteral {
+	fn from(s: Identifier) -> Self {
+		Self(s.0)
 	}
 }

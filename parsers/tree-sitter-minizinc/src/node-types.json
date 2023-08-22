@@ -72,6 +72,14 @@
         "named": true
       },
       {
+        "type": "inversed_identifier",
+        "named": true
+      },
+      {
+        "type": "lambda",
+        "named": true
+      },
+      {
         "type": "let_expression",
         "named": true
       },
@@ -282,6 +290,14 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -401,6 +417,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -544,6 +568,10 @@
         "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "assignment_generator",
+            "named": true
+          },
           {
             "type": "generator",
             "named": true
@@ -723,6 +751,78 @@
     }
   },
   {
+    "type": "assignment_generator",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absent",
+            "named": true
+          },
+          {
+            "type": "anonymous",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "pattern_call",
+            "named": true
+          },
+          {
+            "type": "pattern_numeric_literal",
+            "named": true
+          },
+          {
+            "type": "pattern_record",
+            "named": true
+          },
+          {
+            "type": "pattern_tuple",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "where": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "boolean_literal",
     "named": true,
     "fields": {}
@@ -759,6 +859,10 @@
           },
           {
             "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
             "named": true
           },
           {
@@ -942,6 +1046,14 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -1077,6 +1189,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -1271,6 +1391,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -1528,6 +1656,14 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -1724,6 +1860,10 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
             "type": "parenthesised_expression",
             "named": true
           },
@@ -1745,6 +1885,10 @@
         "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "assignment_generator",
+            "named": true
+          },
           {
             "type": "generator",
             "named": true
@@ -1833,6 +1977,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -2041,6 +2193,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -2395,6 +2555,62 @@
     }
   },
   {
+    "type": "inversed_identifier",
+    "named": true,
+    "fields": {
+      "identifier": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "lambda",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "parameter",
+            "named": true
+          }
+        ]
+      },
+      "return_type": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "let_expression",
     "named": true,
     "fields": {
@@ -2568,6 +2784,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -3043,6 +3267,14 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -3288,6 +3520,14 @@
             "named": true
           },
           {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
             "type": "let_expression",
             "named": true
           },
@@ -3443,6 +3683,10 @@
         "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "assignment_generator",
+            "named": true
+          },
           {
             "type": "generator",
             "named": true
@@ -3673,6 +3917,14 @@
           },
           {
             "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "inversed_identifier",
+            "named": true
+          },
+          {
+            "type": "lambda",
             "named": true
           },
           {
@@ -4028,6 +4280,10 @@
     "named": false
   },
   {
+    "type": "^-1",
+    "named": false
+  },
+  {
     "type": "absent",
     "named": true
   },
@@ -4149,6 +4405,10 @@
   },
   {
     "type": "intersect",
+    "named": false
+  },
+  {
+    "type": "lambda",
     "named": false
   },
   {

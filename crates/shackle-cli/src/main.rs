@@ -9,7 +9,7 @@ use env_logger::{fmt::TimestampPrecision, Builder};
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, Report, Result};
-use shackle::error::{InternalError, ShackleError};
+use shackle::diagnostics::{InternalError, ShackleError};
 use shackle::{Message, Model, Solver, Status};
 
 use std::ffi::OsStr;

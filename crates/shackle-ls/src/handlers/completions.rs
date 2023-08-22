@@ -28,7 +28,7 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 			model,
 			Point {
 				row: params.text_document_position.position.line as usize,
-				column: (params.text_document_position.position.character.max(1) - 1) as usize,
+				column: (params.text_document_position.position.character) as usize,
 			},
 		))
 	}
@@ -37,7 +37,15 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<CompletionResponse>, ResponseError> {
-		let found = find_expression(db, *model_ref, start, start);
+		let found = find_expression(db, *model_ref, start, start).or_else(|| {
+			let mut prev = start;
+			if prev.column > 0 {
+				prev.column -= 1;
+				find_expression(db, *model_ref, prev, prev)
+			} else {
+				None
+			}
+		});
 		Ok((|| {
 			let expression = found?;
 			let model = expression.item().model(db);
@@ -105,7 +113,9 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 				let mut additional_overloads = ps.len() - 1;
 				let types = db.lookup_item_types(p.item());
 				match &types[p.pattern()] {
-					PatternTy::Function(f) => completions.push(CompletionItem {
+					PatternTy::Function(f)
+					| PatternTy::AnnotationConstructor(f)
+					| PatternTy::AnnotationDestructure(f) => completions.push(CompletionItem {
 						label: i.pretty_print(db),
 						kind: Some(CompletionItemKind::FUNCTION),
 						detail: Some(if additional_overloads == 0 {
@@ -121,25 +131,45 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 						}),
 						..Default::default()
 					}),
-					PatternTy::EnumConstructor(cs) => {
-						let c = cs.first().unwrap();
-						additional_overloads += cs.len() - 1;
+					PatternTy::EnumConstructor(ec) => {
+						let func = &ec[0];
+						additional_overloads += ec.len() - 1;
 						completions.push(CompletionItem {
 							label: i.pretty_print(db),
 							kind: Some(CompletionItemKind::ENUM_MEMBER),
 							detail: Some(if additional_overloads == 0 {
-								c.overload.pretty_print_item(db, i)
+								func.overload.pretty_print_item(db, i)
 							} else if additional_overloads == 1 {
-								format!("{} + 1 overload", c.overload.pretty_print_item(db, i),)
+								format!("{} + 1 overload", func.overload.pretty_print_item(db, i),)
 							} else {
 								format!(
 									"{} + {} overloads",
-									c.overload.pretty_print_item(db, i),
+									func.overload.pretty_print_item(db, i),
 									additional_overloads,
 								)
 							}),
 							..Default::default()
-						})
+						});
+					}
+					PatternTy::EnumDestructure(ec) => {
+						let func = &ec[0];
+						additional_overloads += ec.len() - 1;
+						completions.push(CompletionItem {
+							label: i.pretty_print(db),
+							kind: Some(CompletionItemKind::ENUM_MEMBER),
+							detail: Some(if additional_overloads == 0 {
+								func.overload.pretty_print_item(db, i)
+							} else if additional_overloads == 1 {
+								format!("{} + 1 overload", func.overload.pretty_print_item(db, i),)
+							} else {
+								format!(
+									"{} + {} overloads",
+									func.overload.pretty_print_item(db, i),
+									additional_overloads,
+								)
+							}),
+							..Default::default()
+						});
 					}
 					_ => (),
 				}
@@ -147,9 +177,17 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 			for (i, p) in scope.variables_in_scope(db, expression.expression()) {
 				let types = db.lookup_item_types(p.item());
 				match types[p.pattern()] {
-					PatternTy::Variable(ty) => completions.push(CompletionItem {
+					PatternTy::Variable(ty) | PatternTy::Argument(ty) => {
+						completions.push(CompletionItem {
+							label: i.pretty_print(db),
+							kind: Some(CompletionItemKind::VARIABLE),
+							detail: Some(ty.pretty_print(db)),
+							..Default::default()
+						})
+					}
+					PatternTy::Enum(ty) => completions.push(CompletionItem {
 						label: i.pretty_print(db),
-						kind: Some(CompletionItemKind::VARIABLE),
+						kind: Some(CompletionItemKind::ENUM),
 						detail: Some(ty.pretty_print(db)),
 						..Default::default()
 					}),
@@ -157,6 +195,12 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 						label: i.pretty_print(db),
 						kind: Some(CompletionItemKind::ENUM_MEMBER),
 						detail: Some(ty.pretty_print(db)),
+						..Default::default()
+					}),
+					PatternTy::AnnotationAtom => completions.push(CompletionItem {
+						label: i.pretty_print(db),
+						kind: Some(CompletionItemKind::CONSTANT),
+						detail: Some("ann".to_owned()),
 						..Default::default()
 					}),
 					_ => (),

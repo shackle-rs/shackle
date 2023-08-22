@@ -90,6 +90,36 @@ impl Pattern {
 			None
 		})
 	}
+
+	/// Get whether this pattern can only possibly match a single value
+	/// (i.e. no identifiers, no wildcards)
+	pub fn is_singular(pattern: ArenaIndex<Pattern>, data: &ItemData) -> bool {
+		let mut todo = vec![pattern];
+		while let Some(p) = todo.pop() {
+			match &data[p] {
+				Pattern::Identifier(_) | Pattern::Anonymous => return false,
+				Pattern::Call { arguments, .. } => todo.extend(arguments.iter().copied()),
+				Pattern::Tuple { fields } => todo.extend(fields.iter().copied()),
+				Pattern::Record { fields } => todo.extend(fields.iter().map(|(_, p)| *p)),
+				_ => (),
+			}
+		}
+		true
+	}
+
+	/// Get whether this pattern is refutable (i.e. may not always match)
+	pub fn is_refutable(pattern: ArenaIndex<Pattern>, data: &ItemData) -> bool {
+		let mut todo = vec![pattern];
+		while let Some(p) = todo.pop() {
+			match &data[p] {
+				Pattern::Identifier(_) | Pattern::Anonymous => (),
+				Pattern::Tuple { fields } => todo.extend(fields.iter().copied()),
+				Pattern::Record { fields } => todo.extend(fields.iter().map(|(_, p)| *p)),
+				_ => return true,
+			}
+		}
+		false
+	}
 }
 
 /// Identifier
@@ -105,6 +135,18 @@ impl Identifier {
 	/// Get the name of this identifier
 	pub fn lookup(&self, db: &dyn Hir) -> String {
 		db.lookup_intern_string(self.0).0
+	}
+
+	/// Append ⁻¹ to this identifier
+	pub fn inversed(&self, db: &dyn Hir) -> Self {
+		let mut v = self.lookup(db);
+		v.push_str("⁻¹");
+		Self::new(v, db)
+	}
+
+	/// Whether this identifier matches a string
+	pub fn is<T: Into<InternedStringData>>(&self, db: &dyn Hir, v: T) -> bool {
+		db.intern_string(v.into()) == self.0
 	}
 
 	/// Pretty print this identifier (adding quotes if needed)
@@ -167,87 +209,14 @@ impl Identifier {
 	}
 }
 
+impl From<InternedString> for Identifier {
+	fn from(value: InternedString) -> Self {
+		Self(value)
+	}
+}
+
 impl From<Identifier> for InternedString {
 	fn from(ident: Identifier) -> Self {
 		ident.0
 	}
 }
-
-macro_rules! id_registry {
-	($struct:ident, $($tail:tt)*) => {
-		id_registry!(@def $struct ($($tail)*) ());
-		id_registry!(@imp $struct db ($($tail)*) ());
-	};
-
-	(@def $struct:ident ($($name:ident $(:$value:expr)?)?) ($($rest:tt)*)) => {
-		/// Registry for common identifiers
-		#[derive(Clone, Debug, PartialEq, Eq)]
-		pub struct $struct {
-			$($rest)*
-			$(
-				#[allow(missing_docs)]
-				pub $name: Identifier,
-			)?
-		}
-	};
-	(@def $struct:ident ($name:ident $(:$value:expr)?, $($todo:tt)*) ($($rest:tt)*)) => {
-		id_registry!(@def $struct ($($todo)*) (
-			$($rest)*
-			#[allow(missing_docs)]
-			pub $name: Identifier,
-		));
-	};
-
-	(@imp $struct:ident $db:ident ($($name:ident)?) ($($rest:tt)*)) => {
-		impl $struct {
-			/// Create a new identifier registry
-			pub fn new($db: &dyn Hir) -> Self {
-				Self {
-					$($rest)*
-					$(
-						$name: Identifier::new(stringify!($name), $db),
-					)?
-				}
-			}
-		}
-	};
-	(@imp $struct:ident $db:ident ($name:ident, $($todo:tt)*) ($($rest:tt)*)) => {
-		id_registry!(@imp $struct $db ($($todo)*) (
-			$($rest)*
-			$name: Identifier::new(stringify!($name), $db),
-		));
-	};
-
-
-	(@imp $struct:ident $db:ident ($name:ident: $value:expr) ($($rest:tt)*)) => {
-		impl $struct {
-			/// Create a new identifier registry
-			pub fn new($db: &dyn Hir) -> Self {
-				Self {
-					$($rest)*
-					$name: Identifier::new($value, $db)
-				}
-			}
-		}
-	};
-	(@imp $struct:ident $db:ident ($name:ident: $value:expr, $($todo:tt)*) ($($rest:tt)*)) => {
-		id_registry!(@imp $struct $db ($($todo)*) (
-			$($rest)*
-			$name: Identifier::new($value, $db),
-		));
-	};
-}
-
-id_registry!(
-	IdentifierRegistry,
-	annotated_expression,
-	array_nd: "arrayNd",
-	array2d,
-	concat,
-	dot_dot: "..",
-	objective: "_objective",
-	show,
-	eq: "=",
-	index_set,
-	shackle_type,
-);

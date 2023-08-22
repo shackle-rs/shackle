@@ -1,10 +1,11 @@
 use std::{
 	collections::HashMap,
+	panic::RefUnwindSafe,
 	path::{Path, PathBuf},
 	sync::{Arc, Mutex},
 };
 
-use shackle::{error::FileError, file::FileHandler};
+use shackle::{diagnostics::FileError, file::FileHandler};
 
 /// Virtual filesystem allowing us to override file reads
 ///
@@ -55,7 +56,7 @@ impl FileHandler for Vfs {
 			})
 	}
 
-	fn snapshot(&self) -> Box<dyn FileHandler> {
+	fn snapshot(&self) -> Box<dyn FileHandler + RefUnwindSafe> {
 		Box::new(self.clone())
 	}
 }

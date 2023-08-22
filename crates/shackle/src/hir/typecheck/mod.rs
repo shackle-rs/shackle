@@ -18,15 +18,23 @@
 //! Bodies are for expressions in top-level items which need to be type-checked,
 //! but cannot be referred to by an identifier. So computing types for bodies
 //! may require signatures to be typed, and these in turn may require other
-//! signatures to be typed, but never bodies.
+//! signatures to be typed, but never other bodies.
 //!
 //! Typing signatures does not cause types of signatures it depends on to be
 //! queried from the database, as this can create cycles, which cannot be
 //! recovered from in a useful way. The types of dependent signatures are
 //! always computed, so there is some redundant recomputation, but the effect
 //! is minimal.
+//!
+//! The `SignatureTypeContext` and `BodyTypeContext` structs implement the
+//! `TypeContext` trait, which allows them to both use the `Typer` struct to
+//! perform type-checking of expressions.
 
-use std::{fmt::Write, ops::Index, sync::Arc};
+use std::{
+	fmt::Write,
+	ops::{Deref, Index},
+	sync::Arc,
+};
 
 use crate::{
 	arena::{ArenaIndex, ArenaMap},
@@ -173,7 +181,13 @@ impl TypeResult {
 	) -> Option<String> {
 		let decl = self.get_pattern(pattern)?;
 		match decl {
-			PatternTy::Variable(ty) | PatternTy::Destructuring(ty) => {
+			PatternTy::Variable(ty)
+			| PatternTy::Argument(ty)
+			| PatternTy::Enum(ty)
+			| PatternTy::Destructuring(ty)
+			| PatternTy::DestructuringFn {
+				constructor: ty, ..
+			} => {
 				if let Pattern::Identifier(i) = data[pattern] {
 					if let TyData::Function(opt, function) = ty.lookup(db.upcast()) {
 						// Pretty print functions using item-like syntax if possible
@@ -202,13 +216,13 @@ impl TypeResult {
 				f.overload
 					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
-			PatternTy::EnumConstructor(e) => Some(
-				e.first()?
+			PatternTy::EnumConstructor(ec) => Some(
+				ec.first()?
 					.overload
 					.pretty_print_item(db.upcast(), data[pattern].identifier()?),
 			),
 			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(db.upcast())),
-			PatternTy::TypeAlias(ty) => Some(format!(
+			PatternTy::TypeAlias { ty, .. } => Some(format!(
 				"type {} = {}",
 				data[pattern].identifier()?.pretty_print(db),
 				ty.pretty_print(db.upcast())
@@ -337,13 +351,20 @@ impl TypeDiagnostics {
 		let it = item.local_item_ref(db);
 		match it {
 			LocalItemRef::Assignment(_) | LocalItemRef::Constraint(_) | LocalItemRef::Output(_) => {
-				TypeDiagnostics(db.lookup_item_body_diagnostics(item), None)
+				TypeDiagnostics(db.lookup_item_body_errors(item), None)
 			}
 			_ => TypeDiagnostics(
-				db.lookup_item_signature_diagnostics(item),
-				Some(db.lookup_item_body_diagnostics(item)),
+				db.lookup_item_signature_errors(item),
+				Some(db.lookup_item_body_errors(item)),
 			),
 		}
+	}
+
+	/// Iterate over the diagnostic vectors.
+	///
+	/// (Useful when using the `Diagnostics<Error>` helper)
+	pub fn outer_iter(&self) -> impl '_ + Iterator<Item = Arc<Vec<Error>>> {
+		[self.0.clone()].into_iter().chain(self.1.iter().cloned())
 	}
 
 	/// Iterate over the diagnostics
@@ -353,6 +374,8 @@ impl TypeDiagnostics {
 }
 
 /// Context for computation of types
+///
+/// The `Typer` calls these functions when computing types for expressions.
 pub trait TypeContext {
 	/// Add a declaration for a pattern
 	fn add_declaration(&mut self, pattern: PatternRef, declaration: PatternTy);
@@ -391,25 +414,63 @@ pub fn collect_item_body(db: &dyn Hir, item: ItemRef) -> (Arc<BodyTypes>, Arc<Ve
 /// Type of a pattern (usually a declaration)
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PatternTy {
-	/// Pattern is a variable declaration
+	/// Pattern is a variable declaration.
 	Variable(Ty),
-	/// Pattern is a function (with a flag indicating if the return type is known yet)
+	/// Pattern is a function declaration.
 	Function(Box<FunctionEntry>),
-	/// Pattern is a type-inst variable
+	/// Pattern is a function parameter.
+	Argument(Ty),
+	/// Pattern is a type-inst variable declaration.
 	TyVar(TyVar),
-	/// Pattern is a type-inst alias
-	TypeAlias(Ty),
-	/// Enum constructor
-	EnumConstructor(Box<[FunctionEntry]>),
+	/// Pattern is a type-inst alias declaration.
+	TypeAlias {
+		/// The type which is aliased
+		ty: Ty,
+		/// True if this type alias contains a bounded type
+		has_bounded: bool,
+		/// True if this type alias contains a primitive type
+		has_unbounded: bool,
+	},
+	/// An enum declaration (type is of the defining set of the enum).
+	Enum(Ty),
+	/// Enum constructor.
+	///
+	/// Defines the Foo(x) function.
+	EnumConstructor(Box<[EnumConstructorEntry]>),
+	/// Anonymous enum constructor.
+	///
+	/// While the constructor cannot actually be called,
+	/// we still keep track of it for convenience.
+	AnonymousEnumConstructor(Box<FunctionEntry>),
+	/// Enum destructor.
+	///
+	/// Defines the Foo^-1(x) function.
+	EnumDestructure(Box<[FunctionEntry]>),
 	/// Enum atom
 	EnumAtom(Ty),
-	/// Annotation constructor
+	/// Annotation constructor.
+	///
+	/// Defines the Foo(x) function.
 	AnnotationConstructor(Box<FunctionEntry>),
+	/// Annotation destructor.
+	///
+	/// Defines the Foo^-1(x) function.
+	AnnotationDestructure(Box<FunctionEntry>),
 	/// Annotation atom
 	AnnotationAtom,
 	/// Destructuring pattern
 	Destructuring(Ty),
-	/// Currently computing
+	/// Destructuring function call identifier
+	///
+	/// Used for the constructor identifier pattern
+	/// (the call will have the `Destructuring` type)
+	DestructuringFn {
+		/// The type of the constructor function
+		constructor: Ty,
+		/// The type of the destructor function
+		destructor: Ty,
+	},
+	/// Currently computing - if encountered, indicates a cycle
 	Computing,
 }
 
@@ -422,27 +483,77 @@ impl<'a> DebugPrint<'a> for PatternTy {
 			PatternTy::Function(function) => {
 				format!("Function({})", function.overload.pretty_print(db.upcast()))
 			}
+			PatternTy::Argument(ty) => format!("Argument({})", ty.pretty_print(db.upcast())),
 			PatternTy::TyVar(t) => format!("TyVar({})", t.ty_var.pretty_print(db.upcast())),
-			PatternTy::TypeAlias(ty) => format!("TypeAlias({})", ty.pretty_print(db.upcast())),
-			PatternTy::EnumConstructor(fs) => {
+			PatternTy::TypeAlias { ty, .. } => {
+				format!("TypeAlias({})", ty.pretty_print(db.upcast()))
+			}
+			PatternTy::Enum(ty) => format!("Enum({})", ty.pretty_print(db.upcast())),
+			PatternTy::EnumConstructor(ecs) => {
 				format!(
 					"EnumConstructor({})",
-					fs.iter()
+					ecs.iter()
 						.map(|f| f.overload.pretty_print(db.upcast()))
 						.collect::<Vec<_>>()
-						.join(", ")
+						.join(", "),
+				)
+			}
+			PatternTy::AnonymousEnumConstructor(f) => format!(
+				"AnonymousEnumConstructor({})",
+				f.overload.pretty_print(db.upcast()),
+			),
+			PatternTy::EnumDestructure(eds) => {
+				format!(
+					"EnumDestructure({})",
+					eds.iter()
+						.map(|f| f.overload.pretty_print(db.upcast()))
+						.collect::<Vec<_>>()
+						.join(", "),
 				)
 			}
 			PatternTy::EnumAtom(ty) => format!("EnumAtom({})", ty.pretty_print(db.upcast())),
 			PatternTy::AnnotationConstructor(f) => format!(
 				"AnnotationConstructor({})",
-				f.overload.pretty_print(db.upcast())
+				f.overload.pretty_print(db.upcast()),
+			),
+			PatternTy::AnnotationDestructure(f) => format!(
+				"AnnotationDestructure({})",
+				f.overload.pretty_print(db.upcast()),
 			),
 			PatternTy::AnnotationAtom => "AnnotationAtom".to_string(),
 			PatternTy::Destructuring(ty) => {
 				format!("Destructuring({})", ty.pretty_print(db.upcast()))
 			}
+			PatternTy::DestructuringFn {
+				constructor,
+				destructor,
+			} => {
+				format!(
+					"DestructuringFn({}, {})",
+					constructor.pretty_print(db.upcast()),
+					destructor.pretty_print(db.upcast())
+				)
+			}
 			PatternTy::Computing => "{computing}".to_owned(),
 		}
 	}
 }
+
+/// Constructor for an enum
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EnumConstructorEntry {
+	/// If true, this constructor is lifted and is not used for pattern matching
+	pub is_lifted: bool,
+	/// The function entry
+	pub constructor: FunctionEntry,
+}
+
+impl Deref for EnumConstructorEntry {
+	type Target = FunctionEntry;
+	fn deref(&self) -> &Self::Target {
+		&self.constructor
+	}
+}
+
+#[cfg(test)]
+mod test;

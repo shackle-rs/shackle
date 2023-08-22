@@ -1,27 +1,52 @@
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::{fmt::Write, sync::Arc};
+use rustc_hash::FxHashMap;
+use std::{collections::hash_map::Entry, fmt::Write, sync::Arc};
 
 use crate::{
 	arena::ArenaIndex,
-	error::{
+	constants::{IdentifierRegistry, TypeRegistry},
+	diagnostics::{
 		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
 		NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
 	},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ExpressionRef, ItemRef, NodeRef, PatternRef},
-		ArrayAccess, ArrayComprehension, ArrayLiteral, Call, Case, Declaration, Expression,
-		Identifier, IdentifierRegistry, IfThenElse, ItemData, Let, LetItem, Pattern, PrimitiveType,
-		RecordAccess, RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
+		ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, Call, Case, Declaration,
+		Expression, Generator, Identifier, IfThenElse, IndexedArrayLiteral, ItemData, Lambda, Let,
+		LetItem, MaybeIndexSet, Pattern, PrimitiveType, RecordAccess, RecordLiteral,
+		SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
 	},
 	ty::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
-		TyData, TyVar, TyVarRef, TypeRegistry, VarType,
+		TyData, VarType,
 	},
 	Error,
 };
 
 use super::{PatternTy, TypeContext};
+
+/// Mode for completing types
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeCompletionMode {
+	/// Give an error if non-primitive types are used
+	AnnotationParameter,
+	/// Give an error if non-primitive types are used
+	Operation,
+	/// Give an error if unbounded types are used
+	EnumerationParameter,
+	/// Allow all types
+	Default,
+}
+
+/// Result of completing a type
+pub struct TypeCompletionResult {
+	/// The computed type
+	pub ty: Ty,
+	/// Whether this type contains a bound
+	pub has_bounded: bool,
+	/// Whether this type contains an unbounded type
+	pub has_unbounded: bool,
+}
 
 /// Computes types of expressions and patterns in an item.
 ///
@@ -44,6 +69,7 @@ pub struct Typer<'a, T> {
 	ctx: &'a mut T,
 	item: ItemRef,
 	data: &'a ItemData,
+	in_output_item: bool,
 }
 
 impl<'a, T: TypeContext> Typer<'a, T> {
@@ -56,18 +82,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			ctx,
 			item,
 			data,
+			in_output_item: false,
 		}
 	}
 
 	/// Collect the type of an expression and check that it is a subtype of the expected type.
-	pub fn typecheck_expression(
-		&mut self,
-		expr: ArenaIndex<Expression>,
-		expected: Ty,
-		is_annotation_for: Option<Ty>,
-	) {
+	pub fn typecheck_expression(&mut self, expr: ArenaIndex<Expression>, expected: Ty) -> Ty {
 		let db = self.db;
-		let actual = self.collect_expression(expr, is_annotation_for);
+		let actual = self.collect_expression(expr);
 		if !actual.is_subtype_of(self.db.upcast(), expected) {
 			let (src, span) =
 				NodeRef::from(EntityRef::new(self.db, self.item, expr)).source_span(self.db);
@@ -84,25 +106,32 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				},
 			);
 		}
+		actual
+	}
+
+	/// Collect the type of an output expression and check that it is a subtype of the expected type.
+	pub fn typecheck_output(&mut self, expr: ArenaIndex<Expression>, expected: Ty) {
+		let prev = self.in_output_item;
+		self.in_output_item = true;
+		self.typecheck_expression(expr, expected);
+		self.in_output_item = prev;
 	}
 
 	/// Get the type of this expression
-	pub fn collect_expression(
-		&mut self,
-		expr: ArenaIndex<Expression>,
-		is_annotation_for: Option<Ty>,
-	) -> Ty {
+	pub fn collect_expression(&mut self, expr: ArenaIndex<Expression>) -> Ty {
 		let db = self.db;
 		let result = match &self.data[expr] {
-			Expression::Absent => self.types.bottom.with_opt(db.upcast(), OptType::Opt),
+			Expression::Absent => self.types.bottom.make_opt(db.upcast()),
 			Expression::BooleanLiteral(_) => self.types.par_bool,
 			Expression::IntegerLiteral(_) => self.types.par_int,
 			Expression::FloatLiteral(_) => self.types.par_float,
 			Expression::StringLiteral(_) => self.types.string,
 			Expression::Infinity => self.types.par_int,
-			Expression::Identifier(i) => self.collect_identifier(expr, i, is_annotation_for),
-			Expression::Call(c) => self.collect_call(expr, c, is_annotation_for),
+			Expression::Identifier(i) => self.collect_identifier(expr, i, None),
+			Expression::Call(c) => self.collect_call(expr, c, None),
 			Expression::ArrayLiteral(al) => self.collect_array_literal(expr, al),
+			Expression::ArrayLiteral2D(al) => self.collect_array_literal_2d(expr, al),
+			Expression::IndexedArrayLiteral(al) => self.collect_indexed_array_literal(expr, al),
 			Expression::SetLiteral(sl) => self.collect_set_literal(expr, sl),
 			Expression::TupleLiteral(tl) => self.collect_tuple_literal(tl),
 			Expression::RecordLiteral(rl) => self.collect_record_literal(rl),
@@ -114,6 +143,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Expression::IfThenElse(ite) => self.collect_if_then_else(expr, ite),
 			Expression::Case(c) => self.collect_case(expr, c),
 			Expression::Let(l) => self.collect_let(l),
+			Expression::Lambda(l) => self.collect_lambda(l),
 			Expression::Slice(_) => self.types.set_of_bottom,
 			Expression::Missing => self.types.error,
 		};
@@ -132,7 +162,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.flat_map(|anns| anns.iter())
 		{
-			self.typecheck_expression(*ann, self.types.ann, Some(ty));
+			self.typecheck_expression(*ann, self.types.ann);
 			// If annotation is shackle_type("...") then treat as sanity check for type
 			if let Expression::Call(c) = &self.data[*ann] {
 				if let Expression::Identifier(i) = &self.data[c.function] {
@@ -175,9 +205,17 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			let expression = ExpressionRef::new(self.item, expr);
 			self.ctx.add_identifier_resolution(expression, p);
 			match self.ctx.type_pattern(db, p) {
-				PatternTy::Variable(ty) | PatternTy::EnumAtom(ty) => return ty,
+				PatternTy::Variable(ty) => {
+					if self.in_output_item && p.item() != self.item {
+						return ty.make_par(db.upcast());
+					}
+					return ty;
+				}
+				PatternTy::Argument(ty) | PatternTy::Enum(ty) | PatternTy::EnumAtom(ty) => {
+					return ty
+				}
 				PatternTy::AnnotationAtom => return self.types.ann,
-				PatternTy::TypeAlias(_) => {
+				PatternTy::TypeAlias { .. } => {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 					self.ctx.add_diagnostic(
@@ -190,13 +228,16 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					);
 					return self.types.error;
 				}
-				PatternTy::EnumConstructor(_) | PatternTy::AnnotationConstructor(_) => (),
+				PatternTy::EnumConstructor { .. } | PatternTy::AnnotationConstructor(_) => (),
 				PatternTy::Computing => {
 					// Error will be emitted during topological sorting
 					return self.types.error;
 				}
-				_ => {
-					unreachable!("Matched variable in scope, but not a variable or type alias")
+				pattern_ty => {
+					unreachable!(
+						"Matched variable in scope, but not a variable or type alias ({:?})",
+						pattern_ty
+					)
 				}
 			}
 		}
@@ -212,7 +253,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					_ => None,
 				});
-			if let Some((p, _, t)) = fn_match {
+			if let Some((p, fe, t)) = fn_match {
 				match p.item().local_item_ref(db) {
 					crate::hir::ids::LocalItemRef::Function(f) => {
 						let fi = &p.item().model(db)[f];
@@ -227,7 +268,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									_ => false,
 								});
 						if has_annotated_expression {
-							let ret = t.return_type;
+							let ret = fe.overload.instantiate(db.upcast(), &t).return_type;
 							self.ctx
 								.add_identifier_resolution(ExpressionRef::new(self.item, expr), p);
 							return ret;
@@ -260,7 +301,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let args = c
 			.arguments
 			.iter()
-			.map(|e| self.collect_expression(*e, None))
+			.map(|e| self.collect_expression(*e))
 			.collect::<Vec<_>>();
 
 		match self.data[c.function] {
@@ -270,7 +311,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				ret
 			}
 			_ => {
-				let ty = self.collect_expression(c.function, None);
+				let ty = self.collect_expression(c.function);
 				if let TyData::Function(OptType::NonOpt, f) = ty.lookup(db.upcast()) {
 					if f.matches(db.upcast(), &args).is_err() {
 						let (src, span) =
@@ -318,7 +359,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		let ty = Ty::most_specific_supertype(
 			db.upcast(),
-			al.members.iter().map(|e| self.collect_expression(*e, None)),
+			al.members.iter().map(|e| self.collect_expression(*e)),
 		)
 		.unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -346,14 +387,87 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		})
 	}
 
-	fn collect_set_literal(&mut self, expr: ArenaIndex<Expression>, sl: &SetLiteral) -> Ty {
+	fn collect_array_literal_2d(
+		&mut self,
+		expr: ArenaIndex<Expression>,
+		al: &ArrayLiteral2D,
+	) -> Ty {
 		let db = self.db;
-		if sl.members.is_empty() {
-			return Ty::par_set(db.upcast(), self.types.bottom).unwrap();
-		}
-		let ty = Ty::most_specific_supertype(
+		let mut idx_ty = |dim: &MaybeIndexSet| match dim {
+			MaybeIndexSet::Indexed(indices) => Ty::most_specific_supertype(
+				db.upcast(),
+				indices.iter().map(|e| self.collect_expression(*e)),
+			)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform array indices".to_owned(),
+					},
+				);
+				self.types.error
+			}),
+			MaybeIndexSet::NonIndexed(len) => {
+				if *len > 0 {
+					self.types.par_int
+				} else {
+					self.types.bottom
+				}
+			}
+		};
+		let dim_ty = Ty::tuple(db.upcast(), [idx_ty(&al.rows), idx_ty(&al.columns)]);
+		let el_ty = if al.members.is_empty() {
+			self.types.bottom
+		} else {
+			Ty::most_specific_supertype(
+				db.upcast(),
+				al.members.iter().map(|e| self.collect_expression(*e)),
+			)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform array literal".to_owned(),
+					},
+				);
+				self.types.error
+			})
+		};
+		Ty::array(db.upcast(), dim_ty, el_ty).unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				IllegalType {
+					src,
+					span,
+					ty: format!(
+						"array [{}] of {}",
+						dim_ty.pretty_print_as_dims(db.upcast()),
+						el_ty.pretty_print(db.upcast())
+					),
+				},
+			);
+			self.types.error
+		})
+	}
+
+	fn collect_indexed_array_literal(
+		&mut self,
+		expr: ArenaIndex<Expression>,
+		al: &IndexedArrayLiteral,
+	) -> Ty {
+		let db = self.db;
+		let dim_ty = Ty::most_specific_supertype(
 			db.upcast(),
-			sl.members.iter().map(|e| self.collect_expression(*e, None)),
+			al.indices.iter().map(|e| self.collect_expression(*e)),
 		)
 		.unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -362,16 +476,76 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				InvalidArrayLiteral {
 					src,
 					span,
-					msg: "Non-uniform array literal".to_owned(),
+					msg: "Non-uniform array indices".to_owned(),
+				},
+			);
+			self.types.error
+		});
+		let el_ty = if al.members.is_empty() {
+			self.types.bottom
+		} else {
+			Ty::most_specific_supertype(
+				db.upcast(),
+				al.members.iter().map(|e| self.collect_expression(*e)),
+			)
+			.unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Non-uniform array literal".to_owned(),
+					},
+				);
+				self.types.error
+			})
+		};
+		Ty::array(db.upcast(), dim_ty, el_ty).unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				IllegalType {
+					src,
+					span,
+					ty: format!(
+						"array [{}] of {}",
+						dim_ty.pretty_print_as_dims(db.upcast()),
+						el_ty.pretty_print(db.upcast())
+					),
+				},
+			);
+			self.types.error
+		})
+	}
+
+	fn collect_set_literal(&mut self, expr: ArenaIndex<Expression>, sl: &SetLiteral) -> Ty {
+		let db = self.db;
+		if sl.members.is_empty() {
+			return Ty::par_set(db.upcast(), self.types.bottom).unwrap();
+		}
+		let ty = Ty::most_specific_supertype(
+			db.upcast(),
+			sl.members.iter().map(|e| self.collect_expression(*e)),
+		)
+		.unwrap_or_else(|| {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				InvalidArrayLiteral {
+					src,
+					span,
+					msg: "Non-uniform set literal".to_owned(),
 				},
 			);
 			self.types.error
 		});
 		match ty.inst(db.upcast()) {
 			Some(VarType::Var) => {
-				let ty = ty.with_inst(db.upcast(), VarType::Par).unwrap();
+				let ty = ty.make_par(db.upcast());
 				Ty::par_set(db.upcast(), ty)
-					.and_then(|t| t.with_inst(db.upcast(), VarType::Var))
+					.and_then(|t| t.make_var(db.upcast()))
 					.unwrap_or_else(|| {
 						let (src, span) =
 							NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -419,21 +593,22 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		Ty::tuple(
 			db.upcast(),
-			tl.fields.iter().map(|f| self.collect_expression(*f, None)),
+			tl.fields.iter().map(|f| self.collect_expression(*f)),
 		)
 	}
 
 	fn collect_record_literal(&mut self, rl: &RecordLiteral) -> Ty {
 		let db = self.db;
-		let mut seen = FxHashSet::default();
-		let mut fields = rl
-			.fields
-			.iter()
-			.map(|(i, f)| {
-				let ident = self.data[*i]
-					.identifier()
-					.expect("Record field name not an identifier");
-				if seen.contains(&ident) {
+		let mut fields = FxHashMap::default();
+		for (i, f) in rl.fields.iter() {
+			let ident = self.data[*i]
+				.identifier()
+				.expect("Record field name not an identifier");
+			match fields.entry(ident) {
+				Entry::Vacant(e) => {
+					e.insert(self.collect_expression(*f));
+				}
+				Entry::Occupied(_) => {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, *i)).source_span(db);
 					self.ctx.add_diagnostic(
@@ -449,12 +624,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						},
 					);
 				}
-				seen.insert(ident);
-				(ident, self.collect_expression(*f, None))
-			})
-			.collect::<Vec<_>>();
-		fields.sort_by_key(|(i, _)| i.lookup(db));
-		fields.dedup_by_key(|(i, _)| *i);
+			}
+		}
 		Ty::record(db.upcast(), fields)
 	}
 
@@ -466,65 +637,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		let mut lift_to_opt = false;
 		for g in c.generators.iter() {
-			let collection = self.collect_expression(g.collection, None);
-			let gen_el = match collection.lookup(db.upcast()) {
-				TyData::Array {
-					opt: OptType::NonOpt,
-					element,
-					..
-				} => element,
-				TyData::Set(VarType::Par, OptType::NonOpt, element) => element,
-				TyData::Set(VarType::Var, OptType::NonOpt, element) => {
-					lift_to_opt = true;
-					element
-				}
-				TyData::Error => self.types.error,
-				_ => {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-					self.types.error
-				}
-			};
-			for p in g.patterns.iter() {
-				self.collect_pattern(Some(expr), *p, gen_el);
-			}
-			if let Some(w) = g.where_clause {
-				let where_clause = self.collect_expression(w, None);
-				if let Some(VarType::Var) = where_clause.inst(db.upcast()) {
-					lift_to_opt = true;
-				}
-				if !where_clause.is_subtype_of(db.upcast(), self.types.var_bool) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-				}
-			}
+			lift_to_opt |= self.collect_generator(expr, g);
 		}
-		let el = self.collect_expression(c.template, None);
+		let el = self.collect_expression(c.template);
 		let element = if lift_to_opt {
-			el.with_opt(db.upcast(), OptType::Opt)
-				.with_inst(db.upcast(), VarType::Var)
+			el.make_opt(db.upcast())
+				.make_var(db.upcast())
 				.unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -543,7 +661,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		};
 		let dim = c
 			.indices
-			.map(|i| self.collect_expression(i, None))
+			.map(|i| self.collect_expression(i))
 			.unwrap_or(self.types.par_int);
 		Ty::array(db.upcast(), dim, element).unwrap_or_else(|| {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
@@ -571,69 +689,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let db = self.db;
 		let mut is_var = false;
 		for g in c.generators.iter() {
-			let collection = self.collect_expression(g.collection, None);
-			let gen_el = match collection.lookup(db.upcast()) {
-				TyData::Array {
-					opt: OptType::NonOpt,
-					element,
-					..
-				} => match element.inst(db.upcast()) {
-					Some(VarType::Var) => {
-						is_var = true;
-						element.with_inst(db.upcast(), VarType::Par).unwrap()
-					}
-					Some(VarType::Par) => element,
-					None => self.types.error,
-				},
-				TyData::Set(VarType::Par, OptType::NonOpt, element) => element,
-				TyData::Set(VarType::Var, OptType::NonOpt, element) => {
-					is_var = true;
-					element
-				}
-				TyData::Error => self.types.error,
-				_ => {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-					self.types.error
-				}
-			};
-			for p in g.patterns.iter() {
-				self.collect_pattern(Some(expr), *p, gen_el);
-			}
-			if let Some(w) = g.where_clause {
-				let where_clause = self.collect_expression(w, None);
-				if let Some(VarType::Var) = where_clause.inst(db.upcast()) {
-					is_var = true;
-				}
-				if !where_clause.is_subtype_of(db.upcast(), self.types.var_bool) {
-					let (src, span) =
-						NodeRef::from(EntityRef::new(db, self.item, g.collection)).source_span(db);
-					self.ctx.add_diagnostic(
-						self.item,
-						TypeMismatch {
-							src,
-							span,
-							msg: format!(
-								"Expected set or array type, but got {}",
-								collection.pretty_print(db.upcast())
-							),
-						},
-					);
-				}
-			}
+			is_var |= self.collect_generator(expr, g);
 		}
-		let el = self.collect_expression(c.template, None);
+		let el = self.collect_expression(c.template);
 		if !is_var {
 			// Inst determined by el inst
 			match el.inst(db.upcast()) {
@@ -658,18 +716,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			}
 		};
 
-		let element = el.with_inst(db.upcast(), VarType::Par).unwrap_or_else(|| {
-			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
-			panic!(
-				"Failed to make type '{}' par for element of '{}'",
-				el.pretty_print(db.upcast()),
-				&src.contents()[span.offset()..span.offset() + span.len()]
-			);
-		});
+		let element = el.make_par(db.upcast()).make_occurs(db.upcast());
 		Ty::par_set(db.upcast(), element)
 			.and_then(|ty| {
 				if is_var {
-					ty.with_inst(db.upcast(), VarType::Var)
+					ty.make_var(db.upcast())
 				} else {
 					Some(ty)
 				}
@@ -693,10 +744,87 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			})
 	}
 
+	fn collect_generator(&mut self, expr: ArenaIndex<Expression>, g: &Generator) -> bool {
+		let db = self.db;
+		let mut is_var = false;
+		let where_clause = match g {
+			Generator::Iterator {
+				patterns,
+				collection,
+				where_clause,
+			} => {
+				let collection_ty = self.collect_expression(*collection);
+				let gen_el = match collection_ty.lookup(db.upcast()) {
+					TyData::Array {
+						opt: OptType::NonOpt,
+						element,
+						..
+					}
+					| TyData::Set(VarType::Par, OptType::NonOpt, element) => element,
+					TyData::Set(VarType::Var, OptType::NonOpt, element) => {
+						is_var = true;
+						element
+					}
+					TyData::Error => self.types.error,
+					_ => {
+						let (src, span) = NodeRef::from(EntityRef::new(db, self.item, *collection))
+							.source_span(db);
+						self.ctx.add_diagnostic(
+							self.item,
+							TypeMismatch {
+								src,
+								span,
+								msg: format!(
+									"Expected set or array type, but got {}",
+									collection_ty.pretty_print(db.upcast())
+								),
+							},
+						);
+						self.types.error
+					}
+				};
+				for p in patterns.iter() {
+					self.collect_pattern(Some(expr), false, *p, gen_el, false);
+				}
+				*where_clause
+			}
+			Generator::Assignment {
+				pattern,
+				value,
+				where_clause,
+			} => {
+				let ty = self.collect_expression(*value);
+				self.collect_pattern(Some(expr), false, *pattern, ty, false);
+				*where_clause
+			}
+		};
+		if let Some(w) = where_clause {
+			let ty = self.collect_expression(w);
+			if !ty.is_subtype_of(db.upcast(), self.types.var_bool) {
+				let (src, span) = NodeRef::from(EntityRef::new(db, self.item, w)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: format!(
+							"Expected boolean where clause, but got {}",
+							ty.pretty_print(db.upcast())
+						),
+					},
+				);
+			}
+			if let Some(VarType::Var) = ty.inst(db.upcast()) {
+				is_var = true;
+			}
+		}
+		is_var
+	}
+
 	fn collect_array_access(&mut self, expr: ArenaIndex<Expression>, aa: &ArrayAccess) -> Ty {
 		let db = self.db;
-		let collection = self.collect_expression(aa.collection, None);
-		let indices = self.collect_expression(aa.indices, None);
+		let collection = self.collect_expression(aa.collection);
+		let indices = self.collect_expression(aa.indices);
 
 		let process_index = |index: Ty, dim: Ty| -> Result<_, Error> {
 			let mut make_var = false;
@@ -741,8 +869,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 			if !index.is_subtype_of(
 				db.upcast(),
-				dim.with_opt(db.upcast(), OptType::Opt)
-					.with_inst(db.upcast(), VarType::Var)
+				dim.make_opt(db.upcast())
+					.make_var(db.upcast())
 					.unwrap_or_else(|| {
 						panic!(
 							"Array dimension {} should be varifiable",
@@ -756,15 +884,15 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					src,
 					span,
 					msg: format!(
-						"Expected '{}', but got {}",
-						dim.pretty_print(db.upcast()),
+						"Expected '{}', but got '{}'",
+						dim.pretty_print_as_dims(db.upcast()),
 						index.pretty_print(db.upcast())
 					),
 				}
 				.into());
 			}
 
-			match indices.opt(db.upcast()) {
+			match index.opt(db.upcast()) {
 				Some(OptType::Opt) => {
 					make_opt = true;
 				}
@@ -782,7 +910,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				_ => (),
 			}
-			match indices.inst(db.upcast()) {
+			match index.inst(db.upcast()) {
 				Some(VarType::Var) => {
 					make_var = true;
 				}
@@ -884,7 +1012,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 		if slices.is_empty() {
 			let result = if make_var {
-				el.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
+				el.make_var(db.upcast()).unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 					self.ctx.add_diagnostic(
@@ -901,7 +1029,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				el
 			};
 			if make_opt {
-				result.with_opt(db.upcast(), OptType::Opt)
+				result.make_opt(db.upcast())
 			} else {
 				result
 			}
@@ -931,7 +1059,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			)
 			.unwrap();
 			if make_opt {
-				result.with_opt(db.upcast(), OptType::Opt)
+				result.make_opt(db.upcast())
 			} else {
 				result
 			}
@@ -940,7 +1068,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_tuple_access(&mut self, expr: ArenaIndex<Expression>, ta: &TupleAccess) -> Ty {
 		let db = self.db;
-		let tuple = self.collect_expression(ta.tuple, None);
+		let tuple = self.collect_expression(ta.tuple);
 		match tuple.lookup(db.upcast()) {
 			TyData::Tuple(opt, fields) => {
 				let i = ta.field.0;
@@ -963,7 +1091,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				let ty = fields[(i - 1) as usize];
 				if let OptType::Opt = opt {
-					ty.with_opt(db.upcast(), OptType::Opt)
+					ty.make_opt(db.upcast())
 				} else {
 					ty
 				}
@@ -994,7 +1122,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 					let el = fields[(i - 1) as usize];
 					let ty = if let OptType::Opt = o1.max(o2) {
-						el.with_opt(db.upcast(), OptType::Opt)
+						el.make_opt(db.upcast())
 					} else {
 						el
 					};
@@ -1046,7 +1174,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_record_access(&mut self, expr: ArenaIndex<Expression>, ra: &RecordAccess) -> Ty {
 		let db = self.db;
-		let record = self.collect_expression(ra.record, None);
+		let record = self.collect_expression(ra.record);
 		match record.lookup(db.upcast()) {
 			TyData::Record(opt, fields) => {
 				let ty = fields
@@ -1071,7 +1199,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						self.types.error
 					});
 				if let OptType::Opt = opt {
-					ty.with_opt(db.upcast(), OptType::Opt)
+					ty.make_opt(db.upcast())
 				} else {
 					ty
 				}
@@ -1104,7 +1232,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							self.types.error
 						});
 					let ty = if let OptType::Opt = o1.max(o2) {
-						el.with_opt(db.upcast(), OptType::Opt)
+						el.make_opt(db.upcast())
 					} else {
 						el
 					};
@@ -1159,7 +1287,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let condition_types = ite
 			.branches
 			.iter()
-			.map(|b| self.collect_expression(b.condition, None))
+			.map(|b| self.collect_expression(b.condition))
 			.collect::<Vec<_>>();
 		for (t, b) in condition_types.iter().zip(ite.branches.iter()) {
 			if !t.is_subtype_of(db.upcast(), self.types.var_bool) {
@@ -1183,7 +1311,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			.iter()
 			.map(|b| b.result)
 			.chain(ite.else_result)
-			.map(|e| (e, self.collect_expression(e, None)))
+			.map(|e| (e, self.collect_expression(e)))
 			.collect::<Vec<_>>();
 		let ty = Ty::most_specific_supertype(db.upcast(), result_types.iter().map(|(_, ty)| *ty))
 			.unwrap_or_else(|| {
@@ -1212,6 +1340,20 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				self.types.error
 			});
+		if ty.contains_function(db.upcast()) {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeInferenceFailure {
+					src,
+					span,
+					msg:
+						"Function types cannot be used in the results of if-then-else expressions."
+							.to_owned(),
+				},
+			);
+			return self.types.error;
+		}
 		if ite.else_result.is_none() && !ty.has_default_value(db.upcast()) {
 			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 			self.ctx.add_diagnostic(
@@ -1228,12 +1370,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		}
 		if let VarType::Var = condition_types
 			.iter()
-			.map(|t| t.inst(db.upcast()).unwrap())
+			.flat_map(|t| t.inst(db.upcast()))
 			.max()
-			.unwrap()
+			.unwrap_or(VarType::Par)
 		{
 			// Var condition means var result
-			ty.with_inst(db.upcast(), VarType::Var).unwrap_or_else(|| {
+			ty.make_var(db.upcast()).unwrap_or_else(|| {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
 				self.ctx.add_diagnostic(
@@ -1253,17 +1395,17 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	fn collect_case(&mut self, expr: ArenaIndex<Expression>, c: &Case) -> Ty {
 		let db = self.db;
-		let scrutinee = self.collect_expression(c.expression, None);
+		let scrutinee = self.collect_expression(c.expression);
 		for case in c.cases.iter() {
-			self.collect_pattern(Some(expr), case.pattern, scrutinee);
+			self.collect_pattern(Some(expr), true, case.pattern, scrutinee, false);
 		}
 		let cases = c
 			.cases
 			.iter()
-			.map(|case| (case.value, self.collect_expression(case.value, None)))
+			.map(|case| (case.value, self.collect_expression(case.value)))
 			.collect::<Vec<_>>();
-		Ty::most_specific_supertype(db.upcast(), cases.iter().map(|(_, ty)| *ty)).unwrap_or_else(
-			|| {
+		let ty = Ty::most_specific_supertype(db.upcast(), cases.iter().map(|(_, ty)| *ty))
+			.unwrap_or_else(|| {
 				let mut expr_tys = cases.into_iter();
 				let (first_expr, first_ty) = expr_tys.next().unwrap();
 				let (_, first_span) =
@@ -1288,23 +1430,58 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					}
 				}
 				self.types.error
-			},
-		)
+			});
+		if ty.contains_function(db.upcast()) {
+			let (src, span) = NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeInferenceFailure {
+					src,
+					span,
+					msg: "Function types cannot be used in the results of case expressions."
+						.to_owned(),
+				},
+			);
+			return self.types.error;
+		}
+		if let Some(VarType::Var) = scrutinee.inst(db.upcast()) {
+			ty.make_var(db.upcast()).unwrap_or_else(|| {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(db, self.item, expr)).source_span(db);
+				self.ctx.add_diagnostic(
+					self.item,
+					IllegalType {
+						src,
+						span,
+						ty: format!("var {}", ty.pretty_print(db.upcast())),
+					},
+				);
+				self.types.error
+			})
+		} else {
+			ty
+		}
 	}
 
 	fn collect_let(&mut self, l: &Let) -> Ty {
 		let db = self.db;
+		let mut is_var = false;
 		for item in l.items.iter() {
 			match item {
 				LetItem::Constraint(c) => {
 					for ann in c.annotations.iter() {
-						self.typecheck_expression(*ann, self.types.ann, None);
+						self.typecheck_expression(*ann, self.types.ann);
 					}
-					self.typecheck_expression(c.expression, self.types.var_bool, None);
+					let ty = self.typecheck_expression(c.expression, self.types.var_bool);
+					if ty == self.types.var_bool {
+						is_var = true;
+					}
 				}
 				LetItem::Declaration(d) => {
 					let ty = self.collect_declaration(d);
-					if ty.contains_par(db.upcast()) && d.definition.is_none() {
+					if (ty.contains_par(db.upcast()) || ty.contains_function(db.upcast()))
+						&& d.definition.is_none()
+					{
 						let (src, span) =
 							NodeRef::from(EntityRef::new(self.db, self.item, d.pattern))
 								.source_span(db);
@@ -1318,10 +1495,19 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							},
 						);
 					}
+					if !ty.known_par(db.upcast()) {
+						is_var = true;
+					}
 				}
 			}
 		}
-		self.collect_expression(l.in_expression, None)
+		let ty = self.collect_expression(l.in_expression);
+		if ty == self.types.par_bool && is_var {
+			// Becomes var because any var partiality bubbles up to this point
+			self.types.var_bool
+		} else {
+			ty
+		}
 	}
 
 	/// Type check a declaration
@@ -1331,8 +1517,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
 		}
 		let ty = if let Some(e) = d.definition {
-			let actual = self.collect_expression(e, None);
-			let expected = self.complete_type(d.declared_type, Some(actual));
+			let actual = self.collect_expression(e);
+			let expected = self
+				.complete_type(d.declared_type, Some(actual), TypeCompletionMode::Default)
+				.ty;
 			if !actual.is_subtype_of(self.db.upcast(), expected) {
 				let (src, span) =
 					NodeRef::from(EntityRef::new(self.db, self.item, e)).source_span(self.db);
@@ -1351,13 +1539,117 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			}
 			expected
 		} else {
-			self.complete_type(d.declared_type, None)
+			self.complete_type(d.declared_type, None, TypeCompletionMode::Default)
+				.ty
 		};
-		self.collect_pattern(None, d.pattern, ty);
+		self.collect_pattern(None, false, d.pattern, ty, false);
 		for ann in d.annotations.iter() {
-			self.typecheck_expression(*ann, self.types.ann, Some(ty));
+			// Handle identifiers/calls which lead to ::annotated_expression functions
+
+			self.typecheck_expression(*ann, self.types.ann);
 		}
 		ty
+	}
+
+	/// Type check a declaration in output mode
+	pub fn collect_output_declaration(&mut self, d: &Declaration) -> Ty {
+		let prev = self.in_output_item;
+		self.in_output_item = true;
+		let ty = self.collect_declaration(d);
+		self.in_output_item = prev;
+		ty
+	}
+
+	/// Typecheck an annotation for a declaration (since these may be calls to annotations using ::annotated_expression)
+	pub fn typecheck_declaration_annotation(
+		&mut self,
+		ann: ArenaIndex<Expression>,
+		declaration_ty: Ty,
+	) {
+		let db = self.db;
+		let actual = match &self.data[ann] {
+			Expression::Identifier(i) => self.collect_identifier(ann, i, Some(declaration_ty)),
+			Expression::Call(c) => self.collect_call(ann, c, Some(declaration_ty)),
+			_ => self.collect_expression(ann),
+		};
+		if !actual.is_subtype_of(db.upcast(), self.types.ann) {
+			let (src, span) =
+				NodeRef::from(EntityRef::new(db, self.item, ann)).source_span(self.db);
+			self.ctx.add_diagnostic(
+				self.item,
+				TypeMismatch {
+					src,
+					span,
+					msg: format!(
+						"Expected '{}' but got '{}'",
+						self.types.ann.pretty_print(db.upcast()),
+						actual.pretty_print(db.upcast())
+					),
+				},
+			);
+		}
+		self.ctx
+			.add_expression(ExpressionRef::new(self.item, ann), actual);
+		self.collect_annotations(ann, actual);
+	}
+
+	fn collect_lambda(&mut self, l: &Lambda) -> Ty {
+		let db = self.db;
+		for p in l
+			.parameters
+			.iter()
+			.filter_map(|param| param.pattern)
+			.flat_map(|p| Pattern::identifiers(p, self.data))
+		{
+			self.ctx
+				.add_declaration(PatternRef::new(self.item, p), PatternTy::Computing);
+		}
+		let params = l
+			.parameters
+			.iter()
+			.map(|param| {
+				let ty = self
+					.complete_type(param.declared_type, None, TypeCompletionMode::Default)
+					.ty;
+				if let Some(p) = param.pattern {
+					self.collect_pattern(None, false, p, ty, true);
+				}
+				ty
+			})
+			.collect();
+		let body = self.collect_expression(l.body);
+		let return_type = if let Some(r) = l.return_type {
+			let ret = self
+				.complete_type(r, Some(body), TypeCompletionMode::Default)
+				.ty;
+			if !body.is_subtype_of(db.upcast(), ret) {
+				let (src, span) =
+					NodeRef::from(EntityRef::new(self.db, self.item, l.body)).source_span(self.db);
+				self.ctx.add_diagnostic(
+					self.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: format!(
+							"Expected '{}' but got '{}'",
+							ret.pretty_print(db.upcast()),
+							body.pretty_print(db.upcast()),
+						),
+					},
+				);
+			}
+			ret
+		} else {
+			body
+		};
+
+		Ty::function(
+			db.upcast(),
+			FunctionType {
+				return_type,
+				params,
+			},
+		)
 	}
 
 	/// Resolve overloading for the function `expr` that is the identifier `i`.
@@ -1382,7 +1674,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		if let Some(p) = self.find_variable(expr, i) {
 			let d = self.ctx.type_pattern(db, p);
 			let f = match d {
-				PatternTy::Variable(t) => {
+				PatternTy::Variable(t) | PatternTy::Argument(t) => {
 					if let TyData::Function(OptType::NonOpt, f) = t.lookup(db.upcast()) {
 						Some(f)
 					} else {
@@ -1464,11 +1756,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		let mut overloads = Vec::with_capacity(patterns.len());
 		for p in patterns.iter() {
 			match self.ctx.type_pattern(db, *p) {
-				PatternTy::Function(function) | PatternTy::AnnotationConstructor(function) => {
-					overloads.push((*p, *function.clone()))
+				PatternTy::Function(function)
+				| PatternTy::AnnotationConstructor(function)
+				| PatternTy::AnnotationDestructure(function) => overloads.push((*p, *function.clone())),
+				PatternTy::EnumConstructor(ec) => {
+					overloads.extend(ec.iter().map(|ec| (*p, ec.constructor.clone())))
 				}
-				PatternTy::EnumConstructor(functions) => {
-					overloads.extend(functions.iter().map(|function| (*p, function.clone())))
+				PatternTy::EnumDestructure(fs) => {
+					overloads.extend(fs.iter().map(|f| (*p, f.clone())))
 				}
 				PatternTy::Computing => (),
 				_ => unreachable!(),
@@ -1516,7 +1811,8 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		});
 
 		match fn_result {
-			Ok((pattern, _, instantiation)) => {
+			Ok((pattern, fe, tvs)) => {
+				let instantiation = fe.overload.instantiate(db.upcast(), &tvs);
 				let ret = instantiation.return_type;
 				let op = Ty::function(db.upcast(), instantiation);
 				self.ctx
@@ -1648,8 +1944,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	pub fn collect_pattern(
 		&mut self,
 		scope: Option<ArenaIndex<Expression>>,
+		resolves_atoms: bool,
 		pat: ArenaIndex<Pattern>,
 		expected: Ty,
+		is_argument: bool,
 	) -> Ty {
 		let db = self.db;
 		let actual = match &self.data[pat] {
@@ -1661,30 +1959,38 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 			Pattern::Anonymous => expected,
 			Pattern::Missing => self.types.error,
 			Pattern::Identifier(i) => {
-				// If this is an enum atom, then add a resolution to it
-				let res = (|| {
-					let p = self.find_variable(scope?, *i)?;
-					match self.ctx.type_pattern(db, p) {
-						PatternTy::EnumAtom(ty) => {
-							self.ctx
-								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-							Some(ty)
+				let res = if resolves_atoms {
+					// If this is an enum atom, then add a resolution to it
+					(|| {
+						let p = self.find_variable(scope?, *i)?;
+						match self.ctx.type_pattern(db, p) {
+							PatternTy::EnumAtom(ty) => {
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+								Some(ty)
+							}
+							PatternTy::AnnotationAtom => {
+								self.ctx
+									.add_pattern_resolution(PatternRef::new(self.item, pat), p);
+								Some(self.types.ann)
+							}
+							_ => None,
 						}
-						PatternTy::AnnotationAtom => {
-							self.ctx
-								.add_pattern_resolution(PatternRef::new(self.item, pat), p);
-							Some(self.types.ann)
-						}
-						_ => None,
-					}
-				})();
+					})()
+				} else {
+					None
+				};
 				if let Some(ty) = res {
 					ty
 				} else {
-					// This pattern is irrefutable and declares a new variable
+					// This pattern declares a new variable
 					self.ctx.add_declaration(
 						PatternRef::new(self.item, pat),
-						PatternTy::Variable(expected),
+						if is_argument {
+							PatternTy::Argument(expected)
+						} else {
+							PatternTy::Variable(expected)
+						},
 					);
 					return expected;
 				}
@@ -1696,18 +2002,24 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				let res = (|| {
 					let name = self.data[*function].identifier().unwrap();
 					let fns = self.find_function(scope?, name);
-					let cs = fns
+					let (ctor_pat, cs) = fns
 						.iter()
 						.find_map(|f| match self.ctx.type_pattern(db, *f) {
-							PatternTy::EnumConstructor(cs) => {
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
-								Some(cs)
-							}
+							PatternTy::EnumConstructor(ec) => Some((
+								*f,
+								Vec::from(ec)
+									.into_iter()
+									.filter_map(|ec| {
+										if ec.is_lifted {
+											None
+										} else {
+											Some(ec.constructor)
+										}
+									})
+									.collect::<Box<_>>(),
+							)),
 							PatternTy::AnnotationConstructor(fe) => {
-								self.ctx
-									.add_pattern_resolution(PatternRef::new(self.item, pat), *f);
-								Some(Box::new([(*fe).clone()]))
+								Some((*f, Box::new([(*fe).clone()])))
 							}
 							_ => None,
 						})
@@ -1727,9 +2039,11 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						})?;
 
 					// Find the enum constructor via its return type
+					// If this type is opt, make it non opt as if this call pattern is matched, the value occurs
+					let non_opt = expected.make_occurs(db.upcast());
 					let c = cs
 						.iter()
-						.find(|c| expected.is_subtype_of(db.upcast(), c.overload.return_type()))
+						.find(|c| non_opt.is_subtype_of(db.upcast(), c.overload.return_type()))
 						.or_else(|| {
 							let (src, span) =
 								NodeRef::from(EntityRef::new(db, self.item, pat)).source_span(db);
@@ -1772,12 +2086,25 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							.copied()
 							.chain(std::iter::repeat(self.types.error)),
 					) {
-						self.collect_pattern(scope, *p, t);
+						self.collect_pattern(scope, resolves_atoms, *p, t, is_argument);
 					}
-					let fn_type = c.overload.clone().into_function().unwrap();
+					let fn_pat = PatternRef::new(self.item, *function);
+					self.ctx.add_pattern_resolution(fn_pat, ctor_pat);
+					let ctor_type = c.overload.clone().into_function().unwrap();
+					let dtor_type = FunctionType {
+						params: Box::new([ctor_type.return_type]),
+						return_type: if ctor_type.params.len() == 1 {
+							ctor_type.params[0]
+						} else {
+							Ty::tuple(db.upcast(), ctor_type.params.iter().copied())
+						},
+					};
 					self.ctx.add_declaration(
-						PatternRef::new(self.item, *function),
-						PatternTy::Destructuring(Ty::function(db.upcast(), fn_type)),
+						fn_pat,
+						PatternTy::DestructuringFn {
+							constructor: Ty::function(db.upcast(), ctor_type),
+							destructor: Ty::function(db.upcast(), dtor_type),
+						},
 					);
 					Some(c.overload.return_type())
 				})();
@@ -1787,7 +2114,13 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				} else {
 					// Continue collection
 					for p in arguments.iter() {
-						self.collect_pattern(scope, *p, self.types.error);
+						self.collect_pattern(
+							scope,
+							resolves_atoms,
+							*p,
+							self.types.error,
+							is_argument,
+						);
 					}
 					self.types.error
 				}
@@ -1802,13 +2135,21 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								.copied()
 								.chain(std::iter::repeat(self.types.error)),
 						)
-						.map(|(p, e)| self.collect_pattern(scope, *p, e)),
+						.map(|(p, e)| {
+							self.collect_pattern(scope, resolves_atoms, *p, e, is_argument)
+						}),
 				),
 				_ => Ty::tuple(
 					db.upcast(),
-					fields
-						.iter()
-						.map(|p| self.collect_pattern(scope, *p, self.types.error)),
+					fields.iter().map(|p| {
+						self.collect_pattern(
+							scope,
+							resolves_atoms,
+							*p,
+							self.types.error,
+							is_argument,
+						)
+					}),
 				),
 			},
 			Pattern::Record { fields } => match expected.lookup(db.upcast()) {
@@ -1824,8 +2165,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								*i,
 								self.collect_pattern(
 									scope,
+									resolves_atoms,
 									*p,
 									map.get(&i.0).copied().unwrap_or(self.types.error),
+									is_argument,
 								),
 							)
 						}),
@@ -1833,9 +2176,18 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				_ => Ty::record(
 					db.upcast(),
-					fields
-						.iter()
-						.map(|(i, p)| (*i, self.collect_pattern(scope, *p, self.types.error))),
+					fields.iter().map(|(i, p)| {
+						(
+							*i,
+							self.collect_pattern(
+								scope,
+								resolves_atoms,
+								*p,
+								self.types.error,
+								is_argument,
+							),
+						)
+					}),
 				),
 			},
 		};
@@ -1863,14 +2215,90 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 	}
 
 	/// Collect an ascribed type `t`, filling in `Any` types with using `ty` if present.
-	pub fn complete_type(&mut self, t: ArenaIndex<Type>, ty: Option<Ty>) -> Ty {
+	pub fn complete_type(
+		&mut self,
+		t: ArenaIndex<Type>,
+		ty: Option<Ty>,
+		mode: TypeCompletionMode,
+	) -> TypeCompletionResult {
+		let mut has_bounded = false;
+		let mut has_unbounded = false;
+		let ty = self.complete_type_inner(t, ty, mode, &mut has_bounded, &mut has_unbounded);
+		TypeCompletionResult {
+			ty,
+			has_bounded,
+			has_unbounded,
+		}
+	}
+
+	fn complete_type_inner(
+		&mut self,
+		t: ArenaIndex<Type>,
+		ty: Option<Ty>,
+		mode: TypeCompletionMode,
+		has_bounded: &mut bool,
+		has_unbounded: &mut bool,
+	) -> Ty {
 		let db = self.db;
+
+		let mut set_bounded = |typer: &mut Self, domain: ArenaIndex<Expression>| {
+			*has_bounded = true;
+			match mode {
+				TypeCompletionMode::AnnotationParameter => {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, typer.item, domain)).source_span(db);
+					typer.ctx.add_diagnostic(
+						typer.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Bounded domains are not supported in annotation parameters."
+								.to_owned(),
+						},
+					);
+				}
+				TypeCompletionMode::Operation => {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, typer.item, domain)).source_span(db);
+					typer.ctx.add_diagnostic(
+						typer.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Bounded domains are not \
+supported in operation types."
+								.to_owned(),
+						},
+					);
+				}
+				_ => (),
+			}
+		};
+
+		let mut set_unbounded = |typer: &mut Self| {
+			*has_unbounded = true;
+			if let TypeCompletionMode::EnumerationParameter = mode {
+				let (src, span) = NodeRef::from(EntityRef::new(db, typer.item, t)).source_span(db);
+				typer.ctx.add_diagnostic(
+					typer.item,
+					TypeMismatch {
+						src,
+						span,
+						msg: "Unbounded enumeration constructor \
+						parameters are not supported"
+							.to_owned(),
+					},
+				);
+			}
+		};
+
 		match &self.data[t] {
 			Type::Primitive {
 				inst,
 				opt,
 				primitive_type,
 			} => {
+				set_unbounded(self);
 				let ty = match primitive_type {
 					PrimitiveType::Ann => Ty::ann(db.upcast()),
 					PrimitiveType::Bool => Ty::par_bool(db.upcast()),
@@ -1906,9 +2334,24 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 							let domain_ref = ExpressionRef::new(self.item, *domain);
 							self.ctx.add_identifier_resolution(domain_ref, p);
 							match self.ctx.type_pattern(db, p) {
-								PatternTy::TypeAlias(ty) => ty,
-								PatternTy::Variable(ty) => match ty.lookup(db.upcast()) {
+								PatternTy::TypeAlias {
+									ty,
+									has_bounded: b,
+									has_unbounded: ub,
+								} => {
+									if b {
+										set_bounded(self, *domain);
+									}
+									if ub {
+										set_unbounded(self);
+									}
+									ty
+								}
+								PatternTy::Variable(ty) | PatternTy::Argument(ty) => match ty
+									.lookup(db.upcast())
+								{
 									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {
+										set_bounded(self, *domain);
 										self.ctx.add_expression(domain_ref, ty);
 										inner
 									}
@@ -1931,7 +2374,20 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 										return self.types.error;
 									}
 								},
-								PatternTy::TyVar(t) => Ty::type_inst_var(db.upcast(), t),
+								PatternTy::Enum(ty) => match ty.lookup(db.upcast()) {
+									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {
+										// Don't set has_bounded or has_unbounded as enums are accepted
+										// everywhere
+										self.ctx.add_expression(domain_ref, ty);
+										inner
+									}
+									TyData::Error => self.types.error,
+									_ => unreachable!(),
+								},
+								PatternTy::TyVar(t) => {
+									*has_unbounded = true;
+									Ty::type_inst_var(db.upcast(), t)
+								}
 								PatternTy::Computing => {
 									// Error will be emitted during topological sorting
 									return self.types.error;
@@ -1966,9 +2422,12 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						}
 					}
 					_ => {
-						let ty = self.collect_expression(*domain, None);
+						let ty = self.collect_expression(*domain);
 						match ty.lookup(db.upcast()) {
-							TyData::Set(VarType::Par, OptType::NonOpt, e) => e,
+							TyData::Set(VarType::Par, OptType::NonOpt, e) => {
+								set_bounded(self, *domain);
+								e
+							}
 							TyData::Error => self.types.error,
 							_ => {
 								let (src, span) =
@@ -2024,8 +2483,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					Some(TyData::Array { dim, element, .. }) => (Some(dim), Some(element)),
 					_ => (None, None),
 				};
-				let dim = self.complete_type(*dimensions, d_ty);
-				let element = self.complete_type(*element, e_ty);
+				let dim =
+					self.complete_type_inner(*dimensions, d_ty, mode, has_bounded, has_unbounded);
+				let element =
+					self.complete_type_inner(*element, e_ty, mode, has_bounded, has_unbounded);
 				let ty = Ty::array(db.upcast(), dim, element).unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
@@ -2050,7 +2511,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					Some(TyData::Set(_, _, element)) => Some(element),
 					_ => None,
 				};
-				let el = self.complete_type(*element, e_ty);
+				let el = self.complete_type_inner(*element, e_ty, mode, has_bounded, has_unbounded);
 				let ty = Ty::par_set(db.upcast(), el).unwrap_or_else(|| {
 					let (src, span) =
 						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
@@ -2091,24 +2552,30 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 					fields
 						.iter()
 						.zip(fs.iter().map(|f| Some(*f)).chain(std::iter::repeat(None)))
-						.map(|(f, f_ty)| self.complete_type(*f, f_ty)),
+						.map(|(f, f_ty)| {
+							self.complete_type_inner(*f, f_ty, mode, has_bounded, has_unbounded)
+						}),
 				)
 				.with_opt(db.upcast(), *opt),
 				_ => Ty::tuple(
 					db.upcast(),
-					fields.iter().map(|f| self.complete_type(*f, None)),
+					fields.iter().map(|f| {
+						self.complete_type_inner(*f, None, mode, has_bounded, has_unbounded)
+					}),
 				)
 				.with_opt(db.upcast(), *opt),
 			},
-			Type::Record { opt, fields } => {
-				let mut seen = FxHashSet::default();
-				let mut fields = fields
-					.iter()
-					.map(|(p, t)| {
-						let i = self.data[*p]
-							.identifier()
-							.expect("Record field not an identifier");
-						if seen.contains(&i) {
+			Type::Record { opt, fields: fs } => {
+				let mut fields = FxHashMap::default();
+				for (p, t) in fs.iter() {
+					let i = self.data[*p]
+						.identifier()
+						.expect("Record field not an identifier");
+					match fields.entry(i) {
+						Entry::Vacant(e) => {
+							e.insert(*t);
+						}
+						Entry::Occupied(_) => {
 							let (src, span) =
 								NodeRef::from(EntityRef::new(db, self.item, *p)).source_span(db);
 							self.ctx.add_diagnostic(
@@ -2124,18 +2591,14 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 								},
 							);
 						}
-						seen.insert(i);
-						(i, *t)
-					})
-					.collect::<Vec<_>>();
-				fields.sort_by_key(|(i, _)| i.lookup(db));
-				fields.dedup_by_key(|(i, _)| *i);
+					}
+				}
 				Ty::record(
 					db.upcast(),
 					fields.into_iter().map(|(i, f)| {
 						(
 							i,
-							self.complete_type(
+							self.complete_type_inner(
 								f,
 								ty.and_then(|ty| match ty.lookup(db.upcast()) {
 									TyData::Record(_, fs) => {
@@ -2143,6 +2606,9 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 									}
 									_ => None,
 								}),
+								mode,
+								has_bounded,
+								has_unbounded,
 							),
 						)
 					}),
@@ -2153,52 +2619,91 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				opt,
 				return_type,
 				parameter_types,
-			} => match ty.map(|ty| ty.lookup(db.upcast())) {
-				Some(TyData::Function(
-					_,
-					FunctionType {
-						return_type: r,
-						params: ps,
-					},
-				)) => Ty::function(
-					db.upcast(),
-					FunctionType {
-						return_type: self.complete_type(*return_type, Some(r)),
-						params: parameter_types
-							.iter()
-							.zip(ps.iter().map(|p| Some(*p)).chain(std::iter::repeat(None)))
-							.map(|(p, p_ty)| self.complete_type(*p, p_ty))
-							.collect(),
-					},
-				)
-				.with_opt(db.upcast(), *opt),
-				_ => Ty::function(
-					db.upcast(),
-					FunctionType {
-						return_type: self.complete_type(*return_type, None),
-						params: parameter_types
-							.iter()
-							.map(|p| self.complete_type(*p, None))
-							.collect(),
-					},
-				)
-				.with_opt(db.upcast(), *opt),
-			},
-			Type::AnonymousTypeInstVar {
-				inst,
-				opt,
-				pattern,
-				varifiable,
-				enumerable,
-				indexable,
 			} => {
+				if let TypeCompletionMode::AnnotationParameter = mode {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Operation types are are not supported in \
+									annotation item parameters"
+								.to_owned(),
+						},
+					);
+				}
+				match ty.map(|ty| ty.lookup(db.upcast())) {
+					Some(TyData::Function(
+						_,
+						FunctionType {
+							return_type: r,
+							params: ps,
+						},
+					)) => Ty::function(
+						db.upcast(),
+						FunctionType {
+							return_type: self.complete_type_inner(
+								*return_type,
+								Some(r),
+								TypeCompletionMode::Operation,
+								has_bounded,
+								has_unbounded,
+							),
+							params: parameter_types
+								.iter()
+								.zip(ps.iter().map(|p| Some(*p)).chain(std::iter::repeat(None)))
+								.map(|(p, p_ty)| {
+									self.complete_type_inner(
+										*p,
+										p_ty,
+										TypeCompletionMode::Operation,
+										has_bounded,
+										has_unbounded,
+									)
+								})
+								.collect(),
+						},
+					)
+					.with_opt(db.upcast(), *opt),
+					_ => Ty::function(
+						db.upcast(),
+						FunctionType {
+							return_type: self.complete_type_inner(
+								*return_type,
+								None,
+								TypeCompletionMode::Operation,
+								has_bounded,
+								has_unbounded,
+							),
+							params: parameter_types
+								.iter()
+								.map(|p| {
+									self.complete_type_inner(
+										*p,
+										None,
+										TypeCompletionMode::Operation,
+										has_bounded,
+										has_unbounded,
+									)
+								})
+								.collect(),
+						},
+					)
+					.with_opt(db.upcast(), *opt),
+				}
+			}
+			Type::AnonymousTypeInstVar { inst, opt, pattern } => {
+				*has_unbounded = true;
 				let mut ty = Ty::type_inst_var(
 					db.upcast(),
-					TyVar {
-						ty_var: TyVarRef::new(db, PatternRef::new(self.item, *pattern)),
-						varifiable: *varifiable,
-						enumerable: *enumerable,
-						indexable: *indexable,
+					match self
+						.ctx
+						.type_pattern(db, PatternRef::new(self.item, *pattern))
+					{
+						PatternTy::TyVar(tv) => tv,
+						_ => unimplemented!(),
 					},
 				);
 				if let Some(inst) = inst {
@@ -2226,18 +2731,30 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 				}
 				ty
 			}
-			Type::Any => ty.unwrap_or_else(|| {
-				let (src, span) = NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
-				self.ctx.add_diagnostic(
-					self.item,
-					TypeInferenceFailure {
-						src,
-						span,
-						msg: "Unable to infer type".to_owned(),
-					},
-				);
-				self.types.error
-			}),
+			Type::Any => {
+				*has_unbounded = true;
+				ty.and_then(|ty| {
+					if ty.contains_bottom(db.upcast()) {
+						// Not allowed to use bottom type for any
+						None
+					} else {
+						Some(ty)
+					}
+				})
+				.unwrap_or_else(|| {
+					let (src, span) =
+						NodeRef::from(EntityRef::new(db, self.item, t)).source_span(db);
+					self.ctx.add_diagnostic(
+						self.item,
+						TypeInferenceFailure {
+							src,
+							span,
+							msg: "Unable to infer type".to_owned(),
+						},
+					);
+					self.types.error
+				})
+			}
 			Type::Missing => self.types.error,
 		}
 	}

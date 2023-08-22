@@ -128,4 +128,3 @@ predicate if_then_else(array[int] of var bool: c, array[int] of var set of int: 
 */
 predicate if_then_else_partiality(array[int] of var bool: c, array[int] of var bool: d, var bool: b) =
     fzn_if_then_else_partiality(c, d, b);
-

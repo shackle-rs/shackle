@@ -265,16 +265,30 @@ pub(crate) use ast_enum;
 pub mod test {
 	use crate::syntax::ast::Model;
 	use crate::syntax::cst::Cst;
+	use expect_test::{Expect, ExpectFile};
 	use tree_sitter::Parser;
 
-	/// Helper to parse a model from a string for testing
-	pub fn parse_model(source: &str) -> Model {
+	/// Helper to check parsed AST
+	pub fn check_ast(source: &str, expected: Expect) {
 		let mut parser = Parser::new();
 		parser
 			.set_language(tree_sitter_minizinc::language())
 			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
-		Model::new(cst)
+		let model = Model::new(cst);
+		expected.assert_debug_eq(&model);
+	}
+
+	/// Helper to check parsed AST storing the expected result in a file
+	pub fn check_ast_file(source: &str, expected: ExpectFile) {
+		let mut parser = Parser::new();
+		parser
+			.set_language(tree_sitter_minizinc::language())
+			.unwrap();
+		let tree = parser.parse(source.as_bytes(), None).unwrap();
+		let cst = Cst::from_str(tree, source);
+		let model = Model::new(cst);
+		expected.assert_debug_eq(&model);
 	}
 }

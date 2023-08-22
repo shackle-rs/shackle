@@ -158,10 +158,11 @@ function var opt int: erase_enum(var opt $$E) ::mzn_internal_representation;
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be an integer  */
 function opt int: erase_enum(opt $$E) ::mzn_internal_representation;
 
-/** @group stdlib.builtins.coercion Erase enum index set information  */
-function array [int] of any $T: erase_enum(array [_] of any $T: x) = [erase_enum(i): x[i] | i in index_set(x)];
-/** @group stdlib.builtins.coercion Erase enum index set information  */
-function array [int, int] of any $T: erase_enum(array [_, _] of any $T: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be a set of integers  */
+function var set of int: erase_enum(var set of $$E: x) ::mzn_internal_representation;
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be a set of integers  */
+function set of int: erase_enum(set of $$E: x) = {erase_enum(i) | i in x};
+
 /** @group stdlib.builtins.coercion Erase enum index set information  */
 function array [int] of bool: erase_enum(array [_] of bool: x) = [erase_enum(i): x[i] | i in index_set(x)];
 /** @group stdlib.builtins.coercion Erase enum index set information  */
@@ -196,37 +197,75 @@ function array [int] of opt int: erase_enum(array [_] of opt $$E: x) = [erase_en
 /** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
 function array [int, int] of opt int: erase_enum(array [_, _] of opt $$E: x) = [(erase_enum(i), erase_enum(j)): erase_enum(x[i, j]) | i in index_set_1of2(x), j in index_set_2of2(x)];
 
-/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
-function array [int] of var set of int: erase_enum(array [_] of var set of $$E: x) = [erase_enum(i): {erase_enum(v) | v in x[i]} | i in index_set(x)];
-/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
-function array [int, int] of var set of int: erase_enum(array [_, _] of var set of $$E: x) = [(erase_enum(i), erase_enum(j)): {erase_enum(v) | v in x[i, j]} | i in index_set_1of2(x), j in index_set_2of2(x)];
-/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
-function array [int] of set of int: erase_enum(array [_] of set of $$E: x) = [erase_enum(i): {erase_enum(v) | v in x[i]} | i in index_set(x)];
-/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
-function array [int, int] of set of int: erase_enum(array [_, _] of set of $$E: x) = [(erase_enum(i), erase_enum(j)): {erase_enum(v) | v in x[i, j]} | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of float: erase_enum(array [_] of float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of float: erase_enum(array [_, _] of float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of opt float: erase_enum(array [_] of opt float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of opt float: erase_enum(array [_, _] of opt float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of var float: erase_enum(array [_] of var float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of var float: erase_enum(array [_, _] of var float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int] of var opt float: erase_enum(array [_] of var opt float: x) = [erase_enum(i): x[i] | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum index set information  */
+function array [int, int] of var opt float: erase_enum(array [_, _] of var opt float: x) = [(erase_enum(i), erase_enum(j)): x[i, j] | i in index_set_1of2(x), j in index_set_2of2(x)];
 
-/** @group stdlib.builtins.coercion Erase enum information by converting \x to be a set of integers  */
-function var set of int: erase_enum(var set of $$E: x) = {erase_enum(i) | i in x};
-/** @group stdlib.builtins.coercion Erase enum information by converting \x to be a set of integers  */
-function set of int: erase_enum(set of $$E: x) = {erase_enum(i) | i in x};
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
+function array [int] of var set of int: erase_enum(array [_] of var set of $$E: x) = [erase_enum(i): erase_enum(x[i]) | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
+function array [int, int] of var set of int: erase_enum(array [_, _] of var set of $$E: x) = [(erase_enum(i), erase_enum(j)): erase_enum(x[i, j]) | i in index_set_1of2(x), j in index_set_2of2(x)];
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
+function array [int] of set of int: erase_enum(array [_] of set of $$E: x) = [erase_enum(i): erase_enum(x[i]) | i in index_set(x)];
+/** @group stdlib.builtins.coercion Erase enum information by converting \x to be an array of integers with integer index sets  */
+function array [int, int] of set of int: erase_enum(array [_, _] of set of $$E: x) = [(erase_enum(i), erase_enum(j)): erase_enum(x[i, j]) | i in index_set_1of2(x), j in index_set_2of2(x)];
 
 /** @group stdlib.builtins.coercion Return a set of integers \a x coerced to an array of integers  */
 function array[int] of $$E: set2array(set of $$E: x);
 
+/** @group stdlib.debug If \a x is defined, return \a x, otherwise return \a y. */
+function $T: 'default'($T: x, $T: y) = let {
+  bool: defined = let { any: xx = x } in true;
+} in if defined then x else y endif;
+/** @group stdlib.debug If \a x is defined, return \a x, otherwise return \a y. */
+function var $T: 'default'(var $T: x, var $T: y) = let {
+  var bool: defined = let { any: xx = x } in true;
+} in if defined then x else y endif;
 /** @group stdlib.debug If \a x is defined and not absent, return \a x, otherwise return \a y. */
-function $T: 'default'(opt $T:x, $T: y);
+function $T: 'default'(opt $T: x, $T: y) = let {
+  bool: defined = let { any: xx = x } in true;
+} in if defined /\ occurs(x) then deopt(x) else y endif;
 /** @group stdlib.debug If \a x is defined and not absent, return \a x, otherwise return \a y. */
-function opt $T: 'default'(opt $T:x, opt $T: y);
+function opt $T: 'default'(opt $T: x, opt $T: y) = let {
+  bool: defined = let { any: xx = x } in true;
+} in if defined /\ occurs(x) then x else y endif;
 /** @group stdlib.debug If \a x is defined and not absent, return \a x, otherwise return \a y. */
-function var $T: 'default'(var opt $T:x, var $T: y);
+function var $T: 'default'(var opt $T: x, var $T: y) = let {
+  var bool: defined = let { any: xx = x } in true;
+} in if defined /\ occurs(x) then deopt(x) else y endif;
 /** @group stdlib.debug If \a x is defined and not absent, return \a x, otherwise return \a y. */
-function var opt $T: 'default'(var opt $T:x, var opt $T: y);
+function var opt $T: 'default'(var opt $T: x, var opt $T: y) = let {
+  var bool: defined = let { any: xx = x } in true;
+} in if defined /\ occurs(x) then x else y endif;
 
 /** @group stdlib.debug If \a x is defined, return \a x, otherwise return \a y. */
-function array[$U] of $T: 'default'(array[$U] of $T:x, array[$U] of $T: y);
+function array[$U] of $T: 'default'(array[$U] of $T: x, array[$U] of $T: y) = let {
+  bool: defined = let { any: xx = x } in true;
+} in if defined then x else y endif;
 /** @group stdlib.debug If \a x is defined, return \a x, otherwise return \a y. */
-function array[$U] of opt $T: 'default'(array[$U] of opt $T:x, array[$U] of opt $T: y);
+function array[$U] of var $T: 'default'(array[$U] of var $T: x, array[$U] of var $T: y) = let {
+  var bool: defined = let { any: xx = x } in true;
+  any: yy = array1d(y);
+} in arrayXd(y, [if defined then array1d(x)[i] else yy[i] endif | i in index_set(yy)]);
 /** @group stdlib.debug If \a x is defined, return \a x, otherwise return \a y. */
-function array[$U] of var $T: 'default'(array[$U] of var $T:x, array[$U] of var $T: y);
+function array[$U] of opt $T: 'default'(array[$U] of opt $T: x, array[$U] of opt $T: y) = let {
+  bool: defined = let { any: xx = x } in true;
+} in if defined then x else y endif;
 /** @group stdlib.debug If \a x is defined, return \a x, otherwise return \a y. */
-function array[$U] of var opt $T: 'default'(array[$U] of var opt $T:x, array[$U] of var opt $T: y);
+function array[$U] of var opt $T: 'default'(array[$U] of var opt $T: x, array[$U] of var opt $T: y) = let {
+  var bool: defined = let { any: xx = x } in true;
+  any: yy = array1d(y);
+} in arrayXd(y, [if defined then array1d(x)[i] else yy[i] endif | i in index_set(yy)]);

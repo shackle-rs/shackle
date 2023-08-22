@@ -1,4 +1,8 @@
-use lsp_server::{ExtractError, Message, Notification, Request, Response, ResponseError};
+use std::panic::{catch_unwind, UnwindSafe};
+
+use lsp_server::{
+	ErrorCode, ExtractError, Message, Notification, Request, Response, ResponseError,
+};
 use shackle::db::CompilerDatabase;
 
 use crate::LanguageServerDatabase;
@@ -23,14 +27,14 @@ pub struct DispatchRequest<'a>(RequestState<'a>);
 
 impl<'a> DispatchRequest<'a> {
 	pub fn new(request: Request, db: &'a mut LanguageServerDatabase) -> Self {
-		eprintln!("got {} request #{}", request.method, request.id);
+		log::info!("got {} request #{}", request.method, request.id);
 		Self(RequestState::Unhandled { request, db })
 	}
 	pub fn on<H, R, T>(self) -> Self
 	where
 		R: lsp_types::request::Request,
 		H: RequestHandler<R, T>,
-		T: Send + 'static,
+		T: Send + UnwindSafe + 'static,
 	{
 		match self.0 {
 			RequestState::Unhandled { request, db } => {
@@ -47,31 +51,34 @@ impl<'a> DispatchRequest<'a> {
 										error: Some(e),
 									}))
 									.unwrap_or_else(|e| {
-										eprintln!("failed to send response: {:?}", e)
+										log::error!("failed to send response: {:?}", e)
 									});
 									return Self(RequestState::Handled(Ok(())));
 								}
 							};
 							db.execute_async(move |db, sender| {
-								let response = match H::execute(db, value) {
-									Ok(value) => Response {
+								let result = catch_unwind(|| H::execute(db, value));
+								let response = match result {
+									Ok(Ok(value)) => Response::new_ok(
 										id,
-										result: Some(
-											serde_json::to_value(&value)
-												.expect("Failed to serialize response"),
-										),
-										error: None,
-									},
-									Err(err) => Response {
+										serde_json::to_value(&value)
+											.expect("Failed to serialize response"),
+									),
+									Ok(Err(err)) => Response {
 										id,
 										result: None,
 										error: Some(err),
 									},
+									_ => Response::new_err(
+										id,
+										ErrorCode::ContentModified as i32,
+										"Thread panicked".to_owned(),
+									),
 								};
 								sender
 									.send(Message::Response(response))
 									.unwrap_or_else(|e| {
-										eprintln!("failed to send response: {:?}", e)
+										log::error!("failed to send response: {:?}", e)
 									});
 							});
 							Self(RequestState::Handled(Ok(())))
@@ -109,7 +116,7 @@ pub struct DispatchNotification<'a>(NotificationState<'a>);
 
 impl<'a> DispatchNotification<'a> {
 	pub fn new(notification: Notification, db: &'a mut LanguageServerDatabase) -> Self {
-		eprintln!("got {} notification", notification.method);
+		log::info!("got {} notification", notification.method);
 		Self(NotificationState::Unhandled { notification, db })
 	}
 

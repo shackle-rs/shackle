@@ -1,41 +1,40 @@
 {
-  "name": "tree-sitter-minizinc",
-  "version": "0.1.0",
-  "description": "MiniZinc grammar for tree-sitter",
-  "main": "bindings/node",
-  "scripts": {
-    "build": "tree-sitter generate && node-gyp build",
-    "test": "tree-sitter test"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/shackle-rs/shackle.git"
-  },
-  "keywords": [
-    "parser",
-    "minizinc"
-  ],
-  "author": "Jip J. Dekker <jip.dekker@monash.edu> (https://dekker.one/)",
-  "license": "MPL-2.0",
-  "bugs": {
-    "url": "https://github.com/shackle-rs/shackle/issues"
-  },
-  "homepage": "https://github.com/shackle-rs/shackle/issues#readme",
-  "dependencies": {
-    "nan": "^2.16.0"
-  },
-  "devDependencies": {
-    "prettier": "^2.7",
-    "tree-sitter-cli": "^0.20"
-  },
-  "tree-sitter": [
-    {
-      "scope": "source.minizinc",
-      "file-types": [
-        "mzn",
-        "fzn",
-        "dzn"
-      ]
-    }
-  ]
+	"name": "tree-sitter-minizinc",
+	"version": "0.1.0",
+	"description": "MiniZinc grammar for tree-sitter",
+	"main": "bindings/node",
+	"scripts": {
+		"build": "tree-sitter generate && node-gyp build",
+		"test": "tree-sitter test"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/shackle-rs/shackle.git"
+	},
+	"keywords": [
+		"parser",
+		"minizinc"
+	],
+	"author": "Jip J. Dekker <jip.dekker@monash.edu> (https://dekker.one/)",
+	"license": "MPL-2.0",
+	"bugs": {
+		"url": "https://github.com/shackle-rs/shackle/issues"
+	},
+	"homepage": "https://github.com/shackle-rs/shackle/issues#readme",
+	"dependencies": {
+		"nan": "^2.16.0"
+	},
+	"devDependencies": {
+		"tree-sitter-cli": "^0.20"
+	},
+	"tree-sitter": [
+		{
+			"scope": "source.minizinc",
+			"file-types": [
+				"mzn",
+				"fzn",
+				"dzn"
+			]
+		}
+	]
 }

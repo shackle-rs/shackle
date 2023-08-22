@@ -35,12 +35,7 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<Hover>, ResponseError> {
-		let line = Point {
-			row: start.row,
-			column: 0,
-		};
-		let found = find_node(db, *model_ref, start, start)
-			.or_else(|| find_node(db, *model_ref, line, line));
+		let found = find_node(db, *model_ref, start, start);
 		Ok((|| {
 			let node = found?;
 			match node {
@@ -51,11 +46,19 @@ impl RequestHandler<HoverRequest, (ModelRef, Point)> for HoverHandler {
 							let types = db.lookup_item_types(item);
 							let model = item.model(db);
 							let data = item.local_item_ref(db).data(&model);
+							let value =
+								types.pretty_print_expression_ty(db, data, e).or_else(|| {
+									let res = types.name_resolution(e)?;
+									let types = db.lookup_item_types(res.item());
+									let model = res.item().model(db);
+									let data = res.item().local_item_ref(db).data(&model);
+									types.pretty_print_pattern_ty(db, data, res.pattern())
+								})?;
 							Some(Hover {
 								contents: HoverContents::Scalar(MarkedString::LanguageString(
 									LanguageString {
 										language: "minizinc".to_owned(),
-										value: types.pretty_print_expression_ty(db, data, e)?,
+										value,
 									},
 								)),
 								range: Some(node_ref_to_location(db, node)?.range),

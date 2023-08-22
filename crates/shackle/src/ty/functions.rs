@@ -1,7 +1,10 @@
 /// Function overloading and instantiation
 use rustc_hash::FxHashMap;
 
-use crate::db::{InternedString, Interner};
+use crate::{
+	db::{InternedString, Interner},
+	utils::DebugPrint,
+};
 
 use super::{OptType, Ty, TyData, TyVarRef, VarType};
 
@@ -12,6 +15,29 @@ pub enum FunctionResolutionError<T> {
 	NoMatchingFunction(Vec<(T, FunctionEntry, InstantiationError)>),
 	/// Ambiguous call
 	AmbiguousOverloading(Vec<(T, FunctionEntry)>),
+}
+
+impl<'a, T> DebugPrint<'a> for FunctionResolutionError<T> {
+	type Database = dyn Interner;
+	fn debug_print(&self, db: &Self::Database) -> String {
+		match self {
+			Self::NoMatchingFunction(fs) => ["No matching function:".to_owned()]
+				.into_iter()
+				.chain(fs.iter().map(|(_, fe, e)| {
+					format!("  {}: {}", fe.overload.pretty_print(db), e.debug_print(db))
+				}))
+				.collect::<Vec<_>>()
+				.join("\n"),
+			Self::AmbiguousOverloading(fs) => ["Ambiguous overloading".to_owned()]
+				.into_iter()
+				.chain(
+					fs.iter()
+						.map(|(_, fe)| format!("  {}", fe.overload.pretty_print(db))),
+				)
+				.collect::<Vec<_>>()
+				.join("\n"),
+		}
+	}
 }
 
 /// Represent failure to instantiate a function
@@ -42,6 +68,41 @@ pub enum InstantiationError {
 	},
 }
 
+impl<'a> DebugPrint<'a> for InstantiationError {
+	type Database = dyn Interner + 'a;
+
+	fn debug_print(&self, db: &Self::Database) -> String {
+		match self {
+			Self::IncompatibleTypeInstVariable { ty_var, types } => {
+				format!(
+					"type-inst var {} instantiated with incompatible types [{}]",
+					ty_var.pretty_print(db),
+					types
+						.iter()
+						.map(|ty| ty.pretty_print(db))
+						.collect::<Vec<_>>()
+						.join(", ")
+				)
+			}
+			Self::ArgumentMismatch {
+				index,
+				expected,
+				actual,
+			} => {
+				format!(
+					"argument {} expected {} but got {}",
+					*index + 1,
+					expected.pretty_print(db),
+					actual.pretty_print(db)
+				)
+			}
+			Self::ArgumentCountMismatch { expected, actual } => {
+				format!("expected {} arguments but got {}", *expected, *actual)
+			}
+		}
+	}
+}
+
 /// Illegal overloading error
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OverloadingError<T> {
@@ -52,15 +113,23 @@ pub enum OverloadingError<T> {
 		/// Other functions with the same signature
 		others: Vec<(T, FunctionEntry)>,
 	},
+	/// Subtyped overload has incompatible return type
+	IncompatibleReturnType {
+		/// First function
+		first: (T, FunctionEntry),
+		/// Other functions with incompatible return types
+		others: Vec<(T, FunctionEntry)>,
+	},
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Candidate<T> {
 	is_candidate: bool,
 	has_error: bool,
 	data: T,
 	entry: FunctionEntry,
-	instantiation: FunctionType,
+	ty_params: TyParamInstantiations,
+	function_type: FunctionType,
 }
 
 /// An overloaded function entry
@@ -81,37 +150,43 @@ impl FunctionEntry {
 		db: &dyn Interner,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
 		args: &[Ty],
-	) -> Result<(T, FunctionEntry, FunctionType), FunctionResolutionError<T>> {
+	) -> Result<(T, FunctionEntry, TyParamInstantiations), FunctionResolutionError<T>> {
 		let (matches, mismatches) = overloads
 			.into_iter()
 			.map(|(data, entry)| {
-				let instantiation = entry.overload.instantiate(db, args);
-				(data, entry, instantiation)
+				let ty_params = entry.overload.instantiate_ty_params(db, args);
+				(data, entry, ty_params)
 			})
-			.partition::<Vec<_>, _>(|(_, _, instantiation)| instantiation.is_ok());
+			.partition::<Vec<_>, _>(|(_, _, ty_params)| ty_params.is_ok());
 
 		if matches.is_empty() {
 			return Err(FunctionResolutionError::NoMatchingFunction(
 				mismatches
 					.into_iter()
-					.map(|(data, overload, instantiation)| {
-						(data, overload, instantiation.unwrap_err())
-					})
+					.map(|(data, overload, ty_params)| (data, overload, ty_params.unwrap_err()))
 					.collect(),
 			));
 		}
 
 		let mut candidates = matches
 			.into_iter()
-			.map(|(data, overload, instantiation)| Candidate {
-				is_candidate: true,
-				has_error: overload.overload.contains_error(db),
-				data,
-				entry: overload,
-				instantiation: instantiation.unwrap(),
+			.map(|(data, overload, instantiation)| {
+				let (ty_params, function_type) = instantiation.unwrap();
+				Candidate {
+					is_candidate: true,
+					has_error: overload.overload.contains_error(db),
+					data,
+					entry: overload,
+					ty_params,
+					function_type,
+				}
 			})
 			.collect::<Vec<_>>();
 
+		log::debug!(
+			"Overload resolution found {} matching candidates",
+			candidates.len()
+		);
 		for i in 1..candidates.len() {
 			// For each pair, eliminate the less specific function (based on instantiated signature if there were candidate polymorphic functions)
 			// e.g. prefer 'bool' over 'int', prefer 'int' over 'var int'
@@ -123,7 +198,7 @@ impl FunctionEntry {
 			if !c1.is_candidate {
 				continue;
 			}
-			for c2 in right {
+			for (j, c2) in right.iter_mut().enumerate() {
 				if !c2.is_candidate {
 					continue;
 				}
@@ -134,14 +209,29 @@ impl FunctionEntry {
 					c2.is_candidate = false;
 					continue;
 				}
-				let m1 = c1
-					.instantiation
-					.matches(db, &c2.instantiation.params)
-					.is_ok();
-				let m2 = c2
-					.instantiation
-					.matches(db, &c1.instantiation.params)
-					.is_ok();
+				let f1 = &c1.function_type;
+				let f2 = &c2.function_type;
+				let m1 = f1.matches(db, &f2.params).is_ok();
+				let m2 = f2.matches(db, &f1.params).is_ok();
+
+				log::debug!(
+					"Candidate {}: {} instantiates to {}",
+					i,
+					c1.entry.overload.pretty_print(db),
+					f1.pretty_print(db)
+				);
+				log::debug!(
+					"Candidate {}: {} instantiates to {}",
+					i + j + 1,
+					c2.entry.overload.pretty_print(db),
+					f2.pretty_print(db)
+				);
+				log::debug!("Candidate {} accepts candidate 2's parameters? {:?}", i, m1);
+				log::debug!(
+					"Candidate {} accepts candidate 1's parameters? {:?}",
+					i + j + 1,
+					m2
+				);
 				if m1 && !m2 {
 					// We accept their args, but they don't accept ours, so they're more specific
 					c1.is_candidate = false;
@@ -169,8 +259,18 @@ impl FunctionEntry {
 							OverloadedFunction::PolymorphicFunction(p1),
 							OverloadedFunction::PolymorphicFunction(p2),
 						) => {
-							let m1 = p1.instantiate(db, &p2.params).is_ok();
-							let m2 = p2.instantiate(db, &p1.params).is_ok();
+							let m1 = p1.instantiate_ty_params(db, &p2.params).is_ok();
+							let m2 = p2.instantiate_ty_params(db, &p1.params).is_ok();
+							log::debug!(
+								"Polymorphic candidate {} accepts candidate 2's polymorphic parameters? {:?}",
+								i,
+								m1
+							);
+							log::debug!(
+								"Polymorphic candidate {} accepts candidate 1's polymorphic parameters? {:?}",
+								i + j + 1,
+								m2
+							);
 							if m1 && !m2 {
 								// We accept their args, but they don't accept ours, so they're more specific
 								c1.is_candidate = false;
@@ -202,6 +302,12 @@ impl FunctionEntry {
 						}
 					}
 				}
+				if !c1.is_candidate {
+					log::debug!("Eliminated candidate {}", i);
+				}
+				if !c2.is_candidate {
+					log::debug!("Eliminated candidate {}", i + j + 1);
+				}
 			}
 		}
 		candidates.retain(|c| c.is_candidate);
@@ -215,31 +321,45 @@ impl FunctionEntry {
 			));
 		}
 		let c = candidates.pop().unwrap();
-		Ok((c.data, c.entry, c.instantiation))
+		Ok((c.data, c.entry, c.ty_params))
 	}
 
 	/// Validate that the given overloads are legal
-	pub fn check_overloading<T>(
+	pub fn check_overloading<T: Clone>(
 		db: &dyn Interner,
 		overloads: impl IntoIterator<Item = (T, FunctionEntry)>,
 	) -> Vec<OverloadingError<T>> {
 		let mut diagnostics = Vec::new();
 		let overloads = overloads.into_iter().collect::<Vec<_>>();
 		let mut same_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
+		let mut incompat_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
 		// TODO: Make less horrible
 		for (i, (_, a)) in overloads.iter().enumerate() {
 			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
-				if let Ok(fa) = a.overload.instantiate(db, b.overload.params()) {
-					if b.overload.instantiate(db, a.overload.params()).is_ok()
-						&& (a.has_body && b.has_body || fa.return_type != b.overload.return_type())
+				if let Ok((_, fta)) = a.overload.instantiate_ty_params(db, b.overload.params()) {
+					if b.overload
+						.instantiate_ty_params(db, a.overload.params())
+						.is_ok() && (a.has_body && b.has_body
+						|| fta.return_type != b.overload.return_type())
 					{
 						// Same function with multiple definitions
 						same_fns[i + j + 1] = Some(i);
 					}
+					if !b.overload.return_type().is_subtype_of(db, fta.return_type) {
+						// Functions have incompatible return types
+						incompat_fns[i + j + 1] = Some(i);
+					}
+				} else if let Ok((_, ftb)) =
+					b.overload.instantiate_ty_params(db, a.overload.params())
+				{
+					if !a.overload.return_type().is_subtype_of(db, ftb.return_type) {
+						// Functions have incompatible return types
+						incompat_fns[i + j + 1] = Some(i);
+					}
 				}
 			}
 		}
-		let mut drain = overloads.into_iter().map(Some).collect::<Vec<_>>();
+		let mut drain = overloads.iter().cloned().map(Some).collect::<Vec<_>>();
 		for i in 0..same_fns.len() {
 			let others = same_fns
 				.iter()
@@ -260,6 +380,29 @@ impl FunctionEntry {
 				});
 			}
 		}
+
+		let mut drain = overloads.iter().cloned().map(Some).collect::<Vec<_>>();
+		for i in 0..incompat_fns.len() {
+			let others = incompat_fns
+				.iter()
+				.enumerate()
+				.filter_map(|(j, dup)| {
+					if let Some(x) = dup {
+						if *x == i {
+							return Some(drain[j].take().unwrap());
+						}
+					}
+					None
+				})
+				.collect::<Vec<_>>();
+			if !others.is_empty() {
+				diagnostics.push(OverloadingError::IncompatibleReturnType {
+					first: drain[i].take().unwrap(),
+					others,
+				});
+			}
+		}
+
 		diagnostics
 	}
 }
@@ -314,18 +457,30 @@ impl OverloadedFunction {
 		}
 	}
 
-	/// Instantiate this function with the given argument types
-	pub fn instantiate(
+	/// Instantiate this function's type parameters with the given argument types
+	pub fn instantiate_ty_params(
 		&self,
 		db: &dyn Interner,
 		args: &[Ty],
-	) -> Result<FunctionType, InstantiationError> {
+	) -> Result<(TyParamInstantiations, FunctionType), InstantiationError> {
 		match self {
 			OverloadedFunction::Function(f) => {
 				f.matches(db, args)?;
-				Ok(f.clone())
+				Ok((TyParamInstantiations::default(), f.clone()))
 			}
-			OverloadedFunction::PolymorphicFunction(p) => p.instantiate(db, args),
+			OverloadedFunction::PolymorphicFunction(p) => p.instantiate_ty_params(db, args),
+		}
+	}
+
+	/// Instantiate this function using the given type parameter types
+	pub fn instantiate(
+		&self,
+		db: &dyn Interner,
+		instantiations: &TyParamInstantiations,
+	) -> FunctionType {
+		match self {
+			OverloadedFunction::Function(f) => f.clone(),
+			OverloadedFunction::PolymorphicFunction(p) => p.instantiate(db, instantiations),
 		}
 	}
 
@@ -422,9 +577,10 @@ impl FunctionType {
 
 	/// Get human readable representation of type as an item
 	pub fn pretty_print_item(&self, db: &dyn Interner, name: impl Into<InternedString>) -> String {
-		let prefix = if self.return_type == Ty::par_bool(db) {
+		let tys = db.type_registry();
+		let prefix = if self.return_type == tys.par_bool {
 			"test".to_owned()
-		} else if self.return_type == Ty::par_bool(db).with_inst(db, VarType::Var).unwrap() {
+		} else if self.return_type == tys.var_bool {
 			"predicate".to_owned()
 		} else {
 			format!("function {}:", self.return_type.pretty_print(db))
@@ -450,6 +606,9 @@ impl FunctionType {
 	}
 }
 
+/// Mapping from type parameters to the concrete type used to instantiate them
+pub type TyParamInstantiations = FxHashMap<TyVarRef, Ty>;
+
 /// Type of a generic function with type-inst parameters
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PolymorphicFunctionType {
@@ -468,11 +627,24 @@ impl PolymorphicFunctionType {
 	}
 
 	/// Instantiates this polymorphic function using the given parameter types if possible.
-	pub fn instantiate(
+	pub fn instantiate(&self, db: &dyn Interner, ty_vars: &TyParamInstantiations) -> FunctionType {
+		FunctionType {
+			return_type: self.return_type.instantiate_ty_vars(db, ty_vars),
+			params: self
+				.params
+				.iter()
+				.map(|p| p.instantiate_ty_vars(db, ty_vars))
+				.collect(),
+		}
+	}
+
+	/// Instantiates this polymorphic function using the given parameter types if possible, returning
+	/// the type-parameter instantiations.
+	pub fn instantiate_ty_params(
 		&self,
 		db: &dyn Interner,
 		args: &[Ty],
-	) -> Result<FunctionType, InstantiationError> {
+	) -> Result<(TyParamInstantiations, FunctionType), InstantiationError> {
 		if args.len() != self.params.len() {
 			return Err(InstantiationError::ArgumentCountMismatch {
 				expected: self.params.len(),
@@ -486,7 +658,14 @@ impl PolymorphicFunctionType {
 		for (i, (arg, param)) in args.iter().zip(self.params.iter()).enumerate() {
 			if !PolymorphicFunctionType::collect_instantiations(
 				db,
-				&mut instantiations,
+				&mut |tv, ty| {
+					if let Some(is) = instantiations.get_mut(&tv) {
+						is.push(ty);
+						true
+					} else {
+						false
+					}
+				},
 				*arg,
 				*param,
 			) {
@@ -511,20 +690,16 @@ impl PolymorphicFunctionType {
 				}
 			}
 		}
-		Ok(FunctionType {
-			return_type: PolymorphicFunctionType::instantiate_type(db, &resolved, self.return_type),
-			params: self
-				.params
-				.iter()
-				.map(|p| PolymorphicFunctionType::instantiate_type(db, &resolved, *p))
-				.collect(),
-		})
+		resolved.shrink_to_fit();
+		let ft = self.instantiate(db, &resolved);
+		ft.matches(db, args)?;
+		Ok((resolved, ft))
 	}
 
 	/// Collects the types to instantiate unbound type-inst variables with.
-	fn collect_instantiations(
+	pub fn collect_instantiations(
 		db: &dyn Interner,
-		instantiations: &mut FxHashMap<TyVarRef, Vec<Ty>>,
+		add_instantiation: &mut impl FnMut(TyVarRef, Ty) -> bool,
 		arg: Ty,
 		param: Ty,
 	) -> bool {
@@ -542,13 +717,22 @@ impl PolymorphicFunctionType {
 				},
 			) => {
 				(o1 == o2 || o1 == OptType::NonOpt)
-					&& PolymorphicFunctionType::collect_instantiations(db, instantiations, d1, d2)
-					&& PolymorphicFunctionType::collect_instantiations(db, instantiations, e1, e2)
+					&& PolymorphicFunctionType::collect_instantiations(
+						db,
+						add_instantiation,
+						d1,
+						d2,
+					) && PolymorphicFunctionType::collect_instantiations(db, add_instantiation, e1, e2)
 			}
 			(TyData::Set(i1, o1, e1), TyData::Set(i2, o2, e2)) => {
 				(i1 == i2 || i1 == VarType::Par)
 					&& (o1 == o2 || o1 == OptType::NonOpt)
-					&& PolymorphicFunctionType::collect_instantiations(db, instantiations, e1, e2)
+					&& PolymorphicFunctionType::collect_instantiations(
+						db,
+						add_instantiation,
+						e1,
+						e2,
+					)
 			}
 			(TyData::Tuple(o1, f1), TyData::Tuple(o2, f2)) => {
 				(o1 == o2 || o1 == OptType::NonOpt)
@@ -556,7 +740,7 @@ impl PolymorphicFunctionType {
 					&& f1.iter().zip(f2.iter()).all(|(t1, t2)| {
 						PolymorphicFunctionType::collect_instantiations(
 							db,
-							instantiations,
+							add_instantiation,
 							*t1,
 							*t2,
 						)
@@ -569,7 +753,7 @@ impl PolymorphicFunctionType {
 							i1 == i2
 								&& PolymorphicFunctionType::collect_instantiations(
 									db,
-									instantiations,
+									add_instantiation,
 									*t1,
 									*t2,
 								)
@@ -580,14 +764,14 @@ impl PolymorphicFunctionType {
 				(o1 == OptType::NonOpt || o1 == o2)
 					&& PolymorphicFunctionType::collect_instantiations(
 						db,
-						instantiations,
+						add_instantiation,
 						f1.return_type,
 						f2.return_type,
 					) && f1.params.len() == f2.params.len()
 					&& f1.params.iter().zip(f2.params.iter()).all(|(t1, t2)| {
 						PolymorphicFunctionType::collect_instantiations(
 							db,
-							instantiations,
+							add_instantiation,
 							*t2,
 							*t1,
 						)
@@ -596,81 +780,20 @@ impl PolymorphicFunctionType {
 			// Type-inst vars don't accept functions/arrays currently
 			(TyData::Function(_, _), TyData::TyVar(_, _, _)) => false,
 			(TyData::Array { .. }, TyData::TyVar(_, _, _)) => false,
-			(_, TyData::TyVar(i, o, t)) => {
-				let mut ty = arg;
-				match (ty.inst(db), i) {
-					(_, None) | (_, Some(VarType::Var)) | (Some(VarType::Par), _) => (),
-					_ => return false,
+			(_, TyData::TyVar(_, _, t)) => {
+				if arg.contains_function(db) {
+					// $T doesn't accept functions
+					return false;
 				}
-				match (ty.opt(db), o) {
-					(_, None) | (_, Some(OptType::Opt)) | (Some(OptType::NonOpt), _) => (),
-					_ => return false,
-				}
-				if let Some(VarType::Var) = i {
-					ty = ty.with_inst(db, VarType::Par).expect("Failed to make par!");
-				}
-				if let Some(OptType::Opt) = o {
-					ty = ty.with_opt(db, OptType::NonOpt);
-				}
-				if !ty.known_varifiable(db) && t.varifiable
-					|| !ty.known_enumerable(db) && t.enumerable
-					|| !ty.known_indexable(db) && t.indexable
+				if !arg.known_varifiable(db) && t.varifiable
+					|| !arg.known_enumerable(db) && t.enumerable
+					|| !arg.known_indexable(db) && t.indexable
 				{
 					return false;
 				}
-				if let Some(is) = instantiations.get_mut(&t.ty_var) {
-					is.push(ty);
-					return true;
-				}
-				false
+				add_instantiation(t.ty_var, arg)
 			}
 			_ => arg.is_subtype_of(db, param),
-		}
-	}
-
-	/// Instantiate the given type-inst variables with the given types from `instantiations` in the type `t`.
-	fn instantiate_type(db: &dyn Interner, instantiations: &FxHashMap<TyVarRef, Ty>, t: Ty) -> Ty {
-		match t.lookup(db) {
-			TyData::TyVar(i, o, t) if instantiations.contains_key(&t.ty_var) => {
-				let mut ty = instantiations[&t.ty_var];
-				if let Some(inst) = i {
-					ty = ty
-						.with_inst(db, inst)
-						.expect("Type-inst is incompatible with type-inst var");
-				}
-				if let Some(opt) = o {
-					ty = ty.with_opt(db, opt);
-				}
-				ty
-			}
-			TyData::Array { opt, dim, element } => db.intern_ty(TyData::Array {
-				opt,
-				dim: PolymorphicFunctionType::instantiate_type(db, instantiations, dim),
-				element: PolymorphicFunctionType::instantiate_type(db, instantiations, element),
-			}),
-			TyData::Set(i, o, t) => db.intern_ty(TyData::Set(
-				i,
-				o,
-				PolymorphicFunctionType::instantiate_type(db, instantiations, t),
-			)),
-			TyData::Tuple(o, fs) => db.intern_ty(TyData::Tuple(
-				o,
-				fs.iter()
-					.map(|f| PolymorphicFunctionType::instantiate_type(db, instantiations, *f))
-					.collect(),
-			)),
-			TyData::Record(o, fs) => db.intern_ty(TyData::Record(
-				o,
-				fs.iter()
-					.map(|(i, f)| {
-						(
-							*i,
-							PolymorphicFunctionType::instantiate_type(db, instantiations, *f),
-						)
-					})
-					.collect(),
-			)),
-			_ => t,
 		}
 	}
 

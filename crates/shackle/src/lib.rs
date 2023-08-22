@@ -5,19 +5,21 @@
 #![warn(variant_size_differences)]
 
 pub mod arena;
+pub mod constants;
 pub mod db;
-pub mod error;
+pub mod diagnostics;
 pub mod file;
 pub mod hir;
 mod legacy;
 pub mod mir;
+pub mod refmap;
 pub mod syntax;
 pub mod thir;
 pub mod ty;
 pub mod utils;
 
 use db::{CompilerDatabase, Inputs};
-use error::ShackleError;
+use diagnostics::ShackleError;
 use file::InputFile;
 use serde_json::Map;
 
@@ -41,6 +43,8 @@ pub type Error = ShackleError;
 /// Result type for Shackle operations
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+pub use diagnostics::Warning;
+
 /// Structure used to build a shackle model
 pub struct Model {
 	db: CompilerDatabase,
@@ -63,10 +67,8 @@ impl Model {
 
 	/// Check whether a model contains any (non-runtime) errors
 	pub fn check(&self, _slv: &Solver, _data: &[PathBuf], _complete: bool) -> Vec<Error> {
-		// self.db.set_globals_directory()
-		// let errors = (*self.db.all_diagnostics()).clone();
 		// TODO: Check data files
-		(*self.db.all_diagnostics()).clone()
+		self.db.all_errors().iter().cloned().collect()
 	}
 
 	/// Compile current model into a Program that can be used by the Shackle interpreter
@@ -75,7 +77,7 @@ impl Model {
 		if !errors.is_empty() {
 			return Err(ShackleError::try_from(errors).unwrap());
 		}
-		let prg_model = self.db.model_thir();
+		let prg_model = self.db.final_thir();
 		Ok(Program {
 			db: self.db,
 			slv: slv.clone(),
@@ -293,7 +295,7 @@ impl Program {
 	}
 	/// Output the [`Pogram`] using the given output interface, using the [`Write`] trait
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
-		let printer = PrettyPrinter::new(&self.db, &self.code);
+		let printer = PrettyPrinter::new_compat(&self.db, &self.code);
 		out.write_all(printer.pretty_print().as_bytes())
 	}
 }

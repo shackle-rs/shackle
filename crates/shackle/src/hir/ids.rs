@@ -12,7 +12,8 @@ use crate::{
 
 use super::{
 	db::Hir, Annotation, Assignment, Constraint, Declaration, EnumAssignment, Enumeration,
-	Expression, Function, Item, ItemData, Model, Output, Pattern, Solve, Type, TypeAlias,
+	Expression, Function, Identifier, Item, ItemData, Model, Output, Pattern, Solve, Type,
+	TypeAlias,
 };
 
 /// Reference to an item local to a model.
@@ -261,6 +262,14 @@ impl PatternRef {
 	/// Get the index of the pattern
 	pub fn pattern(&self) -> ArenaIndex<Pattern> {
 		self.1
+	}
+
+	/// Get this pattern as an identifier if it is one
+	pub fn identifier(&self, db: &dyn Hir) -> Option<Identifier> {
+		let item = self.item();
+		let model = item.model(db);
+		let data = item.local_item_ref(db).data(&model);
+		data[self.pattern()].identifier()
 	}
 }
 

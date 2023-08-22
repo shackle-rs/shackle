@@ -11,7 +11,7 @@ use tempfile::Builder;
 
 use crate::{
 	db::CompilerDatabase,
-	error::{FileError, InternalError},
+	diagnostics::{FileError, InternalError},
 	hir::{db::Hir, Identifier},
 	ty::{Ty, TyData},
 	Message, Program, Status, Value,

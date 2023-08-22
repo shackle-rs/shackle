@@ -8,9 +8,11 @@ use std::str::FromStr;
 use crate::utils::span_contents_to_range;
 
 pub fn diagnostics_notification(db: &dyn Hir, path: &Path) -> lsp_server::Notification {
-	let all_diagnostics = db.all_diagnostics();
 	let mut diagnostics = Vec::new();
-	for d in all_diagnostics.iter() {
+	for d in db.all_errors().iter() {
+		collect_diagnostic(path, d, &mut diagnostics);
+	}
+	for d in db.all_warnings().iter() {
 		collect_diagnostic(path, d, &mut diagnostics);
 	}
 	lsp_server::Notification {

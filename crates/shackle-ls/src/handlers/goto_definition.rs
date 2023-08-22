@@ -3,7 +3,10 @@ use lsp_types::{request::GotoDefinition, GotoDefinitionParams, GotoDefinitionRes
 use shackle::{
 	db::CompilerDatabase,
 	file::ModelRef,
-	hir::{db::Hir, ids::NodeRef},
+	hir::{
+		db::Hir,
+		ids::{NodeRef, PatternRef},
+	},
 	hir::{
 		ids::LocalEntityRef,
 		source::{find_node, Point},
@@ -32,12 +35,7 @@ impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler
 		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<GotoDefinitionResponse>, ResponseError> {
-		let line = Point {
-			row: start.row,
-			column: 0,
-		};
-		let found = find_node(db, *model_ref, start, start)
-			.or_else(|| find_node(db, *model_ref, line, line));
+		let found = find_node(db, *model_ref, start, start);
 		Ok((|| {
 			let node = found?;
 			match node {
@@ -54,7 +52,9 @@ impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler
 						}
 						LocalEntityRef::Pattern(p) => {
 							let types = db.lookup_item_types(item);
-							let resolution = types.pattern_resolution(p)?;
+							let resolution = types
+								.pattern_resolution(p)
+								.unwrap_or_else(|| PatternRef::new(item, p));
 							Some(GotoDefinitionResponse::Scalar(node_ref_to_location(
 								db,
 								resolution.into_entity(db),

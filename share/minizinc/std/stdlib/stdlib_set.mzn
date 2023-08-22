@@ -7,7 +7,7 @@
 /** @group stdlib.builtins.set Test if \a x is an element of the set \a y */
 function     bool: 'in'(    $$T: x,     set of $$T: y) ::mzn_internal_representation;
 /** @group stdlib.builtins.set Test if \a x is an element of the set \a y */
-function     bool: 'in'(    $$T: x, var set of $$T: y) ::mzn_internal_representation;
+function var bool: 'in'(    $$T: x, var set of $$T: y) ::mzn_internal_representation;
 /** @group stdlib.builtins.set Test if \a x is an element of the set \a y */
 function var bool: 'in'(var $$T: x, var set of $$T: y) ::mzn_internal_representation;
 /** @group stdlib.builtins.set Test if \a x is an element of the set \a y */
@@ -84,13 +84,13 @@ function set of $$E: 'o<..'($$E: a) = enum_next(min(enum_of(a)))..a;
 /** @group stdlib.builtins.set Return the set \(\{\a a+1,\ldots,\a b-1\}\) */
 function set of $$E: 'o<..<'($$E: a) = enum_next(min(enum_of(a)))..enum_prev(a);
 
-function set of int: '..'() = abort("internal function '..'() called", {});
+function set of int: '..'() = abort("internal function '..'() called", let { set of int: x = {} } in x);
 function set of $$E: '..'(set of $$E: s) = min(s)..max(s);
-function set of int: '<..<'() = abort("internal function '<..<'() called", {});
+function set of int: '<..<'() = abort("internal function '<..<'() called", let { set of int: x = {} } in x);
 function set of $$E: '<..<'(set of $$E: s) = enum_next(min(s))..enum_prev(max(s));
-function set of int: '..<'() = abort("internal function '..<'() called", {});
+function set of int: '..<'() = abort("internal function '..<'() called", let { set of int: x = {} } in x);
 function set of $$E: '..<'(set of $$E: s) = min(s)..enum_prev(max(s));
-function set of int: '<..'() = abort("internal function '<..'() called", {});
+function set of int: '<..'() = abort("internal function '<..'() called", let { set of int: x = {} } in x);
 function set of $$E: '<..'(set of $$E: s) = enum_next(min(s))..max(s);
 
 function var set of $$E: '..'(var $$E: a, var $$E: b) ::promise_total =
@@ -154,4 +154,8 @@ function array[int] of float: set_to_ranges(set of float: S);
 function array[int] of bool: set_to_ranges(set of bool: S) =
   if S={false} then [false,false] elseif S={true} then [true,true] else [false,true] endif;
 
+function array[int] of $$E: set_to_sparse_inverse(set of $$E: S);
 
+/* set2iter will be used to redefine comprehensions over set decision variables
+when it has a definition. */
+function array[int] of var opt $$E: set2iter(var set of $$E: s) ::mzn_internal_representation;

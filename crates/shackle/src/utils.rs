@@ -12,10 +12,20 @@ macro_rules! impl_enum_from {
 			}
 		}
 	};
+	($enum:ident<$($ts:ident),+>::$type:ident) => {
+		impl_enum_from!($enum<$($ts),+>::$type($type));
+	};
+	($enum:ident<$($ts:ident),+>::$variant:ident($type:ty)) => {
+		impl<$($ts),+> std::convert::From<$type> for $enum<$($ts),+> {
+			fn from(v: $type) -> Self {
+				Self::$variant(v)
+			}
+		}
+	};
 }
 
 macro_rules! impl_index {
-	($type:ty[$self:ident, $index:ident: $index_type:ty] -> $output:ty {$value:expr}) => {
+	($type:ident[$self:ident, $index:ident: $index_type:ty] -> $output:ty {$value:expr}) => {
 		impl std::ops::Index<$index_type> for $type {
 			type Output = $output;
 			fn index(&$self, $index: $index_type) -> &Self::Output {
@@ -24,6 +34,21 @@ macro_rules! impl_index {
 		}
 
 		impl std::ops::IndexMut<$index_type> for $type {
+			fn index_mut(&mut $self, $index: $index_type) -> &mut Self::Output {
+				&mut $value
+			}
+		}
+	};
+
+	($type:ident<$($tp:ident),+>[$self:ident, $index:ident: $index_type:ty] -> $output:ty {$value:expr}) => {
+		impl<$($tp),+> std::ops::Index<$index_type> for $type<$($tp),+> {
+			type Output = $output;
+			fn index(&$self, $index: $index_type) -> &Self::Output {
+				&$value
+			}
+		}
+
+		impl<$($tp),+> std::ops::IndexMut<$index_type> for $type<$($tp),+> {
 			fn index_mut(&mut $self, $index: $index_type) -> &mut Self::Output {
 				&mut $value
 			}

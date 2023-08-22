@@ -25,10 +25,7 @@ annotation add_to_output;
 
 /** @group stdlib.annotations.general Declare that the annotated variable \a x should be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
-function ann: 'output'(any $T: x :: annotated_expression);
-/** @group stdlib.annotations.general Declare that the annotated variable \a x should be added to the output
-of the model. This annotation only has an effect when the model does not have an output item. */
-function ann: 'output'(array [$U] of any $T: x :: annotated_expression);
+annotation 'output';
 
 /** @group stdlib.annotations.general Declare that the annotated variable should not be added to the output
 of the model. This annotation only has an effect when the model does not have an output item. */
@@ -161,7 +158,7 @@ annotation bounds;
 /** @group stdlib.annotations.search Sequentially perform the searches specified in array \a s */
 annotation seq_search(array[int] of ann: s);
 /** @group stdlib.annotations.search Sequentially perform the searches specified in array \a s */
-function ann: seq_search(array[$X] of ann: s) = seq_search(erase_enum(array1d(s)));
+function ann: seq_search(array[$X] of ann: s) = seq_search(array1d(s));
 
 /** @group stdlib.annotations.search Specify search on variables \a x, with variable selection
   strategy \a select, value choice strategy \a choice, and exploration strategy
@@ -500,7 +497,7 @@ function ann: warm_start(array[$X] of var float: x, array[$X] of float: v) = let
     index_sets_agree(x, v),
     "warm_start: variable and value arrays must have identical index sets"
   );
-} in warm_start_float(erase_enum(array1d(x)), erase_enum(array1d(v)));
+} in warm_start_float(array1d(x), array1d(v));
 /** @group stdlib.annotations.warmstart Specify warm start values \a v for an array \a x */
 function ann: warm_start(array[$X] of var set of $$E: x, array[$X] of set of $$E: v) = let {
   constraint assert(
@@ -634,6 +631,7 @@ predicate implied_constraint(var bool: b);
 annotation promise_ctx_monotone;
 annotation promise_ctx_antitone;
 annotation mzn_internal_representation;
+annotation mzn_evaluate_once;
 
 /** @group stdlib.annotations.symm_red Indicates that a predicate is a FlatZinc builtin
     and does not need a declaration in the output FlatZinc */

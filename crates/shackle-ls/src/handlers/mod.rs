@@ -1,6 +1,8 @@
 mod completions;
 mod goto_definition;
 mod hover;
+mod references;
+mod semantic_tokens;
 mod rename_handler;
 mod vfs;
 mod view_ast;
@@ -12,6 +14,8 @@ mod view_scope;
 pub use self::completions::*;
 pub use self::goto_definition::*;
 pub use self::hover::*;
+pub use self::references::*;
+pub use self::semantic_tokens::*;
 pub use self::rename_handler::*;
 pub use self::vfs::*;
 pub use self::view_ast::*;

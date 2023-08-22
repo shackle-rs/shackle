@@ -9,14 +9,16 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	arena::{Arena, ArenaIndex, ArenaMap},
-	error::{IdentifierAlreadyDefined, InvalidPattern},
+	diagnostics::{IdentifierAlreadyDefined, IdentifierShadowing, InvalidPattern},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		Expression, Goal, Identifier, ItemData, LetItem, Pattern, Type,
 	},
-	Error, Result,
+	Error, Result, Warning,
 };
+
+use super::{Constructor, EnumConstructor, Generator, MaybeIndexSet};
 
 /// Gets all variables in global scope.
 ///
@@ -29,21 +31,47 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 		let model = db.lookup_model(*m);
 		for (i, a) in model.annotations.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
-			let identifier = a.data[a.pattern]
-				.identifier()
-				.expect("Annotation item must have identifier pattern");
-			if a.is_atomic() {
-				if let Err(e) =
-					scope.add_variable(db, identifier, 0, PatternRef::new(item_ref, a.pattern))
-				{
-					diagnostics.push(e);
-				} else {
-					scope.atoms.insert(identifier);
+			match &a.constructor {
+				Constructor::Atom { pattern } => {
+					let identifier = a.data[*pattern]
+						.identifier()
+						.expect("Annotation item must have identifier pattern");
+					if let Err(e) =
+						scope.add_variable(db, identifier, 0, PatternRef::new(item_ref, *pattern))
+					{
+						diagnostics.push(e);
+					} else {
+						scope.atoms.insert(identifier);
+					}
 				}
-			} else if let Err(e) =
-				scope.add_function(db, identifier, 0, PatternRef::new(item_ref, a.pattern))
-			{
-				diagnostics.push(e);
+				Constructor::Function {
+					constructor,
+					destructor,
+					..
+				} => {
+					let ctor_ident = a.data[*constructor]
+						.identifier()
+						.expect("Annotation item must have identifier pattern");
+					let dtor_ident = a.data[*destructor]
+						.identifier()
+						.expect("Annotation item must have identifier pattern");
+					if let Err(e) = scope.add_function(
+						db,
+						ctor_ident,
+						0,
+						PatternRef::new(item_ref, *constructor),
+					) {
+						diagnostics.push(e);
+					}
+					if let Err(e) = scope.add_function(
+						db,
+						dtor_ident,
+						0,
+						PatternRef::new(item_ref, *destructor),
+					) {
+						diagnostics.push(e);
+					}
+				}
 			}
 		}
 		for (i, d) in model.declarations.iter() {
@@ -56,6 +84,51 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				&mut diagnostics,
 			);
 		}
+
+		let process_enum_constructor = |scope: &mut ScopeData,
+		                                diagnostics: &mut Vec<Error>,
+		                                item_ref: ItemRef,
+		                                data: &ItemData,
+		                                ec: &EnumConstructor| {
+			if let EnumConstructor::Named(c) = ec {
+				match c {
+					Constructor::Atom { pattern } => {
+						// Enum atom, so this is a variable
+						let identifier = data[*pattern].identifier().unwrap();
+						if let Err(e) = scope.add_variable(
+							db,
+							identifier,
+							0,
+							PatternRef::new(item_ref, *pattern),
+						) {
+							diagnostics.push(e);
+						} else {
+							scope.atoms.insert(identifier);
+						}
+					}
+					Constructor::Function {
+						constructor,
+						destructor,
+						..
+					} => {
+						// Enum constructor (overloads handled later in type checker)
+						let ctor = data[*constructor].identifier().unwrap();
+						if let Err(e) =
+							scope.add_function(db, ctor, 0, PatternRef::new(item_ref, *constructor))
+						{
+							diagnostics.push(e);
+						}
+						let dtor = data[*destructor].identifier().unwrap();
+						if let Err(e) =
+							scope.add_function(db, dtor, 0, PatternRef::new(item_ref, *destructor))
+						{
+							diagnostics.push(e);
+						}
+					}
+				}
+			}
+		};
+
 		for (i, e) in model.enumerations.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
 			match &e.data[e.pattern] {
@@ -69,69 +142,15 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 				_ => unreachable!("Enumeration must have identifier pattern"),
 			}
 			if let Some(d) = &e.definition {
-				for c in d.iter() {
-					match &e.data[c.pattern] {
-						Pattern::Identifier(identifier) => {
-							if c.is_atomic() {
-								// Enum atom, so this is a variable
-								if let Err(e) = scope.add_variable(
-									db,
-									*identifier,
-									0,
-									PatternRef::new(item_ref, c.pattern),
-								) {
-									diagnostics.push(e);
-								} else {
-									scope.atoms.insert(*identifier);
-								}
-							}
-							// Enum constructor (overloads handled later in type checker)
-							else if let Err(e) = scope.add_function(
-								db,
-								*identifier,
-								0,
-								PatternRef::new(item_ref, c.pattern),
-							) {
-								diagnostics.push(e);
-							}
-						}
-						Pattern::Anonymous => (),
-						_ => unreachable!("Enumeration case must have identifier pattern"),
-					}
+				for ec in d.iter() {
+					process_enum_constructor(&mut scope, &mut diagnostics, item_ref, &e.data, ec);
 				}
 			}
 		}
 		for (i, e) in model.enum_assignments.iter() {
 			let item_ref = ItemRef::new(db, *m, i);
-			for c in e.definition.iter() {
-				match &e.data[c.pattern] {
-					Pattern::Identifier(identifier) => {
-						if c.is_atomic() {
-							// Enum atom, so this is a variable
-							if let Err(e) = scope.add_variable(
-								db,
-								*identifier,
-								0,
-								PatternRef::new(item_ref, c.pattern),
-							) {
-								diagnostics.push(e);
-							} else {
-								scope.atoms.insert(*identifier);
-							}
-						}
-						// Enum constructor (overloads handled later in type checker)
-						else if let Err(e) = scope.add_function(
-							db,
-							*identifier,
-							0,
-							PatternRef::new(item_ref, c.pattern),
-						) {
-							diagnostics.push(e);
-						}
-					}
-					Pattern::Anonymous => (),
-					_ => unreachable!("Enumeration case must have identifier pattern"),
-				}
+			for ec in e.definition.iter() {
+				process_enum_constructor(&mut scope, &mut diagnostics, item_ref, &e.data, ec)
 			}
 		}
 		for (i, f) in model.functions.iter() {
@@ -336,16 +355,6 @@ impl ScopeData {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum PatternMode {
-	/// Destructuring for declarations
-	Destructuring,
-	/// Case expressions
-	Case,
-	/// Comprehension generators
-	Generator,
-}
-
 /// A collected scope entry
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scope {
@@ -372,6 +381,7 @@ struct ScopeCollector<'a> {
 	generations: Vec<u32>,
 	expression_scope: ArenaMap<Expression, (ArenaIndex<Scope>, u32)>,
 	diagnostics: Vec<Error>,
+	warnings: Vec<Warning>,
 }
 
 impl ScopeCollector<'_> {
@@ -388,6 +398,7 @@ impl ScopeCollector<'_> {
 			generations: vec![0],
 			expression_scope: ArenaMap::new(),
 			diagnostics: Vec::new(),
+			warnings: Vec::new(),
 		}
 	}
 
@@ -405,21 +416,21 @@ impl ScopeCollector<'_> {
 	}
 
 	/// Add leaves of a pattern into the current scope.
-	fn collect_pattern(&mut self, index: ArenaIndex<Pattern>, mode: PatternMode) {
+	fn collect_pattern(&mut self, index: ArenaIndex<Pattern>, is_destructuring: bool) {
 		self.increment_generation();
-		self.collect_pattern_inner(index, mode, false);
+		self.collect_pattern_inner(index, is_destructuring, false);
 	}
 
 	fn collect_pattern_inner(
 		&mut self,
 		index: ArenaIndex<Pattern>,
-		mode: PatternMode,
+		is_destructuring: bool,
 		mut had_error: bool,
 	) {
 		let generation = self.generation();
 		let mut refutable_pattern = || {
 			// When destructuring, patterns must be irrefutable
-			if let PatternMode::Destructuring = mode {
+			if is_destructuring {
 				if !had_error {
 					let (src, span) = NodeRef::from(EntityRef::new(self.db, self.item, index))
 						.source_span(self.db);
@@ -435,6 +446,25 @@ impl ScopeCollector<'_> {
 			}
 		};
 
+		let mut shadowed = |p: PatternRef| {
+			let (src_orig, span_orig) = NodeRef::from(p.into_entity(self.db)).source_span(self.db);
+			let (src_new, span_new) =
+				NodeRef::from(PatternRef::new(self.item, index).into_entity(self.db))
+					.source_span(self.db);
+			if src_orig == src_new {
+				// Same file, so warn about shadowing
+				self.warnings.push(
+					IdentifierShadowing {
+						name: self.data[index].identifier().unwrap().pretty_print(self.db),
+						src: src_new,
+						span: span_new,
+						original: span_orig,
+					}
+					.into(),
+				);
+			}
+		};
+
 		match &self.data[index] {
 			Pattern::Identifier(i) => {
 				let mut current = self.current;
@@ -446,20 +476,22 @@ impl ScopeCollector<'_> {
 								current = *parent;
 								continue;
 							}
-							if let PatternMode::Case = mode {
-								if scope.is_atom(*i, generation) {
-									// This identifier refers to this atom and does not create a new binding
-									break;
-								}
+							if !is_destructuring && scope.is_atom(*i, generation) {
+								// This identifier refers to this atom and does not create a new binding
+								break;
+							}
+							if let Some(p) = scope.find_variable(*i, generation) {
+								shadowed(p);
 							}
 							current = *parent;
 						}
 						Scope::Global => {
-							if let PatternMode::Case = mode {
-								if self.db.lookup_global_atom(*i) {
-									// This identifier refers to this atom and does not create a new binding
-									break;
-								}
+							if !is_destructuring && self.db.lookup_global_atom(*i) {
+								// This identifier refers to this atom and does not create a new binding
+								break;
+							}
+							if let Some(p) = self.db.lookup_global_variable(*i) {
+								shadowed(p);
 							}
 							let scope = match self.scopes[self.current] {
 								Scope::Local { ref mut scope, .. } => scope,
@@ -481,17 +513,17 @@ impl ScopeCollector<'_> {
 			Pattern::Call { arguments, .. } => {
 				refutable_pattern();
 				for argument in arguments.iter() {
-					self.collect_pattern_inner(*argument, mode, had_error);
+					self.collect_pattern_inner(*argument, is_destructuring, had_error);
 				}
 			}
 			Pattern::Tuple { fields } => {
 				for field in fields.iter() {
-					self.collect_pattern_inner(*field, mode, had_error);
+					self.collect_pattern_inner(*field, is_destructuring, had_error);
 				}
 			}
 			Pattern::Record { fields } => {
 				for (_, pattern) in fields.iter() {
-					self.collect_pattern_inner(*pattern, mode, had_error);
+					self.collect_pattern_inner(*pattern, is_destructuring, had_error);
 				}
 			}
 			_ => refutable_pattern(),
@@ -506,6 +538,15 @@ impl ScopeCollector<'_> {
 		}
 		let e = &self.data[index];
 		match e {
+			Expression::Absent
+			| Expression::BooleanLiteral(_)
+			| Expression::FloatLiteral(_)
+			| Expression::Identifier(_)
+			| Expression::Infinity
+			| Expression::IntegerLiteral(_)
+			| Expression::Missing
+			| Expression::Slice(_)
+			| Expression::StringLiteral(_) => (),
 			Expression::ArrayAccess(aa) => {
 				self.collect_expression(aa.collection);
 				self.collect_expression(aa.indices);
@@ -513,13 +554,7 @@ impl ScopeCollector<'_> {
 			Expression::ArrayComprehension(c) => {
 				self.push();
 				for generator in c.generators.iter() {
-					self.collect_expression(generator.collection);
-					for p in generator.patterns.iter() {
-						self.collect_pattern(*p, PatternMode::Generator);
-					}
-					if let Some(e) = generator.where_clause {
-						self.collect_expression(e)
-					}
+					self.collect_generator(generator);
 				}
 				if let Some(i) = c.indices {
 					self.collect_expression(i);
@@ -528,6 +563,29 @@ impl ScopeCollector<'_> {
 				self.pop();
 			}
 			Expression::ArrayLiteral(al) => {
+				for e in al.members.iter() {
+					self.collect_expression(*e);
+				}
+			}
+			Expression::ArrayLiteral2D(al) => {
+				if let MaybeIndexSet::Indexed(es) = &al.rows {
+					for e in es.iter() {
+						self.collect_expression(*e);
+					}
+				}
+				if let MaybeIndexSet::Indexed(es) = &al.columns {
+					for e in es.iter() {
+						self.collect_expression(*e);
+					}
+				}
+				for e in al.members.iter() {
+					self.collect_expression(*e);
+				}
+			}
+			Expression::IndexedArrayLiteral(al) => {
+				for e in al.indices.iter() {
+					self.collect_expression(*e);
+				}
 				for e in al.members.iter() {
 					self.collect_expression(*e);
 				}
@@ -565,7 +623,7 @@ impl ScopeCollector<'_> {
 							if let Some(def) = d.definition {
 								self.collect_expression(def)
 							}
-							self.collect_pattern(d.pattern, PatternMode::Destructuring);
+							self.collect_pattern(d.pattern, true);
 						}
 					}
 				}
@@ -575,13 +633,7 @@ impl ScopeCollector<'_> {
 			Expression::SetComprehension(c) => {
 				self.push();
 				for generator in c.generators.iter() {
-					self.collect_expression(generator.collection);
-					for p in generator.patterns.iter() {
-						self.collect_pattern(*p, PatternMode::Generator);
-					}
-					if let Some(e) = generator.where_clause {
-						self.collect_expression(e)
-					}
+					self.collect_generator(generator);
 				}
 				self.collect_expression(c.template);
 				self.pop();
@@ -611,15 +663,60 @@ impl ScopeCollector<'_> {
 				self.collect_expression(c.expression);
 				for i in c.cases.iter() {
 					self.push();
-					self.collect_pattern(i.pattern, PatternMode::Case);
+					self.collect_pattern(i.pattern, false);
 					self.collect_expression(i.value);
 					self.pop();
 				}
 			}
-			_ => (),
+			Expression::Lambda(l) => {
+				if let Some(r) = l.return_type {
+					self.collect_type(r);
+				}
+				for param in l.parameters.iter() {
+					for ann in param.annotations.iter() {
+						self.collect_expression(*ann);
+					}
+					self.collect_type(param.declared_type);
+				}
+				self.push();
+				for pattern in l.parameters.iter().filter_map(|param| param.pattern) {
+					self.collect_pattern(pattern, true);
+				}
+				self.collect_expression(l.body);
+				self.pop();
+			}
 		}
 		self.expression_scope
 			.insert(index, (self.current, self.generation()));
+	}
+
+	fn collect_generator(&mut self, generator: &Generator) {
+		match generator {
+			Generator::Iterator {
+				patterns,
+				collection,
+				where_clause,
+			} => {
+				self.collect_expression(*collection);
+				for p in patterns.iter() {
+					self.collect_pattern(*p, false);
+				}
+				if let Some(e) = where_clause {
+					self.collect_expression(*e)
+				}
+			}
+			Generator::Assignment {
+				pattern,
+				value,
+				where_clause,
+			} => {
+				self.collect_expression(*value);
+				self.collect_pattern(*pattern, true);
+				if let Some(e) = where_clause {
+					self.collect_expression(*e)
+				}
+			}
+		}
 	}
 
 	/// Collect scope for a type
@@ -660,15 +757,15 @@ impl ScopeCollector<'_> {
 	}
 
 	/// Get results
-	#[allow(clippy::type_complexity)] // FIXME: Refactor return into simpler type
-	fn finish(
-		self,
-	) -> (
-		Arena<Scope>,
-		ArenaMap<Expression, (ArenaIndex<Scope>, u32)>,
-		Vec<Error>,
-	) {
-		(self.scopes, self.expression_scope, self.diagnostics)
+	fn finish(self) -> ScopeCollectorResult {
+		ScopeCollectorResult {
+			result: Arc::new(ScopeResult {
+				scopes: self.scopes,
+				expression_scopes: self.expression_scope,
+			}),
+			diagnostics: Arc::new(self.diagnostics),
+			warnings: Arc::new(self.warnings),
+		}
 	}
 
 	fn push(&mut self) {
@@ -686,6 +783,17 @@ impl ScopeCollector<'_> {
 		};
 		self.generations.pop().expect("No generation left");
 	}
+}
+
+/// Result of collecting scopes for an item, including diagnostics
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeCollectorResult {
+	/// Collected scope
+	pub result: Arc<ScopeResult>,
+	/// Diagnostics
+	pub diagnostics: Arc<Vec<Error>>,
+	/// Warnings
+	pub warnings: Arc<Vec<Warning>>,
 }
 
 /// Result of collecting scopes for an item
@@ -816,9 +924,9 @@ impl ScopeResult {
 }
 
 /// Generate a mapping between expressions and the identifiers in scope for the given item.
-pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc<Vec<Error>>) {
+pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> ScopeCollectorResult {
 	let model = db.lookup_model(item.model_ref(db));
-	let (scopes, expression_scopes, diagnostics) = match item.local_item_ref(db) {
+	match item.local_item_ref(db) {
 		LocalItemRef::Annotation(a) => {
 			let annotation = &model[a];
 			let mut collector = ScopeCollector::new(db, item, annotation.data.as_ref());
@@ -894,7 +1002,9 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			}
 			collector.push();
 			for t in function.type_inst_vars.iter() {
-				collector.collect_pattern(t.name, PatternMode::Destructuring);
+				if !t.anonymous {
+					collector.collect_pattern(t.name, true);
+				}
 			}
 			for p in function.parameters.iter() {
 				collector.collect_type(p.declared_type);
@@ -904,7 +1014,7 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			for p in function.parameters.iter() {
 				// Add parameters into scope
 				if let Some(pat) = p.pattern {
-					collector.collect_pattern(pat, PatternMode::Destructuring);
+					collector.collect_pattern(pat, true);
 				}
 			}
 			if let Some(e) = function.body {
@@ -943,12 +1053,5 @@ pub fn collect_item_scope(db: &dyn Hir, item: ItemRef) -> (Arc<ScopeResult>, Arc
 			collector.collect_type(type_alias.aliased_type);
 			collector.finish()
 		}
-	};
-	(
-		Arc::new(ScopeResult {
-			scopes,
-			expression_scopes,
-		}),
-		Arc::new(diagnostics),
-	)
+	}
 }

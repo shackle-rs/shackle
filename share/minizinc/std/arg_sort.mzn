@@ -9,8 +9,8 @@ Constrains \a p to be the permutation which causes \a x to be in sorted order he
 The permutation is the stable sort hence \a x[\a p[\p i]] = \a x[\a p[\p i+1]] \(\rightarrow\) \a p[\p i] < \a p[\p i+1].
 */
 predicate arg_sort(
-	array[$$E] of var $$F:x,
-	array[int] of var $$E:p,
+	array[$$E] of var $$F: x,
+	array[int] of var $$E: p,
 ) = fzn_arg_sort_int(erase_enum(x), erase_enum(p));
 
 /** @group globals.sort
@@ -35,10 +35,10 @@ function array[int] of var $$E: arg_sort(array[$$E] of var $$F:x) :: promise_tot
 		[] 
 	else
 		let {
-			array[1..length(x)] of var erase_enum(index_set(x)): p;
+			array[1..length(x)] of var index_set(x): p;
 			constraint analyse_all_different(erase_enum(p));
-			constraint fzn_arg_sort_int(erase_enum(x), p);
-		} in to_enum(index_set(x), p)
+			constraint fzn_arg_sort_int(erase_enum(x), erase_enum(p));
+		} in p
 	endif;
 
 

@@ -11,6 +11,8 @@
 //! - Scope collection (see the `scope` module)
 //! - Computing types of expressions and declarations, identifier resolution
 //!   (see the `ty` and `typecheck` modules)
+//! - Checking case expressions for exhaustiveness (see the `pattern_matching`)
+//!   module
 //! - Validation of whole program (see the `validate` module)
 
 pub mod container;
@@ -20,6 +22,7 @@ pub mod ids;
 pub mod item;
 pub mod lower;
 pub mod pattern;
+pub mod pattern_matching;
 pub mod primitive;
 pub mod scope;
 pub mod source;
