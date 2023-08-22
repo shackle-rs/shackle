@@ -879,6 +879,9 @@ pub fn fold_function<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	}));
 	function.set_type_inst_vars(f.type_inst_vars().iter().cloned());
 	function.set_specialised(f.is_specialisation());
+	if let Some(tys) = f.mangled_param_tys() {
+		function.set_mangled_param_tys(tys.to_vec());
+	}
 	function
 }
 

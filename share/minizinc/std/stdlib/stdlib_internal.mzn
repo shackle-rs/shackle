@@ -6,28 +6,28 @@
 %
 
 % domain constraints
-test mzn_domain_constraint(string: name, $$E: x, set of $$E: s) =
-  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
-test mzn_domain_constraint(string: name, opt $$E: x, set of $$E: s) =
-  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
-test mzn_domain_constraint(string: name, set of $$E: x, set of $$E: s) =
-  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
-test mzn_domain_constraint(string: name, float: x, set of float: s) =
-  mzn_assert_warn(var_dom(x, s), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
-test mzn_domain_constraint(string: name, opt float: x, set of float: s) =
-  mzn_assert_warn(var_dom(x, s), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
-test mzn_domain_constraint(string: name, set of float: x, set of float: s) =
-  mzn_assert_warn(var_dom(x, s), " the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, $$E: x, set of $$E: s) :: mzn_inline_call_by_name =
+  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), "the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, opt $$E: x, set of $$E: s) :: mzn_inline_call_by_name =
+  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), "the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, set of $$E: x, set of $$E: s) :: mzn_inline_call_by_name =
+  mzn_assert_warn(var_dom(erase_enum(x), erase_enum(s)), "the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, float: x, set of float: s) :: mzn_inline_call_by_name =
+  mzn_assert_warn(var_dom(x, s), "the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, opt float: x, set of float: s) :: mzn_inline_call_by_name =
+  mzn_assert_warn(var_dom(x, s), "the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
+test mzn_domain_constraint(string: name, set of float: x, set of float: s) :: mzn_inline_call_by_name =
+  mzn_assert_warn(var_dom(x, s), "the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).");
 
-predicate mzn_domain_constraint(string: name, var $$E: x, set of $$E: s) =
+predicate mzn_domain_constraint(string: name, var $$E: x, set of $$E: s) :: mzn_inline_call_by_name =
   var_dom(erase_enum(x), erase_enum(s));
-predicate mzn_domain_constraint(string: name, var opt $$E: x, set of $$E: s) =
+predicate mzn_domain_constraint(string: name, var opt $$E: x, set of $$E: s) :: mzn_inline_call_by_name =
   var_dom(erase_enum(x), erase_enum(s));
-predicate mzn_domain_constraint(string: name, var set of $$E: x, set of $$E: s) =
+predicate mzn_domain_constraint(string: name, var set of $$E: x, set of $$E: s) :: mzn_inline_call_by_name =
   var_dom(erase_enum(x), erase_enum(s));
-predicate mzn_domain_constraint(string: name, var float: x, set of float: s) =
+predicate mzn_domain_constraint(string: name, var float: x, set of float: s) :: mzn_inline_call_by_name =
   var_dom(x, s);
-predicate mzn_domain_constraint(string: name, var opt float: x, set of float: s) =
+predicate mzn_domain_constraint(string: name, var opt float: x, set of float: s) :: mzn_inline_call_by_name =
   var_dom(x, s);
 
 test var_dom(int: x, set of int: s) = x in s;
@@ -1326,7 +1326,7 @@ test mzn_set_is_contiguous(set of int: X) =
   card(X) = 0 \/ card(X)=(max(X)-min(X)+1);
 
 function bool: mzn_add_warning(string: msg);
-function bool: mzn_assert_warn(bool: b, string: msg) = let {
+function bool: mzn_assert_warn(bool: b, string: msg) :: mzn_inline_call_by_name = let {
   bool: condition = b;
   constraint if condition then true else mzn_add_warning(msg) endif;
 } in condition;
@@ -1347,7 +1347,9 @@ function string: mzn_show_array_access(string: x, tuple($$E, $$F, $$G, $$H, $$I)
 function string: mzn_show_array_access(string: x, tuple($$E, $$F, $$G, $$H, $$I, $$J): i) =
   x ++ "[" ++ show(i.1) ++ "," ++ show(i.2) ++ "," ++ show(i.3) ++ "," ++ show(i.4) ++ "," ++ show(i.5) ++ "," ++ show(i.6) ++ "]";
 
-test mzn_check_index_set(string: name, set of $$E: actual, set of $$E: expected) =
+test mzn_check_index_set(string: name, set of $$E: actual, set of $$E: expected) :: mzn_inline_call_by_name =
   mzn_check_index_set(name, 1, 1, actual, expected);
-test mzn_check_index_set(string: name, int: d, int: dims, set of $$E: actual, set of $$E: expected) =
+test mzn_check_index_set(string: name, int: d, int: dims, set of $$E: actual, set of $$E: expected) :: mzn_inline_call_by_name =
   assert(actual = expected, "Index set " ++ if dims > 1 then "\(d) " endif ++ "of '" ++ name ++ "' is \(expected), but is assigned an array with " ++ if dims > 1 then "the corresponding " endif ++ "index set \(actual). You may need to coerce the index sets using the array\(dims)d function.");
+
+annotation mzn_inline_call_by_name;

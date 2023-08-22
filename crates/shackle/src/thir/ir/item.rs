@@ -441,6 +441,7 @@ pub struct Function<T = ()> {
 	annotations: Annotations<T>,
 	top_level: bool,
 	is_specialisation: bool,
+	mangled_param_tys: Option<Vec<Ty>>,
 }
 
 /// A function item and the data it owns
@@ -461,6 +462,7 @@ impl<T: Marker> Function<T> {
 			type_inst_vars: Vec::new(),
 			top_level: true,
 			is_specialisation: false,
+			mangled_param_tys: None,
 		}
 	}
 
@@ -479,6 +481,7 @@ impl<T: Marker> Function<T> {
 			type_inst_vars: Vec::new(),
 			top_level: false,
 			is_specialisation: false,
+			mangled_param_tys: None,
 		}
 	}
 
@@ -505,6 +508,16 @@ impl<T: Marker> Function<T> {
 	/// Set whether or not this function is the result of type specialisation
 	pub fn set_specialised(&mut self, specialised: bool) {
 		self.is_specialisation = specialised;
+	}
+
+	/// Get the parameter types as stored for name mangling purposes
+	pub fn mangled_param_tys(&self) -> Option<&[Ty]> {
+		self.mangled_param_tys.as_deref()
+	}
+
+	/// Store the given parameter types for name mangling purposes
+	pub fn set_mangled_param_tys(&mut self, tys: Vec<Ty>) {
+		self.mangled_param_tys = Some(tys);
 	}
 
 	/// Get the type-inst var with the given index

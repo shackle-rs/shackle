@@ -28,10 +28,8 @@ use super::PatternTy;
 pub fn topological_sort(db: &dyn Hir) -> (Arc<Vec<ItemRef>>, Arc<Vec<Error>>) {
 	let mut topo_sorter = TopoSorter::new(db);
 	for m in db.resolve_includes().unwrap().iter() {
-		let model = db.lookup_model(*m);
-		for it in model.items.iter() {
-			let item = ItemRef::new(db, *m, *it);
-			topo_sorter.run(item);
+		for item in db.lookup_items(*m).iter() {
+			topo_sorter.run(*item);
 		}
 	}
 	let (sorted, diagnostics) = topo_sorter.finish();
