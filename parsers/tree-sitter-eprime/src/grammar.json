@@ -1234,7 +1234,7 @@
             "name": "right",
             "content": {
               "type": "SYMBOL",
-              "name": "_base_domain"
+              "name": "_expression"
             }
           }
         ]

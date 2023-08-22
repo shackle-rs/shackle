@@ -199,6 +199,8 @@ module.exports = grammar({
 				[prec.left, PREC.disjunction, "\\/"],
 				[prec.left, PREC.implication, "->"],
 				[prec.left, PREC.equivalence, "<->"],
+				[prec.left, PREC.implication, "=>"],
+				[prec.left, PREC.equivalence, "<=>"],
 			]
 
 			return choice(
@@ -221,11 +223,11 @@ module.exports = grammar({
 				seq(
 					field("left", $._expression),
 					field("operator", "in"),
-					field("right", $._base_domain)
+					field("right", $._expression)
 				)
 			),
 		
-		abs_operator: ($) =>
+		absolute_operator: ($) =>
 			prec(
 				PREC.absolute,
 				seq(
