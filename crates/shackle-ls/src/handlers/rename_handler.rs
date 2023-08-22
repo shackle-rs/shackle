@@ -31,12 +31,12 @@ fn node_contains_definition_of(node: Node, name: &String, cst: &Cst, file_text: 
 			|| node.kind() == "parameter"
 			|| node.kind() == "function_item"
 			|| node.kind() == "generator"
-      || node.kind() == "enumeration_members";
+			|| node.kind() == "enumeration_members";
 	};
 
 	if is_definition(node) {
 		// Walk over the children
-    // If something is an identifier with the same name, then return true
+		// If something is an identifier with the same name, then return true
 		let mut children_cursor = node.walk();
 
 		for child_node in node.children(&mut children_cursor) {
@@ -46,13 +46,13 @@ fn node_contains_definition_of(node: Node, name: &String, cst: &Cst, file_text: 
 		}
 	}
 
-  // Otherwise, DFS over the children in an attempt to find it
-  let mut children_cursor = node.walk();
-  for child_node in node.children(&mut children_cursor) {
-    if node_contains_definition_of(child_node, name, cst, file_text) {
-      return true;
-    }
-  }
+	// Otherwise, DFS over the children in an attempt to find it
+	let mut children_cursor = node.walk();
+	for child_node in node.children(&mut children_cursor) {
+		if node_contains_definition_of(child_node, name, cst, file_text) {
+			return true;
+		}
+	}
 
 	false
 }
@@ -112,7 +112,7 @@ fn find_all_identifier_children<'a>(
 		let node = cursor.node();
 
 		if node.kind() == "identifier" {
-      let id_name = get_node_text(node, file_text);
+			let id_name = get_node_text(node, file_text);
 
 			if &id_name == var_name {
 				to_return.push(node);
@@ -213,8 +213,7 @@ impl RequestHandler<Rename, (Point, String, ModelRef)> for RenameHandler {
 		let file_text = cst.text().as_bytes();
 
 		// The variable name that is being renamed
-    let var_name = get_node_text(containing, file_text);
-
+		let var_name = get_node_text(containing, file_text);
 
 		// Find the scope of this variable, if it exists
 		let scope_node = find_scope_of_identifier(&containing, &cst, &var_name, file_text)
@@ -241,8 +240,6 @@ impl RequestHandler<Rename, (Point, String, ModelRef)> for RenameHandler {
 				return TextEdit::new(node_range, new_name.clone());
 			})
 			.collect();
-
-    
 
 		// The changes to return
 		let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
