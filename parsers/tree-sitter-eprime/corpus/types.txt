@@ -3,10 +3,13 @@ Boolean domain
 ==============
 
 given x: bool
+given x, y: bool
 
 ---
 
-(source_file (param_decl name: (identifier) domain: (boolean_domain)))
+(source_file
+  (param_decl name: (identifier) domain: (boolean_domain))
+  (param_decl name: (identifier) name: (identifier) domain: (boolean_domain)))
 
 ==============
 Integer domain
@@ -21,6 +24,7 @@ given f: int(1..10) intersect int(15..20)
 given g: int(1..10) - int(15..20)
 given h: int(1..10) union int(15..20) - int(2,4,6)
 given i: int(1,3,5..10,15..20)
+given j: int
 
 ---
 
@@ -54,8 +58,10 @@ given i: int(1,3,5..10,15..20)
       member: (integer_literal)
       member: (integer_literal)
       member: (range_literal min: (integer_literal) max: (integer_literal))
-      member: (range_literal min: (integer_literal) max: (integer_literal)))))
-
+      member: (range_literal min: (integer_literal) max: (integer_literal))))
+  (param_decl
+    name: (identifier)
+    domain: (integer_domain)))
 =============
 Matrix Domain
 =============

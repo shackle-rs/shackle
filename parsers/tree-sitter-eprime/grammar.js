@@ -1,3 +1,9 @@
+/*
+Important Notes:
+- The integer domain may need to be modified to differentiate between specific integer domains and ones that require a file.
+
+*/
+
 const PREC = {
 	not: 20,
 	absolute: 20,
@@ -69,7 +75,7 @@ module.exports = grammar({
 		param_decl: ($) =>
 			seq(
 				"given",
-				field("name", $.identifier),
+				sepBy(",", field("name", $.identifier)),
 				":",
 				field("domain", $._domain),
 				optional(seq("where", field("where", $._expression)))
@@ -310,9 +316,13 @@ module.exports = grammar({
 		integer_domain: ($) =>
 			seq(
 				"int",
-				"(",
-				sepBy(",", field("member", choice($._expression, $.range_literal))),
-				")"
+				optional(
+					seq(
+						"(",
+						sepBy(",", field("member", choice($._expression, $.range_literal))),
+						")"
+					)
+				)
 			),
 
 		matrix_literal: ($) =>
