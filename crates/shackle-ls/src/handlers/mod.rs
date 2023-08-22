@@ -1,6 +1,7 @@
 mod completions;
 mod goto_definition;
 mod hover;
+mod rename_handler;
 mod vfs;
 mod view_ast;
 mod view_cst;
@@ -11,6 +12,7 @@ mod view_scope;
 pub use self::completions::*;
 pub use self::goto_definition::*;
 pub use self::hover::*;
+pub use self::rename_handler::*;
 pub use self::vfs::*;
 pub use self::view_ast::*;
 pub use self::view_cst::*;

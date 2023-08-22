@@ -29,7 +29,7 @@
         "shackleLanguageServer.executable": {
           "scope": "window",
           "type": "string",
-          "default": "shackle-ls",
+          "default": "/home/school/shackle/target/debug/shackle-ls",
           "description": "Path to the shackle-ls executable."
         }
       }

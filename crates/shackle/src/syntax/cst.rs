@@ -216,6 +216,7 @@ impl CstNode {
 		let mut cursor = self.as_ref().walk();
 		loop {
 			let node = cursor.node();
+
 			writeln!(
 				buf,
 				"{:i$}kind={:?}, named={:?}, error={:?}, missing={:?}, extra={:?}, field={:?}",

@@ -1,8 +1,8 @@
 use crossbeam_channel::{SendError, Sender};
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, ServerCapabilities,
-	TextDocumentIdentifier, TextDocumentSyncKind,
+	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf,
+	ServerCapabilities, TextDocumentIdentifier, TextDocumentSyncKind,
 };
 use std::ops::Deref;
 use std::sync::Arc;
@@ -122,6 +122,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		definition_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
+		rename_provider: Some(OneOf::Left(true)),
 		completion_provider: Some(CompletionOptions {
 			trigger_characters: Some(vec![".".to_owned()]),
 			..Default::default()
@@ -156,6 +157,7 @@ fn main_loop(
 					.on::<ViewScopeHandler, _, _>()
 					.on::<ViewPrettyPrintHandler, _, _>()
 					.on::<GotoDefinitionHandler, _, _>()
+					.on::<RenameHandler, _, _>()
 					.on::<HoverHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()
 					.finish();
