@@ -1,11 +1,17 @@
 //! Perform name mangling on overloaded/specialised functions
+//!
+//! Must be done before type erasure to give correct mangled names.
+//!
+//! This doesn't actually modify the `name` of a function item, instead we store
+//! the value so that we can print with the correct name. This ensures that
+//! function matching using the original names still works after this.
 
 use rustc_hash::FxHashMap;
 
 use crate::thir::{db::Thir, FunctionId, FunctionName, Model};
 
 /// Mangle names of overloaded/specialised functions
-pub fn mangle_names(db: &dyn Thir, model: &Model) -> Model {
+pub fn mangle_names(_db: &dyn Thir, model: &Model) -> Model {
 	let mut model = model.clone();
 	let mut overloaded: FxHashMap<_, Vec<FunctionId>> = FxHashMap::default();
 	for (idx, function) in model.top_level_functions() {
@@ -13,16 +19,15 @@ pub fn mangle_names(db: &dyn Thir, model: &Model) -> Model {
 			overloaded.entry(ident).or_default().push(idx);
 		}
 	}
-	for (name, functions) in overloaded {
+	for (_, functions) in overloaded {
 		if functions.len() > 1 {
 			for function in functions {
-				if model[function].body().is_some() {
-					let mangled = FunctionName::Named(name).mangled(
-						db,
-						model[function].parameters().iter().map(|p| model[*p].ty()),
-					);
-					model[function].set_name(mangled);
-				}
+				let tys = model[function]
+					.parameters()
+					.iter()
+					.map(|p| model[*p].ty())
+					.collect();
+				model[function].set_mangled_param_tys(tys);
 			}
 		}
 	}
@@ -52,9 +57,9 @@ mod test {
                 function int: bar(string: x) = 1;
             "#,
 			expect!([r#"
-    function int: builtin(int: x);
-    function int: builtin(string: x);
-    function int: mixed(string: x);
+    function int: 'builtin<int>'(int: x);
+    function int: 'builtin<string>'(string: x);
+    function int: 'mixed<string>'(string: x);
     function int: 'mixed<int>'(int: x) = 1;
     function int: 'mixed<float>'(float: x) = 1;
     function int: foo(int: x) = 1;
