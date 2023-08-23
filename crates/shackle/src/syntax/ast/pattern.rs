@@ -260,7 +260,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 1,
+                                                value: Ok(
+                                                    1,
+                                                ),
                                             },
                                         ),
                                     },
@@ -290,7 +292,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 2,
+                                                value: Ok(
+                                                    2,
+                                                ),
                                             },
                                         ),
                                     },
@@ -341,7 +345,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 3,
+                                                value: Ok(
+                                                    3,
+                                                ),
                                             },
                                         ),
                                     },
@@ -356,7 +362,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 4,
+                                                value: Ok(
+                                                    4,
+                                                ),
                                             },
                                         ),
                                     },
@@ -369,7 +377,9 @@ mod test {
                                                 value: IntegerLiteral(
                                                     IntegerLiteral {
                                                         cst_kind: "integer_literal",
-                                                        value: 123,
+                                                        value: Ok(
+                                                            123,
+                                                        ),
                                                     },
                                                 ),
                                             },
@@ -377,7 +387,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 5,
+                                                value: Ok(
+                                                    5,
+                                                ),
                                             },
                                         ),
                                     },
@@ -390,7 +402,9 @@ mod test {
                                                 value: FloatLiteral(
                                                     FloatLiteral {
                                                         cst_kind: "float_literal",
-                                                        value: 5.5,
+                                                        value: Ok(
+                                                            5.5,
+                                                        ),
                                                     },
                                                 ),
                                             },
@@ -398,7 +412,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 6,
+                                                value: Ok(
+                                                    6,
+                                                ),
                                             },
                                         ),
                                     },
@@ -418,7 +434,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 7,
+                                                value: Ok(
+                                                    7,
+                                                ),
                                             },
                                         ),
                                     },
@@ -433,7 +451,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 8,
+                                                value: Ok(
+                                                    8,
+                                                ),
                                             },
                                         ),
                                     },
@@ -447,7 +467,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 9,
+                                                value: Ok(
+                                                    9,
+                                                ),
                                             },
                                         ),
                                     },
@@ -461,7 +483,9 @@ mod test {
                                         value: IntegerLiteral(
                                             IntegerLiteral {
                                                 cst_kind: "integer_literal",
-                                                value: 10,
+                                                value: Ok(
+                                                    10,
+                                                ),
                                             },
                                         ),
                                     },

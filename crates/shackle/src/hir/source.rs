@@ -173,6 +173,16 @@ impl Origin {
 			self.range.clone().into(),
 		)
 	}
+
+	/// Print for debugging purposes
+	pub fn debug_print(&self, db: &dyn Hir) -> String {
+		let path = self
+			.file
+			.path(db.upcast())
+			.map(|p| p.to_string_lossy().into_owned())
+			.unwrap_or_else(|| "<unknown>".to_owned());
+		format!("{} @ {}-{}", path, self.range.start, self.range.end)
+	}
 }
 
 impl<T: AstNode> From<&T> for Origin {

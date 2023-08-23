@@ -64,6 +64,7 @@ use salsa::InternKey;
 
 use crate::db::InternedString;
 use crate::hir::db::Hir;
+use crate::syntax::ast::{parse_float_literal, parse_integer_literal};
 
 /// Trait for pretty printing for debugging with a Salsa database
 pub trait DebugPrint<'a> {
@@ -154,6 +155,7 @@ pub fn pretty_print_identifier(name: &str) -> String {
 			| "var" | "where"
 			| "xor"
 	) {
+		// Identifiers which are keywords need quoting
 		return format!("'{}'", name);
 	}
 
@@ -177,9 +179,16 @@ pub fn pretty_print_identifier(name: &str) -> String {
 				| '+' | '*' | '~'
 		) || c.is_whitespace()
 		{
+			// Operators in identifiers need quoting
 			return format!("'{}'", name);
 		}
 	}
+
+	if parse_integer_literal(name).is_ok() || parse_float_literal(name).is_ok() {
+		// Identifiers which are numeric literals need quoting
+		return format!("'{}'", name);
+	}
+
 	name.to_owned()
 }
 
@@ -193,5 +202,7 @@ mod test {
 		assert_eq!(pretty_print_identifier("-"), "'-'");
 		assert_eq!(pretty_print_identifier("a b"), "'a b'");
 		assert_eq!(pretty_print_identifier("😃"), "😃");
+		assert_eq!(pretty_print_identifier("123"), "'123'");
+		assert_eq!(pretty_print_identifier("1E24"), "'1E24'");
 	}
 }
