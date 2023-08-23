@@ -11,15 +11,15 @@ use shackle::hir::{
 };
 use shackle::ty::TyData;
 
+use crate::db::LanguageServerContext;
 use crate::dispatch::RequestHandler;
-use crate::LanguageServerDatabase;
 
 #[derive(Debug)]
 pub struct CompletionsHandler;
 
 impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 	fn prepare(
-		db: &mut LanguageServerDatabase,
+		db: &mut impl LanguageServerContext,
 		params: CompletionParams,
 	) -> Result<(ModelRef, Point), ResponseError> {
 		let model =
@@ -37,15 +37,7 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 		db: &CompilerDatabase,
 		(model_ref, start): (ModelRef, Point),
 	) -> Result<Option<CompletionResponse>, ResponseError> {
-		let found = find_expression(db, *model_ref, start, start).or_else(|| {
-			let mut prev = start;
-			if prev.column > 0 {
-				prev.column -= 1;
-				find_expression(db, *model_ref, prev, prev)
-			} else {
-				None
-			}
-		});
+		let found = find_expression(db, *model_ref, start, start);
 		Ok((|| {
 			let expression = found?;
 			let model = expression.item().model(db);
@@ -208,5 +200,77 @@ impl RequestHandler<Completion, (ModelRef, Point)> for CompletionsHandler {
 			}
 			Some(CompletionResponse::Array(completions))
 		})())
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::str::FromStr;
+
+	use expect_test::expect;
+	use lsp_types::Url;
+
+	use crate::handlers::test::test_handler;
+
+	use super::CompletionsHandler;
+
+	#[test]
+	fn test_completions() {
+		test_handler::<CompletionsHandler, _, _>(
+			r#"
+enum Foo = {A, B};
+Foo: hello;
+any: y = he
+			"#,
+			true,
+			lsp_types::CompletionParams {
+				context: None,
+				partial_result_params: lsp_types::PartialResultParams {
+					partial_result_token: None,
+				},
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+				text_document_position: lsp_types::TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Url::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 3,
+						character: 11,
+					},
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": [
+        {
+          "label": "y",
+          "kind": 6,
+          "detail": "error"
+        },
+        {
+          "label": "A",
+          "kind": 20,
+          "detail": "Foo"
+        },
+        {
+          "label": "hello",
+          "kind": 6,
+          "detail": "Foo"
+        },
+        {
+          "label": "Foo",
+          "kind": 13,
+          "detail": "set of Foo"
+        },
+        {
+          "label": "B",
+          "kind": 20,
+          "detail": "Foo"
+        }
+      ]
+    }"#]),
+		)
 	}
 }

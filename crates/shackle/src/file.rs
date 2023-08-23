@@ -53,7 +53,7 @@ impl SourceFile {
 	/// Create a new source file from a `FileRef`
 	pub fn new(file: FileRef, db: &dyn FileReader) -> Self {
 		Self(SourceFileInner::Text {
-			name: file.path(db).and_then(|p| p.canonicalize().ok()),
+			name: file.path(db),
 			source: file.contents(db).unwrap_or_default(),
 		})
 	}
@@ -145,9 +145,7 @@ impl salsa::InternKey for FileRef {
 impl FileRef {
 	/// Create a new file reference for an external (included) file
 	pub fn new(path: &Path, db: &dyn FileReader) -> Self {
-		db.intern_file_ref(FileRefData::ExternalFile(
-			path.canonicalize().unwrap_or_else(|_| path.to_owned()),
-		))
+		db.intern_file_ref(FileRefData::ExternalFile(path.to_owned()))
 	}
 
 	/// Get the file path if any
@@ -196,7 +194,7 @@ pub fn file_contents(db: &dyn FileReader, file: FileRef) -> Result<Arc<String>, 
 					db.salsa_runtime()
 						.report_synthetic_read(salsa::Durability::LOW);
 				}
-				h.read_file(p.canonicalize().as_ref().unwrap_or(p))
+				h.read_file(p)
 			}
 			InputFile::ModelString(ref s) => Ok(Arc::new(s.clone())),
 			InputFile::DznString(ref s) => Ok(Arc::new(s.clone())),

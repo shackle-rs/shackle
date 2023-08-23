@@ -282,10 +282,15 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 	// Resolve includes
 	let mut seen = FxHashSet::default();
 	while let Some(file) = todo.pop() {
-		if seen.contains(&file) {
-			continue;
+		if let Some(path) = file
+			.path(db.upcast())
+			.map(|p| p.canonicalize().unwrap_or(p))
+		{
+			if seen.contains(&path) {
+				continue;
+			}
+			seen.insert(path);
 		}
-		seen.insert(file);
 		let model = match db.ast(*file) {
 			Ok(m) => m,
 			Err(e) => {

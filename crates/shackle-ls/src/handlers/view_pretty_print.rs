@@ -7,14 +7,14 @@ use shackle::{
 	thir::{db::Thir, pretty_print::PrettyPrinter},
 };
 
-use crate::{dispatch::RequestHandler, extensions::ViewPrettyPrint, LanguageServerDatabase};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, extensions::ViewPrettyPrint};
 
 #[derive(Debug)]
 pub struct ViewPrettyPrintHandler;
 
 impl RequestHandler<ViewPrettyPrint, ModelRef> for ViewPrettyPrintHandler {
 	fn prepare(
-		db: &mut LanguageServerDatabase,
+		db: &mut impl LanguageServerContext,
 		params: TextDocumentPositionParams,
 	) -> Result<ModelRef, ResponseError> {
 		db.set_active_file_from_document(&params.text_document)

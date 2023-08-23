@@ -13,14 +13,14 @@ use shackle::{
 	},
 };
 
-use crate::{dispatch::RequestHandler, utils::node_ref_to_location, LanguageServerDatabase};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::node_ref_to_location};
 
 #[derive(Debug)]
 pub struct GotoDefinitionHandler;
 
 impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler {
 	fn prepare(
-		db: &mut LanguageServerDatabase,
+		db: &mut impl LanguageServerContext,
 		params: GotoDefinitionParams,
 	) -> Result<(ModelRef, Point), ResponseError> {
 		let model =
@@ -66,5 +66,107 @@ impl RequestHandler<GotoDefinition, (ModelRef, Point)> for GotoDefinitionHandler
 				_ => None,
 			}
 		})())
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::str::FromStr;
+
+	use expect_test::expect;
+	use lsp_types::Url;
+
+	use crate::handlers::test::test_handler;
+
+	use super::GotoDefinitionHandler;
+
+	#[test]
+	fn test_goto_definition_1() {
+		test_handler::<GotoDefinitionHandler, _, _>(
+			r#"
+int: hello;
+int: y = hello + 1;
+int: z = hello + let { int: hello = int; } in hello;
+			"#,
+			false,
+			lsp_types::GotoDefinitionParams {
+				partial_result_params: lsp_types::PartialResultParams {
+					partial_result_token: None,
+				},
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+				text_document_position_params: lsp_types::TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Url::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 2,
+						character: 11,
+					},
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "uri": "file:///test.mzn",
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 5
+          },
+          "end": {
+            "line": 1,
+            "character": 10
+          }
+        }
+      }
+    }"#]),
+		)
+	}
+
+	#[test]
+	fn test_goto_definition_2() {
+		test_handler::<GotoDefinitionHandler, _, _>(
+			r#"
+int: hello;
+int: y = hello + 1;
+int: z = hello + let { int: hello = int; } in hello;
+			"#,
+			false,
+			lsp_types::GotoDefinitionParams {
+				partial_result_params: lsp_types::PartialResultParams {
+					partial_result_token: None,
+				},
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+				text_document_position_params: lsp_types::TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Url::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 3,
+						character: 48,
+					},
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "uri": "file:///test.mzn",
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 28
+          },
+          "end": {
+            "line": 3,
+            "character": 33
+          }
+        }
+      }
+    }"#]),
+		)
 	}
 }

@@ -11,14 +11,14 @@ use shackle::{
 	utils::DebugPrint,
 };
 
-use crate::{dispatch::RequestHandler, extensions::ViewHir, LanguageServerDatabase};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, extensions::ViewHir};
 
 #[derive(Debug)]
 pub struct ViewHirHandler;
 
 impl RequestHandler<ViewHir, (ModelRef, Point)> for ViewHirHandler {
 	fn prepare(
-		db: &mut LanguageServerDatabase,
+		db: &mut impl LanguageServerContext,
 		params: TextDocumentPositionParams,
 	) -> Result<(ModelRef, Point), ResponseError> {
 		let model_ref = db.set_active_file_from_document(&params.text_document)?;
@@ -53,5 +53,68 @@ impl RequestHandler<ViewHir, (ModelRef, Point)> for ViewHirHandler {
 		} else {
 			Ok("Not an item.".to_owned())
 		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::str::FromStr;
+
+	use expect_test::expect;
+	use lsp_types::Url;
+
+	use crate::handlers::test::test_handler_display;
+
+	use super::ViewHirHandler;
+
+	#[test]
+	fn test_view_hir() {
+		test_handler_display::<ViewHirHandler, _, _>(
+			r#"
+function var int: foo(opt int: a);
+var 1..3: x = foo(<>);
+			"#,
+			false,
+			lsp_types::TextDocumentPositionParams {
+				text_document: lsp_types::TextDocumentIdentifier {
+					uri: Url::from_str("file:///test.mzn").unwrap(),
+				},
+				position: lsp_types::Position {
+					line: 2,
+					character: 0,
+				},
+			},
+			expect!([r#"
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::7>), annotations: [] }
+      Expressions:
+        <Expression::1>: IntegerLiteral(1)
+        <Expression::2>: IntegerLiteral(3)
+        <Expression::3>: Identifier("..")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+        <Expression::5>: Absent
+        <Expression::6>: Identifier("foo")
+        <Expression::7>: Call { function: <Expression::6>, arguments: [<Expression::5>] }
+      Types:
+        <Type::1>: Bounded { inst: Some(Var), opt: None, domain: <Expression::4> }
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("x"))
+      Annotations:
+
+    Computed types:
+      Declarations:
+        <Pattern::1>: Variable(var int)
+      Expressions:
+        <Expression::1>: int
+        <Expression::2>: int
+        <Expression::3>: op(set of int: (int, int))
+        <Expression::4>: set of int
+        <Expression::5>: opt ..
+        <Expression::6>: op(var int: (opt int))
+        <Expression::7>: var int
+      Name resolution:
+        <Expression::3>: PatternRef(ItemRef(562), <Pattern::1>)
+        <Expression::6>: PatternRef(ItemRef(0), <Pattern::1>)
+"#]),
+		)
 	}
 }
