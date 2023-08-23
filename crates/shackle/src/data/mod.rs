@@ -8,8 +8,8 @@ use std::{ops::RangeInclusive, sync::Arc};
 use itertools::Itertools;
 
 use crate::{
-	diagnostics::{InvalidArrayLiteral, ShackleError},
-	value::{Array, EnumRangeInclusive, Index, Polarity, Set, Value},
+	diagnostics::ShackleError,
+	value::{Array, EnumRangeInclusive, Index, Polarity, Record, Set, Value},
 	OptType, Type,
 };
 
@@ -71,9 +71,9 @@ impl ParserVal {
 		match self {
 			ParserVal::Absent => Ok(Value::Absent),
 			ParserVal::Infinity(v) => Ok(Value::Infinity(v)),
-			ParserVal::Boolean(v) => Ok(v.into()),
-			ParserVal::Integer(v) => Ok(v.into()),
-			ParserVal::Float(v) => Ok(v.into()),
+			ParserVal::Boolean(v) => Ok(Value::Boolean(v)),
+			ParserVal::Integer(v) => Ok(Value::Integer(v)),
+			ParserVal::Float(v) => Ok(Value::Float(v)),
 			ParserVal::String(v) => Ok(Value::String(v.into())),
 			ParserVal::Enum(_, _) => todo!(),
 			ParserVal::Ann(_, _) => todo!(),
@@ -133,7 +133,44 @@ impl ParserVal {
 				Ok(Array::new(indices, elements).into())
 			}
 			ParserVal::IndexedArray(_, _) => todo!(),
-			ParserVal::SetList(_) => todo!(),
+			ParserVal::SetList(li) => {
+				let Type::Set(_, ty) = ty else { unreachable!() };
+				let members = li
+					.into_iter()
+					.map(|m| m.resolve_value(ty))
+					.collect::<Result<Vec<_>, _>>()?;
+				// TODO: This could likely be optimised to not create ranges first
+				match **ty {
+					Type::Integer(_) => Ok(Value::Set(
+						members
+							.into_iter()
+							.map(|m| {
+								let Value::Integer(i) = m else {unreachable!()};
+								i..=i
+							})
+							.collect(),
+					)),
+					Type::Float(_) => Ok(Value::Set(
+						members
+							.into_iter()
+							.map(|m| {
+								let Value::Float(i) = m else {unreachable!()};
+								i..=i
+							})
+							.collect(),
+					)),
+					Type::Enum(_, _) => Ok(Value::Set(
+						members
+							.into_iter()
+							.map(|m| {
+								let Value::Enum(i) = m else {unreachable!()};
+								EnumRangeInclusive::new(i.clone(), i)
+							})
+							.collect(),
+					)),
+					_ => unreachable!("invalid set type"),
+				}
+			}
 			ParserVal::SetRangeList(li) => Ok(match ty {
 				Type::Integer(OptType::NonOpt) => Set::from_iter(li.into_iter().map(|r| {
 					let (ParserVal::Integer(a), ParserVal::Integer(b)) = r else {
@@ -193,7 +230,18 @@ impl ParserVal {
 					.collect::<Result<Vec<_>, _>>()?;
 				Ok(Value::Tuple(members))
 			}
-			ParserVal::Record(_) => todo!(),
+			ParserVal::Record(v) => {
+				let Type::Record(_, ty) = ty else {unreachable!()};
+				let rec = v
+					.into_iter()
+					.zip_eq(ty.iter())
+					.map(|((n, v), (name, ty))| {
+						debug_assert_eq!(&n, name);
+						Ok((name.clone(), v.resolve_value(ty)?))
+					})
+					.collect::<Result<Record, ShackleError>>()?;
+				Ok(Value::Record(rec))
+			}
 			ParserVal::EnumCtor(_) => unreachable!("not a value"),
 		}
 	}
