@@ -1017,7 +1017,9 @@ mod test {
                                                 left: IntegerLiteral(
                                                     IntegerLiteral {
                                                         cst_kind: "integer_literal",
-                                                        value: 1,
+                                                        value: Ok(
+                                                            1,
+                                                        ),
                                                     },
                                                 ),
                                                 operator: Operator {
@@ -1027,7 +1029,9 @@ mod test {
                                                 right: IntegerLiteral(
                                                     IntegerLiteral {
                                                         cst_kind: "integer_literal",
-                                                        value: 3,
+                                                        value: Ok(
+                                                            3,
+                                                        ),
                                                     },
                                                 ),
                                             },

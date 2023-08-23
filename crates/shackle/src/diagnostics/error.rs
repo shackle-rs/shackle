@@ -459,6 +459,21 @@ pub struct NonExhaustivePatternMatching {
 	pub span: SourceSpan,
 }
 
+/// Invalid numeric literal
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid numeric literal")]
+#[diagnostic(code(shackle::invalid_numeric_literal))]
+pub struct InvalidNumericLiteral {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum ShackleError {
@@ -554,6 +569,10 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	NonExhaustivePatternMatching(#[from] NonExhaustivePatternMatching),
+	/// Invalid numeric literal
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidNumericLiteral(#[from] InvalidNumericLiteral),
 	/// An internal error
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),

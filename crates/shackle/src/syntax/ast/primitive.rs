@@ -1,5 +1,8 @@
 //! AST representation of primitive values
 
+use std::num::ParseFloatError;
+use std::num::ParseIntError;
+
 use super::AstNode;
 
 use super::helpers::*;
@@ -12,8 +15,8 @@ ast_node!(
 
 impl IntegerLiteral {
 	/// Get the value of this integer literal
-	pub fn value(&self) -> i64 {
-		self.cst_text().parse().unwrap()
+	pub fn value(&self) -> Result<i64, ParseIntError> {
+		parse_integer_literal(self.cst_text())
 	}
 }
 
@@ -25,8 +28,8 @@ ast_node!(
 
 impl FloatLiteral {
 	/// Get the value of this float literal
-	pub fn value(&self) -> f64 {
-		self.cst_text().parse().unwrap()
+	pub fn value(&self) -> Result<f64, ParseFloatError> {
+		parse_float_literal(self.cst_text())
 	}
 }
 
@@ -70,6 +73,27 @@ ast_node!(
 	Infinity,
 );
 
+/// Parse a MiniZinc integer literal
+pub fn parse_integer_literal(text: &str) -> Result<i64, ParseIntError> {
+	if text.starts_with("0x") {
+		i64::from_str_radix(&text[2..], 16)
+	} else if text.starts_with("0b") {
+		i64::from_str_radix(&text[2..], 2)
+	} else if text.starts_with("0o") {
+		i64::from_str_radix(&text[2..], 8)
+	} else {
+		text.parse::<i64>()
+	}
+}
+
+/// Parse a MiniZinc float literal
+pub fn parse_float_literal(text: &str) -> Result<f64, ParseFloatError> {
+	if text.starts_with("0x") {
+		todo!("Hexadecimal floats not yet implemented")
+	}
+	text.parse()
+}
+
 #[cfg(test)]
 mod test {
 	use crate::syntax::ast::helpers::test::*;
@@ -96,7 +120,9 @@ mod test {
                     definition: IntegerLiteral(
                         IntegerLiteral {
                             cst_kind: "integer_literal",
-                            value: 1,
+                            value: Ok(
+                                1,
+                            ),
                         },
                     ),
                 },
@@ -128,7 +154,9 @@ mod test {
                     definition: FloatLiteral(
                         FloatLiteral {
                             cst_kind: "float_literal",
-                            value: 1.2,
+                            value: Ok(
+                                1.2,
+                            ),
                         },
                     ),
                 },
@@ -223,6 +251,102 @@ mod test {
                     definition: Infinity(
                         Infinity {
                             cst_kind: "infinity",
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_non_decimal() {
+		check_ast(
+			r#"x = 0xFF;"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: IntegerLiteral(
+                        IntegerLiteral {
+                            cst_kind: "integer_literal",
+                            value: Ok(
+                                255,
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
+		);
+
+		check_ast(
+			r#"x = 0b11;"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: IntegerLiteral(
+                        IntegerLiteral {
+                            cst_kind: "integer_literal",
+                            value: Ok(
+                                3,
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ],
+    }
+"#]),
+		);
+
+		check_ast(
+			r#"x = 0o77;"#,
+			expect!([r#"
+    Model {
+        items: [
+            Assignment(
+                Assignment {
+                    cst_kind: "assignment",
+                    assignee: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    definition: IntegerLiteral(
+                        IntegerLiteral {
+                            cst_kind: "integer_literal",
+                            value: Ok(
+                                63,
+                            ),
                         },
                     ),
                 },

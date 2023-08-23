@@ -1579,7 +1579,9 @@ mod test {
                             ),
                             field: IntegerLiteral {
                                 cst_kind: "integer_literal",
-                                value: 1,
+                                value: Ok(
+                                    1,
+                                ),
                             },
                         },
                     ),
