@@ -5,7 +5,7 @@ use lsp_server::{
 };
 use shackle::db::CompilerDatabase;
 
-use crate::LanguageServerDatabase;
+use crate::{db::LanguageServerContext, LanguageServerDatabase};
 
 enum RequestState<'a> {
 	Unhandled {
@@ -18,7 +18,7 @@ enum RequestState<'a> {
 pub trait RequestHandler<R: lsp_types::request::Request, T> {
 	/// Run on the main thread to prepare the argument passed to the `execute` function.
 	/// Usually needs to call `set_input_files` on the database.
-	fn prepare(db: &mut LanguageServerDatabase, params: R::Params) -> Result<T, ResponseError>;
+	fn prepare(db: &mut impl LanguageServerContext, params: R::Params) -> Result<T, ResponseError>;
 	/// Run in the thread pool. Can panic without crashing the language server.
 	fn execute(db: &CompilerDatabase, data: T) -> Result<R::Result, ResponseError>;
 }

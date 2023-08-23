@@ -37,8 +37,8 @@ fn collect_diagnostic(
 	let span = sc.read_span(first.inner(), 0, 0).ok()?;
 	let range = span_contents_to_range(span.as_ref());
 	let name = span.name()?;
-	let p = PathBuf::from_str(name).ok()?.canonicalize().ok()?;
-	if p.as_path() != path {
+	let p = PathBuf::from_str(name).ok()?;
+	if p != path {
 		return None;
 	}
 	let uri = Url::from_file_path(path).ok()?;
