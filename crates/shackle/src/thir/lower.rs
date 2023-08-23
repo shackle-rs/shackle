@@ -16,7 +16,6 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 
 use crate::{
-	arena::ArenaIndex,
 	constants::IdentifierRegistry,
 	hir::{
 		self,
@@ -24,7 +23,7 @@ use crate::{
 		PatternTy, TypeResult,
 	},
 	ty::{OptType, Ty, TyData, VarType},
-	utils::{impl_enum_from, maybe_grow_stack},
+	utils::{arena::ArenaIndex, impl_enum_from, maybe_grow_stack},
 };
 
 use super::{

@@ -17,8 +17,10 @@
 use std::fmt::Write;
 use std::ops::{Deref, DerefMut};
 
-use crate::arena::{Arena, ArenaIndex, ArenaMap};
-use crate::utils::{debug_print_strings, impl_enum_from, impl_index, DebugPrint};
+use crate::utils::{
+	arena::{Arena, ArenaIndex, ArenaMap},
+	debug_print_strings, impl_enum_from, impl_index, DebugPrint,
+};
 
 use super::db::Hir;
 use super::{source::Origin, Expression, Pattern, Type};

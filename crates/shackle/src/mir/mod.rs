@@ -3,9 +3,9 @@
 pub mod ty;
 
 use crate::{
-	arena::{Arena, ArenaIndex},
 	hir::{BooleanLiteral, FloatLiteral, Identifier, IntegerLiteral, StringLiteral},
 	thir::source::Origin,
+	utils::arena::{Arena, ArenaIndex},
 };
 
 use ty::Ty;

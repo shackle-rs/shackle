@@ -3,8 +3,7 @@
 
 use super::{db::Hir, BooleanLiteral, FloatLiteral, IntegerLiteral, ItemData, StringLiteral};
 use crate::db::{InternedString, InternedStringData};
-use crate::utils::pretty_print_identifier;
-use crate::{arena::ArenaIndex, utils::impl_enum_from};
+use crate::utils::{arena::ArenaIndex, impl_enum_from, pretty_print_identifier};
 
 /// A pattern for destructuring
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

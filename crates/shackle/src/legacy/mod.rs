@@ -163,7 +163,14 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 			}
 		}
 		Value::Array(v) => {
-			let Type::Array { opt: _, dim: _, element } = ty else {unreachable!()};
+			let Type::Array {
+				opt: _,
+				dim: _,
+				element,
+			} = ty
+			else {
+				unreachable!()
+			};
 			let extract_idx = |x: &Value| match x {
 				Value::Integer(i) => *i,
 				Value::Enum(v) => v.int_val() as i64,
@@ -220,7 +227,9 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 			)?,
 		},
 		Value::Tuple(v) => {
-			let Type::Tuple(_, tys) = ty else { unreachable!() };
+			let Type::Tuple(_, tys) = ty else {
+				unreachable!()
+			};
 			write!(out, "(")?;
 			for (ty, val) in tys.iter().zip_eq(v) {
 				write_legacy_value(out, ty, val)?;
@@ -229,7 +238,9 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 			write!(out, ")")?;
 		}
 		Value::Record(v) => {
-			let Type::Record(_, tys) = ty else { unreachable!() };
+			let Type::Record(_, tys) = ty else {
+				unreachable!()
+			};
 			write!(out, "(")?;
 			for (ty, val) in tys.iter().map(|(_, t)| t).zip_eq(v.iter().map(|(_, v)| v)) {
 				write_legacy_value(out, ty, val)?;

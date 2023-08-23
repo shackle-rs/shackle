@@ -7,13 +7,13 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-	arena::{ArenaIndex, ArenaMap},
 	hir::{
 		db::Hir,
 		ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
 		Expression, Pattern,
 	},
 	ty::Ty,
+	utils::arena::{ArenaIndex, ArenaMap},
 	Error,
 };
 

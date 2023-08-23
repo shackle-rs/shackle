@@ -4,21 +4,20 @@
 #![warn(unused_crate_dependencies, unused_extern_crates)]
 #![warn(variant_size_differences)]
 
-pub mod arena;
 pub mod constants;
-mod data;
 pub mod db;
 pub mod diagnostics;
 pub mod file;
 pub mod hir;
-mod legacy;
 pub mod mir;
-pub mod refmap;
 pub mod syntax;
 pub mod thir;
 pub mod ty;
 pub mod utils;
-pub mod value;
+
+mod data;
+mod legacy;
+mod value;
 
 use data::{
 	dzn::{parse_dzn, typecheck_dzn},
@@ -33,7 +32,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserializer;
 use syntax::ast::{AstNode, Identifier};
 use ty::{Ty, TyData};
-use value::Enum;
 
 use std::{
 	ffi::OsStr,
@@ -48,7 +46,6 @@ use crate::{
 	diagnostics::UndefinedIdentifier,
 	hir::db::Hir,
 	thir::{db::Thir, pretty_print::PrettyPrinter},
-	value::Value,
 };
 
 // Export OptType enumeration used in [`Type`]
@@ -60,6 +57,7 @@ pub type Error = ShackleError;
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub use diagnostics::Warning;
+pub use value::{Enum, Value};
 
 /// Structure used to build a shackle model
 pub struct Model {

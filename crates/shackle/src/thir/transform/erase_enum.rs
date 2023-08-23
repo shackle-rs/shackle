@@ -8,7 +8,6 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-	arena::ArenaMap,
 	constants::{IdentifierRegistry, TypeRegistry},
 	hir::{Identifier, IntegerLiteral, StringLiteral, VarType},
 	thir::{
@@ -22,7 +21,7 @@ use crate::{
 		FunctionName, Item, ItemId, LookupCall, Marker, Model, ResolvedIdentifier, TupleLiteral,
 	},
 	ty::EnumRef,
-	utils::maybe_grow_stack,
+	utils::{arena::ArenaMap, maybe_grow_stack},
 	Result,
 };
 use std::sync::Arc;

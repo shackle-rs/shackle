@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use crate::{arena::ArenaIndex, utils::impl_enum_from};
+use crate::utils::{arena::ArenaIndex, impl_enum_from};
 
 use super::{
 	ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, BooleanLiteral, Constraint,

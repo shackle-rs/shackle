@@ -5,7 +5,6 @@
 use crate::{
 	db::Interner,
 	hir::{OptType, VarType},
-	refmap::RefMap,
 	thir::{
 		db::Thir,
 		traverse::{add_declaration, add_function, fold_expression, Folder, ReplacementMap},
@@ -13,7 +12,7 @@ use crate::{
 		ExpressionData, FunctionId, Item, Let, LetItem, Marker, Model,
 	},
 	ty::{FunctionType, PolymorphicFunctionType, Ty, TyData},
-	utils::maybe_grow_stack,
+	utils::{maybe_grow_stack, refmap::RefMap},
 	Result,
 };
 

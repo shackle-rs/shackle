@@ -8,14 +8,16 @@ use std::{collections::hash_map::Entry, fmt::Debug, sync::Arc};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-	arena::{Arena, ArenaIndex, ArenaMap},
 	diagnostics::{IdentifierAlreadyDefined, IdentifierShadowing, InvalidPattern},
 	hir::{
 		db::Hir,
 		ids::{EntityRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		Expression, Goal, Identifier, ItemData, LetItem, Pattern, Type,
 	},
-	utils::maybe_grow_stack,
+	utils::{
+		arena::{Arena, ArenaIndex, ArenaMap},
+		maybe_grow_stack,
+	},
 	Error, Result, Warning,
 };
 

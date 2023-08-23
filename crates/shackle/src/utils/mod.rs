@@ -1,5 +1,8 @@
 //! Miscellaneous utilities
 
+pub mod arena;
+pub mod refmap;
+
 /// Implement `From<T>` for an enum `X` which has a variant `X::V(T)`.
 macro_rules! impl_enum_from {
 	($enum:ident::$type:ident) => {

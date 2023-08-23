@@ -2,7 +2,6 @@ use rustc_hash::FxHashMap;
 use std::{collections::hash_map::Entry, fmt::Write, sync::Arc};
 
 use crate::{
-	arena::ArenaIndex,
 	constants::{IdentifierRegistry, TypeRegistry},
 	diagnostics::{
 		AmbiguousCall, BranchMismatch, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
@@ -20,7 +19,7 @@ use crate::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
 		TyData, VarType,
 	},
-	utils::maybe_grow_stack,
+	utils::{arena::ArenaIndex, maybe_grow_stack},
 	Error,
 };
 

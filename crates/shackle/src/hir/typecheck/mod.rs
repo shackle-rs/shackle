@@ -37,9 +37,11 @@ use std::{
 };
 
 use crate::{
-	arena::{ArenaIndex, ArenaMap},
 	ty::{FunctionEntry, Ty, TyData, TyVar},
-	utils::{debug_print_strings, DebugPrint},
+	utils::{
+		arena::{ArenaIndex, ArenaMap},
+		debug_print_strings, DebugPrint,
+	},
 	Error,
 };
 

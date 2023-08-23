@@ -2,7 +2,7 @@
 //!
 //! See the `typecheck` module for computing types.
 
-use crate::arena::ArenaIndex;
+use crate::utils::arena::ArenaIndex;
 
 use super::{Expression, ItemData, Pattern};
 

@@ -39,9 +39,9 @@ pub use scope::*;
 pub use typecheck::*;
 pub use types::*;
 
-use crate::{
+use crate::utils::{
 	arena::{Arena, ArenaIndex},
-	utils::impl_index,
+	impl_index,
 };
 
 use self::ids::LocalItemRef;

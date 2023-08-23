@@ -7,10 +7,10 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-	arena::ArenaIndex,
 	constants::TypeRegistry,
 	diagnostics::{NonExhaustivePatternMatching, UnreachablePattern, Warning},
 	ty::{EnumRef, Ty, TyData},
+	utils::arena::ArenaIndex,
 	Error,
 };
 

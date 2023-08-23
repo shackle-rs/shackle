@@ -3,13 +3,12 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
-	arena::ArenaIndex,
 	thir::{db::Thir, source::Origin},
 	ty::{
 		EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty,
 		TyVar,
 	},
-	utils::impl_enum_from,
+	utils::{arena::ArenaIndex, impl_enum_from},
 };
 
 use super::{domain::Domain, Annotations, Expression, Identifier, Marker, Model};

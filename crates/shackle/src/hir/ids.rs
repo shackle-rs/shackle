@@ -5,9 +5,8 @@ use std::sync::Arc;
 use miette::SourceSpan;
 
 use crate::{
-	arena::ArenaIndex,
 	file::{ModelRef, SourceFile},
-	utils::{impl_enum_from, DebugPrint},
+	utils::{arena::ArenaIndex, impl_enum_from, DebugPrint},
 };
 
 use super::{

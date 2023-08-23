@@ -77,7 +77,14 @@ impl ParserVal {
 			ParserVal::Enum(_, _) => todo!(),
 			ParserVal::Ann(_, _) => todo!(),
 			ParserVal::SimpleArray(ranges, elements) => {
-				let Type::Array { opt: _, dim, element } = ty else { unreachable!() };
+				let Type::Array {
+					opt: _,
+					dim,
+					element,
+				} = ty
+				else {
+					unreachable!()
+				};
 				let indices = ranges
 					.into_iter()
 					.zip_eq(dim.iter())
@@ -86,8 +93,12 @@ impl ParserVal {
 							Ok::<_, ShackleError>(Index::Integer(from..=to))
 						}
 						(from @ ParserVal::Enum(_, _), to @ ParserVal::Enum(_, _)) => {
-							let Value::Enum(_) = from.resolve_value(ty)? else {unreachable!()};
-							let Value::Enum(_) = to.resolve_value(ty)? else {unreachable!()};
+							let Value::Enum(_) = from.resolve_value(ty)? else {
+								unreachable!()
+							};
+							let Value::Enum(_) = to.resolve_value(ty)? else {
+								unreachable!()
+							};
 							todo!()
 						}
 						_ => unreachable!("invalid index range parsed"),
@@ -104,14 +115,20 @@ impl ParserVal {
 			ParserVal::Range(a, b) => Ok(Value::Set(match (*a, *b) {
 				(ParserVal::Integer(from), ParserVal::Integer(to)) => (from..=to).into(),
 				(from @ ParserVal::Enum(_, _), to @ ParserVal::Enum(_, _)) => {
-					let Value::Enum(a) = from.resolve_value(ty)? else {unreachable!()};
-					let Value::Enum(b) = to.resolve_value(ty)? else {unreachable!()};
+					let Value::Enum(a) = from.resolve_value(ty)? else {
+						unreachable!()
+					};
+					let Value::Enum(b) = to.resolve_value(ty)? else {
+						unreachable!()
+					};
 					EnumRangeInclusive::new(a, b).into()
 				}
 				_ => unreachable!("invalid ParserVal::Range arguments"),
 			})),
 			ParserVal::Tuple(v) => {
-				let Type::Tuple(_, ty) = ty else {unreachable!()};
+				let Type::Tuple(_, ty) = ty else {
+					unreachable!()
+				};
 				let members = v
 					.into_iter()
 					.zip_eq(ty.iter())

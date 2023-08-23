@@ -111,7 +111,12 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 			Type::Tuple(_, members) => {
 				let mut tup = Vec::with_capacity(members.len());
 				for ty in members.iter() {
-					let Some(m) = seq.next_element_seed(SerdeValueVisitor(ty))? else { return Err(Error::invalid_length(tup.len(), &members.len().to_string().as_str())) };
+					let Some(m) = seq.next_element_seed(SerdeValueVisitor(ty))? else {
+						return Err(Error::invalid_length(
+							tup.len(),
+							&members.len().to_string().as_str(),
+						));
+					};
 					tup.push(m);
 				}
 				if seq.next_element::<IgnoredAny>()?.is_some() {

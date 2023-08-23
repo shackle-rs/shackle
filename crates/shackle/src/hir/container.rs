@@ -1,7 +1,7 @@
 //! HIR representation of containers
 
 use super::{Expression, Pattern};
-use crate::arena::ArenaIndex;
+use crate::utils::arena::ArenaIndex;
 
 /// Set literal
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

@@ -3,13 +3,13 @@
 
 use std::ops::Index;
 
-use crate::arena::Arena;
 use crate::hir::Identifier;
 use crate::ty::FunctionEntry;
 use crate::ty::FunctionResolutionError;
 use crate::ty::OverloadedFunction;
 use crate::ty::Ty;
 use crate::ty::TyParamInstantiations;
+use crate::utils::arena::Arena;
 use crate::utils::impl_index;
 
 mod annotations;
@@ -271,7 +271,7 @@ impl<T: Marker> Model<T> {
 
 	/// Add a function item after the given item
 	pub fn add_function_after(&mut self, item: FunctionItem<T>, after: ItemId<T>) -> FunctionId<T> {
-		let idx: crate::arena::ArenaIndex<Item<Function<T>>> = self.functions.insert(item);
+		let idx: crate::utils::arena::ArenaIndex<Item<Function<T>>> = self.functions.insert(item);
 		self.items.insert(
 			self.items.iter().position(|it| *it == after).unwrap() + 1,
 			idx.into(),
@@ -281,7 +281,7 @@ impl<T: Marker> Model<T> {
 
 	/// Add a function item at the start of the model
 	pub fn prepend_function(&mut self, item: FunctionItem<T>) -> FunctionId<T> {
-		let idx: crate::arena::ArenaIndex<Item<Function<T>>> = self.functions.insert(item);
+		let idx: crate::utils::arena::ArenaIndex<Item<Function<T>>> = self.functions.insert(item);
 		self.items.insert(0, idx.into());
 		idx
 	}

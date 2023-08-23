@@ -1,13 +1,12 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-	arena::ArenaIndex,
 	constants::IdentifierRegistry,
 	db::InternedStringData,
 	diagnostics::{InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError},
 	hir::source::Origin,
 	syntax::ast::{self, AstNode},
-	utils::maybe_grow_stack,
+	utils::{arena::ArenaIndex, maybe_grow_stack},
 	Error,
 };
 

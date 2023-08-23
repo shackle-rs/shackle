@@ -98,15 +98,6 @@ impl SourceFile {
 	}
 }
 
-impl<'a> From<Span<'a>> for SourceFile {
-	fn from(span: Span) -> Self {
-		Self(SourceFileInner::Text {
-			name: span.extra.0,
-			source: span.extra.1,
-		})
-	}
-}
-
 impl TryFrom<&Path> for SourceFile {
 	type Error = FileError;
 
