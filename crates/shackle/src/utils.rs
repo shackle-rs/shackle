@@ -111,3 +111,87 @@ pub fn levenshtein_distance(s: &str, t: &str) -> usize {
 	}
 	*dp0.last().unwrap()
 }
+
+/// Pretty print an identifier.
+///
+/// Either returns the string as is, if it is already a valid identifier,
+/// otherwise, encloses it in quotes.
+///
+/// Panics if the given name contains a quote.
+pub fn pretty_print_identifier(name: &str) -> String {
+	assert!(
+		!name.contains('\''),
+		"Identifier names cannot contain single quotes"
+	);
+	if matches!(
+		name,
+		"ann"
+			| "annotation"
+			| "any" | "array"
+			| "bool" | "case"
+			| "constraint"
+			| "default" | "diff"
+			| "div" | "else"
+			| "elseif" | "endif"
+			| "enum" | "false"
+			| "float" | "function"
+			| "if" | "in"
+			| "include" | "int"
+			| "intersect"
+			| "let" | "list"
+			| "maximize" | "minimize"
+			| "mod" | "not"
+			| "of" | "op"
+			| "opt" | "output"
+			| "par" | "predicate"
+			| "record" | "satisfy"
+			| "set" | "solve"
+			| "string" | "subset"
+			| "superset" | "symdiff"
+			| "test" | "then"
+			| "true" | "tuple"
+			| "type" | "union"
+			| "var" | "where"
+			| "xor"
+	) {
+		return format!("'{}'", name);
+	}
+
+	for c in name.chars() {
+		if matches!(
+			c,
+			'"' | '\''
+				| '.' | '-' | '['
+				| ']' | '^' | ','
+				| ';' | ':' | '('
+				| ')' | '{' | '}'
+				| '&' | '|' | '$'
+				| '∞' | '%' | '<'
+				| '>' | '⟷' | '⇔'
+				| '→' | '⇒' | '←'
+				| '⇐' | '/' | '∨'
+				| '⊻' | '∧' | '='
+				| '!' | '≠' | '≤'
+				| '≥' | '∈' | '⊆'
+				| '⊇' | '∪' | '∩'
+				| '+' | '*' | '~'
+		) || c.is_whitespace()
+		{
+			return format!("'{}'", name);
+		}
+	}
+	name.to_owned()
+}
+
+#[cfg(test)]
+mod test {
+	use super::pretty_print_identifier;
+
+	#[test]
+	fn pretty_print_ident() {
+		assert_eq!(pretty_print_identifier("x"), "x");
+		assert_eq!(pretty_print_identifier("-"), "'-'");
+		assert_eq!(pretty_print_identifier("a b"), "'a b'");
+		assert_eq!(pretty_print_identifier("😃"), "😃");
+	}
+}
