@@ -617,8 +617,8 @@ module.exports = grammar({
 			token(
 				choice(
 					/\d+\.\d+/,
-					/\d+(\.\d+)?[Ee][+-]?\d+/
-					// TODO: Hexadecimal floating point numbers
+					/\d+(\.\d+)?[Ee][+-]?\d+/,
+					/0[xX]([0-9a-fA-F]*\.[0-9a-fA-F]+|[0-9a-fA-F]+\.?)[pP][+-]?[0-9]+/
 				)
 			),
 		integer_literal: ($) =>
