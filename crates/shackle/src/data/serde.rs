@@ -427,8 +427,12 @@ impl<
 
 	// A sequence is expected to be a pair
 	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-		let Some(first) = seq.next_element_seed(self.0.clone())? else { return Err(Error::invalid_length(0, &"2"))};
-		let Some(second) = seq.next_element_seed(self.0.clone())? else { return Err(Error::invalid_length(1, &"2"))};
+		let Some(first) = seq.next_element_seed(self.0.clone())? else {
+			return Err(Error::invalid_length(0, &"2"));
+		};
+		let Some(second) = seq.next_element_seed(self.0.clone())? else {
+			return Err(Error::invalid_length(1, &"2"));
+		};
 
 		let mut i = 0;
 		while let Some(_) = seq.next_element::<IgnoredAny>()? {

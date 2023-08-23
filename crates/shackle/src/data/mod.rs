@@ -8,7 +8,7 @@ use std::{ops::RangeInclusive, sync::Arc};
 use itertools::Itertools;
 
 use crate::{
-	diagnostics::ShackleError,
+	diagnostics::{InvalidArrayLiteral, ShackleError},
 	value::{Array, EnumRangeInclusive, Index, Polarity, Set, Value},
 	OptType, Type,
 };
@@ -39,7 +39,7 @@ pub(crate) enum ParserVal {
 	Ann(String, Vec<ParserVal>),
 	/// An array of values
 	SimpleArray(Vec<(ParserVal, ParserVal)>, Vec<ParserVal>),
-	IndexedArray(u64, Vec<ParserVal>),
+	IndexedArray(usize, Vec<ParserVal>),
 	/// A set of values
 	SetList(Vec<ParserVal>),
 	SetRangeList(Vec<(ParserVal, ParserVal)>),
@@ -86,28 +86,49 @@ impl ParserVal {
 				else {
 					unreachable!()
 				};
+				let elements = elements
+					.into_iter()
+					.map(|el| el.resolve_value(element))
+					.collect::<Result<Vec<_>, _>>()?;
 				let indices = ranges
 					.into_iter()
 					.zip_eq(dim.iter())
 					.map(|(range, ty)| match range {
-						(ParserVal::Integer(from), ParserVal::Integer(to)) => {
-							Ok::<_, ShackleError>(Index::Integer(from..=to))
+						(ParserVal::Integer(start), ParserVal::Integer(end)) => {
+							Ok::<_, ShackleError>(Index::Integer(start..=end))
 						}
-						(from @ ParserVal::Enum(_, _), to @ ParserVal::Enum(_, _)) => {
-							let Value::Enum(_) = from.resolve_value(ty)? else {
+						(start @ ParserVal::Enum(_, _), ParserVal::Infinity(Polarity::Pos)) => {
+							debug_assert_eq!(dim.len(), 1);
+							let Value::Enum(start) = start.resolve_value(ty)? else {
 								unreachable!()
 							};
-							let Value::Enum(_) = to.resolve_value(ty)? else {
+							if start.int_val() + elements.len() > start.enum_type().len() {
+								todo!()
+							// Err(InvalidArrayLiteral {
+							// 	msg: format!("Array literal cannot start at value {start}. There are only {} higher values in its enumerated type, but the array literal has {} members", start.enum_type().len() + 1 - start.int_val(), elements.len()),
+							// 	src: todo!(),
+							// 	span: todo!(),
+							// }
+							// .into())
+							} else {
+								Ok(Index::Enum(EnumRangeInclusive::from_internal_values(
+									start.enum_type(),
+									start.int_val(),
+									start.int_val() + elements.len(),
+								)))
+							}
+						}
+						(start @ ParserVal::Enum(_, _), end @ ParserVal::Enum(_, _)) => {
+							let Value::Enum(start) = start.resolve_value(ty)? else {
 								unreachable!()
 							};
-							todo!()
+							let Value::Enum(end) = end.resolve_value(ty)? else {
+								unreachable!()
+							};
+							Ok(Index::Enum((start, end).into()))
 						}
 						_ => unreachable!("invalid index range parsed"),
 					})
-					.collect::<Result<Vec<_>, _>>()?;
-				let elements = elements
-					.into_iter()
-					.map(|el| el.resolve_value(element))
 					.collect::<Result<Vec<_>, _>>()?;
 				Ok(Array::new(indices, elements).into())
 			}
@@ -115,12 +136,16 @@ impl ParserVal {
 			ParserVal::SetList(_) => todo!(),
 			ParserVal::SetRangeList(li) => Ok(match ty {
 				Type::Integer(OptType::NonOpt) => Set::from_iter(li.into_iter().map(|r| {
-					let (ParserVal::Integer(a), ParserVal::Integer(b)) = r else { unreachable!("invalid integer set")};
+					let (ParserVal::Integer(a), ParserVal::Integer(b)) = r else {
+						unreachable!("invalid integer set")
+					};
 					a..=b
 				}))
 				.into(),
 				Type::Float(OptType::NonOpt) => Set::from_iter(li.into_iter().map(|r| {
-					let (ParserVal::Float(a), ParserVal::Float(b)) = r else { unreachable!("invalid integer set")};
+					let (ParserVal::Float(a), ParserVal::Float(b)) = r else {
+						unreachable!("invalid integer set")
+					};
 					a..=b
 				}))
 				.into(),
@@ -129,7 +154,9 @@ impl ParserVal {
 						.map(|(a, b)| match a.resolve_value(e) {
 							Ok(a) => match b.resolve_value(e) {
 								Ok(b) => {
-									let (Value::Enum(a), Value::Enum(b)) = (a, b) else { unreachable!("invalid enum set")};
+									let (Value::Enum(a), Value::Enum(b)) = (a, b) else {
+										unreachable!("invalid enum set")
+									};
 									Ok(EnumRangeInclusive::new(a, b))
 								}
 								Err(e) => Err(e),

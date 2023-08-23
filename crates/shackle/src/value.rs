@@ -263,6 +263,22 @@ impl Index {
 		}
 	}
 
+	/// Returns the lower bound of the index range (inclusive).
+	pub fn start(&self) -> Value {
+		match self {
+			Index::Integer(it) => Value::Integer(*it.start()),
+			Index::Enum(it) => Value::Enum(it.start()),
+		}
+	}
+
+	/// Returns the upper bound of the index range (inclusive).
+	pub fn end(&self) -> Value {
+		match self {
+			Index::Integer(it) => Value::Integer(*it.end()),
+			Index::Enum(it) => Value::Enum(it.end()),
+		}
+	}
+
 	/// Returns whether the index set contains any members
 	pub fn is_empty(&self) -> bool {
 		match &self {
@@ -469,6 +485,10 @@ impl EnumRangeInclusive {
 		}
 	}
 
+	pub(crate) fn from_internal_values(set: Arc<Enum>, start: usize, end: usize) -> Self {
+		EnumRangeInclusive { set, start, end }
+	}
+
 	/// Returns `true` if item is contained in the range.
 	pub fn contains(&self, item: EnumValue) -> bool {
 		if item.set != self.set {
@@ -521,11 +541,30 @@ impl EnumRangeInclusive {
 	}
 }
 
+impl From<(EnumValue, EnumValue)> for EnumRangeInclusive {
+	fn from(value: (EnumValue, EnumValue)) -> Self {
+		EnumRangeInclusive::from((&value.0, &value.1))
+	}
+}
+impl From<(&EnumValue, &EnumValue)> for EnumRangeInclusive {
+	fn from(value: (&EnumValue, &EnumValue)) -> Self {
+		assert_eq!(
+			value.0.set, value.1.set,
+			"EnumRangeInclusive must be of a single enumerated type"
+		);
+		Self {
+			set: value.0.set.clone(),
+			start: value.0.val,
+			end: value.1.val,
+		}
+	}
+}
+
 impl Display for EnumRangeInclusive {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
-			"{}..={}",
+			"{}..{}",
 			EnumValue {
 				set: self.set.clone(),
 				val: self.start,
