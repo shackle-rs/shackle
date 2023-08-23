@@ -8,7 +8,9 @@ use tree_sitter::Parser;
 
 use crate::{
 	data::ParserVal,
-	diagnostics::{InvalidArrayLiteral, ShackleError, SyntaxError, TypeMismatch},
+	diagnostics::{
+		InvalidArrayLiteral, InvalidNumericLiteral, ShackleError, SyntaxError, TypeMismatch,
+	},
 	file::SourceFile,
 	syntax::{
 		ast::{
@@ -60,16 +62,27 @@ pub(crate) fn typecheck_dzn(
 	};
 
 	match val {
-		Expression::IntegerLiteral(il) => {
-			if matches!(ty, Type::Integer(_) | Type::Float(_)) {
-				Ok(ParserVal::Integer(il.value()))
-			} else {
-				type_err("an integer literal")
+		Expression::IntegerLiteral(v) => {
+			let v = v.value().map_err(|e| InvalidNumericLiteral {
+				src: file.clone(),
+				span: v.cst_node().as_ref().byte_range().into(),
+				msg: e.to_string(),
+			})?;
+			match ty {
+				Type::Integer(_) => Ok(ParserVal::Integer(v)),
+				Type::Float(_) => Ok(ParserVal::Float(v as f64)),
+				_ => type_err("an integer literal"),
 			}
 		}
-		Expression::FloatLiteral(fl) => {
+		Expression::FloatLiteral(v) => {
 			if matches!(ty, Type::Float(_)) {
-				Ok(ParserVal::Float(fl.value()))
+				Ok(ParserVal::Float(v.value().map_err(|e| {
+					InvalidNumericLiteral {
+						src: file.clone(),
+						span: v.cst_node().as_ref().byte_range().into(),
+						msg: e.to_string(),
+					}
+				})?))
 			} else {
 				type_err("a floating point literal")
 			}
@@ -142,13 +155,12 @@ pub(crate) fn typecheck_dzn(
 			}
 			_ => type_err("a set literal"),
 		},
-		Expression::BooleanLiteral(b) => {
-			if matches!(ty, Type::Boolean(_) | Type::Integer(_) | Type::Float(_)) {
-				Ok(ParserVal::Boolean(b.value()))
-			} else {
-				type_err("a Boolean literal")
-			}
-		}
+		Expression::BooleanLiteral(b) => match ty {
+			Type::Boolean(_) => Ok(ParserVal::Boolean(b.value())),
+			Type::Integer(_) => Ok(ParserVal::Integer(b.value() as i64)),
+			Type::Float(_) => Ok(ParserVal::Float(b.value() as i64 as f64)),
+			_ => type_err("a Boolean literal"),
+		},
 		Expression::StringLiteral(s) => {
 			if matches!(ty, Type::String(_)) {
 				Ok(ParserVal::String(s.value()))
@@ -168,9 +180,14 @@ pub(crate) fn typecheck_dzn(
 				type_err("absent")
 			}
 		}
-		Expression::Infinity(_) => {
+		Expression::Infinity(v) => {
 			if matches!(ty, Type::Integer(_) | Type::Float(_)) {
-				Ok(ParserVal::Infinity(Polarity::Pos))
+				debug_assert_eq!(v.cst_text().trim_start(), v.cst_text());
+				Ok(ParserVal::Infinity(if v.cst_text().starts_with("-") {
+					Polarity::Neg
+				} else {
+					Polarity::Pos
+				}))
 			} else {
 				type_err("infinity")
 			}
@@ -186,7 +203,8 @@ pub(crate) fn typecheck_dzn(
 					// Empty array literal
 					Ok(ParserVal::SimpleArray(Vec::new(), Vec::new()))
 				} else if members[0].indices().is_none()
-					|| (members.len() > 1 && members[1].indices().is_none())
+					|| members.len() <= 1
+					|| members[1].indices().is_none()
 				{
 					// Array literal without any indices or a single index
 					if dim.len() != 1 {
@@ -218,7 +236,7 @@ pub(crate) fn typecheck_dzn(
 						elems.push(typecheck_dzn(file, name, &m.value(), element)?);
 					}
 					let end = if let ParserVal::Integer(v) = &start {
-						ParserVal::Integer(v + elems.len() as i64)
+						ParserVal::Integer(v - 1 + elems.len() as i64)
 					} else {
 						ParserVal::Infinity(Polarity::Pos)
 					};
@@ -374,7 +392,11 @@ pub(crate) fn typecheck_dzn(
 				let ident: Identifier = c.function().cast().unwrap();
 				let args = c.arguments().map( |expr |
 					match expr {
-						Expression::IntegerLiteral(v) => Ok(ParserVal::Integer(v.value())),
+						Expression::IntegerLiteral(v) => Ok(ParserVal::Integer(v.value().map_err(|e| InvalidNumericLiteral {
+							src: file.clone(),
+							span: v.cst_node().as_ref().byte_range().into(),
+							msg: e.to_string(),
+						})?)),
 						Expression::Identifier(_) | Expression::Call(_) => {
 							const UNKNOWN_ENUM: Type = Type::Enum(OptType::NonOpt, None);
 							typecheck_dzn(file, name, &expr, &UNKNOWN_ENUM)
@@ -440,7 +462,12 @@ pub(crate) fn typecheck_dzn(
 							}
 						}
 
-						Ok(ParserVal::Range(Box::new(extract_range(op, ty)?)))
+						Ok(ParserVal::SetRangeList(
+							ranges
+								.iter()
+								.map(|op| extract_range(op, ty))
+								.collect::<Result<_, _>>()?,
+						))
 					} else {
 						type_err("a union of ranges")
 					}
@@ -454,4 +481,401 @@ pub(crate) fn typecheck_dzn(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use std::sync::Arc;
+
+	use expect_test::{expect, Expect};
+
+	use super::parse_dzn;
+	use crate::{data::dzn::typecheck_dzn, file::SourceFile, OptType, Type};
+
+	fn check_serialization(input: &str, ty: &Type, expected: Expect) {
+		let src = SourceFile::from(Arc::new(format!("x = {input};")));
+		let assignments = parse_dzn(&src).expect("unexpected syntax error");
+		assert_eq!(assignments.len(), 1);
+
+		let val = typecheck_dzn(&src, "x", &assignments[0].definition(), ty)
+			.expect("unexpected type error");
+		let val = val.resolve_value(ty).expect("unexpected resolve error");
+		let s = val.to_string();
+		expected.assert_eq(&s);
+
+		// Serialize as DZN and then deserialize again ensuring it is equal
+		let src = SourceFile::from(Arc::new(format!("x = {val};")));
+		let assignments = parse_dzn(&src).expect("unexpected syntax error");
+		assert_eq!(assignments.len(), 1);
+		let val = typecheck_dzn(&src, "x", &assignments[0].definition(), ty)
+			.expect("unexpected type error");
+		let val = val.resolve_value(ty).expect("unexpected resolve error");
+		assert_eq!(s, val.to_string());
+	}
+
+	#[test]
+	fn test_parse_absent() {
+		check_serialization("<>", &Type::Integer(OptType::Opt), expect!("<>"));
+	}
+
+	#[test]
+	fn test_parse_inf() {
+		check_serialization("infinity", &Type::Integer(OptType::NonOpt), expect!("∞"));
+		check_serialization("-infinity", &Type::Float(OptType::NonOpt), expect!("-∞"));
+		check_serialization("∞", &Type::Float(OptType::NonOpt), expect!("∞"));
+		check_serialization("-∞", &Type::Integer(OptType::NonOpt), expect!("-∞"));
+	}
+
+	#[test]
+	fn test_parse_boolean() {
+		check_serialization("true", &Type::Boolean(OptType::NonOpt), expect!("true"));
+		check_serialization("false", &Type::Boolean(OptType::NonOpt), expect!("false"));
+	}
+
+	#[test]
+	fn test_parse_integer() {
+		check_serialization("0", &Type::Integer(OptType::NonOpt), expect!("0"));
+		check_serialization("1", &Type::Integer(OptType::NonOpt), expect!("1"));
+		check_serialization("99", &Type::Integer(OptType::NonOpt), expect!("99"));
+		check_serialization("-1", &Type::Integer(OptType::NonOpt), expect!("-1"));
+		check_serialization("0b1010", &Type::Integer(OptType::NonOpt), expect!("10"));
+		check_serialization("0o70", &Type::Integer(OptType::NonOpt), expect!("56"));
+		check_serialization("0xFF", &Type::Integer(OptType::NonOpt), expect!("255"));
+	}
+
+	#[test]
+	fn test_parse_float() {
+		check_serialization("0.1", &Type::Float(OptType::NonOpt), expect!("0.1"));
+		check_serialization("3.65", &Type::Float(OptType::NonOpt), expect!("3.65"));
+		check_serialization("-3.65", &Type::Float(OptType::NonOpt), expect!("-3.65"));
+		check_serialization(
+			"4.5e10",
+			&Type::Float(OptType::NonOpt),
+			expect!("45000000000"),
+		);
+		check_serialization(
+			"5E-10",
+			&Type::Float(OptType::NonOpt),
+			expect!("0.0000000005"),
+		);
+	}
+
+	#[test]
+	fn test_parse_string() {
+		check_serialization("\"\"", &Type::String(OptType::NonOpt), expect!([r#""""#]));
+		check_serialization(
+			"\"test\"",
+			&Type::String(OptType::NonOpt),
+			expect!([r#""test""#]),
+		);
+		check_serialization(
+			"\"    Another test    \"",
+			&Type::String(OptType::NonOpt),
+			expect!([r#""    Another test    ""#]),
+		);
+		check_serialization(
+			"\"\\t\\n\"",
+			&Type::String(OptType::NonOpt),
+			expect!([r#""\t\n""#]),
+		);
+	}
+
+	#[test]
+	fn test_parse_tuple() {
+		check_serialization(
+			"(1,)",
+			&Type::Tuple(OptType::NonOpt, Arc::new([Type::Integer(OptType::NonOpt)])),
+			expect!("(1,)"),
+		);
+		check_serialization(
+			"(1, \"foo\")",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Integer(OptType::NonOpt),
+					Type::String(OptType::NonOpt),
+				]),
+			),
+			expect!([r#"(1, "foo")"#]),
+		);
+		check_serialization(
+			"(2.5, true, <>,)",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Float(OptType::NonOpt),
+					Type::Boolean(OptType::NonOpt),
+					Type::Boolean(OptType::Opt),
+				]),
+			),
+			expect!("(2.5, true, <>)"),
+		);
+		check_serialization(
+			"([1, 2], {3, 4}, 5)",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Array {
+						opt: OptType::NonOpt,
+						dim: Box::new([Type::Integer(OptType::NonOpt)]),
+						element: Box::new(Type::Integer(OptType::NonOpt)),
+					},
+					Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+					Type::Integer(OptType::NonOpt),
+				]),
+			),
+			expect!("([1, 2], 3..3 ∪ 4..4, 5)"),
+		);
+		check_serialization(
+			"(1, (2, (4, 5)), 6)",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Integer(OptType::NonOpt),
+					Type::Tuple(
+						OptType::NonOpt,
+						Arc::new([
+							Type::Integer(OptType::NonOpt),
+							Type::Tuple(
+								OptType::NonOpt,
+								Arc::new([
+									Type::Integer(OptType::NonOpt),
+									Type::Integer(OptType::NonOpt),
+								]),
+							),
+						]),
+					),
+					Type::Integer(OptType::NonOpt),
+				]),
+			),
+			expect!("(1, (2, (4, 5)), 6)"),
+		);
+	}
+
+	#[test]
+	fn test_parse_set() {
+		check_serialization(
+			"{ }",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+			expect!("∅"),
+		);
+		check_serialization(
+			"∅",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+			expect!("∅"),
+		);
+		check_serialization(
+			"{1.0}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
+			expect!("1..1"),
+		);
+		check_serialization(
+			"{1,2.2}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
+			expect!("1..1 ∪ 2.2..2.2"),
+		);
+		check_serialization(
+			"1..3",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+			expect!("1..3"),
+		);
+		check_serialization(
+			"1.0..3.3",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
+			expect!("1..3.3"),
+		);
+	}
+
+	#[test]
+	fn test_parse_record() {
+		let a: Arc<str> = "a".into();
+		let b: Arc<str> = "b".into();
+		let c: Arc<str> = "c".into();
+		let d = "d".into();
+		let e = "e".into();
+		let f = "f".into();
+
+		check_serialization(
+			"(a: 1, b: 2.5)",
+			&Type::Record(
+				OptType::NonOpt,
+				Arc::new([
+					(a.clone(), Type::Integer(OptType::NonOpt)),
+					(b.clone(), Type::Float(OptType::NonOpt)),
+				]),
+			),
+			expect!("(a: 1, b: 2.5)"),
+		);
+		check_serialization(
+			"( b: (3.5, true), a: {1, 2}, c: [<>])",
+			&Type::Record(
+				OptType::NonOpt,
+				Arc::new([
+					(
+						a.clone(),
+						Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+					),
+					(
+						b.clone(),
+						Type::Tuple(
+							OptType::NonOpt,
+							Arc::new([
+								Type::Float(OptType::NonOpt),
+								Type::Boolean(OptType::NonOpt),
+							]),
+						),
+					),
+					(
+						c.clone(),
+						Type::Array {
+							opt: OptType::NonOpt,
+							dim: [Type::Integer(OptType::NonOpt)].into(),
+							element: Type::Integer(OptType::Opt).into(),
+						},
+					),
+				]),
+			),
+			expect!("(a: 1..1 ∪ 2..2, b: (3.5, true), c: [<>])"),
+		);
+
+		check_serialization(
+			"(b: (d: (e: 3, f: 4), c: 2), a: 1)",
+			&Type::Record(
+				OptType::NonOpt,
+				Arc::new([
+					(a, Type::Integer(OptType::NonOpt)),
+					(
+						b,
+						Type::Record(
+							OptType::NonOpt,
+							Arc::new([
+								(c, Type::Integer(OptType::NonOpt)),
+								(
+									d,
+									Type::Record(
+										OptType::NonOpt,
+										Arc::new([
+											(e, Type::Integer(OptType::NonOpt)),
+											(f, Type::Integer(OptType::NonOpt)),
+										]),
+									),
+								),
+							]),
+						),
+					),
+				]),
+			),
+			expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
+		);
+	}
+
+	#[test]
+	fn test_parse_simple_array() {
+		check_serialization(
+			"[]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Integer(OptType::NonOpt).into(),
+			},
+			expect!("[]"),
+		);
+		check_serialization(
+			"[1.0]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Float(OptType::NonOpt).into(),
+			},
+			expect!("[1]"),
+		);
+		check_serialization(
+			"[1, 2.2]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Float(OptType::NonOpt).into(),
+			},
+			expect!("[1, 2.2]"),
+		);
+		check_serialization(
+			"[<>, <>, 1, <>,]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Integer(OptType::Opt).into(),
+			},
+			expect!("[<>, <>, 1, <>]"),
+		);
+	}
+
+	// #[test]
+	// fn test_parse_ident() {
+	// 	let (_, out) = identifier(span("Albus")).unwrap();
+	// 	assert_eq!(out, "Albus");
+	// 	assert!(identifier(span("1")).is_err());
+	// }
+
+	// #[test]
+	// fn test_parse_enum_val() {
+	// 	// Simple identifier representing an enum value
+	// 	let (_, out) = value_or_enum(span("A")).unwrap();
+	// 	assert_eq!(out, ParsedVal::EnumVal(EnumVal::Ident("A".to_owned())));
+
+	// 	// Enum value with integer argument
+	// 	let (_, out) = value_or_enum(span("A(1)")).unwrap();
+	// 	assert_eq!(
+	// 		out,
+	// 		ParsedVal::EnumVal(EnumVal::IntArg(("A".to_owned(), 1)))
+	// 	);
+
+	// 	// Enum value with another enum value as argument
+	// 	let (_, out) = value_or_enum(span("A(B)")).unwrap();
+	// 	assert_eq!(
+	// 		out,
+	// 		ParsedVal::EnumVal(EnumVal::EnumArg((
+	// 			"A".to_owned(),
+	// 			Box::new(EnumVal::Ident("B".to_owned()))
+	// 		)))
+	// 	);
+
+	// 	// Complex chain of enum constructors to make value
+	// 	let (_, out) = value_or_enum(span("A(B(C(D(-60))))")).unwrap();
+	// 	assert_eq!(out.to_string(), "A(B(C(D(-60))))");
+	// }
+
+	// #[test]
+	// fn test_parse_enum_members() {
+	// 	let (_, out) = value_or_enum(span("{ A }")).unwrap();
+	// 	assert_eq!(
+	// 		out,
+	// 		ParsedVal::EnumSetList(vec![EnumVal::Ident("A".to_owned())])
+	// 	);
+
+	// 	let (_, out) = value_or_enum(span("{ A, B, C }")).unwrap();
+	// 	assert_eq!(
+	// 		out,
+	// 		ParsedVal::EnumSetList(vec![
+	// 			EnumVal::Ident("A".to_owned()),
+	// 			EnumVal::Ident("B".to_owned()),
+	// 			EnumVal::Ident("C".to_owned())
+	// 		])
+	// 	);
+
+	// 	let (_, out) = value_or_enum(span("X(1..6)")).unwrap();
+	// 	assert_eq!(
+	// 		out,
+	// 		ParsedVal::EnumCtor(EnumCtor::SetArg((
+	// 			"X".to_owned(),
+	// 			Set::IntRangeList(vec![1..=6])
+	// 		)))
+	// 	);
+
+	// 	let (_, out) = value_or_enum(span("{ A } ++ Z(-1..1) ++ X(Y)")).unwrap();
+	// 	assert_eq!(
+	// 		out,
+	// 		ParsedVal::EnumCtor(EnumCtor::Concat(vec![
+	// 			EnumCtor::ValueList(vec!["A".to_owned()]),
+	// 			EnumCtor::SetArg(("Z".to_owned(), Set::IntRangeList(vec![-1..=1]))),
+	// 			EnumCtor::NameArg(("X".to_owned(), "Y".to_owned()))
+	// 		]))
+	// 	)
+	// }
+}

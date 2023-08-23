@@ -1944,11 +1944,6 @@
     }
   },
   {
-    "type": "infinity",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "infix_operator",
     "named": true,
     "fields": {
@@ -3763,7 +3758,7 @@
   },
   {
     "type": "infinity",
-    "named": false
+    "named": true
   },
   {
     "type": "int",
@@ -3915,10 +3910,6 @@
   },
   {
     "type": "∅",
-    "named": false
-  },
-  {
-    "type": "∞",
     "named": false
   },
   {

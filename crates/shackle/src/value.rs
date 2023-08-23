@@ -97,7 +97,7 @@ impl Display for Value {
 			Value::Boolean(v) => write!(f, "{v}"),
 			Value::Integer(v) => write!(f, "{v}"),
 			Value::Float(v) => write!(f, "{v}"),
-			Value::String(v) => write!(f, "{:?}", v),
+			Value::String(v) => write!(f, "{v:?}"),
 			Value::Enum(v) => write!(f, "{v}"),
 			Value::Ann(ann, args) => {
 				if args.is_empty() {
@@ -113,7 +113,12 @@ impl Display for Value {
 				write!(f, "{v}")
 			}
 			Value::Tuple(v) => {
-				write!(f, "({})", v.iter().format(", "))
+				write!(
+					f,
+					"({}{})",
+					v.iter().format(", "),
+					if v.len() == 1 { "," } else { "" }
+				)
 			}
 			Value::Record(rec) => {
 				write!(f, "{rec}")
@@ -142,6 +147,14 @@ impl Array {
 		Self {
 			indices: indexes.into_boxed_slice(),
 			members: elements.into_boxed_slice(),
+		}
+	}
+
+	/// Create a new empty array
+	pub fn empty() -> Self {
+		Self {
+			indices: [].into(),
+			members: [].into(),
 		}
 	}
 
@@ -179,7 +192,7 @@ impl std::ops::Index<&[Value]> for Array {
 					if let Value::Integer(ii) = ii {
 						assert!(
 							r.contains(ii),
-							"index out of bounds: the index set is {}..={} but the index is {ii}",
+							"index out of bounds: the index set is {}..{} but the index is {ii}",
 							r.start(),
 							r.end()
 						);
@@ -221,7 +234,11 @@ impl Display for Array {
 			return write!(f, "[]");
 		}
 		if let [Index::Integer(ii)] = &(*self.indices) {
-			return write!(f, "[{}: {}]", ii.start(), self.members.iter().format(", "));
+			if *ii.start() == 1 {
+				return write!(f, "[{}]", self.members.iter().format(", "));
+			} else {
+				return write!(f, "[{}: {}]", ii.start(), self.members.iter().format(", "));
+			}
 		}
 		write!(
 			f,
@@ -742,7 +759,7 @@ impl Display for Set {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}
-				write!(f, "{}", ranges.iter().format(" union "))
+				write!(f, "{}", ranges.iter().format(" ∪ "))
 			}
 			Set::IntRangeList(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
@@ -751,13 +768,11 @@ impl Display for Set {
 				write!(
 					f,
 					"{}",
-					ranges
-						.iter()
-						.format_with(" union ", |range, f| f(&format_args!(
-							"{}..{}",
-							range.start(),
-							range.end()
-						)))
+					ranges.iter().format_with(" ∪ ", |range, f| f(&format_args!(
+						"{}..{}",
+						range.start(),
+						range.end()
+					)))
 				)
 			}
 			Set::FloatRangeList(ranges) => {
@@ -767,13 +782,11 @@ impl Display for Set {
 				write!(
 					f,
 					"{}",
-					ranges
-						.iter()
-						.format_with(" union ", |range, f| f(&format_args!(
-							"{}..{}",
-							range.start(),
-							range.end()
-						)))
+					ranges.iter().format_with(" ∪ ", |range, f| f(&format_args!(
+						"{}..{}",
+						range.start(),
+						range.end()
+					)))
 				)
 			}
 		}
@@ -839,5 +852,17 @@ impl Display for Record {
 				.map(|(k, v)| format!("{}: {}", *k, v))
 				.format(", ")
 		)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use itertools::Itertools;
+
+	use crate::value::Array;
+
+	#[test]
+	fn test_array_iter() {
+		assert_eq!(Array::empty().iter().collect_vec(), Vec::new());
 	}
 }

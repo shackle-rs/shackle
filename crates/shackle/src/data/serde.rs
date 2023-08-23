@@ -24,19 +24,20 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 
 	fn visit_bool<E: Error>(self, v: bool) -> Result<Self::Value, E> {
 		let ty = self.0;
-		if matches!(ty, Type::Boolean(_) | Type::Integer(_) | Type::Float(_)) {
-			Ok(ParserVal::Boolean(v))
-		} else {
-			Err(Error::invalid_type(Unexpected::Bool(v), &self))
+		match ty {
+			Type::Boolean(_) => Ok(ParserVal::Boolean(v)),
+			Type::Integer(_) => Ok(ParserVal::Integer(v as i64)),
+			Type::Float(_) => Ok(ParserVal::Float(v as i64 as f64)),
+			_ => Err(Error::invalid_type(Unexpected::Bool(v), &self)),
 		}
 	}
 
 	fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
 		let ty = self.0;
-		if matches!(ty, Type::Integer(_) | Type::Float(_)) {
-			Ok(ParserVal::Integer(v))
-		} else {
-			Err(Error::invalid_type(Unexpected::Signed(v), &self))
+		match ty {
+			Type::Integer(_) => Ok(ParserVal::Integer(v)),
+			Type::Float(_) => Ok(ParserVal::Float(v as f64)),
+			_ => Err(Error::invalid_type(Unexpected::Signed(v), &self)),
 		}
 	}
 
@@ -73,10 +74,29 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 		}
 	}
 
+	fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+		let ty = self.0;
+		if ty.is_opt() {
+			Ok(ParserVal::Absent)
+		} else {
+			Err(Error::invalid_type(Unexpected::Unit, &self))
+		}
+	}
 	fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
 		let ty = self.0;
 		if ty.is_opt() {
 			Ok(ParserVal::Absent)
+		} else {
+			Err(Error::invalid_type(Unexpected::Option, &self))
+		}
+	}
+	fn visit_some<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		let ty = self.0;
+		if ty.is_opt() {
+			deserializer.deserialize_any(self)
 		} else {
 			Err(Error::invalid_type(Unexpected::Option, &self))
 		}
@@ -557,7 +577,11 @@ impl Serialize for Value {
 }
 impl Serialize for Array {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		ArraySliceSerializer::new(&self.indices[..], &self.members[..]).serialize(serializer)
+		if self.is_empty() {
+			serializer.serialize_seq(Some(0))?.end()
+		} else {
+			ArraySliceSerializer::new(&self.indices[..], &self.members[..]).serialize(serializer)
+		}
 	}
 }
 impl Serialize for Record {
@@ -638,5 +662,333 @@ impl<'a> Serialize for ArraySliceSerializer<'a> {
 			}
 		}
 		seq.end()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use expect_test::{expect, Expect};
+	use rustc_hash::FxHashMap;
+	use serde::Deserializer;
+
+	use super::SerdeFileVisitor;
+	use crate::{diagnostics::ShackleError, file::SourceFile, OptType, Type};
+
+	fn check_serialization(input: &str, ty: &Type, expected: Expect) {
+		let type_map = FxHashMap::from_iter([("x".to_string(), ty.clone())].into_iter());
+		let src = SourceFile::from(Arc::new(format!("{{ \"x\": {input} }}")));
+		let assignments = serde_json::Deserializer::from_str(src.contents())
+			.deserialize_map(SerdeFileVisitor(&type_map))
+			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.expect("unexpected syntax error");
+		assert_eq!(assignments.len(), 1);
+
+		let val = assignments[0]
+			.2
+			.clone()
+			.resolve_value(ty)
+			.expect("unexpected resolve error");
+		let s = val.to_string();
+		expected.assert_eq(&s);
+
+		// Serialize as DZN and then deserialize again ensuring it is equal
+		let src = SourceFile::from(Arc::new(format!(
+			"{{ \"x\":  {} }}",
+			serde_json::to_string(&val).expect("unexpected serialization error")
+		)));
+		let assignments = serde_json::Deserializer::from_str(src.contents())
+			.deserialize_map(SerdeFileVisitor(&type_map))
+			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.expect("unexpected syntax error");
+		assert_eq!(assignments.len(), 1);
+		let val = assignments[0]
+			.clone()
+			.2
+			.clone()
+			.resolve_value(ty)
+			.expect("unexpected resolve error");
+		assert_eq!(s, val.to_string());
+	}
+
+	#[test]
+	fn test_parse_absent() {
+		check_serialization("null", &Type::Integer(OptType::Opt), expect!("<>"));
+	}
+
+	#[test]
+	fn test_parse_boolean() {
+		check_serialization("true", &Type::Boolean(OptType::NonOpt), expect!("true"));
+		check_serialization("false", &Type::Boolean(OptType::NonOpt), expect!("false"));
+	}
+
+	#[test]
+	fn test_parse_integer() {
+		check_serialization("0", &Type::Integer(OptType::NonOpt), expect!("0"));
+		check_serialization("1", &Type::Integer(OptType::NonOpt), expect!("1"));
+		check_serialization("99", &Type::Integer(OptType::NonOpt), expect!("99"));
+		check_serialization("-1", &Type::Integer(OptType::NonOpt), expect!("-1"));
+	}
+
+	#[test]
+	fn test_parse_float() {
+		check_serialization("0.1", &Type::Float(OptType::NonOpt), expect!("0.1"));
+		check_serialization("3.65", &Type::Float(OptType::NonOpt), expect!("3.65"));
+		check_serialization("-3.65", &Type::Float(OptType::NonOpt), expect!("-3.65"));
+		check_serialization(
+			"4.5e10",
+			&Type::Float(OptType::NonOpt),
+			expect!("45000000000"),
+		);
+		check_serialization(
+			"5E-10",
+			&Type::Float(OptType::NonOpt),
+			expect!("0.0000000005"),
+		);
+	}
+
+	#[test]
+	fn test_parse_string() {
+		check_serialization("\"\"", &Type::String(OptType::NonOpt), expect!([r#""""#]));
+		check_serialization(
+			"\"test\"",
+			&Type::String(OptType::NonOpt),
+			expect!([r#""test""#]),
+		);
+		check_serialization(
+			"\"    Another test    \"",
+			&Type::String(OptType::NonOpt),
+			expect!([r#""    Another test    ""#]),
+		);
+		check_serialization(
+			"\"\\t\\n\"",
+			&Type::String(OptType::NonOpt),
+			expect!([r#""\t\n""#]),
+		);
+	}
+
+	#[test]
+	fn test_parse_tuple() {
+		check_serialization(
+			"[1]",
+			&Type::Tuple(OptType::NonOpt, Arc::new([Type::Integer(OptType::NonOpt)])),
+			expect!("(1,)"),
+		);
+		check_serialization(
+			"[1, \"foo\"]",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Integer(OptType::NonOpt),
+					Type::String(OptType::NonOpt),
+				]),
+			),
+			expect!([r#"(1, "foo")"#]),
+		);
+		check_serialization(
+			"[2.5, true, null]",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Float(OptType::NonOpt),
+					Type::Boolean(OptType::NonOpt),
+					Type::Boolean(OptType::Opt),
+				]),
+			),
+			expect!("(2.5, true, <>)"),
+		);
+		check_serialization(
+			"[[1, 2], { \"set\": [3, 4]}, 5]",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Array {
+						opt: OptType::NonOpt,
+						dim: Box::new([Type::Integer(OptType::NonOpt)]),
+						element: Box::new(Type::Integer(OptType::NonOpt)),
+					},
+					Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+					Type::Integer(OptType::NonOpt),
+				]),
+			),
+			expect!("([1, 2], 3..3 ∪ 4..4, 5)"),
+		);
+		check_serialization(
+			"[1, [2, [4, 5]], 6]",
+			&Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([
+					Type::Integer(OptType::NonOpt),
+					Type::Tuple(
+						OptType::NonOpt,
+						Arc::new([
+							Type::Integer(OptType::NonOpt),
+							Type::Tuple(
+								OptType::NonOpt,
+								Arc::new([
+									Type::Integer(OptType::NonOpt),
+									Type::Integer(OptType::NonOpt),
+								]),
+							),
+						]),
+					),
+					Type::Integer(OptType::NonOpt),
+				]),
+			),
+			expect!("(1, (2, (4, 5)), 6)"),
+		);
+	}
+
+	#[test]
+	fn test_parse_set() {
+		check_serialization(
+			"{\"set\": []}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+			expect!("∅"),
+		);
+		check_serialization(
+			"{\"set\": [1.0]}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
+			expect!("1..1"),
+		);
+		check_serialization(
+			"{\"set\": [1, 1.0]}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
+			expect!("1..1"),
+		);
+		check_serialization(
+			"{\"set\": [[1, 3]]}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+			expect!("1..3"),
+		);
+		check_serialization(
+			"{\"set\": [[1.0, 3.3]]}",
+			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
+			expect!("1..3.3"),
+		);
+	}
+
+	#[test]
+	fn test_parse_record() {
+		let a: Arc<str> = "a".into();
+		let b: Arc<str> = "b".into();
+		let c: Arc<str> = "c".into();
+		let d = "d".into();
+		let e = "e".into();
+		let f = "f".into();
+
+		check_serialization(
+			"{\"a\": 1, \"b\": 2.5}",
+			&Type::Record(
+				OptType::NonOpt,
+				Arc::new([
+					(a.clone(), Type::Integer(OptType::NonOpt)),
+					(b.clone(), Type::Float(OptType::NonOpt)),
+				]),
+			),
+			expect!("(a: 1, b: 2.5)"),
+		);
+		check_serialization(
+			"{\"b\": [3.5, true], \"a\": {\"set\": [1, 2] }, \"c\": [null]}",
+			&Type::Record(
+				OptType::NonOpt,
+				Arc::new([
+					(
+						a.clone(),
+						Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
+					),
+					(
+						b.clone(),
+						Type::Tuple(
+							OptType::NonOpt,
+							Arc::new([
+								Type::Float(OptType::NonOpt),
+								Type::Boolean(OptType::NonOpt),
+							]),
+						),
+					),
+					(
+						c.clone(),
+						Type::Array {
+							opt: OptType::NonOpt,
+							dim: [Type::Integer(OptType::NonOpt)].into(),
+							element: Type::Integer(OptType::Opt).into(),
+						},
+					),
+				]),
+			),
+			expect!("(a: 1..1 ∪ 2..2, b: (3.5, true), c: [<>])"),
+		);
+
+		check_serialization(
+			"{\"b\": {\"d\": {\"e\": 3, \"f\": 4}, \"c\": 2}, \"a\": 1}",
+			&Type::Record(
+				OptType::NonOpt,
+				Arc::new([
+					(a, Type::Integer(OptType::NonOpt)),
+					(
+						b,
+						Type::Record(
+							OptType::NonOpt,
+							Arc::new([
+								(c, Type::Integer(OptType::NonOpt)),
+								(
+									d,
+									Type::Record(
+										OptType::NonOpt,
+										Arc::new([
+											(e, Type::Integer(OptType::NonOpt)),
+											(f, Type::Integer(OptType::NonOpt)),
+										]),
+									),
+								),
+							]),
+						),
+					),
+				]),
+			),
+			expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
+		);
+	}
+
+	#[test]
+	fn test_parse_simple_array() {
+		check_serialization(
+			"[]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Integer(OptType::NonOpt).into(),
+			},
+			expect!("[]"),
+		);
+		check_serialization(
+			"[1.0]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Float(OptType::NonOpt).into(),
+			},
+			expect!("[1]"),
+		);
+		check_serialization(
+			"[1, 2.2]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Float(OptType::NonOpt).into(),
+			},
+			expect!("[1, 2.2]"),
+		);
+		check_serialization(
+			"[null, null, 1, null]",
+			&Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Type::Integer(OptType::Opt).into(),
+			},
+			expect!("[<>, <>, 1, <>]"),
+		);
 	}
 }

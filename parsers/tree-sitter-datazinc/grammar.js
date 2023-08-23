@@ -63,6 +63,7 @@ module.exports = grammar(mzn, {
 
 		float_literal: ($, orig) => token(seq(optional("-"), orig)),
 		integer_literal: ($, orig) => token(seq(optional("-"), orig)),
+		infinity: ($, orig) => token(seq(optional("-"), orig)),
 	},
 })
 

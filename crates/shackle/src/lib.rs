@@ -209,7 +209,7 @@ pub enum Type {
 	/// Tuple type
 	Tuple(OptType, Arc<[Type]>),
 	/// Record type
-	Record(OptType, Arc<Vec<(Arc<str>, Type)>>),
+	Record(OptType, Arc<[(Arc<str>, Type)]>),
 }
 
 impl Type {
