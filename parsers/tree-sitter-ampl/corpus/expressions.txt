@@ -1,0 +1,95 @@
+========
+Indexing
+========
+
+{A};
+{A, B};
+{i in A, B};
+{i in A, j in B};
+
+---
+
+(source_file
+    (indexing (identifier))
+    (indexing (identifier) (identifier))
+    (indexing ))
+
+==============
+Unary Operator
+==============
+
+let x := -x;
+let y := +y;
+let z := not z;
+
+---
+
+(source_file
+    item: (let_decl
+        name: (identifier)
+        (unary_operator
+            operand: (identifier)))
+    item: (let_decl
+        name: (identifier)
+        (unary_operator
+            operand: (identifier)))
+    item: (let_decl
+        name: (identifier)
+        (unary_operator
+            operand: (identifier))))
+
+==============
+Infix Operator
+==============
+
+let a := x + 1;
+let b := x - 1;
+let c := x * 1;
+let d := x / 1;
+let e := x less 1;
+let f := x mod 1;
+
+---
+
+(source_file
+    item: (let_decl
+        name: (identifier)
+        (infix_operator
+            left: (identifier)
+            right: (number_literal)))
+    item: (let_decl
+        name: (identifier)
+        (infix_operator
+            left: (identifier)
+            right: (number_literal)))
+    item: (let_decl
+        name: (identifier)
+        (infix_operator
+            left: (identifier)
+            right: (number_literal)))
+    item: (let_decl
+        name: (identifier)
+        (infix_operator
+            left: (identifier)
+            right: (number_literal)))
+    item: (let_decl
+        name: (identifier)
+        (infix_operator
+            left: (identifier)
+            right: (number_literal)))
+    item: (let_decl
+        name: (identifier)
+        (infix_operator
+            left: (identifier)
+            right: (number_literal))))
+
+============
+if-then-else
+============
+
+let x := if x < 2 then 1 else 0
+let y := if x < 2 then 1 else 0
+let z := if not true then 1 else 0
+
+---
+

@@ -1,0 +1,68 @@
+======
+Number
+======
+
+let decimal_integer := 123;
+let simple_float := 3.65;
+let exponent_float := 4.5e10;
+let simple_exponent_float := 5E-10;
+let simple_exponent_float := 5D-10;
+let simple_exponent_float := 5E-10;
+
+---
+
+(source_file
+  item: (let_decl
+    name: (identifier)
+    (number_literal))
+  item: (let_decl
+    name: (identifier)
+    (number_literal))
+  item: (let_decl
+    name: (identifier)
+    (number_literal))
+  item: (let_decl
+    name: (identifier)
+    (number_literal))
+  item: (let_decl
+    name: (identifier)
+    (number_literal))
+  item: (let_decl
+    name: (identifier)
+    (number_literal)))
+
+======
+String
+======
+
+let empty_string := "";
+let small_string := "test";
+let spaced_string := "    Another test    ";
+let escaped_string := "\t\n";
+
+---
+
+(source_file
+  item: (let_decl
+    name: (identifier)
+    (string_literal))
+  item: (let_decl
+    name: (identifier)
+    (string_literal
+      content: (string_characters)))
+  item: (let_decl
+    name: (identifier)
+    (string_literal
+      content: (string_characters)))
+  item: (let_decl
+    name: (identifier)
+    (string_literal
+      content: (escape_sequence)
+      content: (escape_sequence))))
+
+===
+Set
+===
+
+{"a","b","c"};
+{1,2,3,4,5,6,7,8,9};
