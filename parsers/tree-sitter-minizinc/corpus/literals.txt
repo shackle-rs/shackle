@@ -163,6 +163,7 @@ Number
 simple_float = 3.65;
 exponent_float = 4.5e10;
 simple_exponent_float = 5E-10;
+hexadecimal_float = 0x1.ABp-2;
 
 decimal_integer = 123;
 hexadecimal_integer = 0xA23F;
@@ -172,6 +173,7 @@ binary_integer = 0b00110101;
 ---
 
 (source_file
+  (assignment (identifier) (float_literal))
   (assignment (identifier) (float_literal))
   (assignment (identifier) (float_literal))
   (assignment (identifier) (float_literal))
