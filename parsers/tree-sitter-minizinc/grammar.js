@@ -663,7 +663,7 @@ module.exports = grammar({
 			seq(field("name", $._identifier), ":", field("value", $._expression)),
 
 		identifier: ($) => {
-			return new RegExp(`[^"'\\s\\.\\-\\[\\]\\^${OPERATOR_CHARACTERS}]+`)
+			return new RegExp(`[^"'\\s\\.\\-\\[\\]\\^\\/${OPERATOR_CHARACTERS}]+`)
 		},
 		quoted_identifier: ($) => /'[^']*'/,
 		inversed_identifier: ($) => seq(field("identifier", $._identifier), "^-1"),
@@ -720,5 +720,5 @@ function sepBy1(sep, rule) {
 }
 
 function getOpChars(list) {
-	return list.join("").replace(/[A-Za-z0-9\-\\]/g, "")
+	return list.join("").replace(/[A-Za-z0-9\-\\\/]/g, "")
 }

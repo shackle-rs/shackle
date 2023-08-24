@@ -156,6 +156,7 @@ bool_xor = x xor y;
 or = x \/ y;
 def = x default y;
 not_call = x..(y);
+not_ident = x/y;
 
 ---
 
@@ -187,7 +188,8 @@ not_call = x..(y);
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))
   (assignment (identifier) (infix_operator (identifier) (identifier)))
-  (assignment (identifier) (infix_operator (identifier) (parenthesised_expression (identifier)))))
+  (assignment (identifier) (infix_operator (identifier) (parenthesised_expression (identifier))))
+  (assignment (identifier) (infix_operator (identifier) (identifier))))
 
 ==============
 UTF8 Operators
