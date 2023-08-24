@@ -2,7 +2,7 @@ use std::{ops::Deref, path::Path, sync::Arc};
 
 use crossbeam_channel::{SendError, Sender};
 use lsp_server::{Connection, ErrorCode, Message, ResponseError};
-use lsp_types::TextDocumentIdentifier;
+use lsp_types::{TextDocumentIdentifier, Url};
 use shackle::{
 	db::{CompilerDatabase, FileReader, HasFileHandler, Inputs},
 	file::{InputFile, ModelRef},
@@ -12,10 +12,14 @@ use crate::{diagnostics, vfs::Vfs};
 
 /// Trait for handler preparation
 pub trait LanguageServerContext: Deref<Target = CompilerDatabase> {
+	/// Set the input file for the compiler database
 	fn set_active_file_from_document(
 		&mut self,
 		doc: &TextDocumentIdentifier,
 	) -> Result<ModelRef, ResponseError>;
+
+	/// Get the workspace URI
+	fn get_workspace_uri(&self) -> Option<&Url>;
 }
 
 pub struct LanguageServerDatabase {
@@ -23,10 +27,11 @@ pub struct LanguageServerDatabase {
 	pool: threadpool::ThreadPool,
 	sender: Sender<Message>,
 	db: CompilerDatabase,
+	workspace: Option<Url>,
 }
 
 impl LanguageServerDatabase {
-	pub fn new(connection: &Connection) -> Self {
+	pub fn new(connection: &Connection, workspace: Option<Url>) -> Self {
 		let fs = Vfs::new();
 		let db = CompilerDatabase::with_file_handler(Box::new(fs.clone()));
 		Self {
@@ -34,6 +39,7 @@ impl LanguageServerDatabase {
 			pool: threadpool::Builder::new().build(),
 			sender: connection.sender.clone(),
 			db,
+			workspace,
 		}
 	}
 
@@ -97,5 +103,9 @@ impl LanguageServerContext for LanguageServerDatabase {
 		})?;
 		self.set_active_file(&requested_path);
 		Ok(self.input_models()[0])
+	}
+
+	fn get_workspace_uri(&self) -> Option<&Url> {
+		self.workspace.as_ref()
 	}
 }
