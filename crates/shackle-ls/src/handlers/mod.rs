@@ -66,12 +66,15 @@ pub mod test {
 		}
 	}
 
-	struct MockDatabase(CompilerDatabase);
+	struct MockDatabase {
+		db: CompilerDatabase,
+		workspace: Option<lsp_types::Url>,
+	}
 
 	impl Deref for MockDatabase {
 		type Target = CompilerDatabase;
 		fn deref(&self) -> &Self::Target {
-			&self.0
+			&self.db
 		}
 	}
 
@@ -81,6 +84,9 @@ pub mod test {
 			_doc: &lsp_types::TextDocumentIdentifier,
 		) -> Result<shackle::file::ModelRef, lsp_server::ResponseError> {
 			Ok(self.input_models()[0])
+		}
+		fn get_workspace_uri(&self) -> Option<&lsp_types::Url> {
+			self.workspace.as_ref()
 		}
 	}
 
@@ -93,11 +99,12 @@ pub mod test {
 		H: RequestHandler<R, T>,
 		R: lsp_types::request::Request,
 	{
-		let mut db = MockDatabase(CompilerDatabase::with_file_handler(Box::new(
-			MockFileHandler(model.to_string()),
-		)));
-		db.0.set_ignore_stdlib(no_stdlib);
-		db.0.set_input_files(Arc::new(vec![InputFile::Path(
+		let mut db = MockDatabase {
+			db: CompilerDatabase::with_file_handler(Box::new(MockFileHandler(model.to_string()))),
+			workspace: lsp_types::Url::from_str("file:///").ok(),
+		};
+		db.db.set_ignore_stdlib(no_stdlib);
+		db.db.set_input_files(Arc::new(vec![InputFile::Path(
 			PathBuf::from_str("test.mzn").unwrap(),
 		)]));
 		H::prepare(&mut db, params).and_then(|t| H::execute(&db, t))

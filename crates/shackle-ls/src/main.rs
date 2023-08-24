@@ -69,8 +69,8 @@ fn main_loop(
 	connection: Connection,
 	params: serde_json::Value,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
-	let _params: InitializeParams = serde_json::from_value(params).unwrap();
-	let mut db = LanguageServerDatabase::new(&connection);
+	let params: InitializeParams = serde_json::from_value(params).unwrap();
+	let mut db = LanguageServerDatabase::new(&connection, params.root_uri);
 	for msg in &connection.receiver {
 		match msg {
 			Message::Request(req) => {
