@@ -1,6 +1,6 @@
 //! Generation of output
 //! - Create ::output_only string declarations for output item sections
-//!
+//! - Make make default ::output variables explicit
 
 use rustc_hash::FxHashMap;
 
@@ -8,7 +8,7 @@ use crate::{
 	hir::{Identifier, StringLiteral},
 	thir::{
 		db::Thir, source::Origin, Declaration, Domain, Expression, ExpressionData, Item,
-		LookupCall, Model,
+		LookupCall, LookupIdentifier, Model,
 	},
 };
 
@@ -55,6 +55,17 @@ pub fn generate_output(db: &dyn Thir, model: &Model) -> Model {
 					},
 				)
 			})
+			.map(|arg| {
+				Expression::new(
+					db,
+					&model,
+					origin,
+					LookupCall {
+						function: ids.concat.into(),
+						arguments: vec![arg],
+					},
+				)
+			})
 			.unwrap_or_else(|| {
 				Expression::new(db, &model, origin, StringLiteral::from(ids.empty_string))
 			});
@@ -69,6 +80,32 @@ pub fn generate_output(db: &dyn Thir, model: &Model) -> Model {
 		declaration.set_definition(definition);
 		model.add_declaration(Item::new(declaration, origin));
 	}
+
+	// Make output variables explicit
+	let implicit_output_vars = model
+		.top_level_declarations()
+		.filter_map(|(idx, decl)| {
+			if decl.definition().is_none()
+				&& !decl.ty().known_par(db.upcast())
+				&& !decl.annotations().has(&model, ids.no_output)
+				&& !decl.annotations().has(&model, ids.output)
+			{
+				Some(idx)
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<_>>();
+	for idx in implicit_output_vars {
+		let output_ann = Expression::new(
+			db,
+			&model,
+			model[idx].origin(),
+			LookupIdentifier(ids.output),
+		);
+		model[idx].annotations_mut().push(output_ann);
+	}
+
 	model
 }
 
@@ -91,9 +128,34 @@ mod test {
 				output :: "one" ["C"];
             "#,
 			expect!([r#"
-    string: mzn_output_default :: (output_only) = ["Hello, world"];
-    string: mzn_output_one :: (output_only) = '++'(["A"], ["C"]);
-    string: mzn_output_two :: (output_only) = ["B"];
+    string: mzn_output_default :: (output_only) = concat(["Hello, world"]);
+    string: mzn_output_one :: (output_only) = concat('++'(["A"], ["C"]));
+    string: mzn_output_two :: (output_only) = concat(["B"]);
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_implicit_output_vars() {
+		check(
+			generate_output,
+			r#"
+				var 1..3: x;
+				var opt 1..3: y;
+				array [1..2] of var 1..3: z;
+				var 1..3: p :: output;
+				var 1..2: q :: no_output;
+				1..3: a;
+				var 1..3: b = 2;
+			"#,
+			expect!([r#"
+    var '..'(1, 3): x :: ('output');
+    var opt '..'(1, 3): y :: ('output');
+    array ['..'(1, 2)] of var '..'(1, 3): z :: ('output');
+    var '..'(1, 3): p :: ('output');
+    var '..'(1, 2): q :: (no_output);
+    '..'(1, 3): a;
+    var '..'(1, 3): b = 2;
 "#]),
 		);
 	}

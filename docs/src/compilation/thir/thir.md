@@ -366,6 +366,9 @@ may be removed in one transform, and so cannot be used in subsequent transforms.
 
 The transforms which occur are:
 
+- [Output item removal](./compilation/thir/output.md)
+- [Generating constraints for domains](./domains.md)
+- [Top-down typing](./top-down-types.md)
 - [Type specialisation](./type-specialise.md)
 - [Removal of overloading](./overloading.md)
 - [Erasure of records](./records.md)

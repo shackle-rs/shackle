@@ -11,14 +11,14 @@ use shackle::{
 };
 use std::fmt::Write;
 
-use crate::{dispatch::RequestHandler, extensions::ViewScope, LanguageServerDatabase};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, extensions::ViewScope};
 
 #[derive(Debug)]
 pub struct ViewScopeHandler;
 
 impl RequestHandler<ViewScope, (ModelRef, Point)> for ViewScopeHandler {
 	fn prepare(
-		db: &mut LanguageServerDatabase,
+		db: &mut impl LanguageServerContext,
 		params: TextDocumentPositionParams,
 	) -> Result<(ModelRef, Point), ResponseError> {
 		let model_ref = db.set_active_file_from_document(&params.text_document)?;
@@ -66,5 +66,45 @@ impl RequestHandler<ViewScope, (ModelRef, Point)> for ViewScopeHandler {
 			}
 		}
 		Ok("Not an expression.".to_owned())
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::str::FromStr;
+
+	use expect_test::expect;
+	use lsp_types::Url;
+
+	use crate::handlers::test::test_handler_display;
+
+	use super::ViewScopeHandler;
+
+	#[test]
+	fn test_view_scope() {
+		test_handler_display::<ViewScopeHandler, _, _>(
+			r#"
+int: a = let { int: b = 1; } in 1;
+int: c = let { int: d = 1; } in z;
+			"#,
+			true,
+			lsp_types::TextDocumentPositionParams {
+				text_document: lsp_types::TextDocumentIdentifier {
+					uri: Url::from_str("file:///test.mzn").unwrap(),
+				},
+				position: lsp_types::Position {
+					line: 2,
+					character: 32,
+				},
+			},
+			expect!([r#"
+    Scope for current expression:
+      Functions:
+      Variables:
+        a
+        c
+        d
+"#]),
+		)
 	}
 }

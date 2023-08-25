@@ -4,7 +4,7 @@ use crate::{
 	arena::ArenaIndex,
 	constants::IdentifierRegistry,
 	db::InternedStringData,
-	diagnostics::{InvalidArrayLiteral, SyntaxError},
+	diagnostics::{InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError},
 	hir::source::Origin,
 	syntax::ast::{self, AstNode},
 	Error,
@@ -45,12 +45,35 @@ impl ExpressionCollector<'_> {
 	/// Lower an AST expression into HIR
 	pub fn collect_expression(&mut self, expression: ast::Expression) -> ArenaIndex<Expression> {
 		let origin = Origin::new(&expression);
+		log::debug!(
+			"Lowering {} to HIR ({})",
+			expression.cst_node().text(),
+			origin.debug_print(self.db)
+		);
 		if expression.is_missing() {
 			return self.alloc_expression(origin, Expression::Missing);
 		}
 		let collected: Expression = match expression {
-			ast::Expression::IntegerLiteral(i) => IntegerLiteral(i.value()).into(),
-			ast::Expression::FloatLiteral(f) => FloatLiteral::new(f.value()).into(),
+			ast::Expression::IntegerLiteral(i) => IntegerLiteral(i.value().unwrap_or_else(|e| {
+				let (src, span) = i.cst_node().source_span(self.db.upcast());
+				self.add_diagnostic(InvalidNumericLiteral {
+					src,
+					span,
+					msg: e.to_string(),
+				});
+				0
+			}))
+			.into(),
+			ast::Expression::FloatLiteral(f) => FloatLiteral::new(f.value().unwrap_or_else(|e| {
+				let (src, span) = f.cst_node().source_span(self.db.upcast());
+				self.add_diagnostic(InvalidNumericLiteral {
+					src,
+					span,
+					msg: e.to_string(),
+				});
+				0.0
+			}))
+			.into(),
 			ast::Expression::BooleanLiteral(b) => BooleanLiteral(b.value()).into(),
 			ast::Expression::StringLiteral(s) => StringLiteral::new(s.value(), self.db).into(),
 			ast::Expression::Absent(_) => Expression::Absent,
@@ -213,20 +236,36 @@ impl ExpressionCollector<'_> {
 				Pattern::String(StringLiteral::new(s.value(), self.db)),
 			),
 			ast::Pattern::PatternNumericLiteral(n) => match n.value() {
-				ast::NumericLiteral::IntegerLiteral(i) => self.alloc_pattern(
-					origin,
-					Pattern::Integer {
+				ast::NumericLiteral::IntegerLiteral(i) => {
+					let pat = Pattern::Integer {
 						negated: n.negated(),
-						value: IntegerLiteral(i.value()),
-					},
-				),
-				ast::NumericLiteral::FloatLiteral(f) => self.alloc_pattern(
-					origin,
-					Pattern::Float {
+						value: IntegerLiteral(i.value().unwrap_or_else(|e| {
+							let (src, span) = i.cst_node().source_span(self.db.upcast());
+							self.add_diagnostic(InvalidNumericLiteral {
+								src,
+								span,
+								msg: e.to_string(),
+							});
+							0
+						})),
+					};
+					self.alloc_pattern(origin, pat)
+				}
+				ast::NumericLiteral::FloatLiteral(f) => {
+					let pat = Pattern::Float {
 						negated: n.negated(),
-						value: FloatLiteral::new(f.value()),
-					},
-				),
+						value: FloatLiteral::new(f.value().unwrap_or_else(|e| {
+							let (src, span) = f.cst_node().source_span(self.db.upcast());
+							self.add_diagnostic(InvalidNumericLiteral {
+								src,
+								span,
+								msg: e.to_string(),
+							});
+							0.0
+						})),
+					};
+					self.alloc_pattern(origin, pat)
+				}
 				ast::NumericLiteral::Infinity(_) => self.alloc_pattern(
 					origin,
 					Pattern::Infinity {
@@ -762,7 +801,15 @@ impl ExpressionCollector<'_> {
 
 	fn collect_tuple_access(&mut self, t: ast::TupleAccess) -> TupleAccess {
 		TupleAccess {
-			field: IntegerLiteral(t.field().value()),
+			field: IntegerLiteral(t.field().value().unwrap_or_else(|e| {
+				let (src, span) = t.field().cst_node().source_span(self.db.upcast());
+				self.add_diagnostic(InvalidNumericLiteral {
+					src,
+					span,
+					msg: e.to_string(),
+				});
+				1
+			})),
 			tuple: self.collect_expression(t.tuple()),
 		}
 	}

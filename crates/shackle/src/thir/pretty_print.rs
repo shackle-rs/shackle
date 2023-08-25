@@ -213,12 +213,23 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	}
 	fn pretty_print_function(&self, idx: FunctionId<T>, signature_only: bool) -> String {
 		let function = &self.model[idx];
+		let name = (|| {
+			if let Some(tys) = function.mangled_param_tys() {
+				if !self.old_compat || function.body().is_some() {
+					return function
+						.name()
+						.mangled(self.db, tys.iter().copied())
+						.pretty_print(self.db.upcast());
+				}
+			}
+			function.name().pretty_print(self.db)
+		})();
 		let mut buf = String::new();
 		write!(
 			&mut buf,
 			"function {}: {}({})",
 			self.pretty_print_domain(function.domain()),
-			function.name().pretty_print(self.db),
+			name,
 			function
 				.parameters()
 				.iter()
@@ -488,7 +499,17 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 								m.member_index()
 							)
 						}),
-					Callable::Function(f) => self.model[*f].name().pretty_print(self.db),
+					Callable::Function(f) => (|| {
+						if let Some(tys) = self.model[*f].mangled_param_tys() {
+							if !self.old_compat || self.model[*f].body().is_some() {
+								return self.model[*f]
+									.name()
+									.mangled(self.db, tys.iter().copied())
+									.pretty_print(self.db.upcast());
+							}
+						}
+						self.model[*f].name().pretty_print(self.db)
+					})(),
 					Callable::Expression(e) => format!("({})", self.pretty_print_expression(e)),
 				};
 				let args = c

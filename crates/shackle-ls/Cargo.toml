@@ -18,3 +18,6 @@ threadpool = "1.8.1"
 tree-sitter = "0.20.9"
 tree-sitter-minizinc = { path = "../../parsers/tree-sitter-minizinc" }
 shackle = { path = "../shackle" }
+
+[dev-dependencies]
+expect-test = "1.4.0"

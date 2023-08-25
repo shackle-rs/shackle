@@ -4,8 +4,10 @@
 //! The `crate::thir::Visitor` and `crate::thir::Folder` traits are useful for implementing these.
 //! It is the responsibility of implementors to know what constructs are expected to be present at the stage they run.
 
+use self::call_by_name::inline_call_by_name;
 use self::capturing_fn::decapture_model;
 use self::comprehension::desugar_comprehension;
+use self::domain_constraint::rewrite_domains;
 use self::erase_enum::erase_enum;
 use self::erase_opt::erase_opt;
 use self::erase_record::erase_record;
@@ -17,6 +19,7 @@ use self::type_specialise::type_specialise;
 use super::db::Thir;
 use super::Model;
 
+pub mod call_by_name;
 pub mod capturing_fn;
 pub mod case;
 pub mod comprehension;
@@ -49,15 +52,17 @@ pub fn transformer(
 /// Get the default THIR transformer
 pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
 	transformer(vec![
+		generate_output,
+		rewrite_domains,
 		top_down_type,
 		type_specialise,
 		function_dispatch,
-		generate_output,
+		mangle_names,
 		erase_record,
 		erase_enum,
 		desugar_comprehension,
 		erase_opt,
-		mangle_names,
+		inline_call_by_name,
 		decapture_model,
 	])
 }
@@ -167,8 +172,11 @@ pub mod test {
 					};
 					match origin.node() {
 						Some(NodeRef::Item(item)) => item.model_ref(db.upcast()) == model_ref,
+						Some(NodeRef::Entity(entity)) => {
+							entity.item(db.upcast()).model_ref(db.upcast()) == model_ref
+						}
+						Some(NodeRef::Model(m)) => m == model_ref,
 						None => true,
-						_ => false,
 					}
 				})
 				.collect::<Vec<_>>();

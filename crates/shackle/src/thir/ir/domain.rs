@@ -189,6 +189,31 @@ impl<T: Marker> Domain<T> {
 	pub fn into_inner(self) -> (Ty, DomainData<T>, Origin) {
 		(self.ty, self.data, self.origin)
 	}
+
+	/// Walk the contents of this domain
+	pub fn walk(&self) -> impl Iterator<Item = &Domain<T>> {
+		let mut todo = vec![self];
+		std::iter::from_fn(move || {
+			let next = todo.pop()?;
+			match &**next {
+				DomainData::Array(dim, el) => {
+					todo.push(el);
+					todo.push(dim);
+				}
+				DomainData::Set(el) => {
+					todo.push(el);
+				}
+				DomainData::Tuple(fields) => {
+					todo.extend(fields.iter().rev());
+				}
+				DomainData::Record(fields) => {
+					todo.extend(fields.iter().rev().map(|(_, f)| f));
+				}
+				_ => (),
+			}
+			Some(next)
+		})
+	}
 }
 
 /// Ascribed domain of a variable

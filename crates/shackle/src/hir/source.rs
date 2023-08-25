@@ -10,7 +10,7 @@ pub use tree_sitter::Point;
 
 use crate::{
 	file::{FileRef, SourceFile},
-	syntax::ast::*,
+	syntax::{ast::*, cst::CstNode},
 	utils::{debug_print_strings, DebugPrint},
 };
 
@@ -72,13 +72,49 @@ impl SourceMap {
 
 /// Find an HIR node from a location.
 pub fn find_node(db: &dyn Hir, file: FileRef, start: Point, end: Point) -> Option<NodeRef> {
+	let result = find_node_raw(db, file, start, end);
+	if start == end && start.column > 0 {
+		// Find when we're looking just after a node
+		let prev_column = Point {
+			row: start.row,
+			column: start.column - 1,
+		};
+		let prev = find_node_raw(db, file, prev_column, prev_column);
+		match (prev, result) {
+			(Some((pn, pnr)), Some((rn, rnr))) => {
+				if rn
+					.as_ref()
+					.byte_range()
+					.contains(&pn.as_ref().byte_range().start)
+				{
+					return Some(pnr);
+				}
+				return Some(rnr);
+			}
+			(Some((_, node_ref)), None) | (None, Some((_, node_ref))) => {
+				return Some(node_ref);
+			}
+			_ => return None,
+		}
+	}
+	Some(result?.1)
+}
+
+fn find_node_raw(
+	db: &dyn Hir,
+	file: FileRef,
+	start: Point,
+	end: Point,
+) -> Option<(CstNode, NodeRef)> {
 	let cst = db.cst(file).ok()?;
 	let root = cst.root_node();
 	let mut node = root.descendant_for_point_range(start, end)?;
 	let source_map = db.lookup_source_map(file.into());
 	loop {
 		match source_map.find_node(node) {
-			Some(r) => return Some(r),
+			Some(r) => {
+				return Some((cst.node(node), r));
+			}
 			None => node = node.parent()?,
 		}
 	}
@@ -136,6 +172,16 @@ impl Origin {
 			SourceFile::new(self.file, db.upcast()),
 			self.range.clone().into(),
 		)
+	}
+
+	/// Print for debugging purposes
+	pub fn debug_print(&self, db: &dyn Hir) -> String {
+		let path = self
+			.file
+			.path(db.upcast())
+			.map(|p| p.to_string_lossy().into_owned())
+			.unwrap_or_else(|| "<unknown>".to_owned());
+		format!("{} @ {}-{}", path, self.range.start, self.range.end)
 	}
 }
 

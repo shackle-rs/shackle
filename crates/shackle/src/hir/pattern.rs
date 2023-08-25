@@ -3,6 +3,7 @@
 
 use super::{db::Hir, BooleanLiteral, FloatLiteral, IntegerLiteral, ItemData, StringLiteral};
 use crate::db::{InternedString, InternedStringData};
+use crate::utils::pretty_print_identifier;
 use crate::{arena::ArenaIndex, utils::impl_enum_from};
 
 /// A pattern for destructuring
@@ -150,62 +151,9 @@ impl Identifier {
 	}
 
 	/// Pretty print this identifier (adding quotes if needed)
-	///
-	/// TODO: Don't quote UTF-8
 	pub fn pretty_print(&self, db: &dyn Hir) -> String {
 		let ident = self.lookup(db);
-		let name = ident.as_str();
-		if matches!(
-			name,
-			"ann"
-				| "annotation" | "any"
-				| "array" | "bool"
-				| "case" | "constraint"
-				| "default" | "diff"
-				| "div" | "else" | "elseif"
-				| "endif" | "enum"
-				| "false" | "float"
-				| "function" | "if"
-				| "in" | "include"
-				| "int" | "intersect"
-				| "let" | "list" | "maximize"
-				| "minimize" | "mod"
-				| "not" | "of" | "op"
-				| "opt" | "output"
-				| "par" | "predicate"
-				| "record" | "satisfy"
-				| "set" | "solve"
-				| "string" | "subset"
-				| "superset" | "symdiff"
-				| "test" | "then"
-				| "true" | "tuple"
-				| "type" | "union"
-				| "var" | "where"
-				| "xor"
-		) {
-			return format!("'{}'", name);
-		}
-		for c in name.chars() {
-			if matches!(
-				c,
-				'"' | '\''
-					| '.' | '-' | '[' | ']'
-					| '^' | ',' | ';' | ':'
-					| '(' | ')' | '{' | '}'
-					| '&' | '|' | '$' | '∞'
-					| '%' | '<' | '>' | '⟷'
-					| '⇔' | '→' | '⇒' | '←'
-					| '⇐' | '/' | '∨' | '⊻'
-					| '∧' | '=' | '!' | '≠'
-					| '≤' | '≥' | '∈' | '⊆'
-					| '⊇' | '∪' | '∩' | '+'
-					| '*' | '~'
-			) || c.is_whitespace()
-			{
-				return format!("'{}'", name);
-			}
-		}
-		ident
+		pretty_print_identifier(&ident)
 	}
 }
 

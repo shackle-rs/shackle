@@ -34,10 +34,12 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for RecordEraser<Dst, Src> {
 		let origin = expression.origin();
 		match &**expression {
 			ExpressionData::RecordLiteral(rl) => {
-				let fields = rl
+				let mut pairs = rl
 					.iter()
-					.map(|(_, e)| self.fold_expression(db, model, e))
-					.collect();
+					.map(|(i, e)| (*i, self.fold_expression(db, model, e)))
+					.collect::<Vec<_>>();
+				pairs.sort_by_key(|(i, _)| *i);
+				let fields = pairs.into_iter().map(|(_, e)| e).collect();
 				let mut e = Expression::new(db, &self.model, origin, TupleLiteral(fields));
 				e.annotations_mut().extend(
 					expression
@@ -118,6 +120,24 @@ mod test {
 			erase_record,
 			r#"
                 record(int: foo, float: bar): x = (foo: 1, bar: 2.5);
+				int: y = x.foo;
+				float: z = x.bar;
+            "#,
+			expect!([r#"
+    tuple(int, float): x = (1, 2.5);
+    int: y = x.1;
+    float: z = x.2;
+    solve satisfy;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_record_type_erasure_sorting() {
+		check_no_stdlib(
+			erase_record,
+			r#"
+                record(int: foo, float: bar): x = (bar: 2.5, foo: 1);
 				int: y = x.foo;
 				float: z = x.bar;
             "#,

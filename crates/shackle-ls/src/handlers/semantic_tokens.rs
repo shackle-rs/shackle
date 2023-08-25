@@ -15,14 +15,14 @@ use shackle::{
 	syntax::db::SourceParser,
 };
 
-use crate::{dispatch::RequestHandler, utils::span_contents_to_range, LanguageServerDatabase};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::span_contents_to_range};
 
 #[derive(Debug)]
 pub struct SemanticTokensHandler;
 
 impl RequestHandler<SemanticTokensFullRequest, ModelRef> for SemanticTokensHandler {
 	fn prepare(
-		db: &mut LanguageServerDatabase,
+		db: &mut impl LanguageServerContext,
 		params: SemanticTokensParams,
 	) -> Result<ModelRef, ResponseError> {
 		db.set_active_file_from_document(&params.text_document)
@@ -163,3 +163,91 @@ legend!(
 		ReadOnly: SemanticTokenModifier::READONLY
 	}
 );
+
+#[cfg(test)]
+mod test {
+	use std::str::FromStr;
+
+	use expect_test::expect;
+	use lsp_types::Url;
+
+	use crate::handlers::test::test_handler;
+
+	use super::SemanticTokensHandler;
+
+	#[test]
+	fn test_semantic_tokens() {
+		test_handler::<SemanticTokensHandler, _, _>(
+			r#"
+enum Foo = {A, B, C};
+int: x;
+var 1..3: y;
+any: z = x + y;
+			"#,
+			false,
+			lsp_types::SemanticTokensParams {
+				text_document: lsp_types::TextDocumentIdentifier {
+					uri: Url::from_str("file:///test.mzn").unwrap(),
+				},
+				partial_result_params: lsp_types::PartialResultParams {
+					partial_result_token: None,
+				},
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "data": [
+          1,
+          5,
+          3,
+          1,
+          0,
+          0,
+          7,
+          1,
+          4,
+          0,
+          0,
+          3,
+          1,
+          4,
+          0,
+          0,
+          3,
+          1,
+          4,
+          0,
+          1,
+          5,
+          1,
+          6,
+          1,
+          1,
+          10,
+          1,
+          6,
+          0,
+          1,
+          5,
+          1,
+          6,
+          0,
+          0,
+          4,
+          1,
+          6,
+          1,
+          0,
+          4,
+          1,
+          6,
+          0
+        ]
+      }
+    }"#]),
+		)
+	}
+}
