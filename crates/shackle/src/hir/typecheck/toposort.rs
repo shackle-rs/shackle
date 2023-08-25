@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	diagnostics::CyclicDefinition,
@@ -26,11 +26,35 @@ use super::PatternTy;
 
 /// Topologically sort items
 pub fn topological_sort(db: &dyn Hir) -> (Arc<Vec<ItemRef>>, Arc<Vec<Error>>) {
-	let mut topo_sorter = TopoSorter::new(db);
-	for m in db.resolve_includes().unwrap().iter() {
+	log::info!("Topologically sorting items");
+	let models = db.resolve_includes().unwrap();
+	let mut items = Vec::with_capacity(models.iter().map(|m| db.lookup_items(*m).len()).sum());
+	let mut assignments = FxHashMap::default();
+	for m in models.iter() {
 		for item in db.lookup_items(*m).iter() {
-			topo_sorter.run(*item);
+			match item.local_item_ref(db) {
+				LocalItemRef::Assignment(a) => {
+					let model = item.model(db);
+					let types = db.lookup_item_types(*item);
+					if let Some(p) = types.name_resolution(model[a].assignee) {
+						assignments.entry(p.item()).or_insert(*item);
+					}
+				}
+				LocalItemRef::EnumAssignment(a) => {
+					let model = item.model(db);
+					let types = db.lookup_item_types(*item);
+					if let Some(p) = types.name_resolution(model[a].assignee) {
+						assignments.entry(p.item()).or_insert(*item);
+					}
+				}
+				_ => (),
+			}
+			items.push(*item);
 		}
+	}
+	let mut topo_sorter = TopoSorter::new(db, assignments);
+	for item in items.iter() {
+		topo_sorter.run(*item);
 	}
 	let (sorted, diagnostics) = topo_sorter.finish();
 	(Arc::new(sorted), Arc::new(diagnostics))
@@ -42,17 +66,19 @@ pub struct TopoSorter<'a> {
 	sorted: Vec<ItemRef>,
 	visited: FxHashSet<ItemRef>,
 	current: FxHashSet<PatternRef>,
+	assignments: FxHashMap<ItemRef, ItemRef>,
 	diagnostics: Vec<Error>,
 }
 
 impl<'a> TopoSorter<'a> {
 	/// Create a new topological sorter
-	pub fn new(db: &'a dyn Hir) -> Self {
+	pub fn new(db: &'a dyn Hir, assignments: FxHashMap<ItemRef, ItemRef>) -> Self {
 		Self {
 			db,
 			sorted: Vec::new(),
 			visited: FxHashSet::default(),
 			current: FxHashSet::default(),
+			assignments,
 			diagnostics: Vec::new(),
 		}
 	}
@@ -77,6 +103,7 @@ impl<'a> TopoSorter<'a> {
 			LocalItemRef::Assignment(a) => {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[a].assignee) {
+					self.run(p.item());
 					self.current.insert(p);
 					self.visit_expression(ExpressionRef::new(item, model[a].definition), None);
 					self.current.remove(&p);
@@ -102,7 +129,16 @@ impl<'a> TopoSorter<'a> {
 				}
 				if let Some(def) = model[d].definition {
 					self.visit_expression(ExpressionRef::new(item, def), None);
+				} else if let Some(asg) = self.assignments.remove(&item) {
+					let m = asg.model(self.db);
+					match asg.local_item_ref(self.db) {
+						LocalItemRef::Assignment(a) => {
+							self.visit_expression(ExpressionRef::new(asg, m[a].definition), None)
+						}
+						_ => unreachable!(),
+					}
 				}
+
 				for p in pats.iter() {
 					self.current.remove(p);
 				}
@@ -122,12 +158,28 @@ impl<'a> TopoSorter<'a> {
 							}
 						}
 					}
+				} else if let Some(asg) = self.assignments.remove(&item) {
+					let m = asg.model(self.db);
+					match asg.local_item_ref(self.db) {
+						LocalItemRef::EnumAssignment(e) => {
+							let data = local_item.data(&m);
+							for c in m[e].definition.iter() {
+								for param in c.parameters() {
+									for e in Type::expressions(param.declared_type, data) {
+										self.visit_expression(ExpressionRef::new(item, e), None);
+									}
+								}
+							}
+						}
+						_ => unreachable!(),
+					}
 				}
 				self.current.remove(&p);
 			}
 			LocalItemRef::EnumAssignment(e) => {
 				let types = self.db.lookup_item_types(item);
 				if let Some(p) = types.name_resolution(model[e].assignee) {
+					self.run(p.item());
 					self.current.insert(p);
 					let data = local_item.data(&model);
 					for c in model[e].definition.iter() {
@@ -355,6 +407,32 @@ mod test {
     				int: y = 3;
     				constraint x;
     			} in foo(y);
+"#]),
+		);
+
+		check_toposort(
+			r#"
+			int: x;
+			x = y;
+			int: y;
+		"#,
+			expect!([r#"
+    int: y;
+    int: x;
+    x = y;
+"#]),
+		);
+
+		check_toposort(
+			r#"
+			x = y;
+			int: x;
+			int: y;
+		"#,
+			expect!([r#"
+    int: y;
+    int: x;
+    x = y;
 "#]),
 		);
 	}
