@@ -197,6 +197,9 @@ pub trait Hir:
 
 	/// Lookup warnings from checking case expression exhaustiveness
 	fn lookup_case_exhaustiveness_warnings(&self, item: ItemRef) -> Arc<Vec<Warning>>;
+
+	/// Get counts of entities across all models
+	fn entity_counts(&self) -> Arc<EntityCounts>;
 }
 
 fn identifier_registry(db: &dyn Hir) -> Arc<IdentifierRegistry> {
@@ -518,4 +521,71 @@ fn all_warnings(db: &dyn Hir) -> Arc<Diagnostics<Warning>> {
 		}
 	}
 	Arc::new(diagnostics)
+}
+
+/// Counts of entities
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct EntityCounts {
+	/// Annotation item count
+	pub annotations: u32,
+	/// Assignment item count
+	pub assignments: u32,
+	/// Enum assignment item count
+	pub enum_assignments: u32,
+	/// Constraint item count
+	pub constraints: u32,
+	/// Declaration item count
+	pub declarations: u32,
+	/// Enumeration item count
+	pub enumerations: u32,
+	/// Function item count
+	pub functions: u32,
+	/// Output item count
+	pub outputs: u32,
+	/// Solve item count
+	pub solves: u32,
+	/// Type alias item count
+	pub type_aliases: u32,
+	/// Expression count
+	pub expressions: u32,
+	/// (Ascribed) type count
+	pub types: u32,
+	/// Pattern count
+	pub patterns: u32,
+}
+
+fn entity_counts(db: &dyn Hir) -> Arc<EntityCounts> {
+	let mut counts = EntityCounts::default();
+	for m in db.resolve_includes().unwrap().iter() {
+		let model = db.lookup_model(*m);
+		counts.annotations += model.annotations.len();
+		counts.assignments += model.assignments.len();
+		counts.enum_assignments += model.enum_assignments.len();
+		counts.constraints += model.constraints.len();
+		counts.declarations += model.declarations.len();
+		counts.enumerations += model.enumerations.len();
+		counts.functions += model.functions.len();
+		counts.outputs += model.outputs.len();
+		counts.solves += model.solves.len();
+		counts.type_aliases += model.type_aliases.len();
+		let data = model
+			.annotations
+			.values()
+			.map(|v| &v.data)
+			.chain(model.assignments.values().map(|v| &v.data))
+			.chain(model.enum_assignments.values().map(|v| &v.data))
+			.chain(model.constraints.values().map(|v| &v.data))
+			.chain(model.declarations.values().map(|v| &v.data))
+			.chain(model.enumerations.values().map(|v| &v.data))
+			.chain(model.functions.values().map(|v| &v.data))
+			.chain(model.outputs.values().map(|v| &v.data))
+			.chain(model.solves.values().map(|v| &v.data))
+			.chain(model.type_aliases.values().map(|v| &v.data));
+		for d in data {
+			counts.expressions += d.expressions.len();
+			counts.types += d.types.len();
+			counts.patterns += d.patterns.len();
+		}
+	}
+	Arc::new(counts)
 }

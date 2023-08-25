@@ -40,6 +40,7 @@ struct TypeSpecialiser<Dst: Marker> {
 	todo: Vec<SpecialisedFunction<Dst>>,
 	ids: Arc<IdentifierRegistry>,
 	position: FxHashMap<FunctionId, ItemId<Dst>>,
+	count: usize,
 }
 
 impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
@@ -303,6 +304,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 			"Created {}",
 			PrettyPrinter::new(db, &self.specialised_model).pretty_print_signature(idx.into())
 		);
+		self.count += 1;
 		idx
 	}
 
@@ -536,14 +538,16 @@ pub fn type_specialise(db: &dyn Thir, model: Model) -> Model {
 	let ids = db.identifier_registry();
 	let mut ts = TypeSpecialiser {
 		replacement_map: ReplacementMap::default(),
-		specialised_model: Model::default(),
+		specialised_model: Model::with_capacities(&model.entity_counts()),
 		concrete: FxHashMap::default(),
 		specialised: Vec::new(),
 		todo: Vec::new(),
 		ids,
 		position: FxHashMap::default(),
+		count: 0,
 	};
 	ts.add_model(db, &model);
+	log::info!("Created {} specialised functions", ts.count);
 	ts.specialised_model
 }
 

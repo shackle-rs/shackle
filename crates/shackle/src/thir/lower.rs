@@ -75,12 +75,16 @@ struct ItemCollector<'a> {
 
 impl<'a> ItemCollector<'a> {
 	/// Create a new item collector
-	pub fn new(db: &'a dyn Thir, ids: &'a IdentifierRegistry) -> Self {
+	pub fn new(
+		db: &'a dyn Thir,
+		ids: &'a IdentifierRegistry,
+		entity_counts: &hir::db::EntityCounts,
+	) -> Self {
 		Self {
 			db,
 			ids,
 			resolutions: FxHashMap::default(),
-			model: Model::default(),
+			model: Model::with_capacities(&entity_counts.clone().into()),
 			type_alias_expressions: FxHashMap::default(),
 			deferred: Vec::new(),
 		}
@@ -2269,7 +2273,8 @@ pub fn lower_model(db: &dyn Thir) -> Arc<Intermediate<Model>> {
 			.join("\n")
 	);
 	let ids = db.identifier_registry();
-	let mut collector = ItemCollector::new(db, &ids);
+	let counts = db.entity_counts();
+	let mut collector = ItemCollector::new(db, &ids, &counts);
 	let items = db.lookup_topological_sorted_items();
 	for item in items.iter() {
 		collector.collect_item(*item);

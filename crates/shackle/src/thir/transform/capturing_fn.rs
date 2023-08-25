@@ -339,7 +339,7 @@ impl<Dst: Marker> Decapturer<Dst> {
 pub fn decapture_model(db: &dyn Thir, model: Model) -> Model {
 	log::info!("Rewriting functions to be non-capturing");
 	let mut d = Decapturer {
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 		captures: Captures::get(&model),
 		decaptured: FxHashMap::default(),

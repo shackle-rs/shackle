@@ -399,12 +399,12 @@ impl<Src: Marker, Dst: Marker> EnumEraser<Dst, Src> {
 pub fn erase_enum(db: &dyn Thir, model: Model) -> Model {
 	log::info!("Erasing enums into ints");
 	let mut c = EnumEraser {
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 		ids: db.identifier_registry(),
 		tys: db.type_registry(),
 		enum_definitions: Vec::with_capacity(model.enumerations_len() as usize),
-		mzn_enum_for_item: ArenaMap::with_capacity(model.enumerations_len() as usize),
+		mzn_enum_for_item: ArenaMap::with_capacity(model.enumerations_len()),
 		enum_id_for_ty: FxHashMap::default(),
 		identifier_replacement: FxHashMap::default(),
 	};

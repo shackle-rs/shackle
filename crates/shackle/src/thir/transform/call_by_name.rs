@@ -135,7 +135,7 @@ pub fn inline_call_by_name(db: &dyn Thir, model: Model) -> Model {
 	log::info!("Inlining call by name functions");
 	let mut inliner = Inliner {
 		replacement_map: ReplacementMap::default(),
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		ids: db.identifier_registry(),
 		map: FxHashMap::default(),
 	};

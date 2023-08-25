@@ -407,7 +407,11 @@ pub fn collect_item_signature(
 /// Type-check expressions in an item (other than those used in the signature)
 pub fn collect_item_body(db: &dyn Hir, item: ItemRef) -> (Arc<BodyTypes>, Arc<Vec<Error>>) {
 	log::debug!("Type checking body of {:?}", item);
-	let mut ctx = BodyTypeContext::new(item);
+	let model = item.model(db);
+	let it = item.local_item_ref(db);
+	let patterns = it.data(&model).patterns.len();
+	let expressions = it.data(&model).expressions.len();
+	let mut ctx = BodyTypeContext::with_capacity(item, patterns, expressions);
 	ctx.type_item(db);
 	let (s, e) = ctx.finish();
 	(Arc::new(s), Arc::new(e))
