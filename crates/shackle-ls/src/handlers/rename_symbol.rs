@@ -138,3 +138,81 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 		Ok(Some(WorkspaceEdit::new(edits)))
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use std::str::FromStr;
+
+	use expect_test::expect;
+	use lsp_types::{RenameParams, TextDocumentPositionParams, Url};
+
+	use crate::handlers::test::test_handler;
+
+	use super::{RenameHandler, SymbolHandlerData};
+
+	#[test]
+	fn test_references() {
+		test_handler::<RenameHandler, _, _>(
+			r#"
+var int: x;
+any: y = let {
+    int: x = 1;
+} in x + let {
+    int: x = 2;
+} in x;
+any: z = x;
+			"#,
+			false,
+			RenameParams {
+				new_name: "abc 123 !@# \"".into(),
+				text_document_position: TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Url::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 6,
+						character: 6,
+					},
+				},
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "changes": {
+          "file:///test.mzn": [
+            {
+              "range": {
+                "start": {
+                  "line": 5,
+                  "character": 9
+                },
+                "end": {
+                  "line": 5,
+                  "character": 10
+                }
+              },
+              "newText": "'abc 123 !@# \"'"
+            },
+            {
+              "range": {
+                "start": {
+                  "line": 6,
+                  "character": 5
+                },
+                "end": {
+                  "line": 6,
+                  "character": 6
+                }
+              },
+              "newText": "'abc 123 !@# \"'"
+            }
+          ]
+        }
+      }
+    }"#]),
+		)
+	}
+}
