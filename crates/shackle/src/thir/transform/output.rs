@@ -13,19 +13,20 @@ use crate::{
 };
 
 /// Generate the output
-pub fn generate_output(db: &dyn Thir, model: &Model) -> Model {
+pub fn generate_output(db: &dyn Thir, mut model: Model) -> Model {
+	log::info!("Generating output");
+
 	let ids = db.identifier_registry();
 	let tys = db.type_registry();
 	let origin = Origin::Introduced("<generated-output>");
-	let mut model = model.clone();
 	let mut sections: FxHashMap<StringLiteral, Vec<Expression>> = FxHashMap::default();
 	let outputs = model.take_outputs();
 	for output in outputs {
 		let (_, output) = output.into_inner();
 		let (section, expression) = output.into_inner();
 		if let Some(s) = section {
-			let section = match s.into_inner().1 {
-				ExpressionData::StringLiteral(sl) => sl,
+			let section = match &*s {
+				ExpressionData::StringLiteral(sl) => sl.clone(),
 				_ => unreachable!(),
 			};
 			sections.entry(section).or_default().push(expression)

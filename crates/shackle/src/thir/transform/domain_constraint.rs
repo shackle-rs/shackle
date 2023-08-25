@@ -28,7 +28,7 @@ use crate::{
 	},
 };
 
-enum DomainConstraint<T> {
+enum DomainConstraint<T: Marker> {
 	Array(
 		Origin,
 		Option<IndexSet<T>>,
@@ -39,12 +39,12 @@ enum DomainConstraint<T> {
 	Bound(DeclarationId<T>),
 }
 
-enum IndexSet<T> {
+enum IndexSet<T: Marker> {
 	OneDimensional(DeclarationId<T>),
 	MutliDimensional(Vec<(IntegerLiteral, DeclarationId<T>)>),
 }
 
-struct DomainRewriter<Dst, Src = ()> {
+struct DomainRewriter<Dst: Marker, Src: Marker = ()> {
 	replacement_map: ReplacementMap<Dst, Src>,
 	model: Model<Dst>,
 	ids: Arc<IdentifierRegistry>,
@@ -883,7 +883,8 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 }
 
 /// Rewrite domains
-pub fn rewrite_domains(db: &dyn Thir, model: &Model) -> Model {
+pub fn rewrite_domains(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Rewriting domains into constraints and unpacking structured variables");
 	let mut d = DomainRewriter {
 		ids: db.identifier_registry(),
 		model: Model::default(),
@@ -891,7 +892,7 @@ pub fn rewrite_domains(db: &dyn Thir, model: &Model) -> Model {
 		domain_constraints: FxHashMap::default(),
 		return_constraints: FxHashMap::default(),
 	};
-	d.add_model(db, model);
+	d.add_model(db, &model);
 	d.model
 }
 

@@ -1,6 +1,8 @@
 //! Pretty printing of THIR as MiniZinc
 //!
 
+use crate::utils::maybe_grow_stack;
+
 use super::db::Thir;
 use super::{
 	AnnotationId, Callable, ConstraintId, DeclarationId, Domain, DomainData, EnumerationId,
@@ -12,7 +14,7 @@ use std::fmt::Write;
 static MINIZINC_COMPAT: &str = include_str!("../../../../share/minizinc/compat.mzn");
 
 /// Pretty prints THIR as MiniZinc
-pub struct PrettyPrinter<'a, T = ()> {
+pub struct PrettyPrinter<'a, T: Marker = ()> {
 	db: &'a dyn Thir,
 	model: &'a Model<T>,
 	/// Whether to output a model compatible with old MiniZinc (default `true`)
@@ -419,6 +421,10 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 
 	/// Pretty print an expression
 	pub fn pretty_print_expression(&self, expression: &Expression<T>) -> String {
+		maybe_grow_stack(|| self.pretty_print_expression_inner(expression))
+	}
+
+	fn pretty_print_expression_inner(&self, expression: &Expression<T>) -> String {
 		let mut out = match &**expression {
 			ExpressionData::Absent => "<>".to_owned(),
 			ExpressionData::ArrayAccess(aa) => format!(

@@ -15,6 +15,7 @@ use crate::{
 		ids::{EntityRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		Expression, Goal, Identifier, ItemData, LetItem, Pattern, Type,
 	},
+	utils::maybe_grow_stack,
 	Error, Result, Warning,
 };
 
@@ -24,6 +25,7 @@ use super::{Constructor, EnumConstructor, Generator, MaybeIndexSet};
 ///
 /// - Checks for multiply defined identifiers
 pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
+	log::info!("Determining global scope");
 	let mut scope = ScopeData::default();
 	let mut diagnostics = Vec::new();
 	let mut had_solve_item = false;
@@ -387,6 +389,7 @@ struct ScopeCollector<'a> {
 impl ScopeCollector<'_> {
 	/// Create a new scope collector
 	fn new<'a>(db: &'a dyn Hir, item: ItemRef, data: &'a ItemData) -> ScopeCollector<'a> {
+		log::debug!("Collecting scopes for {:?}", item);
 		let mut scopes = Arena::new();
 		let current = scopes.insert(Scope::Global);
 		ScopeCollector {
@@ -532,6 +535,10 @@ impl ScopeCollector<'_> {
 
 	/// Collect scope for an expression
 	fn collect_expression(&mut self, index: ArenaIndex<Expression>) {
+		maybe_grow_stack(|| self.collect_expression_inner(index))
+	}
+
+	fn collect_expression_inner(&mut self, index: ArenaIndex<Expression>) {
 		let ann = self.data.annotations(index);
 		for e in ann {
 			self.collect_expression(e);

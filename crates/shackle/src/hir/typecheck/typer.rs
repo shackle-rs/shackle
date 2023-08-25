@@ -20,6 +20,7 @@ use crate::{
 		FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty,
 		TyData, VarType,
 	},
+	utils::maybe_grow_stack,
 	Error,
 };
 
@@ -119,6 +120,10 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 
 	/// Get the type of this expression
 	pub fn collect_expression(&mut self, expr: ArenaIndex<Expression>) -> Ty {
+		maybe_grow_stack(|| self.collect_expression_inner(expr))
+	}
+
+	fn collect_expression_inner(&mut self, expr: ArenaIndex<Expression>) -> Ty {
 		let db = self.db;
 		let result = match &self.data[expr] {
 			Expression::Absent => self.types.bottom.make_opt(db.upcast()),

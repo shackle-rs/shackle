@@ -14,6 +14,13 @@ use super::{ExpressionCollector, TypeInstIdentifiers};
 
 /// Lower a model to HIR
 pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>, Arc<Vec<Error>>) {
+	log::info!(
+		"Lowering {} to HIR",
+		model
+			.path(db.upcast())
+			.map(|p| p.to_string_lossy().to_string())
+			.unwrap_or_else(|| "<unnamed file>".to_owned())
+	);
 	let ast = match db.ast(*model) {
 		Ok(m) => m,
 		Err(e) => return (Default::default(), Default::default(), Arc::new(vec![e])),
@@ -56,6 +63,7 @@ impl ItemCollector<'_> {
 
 	/// Lower an AST item to HIR
 	pub fn collect_item(&mut self, item: ast::Item) {
+		log::debug!("Lowering {} to HIR", item.cst_text());
 		let (it, sm) = match item.clone() {
 			ast::Item::Annotation(a) => self.collect_annotation(a),
 			ast::Item::Assignment(a) => self.collect_assignment(a),
@@ -69,6 +77,7 @@ impl ItemCollector<'_> {
 			ast::Item::Solve(s) => self.collect_solve(s),
 			ast::Item::TypeAlias(t) => self.collect_type_alias(t),
 		};
+		log::debug!("Produced HIR item {:?}", it);
 		self.source_map.insert(it.into(), Origin::new(&item));
 		self.source_map.add_from_item_data(self.db, it, &sm);
 	}

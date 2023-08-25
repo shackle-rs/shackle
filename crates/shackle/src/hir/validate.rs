@@ -30,6 +30,7 @@ use super::{
 
 /// Validate HIR
 pub fn validate_hir(db: &dyn Hir) -> Arc<Vec<Error>> {
+	log::info!("Validating HIR");
 	let mut diagnostics = Vec::new();
 	// Validate overloading
 	let global_scope = db.lookup_global_scope();

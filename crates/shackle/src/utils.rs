@@ -12,11 +12,11 @@ macro_rules! impl_enum_from {
 			}
 		}
 	};
-	($enum:ident<$($ts:ident),+>::$type:ident) => {
-		impl_enum_from!($enum<$($ts),+>::$type($type));
+	($enum:ident<$($ls:lifetime,)* $($ts:ident $(: $fb:path)?),+>::$type:ident) => {
+		impl_enum_from!($enum<$($ts $(: $fb)?),+>::$type($type));
 	};
-	($enum:ident<$($ts:ident),+>::$variant:ident($type:ty)) => {
-		impl<$($ts),+> std::convert::From<$type> for $enum<$($ts),+> {
+	($enum:ident<$($ls:lifetime,)* $($ts:ident $(: $fb:path)?),+>::$variant:ident($type:ty)) => {
+		impl<$($ls,)* $($ts $(: $fb)?),+> std::convert::From<$type> for $enum<$($ls,)* $($ts),+> {
 			fn from(v: $type) -> Self {
 				Self::$variant(v)
 			}
@@ -40,15 +40,15 @@ macro_rules! impl_index {
 		}
 	};
 
-	($type:ident<$($tp:ident),+>[$self:ident, $index:ident: $index_type:ty] -> $output:ty {$value:expr}) => {
-		impl<$($tp),+> std::ops::Index<$index_type> for $type<$($tp),+> {
+	($type:ident<$($tp:ident $(: $fb:path)?),+>[$self:ident, $index:ident: $index_type:ty] -> $output:ty {$value:expr}) => {
+		impl<$($tp $(: $fb)?),+> std::ops::Index<$index_type> for $type<$($tp),+> {
 			type Output = $output;
 			fn index(&$self, $index: $index_type) -> &Self::Output {
 				&$value
 			}
 		}
 
-		impl<$($tp),+> std::ops::IndexMut<$index_type> for $type<$($tp),+> {
+		impl<$($tp $(: $fb)?),+> std::ops::IndexMut<$index_type> for $type<$($tp),+> {
 			fn index_mut(&mut $self, $index: $index_type) -> &mut Self::Output {
 				&mut $value
 			}
@@ -190,6 +190,14 @@ pub fn pretty_print_identifier(name: &str) -> String {
 	}
 
 	name.to_owned()
+}
+
+/// Grow the stack if necessary to run the given function.
+///
+/// Useful for recursive calls which may overrun the stack otherwise.
+#[inline]
+pub fn maybe_grow_stack<R>(f: impl FnOnce() -> R) -> R {
+	stacker::maybe_grow(64 * 1024, 1024 * 1024, f)
 }
 
 #[cfg(test)]

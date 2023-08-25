@@ -15,11 +15,11 @@ pub use crate::hir::{BooleanLiteral, FloatLiteral, IntegerLiteral, StringLiteral
 use crate::{
 	thir::{db::Thir, source::Origin},
 	ty::{FunctionType, Ty, TyData, TyParamInstantiations, TyVar},
-	utils::{impl_enum_from, DebugPrint},
+	utils::{impl_enum_from, maybe_grow_stack, DebugPrint},
 };
 
 /// Trait for building expressions
-pub trait ExpressionBuilder<T = ()> {
+pub trait ExpressionBuilder<T: Marker = ()> {
 	/// Build the expression
 	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T>;
 }
@@ -27,8 +27,8 @@ pub trait ExpressionBuilder<T = ()> {
 /// An expression.
 ///
 /// The data inside an expression is immutable (as modifying the data could invalidate the type).
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Expression<T = ()> {
+#[derive(Debug, Hash, PartialEq, Eq)]
+pub struct Expression<T: Marker = ()> {
 	ty: Ty,
 	data: ExpressionData<T>,
 	annotations: Annotations<T>,
@@ -81,11 +81,6 @@ impl<T: Marker> Expression<T> {
 	pub fn origin(&self) -> Origin {
 		self.origin
 	}
-
-	/// Get the inner data
-	pub fn into_inner(self) -> (Ty, ExpressionData<T>, Annotations<T>, Origin) {
-		(self.ty, self.data, self.annotations, self.origin)
-	}
 }
 
 impl<T: Marker> Deref for Expression<T> {
@@ -95,9 +90,32 @@ impl<T: Marker> Deref for Expression<T> {
 	}
 }
 
+impl<T: Marker> Drop for Expression<T> {
+	fn drop(&mut self) {
+		// Default recursive drop can cause stack overflow
+		maybe_grow_stack(|| {
+			let _ = std::mem::replace(&mut self.data, ExpressionData::Absent);
+			let _ = std::mem::take(&mut self.annotations);
+		})
+	}
+}
+
+impl<T: Marker> Clone for Expression<T> {
+	fn clone(&self) -> Self {
+		// Default recursive clone can cause stack overflow
+		maybe_grow_stack(|| Self {
+			ty: self.ty,
+			data: self.data.clone(),
+			annotations: self.annotations.clone(),
+			origin: self.origin,
+			phantom: PhantomData,
+		})
+	}
+}
+
 /// An expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum ExpressionData<T = ()> {
+pub enum ExpressionData<T: Marker = ()> {
 	/// Absent `<>`
 	Absent,
 	/// Bool literal
@@ -142,25 +160,25 @@ pub enum ExpressionData<T = ()> {
 	Lambda(Lambda<T>),
 }
 
-impl_enum_from!(ExpressionData<T>::BooleanLiteral(BooleanLiteral));
-impl_enum_from!(ExpressionData<T>::IntegerLiteral(IntegerLiteral));
-impl_enum_from!(ExpressionData<T>::FloatLiteral(FloatLiteral));
-impl_enum_from!(ExpressionData<T>::StringLiteral(StringLiteral));
-impl_enum_from!(ExpressionData<T>::Identifier(ResolvedIdentifier<T>));
-impl_enum_from!(ExpressionData<T>::ArrayLiteral(ArrayLiteral<T>));
-impl_enum_from!(ExpressionData<T>::SetLiteral(SetLiteral<T>));
-impl_enum_from!(ExpressionData<T>::TupleLiteral(TupleLiteral<T>));
-impl_enum_from!(ExpressionData<T>::RecordLiteral(RecordLiteral<T>));
-impl_enum_from!(ExpressionData<T>::ArrayComprehension(ArrayComprehension<T>));
-impl_enum_from!(ExpressionData<T>::SetComprehension(SetComprehension<T>));
-impl_enum_from!(ExpressionData<T>::ArrayAccess(ArrayAccess<T>));
-impl_enum_from!(ExpressionData<T>::TupleAccess(TupleAccess<T>));
-impl_enum_from!(ExpressionData<T>::RecordAccess(RecordAccess<T>));
-impl_enum_from!(ExpressionData<T>::IfThenElse(IfThenElse<T>));
-impl_enum_from!(ExpressionData<T>::Case(Case<T>));
-impl_enum_from!(ExpressionData<T>::Call(Call<T>));
-impl_enum_from!(ExpressionData<T>::Let(Let<T>));
-impl_enum_from!(ExpressionData<T>::Lambda(Lambda<T>));
+impl_enum_from!(ExpressionData<T: Marker>::BooleanLiteral(BooleanLiteral));
+impl_enum_from!(ExpressionData<T: Marker>::IntegerLiteral(IntegerLiteral));
+impl_enum_from!(ExpressionData<T: Marker>::FloatLiteral(FloatLiteral));
+impl_enum_from!(ExpressionData<T: Marker>::StringLiteral(StringLiteral));
+impl_enum_from!(ExpressionData<T: Marker>::Identifier(ResolvedIdentifier<T>));
+impl_enum_from!(ExpressionData<T: Marker>::ArrayLiteral(ArrayLiteral<T>));
+impl_enum_from!(ExpressionData<T: Marker>::SetLiteral(SetLiteral<T>));
+impl_enum_from!(ExpressionData<T: Marker>::TupleLiteral(TupleLiteral<T>));
+impl_enum_from!(ExpressionData<T: Marker>::RecordLiteral(RecordLiteral<T>));
+impl_enum_from!(ExpressionData<T: Marker>::ArrayComprehension(ArrayComprehension<T>));
+impl_enum_from!(ExpressionData<T: Marker>::SetComprehension(SetComprehension<T>));
+impl_enum_from!(ExpressionData<T: Marker>::ArrayAccess(ArrayAccess<T>));
+impl_enum_from!(ExpressionData<T: Marker>::TupleAccess(TupleAccess<T>));
+impl_enum_from!(ExpressionData<T: Marker>::RecordAccess(RecordAccess<T>));
+impl_enum_from!(ExpressionData<T: Marker>::IfThenElse(IfThenElse<T>));
+impl_enum_from!(ExpressionData<T: Marker>::Case(Case<T>));
+impl_enum_from!(ExpressionData<T: Marker>::Call(Call<T>));
+impl_enum_from!(ExpressionData<T: Marker>::Let(Let<T>));
+impl_enum_from!(ExpressionData<T: Marker>::Lambda(Lambda<T>));
 impl<T: Marker> From<Absent> for ExpressionData<T> {
 	fn from(_: Absent) -> Self {
 		ExpressionData::Absent
@@ -258,7 +276,7 @@ impl<T: Marker> ExpressionBuilder<T> for Infinity {
 
 /// Array literal
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
-pub struct ArrayLiteral<T = ()>(pub Vec<Expression<T>>);
+pub struct ArrayLiteral<T: Marker = ()>(pub Vec<Expression<T>>);
 
 impl<T: Marker> ExpressionBuilder<T> for ArrayLiteral<T> {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -293,7 +311,7 @@ impl<T: Marker> DerefMut for ArrayLiteral<T> {
 
 /// Set literal
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
-pub struct SetLiteral<T = ()>(pub Vec<Expression<T>>);
+pub struct SetLiteral<T: Marker = ()>(pub Vec<Expression<T>>);
 
 impl<T: Marker> ExpressionBuilder<T> for SetLiteral<T> {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -330,7 +348,7 @@ impl<T: Marker> DerefMut for SetLiteral<T> {
 
 /// Tuple literal
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TupleLiteral<T = ()>(pub Vec<Expression<T>>);
+pub struct TupleLiteral<T: Marker = ()>(pub Vec<Expression<T>>);
 
 impl<T: Marker> ExpressionBuilder<T> for TupleLiteral<T> {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -358,7 +376,7 @@ impl<T: Marker> DerefMut for TupleLiteral<T> {
 
 /// Record literal
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RecordLiteral<T = ()>(pub Vec<(Identifier, Expression<T>)>);
+pub struct RecordLiteral<T: Marker = ()>(pub Vec<(Identifier, Expression<T>)>);
 
 impl<T: Marker> ExpressionBuilder<T> for RecordLiteral<T> {
 	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -383,7 +401,7 @@ impl<T: Marker> DerefMut for RecordLiteral<T> {
 
 /// Array comprehension
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ArrayComprehension<T = ()> {
+pub struct ArrayComprehension<T: Marker = ()> {
 	/// Value of the comprehension
 	pub template: Box<Expression<T>>,
 	/// The indices to generate
@@ -448,7 +466,7 @@ impl<T: Marker> ExpressionBuilder<T> for ArrayComprehension<T> {
 
 /// Set comprehension
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SetComprehension<T = ()> {
+pub struct SetComprehension<T: Marker = ()> {
 	/// Value of the comprehension
 	pub template: Box<Expression<T>>,
 	/// Generators of the comprehension
@@ -484,7 +502,7 @@ impl<T: Marker> ExpressionBuilder<T> for SetComprehension<T> {
 
 /// Array access
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ArrayAccess<T = ()> {
+pub struct ArrayAccess<T: Marker = ()> {
 	/// The array being indexed into
 	pub collection: Box<Expression<T>>,
 	/// The indices
@@ -527,7 +545,7 @@ impl<T: Marker> ExpressionBuilder<T> for ArrayAccess<T> {
 
 /// Tuple access
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TupleAccess<T = ()> {
+pub struct TupleAccess<T: Marker = ()> {
 	/// Tuple being accessed
 	pub tuple: Box<Expression<T>>,
 	/// Field being accessed
@@ -557,7 +575,7 @@ impl<T: Marker> ExpressionBuilder<T> for TupleAccess<T> {
 
 /// Record access
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RecordAccess<T = ()> {
+pub struct RecordAccess<T: Marker = ()> {
 	/// Record being accessed
 	pub record: Box<Expression<T>>,
 	/// Field being accessed
@@ -589,7 +607,7 @@ impl<T: Marker> ExpressionBuilder<T> for RecordAccess<T> {
 
 /// If-then-else
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct IfThenElse<T = ()> {
+pub struct IfThenElse<T: Marker = ()> {
 	/// The if-then and elseif-then branches
 	pub branches: Vec<Branch<T>>,
 	/// The else result
@@ -644,7 +662,7 @@ impl<T: Marker> ExpressionBuilder<T> for IfThenElse<T> {
 
 /// Case expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Case<T = ()> {
+pub struct Case<T: Marker = ()> {
 	/// The expression being matched on
 	pub scrutinee: Box<Expression<T>>,
 	/// The case match arms
@@ -673,7 +691,7 @@ impl<T: Marker> ExpressionBuilder<T> for Case<T> {
 
 /// Target of a function call
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum Callable<T = ()> {
+pub enum Callable<T: Marker = ()> {
 	/// Call to a function item
 	Function(FunctionId<T>),
 	/// Call to an annotation constructor function
@@ -690,7 +708,7 @@ pub enum Callable<T = ()> {
 
 /// A function call
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Call<T = ()> {
+pub struct Call<T: Marker = ()> {
 	/// Function being called
 	pub function: Callable<T>,
 	/// Call arguments
@@ -861,7 +879,7 @@ impl<T: Marker> ExpressionBuilder<T> for Call<T> {
 /// A call to a function with the given name.
 ///
 /// Used only to build expressions. Becomes a `Call` once built.
-pub struct LookupCall<T = ()> {
+pub struct LookupCall<T: Marker = ()> {
 	/// Function name
 	pub function: FunctionName,
 	/// Call arguments
@@ -924,7 +942,7 @@ impl<T: Marker> ExpressionBuilder<T> for LookupIdentifier {
 
 /// A let expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Let<T = ()> {
+pub struct Let<T: Marker = ()> {
 	/// Items in this let expression
 	pub items: Vec<LetItem<T>>,
 	/// Value of the let expression
@@ -948,7 +966,7 @@ impl<T: Marker> ExpressionBuilder<T> for Let<T> {
 
 /// A lambda function
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Lambda<T = ()>(pub FunctionId<T>);
+pub struct Lambda<T: Marker = ()>(pub FunctionId<T>);
 
 impl<T: Marker> ExpressionBuilder<T> for Lambda<T> {
 	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -1032,7 +1050,7 @@ impl<T: Marker> ExpressionBuilder<T> for Identifier {
 
 /// An identifier which resolves to a declaration
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum ResolvedIdentifier<T = ()> {
+pub enum ResolvedIdentifier<T: Marker = ()> {
 	/// Identifier resolves to an annotation atom
 	Annotation(AnnotationId<T>),
 	/// Identifier resolves to a declaration
@@ -1043,10 +1061,10 @@ pub enum ResolvedIdentifier<T = ()> {
 	EnumerationMember(EnumMemberId<T>),
 }
 
-impl_enum_from!(ResolvedIdentifier<T>::Annotation(AnnotationId<T>));
-impl_enum_from!(ResolvedIdentifier<T>::Declaration(DeclarationId<T>));
-impl_enum_from!(ResolvedIdentifier<T>::Enumeration(EnumerationId<T>));
-impl_enum_from!(ResolvedIdentifier<T>::EnumerationMember(EnumMemberId<T>));
+impl_enum_from!(ResolvedIdentifier<T: Marker>::Annotation(AnnotationId<T>));
+impl_enum_from!(ResolvedIdentifier<T: Marker>::Declaration(DeclarationId<T>));
+impl_enum_from!(ResolvedIdentifier<T: Marker>::Enumeration(EnumerationId<T>));
+impl_enum_from!(ResolvedIdentifier<T: Marker>::EnumerationMember(EnumMemberId<T>));
 
 impl<T: Marker> ExpressionBuilder<T> for ResolvedIdentifier<T> {
 	fn build(self, db: &dyn Thir, model: &Model<T>, origin: Origin) -> Expression<T> {
@@ -1061,7 +1079,7 @@ impl<T: Marker> ExpressionBuilder<T> for ResolvedIdentifier<T> {
 
 /// Reference to a member of an enum
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct EnumMemberId<T = ()> {
+pub struct EnumMemberId<T: Marker = ()> {
 	parent: EnumerationId<T>,
 	index: u32,
 }
@@ -1184,7 +1202,7 @@ impl EnumConstructorKind {
 
 /// Comprehension generator
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum Generator<T = ()> {
+pub enum Generator<T: Marker = ()> {
 	/// Generator which iterates over a collection
 	Iterator {
 		/// Generator declaration
@@ -1276,7 +1294,7 @@ impl<T: Marker> Generator<T> {
 
 /// A branch of an `IfThenElse`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Branch<T = ()> {
+pub struct Branch<T: Marker = ()> {
 	/// The boolean condition
 	pub condition: Expression<T>,
 	/// The result if the condition holds
@@ -1297,7 +1315,7 @@ impl<T: Marker> Branch<T> {
 
 /// A branch of a `Case`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CaseBranch<T = ()> {
+pub struct CaseBranch<T: Marker = ()> {
 	/// The pattern to match
 	pub pattern: Pattern<T>,
 	/// The value if the pattern matches
@@ -1320,7 +1338,7 @@ impl<T: Marker> CaseBranch<T> {
 /// Instead, the anonymous wildcard pattern is used, and destructuring happens
 /// via destructor functions.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Pattern<T = ()> {
+pub struct Pattern<T: Marker = ()> {
 	data: PatternData<T>,
 	origin: Origin,
 }
@@ -1519,7 +1537,7 @@ impl<T: Marker> DerefMut for Pattern<T> {
 
 /// A pattern for a case expression.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum PatternData<T = ()> {
+pub enum PatternData<T: Marker = ()> {
 	/// Enum constructor call
 	EnumConstructor {
 		/// The enum item member
@@ -1546,7 +1564,7 @@ pub enum PatternData<T = ()> {
 
 /// An item in a let expression
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum LetItem<T = ()> {
+pub enum LetItem<T: Marker = ()> {
 	/// A local constraint item
 	Constraint(ConstraintId<T>),
 	/// A local declaration item

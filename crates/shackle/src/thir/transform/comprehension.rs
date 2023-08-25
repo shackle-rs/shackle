@@ -18,6 +18,7 @@ use crate::{
 		Expression, ExpressionData, Generator, IfThenElse, IntegerLiteral, LookupCall, Marker,
 		Model, ResolvedIdentifier, SetComprehension, VarType,
 	},
+	utils::maybe_grow_stack,
 };
 
 use super::top_down_type::add_coercion;
@@ -29,7 +30,7 @@ enum SurroundingCall {
 	Other,
 }
 
-struct ComprehensionRewriter<Dst> {
+struct ComprehensionRewriter<Dst: Marker> {
 	result: Model<Dst>,
 	replacement_map: ReplacementMap<Dst>,
 	ids: Arc<IdentifierRegistry>,
@@ -92,25 +93,27 @@ impl<Dst: Marker> Folder<'_, Dst> for ComprehensionRewriter<Dst> {
 		model: &Model,
 		expression: &Expression,
 	) -> Expression<Dst> {
-		if let ExpressionData::SetComprehension(c) = &**expression {
-			// Set comprehensions are turned into array comprehensions surrounded by array2set()
-			let array = self.rewrite_set_comprehension(db, model, c, SurroundingCall::Other);
-			return Expression::new(
-				db,
-				&self.result,
-				expression.origin(),
-				LookupCall {
-					function: self.ids.array2set.into(),
-					arguments: vec![Expression::new(
-						db,
-						&self.result,
-						expression.origin(),
-						array,
-					)],
-				},
-			);
-		}
-		fold_expression(self, db, model, expression)
+		maybe_grow_stack(|| {
+			if let ExpressionData::SetComprehension(c) = &**expression {
+				// Set comprehensions are turned into array comprehensions surrounded by array2set()
+				let array = self.rewrite_set_comprehension(db, model, c, SurroundingCall::Other);
+				return Expression::new(
+					db,
+					&self.result,
+					expression.origin(),
+					LookupCall {
+						function: self.ids.array2set.into(),
+						arguments: vec![Expression::new(
+							db,
+							&self.result,
+							expression.origin(),
+							array,
+						)],
+					},
+				);
+			}
+			fold_expression(self, db, model, expression)
+		})
 	}
 }
 
@@ -399,7 +402,7 @@ impl<Dst: Marker> ComprehensionRewriter<Dst> {
 	}
 }
 
-struct ScopeTester<'a, T> {
+struct ScopeTester<'a, T: Marker> {
 	scope: &'a FxHashMap<DeclarationId<T>, bool>,
 	ok: bool,
 }
@@ -409,7 +412,7 @@ impl<'a, T: Marker> Visitor<'_, T> for ScopeTester<'a, T> {
 		if !self.ok {
 			return;
 		}
-		visit_expression(self, model, expression)
+		maybe_grow_stack(|| visit_expression(self, model, expression))
 	}
 
 	fn visit_identifier(&mut self, _model: &Model<T>, identifier: &ResolvedIdentifier<T>) {
@@ -434,13 +437,14 @@ impl<'a, T: Marker> ScopeTester<'a, T> {
 }
 
 /// Desugar comprehensions
-pub fn desugar_comprehension(db: &dyn Thir, model: &Model) -> Model {
+pub fn desugar_comprehension(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Desugaring comprehensions");
 	let mut r = ComprehensionRewriter {
 		ids: db.identifier_registry(),
 		replacement_map: ReplacementMap::default(),
 		result: Model::default(),
 	};
-	r.add_model(db, model);
+	r.add_model(db, &model);
 	r.result
 }
 

@@ -1,10 +1,13 @@
 use rustc_hash::FxHashMap;
 
-use crate::thir::{db::Thir, pretty_print::PrettyPrinter, source::Origin, *};
+use crate::{
+	thir::{db::Thir, pretty_print::PrettyPrinter, source::Origin, *},
+	utils::maybe_grow_stack,
+};
 
 /// Replacement map for references to items
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ReplacementMap<Dst, Src = ()> {
+pub struct ReplacementMap<Dst: Marker, Src: Marker = ()> {
 	annotations: FxHashMap<AnnotationId<Src>, AnnotationId<Dst>>,
 	constraints: FxHashMap<ConstraintId<Src>, ConstraintId<Dst>>,
 	declarations: FxHashMap<DeclarationId<Src>, DeclarationId<Dst>>,
@@ -320,13 +323,16 @@ pub trait Folder<'a, Dst: Marker, Src: Marker = ()> {
 	}
 
 	/// Fold an expression
+	///
+	/// When overriding this, it is generally a good idea to wrap the body in `utils::maybe_grow_stack`
+	/// to prevent stack overflows on highly nested models
 	fn fold_expression(
 		&mut self,
 		db: &'a dyn Thir,
 		model: &'a Model<Src>,
 		expression: &'a Expression<Src>,
 	) -> Expression<Dst> {
-		fold_expression(self, db, model, expression)
+		maybe_grow_stack(|| fold_expression(self, db, model, expression))
 	}
 
 	/// Fold a boolean literal

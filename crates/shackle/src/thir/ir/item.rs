@@ -56,7 +56,7 @@ impl<T> Item<T> {
 
 /// Annotation item
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Annotation<T = ()> {
+pub struct Annotation<T: Marker = ()> {
 	constructor: Constructor<T>,
 }
 
@@ -100,7 +100,7 @@ impl<T: Marker> Annotation<T> {
 
 /// Constraint item
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Constraint<T = ()> {
+pub struct Constraint<T: Marker = ()> {
 	expression: Expression<T>,
 	annotations: Annotations<T>,
 	top_level: bool,
@@ -152,7 +152,7 @@ pub type ConstraintId<T = ()> = ArenaIndex<ConstraintItem<T>>;
 
 /// A declaration item
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Declaration<T = ()> {
+pub struct Declaration<T: Marker = ()> {
 	domain: Domain<T>,
 	name: Option<Identifier>,
 	definition: Option<Expression<T>>,
@@ -281,7 +281,7 @@ pub type EnumerationId<T = ()> = ArenaIndex<EnumerationItem<T>>;
 
 /// A enum item
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Enumeration<T = ()> {
+pub struct Enumeration<T: Marker = ()> {
 	enum_type: EnumRef,
 	definition: Option<Vec<Constructor<T>>>,
 	annotations: Annotations<T>,
@@ -347,7 +347,7 @@ impl<T: Marker> Enumeration<T> {
 
 /// A constructor (either atomic or a constructor function)
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Constructor<T = ()> {
+pub struct Constructor<T: Marker = ()> {
 	/// The name of this constructor
 	pub name: Option<Identifier>,
 	/// The constructor function parameters, or `None` if this is atomic
@@ -432,7 +432,7 @@ impl PartialEq<Identifier> for FunctionName {
 
 /// Function item
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Function<T = ()> {
+pub struct Function<T: Marker = ()> {
 	domain: Domain<T>,
 	name: FunctionName,
 	type_inst_vars: Vec<TyVar>,
@@ -646,7 +646,7 @@ impl<T: Marker> Function<T> {
 
 /// Output item
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Output<T = ()> {
+pub struct Output<T: Marker = ()> {
 	section: Option<Expression<T>>,
 	expression: Expression<T>,
 }
@@ -699,7 +699,7 @@ impl<T: Marker> Output<T> {
 
 /// Solve item
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Solve<T = ()> {
+pub struct Solve<T: Marker = ()> {
 	/// Solve goal
 	goal: Goal<T>,
 	/// Annotations
@@ -775,7 +775,7 @@ impl<T: Marker> Solve<T> {
 
 /// Solve method and objective
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Goal<T = ()> {
+pub enum Goal<T: Marker = ()> {
 	/// Satisfaction problem
 	Satisfy,
 	/// Maximize the given objective
@@ -792,7 +792,7 @@ pub enum Goal<T = ()> {
 
 /// ID of an item
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ItemId<T = ()> {
+pub enum ItemId<T: Marker = ()> {
 	/// Annotation item
 	Annotation(AnnotationId<T>),
 	/// Constraint item
@@ -809,9 +809,9 @@ pub enum ItemId<T = ()> {
 	Solve,
 }
 
-impl_enum_from!(ItemId<T>::Annotation(AnnotationId<T>));
-impl_enum_from!(ItemId<T>::Constraint(ConstraintId<T>));
-impl_enum_from!(ItemId<T>::Declaration(DeclarationId<T>));
-impl_enum_from!(ItemId<T>::Enumeration(EnumerationId<T>));
-impl_enum_from!(ItemId<T>::Function(FunctionId<T>));
-impl_enum_from!(ItemId<T>::Output(OutputId<T>));
+impl_enum_from!(ItemId<T: Marker>::Annotation(AnnotationId<T>));
+impl_enum_from!(ItemId<T: Marker>::Constraint(ConstraintId<T>));
+impl_enum_from!(ItemId<T: Marker>::Declaration(DeclarationId<T>));
+impl_enum_from!(ItemId<T: Marker>::Enumeration(EnumerationId<T>));
+impl_enum_from!(ItemId<T: Marker>::Function(FunctionId<T>));
+impl_enum_from!(ItemId<T: Marker>::Output(OutputId<T>));

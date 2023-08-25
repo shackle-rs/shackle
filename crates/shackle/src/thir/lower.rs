@@ -24,10 +24,14 @@ use crate::{
 		PatternTy, TypeResult,
 	},
 	ty::{OptType, Ty, TyData, VarType},
-	utils::impl_enum_from,
+	utils::{impl_enum_from, maybe_grow_stack},
 };
 
-use super::{db::Thir, source::Origin, *};
+use super::{
+	db::{Intermediate, Thir},
+	source::Origin,
+	*,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum DeclOrConstraint {
@@ -678,6 +682,10 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 
 	/// Collect an expression
 	pub fn collect_expression(&mut self, idx: ArenaIndex<hir::Expression>) -> Expression {
+		maybe_grow_stack(|| self.collect_expression_inner(idx))
+	}
+
+	pub fn collect_expression_inner(&mut self, idx: ArenaIndex<hir::Expression>) -> Expression {
 		let db = self.parent.db;
 		let ty = self.types[idx];
 		let origin = EntityRef::new(db.upcast(), self.item, idx);
@@ -2249,11 +2257,17 @@ enum Destructuring {
 }
 
 /// Lower a model to THIR
-pub fn lower_model(db: &dyn Thir) -> Arc<Model> {
-	for e in db.all_errors().iter() {
-		eprintln!("{:#?}", e);
-	}
-	assert!(db.all_errors().is_empty());
+pub fn lower_model(db: &dyn Thir) -> Arc<Intermediate<Model>> {
+	log::info!("Lowering model to THIR");
+	assert!(
+		db.all_errors().is_empty(),
+		"Errors present, cannot lower model.\n{}",
+		db.all_errors()
+			.iter()
+			.map(|e| format!("{:#?}", e))
+			.collect::<Vec<_>>()
+			.join("\n")
+	);
 	let ids = db.identifier_registry();
 	let mut collector = ItemCollector::new(db, &ids);
 	let items = db.lookup_topological_sorted_items();
@@ -2261,5 +2275,5 @@ pub fn lower_model(db: &dyn Thir) -> Arc<Model> {
 		collector.collect_item(*item);
 	}
 	collector.collect_deferred();
-	Arc::new(collector.finish())
+	Arc::new(Intermediate::new(collector.finish()))
 }

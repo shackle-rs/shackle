@@ -7,6 +7,7 @@ use crate::{
 	diagnostics::{InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError},
 	hir::source::Origin,
 	syntax::ast::{self, AstNode},
+	utils::maybe_grow_stack,
 	Error,
 };
 
@@ -44,6 +45,10 @@ impl ExpressionCollector<'_> {
 
 	/// Lower an AST expression into HIR
 	pub fn collect_expression(&mut self, expression: ast::Expression) -> ArenaIndex<Expression> {
+		maybe_grow_stack(|| self.collect_expression_inner(expression))
+	}
+
+	fn collect_expression_inner(&mut self, expression: ast::Expression) -> ArenaIndex<Expression> {
 		let origin = Origin::new(&expression);
 		log::debug!(
 			"Lowering {} to HIR ({})",

@@ -13,6 +13,7 @@ use crate::{
 		ExpressionData, FunctionId, Item, Let, LetItem, Marker, Model,
 	},
 	ty::{FunctionType, PolymorphicFunctionType, Ty, TyData},
+	utils::maybe_grow_stack,
 };
 
 /// Create a let wrapping an expression into a declaration.
@@ -102,7 +103,7 @@ fn is_opt_subtype_of(db: &dyn Interner, a: Ty, b: Ty) -> bool {
 }
 
 #[derive(Default)]
-struct TopDownTyper<'a, Dst, Src = ()> {
+struct TopDownTyper<'a, Dst: Marker, Src: Marker = ()> {
 	types: RefMap<'a, Expression<Src>, Ty>,
 	result: Model<Dst>,
 	replacement_map: ReplacementMap<Dst, Src>,
@@ -163,14 +164,16 @@ impl<'a, Src: Marker, Dst: Marker> Folder<'a, Dst, Src> for TopDownTyper<'a, Dst
 		model: &'a Model<Src>,
 		expression: &'a Expression<Src>,
 	) -> Expression<Dst> {
-		let enter_expression = self.propagate_ty(db, model, expression);
-		let folded = fold_expression(self, db, model, expression);
-		if !enter_expression {
-			if let Some(ty) = self.get(expression) {
-				return add_coercion(db, &mut self.result, ty, folded);
+		maybe_grow_stack(|| {
+			let enter_expression = self.propagate_ty(db, model, expression);
+			let folded = fold_expression(self, db, model, expression);
+			if !enter_expression {
+				if let Some(ty) = self.get(expression) {
+					return add_coercion(db, &mut self.result, ty, folded);
+				}
 			}
-		}
-		folded
+			folded
+		})
 	}
 }
 
@@ -311,9 +314,10 @@ impl<'a, Src: Marker, Dst: Marker> TopDownTyper<'a, Dst, Src> {
 }
 
 /// Compute real types for bottom types
-pub fn top_down_type(db: &dyn Thir, model: &Model) -> Model {
+pub fn top_down_type(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Computing top-down types");
 	let mut tdt = TopDownTyper::default();
-	tdt.add_model(db, model);
+	tdt.add_model(db, &model);
 	tdt.result
 }
 
