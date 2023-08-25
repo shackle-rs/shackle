@@ -1,4 +1,4 @@
-use lsp_server::ResponseError;
+use lsp_server::{ErrorCode::InvalidRequest, ResponseError};
 use lsp_types::{request::Rename, RenameParams, TextEdit, WorkspaceEdit};
 use shackle::{
 	db::CompilerDatabase,
@@ -24,14 +24,19 @@ pub struct SymbolHandlerData {
 	new_name: String,
 }
 
+fn create_error(msg: &str) -> ResponseError {
+	ResponseError {
+		code: InvalidRequest as i32,
+		message: msg.into(),
+		data: None,
+	}
+}
+
 impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 	fn prepare(
 		db: &mut impl LanguageServerContext,
 		params: RenameParams,
 	) -> Result<SymbolHandlerData, ResponseError> {
-		// Verify if the new name is valid
-		let mut attempted_new_name = params.new_name.chars();
-
 		// identifiers can consist of anything which is not in these chars
 		let cursor_pos = Point {
 			row: params.text_document_position.position.line as usize,
@@ -39,12 +44,8 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 		};
 
 		// cannot include single quotes
-		if attempted_new_name.any(|ch| ch == '\'') {
-			return Err(ResponseError {
-				code: -32602,
-				message: "Identifier cannot include single quotes".into(),
-				data: None,
-			});
+		if params.new_name.chars().any(|ch| ch == '\'') {
+			return Err(create_error("Identifier cannot include single quotes"));
 		}
 
 		// the file it is in
@@ -65,37 +66,22 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 		db: &CompilerDatabase,
 		data: SymbolHandlerData,
 	) -> Result<Option<WorkspaceEdit>, ResponseError> {
-		// It's messy to write the full struct every time
-		let create_error = |msg: &str| {
-			Err(ResponseError {
-				code: -32602,
-				message: msg.into(),
-				data: None,
-			})
-		};
-
 		// Find the node that is possibly going to be changed
-		let node = match find_node(db, *data.model_ref, data.cursor_pos, data.cursor_pos) {
-			Some(n) => n,
-			None => return create_error("Identifier not selected"),
-		};
+		let node: NodeRef = find_node(db, *data.model_ref, data.cursor_pos, data.cursor_pos)
+			.ok_or_else(|| create_error("Identifier not selected"))?;
 
 		let pattern: PatternRef = match node {
 			NodeRef::Entity(e) => {
 				let item = e.item(db);
 				match e.entity(db) {
-					LocalEntityRef::Expression(e) => {
-						match db.lookup_item_types(item).name_resolution(e) {
-							Some(p) => p,
-							_ => return create_error("Could not resolve pattern"),
-						}
-					}
-					LocalEntityRef::Pattern(p) => {
-						let types = db.lookup_item_types(item);
-						types
-							.pattern_resolution(p)
-							.unwrap_or_else(|| PatternRef::new(item, p))
-					}
+					LocalEntityRef::Expression(e) => db
+						.lookup_item_types(item)
+						.name_resolution(e)
+						.ok_or_else(|| create_error("Could not resolve pattern"))?,
+					LocalEntityRef::Pattern(p) => db
+						.lookup_item_types(item)
+						.pattern_resolution(p)
+						.unwrap_or_else(|| PatternRef::new(item, p)),
 					_ => return Ok(None), // Don't want a message in this case, so Ok(None) instead of an Err
 				}
 			}
