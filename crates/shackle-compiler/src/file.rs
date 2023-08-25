@@ -3,6 +3,7 @@
 //! `FileRef` is an interned data structure used to represent a pointer to a file (or inline string).
 
 use std::{
+	ffi::OsStr,
 	fs::read_to_string,
 	ops::Deref,
 	panic::{RefUnwindSafe, UnwindSafe},
@@ -18,13 +19,48 @@ use crate::{db::FileReader, diagnostics::FileError};
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum InputFile {
 	/// File from filesystem
-	Path(PathBuf),
+	Path(PathBuf, InputLang),
 	/// Inline model string
-	ModelString(String),
-	/// Inline dzn string
-	DznString(String),
-	/// Inline JSON data string
-	JsonString(String),
+	String(String, InputLang),
+}
+
+impl InputFile {
+	fn lang(&self) -> InputLang {
+		match self {
+			InputFile::Path(_, l) | InputFile::String(_, l) => *l,
+		}
+	}
+}
+
+/// Input languages
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum InputLang {
+	/// MiniZinc modelling language
+	MiniZinc,
+	/// Essence' modelling language
+	EPrime,
+	/// DataZinc data input language
+	DataZinc,
+	/// JSON data input language
+	Json,
+}
+
+impl InputLang {
+	/// Gues the input language based on a file extension.
+	///
+	/// Note that this function will use MiniZinc as a fall
+	pub fn from_extension(ext: Option<&OsStr>) -> Self {
+		let Some(ext) = ext else {
+			return Self::MiniZinc;
+		};
+		match ext.to_str() {
+			Some("mzn") => Self::MiniZinc,
+			Some("eprime") => Self::EPrime,
+			Some("dzn") => Self::DataZinc,
+			Some("json") => Self::Json,
+			_ => Self::MiniZinc,
+		}
+	}
 }
 
 /// Source file/text for error reporting
@@ -177,10 +213,21 @@ impl FileRef {
 	pub fn path(&self, db: &dyn FileReader) -> Option<PathBuf> {
 		match db.lookup_intern_file_ref(*self) {
 			FileRefData::InputFile(i) => match db.input_files()[i] {
-				InputFile::Path(ref p) => Some(p.clone()),
+				InputFile::Path(ref p, _) => Some(p.clone()),
 				_ => None,
 			},
 			FileRefData::ExternalFile(p) => Some(p),
+		}
+	}
+
+	/// Get the input language of the file
+	pub fn lang(&self, db: &dyn FileReader) -> InputLang {
+		match db.lookup_intern_file_ref(*self) {
+			FileRefData::InputFile(i) => match db.input_files()[i] {
+				InputFile::Path(_, l) => l,
+				InputFile::String(_, l) => l,
+			},
+			FileRefData::ExternalFile(p) => InputLang::from_extension(p.extension()),
 		}
 	}
 
@@ -220,7 +267,7 @@ pub fn input_file_refs(db: &dyn FileReader) -> Arc<Vec<FileRef>> {
 pub fn file_contents(db: &dyn FileReader, file: FileRef) -> Result<Arc<String>, FileError> {
 	match db.lookup_intern_file_ref(file) {
 		FileRefData::InputFile(i) => match db.input_files()[i] {
-			InputFile::Path(ref p) => {
+			InputFile::Path(ref p, _) => {
 				let h = db.get_file_handler();
 				if !h.durable() {
 					db.salsa_runtime()
@@ -228,9 +275,7 @@ pub fn file_contents(db: &dyn FileReader, file: FileRef) -> Result<Arc<String>, 
 				}
 				h.read_file(p)
 			}
-			InputFile::ModelString(ref s) => Ok(Arc::new(s.clone())),
-			InputFile::DznString(ref s) => Ok(Arc::new(s.clone())),
-			InputFile::JsonString(ref s) => Ok(Arc::new(s.clone())),
+			InputFile::String(ref s, _) => Ok(Arc::new(s.clone())),
 		},
 		FileRefData::ExternalFile(p) => {
 			let h = db.get_file_handler();
@@ -266,21 +311,12 @@ pub fn input_models(db: &dyn FileReader) -> Arc<Vec<ModelRef>> {
 		db.input_files()
 			.iter()
 			.enumerate()
-			.filter_map(|(idx, f)| match f {
-				InputFile::Path(p) => match p.extension() {
-					Some(e) => {
-						if e.to_str() == Some("mzn") {
-							Some(db.intern_file_ref(FileRefData::InputFile(idx)).into())
-						} else {
-							None
-						}
-					}
-					None => None,
-				},
-				InputFile::ModelString(_) => {
+			.filter_map(|(idx, f)| {
+				if matches!(f.lang(), InputLang::MiniZinc | InputLang::EPrime) {
 					Some(db.intern_file_ref(FileRefData::InputFile(idx)).into())
+				} else {
+					None
 				}
-				_ => None,
 			})
 			.collect(),
 	)

@@ -4,7 +4,7 @@ use expect_test::{expect, Expect};
 
 use crate::{
 	db::{CompilerDatabase, FileReader, Inputs},
-	file::InputFile,
+	file::{InputFile, InputLang},
 	hir::{db::Hir, ids::LocalItemRef},
 	ty::Ty,
 };
@@ -28,8 +28,10 @@ impl TypeTester {
 	}
 
 	fn check_error(&mut self, model: &str, expected: Expect) {
-		self.db
-			.set_input_files(Arc::new(vec![InputFile::ModelString(model.to_owned())]));
+		self.db.set_input_files(Arc::new(vec![InputFile::String(
+			model.to_owned(),
+			InputLang::MiniZinc,
+		)]));
 		let mut errors = Vec::new();
 		for m in self.db.resolve_includes().unwrap().iter() {
 			for i in self.db.lookup_items(*m).iter() {
@@ -48,8 +50,8 @@ impl TypeTester {
 
 	fn type_expression(&mut self, preamble: &str, expr: &str) -> Ty {
 		self.db.set_input_files(Arc::new(vec![
-			InputFile::ModelString(format!("any: _TEST_EXPR = {};", expr)),
-			InputFile::ModelString(preamble.to_owned()),
+			InputFile::String(format!("any: _TEST_EXPR = {};", expr), InputLang::MiniZinc),
+			InputFile::String(preamble.to_owned(), InputLang::MiniZinc),
 		]));
 		let model = self.db.input_models();
 		let items = self.db.lookup_items(model[0]);

@@ -4,7 +4,7 @@ use expect_test::{expect, Expect};
 
 use crate::{
 	db::{CompilerDatabase, FileReader, Inputs},
-	file::InputFile,
+	file::{InputFile, InputLang},
 	hir::db::Hir,
 	utils::DebugPrint,
 };
@@ -12,7 +12,10 @@ use crate::{
 fn check_lower_item(item: &str, expected: Expect) {
 	let mut db = CompilerDatabase::default();
 	db.set_ignore_stdlib(true);
-	db.set_input_files(Arc::new(vec![InputFile::ModelString(item.to_owned())]));
+	db.set_input_files(Arc::new(vec![InputFile::String(
+		item.to_owned(),
+		InputLang::MiniZinc,
+	)]));
 	let model = db.input_models();
 	let items = db.lookup_items(model[0]);
 	let item = *items.last().unwrap();

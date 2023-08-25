@@ -356,14 +356,17 @@ mod test {
 
 	use crate::{
 		db::{CompilerDatabase, FileReader, Inputs},
-		file::InputFile,
+		file::{InputFile, InputLang},
 		hir::db::Hir,
 	};
 
 	fn check_toposort(model: &str, expected: Expect) {
 		let mut db = CompilerDatabase::default();
 		db.set_ignore_stdlib(true);
-		db.set_input_files(Arc::new(vec![InputFile::ModelString(model.to_owned())]));
+		db.set_input_files(Arc::new(vec![InputFile::String(
+			model.to_owned(),
+			InputLang::MiniZinc,
+		)]));
 		let model = db.input_models()[0];
 		let sm = db.lookup_source_map(model);
 		let items = db.lookup_topological_sorted_items();

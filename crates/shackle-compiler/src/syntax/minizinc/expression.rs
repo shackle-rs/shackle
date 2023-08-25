@@ -3,12 +3,18 @@
 use std::borrow::Cow;
 
 use super::{
-	helpers::*, Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, AstNode,
-	BooleanLiteral, Children, Constraint, Declaration, FloatLiteral, Generator, Infinity,
-	IntegerLiteral, Parameter, Pattern, RecordLiteral, SetComprehension, SetLiteral, StringLiteral,
-	TupleLiteral, Type,
+	Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, BooleanLiteral,
+	Children, Constraint, Declaration, FloatLiteral, Generator, Infinity, IntegerLiteral,
+	Parameter, Pattern, RecordLiteral, SetComprehension, SetLiteral, StringLiteral, TupleLiteral,
+	Type,
 };
-use crate::syntax::cst::CstNode;
+use crate::syntax::{
+	ast::{
+		ast_enum, ast_node, child_with_field_name, children_with_field_name, decode_string,
+		optional_child_with_field_name, AstNode,
+	},
+	cst::CstNode,
+};
 
 ast_enum!(
 	/// Expression
@@ -497,7 +503,7 @@ impl Lambda {
 mod test {
 	use expect_test::expect;
 
-	use crate::syntax::ast::helpers::test::*;
+	use crate::syntax::ast::test::*;
 
 	#[test]
 	fn test_annotated_expression() {

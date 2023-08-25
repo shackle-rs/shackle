@@ -66,7 +66,7 @@ pub mod test {
 
 	use crate::{
 		db::{CompilerDatabase, FileReader, Inputs},
-		file::{InputFile, ModelRef},
+		file::{InputFile, InputLang, ModelRef},
 		hir::{ids::NodeRef, Identifier},
 		thir::{
 			db::Thir,
@@ -86,7 +86,10 @@ pub mod test {
 		expected: Expect,
 	) {
 		let mut db = CompilerDatabase::default();
-		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
+		db.set_input_files(Arc::new(vec![InputFile::String(
+			source.to_owned(),
+			InputLang::MiniZinc,
+		)]));
 		let model_ref = db.input_models()[0];
 		let model = db.model_thir();
 		let pretty = match transform(&db, model.take()) {
@@ -115,7 +118,10 @@ pub mod test {
 	) {
 		let mut db = CompilerDatabase::default();
 		db.set_ignore_stdlib(true);
-		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
+		db.set_input_files(Arc::new(vec![InputFile::String(
+			source.to_owned(),
+			InputLang::MiniZinc,
+		)]));
 		let model = db.model_thir();
 		let pretty = match transform(&db, model.take()) {
 			Ok(result) => PrettyPrinter::new(&db, &result).pretty_print(),

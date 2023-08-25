@@ -3,7 +3,7 @@
 //! See the `typecheck` module for computing types.
 
 use super::{Expression, ItemData, Pattern};
-pub use crate::syntax::ast::{OptType, PrimitiveType, VarType};
+pub use crate::syntax::minizinc::{OptType, PrimitiveType, VarType};
 use crate::utils::arena::ArenaIndex;
 
 /// Type of an expression

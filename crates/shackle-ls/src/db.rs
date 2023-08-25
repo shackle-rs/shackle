@@ -5,7 +5,7 @@ use lsp_server::{Connection, ErrorCode, Message, ResponseError};
 use lsp_types::{TextDocumentIdentifier, Url};
 use shackle_compiler::{
 	db::{CompilerDatabase, FileReader, HasFileHandler, Inputs},
-	file::{InputFile, ModelRef},
+	file::{InputFile, InputLang, ModelRef},
 };
 
 use crate::{diagnostics, vfs::Vfs};
@@ -72,8 +72,10 @@ impl LanguageServerDatabase {
 	}
 
 	pub fn set_active_file(&mut self, path: &Path) {
-		self.db
-			.set_input_files(Arc::new(vec![InputFile::Path(path.to_owned())]));
+		self.db.set_input_files(Arc::new(vec![InputFile::Path(
+			path.to_owned(),
+			InputLang::MiniZinc,
+		)]));
 		let path_filter = path.to_owned();
 		self.execute_async(move |db, sender| {
 			let notification = diagnostics::diagnostics_notification(db, path_filter.as_path());

@@ -19,8 +19,9 @@ use crate::{
 	diagnostics::{Diagnostics, IncludeError, MultipleErrors},
 	file::{FileRef, ModelRef, SourceFile},
 	syntax::{
-		ast::{self, AstNode},
+		ast::{AstNode, ConstraintModel},
 		db::SourceParser,
+		minizinc,
 	},
 	ty::EnumRef,
 	Error, Result, Warning,
@@ -314,7 +315,10 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 		}
 
 		let model = match db.ast(*file) {
-			Ok(m) => m,
+			Ok(ConstraintModel::MznModel(m)) => m,
+			Ok(ConstraintModel::EPrimeModel(_)) => {
+				continue;
+			}
 			Err(e) => {
 				errors.push(e);
 				continue;
@@ -323,7 +327,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 
 		models.push(file);
 		for item in model.items() {
-			if let ast::Item::Include(i) = item {
+			if let minizinc::Item::Include(i) = item {
 				let value = i.file().value();
 				let included = Path::new(&value);
 
@@ -384,9 +388,11 @@ fn enumeration_names(db: &dyn Hir) -> Arc<HashSet<Identifier>> {
 	let models = db.resolve_includes().unwrap();
 	for model in models.iter() {
 		let ast = db.ast(**model).unwrap();
-		for item in ast.items() {
-			if let ast::Item::Enumeration(e) = item {
-				result.insert(Identifier::new(e.id().name(), db));
+		if let ConstraintModel::MznModel(ast) = ast {
+			for item in ast.items() {
+				if let minizinc::Item::Enumeration(e) = item {
+					result.insert(Identifier::new(e.id().name(), db));
+				}
 			}
 		}
 	}
@@ -481,9 +487,11 @@ fn items_with_case(db: &dyn Hir, model: ModelRef) -> Arc<Vec<ItemRef>> {
 	)
 	.expect("Failed to create query");
 	let mut cursor = tree_sitter::QueryCursor::new();
+	let ConstraintModel::MznModel(model) = db.ast(*model).unwrap() else {
+		unreachable!()
+	};
 	Arc::new(
-		db.ast(*model)
-			.unwrap()
+		model
 			.items()
 			.filter_map(|item| {
 				let node = *item.cst_node().as_ref();

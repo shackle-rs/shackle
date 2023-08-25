@@ -86,10 +86,7 @@ module.exports = grammar({
 				"letting",
 				field("name", $.identifier),
 				optional(seq(":", field("domain", $._domain))),
-				choice (
-					"=",
-					"be"
-				),
+				choice("=", "be"),
 				field("definition", $._expression)
 			),
 
@@ -130,12 +127,7 @@ module.exports = grammar({
 
 		heuristic: ($) =>
 			seq("heuristic", optional(field("name", $.heuristicType))),
-		heuristicType : ($) => choice(
-			"static",
-			"sdf",
-			"srf",
-			"conflict"
-		),
+		heuristicType: ($) => choice("static", "sdf", "srf", "conflict"),
 
 		_expression: ($) =>
 			choice(
@@ -242,16 +234,9 @@ module.exports = grammar({
 					field("right", $._expression)
 				)
 			),
-		
+
 		absolute_operator: ($) =>
-			prec(
-				PREC.absolute,
-				seq(
-					"|",
-					field("operand", $._expression),
-					"|"
-				)
-			),
+			prec(PREC.absolute, seq("|", field("operand", $._expression), "|")),
 
 		prefix_operator: ($) => {
 			const table = [

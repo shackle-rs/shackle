@@ -1,6 +1,9 @@
 //! AST representation for types
 
-use super::{helpers::*, AstNode, Children, Expression, Identifier};
+use super::{Children, Expression, Identifier};
+use crate::syntax::ast::{
+	ast_enum, ast_node, child_with_field_name, children_with_field_name, AstNode,
+};
 
 ast_enum!(
 	/// Type from a declaration
@@ -330,7 +333,7 @@ impl TypeInstEnumIdentifier {
 mod test {
 	use expect_test::expect;
 
-	use crate::syntax::ast::helpers::test::*;
+	use crate::syntax::ast::test::*;
 
 	#[test]
 	fn test_array_type() {

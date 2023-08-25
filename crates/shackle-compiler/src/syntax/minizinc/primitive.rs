@@ -2,7 +2,7 @@
 
 use std::num::{IntErrorKind, ParseFloatError, ParseIntError};
 
-use super::{helpers::*, AstNode};
+use crate::syntax::ast::{ast_node, decode_string, AstNode};
 
 ast_node!(
 	/// Integer literal
@@ -226,7 +226,7 @@ mod test {
 	use expect_test::expect;
 
 	use super::parse_float_literal;
-	use crate::syntax::ast::{helpers::test::*, FloatParsingError};
+	use crate::syntax::{ast::test::*, minizinc::FloatParsingError};
 
 	#[test]
 	fn test_parse_float() {

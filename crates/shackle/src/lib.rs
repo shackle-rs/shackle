@@ -31,9 +31,9 @@ use serde::Deserializer;
 pub use shackle_compiler::ty::OptType;
 use shackle_compiler::{
 	db::{CompilerDatabase, Inputs, InternedString, Interner},
-	file::{InputFile, SourceFile},
+	file::{InputFile, InputLang, SourceFile},
 	hir::db::Hir,
-	syntax::ast::{AstNode, Identifier},
+	syntax::{ast::AstNode, minizinc::Identifier},
 	thir::{self, db::Thir, pretty_print::PrettyPrinter, Declaration},
 	ty::{Ty, TyData},
 };
@@ -59,14 +59,15 @@ impl Model {
 	/// Create a Model from the file at the given path
 	pub fn from_file(path: PathBuf) -> Model {
 		let mut db = CompilerDatabase::default();
-		db.set_input_files(Arc::new(vec![InputFile::Path(path)]));
+		let l = InputLang::from_extension(path.extension());
+		db.set_input_files(Arc::new(vec![InputFile::Path(path, l)]));
 		Model { db }
 	}
 
 	/// Create a Model from the given string
-	pub fn from_string(m: String) -> Model {
+	pub fn from_string(m: String, l: InputLang) -> Model {
 		let mut db = CompilerDatabase::default();
-		db.set_input_files(Arc::new(vec![InputFile::ModelString(m)]));
+		db.set_input_files(Arc::new(vec![InputFile::String(m, l)]));
 		Model { db }
 	}
 
