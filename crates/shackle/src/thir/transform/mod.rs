@@ -21,7 +21,6 @@ use super::Model;
 
 pub mod call_by_name;
 pub mod capturing_fn;
-pub mod case;
 pub mod comprehension;
 pub mod domain_constraint;
 pub mod erase_enum;
@@ -35,22 +34,14 @@ pub mod type_specialise;
 
 /// Create a transformer which runs the given transforms in order on an initial model
 pub fn transformer(
-	transforms: Vec<fn(&dyn Thir, &Model) -> Model>,
-) -> impl FnMut(&dyn Thir, &Model) -> Model {
+	transforms: Vec<fn(&dyn Thir, Model) -> Model>,
+) -> impl FnMut(&dyn Thir, Model) -> Model {
 	let mut iter = transforms.into_iter();
-	move |db, model| {
-		let mut m = iter
-			.next()
-			.map_or_else(|| model.clone(), |initial| initial(db, model));
-		for transform in iter.by_ref() {
-			m = transform(db, &m);
-		}
-		m
-	}
+	move |db, model| iter.by_ref().fold(model, |m, transform| transform(db, m))
 }
 
 /// Get the default THIR transformer
-pub fn thir_transforms() -> impl FnMut(&dyn Thir, &Model) -> Model {
+pub fn thir_transforms() -> impl FnMut(&dyn Thir, Model) -> Model {
 	transformer(vec![
 		generate_output,
 		rewrite_domains,
@@ -90,7 +81,7 @@ pub mod test {
 	///
 	/// The expected value only includes items which are from the `source` (i.e. not from stdlib).
 	pub fn check(
-		transform: impl FnOnce(&dyn Thir, &Model) -> Model,
+		transform: impl FnOnce(&dyn Thir, Model) -> Model,
 		source: &str,
 		expected: Expect,
 	) {
@@ -98,7 +89,7 @@ pub mod test {
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
 		let model_ref = db.input_models()[0];
 		let model = db.model_thir();
-		let mut result = transform(&db, &model);
+		let mut result = transform(&db, model.take());
 		let to_print = NameMapper::default().run(&db, model_ref, &mut result);
 		let printer = PrettyPrinter::new(&db, &result);
 		let mut pretty = String::new();
@@ -113,7 +104,7 @@ pub mod test {
 	///
 	/// Turns off stdlib inclusion.
 	pub fn check_no_stdlib(
-		transform: impl FnOnce(&dyn Thir, &Model) -> Model,
+		transform: impl FnOnce(&dyn Thir, Model) -> Model,
 		source: &str,
 		expected: Expect,
 	) {
@@ -121,7 +112,7 @@ pub mod test {
 		db.set_ignore_stdlib(true);
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
 		let model = db.model_thir();
-		let result = transform(&db, &model);
+		let result = transform(&db, model.take());
 		let pretty = PrettyPrinter::new(&db, &result).pretty_print();
 		expected.assert_eq(&pretty);
 	}

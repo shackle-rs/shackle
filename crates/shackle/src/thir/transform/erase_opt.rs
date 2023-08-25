@@ -24,9 +24,10 @@ use crate::{
 		LookupCall, Marker, Model, TupleAccess, TupleLiteral,
 	},
 	ty::{Ty, TyData},
+	utils::maybe_grow_stack,
 };
 
-struct OptEraser<Dst, Src = ()> {
+struct OptEraser<Dst: Marker, Src: Marker = ()> {
 	model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst, Src>,
 	ids: Arc<IdentifierRegistry>,
@@ -162,17 +163,19 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 		model: &Model<Src>,
 		expression: &Expression<Src>,
 	) -> Expression<Dst> {
-		if let ExpressionData::Call(c) = &**expression {
-			// Remove calls to mzn_construct_opt/mzn_destruct_opt
-			if let Callable::Function(f) = &c.function {
-				if model[*f].name() == self.ids.mzn_construct_opt
-					|| model[*f].name() == self.ids.mzn_destruct_opt
-				{
-					return self.fold_expression(db, model, &c.arguments[0]);
+		maybe_grow_stack(|| {
+			if let ExpressionData::Call(c) = &**expression {
+				// Remove calls to mzn_construct_opt/mzn_destruct_opt
+				if let Callable::Function(f) = &c.function {
+					if model[*f].name() == self.ids.mzn_construct_opt
+						|| model[*f].name() == self.ids.mzn_destruct_opt
+					{
+						return self.fold_expression(db, model, &c.arguments[0]);
+					}
 				}
 			}
-		}
-		fold_expression(self, db, model, expression)
+			fold_expression(self, db, model, expression)
+		})
 	}
 }
 
@@ -420,7 +423,8 @@ impl<Src: Marker, Dst: Marker> OptEraser<Dst, Src> {
 }
 
 /// Erase types which are not present in MicroZinc
-pub fn erase_opt(db: &dyn Thir, model: &Model) -> Model {
+pub fn erase_opt(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Erasing option types");
 	let mut c = OptEraser {
 		model: Model::default(),
 		replacement_map: ReplacementMap::default(),
@@ -428,7 +432,7 @@ pub fn erase_opt(db: &dyn Thir, model: &Model) -> Model {
 		tys: db.type_registry(),
 		needs_opt_erase: FxHashMap::default(),
 	};
-	c.add_model(db, model);
+	c.add_model(db, &model);
 	c.model
 }
 

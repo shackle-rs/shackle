@@ -26,13 +26,13 @@ use crate::{
 	utils::DebugPrint,
 };
 
-struct SpecialisedFunction<Dst> {
+struct SpecialisedFunction<Dst: Marker> {
 	original: FunctionId,
 	ty_vars: TyParamInstantiations,
 	parameters: FxHashMap<DeclarationId, DeclarationId<Dst>>,
 }
 
-struct TypeSpecialiser<Dst> {
+struct TypeSpecialiser<Dst: Marker> {
 	specialised_model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst>,
 	concrete: FxHashMap<(FunctionId, FunctionType), FunctionId<Dst>>,
@@ -531,7 +531,8 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 }
 
 /// Type specialise a model
-pub fn type_specialise(db: &dyn Thir, model: &Model) -> Model {
+pub fn type_specialise(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Performing type specialisation");
 	let ids = db.identifier_registry();
 	let mut ts = TypeSpecialiser {
 		replacement_map: ReplacementMap::default(),
@@ -542,7 +543,7 @@ pub fn type_specialise(db: &dyn Thir, model: &Model) -> Model {
 		ids,
 		position: FxHashMap::default(),
 	};
-	ts.add_model(db, model);
+	ts.add_model(db, &model);
 	ts.specialised_model
 }
 

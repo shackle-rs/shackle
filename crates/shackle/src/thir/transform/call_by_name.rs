@@ -17,9 +17,10 @@ use crate::{
 		Callable, Declaration, DeclarationId, Expression, ExpressionData, FunctionId, Marker,
 		Model, ResolvedIdentifier,
 	},
+	utils::maybe_grow_stack,
 };
 
-struct Inliner<Dst, Src = ()> {
+struct Inliner<Dst: Marker, Src: Marker = ()> {
 	model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst, Src>,
 	ids: Arc<IdentifierRegistry>,
@@ -77,64 +78,68 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for Inliner<Dst, Src> {
 		model: &Model<Src>,
 		expression: &Expression<Src>,
 	) -> Expression<Dst> {
-		match &**expression {
-			ExpressionData::Identifier(ResolvedIdentifier::Declaration(d)) => {
-				if let Some(e) = self.map.get(d) {
-					return e.clone();
-				}
-			}
-			ExpressionData::Call(c) => {
-				if let Callable::Function(f) = &c.function {
-					if model[*f]
-						.annotations()
-						.has(model, self.ids.mzn_inline_call_by_name)
-					{
-						let args = c
-							.arguments
-							.iter()
-							.map(|arg| self.fold_expression(db, model, arg))
-							.collect::<Vec<_>>();
-						let mut restore = Vec::with_capacity(args.len());
-						for (param, arg) in model[*f].parameters().iter().zip(args) {
-							restore.push(self.map.insert(*param, arg));
-						}
-						let inlined = self.fold_expression(
-							db,
-							model,
-							model[*f].body().unwrap_or_else(|| {
-								panic!(
-									"Cannot inline {} with no body",
-									model[*f].name().pretty_print(db)
-								)
-							}),
-						);
-						for (param, prev) in model[*f].parameters().iter().zip(restore) {
-							if let Some(prev) = prev {
-								self.map.insert(*param, prev);
-							} else {
-								self.map.remove(param);
-							}
-						}
-						return inlined;
+		maybe_grow_stack(|| {
+			match &**expression {
+				ExpressionData::Identifier(ResolvedIdentifier::Declaration(d)) => {
+					if let Some(e) = self.map.get(d) {
+						return e.clone();
 					}
 				}
+				ExpressionData::Call(c) => {
+					if let Callable::Function(f) = &c.function {
+						if model[*f]
+							.annotations()
+							.has(model, self.ids.mzn_inline_call_by_name)
+						{
+							log::debug!("Inlining {}", model[*f].name().pretty_print(db));
+							let args = c
+								.arguments
+								.iter()
+								.map(|arg| self.fold_expression(db, model, arg))
+								.collect::<Vec<_>>();
+							let mut restore = Vec::with_capacity(args.len());
+							for (param, arg) in model[*f].parameters().iter().zip(args) {
+								restore.push(self.map.insert(*param, arg));
+							}
+							let inlined = self.fold_expression(
+								db,
+								model,
+								model[*f].body().unwrap_or_else(|| {
+									panic!(
+										"Cannot inline {} with no body",
+										model[*f].name().pretty_print(db)
+									)
+								}),
+							);
+							for (param, prev) in model[*f].parameters().iter().zip(restore) {
+								if let Some(prev) = prev {
+									self.map.insert(*param, prev);
+								} else {
+									self.map.remove(param);
+								}
+							}
+							return inlined;
+						}
+					}
+				}
+				_ => (),
 			}
-			_ => (),
-		}
-		fold_expression(self, db, model, expression)
+			fold_expression(self, db, model, expression)
+		})
 	}
 }
 
 /// Perform inlining to implement call-by-name semantics for functions annotated with
 /// `:: mzn_inline_call_by_name`.
-pub fn inline_call_by_name(db: &dyn Thir, model: &Model) -> Model {
+pub fn inline_call_by_name(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Inlining call by name functions");
 	let mut inliner = Inliner {
 		replacement_map: ReplacementMap::default(),
 		model: Model::default(),
 		ids: db.identifier_registry(),
 		map: FxHashMap::default(),
 	};
-	inliner.add_model(db, model);
+	inliner.add_model(db, &model);
 	inliner.model
 }
 

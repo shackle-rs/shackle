@@ -9,7 +9,7 @@ use super::{
 
 /// Collection of annotations
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Annotations<T> {
+pub struct Annotations<T: Marker = ()> {
 	annotations: Vec<Expression<T>>,
 }
 

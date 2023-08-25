@@ -245,6 +245,8 @@ fn variable_type_map(db: &dyn Hir) -> Arc<FxHashMap<Identifier, Ty>> {
 }
 
 fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
+	log::info!("Resolving includes");
+
 	let mut errors: Vec<Error> = Vec::new();
 	let mut todo = (*db.input_models()).clone();
 
@@ -289,8 +291,10 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 			if seen.contains(&path) {
 				continue;
 			}
+			log::info!("Including model {}", path.to_string_lossy());
 			seen.insert(path);
 		}
+
 		let model = match db.ast(*file) {
 			Ok(m) => m,
 			Err(e) => {
@@ -298,6 +302,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 				continue;
 			}
 		};
+
 		models.push(file);
 		for item in model.items() {
 			if let ast::Item::Include(i) = item {

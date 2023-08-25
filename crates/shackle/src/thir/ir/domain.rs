@@ -13,7 +13,7 @@ pub use crate::hir::{OptType, VarType};
 
 /// Ascribed domain of a variable
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Domain<T = ()> {
+pub struct Domain<T: Marker = ()> {
 	ty: Ty,
 	data: DomainData<T>,
 	origin: Origin,
@@ -218,7 +218,7 @@ impl<T: Marker> Domain<T> {
 
 /// Ascribed domain of a variable
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum DomainData<T = ()> {
+pub enum DomainData<T: Marker = ()> {
 	/// Bounded by an expression
 	Bounded(Box<Expression<T>>),
 	/// Array index sets and element domain

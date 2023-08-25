@@ -22,12 +22,13 @@ use crate::{
 		FunctionName, Item, ItemId, LookupCall, Marker, Model, ResolvedIdentifier, TupleLiteral,
 	},
 	ty::EnumRef,
+	utils::maybe_grow_stack,
 };
 use std::sync::Arc;
 
 use super::top_down_type::add_coercion;
 
-struct EnumEraser<Dst, Src = ()> {
+struct EnumEraser<Dst: Marker, Src: Marker = ()> {
 	model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst, Src>,
 	ids: Arc<IdentifierRegistry>,
@@ -192,14 +193,16 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 		model: &Model<Src>,
 		expression: &Expression<Src>,
 	) -> Expression<Dst> {
-		if let ExpressionData::Call(c) = &**expression {
-			if let Callable::Function(f) = &c.function {
-				if model[*f].name() == self.ids.erase_enum {
-					return self.fold_expression(db, model, &c.arguments[0]);
+		maybe_grow_stack(|| {
+			if let ExpressionData::Call(c) = &**expression {
+				if let Callable::Function(f) = &c.function {
+					if model[*f].name() == self.ids.erase_enum {
+						return self.fold_expression(db, model, &c.arguments[0]);
+					}
 				}
 			}
-		}
-		fold_expression(self, db, model, expression)
+			fold_expression(self, db, model, expression)
+		})
 	}
 
 	fn fold_domain(
@@ -393,7 +396,8 @@ impl<Src: Marker, Dst: Marker> EnumEraser<Dst, Src> {
 }
 
 /// Erase types which are not present in MicroZinc
-pub fn erase_enum(db: &dyn Thir, model: &Model) -> Model {
+pub fn erase_enum(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Erasing enums into ints");
 	let mut c = EnumEraser {
 		model: Model::default(),
 		replacement_map: ReplacementMap::default(),
@@ -404,7 +408,7 @@ pub fn erase_enum(db: &dyn Thir, model: &Model) -> Model {
 		enum_id_for_ty: FxHashMap::default(),
 		identifier_replacement: FxHashMap::default(),
 	};
-	c.add_model(db, model);
+	c.add_model(db, &model);
 	c.model
 }
 

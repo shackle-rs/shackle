@@ -1,4 +1,4 @@
-use crate::thir::*;
+use crate::{thir::*, utils::maybe_grow_stack};
 
 /// Trait for visiting THIR nodes
 ///
@@ -53,8 +53,13 @@ pub trait Visitor<'a, T: Marker = ()> {
 	}
 
 	/// Visit an expression
+	///
+	/// When overriding this, it is generally a good idea to wrap the body in `utils::maybe_grow_stack`
+	/// to prevent stack overflows on highly nested models
 	fn visit_expression(&mut self, model: &'a Model<T>, expression: &'a Expression<T>) {
-		visit_expression(self, model, expression);
+		maybe_grow_stack(|| {
+			visit_expression(self, model, expression);
+		});
 	}
 
 	/// Visit an absent literal

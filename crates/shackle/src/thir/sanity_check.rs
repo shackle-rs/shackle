@@ -18,10 +18,11 @@ use super::{db::Thir, pretty_print::PrettyPrinter};
 /// This should give no errors (as for the THIR to exist, it must have come
 /// from a valid source program).
 pub fn sanity_check_thir(db: &dyn Thir) -> Arc<Diagnostics<Error>> {
-	let model = db.model_thir();
+	let initial_thir = db.model_thir();
+	let model = initial_thir.get();
 
 	// Pretty print with extra info for sanity checking types
-	let mut printer = PrettyPrinter::new(db, &model);
+	let mut printer = PrettyPrinter::new(db, model.as_ref());
 	printer.old_compat = false;
 	printer.debug_types = true;
 	let code = printer.pretty_print();

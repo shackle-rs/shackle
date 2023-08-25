@@ -397,6 +397,7 @@ pub fn collect_item_signature(
 	db: &dyn Hir,
 	item: ItemRef,
 ) -> (Arc<SignatureTypes>, Arc<Vec<Error>>) {
+	log::debug!("Type checking signature of {:?}", item);
 	let mut ctx = SignatureTypeContext::new(item);
 	ctx.type_item(db, item);
 	let (s, e) = ctx.finish();
@@ -405,6 +406,7 @@ pub fn collect_item_signature(
 
 /// Type-check expressions in an item (other than those used in the signature)
 pub fn collect_item_body(db: &dyn Hir, item: ItemRef) -> (Arc<BodyTypes>, Arc<Vec<Error>>) {
+	log::debug!("Type checking body of {:?}", item);
 	let mut ctx = BodyTypeContext::new(item);
 	ctx.type_item(db);
 	let (s, e) = ctx.finish();

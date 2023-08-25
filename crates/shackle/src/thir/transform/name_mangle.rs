@@ -11,8 +11,9 @@ use rustc_hash::FxHashMap;
 use crate::thir::{db::Thir, FunctionId, FunctionName, Model};
 
 /// Mangle names of overloaded/specialised functions
-pub fn mangle_names(_db: &dyn Thir, model: &Model) -> Model {
-	let mut model = model.clone();
+pub fn mangle_names(_db: &dyn Thir, mut model: Model) -> Model {
+	log::info!("Mangling overloaded function names");
+
 	let mut overloaded: FxHashMap<_, Vec<FunctionId>> = FxHashMap::default();
 	for (idx, function) in model.top_level_functions() {
 		if let FunctionName::Named(ident) = function.name() {

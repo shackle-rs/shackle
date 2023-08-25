@@ -27,7 +27,7 @@ use super::db::Thir;
 
 /// A model
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Model<T = ()> {
+pub struct Model<T: Marker = ()> {
 	annotations: Arena<AnnotationItem<T>>,
 	constraints: Arena<ConstraintItem<T>>,
 	declarations: Arena<DeclarationItem<T>>,
@@ -371,12 +371,12 @@ impl<T: Marker> Model<T> {
 	}
 }
 
-impl_index!(Model<T>[self, index: AnnotationId<T>] -> AnnotationItem<T> { self.annotations[index] });
-impl_index!(Model<T>[self, index: ConstraintId<T>] -> ConstraintItem<T> { self.constraints[index] });
-impl_index!(Model<T>[self, index: DeclarationId<T>] -> DeclarationItem<T> { self.declarations[index] });
-impl_index!(Model<T>[self, index: EnumerationId<T>] -> EnumerationItem<T> { self.enumerations[index] });
-impl_index!(Model<T>[self, index: FunctionId<T>] -> FunctionItem<T> { self.functions[index] });
-impl_index!(Model<T>[self, index: OutputId<T>] -> OutputItem<T> { self.outputs[index] });
+impl_index!(Model<T: Marker>[self, index: AnnotationId<T>] -> AnnotationItem<T> { self.annotations[index] });
+impl_index!(Model<T: Marker>[self, index: ConstraintId<T>] -> ConstraintItem<T> { self.constraints[index] });
+impl_index!(Model<T: Marker>[self, index: DeclarationId<T>] -> DeclarationItem<T> { self.declarations[index] });
+impl_index!(Model<T: Marker>[self, index: EnumerationId<T>] -> EnumerationItem<T> { self.enumerations[index] });
+impl_index!(Model<T: Marker>[self, index: FunctionId<T>] -> FunctionItem<T> { self.functions[index] });
+impl_index!(Model<T: Marker>[self, index: OutputId<T>] -> OutputItem<T> { self.outputs[index] });
 
 impl<T: Marker> Index<EnumMemberId<T>> for Model<T> {
 	type Output = Constructor<T>;
@@ -389,7 +389,7 @@ impl<T: Marker> Index<EnumMemberId<T>> for Model<T> {
 
 /// Result of looking up a function by its signature
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FunctionLookup<T> {
+pub struct FunctionLookup<T: Marker> {
 	/// Id of the resolved function
 	pub function: FunctionId<T>,
 	/// The function entry (i.e. not instantiated with the call arguments)

@@ -19,6 +19,7 @@ use crate::{
 		Call, Callable, Declaration, DeclarationId, Domain, Expression, ExpressionData, FunctionId,
 		IntegerLiteral, Item, Marker, Model, ResolvedIdentifier, TupleAccess, TupleLiteral,
 	},
+	utils::maybe_grow_stack,
 };
 
 /// Computes all globals this function (transitively) refers to
@@ -76,14 +77,14 @@ impl Captures {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Decaptured<Dst> {
+struct Decaptured<Dst: Marker> {
 	declaration: DeclarationId<Dst>,
 	parameter: DeclarationId<Dst>,
 	field: FxHashMap<DeclarationId<Dst>, IntegerLiteral>,
 	captures: Vec<DeclarationId<Dst>>,
 }
 
-struct Decapturer<Dst> {
+struct Decapturer<Dst: Marker> {
 	model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst>,
 	captures: FxHashMap<FunctionId, FxHashSet<DeclarationId>>,
@@ -124,43 +125,45 @@ impl<Dst: Marker> Folder<'_, Dst> for Decapturer<Dst> {
 		model: &Model,
 		expression: &Expression,
 	) -> Expression<Dst> {
-		(|| {
-			let current = self.current?;
-			let declaration =
-				if let ExpressionData::Identifier(ResolvedIdentifier::Declaration(d)) =
-					&**expression
-				{
-					Some(self.fold_declaration_id(db, model, *d))
+		maybe_grow_stack(|| {
+			(|| {
+				let current = self.current?;
+				let declaration =
+					if let ExpressionData::Identifier(ResolvedIdentifier::Declaration(d)) =
+						&**expression
+					{
+						Some(self.fold_declaration_id(db, model, *d))
+					} else {
+						None
+					}?;
+				let decaptured = &self.decaptured[&current];
+				let field = decaptured.field.get(&declaration)?;
+				if decaptured.captures.len() > 1 {
+					Some(Expression::new(
+						db,
+						&self.model,
+						expression.origin(),
+						TupleAccess {
+							field: *field,
+							tuple: Box::new(Expression::new(
+								db,
+								&self.model,
+								expression.origin(),
+								decaptured.parameter,
+							)),
+						},
+					))
 				} else {
-					None
-				}?;
-			let decaptured = &self.decaptured[&current];
-			let field = decaptured.field.get(&declaration)?;
-			if decaptured.captures.len() > 1 {
-				Some(Expression::new(
-					db,
-					&self.model,
-					expression.origin(),
-					TupleAccess {
-						field: *field,
-						tuple: Box::new(Expression::new(
-							db,
-							&self.model,
-							expression.origin(),
-							decaptured.parameter,
-						)),
-					},
-				))
-			} else {
-				Some(Expression::new(
-					db,
-					&self.model,
-					expression.origin(),
-					decaptured.parameter,
-				))
-			}
-		})()
-		.unwrap_or_else(|| fold_expression(self, db, model, expression))
+					Some(Expression::new(
+						db,
+						&self.model,
+						expression.origin(),
+						decaptured.parameter,
+					))
+				}
+			})()
+			.unwrap_or_else(|| fold_expression(self, db, model, expression))
+		})
 	}
 
 	fn fold_call(&mut self, db: &dyn Thir, model: &Model, call: &Call) -> Call<Dst> {
@@ -333,16 +336,17 @@ impl<Dst: Marker> Decapturer<Dst> {
 }
 
 /// Rewrite capturing functions into non-capturing functions
-pub fn decapture_model(db: &dyn Thir, model: &Model) -> Model {
+pub fn decapture_model(db: &dyn Thir, model: Model) -> Model {
+	log::info!("Rewriting functions to be non-capturing");
 	let mut d = Decapturer {
 		model: Model::default(),
 		replacement_map: ReplacementMap::default(),
-		captures: Captures::get(model),
+		captures: Captures::get(&model),
 		decaptured: FxHashMap::default(),
 		added_declarations: FxHashMap::default(),
 		current: None,
 	};
-	d.add_model(db, model);
+	d.add_model(db, &model);
 	d.model
 }
 
