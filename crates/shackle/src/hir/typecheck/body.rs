@@ -54,6 +54,20 @@ impl BodyTypeContext {
 		}
 	}
 
+	/// Create a new signature type context with the given capacity for patterns/expressions
+	pub fn with_capacity(item: ItemRef, patterns: u32, expressions: u32) -> Self {
+		Self {
+			item,
+			data: BodyTypes {
+				patterns: ArenaMap::with_capacity(patterns + 1),
+				expressions: ArenaMap::with_capacity(expressions + 1),
+				identifier_resolution: FxHashMap::default(),
+				pattern_resolution: FxHashMap::default(),
+			},
+			diagnostics: Vec::new(),
+		}
+	}
+
 	/// Compute the type of the body of this item
 	pub fn type_item(&mut self, db: &dyn Hir) {
 		let item = self.item;

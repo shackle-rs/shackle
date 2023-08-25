@@ -426,7 +426,7 @@ impl<Src: Marker, Dst: Marker> OptEraser<Dst, Src> {
 pub fn erase_opt(db: &dyn Thir, model: Model) -> Model {
 	log::info!("Erasing option types");
 	let mut c = OptEraser {
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 		ids: db.identifier_registry(),
 		tys: db.type_registry(),

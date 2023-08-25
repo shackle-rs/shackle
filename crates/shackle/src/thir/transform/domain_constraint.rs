@@ -887,7 +887,7 @@ pub fn rewrite_domains(db: &dyn Thir, model: Model) -> Model {
 	log::info!("Rewriting domains into constraints and unpacking structured variables");
 	let mut d = DomainRewriter {
 		ids: db.identifier_registry(),
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 		domain_constraints: FxHashMap::default(),
 		return_constraints: FxHashMap::default(),

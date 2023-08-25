@@ -602,7 +602,7 @@ pub fn function_dispatch(db: &dyn Thir, model: Model) -> Model {
 	}
 
 	let mut c = DispatchRewriter {
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 		ids: db.identifier_registry(),
 		dispatch_to,

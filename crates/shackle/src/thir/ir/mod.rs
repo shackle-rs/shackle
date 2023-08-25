@@ -25,6 +25,48 @@ pub use self::item::*;
 
 use super::db::Thir;
 
+/// Entity counts
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EntityCounts {
+	/// Number of annotation items
+	pub annotations: u32,
+	/// Number of constraint items
+	pub constraints: u32,
+	/// Number of declaration items
+	pub declarations: u32,
+	/// Number of enumeration items
+	pub enumerations: u32,
+	/// Number of function items
+	pub functions: u32,
+	/// Number of output items
+	pub outputs: u32,
+}
+
+impl EntityCounts {
+	/// Total number of items (will not include solve item)
+	pub fn items(&self) -> u32 {
+		self.annotations
+			+ self.constraints
+			+ self.declarations
+			+ self.enumerations
+			+ self.functions
+			+ self.outputs
+	}
+}
+
+impl From<crate::hir::db::EntityCounts> for EntityCounts {
+	fn from(value: crate::hir::db::EntityCounts) -> Self {
+		Self {
+			annotations: value.annotations,
+			constraints: value.constraints,
+			declarations: value.declarations,
+			enumerations: value.enumerations,
+			functions: value.functions,
+			outputs: value.outputs,
+		}
+	}
+}
+
 /// A model
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Model<T: Marker = ()> {
@@ -39,6 +81,32 @@ pub struct Model<T: Marker = ()> {
 }
 
 impl<T: Marker> Model<T> {
+	/// Create a model able to store the given numbers entities without reallocating
+	pub fn with_capacities(capacities: &EntityCounts) -> Self {
+		Self {
+			annotations: Arena::with_capacity(capacities.annotations),
+			constraints: Arena::with_capacity(capacities.constraints),
+			declarations: Arena::with_capacity(capacities.declarations),
+			enumerations: Arena::with_capacity(capacities.enumerations),
+			functions: Arena::with_capacity(capacities.functions),
+			outputs: Arena::with_capacity(capacities.outputs),
+			items: Vec::with_capacity(capacities.items() as usize),
+			..Default::default()
+		}
+	}
+
+	/// Get the entity counts
+	pub fn entity_counts(&self) -> EntityCounts {
+		EntityCounts {
+			annotations: self.annotations_len(),
+			constraints: self.constraints_len(),
+			declarations: self.declarations_len(),
+			enumerations: self.enumerations_len(),
+			functions: self.functions_len(),
+			outputs: self.outputs_len(),
+		}
+	}
+
 	/// Get the top-level items
 	pub fn top_level_items(&self) -> impl '_ + Iterator<Item = ItemId<T>> {
 		self.all_items()

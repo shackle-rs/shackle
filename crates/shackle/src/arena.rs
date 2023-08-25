@@ -108,6 +108,18 @@ impl<T> Arena<T> {
 		Self::default()
 	}
 
+	/// Create an arena with the given capacity
+	pub fn with_capacity(capacity: u32) -> Arena<T> {
+		Self {
+			items: Vec::with_capacity(capacity as usize),
+		}
+	}
+
+	/// Reserve additional space in the arena
+	pub fn reserve(&mut self, additional: u32) {
+		self.items.reserve(additional as usize);
+	}
+
 	/// Clear the arena.
 	pub fn clear(&mut self) {
 		self.items.clear();
@@ -308,9 +320,9 @@ impl<K, V> ArenaMap<K, V> {
 	}
 
 	/// Create a new arena map with the given capacity
-	pub fn with_capacity(capacity: usize) -> ArenaMap<K, V> {
+	pub fn with_capacity(capacity: u32) -> ArenaMap<K, V> {
 		Self {
-			items: Vec::with_capacity(capacity),
+			items: Vec::with_capacity(capacity as usize),
 			phantom: PhantomData,
 		}
 	}

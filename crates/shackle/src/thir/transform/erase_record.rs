@@ -103,7 +103,7 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for RecordEraser<Dst, Src> {
 pub fn erase_record(db: &dyn Thir, model: Model) -> Model {
 	log::info!("Erasing record types");
 	let mut c = RecordEraser {
-		model: Model::default(),
+		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 	};
 	c.add_model(db, &model);
