@@ -13,9 +13,7 @@ use shackle::{
 };
 use std::collections::HashMap;
 
-use crate::{
-	db::LanguageServerContext, dispatch::RequestHandler, utils::node_ref_to_location
-};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::node_ref_to_location};
 
 #[derive(Debug)]
 pub struct RenameHandler;
@@ -53,7 +51,7 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 		let model_ref =
 			db.set_active_file_from_document(&params.text_document_position.text_document)?;
 
-    // pretty print it to add single quotes, etc as necessary
+		// pretty print it to add single quotes, etc as necessary
 		let new_name = utils::pretty_print_identifier(&params.new_name);
 		return Ok(SymbolHandlerData {
 			cursor_pos,
@@ -106,7 +104,7 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 		let models = db.resolve_includes().ok().unwrap();
 		let mut edits = HashMap::new();
 
-    // loop over all the files included from the main file
+		// loop over all the files included from the main file
 		for m in models.iter().copied() {
 			let cst = db.cst(*m).ok().unwrap();
 			let query = tree_sitter::Query::new(
@@ -122,8 +120,8 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 			// The edits to the current file
 			let mut model_edits = Vec::new();
 			let mut url = None;
-      
-      // Loop over all the identifiers
+
+			// Loop over all the identifiers
 			for node in nodes {
 				if let Some(node_ref @ NodeRef::Entity(entity)) = source_map.find_node(node) {
 					let item = entity.item(db);
@@ -133,7 +131,7 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 						LocalEntityRef::Pattern(p) => Some(PatternRef::new(item, p)),
 						_ => None,
 					};
-          // If the definition is matching, push it to be updated
+					// If the definition is matching, push it to be updated
 					if def == Some(pattern) {
 						if let Some(loc) = node_ref_to_location(db, node_ref) {
 							model_edits.push(TextEdit::new(loc.range, data.new_name.clone()));
@@ -143,7 +141,7 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 				}
 			}
 
-      // The file will be known iff there is an edit to change
+			// The file will be known iff there is an edit to change
 			if let Some(url) = url {
 				// Put it into the hashmap
 				edits.insert(url, model_edits);
