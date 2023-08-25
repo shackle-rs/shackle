@@ -53,11 +53,12 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 
 		// pretty print it to add single quotes, etc as necessary
 		let new_name = utils::pretty_print_identifier(&params.new_name);
-		return Ok(SymbolHandlerData {
+
+		Ok(SymbolHandlerData {
 			cursor_pos,
 			new_name,
 			model_ref,
-		});
+		})
 	}
 
 	fn execute(
@@ -66,11 +67,11 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 	) -> Result<Option<WorkspaceEdit>, ResponseError> {
 		// It's messy to write the full struct every time
 		let create_error = |msg: &str| {
-			return Err(ResponseError {
+			Err(ResponseError {
 				code: -32602,
 				message: msg.into(),
 				data: None,
-			});
+			})
 		};
 
 		// Find the node that is possibly going to be changed
