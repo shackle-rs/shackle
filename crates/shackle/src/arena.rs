@@ -19,10 +19,7 @@ impl<T> Copy for ArenaIndex<T> {}
 
 impl<T> Clone for ArenaIndex<T> {
 	fn clone(&self) -> Self {
-		Self {
-			index: self.index,
-			phantom: PhantomData,
-		}
+		*self
 	}
 }
 

@@ -2,30 +2,30 @@ name: Build and test
 
 on: [push, pull_request]
 
+env:
+  RUST_CHANNEL: stable
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        crate: [shackle-cli, shackle-ls]
     steps:
       - uses: actions/checkout@v3
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
+          rustup default ${{ env.RUST_CHANNEL }}
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
       - name: Build shackle-cli
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: --root dist/ --path crates/shackle-cli
-      - name: Build shackle-ls
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: --root dist/ --path crates/shackle-ls
+        run: cargo install --root dist/ --path crates/${{ matrix.crate }}
       - name: Upload build artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: shackle-${{ matrix.os }}
+          name: ${{ matrix.crate }}-${{ matrix.os }}
           path: dist/
   test:
     runs-on: ${{ matrix.os }}
@@ -33,17 +33,24 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v2
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
+          rustup default ${{ env.RUST_CHANNEL }}
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: cargo test
   clippy:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install --profile minimal --component clippy --no-self-update ${{ env.RUST_CHANNEL }}
+          rustup default ${{ env.RUST_CHANNEL }}
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
       - name: Run clippy
         run: cargo clippy -- -D warnings
