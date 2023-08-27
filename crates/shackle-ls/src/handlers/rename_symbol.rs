@@ -148,7 +148,7 @@ mod test {
 
 	use crate::handlers::test::test_handler;
 
-	use super::{RenameHandler, SymbolHandlerData};
+	use super::RenameHandler;
 
 	#[test]
 	fn test_references() {

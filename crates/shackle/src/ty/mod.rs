@@ -1077,28 +1077,28 @@ impl Ty {
 			TyData::Boolean(i, o) => i
 				.pretty_print()
 				.into_iter()
-				.chain(o.pretty_print().into_iter())
+				.chain(o.pretty_print())
 				.chain(["bool".to_owned()])
 				.collect::<Vec<_>>()
 				.join(" "),
 			TyData::Integer(i, o) => i
 				.pretty_print()
 				.into_iter()
-				.chain(o.pretty_print().into_iter())
+				.chain(o.pretty_print())
 				.chain(["int".to_owned()])
 				.collect::<Vec<_>>()
 				.join(" "),
 			TyData::Float(i, o) => i
 				.pretty_print()
 				.into_iter()
-				.chain(o.pretty_print().into_iter())
+				.chain(o.pretty_print())
 				.chain(["float".to_owned()])
 				.collect::<Vec<_>>()
 				.join(" "),
 			TyData::Enum(i, o, e) => i
 				.pretty_print()
 				.into_iter()
-				.chain(o.pretty_print().into_iter())
+				.chain(o.pretty_print())
 				.chain([e.pretty_print(db)])
 				.collect::<Vec<_>>()
 				.join(" "),
@@ -1134,7 +1134,7 @@ impl Ty {
 			TyData::Set(i, o, e) => i
 				.pretty_print()
 				.into_iter()
-				.chain(o.pretty_print().into_iter())
+				.chain(o.pretty_print())
 				.chain(["set of".to_owned(), e.pretty_print(db)])
 				.collect::<Vec<_>>()
 				.join(" "),
