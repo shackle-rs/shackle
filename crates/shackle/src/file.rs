@@ -163,6 +163,13 @@ impl FileRef {
 	pub fn contents(&self, db: &dyn FileReader) -> Result<Arc<String>, FileError> {
 		db.file_contents(*self)
 	}
+
+	/// Pretty print file name for debugging
+	pub fn pretty_print(&self, db: &dyn FileReader) -> String {
+		self.path(db)
+			.map(|p| p.to_string_lossy().to_string())
+			.unwrap_or_else(|| "<unnamed file>".to_owned())
+	}
 }
 
 /// Reference to an input file or external file

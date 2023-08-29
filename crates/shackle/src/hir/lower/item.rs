@@ -14,13 +14,7 @@ use super::{ExpressionCollector, TypeInstIdentifiers};
 
 /// Lower a model to HIR
 pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>, Arc<Vec<Error>>) {
-	log::info!(
-		"Lowering {} to HIR",
-		model
-			.path(db.upcast())
-			.map(|p| p.to_string_lossy().to_string())
-			.unwrap_or_else(|| "<unnamed file>".to_owned())
-	);
+	log::info!("Lowering {} to HIR", model.pretty_print(db.upcast()));
 	let ast = match db.ast(*model) {
 		Ok(m) => m,
 		Err(e) => return (Default::default(), Default::default(), Arc::new(vec![e])),

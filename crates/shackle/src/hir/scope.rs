@@ -207,6 +207,12 @@ pub fn collect_global_scope(db: &dyn Hir) -> (Arc<ScopeData>, Arc<Vec<Error>>) {
 			}
 		}
 	}
+	log::info!(
+		"{} atoms, {} variables, {} function names in global scope",
+		scope.variables.len(),
+		scope.atoms.len(),
+		scope.functions.len()
+	);
 	(Arc::new(scope), Arc::new(diagnostics))
 }
 

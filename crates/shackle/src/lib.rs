@@ -68,7 +68,10 @@ impl Model {
 	/// Check whether a model contains any (non-runtime) errors
 	pub fn check(&self, _slv: &Solver, _data: &[PathBuf], _complete: bool) -> Vec<Error> {
 		// TODO: Check data files
-		self.db.all_errors().iter().cloned().collect()
+		self.db
+			.run_hir_phase()
+			.map(|_| Vec::new())
+			.unwrap_or_else(|e| e.iter().cloned().collect())
 	}
 
 	/// Compile current model into a Program that can be used by the Shackle interpreter
