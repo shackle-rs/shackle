@@ -193,6 +193,12 @@ pub trait Hir:
 	#[salsa::invoke(super::pattern_matching::lookup_enum_constructors)]
 	fn lookup_enum_constructors(&self, e: EnumRef) -> Option<Arc<Vec<PatternRef>>>;
 
+	/// Get the items in the given model which contain a case expression
+	///
+	/// Allows us to only perform case exhaustiveness checking if there are actually
+	/// case expressions in a model
+	fn items_with_case(&self, model: ModelRef) -> Arc<Vec<ItemRef>>;
+
 	/// Check that case expressions are exhaustive
 	#[salsa::invoke(super::pattern_matching::check_case_exhaustiveness)]
 	fn check_case_exhaustiveness(&self, item: ItemRef) -> (Arc<Vec<Error>>, Arc<Vec<Warning>>);
@@ -210,9 +216,11 @@ pub trait Hir:
 fn run_hir_phase(db: &dyn Hir) -> Result<Arc<Vec<ItemRef>>, Arc<Diagnostics<Error>>> {
 	let models = db.resolve_includes().map_err(|_| db.all_errors())?;
 	db.syntax_errors();
-	for m in models.iter() {
-		db.lookup_items(*m);
-	}
+	let item_count = models
+		.iter()
+		.map(|m| db.lookup_items(*m).len())
+		.sum::<usize>();
+	log::info!("Lowered {} items to HIR", item_count);
 	db.lookup_global_scope();
 	for m in models.iter() {
 		log::info!(
@@ -230,11 +238,15 @@ fn run_hir_phase(db: &dyn Hir) -> Result<Arc<Vec<ItemRef>>, Arc<Diagnostics<Erro
 		}
 	}
 	for m in models.iter() {
+		let items = db.items_with_case(*m);
+		if items.is_empty() {
+			continue;
+		}
 		log::info!(
 			"Checking case exhaustiveness for {}",
 			m.pretty_print(db.upcast())
 		);
-		for i in db.lookup_items(*m).iter() {
+		for i in items.iter() {
 			db.lookup_case_exhaustiveness_errors(*i);
 		}
 	}
@@ -501,6 +513,35 @@ fn lookup_topological_sorted_items_errors(db: &dyn Hir) -> Arc<Vec<Error>> {
 	db.topological_sort_items().1
 }
 
+fn items_with_case(db: &dyn Hir, model: ModelRef) -> Arc<Vec<ItemRef>> {
+	let source_map = db.lookup_source_map(model);
+	let cst = db.cst(*model).unwrap();
+	let query = tree_sitter::Query::new(
+		tree_sitter_minizinc::language(),
+		tree_sitter_minizinc::CASE_EXPRESSION_QUERY,
+	)
+	.expect("Failed to create query");
+	let mut cursor = tree_sitter::QueryCursor::new();
+	Arc::new(
+		db.ast(*model)
+			.unwrap()
+			.items()
+			.filter_map(|item| {
+				let node = *item.cst_node().as_ref();
+				if cursor
+					.captures(&query, node, cst.text().as_bytes())
+					.next()
+					.is_some()
+				{
+					source_map.find_node(node).unwrap().as_item_ref()
+				} else {
+					None
+				}
+			})
+			.collect(),
+	)
+}
+
 fn lookup_case_exhaustiveness_errors(db: &dyn Hir, item: ItemRef) -> Arc<Vec<Error>> {
 	db.check_case_exhaustiveness(item).0
 }
@@ -536,6 +577,8 @@ fn all_errors(db: &dyn Hir) -> Arc<Diagnostics<Error>> {
 					for e in db.lookup_item_type_errors(*i).outer_iter() {
 						diagnostics.extend(e);
 					}
+				}
+				for i in db.items_with_case(*m).iter() {
 					// Collect pattern matching exhaustiveness errors
 					diagnostics.extend(db.lookup_case_exhaustiveness_errors(*i));
 				}

@@ -307,6 +307,30 @@ impl EntityRef {
 	pub fn entity(&self, db: &dyn Hir) -> LocalEntityRef {
 		db.lookup_intern_entity_ref(*self).1
 	}
+
+	/// Get as an `ExpressionRef` if this is one
+	pub fn as_expression_ref(&self, db: &dyn Hir) -> Option<ExpressionRef> {
+		match self.entity(db) {
+			LocalEntityRef::Expression(e) => Some(ExpressionRef::new(self.item(db), e)),
+			_ => None,
+		}
+	}
+
+	/// Get as an `TypeRef` if this is one
+	pub fn as_type_ref(&self, db: &dyn Hir) -> Option<TypeRef> {
+		match self.entity(db) {
+			LocalEntityRef::Type(t) => Some(TypeRef::new(self.item(db), t)),
+			_ => None,
+		}
+	}
+
+	/// Get as an `PatternRef` if this is one
+	pub fn as_pattern_ref(&self, db: &dyn Hir) -> Option<PatternRef> {
+		match self.entity(db) {
+			LocalEntityRef::Pattern(p) => Some(PatternRef::new(self.item(db), p)),
+			_ => None,
+		}
+	}
 }
 
 impl salsa::InternKey for EntityRef {
@@ -339,6 +363,30 @@ impl_enum_from!(NodeRef::Item(ItemRef));
 impl_enum_from!(NodeRef::Entity(EntityRef));
 
 impl NodeRef {
+	/// Get the inner `ModelRef` if this is one
+	pub fn as_model_ref(&self) -> Option<ModelRef> {
+		match self {
+			NodeRef::Model(m) => Some(*m),
+			_ => None,
+		}
+	}
+
+	/// Get the inner `ItemRef` if this is one
+	pub fn as_item_ref(&self) -> Option<ItemRef> {
+		match self {
+			NodeRef::Item(i) => Some(*i),
+			_ => None,
+		}
+	}
+
+	/// Get the inner `EntityRef` if this is one
+	pub fn as_entity(&self) -> Option<EntityRef> {
+		match self {
+			NodeRef::Entity(e) => Some(*e),
+			_ => None,
+		}
+	}
+
 	/// Get the source and span for emitting a diagnostic
 	pub fn source_span(&self, db: &dyn Hir) -> (SourceFile, SourceSpan) {
 		let model = match *self {
