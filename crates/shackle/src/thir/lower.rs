@@ -2263,19 +2263,18 @@ enum Destructuring {
 /// Lower a model to THIR
 pub fn lower_model(db: &dyn Thir) -> Arc<Intermediate<Model>> {
 	log::info!("Lowering model to THIR");
-	assert!(
-		db.all_errors().is_empty(),
-		"Errors present, cannot lower model.\n{}",
-		db.all_errors()
-			.iter()
-			.map(|e| format!("{:#?}", e))
-			.collect::<Vec<_>>()
-			.join("\n")
-	);
+	let items = db.run_hir_phase().unwrap_or_else(|e| {
+		panic!(
+			"Errors present, cannot lower model.\n{}",
+			e.iter()
+				.map(|e| format!("{:#?}", e))
+				.collect::<Vec<_>>()
+				.join("\n")
+		)
+	});
 	let ids = db.identifier_registry();
 	let counts = db.entity_counts();
 	let mut collector = ItemCollector::new(db, &ids, &counts);
-	let items = db.lookup_topological_sorted_items();
 	for item in items.iter() {
 		collector.collect_item(*item);
 	}

@@ -35,6 +35,11 @@ pub trait Hir:
 	+ Upcast<dyn SourceParser>
 	+ Upcast<dyn FileReader>
 {
+	/// Run the HIR phase and get the results
+	///
+	/// Triggers all needed queries in a predictable order so that logging is easier to read
+	fn run_hir_phase(&self) -> Result<Arc<Vec<ItemRef>>, Arc<Diagnostics<Error>>>;
+
 	/// Resolve input files and include items (only visits each model once).
 	/// The result gives a list of models which need to be lowered into HIR.
 	///
@@ -200,6 +205,45 @@ pub trait Hir:
 
 	/// Get counts of entities across all models
 	fn entity_counts(&self) -> Arc<EntityCounts>;
+}
+
+fn run_hir_phase(db: &dyn Hir) -> Result<Arc<Vec<ItemRef>>, Arc<Diagnostics<Error>>> {
+	let models = db.resolve_includes().map_err(|_| db.all_errors())?;
+	db.syntax_errors();
+	for m in models.iter() {
+		db.lookup_items(*m);
+	}
+	db.lookup_global_scope();
+	for m in models.iter() {
+		log::info!(
+			"Collecting scope for expressions in {}",
+			m.pretty_print(db.upcast())
+		);
+		for i in db.lookup_items(*m).iter() {
+			db.lookup_item_scope(*i);
+		}
+	}
+	for m in models.iter() {
+		log::info!("Typechecking {}", m.pretty_print(db.upcast()));
+		for i in db.lookup_items(*m).iter() {
+			db.lookup_item_types(*i);
+		}
+	}
+	for m in models.iter() {
+		log::info!(
+			"Checking case exhaustiveness for {}",
+			m.pretty_print(db.upcast())
+		);
+		for i in db.lookup_items(*m).iter() {
+			db.lookup_case_exhaustiveness_errors(*i);
+		}
+	}
+	let errors = db.all_errors();
+	if errors.is_empty() {
+		Ok(db.lookup_topological_sorted_items())
+	} else {
+		Err(errors)
+	}
 }
 
 fn identifier_registry(db: &dyn Hir) -> Arc<IdentifierRegistry> {
