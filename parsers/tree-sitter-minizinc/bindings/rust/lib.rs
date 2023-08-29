@@ -43,6 +43,9 @@ pub const TAGS_QUERY: &str = include_str!("../../queries/tags.scm");
 /// Get identifier names
 pub const IDENTIFIERS_QUERY: &str = include_str!("../../queries/identifiers.scm");
 
+/// Get case expressions
+pub const CASE_EXPRESSION_QUERY: &str = include_str!("../../queries/case_expressions.scm");
+
 #[cfg(test)]
 mod tests {
 	#[test]
