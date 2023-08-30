@@ -23,65 +23,67 @@ variables introduced in the same let expression.
 
 MicroZinc is defined using the following syntax,
 
-\\[
+<div>
+\[
 \begin{array}{lcl}
 \mathit{program} &::=&
-\mathit{func}\* \\\\
+\mathit{func}* \\
 \mathit{func} &::=&
-\mathsf{function}~\mathit{typeinst}~\mathsf{:}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathit{letExpr}]\mathsf{;}\\\\&|&
-\mathsf{predicate}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]\*\mathsf{)}~[\mathsf{=}~\mathit{letRoot}]\mathsf{;} \\\\
+\mathsf{function}~\mathit{typeinst}~\mathsf{:}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]*\mathsf{)}~[\mathsf{=}~\mathit{letExpr}]\mathsf{;}\\&|&
+\mathsf{predicate}~\mathit{ident}~\mathsf{(}\mathit{typing} [\mathsf{,}~ \mathit{typing}]*\mathsf{)}~[\mathsf{=}~\mathit{letRoot}]\mathsf{;} \\
 \mathit{typing} &::=&
-\mathit{typeinst}~\mathsf{:}~\mathit{ident} \\\\
-\\\\
+\mathit{typeinst}~\mathsf{:}~\mathit{ident} \\
+\\
 \mathit{expr} &::=&
-\mathit{letExpr} \\\\&|&
-\mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]\*\mathsf{)} \\\\&|&
-\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letExpr}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letExpr}]\*~\mathsf{else}~\mathit{letExpr}~\mathsf{endif} \\\\&|&
-\mathsf{[}[\mathit{tuple}\mathsf{:}]~\mathit{letExpr}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]} \\\\
+\mathit{letExpr} \\&|&
+\mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]*\mathsf{)} \\&|&
+\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letExpr}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letExpr}]*~\mathsf{else}~\mathit{letExpr}~\mathsf{endif} \\&|&
+\mathsf{[}[\mathit{tuple}\mathsf{:}]~\mathit{letExpr}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]*\mathsf{]} \\
 \mathit{rootExpr} &::=&
-\mathit{letRoot} \\\\&|&
-\mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]\*\mathsf{)} \\\\&|&
-\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letRoot}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letRoot}]\*~\mathsf{else}~\mathit{letRoot}~\mathsf{endif} \\\\&|&
-\mathsf{forall\*root}\mathsf{(}\mathsf{[}\mathit{letRoot}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]\*\mathsf{]}\mathsf{)} \\\\
+\mathit{letRoot} \\&|&
+\mathit{ident}~\mathsf{(}\mathit{val} [ \mathsf{,}~ \mathit{val}]*\mathsf{)} \\&|&
+\mathsf{if}~\mathit{val}~\mathsf{then}~\mathit{letRoot}~[\mathsf{elseif}~\mathit{val}~\mathsf{then}~\mathit{letRoot}]*~\mathsf{else}~\mathit{letRoot}~\mathsf{endif} \\&|&
+\mathsf{forall*root}\mathsf{(}\mathsf{[}\mathit{letRoot}~\mathsf{|}~\mathit{genExpr} [ \mathsf{,}~ \mathit{genExpr}]*\mathsf{]}\mathsf{)} \\
 \mathit{letExpr} &::=&
-\mathit{val} \\\\&|&
-\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathit{val} \\\\
+\mathit{val} \\&|&
+\mathsf{let}~\mathsf{\\{}\mathit{item}*\mathsf{\\}}~\mathsf{in}~\mathit{val} \\
 \mathit{letRoot} &::=&
-\mathsf{let}~\mathsf{\\\{}\mathit{item}\*\mathsf{\\\}}~\mathsf{in}~\mathsf{root} \\\\
+\mathsf{let}~\mathsf{\\{}\mathit{item}*\mathsf{\\}}~\mathsf{in}~\mathsf{root} \\
 \mathit{item} &::=&
-\mathit{typing}~\mathsf{;} \\\\&|&
-\mathit{typing}~\mathsf{=}~\mathit{expr}~\mathsf{;} \\\\&|&
-\mathsf{constraint}~\mathit{rootExpr}~\mathsf{;} \\\\
+\mathit{typing}~\mathsf{;} \\&|&
+\mathit{typing}~\mathsf{=}~\mathit{expr}~\mathsf{;} \\&|&
+\mathsf{constraint}~\mathit{rootExpr}~\mathsf{;} \\
 \mathit{genExpr} &::=&
-\mathit{ident}~\mathsf{in}~\mathit{letExpr}~[\mathsf{where}~\mathit{letExpr}] \\\\&|&
-\mathit{ident}~\mathsf{=}~\mathit{letExpr} \\\\
+\mathit{ident}~\mathsf{in}~\mathit{letExpr}~[\mathsf{where}~\mathit{letExpr}] \\&|&
+\mathit{ident}~\mathsf{=}~\mathit{letExpr} \\
 \mathit{val} &::=&
-\mathit{lit}~|~\mathit{range}~|~\mathit{tuple} \\\\&|&
-\mathsf{\\{}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{\\}} \\\\&|&
-\mathsf{array}\mathit{int}\mathsf{d(}\mathit{range}~\mathsf{,}~[\mathit{range}~\mathsf{,}]\*~\mathsf{[}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{])} \\\\&|&
-\mathit{ident}~\mathsf{.}~\mathit{int} \\\\&|&
-\mathit{ident}~\mathsf{[}\mathit{lit}\mathsf{]} \\\\
+\mathit{lit}~|~\mathit{range}~|~\mathit{tuple} \\&|&
+\mathsf{\{}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]*\mathsf{\}} \\&|&
+\mathsf{array}\mathit{int}\mathsf{d(}\mathit{range}~\mathsf{,}~[\mathit{range}~\mathsf{,}]*~\mathsf{[}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]*\mathsf{])} \\&|&
+\mathit{ident}~\mathsf{.}~\mathit{int} \\&|&
+\mathit{ident}~\mathsf{[}\mathit{lit}\mathsf{]} \\
 \mathit{tuple} &::=&
-\mathsf{(}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]\*\mathsf{)} \\\\
+\mathsf{(}\mathit{lit}~\mathsf{,}~ [\mathit{lit}~\mathsf{,}]*\mathsf{)} \\
 \mathit{range} &::=&
-\mathit{lit}\mathsf{..}\mathit{lit} \\\\&|&
-\mathit{ident} \\\\
+\mathit{lit}\mathsf{..}\mathit{lit} \\&|&
+\mathit{ident} \\
 \mathit{lit} &::=&
-\mathit{bool} \\\\&|&
-\mathit{int} \\\\&|&
-\mathit{float} \\\\&|&
-\mathit{str} \\\\&|&
-\mathit{ident} \\\\
-\\\\
+\mathit{bool} \\&|&
+\mathit{int} \\&|&
+\mathit{float} \\&|&
+\mathit{str} \\&|&
+\mathit{ident} \\
+\\
 \mathit{bool} &::=&
-\mathsf{true}~|~\mathsf{false} \\\\
+\mathsf{true}~|~\mathsf{false} \\
 \mathit{int} &::=&
-/\texttt{[0-9]+}/ \\\\
+/\texttt{[0-9]+}/ \\
 \mathit{float} &::=&
-/\texttt{0[xX]\([0-9a-fA-F]\*\\.[0-9a-fA-F]+\)|\([0-9a-fA-F]+\\.?\)\([pP][+-]?[0-9]+\)?}/ \\\\
+/\texttt{0[xX]\([0-9a-fA-F]*\\.[0-9a-fA-F]+\)|\([0-9a-fA-F]+\\.?\)\([pP][+-]?[0-9]+\)?}/ \\
 \mathit{str} &::=&
-/\texttt{"[\^\"]\*"}/ \\\\
+/\texttt{"[\^\"]*"}/ \\
 \mathit{ident} &::=&
-/\texttt{[A-Za-z]A-Za-z0-9\*]\*}/ \\\\
+/\texttt{[A-Za-z]A-Za-z0-9*]*}/ \\
 \end{array}
-\\]
+\]
+</div>
