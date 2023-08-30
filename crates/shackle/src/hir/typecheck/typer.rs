@@ -338,7 +338,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 						);
 						return self.types.error;
 					} else {
-						return ty;
+						return f.return_type;
 					}
 				}
 

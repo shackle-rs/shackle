@@ -171,6 +171,7 @@ fn test_type_expressions() {
 		"let { constraint let { var bool: p } in p } in true",
 		expect!("var bool"),
 	);
+	tester.check_expression("(lambda int: (int: x) => x)(1)", expect!("int"));
 }
 
 #[test]
