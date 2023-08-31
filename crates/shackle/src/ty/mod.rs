@@ -18,6 +18,7 @@ use crate::db::{InternedString, Interner};
 use crate::hir::db::Hir;
 use crate::hir::ids::PatternRef;
 use crate::hir::Identifier;
+use crate::utils::maybe_grow_stack;
 
 mod functions;
 pub use self::functions::*;
@@ -140,6 +141,10 @@ impl Ty {
 	///
 	/// Some types e.g. var arrays are not possible.
 	pub fn with_inst(&self, db: &dyn Interner, inst: VarType) -> Option<Ty> {
+		maybe_grow_stack(|| self.with_inst_inner(db, inst))
+	}
+
+	fn with_inst_inner(&self, db: &dyn Interner, inst: VarType) -> Option<Ty> {
 		if inst == VarType::Par {
 			return Some(self.make_par(db));
 		}
@@ -176,6 +181,10 @@ impl Ty {
 
 	/// Returns the fixed version of this type
 	pub fn make_par(&self, db: &dyn Interner) -> Ty {
+		maybe_grow_stack(|| self.make_par_inner(db))
+	}
+
+	fn make_par_inner(&self, db: &dyn Interner) -> Ty {
 		db.intern_ty(match self.lookup(db) {
 			TyData::Boolean(_, o) => TyData::Boolean(VarType::Par, o),
 			TyData::Integer(_, o) => TyData::Integer(VarType::Par, o),
@@ -228,23 +237,30 @@ impl Ty {
 
 	/// Whether this type-inst is known to be completely par.
 	pub fn known_par(&self, db: &dyn Interner) -> bool {
-		match self.lookup(db) {
-			TyData::Error
-			| TyData::Boolean(VarType::Par, _)
-			| TyData::Integer(VarType::Par, _)
-			| TyData::Float(VarType::Par, _)
-			| TyData::Enum(VarType::Par, _, _)
-			| TyData::String(_)
-			| TyData::Annotation(_)
-			| TyData::Bottom(_)
-			| TyData::Function(_, _)
-			| TyData::Set(VarType::Par, _, _)
-			| TyData::TyVar(Some(VarType::Par), _, _) => true,
-			TyData::Array { element, .. } => element.known_par(db),
-			TyData::Tuple(_, fs) => fs.iter().all(|f| f.known_par(db)),
-			TyData::Record(_, fs) => fs.iter().all(|(_, f)| f.known_par(db)),
-			_ => false,
+		let mut todo = vec![*self];
+		while let Some(ty) = todo.pop() {
+			match ty.lookup(db) {
+				TyData::Error
+				| TyData::Boolean(VarType::Par, _)
+				| TyData::Integer(VarType::Par, _)
+				| TyData::Float(VarType::Par, _)
+				| TyData::Enum(VarType::Par, _, _)
+				| TyData::String(_)
+				| TyData::Annotation(_)
+				| TyData::Bottom(_)
+				| TyData::Function(_, _)
+				| TyData::Set(VarType::Par, _, _)
+				| TyData::TyVar(Some(VarType::Par), _, _) => (),
+				TyData::Array { dim, element, .. } => {
+					todo.push(dim);
+					todo.push(element);
+				}
+				TyData::Tuple(_, fs) => todo.extend(fs.iter().copied()),
+				TyData::Record(_, fs) => todo.extend(fs.iter().map(|(_, t)| *t)),
+				_ => return false,
+			}
 		}
+		true
 	}
 
 	/// Whether this type-inst is known to be non-optional.
@@ -300,25 +316,29 @@ impl Ty {
 
 	/// Whether this type-inst has a default value (allowing omission of else branch in ITE)
 	pub fn has_default_value(&self, db: &dyn Interner) -> bool {
-		match self.lookup(db) {
-			TyData::Boolean(_, _)
-			| TyData::Integer(_, OptType::Opt)
-			| TyData::Float(_, OptType::Opt)
-			| TyData::Enum(_, OptType::Opt, _)
-			| TyData::String(_)
-			| TyData::Annotation(_)
-			| TyData::Bottom(OptType::Opt)
-			| TyData::Array { .. }
-			| TyData::Set(_, _, _)
-			| TyData::Tuple(OptType::Opt, _)
-			| TyData::Record(OptType::Opt, _)
-			| TyData::Function(OptType::Opt, _)
-			| TyData::TyVar(_, Some(OptType::Opt), _)
-			| TyData::Error => true,
-			TyData::Tuple(_, fs) => fs.iter().all(|f| f.has_default_value(db)),
-			TyData::Record(_, fs) => fs.iter().all(|(_, f)| f.has_default_value(db)),
-			_ => false,
+		let mut todo = vec![*self];
+		while let Some(ty) = todo.pop() {
+			match ty.lookup(db) {
+				TyData::Boolean(_, _)
+				| TyData::Integer(_, OptType::Opt)
+				| TyData::Float(_, OptType::Opt)
+				| TyData::Enum(_, OptType::Opt, _)
+				| TyData::String(_)
+				| TyData::Annotation(_)
+				| TyData::Bottom(OptType::Opt)
+				| TyData::Array { .. }
+				| TyData::Set(_, _, _)
+				| TyData::Tuple(OptType::Opt, _)
+				| TyData::Record(OptType::Opt, _)
+				| TyData::Function(OptType::Opt, _)
+				| TyData::TyVar(_, Some(OptType::Opt), _)
+				| TyData::Error => (),
+				TyData::Tuple(_, fs) => todo.extend(fs.iter().copied()),
+				TyData::Record(_, fs) => todo.extend(fs.iter().map(|(_, t)| *t)),
+				_ => return false,
+			}
 		}
+		true
 	}
 
 	/// Whether this type-inst contains a type-inst variable
@@ -359,13 +379,22 @@ impl Ty {
 
 	/// Whether this type inst contains something that is par
 	pub fn contains_par(&self, db: &dyn Interner) -> bool {
-		self.known_par(db)
-			|| match self.lookup(db) {
-				TyData::Array { element, .. } => element.contains_par(db),
-				TyData::Tuple(_, fs) => fs.iter().any(|f| f.contains_par(db)),
-				TyData::Record(_, fs) => fs.iter().any(|(_, f)| f.contains_par(db)),
-				_ => false,
+		let mut todo = vec![*self];
+		while let Some(ty) = todo.pop() {
+			match ty.lookup(db) {
+				TyData::Array { element, .. } => {
+					todo.push(element);
+				}
+				TyData::Tuple(_, fs) => todo.extend(fs.iter().copied()),
+				TyData::Record(_, fs) => todo.extend(fs.iter().map(|(_, t)| *t)),
+				_ => {
+					if self.known_par(db) {
+						return true;
+					}
+				}
 			}
+		}
+		false
 	}
 
 	/// Whether this type-inst contains a var type
@@ -624,6 +653,13 @@ impl Ty {
 		db: &dyn Interner,
 		ts: impl IntoIterator<Item = Ty>,
 	) -> Option<Ty> {
+		maybe_grow_stack(|| Self::most_specific_supertype_inner(db, ts))
+	}
+
+	fn most_specific_supertype_inner(
+		db: &dyn Interner,
+		ts: impl IntoIterator<Item = Ty>,
+	) -> Option<Ty> {
 		ts.into_iter()
 			.map(Some)
 			.reduce(|a, b| {
@@ -796,6 +832,13 @@ impl Ty {
 	/// Note that there is no subtype of e.g. `var int` and `any $T` since `$T` may be bound to an
 	/// incompatible type-inst (e.g. a set type).
 	pub fn most_general_subtype(db: &dyn Interner, ts: impl IntoIterator<Item = Ty>) -> Option<Ty> {
+		maybe_grow_stack(|| Self::most_general_subtype_inner(db, ts))
+	}
+
+	fn most_general_subtype_inner(
+		db: &dyn Interner,
+		ts: impl IntoIterator<Item = Ty>,
+	) -> Option<Ty> {
 		ts.into_iter()
 			.map(Some)
 			.reduce(|a, b| {
@@ -947,93 +990,128 @@ impl Ty {
 		if *self == other {
 			return true;
 		}
-		match (self.lookup(db), other.lookup(db)) {
-			(TyData::Error, _) | (_, TyData::Error) => true,
-			// Scalar coercions
-			(TyData::Boolean(i1, o1), TyData::Boolean(i2, o2))
-			| (TyData::Boolean(i1, o1), TyData::Integer(i2, o2))
-			| (TyData::Boolean(i1, o1), TyData::Float(i2, o2))
-			| (TyData::Integer(i1, o1), TyData::Integer(i2, o2))
-			| (TyData::Integer(i1, o1), TyData::Float(i2, o2))
-			| (TyData::Float(i1, o1), TyData::Float(i2, o2)) => {
-				(i1 == VarType::Par || i1 == i2) && (o1 == OptType::NonOpt || o1 == o2)
-			}
-			(TyData::Enum(i1, o1, e1), TyData::Enum(i2, o2, e2)) => {
-				(i1 == VarType::Par || i1 == i2) && (o1 == OptType::NonOpt || o1 == o2) && e1 == e2
-			}
-			(TyData::Bottom(o1), TyData::Bottom(o2))
-			| (TyData::Bottom(o1), TyData::Boolean(_, o2))
-			| (TyData::Bottom(o1), TyData::Integer(_, o2))
-			| (TyData::Bottom(o1), TyData::Float(_, o2))
-			| (TyData::Bottom(o1), TyData::Enum(_, o2, _))
-			| (TyData::Bottom(o1), TyData::String(o2))
-			| (TyData::Bottom(o1), TyData::Annotation(o2))
-			| (TyData::Bottom(o1), TyData::Array { opt: o2, .. })
-			| (TyData::Bottom(o1), TyData::Set(_, o2, _))
-			| (TyData::Bottom(o1), TyData::Tuple(o2, _))
-			| (TyData::Bottom(o1), TyData::Record(o2, _))
-			| (TyData::Bottom(o1), TyData::Function(o2, _))
-			| (TyData::String(o1), TyData::String(o2))
-			| (TyData::Annotation(o1), TyData::Annotation(o2)) => o1 == OptType::NonOpt || o1 == o2,
-			// Compound type coercions
-			(
-				TyData::Array {
-					opt: o1,
-					dim: d1,
-					element: e1,
-				},
-				TyData::Array {
-					opt: o2,
-					dim: d2,
-					element: e2,
-				},
-			) => {
-				(o1 == OptType::NonOpt || o1 == o2)
-					&& d1.is_subtype_of(db, d2)
-					&& e1.is_subtype_of(db, e2)
-			}
-			(TyData::Set(i1, o1, e1), TyData::Set(i2, o2, e2)) => {
-				(o1 == OptType::NonOpt || o1 == o2)
-					&& (i1 == VarType::Par || i1 == i2)
-					&& e1.is_subtype_of(db, e2)
-			}
-			(TyData::Tuple(o1, f1), TyData::Tuple(o2, f2)) => {
-				(o1 == OptType::NonOpt || o1 == o2)
-					&& f1.len() == f2.len()
-					&& f1
+
+		let mut todo = vec![(*self, other)];
+		while let Some((a, b)) = todo.pop() {
+			match (a.lookup(db), b.lookup(db)) {
+				(TyData::Error, _) | (_, TyData::Error) => (),
+				// Scalar coercions
+				(TyData::Boolean(i1, o1), TyData::Boolean(i2, o2))
+				| (TyData::Boolean(i1, o1), TyData::Integer(i2, o2))
+				| (TyData::Boolean(i1, o1), TyData::Float(i2, o2))
+				| (TyData::Integer(i1, o1), TyData::Integer(i2, o2))
+				| (TyData::Integer(i1, o1), TyData::Float(i2, o2))
+				| (TyData::Float(i1, o1), TyData::Float(i2, o2)) => {
+					if i1 != VarType::Par && i1 != i2 || o1 != OptType::NonOpt && o1 != o2 {
+						return false;
+					}
+				}
+				(TyData::Enum(i1, o1, e1), TyData::Enum(i2, o2, e2)) => {
+					if i1 != VarType::Par && i1 != i2
+						|| o1 != OptType::NonOpt && o1 != o2
+						|| e1 != e2
+					{
+						return false;
+					}
+				}
+				(TyData::Bottom(o1), TyData::Bottom(o2))
+				| (TyData::Bottom(o1), TyData::Boolean(_, o2))
+				| (TyData::Bottom(o1), TyData::Integer(_, o2))
+				| (TyData::Bottom(o1), TyData::Float(_, o2))
+				| (TyData::Bottom(o1), TyData::Enum(_, o2, _))
+				| (TyData::Bottom(o1), TyData::String(o2))
+				| (TyData::Bottom(o1), TyData::Annotation(o2))
+				| (TyData::Bottom(o1), TyData::Array { opt: o2, .. })
+				| (TyData::Bottom(o1), TyData::Set(_, o2, _))
+				| (TyData::Bottom(o1), TyData::Tuple(o2, _))
+				| (TyData::Bottom(o1), TyData::Record(o2, _))
+				| (TyData::Bottom(o1), TyData::Function(o2, _))
+				| (TyData::String(o1), TyData::String(o2))
+				| (TyData::Annotation(o1), TyData::Annotation(o2)) => {
+					if o1 != OptType::NonOpt && o1 != o2 {
+						return false;
+					}
+				}
+				// Compound type coercions
+				(
+					TyData::Array {
+						opt: o1,
+						dim: d1,
+						element: e1,
+					},
+					TyData::Array {
+						opt: o2,
+						dim: d2,
+						element: e2,
+					},
+				) => {
+					if o1 != OptType::NonOpt && o1 != o2 {
+						return false;
+					}
+					todo.push((d1, d2));
+					todo.push((e1, e2));
+				}
+				(TyData::Set(i1, o1, e1), TyData::Set(i2, o2, e2)) => {
+					if o1 != OptType::NonOpt && o1 != o2 || i1 != VarType::Par && i1 != i2 {
+						return false;
+					}
+					todo.push((e1, e2));
+				}
+				(TyData::Tuple(o1, f1), TyData::Tuple(o2, f2)) => {
+					if o1 != OptType::NonOpt && o1 != o2 || f1.len() != f2.len() {
+						return false;
+					}
+					todo.extend(f1.iter().copied().zip(f2.iter().copied()));
+				}
+				(TyData::Record(o1, f1), TyData::Record(o2, f2)) => {
+					if o1 != OptType::NonOpt && o1 != o2
+						|| f1.len() != f2.len() || !f1
 						.iter()
 						.zip(f2.iter())
-						.all(|(t1, t2)| t1.is_subtype_of(db, *t2))
+						.all(|((i1, _), (i2, _))| i1 == i2)
+					{
+						return false;
+					}
+					todo.extend(
+						f1.iter()
+							.zip(f2.iter())
+							.map(|((_, t1), (_, t2))| (*t1, *t2)),
+					);
+				}
+				// Function coercion
+				(TyData::Function(o1, f1), TyData::Function(o2, f2)) => {
+					if o1 != OptType::NonOpt && o1 != o2 || !f1.is_subtype_of(db, &f2) {
+						return false;
+					}
+				}
+				// Type-inst var coercion (par T -> var T, par T -> T, T -> var T)
+				(TyData::TyVar(i1, o1, t1), TyData::TyVar(i2, o2, t2)) => {
+					if (i1 != i2 && i1 != Some(VarType::Par) && i2.is_some())
+						|| (o1 != o2 && o1 != Some(OptType::NonOpt) && o2.is_some())
+						|| t1 != t2
+					{
+						return false;
+					}
+				}
+				(TyData::Bottom(o1), TyData::TyVar(_, o2, _)) => {
+					if o1 != OptType::NonOpt && Some(o1) != o2 {
+						return false;
+					}
+				}
+				_ => return false,
 			}
-			(TyData::Record(o1, f1), TyData::Record(o2, f2)) => {
-				(o1 == OptType::NonOpt || o1 == o2)
-					&& f1.len() == f2.len()
-					&& f1
-						.iter()
-						.zip(f2.iter())
-						.all(|((i1, t1), (i2, t2))| i1 == i2 && t1.is_subtype_of(db, *t2))
-			}
-			// Function coercion
-			(TyData::Function(o1, f1), TyData::Function(o2, f2)) => {
-				(o1 == OptType::NonOpt || o1 == o2) && f1.is_subtype_of(db, &f2)
-			}
-			// Type-inst var coercion (par T -> var T, par T -> T, T -> var T)
-			(TyData::TyVar(i1, o1, t1), TyData::TyVar(i2, o2, t2)) => {
-				(i1 == i2 || i1 == Some(VarType::Par) || i2.is_none())
-					&& (o1 == o2 || o1 == Some(OptType::NonOpt) || o2.is_none())
-					&& t1 == t2
-			}
-			(TyData::Bottom(o1), TyData::TyVar(_, o2, _)) => {
-				o1 == OptType::NonOpt || Some(o1) == o2
-			}
-			_ => false,
 		}
+		true
 	}
 
 	/// Instantiate the given type-inst variables with the given types from `instantiations` in this type.
 	///
 	/// Panics if this is not possible.
 	pub fn instantiate_ty_vars(&self, db: &dyn Interner, ty_vars: &TyParamInstantiations) -> Ty {
+		maybe_grow_stack(|| self.instantiate_ty_vars_inner(db, ty_vars))
+	}
+
+	fn instantiate_ty_vars_inner(&self, db: &dyn Interner, ty_vars: &TyParamInstantiations) -> Ty {
 		match self.lookup(db) {
 			TyData::TyVar(i, o, t) if ty_vars.contains_key(&t.ty_var) => {
 				let mut ty = ty_vars[&t.ty_var];
@@ -1073,6 +1151,10 @@ impl Ty {
 
 	/// Get human readable type name
 	pub fn pretty_print(&self, db: &dyn Interner) -> String {
+		maybe_grow_stack(|| self.pretty_print_inner(db))
+	}
+
+	fn pretty_print_inner(&self, db: &dyn Interner) -> String {
 		match self.lookup(db) {
 			TyData::Boolean(i, o) => i
 				.pretty_print()

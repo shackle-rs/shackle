@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	db::{InternedString, Interner},
-	utils::DebugPrint,
+	utils::{maybe_grow_stack, DebugPrint},
 };
 
 use super::{OptType, Ty, TyData, TyVarRef, VarType};
@@ -698,6 +698,15 @@ impl PolymorphicFunctionType {
 
 	/// Collects the types to instantiate unbound type-inst variables with.
 	pub fn collect_instantiations(
+		db: &dyn Interner,
+		add_instantiation: &mut impl FnMut(TyVarRef, Ty) -> bool,
+		arg: Ty,
+		param: Ty,
+	) -> bool {
+		maybe_grow_stack(|| Self::collect_instantiations_inner(db, add_instantiation, arg, param))
+	}
+
+	fn collect_instantiations_inner(
 		db: &dyn Interner,
 		add_instantiation: &mut impl FnMut(TyVarRef, Ty) -> bool,
 		arg: Ty,
