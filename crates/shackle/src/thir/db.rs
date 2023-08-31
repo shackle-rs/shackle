@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
-use crate::{db::Upcast, diagnostics::Diagnostics, hir::db::Hir, Error};
+use crate::{db::Upcast, diagnostics::Diagnostics, hir::db::Hir, Error, Result};
 
 use super::{transform::thir_transforms, Model};
 
@@ -16,7 +16,7 @@ pub trait Thir: Hir + Upcast<dyn Hir> {
 	fn model_thir(&self) -> Arc<Intermediate<Model>>;
 
 	/// Get the THIR after all THIR rewritings have been done
-	fn final_thir(&self) -> Arc<Model>;
+	fn final_thir(&self) -> Result<Arc<Model>>;
 
 	/// Check that the pretty printed THIR is a valid model
 	#[salsa::invoke(super::sanity_check::sanity_check_thir)]
@@ -69,7 +69,7 @@ impl<T: PartialEq> PartialEq for Intermediate<T> {
 
 impl<T: Eq> Eq for Intermediate<T> {}
 
-fn final_thir(db: &dyn Thir) -> Arc<Model> {
+fn final_thir(db: &dyn Thir) -> Result<Arc<Model>> {
 	let model = db.model_thir();
-	Arc::new(thir_transforms()(db, model.take()))
+	thir_transforms()(db, model.take()).map(Arc::new)
 }

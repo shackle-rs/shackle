@@ -17,6 +17,7 @@ use crate::{
 		RecordAccess, SetComprehension, TupleAccess, TupleLiteral,
 	},
 	ty::{Ty, TyData},
+	Result,
 };
 
 use super::top_down_type::add_coercion;
@@ -552,7 +553,7 @@ fn dispatches_to(db: &dyn Thir, a: Ty, b: Ty) -> bool {
 }
 
 /// Add function dispatch headers
-pub fn function_dispatch(db: &dyn Thir, model: Model) -> Model {
+pub fn function_dispatch(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Generating function dispatch preambles");
 
 	let mut overloaded: FxHashMap<_, Vec<FunctionId>> = FxHashMap::default();
@@ -609,7 +610,7 @@ pub fn function_dispatch(db: &dyn Thir, model: Model) -> Model {
 		overloaded: FxHashMap::default(),
 	};
 	c.add_model(db, &model);
-	c.model
+	Ok(c.model)
 }
 
 #[cfg(test)]

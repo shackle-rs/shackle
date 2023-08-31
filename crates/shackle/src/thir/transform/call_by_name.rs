@@ -18,6 +18,7 @@ use crate::{
 		Model, ResolvedIdentifier,
 	},
 	utils::maybe_grow_stack,
+	Result,
 };
 
 struct Inliner<Dst: Marker, Src: Marker = ()> {
@@ -131,7 +132,7 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for Inliner<Dst, Src> {
 
 /// Perform inlining to implement call-by-name semantics for functions annotated with
 /// `:: mzn_inline_call_by_name`.
-pub fn inline_call_by_name(db: &dyn Thir, model: Model) -> Model {
+pub fn inline_call_by_name(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Inlining call by name functions");
 	let mut inliner = Inliner {
 		replacement_map: ReplacementMap::default(),
@@ -140,7 +141,7 @@ pub fn inline_call_by_name(db: &dyn Thir, model: Model) -> Model {
 		map: FxHashMap::default(),
 	};
 	inliner.add_model(db, &model);
-	inliner.model
+	Ok(inliner.model)
 }
 
 #[cfg(test)]

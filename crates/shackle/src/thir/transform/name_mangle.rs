@@ -8,10 +8,13 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::thir::{db::Thir, FunctionId, FunctionName, Model};
+use crate::{
+	thir::{db::Thir, FunctionId, FunctionName, Model},
+	Result,
+};
 
 /// Mangle names of overloaded/specialised functions
-pub fn mangle_names(_db: &dyn Thir, mut model: Model) -> Model {
+pub fn mangle_names(_db: &dyn Thir, mut model: Model) -> Result<Model> {
 	log::info!("Mangling overloaded function names");
 
 	let mut overloaded: FxHashMap<_, Vec<FunctionId>> = FxHashMap::default();
@@ -32,7 +35,7 @@ pub fn mangle_names(_db: &dyn Thir, mut model: Model) -> Model {
 			}
 		}
 	}
-	model
+	Ok(model)
 }
 
 #[cfg(test)]

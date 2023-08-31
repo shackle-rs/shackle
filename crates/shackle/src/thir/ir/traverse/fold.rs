@@ -550,13 +550,16 @@ pub trait Folder<'a, Dst: Marker, Src: Marker = ()> {
 	}
 
 	/// Fold a domain
+	///
+	/// When overriding this, it is generally a good idea to wrap the body in `utils::maybe_grow_stack`
+	/// to prevent stack overflows on highly nested types
 	fn fold_domain(
 		&mut self,
 		db: &'a dyn Thir,
 		model: &'a Model<Src>,
 		domain: &'a Domain<Src>,
 	) -> Domain<Dst> {
-		fold_domain(self, db, model, domain)
+		maybe_grow_stack(|| fold_domain(self, db, model, domain))
 	}
 
 	/// Fold a case pattern

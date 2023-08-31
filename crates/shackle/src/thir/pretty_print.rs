@@ -322,6 +322,10 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 
 	/// Pretty print a domain
 	pub fn pretty_print_domain(&self, domain: &Domain<T>) -> String {
+		maybe_grow_stack(|| self.pretty_print_domain_inner(domain))
+	}
+
+	fn pretty_print_domain_inner(&self, domain: &Domain<T>) -> String {
 		let ty = domain.ty();
 		match &**domain {
 			DomainData::Array(dim, el) => {

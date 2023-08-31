@@ -5,6 +5,7 @@ use crate::{
 	hir::Identifier,
 	thir::{db::Thir, source::Origin},
 	ty::{Ty, TyData},
+	utils::maybe_grow_stack,
 };
 
 use super::{Expression, Marker};
@@ -12,7 +13,7 @@ use super::{Expression, Marker};
 pub use crate::hir::{OptType, VarType};
 
 /// Ascribed domain of a variable
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Domain<T: Marker = ()> {
 	ty: Ty,
 	data: DomainData<T>,
@@ -151,43 +152,40 @@ impl<T: Marker> Domain<T> {
 	/// Normalises structured types, so e.g. providing an array type
 	/// will create an domain with `DomainData::Array`.
 	pub fn unbounded(db: &dyn Thir, origin: impl Into<Origin>, ty: Ty) -> Self {
-		let origin = origin.into();
-		match ty.lookup(db.upcast()) {
-			TyData::Array { opt, dim, element } => Domain::array(
-				db,
-				origin,
-				opt,
-				Domain::unbounded(db, origin, dim),
-				Domain::unbounded(db, origin, element),
-			),
-			TyData::Set(inst, opt, elem) => {
-				Domain::set(db, origin, inst, opt, Domain::unbounded(db, origin, elem))
+		maybe_grow_stack(|| {
+			let origin = origin.into();
+			match ty.lookup(db.upcast()) {
+				TyData::Array { opt, dim, element } => Domain::array(
+					db,
+					origin,
+					opt,
+					Domain::unbounded(db, origin, dim),
+					Domain::unbounded(db, origin, element),
+				),
+				TyData::Set(inst, opt, elem) => {
+					Domain::set(db, origin, inst, opt, Domain::unbounded(db, origin, elem))
+				}
+				TyData::Tuple(opt, fields) => Domain::tuple(
+					db,
+					origin,
+					opt,
+					fields.iter().map(|f| Domain::unbounded(db, origin, *f)),
+				),
+				TyData::Record(opt, fields) => Domain::record(
+					db,
+					origin,
+					opt,
+					fields
+						.iter()
+						.map(|(i, f)| (Identifier(*i), Domain::unbounded(db, origin, *f))),
+				),
+				_ => Domain {
+					ty,
+					data: DomainData::Unbounded,
+					origin,
+				},
 			}
-			TyData::Tuple(opt, fields) => Domain::tuple(
-				db,
-				origin,
-				opt,
-				fields.iter().map(|f| Domain::unbounded(db, origin, *f)),
-			),
-			TyData::Record(opt, fields) => Domain::record(
-				db,
-				origin,
-				opt,
-				fields
-					.iter()
-					.map(|(i, f)| (Identifier(*i), Domain::unbounded(db, origin, *f))),
-			),
-			_ => Domain {
-				ty,
-				data: DomainData::Unbounded,
-				origin,
-			},
-		}
-	}
-
-	/// Get the inner data
-	pub fn into_inner(self) -> (Ty, DomainData<T>, Origin) {
-		(self.ty, self.data, self.origin)
+		})
 	}
 
 	/// Walk the contents of this domain
@@ -212,6 +210,26 @@ impl<T: Marker> Domain<T> {
 				_ => (),
 			}
 			Some(next)
+		})
+	}
+}
+
+impl<T: Marker> Drop for Domain<T> {
+	fn drop(&mut self) {
+		// Default recursive drop can cause stack overflow
+		maybe_grow_stack(|| {
+			let _ = std::mem::replace(&mut self.data, DomainData::Unbounded);
+		})
+	}
+}
+
+impl<T: Marker> Clone for Domain<T> {
+	fn clone(&self) -> Self {
+		// Default recursive clone can cause stack overflow
+		maybe_grow_stack(|| Self {
+			ty: self.ty,
+			data: self.data.clone(),
+			origin: self.origin,
 		})
 	}
 }

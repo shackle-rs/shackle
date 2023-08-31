@@ -474,6 +474,21 @@ pub struct InvalidNumericLiteral {
 	pub span: SourceSpan,
 }
 
+/// Reached function instantiation recursion limit
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Function instantiation error")]
+#[diagnostic(code(shackle::instantiation_recursion_limit))]
+pub struct TypeSpecialisationRecursionLimit {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The function being instantiated
+	pub name: String,
+	/// The span associated with the error
+	#[label("Reached recursion limit while instantiating {name}")]
+	pub span: SourceSpan,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum ShackleError {
@@ -573,6 +588,10 @@ pub enum ShackleError {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	InvalidNumericLiteral(#[from] InvalidNumericLiteral),
+	/// Reached function instantiation recursion limit
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	TypeSpecialisationRecursionLimit(#[from] TypeSpecialisationRecursionLimit),
 	/// An internal error
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),

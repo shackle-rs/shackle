@@ -23,6 +23,7 @@ use crate::{
 	},
 	ty::EnumRef,
 	utils::maybe_grow_stack,
+	Result,
 };
 use std::sync::Arc;
 
@@ -211,16 +212,18 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 		model: &Model<Src>,
 		domain: &Domain<Src>,
 	) -> Domain<Dst> {
-		let mut folded = fold_domain(self, db, model, domain);
-		if folded.ty().enum_ty(db.upcast()).is_some() {
-			// Erase enum types into ints
-			if let Some(VarType::Var) = folded.ty().inst(db.upcast()) {
-				folded.set_ty_unchecked(self.tys.var_int);
-			} else {
-				folded.set_ty_unchecked(self.tys.par_int);
+		maybe_grow_stack(|| {
+			let mut folded = fold_domain(self, db, model, domain);
+			if folded.ty().enum_ty(db.upcast()).is_some() {
+				// Erase enum types into ints
+				if let Some(VarType::Var) = folded.ty().inst(db.upcast()) {
+					folded.set_ty_unchecked(self.tys.var_int);
+				} else {
+					folded.set_ty_unchecked(self.tys.par_int);
+				}
 			}
-		}
-		folded
+			folded
+		})
 	}
 }
 
@@ -396,7 +399,7 @@ impl<Src: Marker, Dst: Marker> EnumEraser<Dst, Src> {
 }
 
 /// Erase types which are not present in MicroZinc
-pub fn erase_enum(db: &dyn Thir, model: Model) -> Model {
+pub fn erase_enum(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Erasing enums into ints");
 	let mut c = EnumEraser {
 		model: Model::with_capacities(&model.entity_counts()),
@@ -409,7 +412,7 @@ pub fn erase_enum(db: &dyn Thir, model: Model) -> Model {
 		identifier_replacement: FxHashMap::default(),
 	};
 	c.add_model(db, &model);
-	c.model
+	Ok(c.model)
 }
 
 #[cfg(test)]

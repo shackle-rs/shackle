@@ -20,6 +20,7 @@ use crate::{
 		IntegerLiteral, Item, Marker, Model, ResolvedIdentifier, TupleAccess, TupleLiteral,
 	},
 	utils::maybe_grow_stack,
+	Result,
 };
 
 /// Computes all globals this function (transitively) refers to
@@ -336,7 +337,7 @@ impl<Dst: Marker> Decapturer<Dst> {
 }
 
 /// Rewrite capturing functions into non-capturing functions
-pub fn decapture_model(db: &dyn Thir, model: Model) -> Model {
+pub fn decapture_model(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Rewriting functions to be non-capturing");
 	let mut d = Decapturer {
 		model: Model::with_capacities(&model.entity_counts()),
@@ -347,7 +348,7 @@ pub fn decapture_model(db: &dyn Thir, model: Model) -> Model {
 		current: None,
 	};
 	d.add_model(db, &model);
-	d.model
+	Ok(d.model)
 }
 
 #[cfg(test)]
