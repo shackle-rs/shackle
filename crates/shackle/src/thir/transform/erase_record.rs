@@ -10,6 +10,7 @@ use crate::{
 		Domain, DomainData, Expression, ExpressionData, Marker, Model, TupleAccess, TupleLiteral,
 	},
 	utils::maybe_grow_stack,
+	Result,
 };
 
 struct RecordEraser<Dst: Marker, Src: Marker = ()> {
@@ -85,29 +86,31 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for RecordEraser<Dst, Src> {
 		model: &Model<Src>,
 		domain: &Domain<Src>,
 	) -> Domain<Dst> {
-		let origin = domain.origin();
-		match &**domain {
-			DomainData::Record(items) => {
-				let fields = items
-					.iter()
-					.map(|(_, d)| self.fold_domain(db, model, d))
-					.collect::<Vec<_>>();
-				Domain::tuple(db, origin, OptType::NonOpt, fields)
+		maybe_grow_stack(|| {
+			let origin = domain.origin();
+			match &**domain {
+				DomainData::Record(items) => {
+					let fields = items
+						.iter()
+						.map(|(_, d)| self.fold_domain(db, model, d))
+						.collect::<Vec<_>>();
+					Domain::tuple(db, origin, OptType::NonOpt, fields)
+				}
+				_ => fold_domain(self, db, model, domain),
 			}
-			_ => fold_domain(self, db, model, domain),
-		}
+		})
 	}
 }
 
 /// Erase types which are not present in MicroZinc
-pub fn erase_record(db: &dyn Thir, model: Model) -> Model {
+pub fn erase_record(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Erasing record types");
 	let mut c = RecordEraser {
 		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
 	};
 	c.add_model(db, &model);
-	c.model
+	Ok(c.model)
 }
 
 #[cfg(test)]

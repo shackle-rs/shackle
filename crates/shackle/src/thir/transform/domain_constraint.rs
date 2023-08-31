@@ -26,6 +26,7 @@ use crate::{
 		Domain, DomainData, Expression, FunctionId, Generator, Item, Let, LetItem, LookupCall,
 		Marker, Model, RecordAccess, RecordLiteral, TupleAccess, TupleLiteral,
 	},
+	Result,
 };
 
 enum DomainConstraint<T: Marker> {
@@ -883,7 +884,7 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 }
 
 /// Rewrite domains
-pub fn rewrite_domains(db: &dyn Thir, model: Model) -> Model {
+pub fn rewrite_domains(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Rewriting domains into constraints and unpacking structured variables");
 	let mut d = DomainRewriter {
 		ids: db.identifier_registry(),
@@ -893,7 +894,7 @@ pub fn rewrite_domains(db: &dyn Thir, model: Model) -> Model {
 		return_constraints: FxHashMap::default(),
 	};
 	d.add_model(db, &model);
-	d.model
+	Ok(d.model)
 }
 
 #[cfg(test)]

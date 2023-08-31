@@ -10,10 +10,11 @@ use crate::{
 		db::Thir, source::Origin, Declaration, Domain, Expression, ExpressionData, Item,
 		LookupCall, LookupIdentifier, Model,
 	},
+	Result,
 };
 
 /// Generate the output
-pub fn generate_output(db: &dyn Thir, mut model: Model) -> Model {
+pub fn generate_output(db: &dyn Thir, mut model: Model) -> Result<Model> {
 	log::info!("Generating output");
 
 	let ids = db.identifier_registry();
@@ -107,7 +108,7 @@ pub fn generate_output(db: &dyn Thir, mut model: Model) -> Model {
 		model[idx].annotations_mut().push(output_ann);
 	}
 
-	model
+	Ok(model)
 }
 
 #[cfg(test)]

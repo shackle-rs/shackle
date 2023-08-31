@@ -4,6 +4,8 @@
 //! The `crate::thir::Visitor` and `crate::thir::Folder` traits are useful for implementing these.
 //! It is the responsibility of implementors to know what constructs are expected to be present at the stage they run.
 
+use crate::Result;
+
 use self::call_by_name::inline_call_by_name;
 use self::capturing_fn::decapture_model;
 use self::comprehension::desugar_comprehension;
@@ -32,16 +34,20 @@ pub mod output;
 pub mod top_down_type;
 pub mod type_specialise;
 
+/// A THIR transform function
+pub type TransformFn = fn(&dyn Thir, Model) -> Result<Model>;
+
 /// Create a transformer which runs the given transforms in order on an initial model
-pub fn transformer(
-	transforms: Vec<fn(&dyn Thir, Model) -> Model>,
-) -> impl FnMut(&dyn Thir, Model) -> Model {
+pub fn transformer(transforms: Vec<TransformFn>) -> impl FnMut(&dyn Thir, Model) -> Result<Model> {
 	let mut iter = transforms.into_iter();
-	move |db, model| iter.by_ref().fold(model, |m, transform| transform(db, m))
+	move |db, model| {
+		iter.by_ref()
+			.try_fold(model, |m, transform| transform(db, m))
+	}
 }
 
 /// Get the default THIR transformer
-pub fn thir_transforms() -> impl FnMut(&dyn Thir, Model) -> Model {
+pub fn thir_transforms() -> impl FnMut(&dyn Thir, Model) -> Result<Model> {
 	transformer(vec![
 		generate_output,
 		rewrite_domains,
@@ -75,13 +81,14 @@ pub mod test {
 			traverse::{visit_annotation, visit_declaration, Visitor},
 			AnnotationId, DeclarationId, ItemId, Model, ResolvedIdentifier,
 		},
+		Result,
 	};
 
 	/// Perform a transform on the THIR, and verify the result matches an expected value.
 	///
 	/// The expected value only includes items which are from the `source` (i.e. not from stdlib).
 	pub fn check(
-		transform: impl FnOnce(&dyn Thir, Model) -> Model,
+		transform: impl FnOnce(&dyn Thir, Model) -> Result<Model>,
 		source: &str,
 		expected: Expect,
 	) {
@@ -89,14 +96,19 @@ pub mod test {
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
 		let model_ref = db.input_models()[0];
 		let model = db.model_thir();
-		let mut result = transform(&db, model.take());
-		let to_print = NameMapper::default().run(&db, model_ref, &mut result);
-		let printer = PrettyPrinter::new(&db, &result);
-		let mut pretty = String::new();
-		for item in to_print {
-			pretty.push_str(&printer.pretty_print_item(item));
-			pretty.push_str(";\n");
-		}
+		let pretty = match transform(&db, model.take()) {
+			Ok(mut result) => {
+				let to_print = NameMapper::default().run(&db, model_ref, &mut result);
+				let printer = PrettyPrinter::new(&db, &result);
+				let mut pretty = String::new();
+				for item in to_print {
+					pretty.push_str(&printer.pretty_print_item(item));
+					pretty.push_str(";\n");
+				}
+				pretty
+			}
+			Err(e) => e.to_string(),
+		};
 		expected.assert_eq(&pretty);
 	}
 
@@ -104,7 +116,7 @@ pub mod test {
 	///
 	/// Turns off stdlib inclusion.
 	pub fn check_no_stdlib(
-		transform: impl FnOnce(&dyn Thir, Model) -> Model,
+		transform: impl FnOnce(&dyn Thir, Model) -> Result<Model>,
 		source: &str,
 		expected: Expect,
 	) {
@@ -112,8 +124,10 @@ pub mod test {
 		db.set_ignore_stdlib(true);
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(source.to_owned())]));
 		let model = db.model_thir();
-		let result = transform(&db, model.take());
-		let pretty = PrettyPrinter::new(&db, &result).pretty_print();
+		let pretty = match transform(&db, model.take()) {
+			Ok(result) => PrettyPrinter::new(&db, &result).pretty_print(),
+			Err(e) => e.to_string(),
+		};
 		expected.assert_eq(&pretty);
 	}
 

@@ -14,6 +14,7 @@ use crate::{
 	},
 	ty::{FunctionType, PolymorphicFunctionType, Ty, TyData},
 	utils::maybe_grow_stack,
+	Result,
 };
 
 /// Create a let wrapping an expression into a declaration.
@@ -314,11 +315,11 @@ impl<'a, Src: Marker, Dst: Marker> TopDownTyper<'a, Dst, Src> {
 }
 
 /// Compute real types for bottom types
-pub fn top_down_type(db: &dyn Thir, model: Model) -> Model {
+pub fn top_down_type(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Computing top-down types");
 	let mut tdt = TopDownTyper::default();
 	tdt.add_model(db, &model);
-	tdt.result
+	Ok(tdt.result)
 }
 
 #[cfg(test)]

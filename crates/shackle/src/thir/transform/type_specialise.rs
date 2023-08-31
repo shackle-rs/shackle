@@ -10,6 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	constants::IdentifierRegistry,
+	diagnostics::TypeSpecialisationRecursionLimit,
 	thir::{
 		db::Thir,
 		pretty_print::PrettyPrinter,
@@ -23,13 +24,15 @@ use crate::{
 		StringLiteral, TupleAccess,
 	},
 	ty::{FunctionType, Ty, TyData, TyParamInstantiations},
-	utils::DebugPrint,
+	utils::{maybe_grow_stack, DebugPrint},
+	Result,
 };
 
 struct SpecialisedFunction<Dst: Marker> {
 	original: FunctionId,
 	ty_vars: TyParamInstantiations,
 	parameters: FxHashMap<DeclarationId, DeclarationId<Dst>>,
+	depth: u16,
 }
 
 struct TypeSpecialiser<Dst: Marker> {
@@ -41,6 +44,7 @@ struct TypeSpecialiser<Dst: Marker> {
 	ids: Arc<IdentifierRegistry>,
 	position: FxHashMap<FunctionId, ItemId<Dst>>,
 	count: usize,
+	reached_recursion_limit: Option<FunctionId>,
 }
 
 impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
@@ -66,12 +70,22 @@ impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 		}
 
 		// Add bodies to specialised functions
-		while let Some((f, s)) = self.specialised.pop() {
+		while let Some((f, mut s)) = self.specialised.pop() {
 			if let Some(b) = model[s.original].body() {
 				log::debug!(
-					"Adding specialised body to {}",
-					model[s.original].name().pretty_print(db)
+					"Adding specialised body to {} (call depth {})",
+					model[s.original].name().pretty_print(db),
+					s.depth
 				);
+				if s.depth > 1000 {
+					log::debug!(
+						"Reached maximum depth for {}",
+						model[s.original].name().pretty_print(db)
+					);
+					self.reached_recursion_limit = Some(s.original);
+					return;
+				}
+				s.depth += 1;
 				self.todo.push(s);
 				let body = self.fold_expression(db, model, b);
 				self.todo.pop();
@@ -154,17 +168,19 @@ impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 	}
 
 	fn fold_domain(&mut self, db: &dyn Thir, model: &Model, domain: &Domain) -> Domain<Dst> {
-		if let Some(s) = self.todo.last() {
-			// Instantiate type-inst vars in param/return types
-			if let DomainData::Unbounded = &**domain {
-				return Domain::unbounded(
-					db,
-					domain.origin(),
-					domain.ty().instantiate_ty_vars(db.upcast(), &s.ty_vars),
-				);
+		maybe_grow_stack(|| {
+			if let Some(s) = self.todo.last() {
+				// Instantiate type-inst vars in param/return types
+				if let DomainData::Unbounded = &**domain {
+					return Domain::unbounded(
+						db,
+						domain.origin(),
+						domain.ty().instantiate_ty_vars(db.upcast(), &s.ty_vars),
+					);
+				}
 			}
-		}
-		fold_domain(self, db, model, domain)
+			fold_domain(self, db, model, domain)
+		})
 	}
 }
 
@@ -241,6 +257,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 			original: f,
 			ty_vars,
 			parameters: FxHashMap::default(),
+			depth: self.todo.last().map(|t| t.depth).unwrap_or_default(),
 		});
 		let mut function = Function::new(
 			model[f].name(),
@@ -533,7 +550,7 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 }
 
 /// Type specialise a model
-pub fn type_specialise(db: &dyn Thir, model: Model) -> Model {
+pub fn type_specialise(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Performing type specialisation");
 	let ids = db.identifier_registry();
 	let mut ts = TypeSpecialiser {
@@ -545,10 +562,20 @@ pub fn type_specialise(db: &dyn Thir, model: Model) -> Model {
 		ids,
 		position: FxHashMap::default(),
 		count: 0,
+		reached_recursion_limit: None,
 	};
 	ts.add_model(db, &model);
 	log::info!("Created {} specialised functions", ts.count);
-	ts.specialised_model
+	if let Some(f) = ts.reached_recursion_limit {
+		let (src, span) = model[f].origin().source_span(db);
+		return Err(TypeSpecialisationRecursionLimit {
+			name: model[f].name().pretty_print(db),
+			src,
+			span,
+		}
+		.into());
+	}
+	Ok(ts.specialised_model)
 }
 
 #[cfg(test)]
@@ -732,6 +759,18 @@ mod test {
     output [foo(x)];
     solve satisfy;
 "#]),
+		)
+	}
+
+	#[test]
+	fn test_type_specialisation_recursive() {
+		check_no_stdlib(
+			type_specialise,
+			r#"
+			test foo($T: x) = foo((1, x));
+			any: f = foo(1);
+			"#,
+			expect!("Function instantiation error"),
 		)
 	}
 }

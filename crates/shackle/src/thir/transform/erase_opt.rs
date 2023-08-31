@@ -25,6 +25,7 @@ use crate::{
 	},
 	ty::{Ty, TyData},
 	utils::maybe_grow_stack,
+	Result,
 };
 
 struct OptEraser<Dst: Marker, Src: Marker = ()> {
@@ -118,26 +119,28 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 		model: &Model<Src>,
 		domain: &Domain<Src>,
 	) -> Domain<Dst> {
-		let origin = domain.origin();
-		if let Some(OptType::Opt) = domain.ty().opt(db.upcast()) {
-			// Convert into tuple of occurs boolean and non-optional value
-			let occurs = if let Some(VarType::Var) = domain.ty().inst(db.upcast()) {
-				self.tys.var_bool
-			} else {
-				self.tys.par_bool
-			};
-			let deopt = domain.ty().make_occurs(db.upcast());
-			return Domain::tuple(
-				db,
-				origin,
-				OptType::NonOpt,
-				[
-					Domain::unbounded(db, origin, occurs),
-					Domain::unbounded(db, origin, deopt),
-				],
-			);
-		}
-		fold_domain(self, db, model, domain)
+		maybe_grow_stack(|| {
+			let origin = domain.origin();
+			if let Some(OptType::Opt) = domain.ty().opt(db.upcast()) {
+				// Convert into tuple of occurs boolean and non-optional value
+				let occurs = if let Some(VarType::Var) = domain.ty().inst(db.upcast()) {
+					self.tys.var_bool
+				} else {
+					self.tys.par_bool
+				};
+				let deopt = domain.ty().make_occurs(db.upcast());
+				return Domain::tuple(
+					db,
+					origin,
+					OptType::NonOpt,
+					[
+						Domain::unbounded(db, origin, occurs),
+						Domain::unbounded(db, origin, deopt),
+					],
+				);
+			}
+			fold_domain(self, db, model, domain)
+		})
 	}
 
 	fn fold_call(&mut self, db: &dyn Thir, model: &Model<Src>, call: &Call<Src>) -> Call<Dst> {
@@ -423,7 +426,7 @@ impl<Src: Marker, Dst: Marker> OptEraser<Dst, Src> {
 }
 
 /// Erase types which are not present in MicroZinc
-pub fn erase_opt(db: &dyn Thir, model: Model) -> Model {
+pub fn erase_opt(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Erasing option types");
 	let mut c = OptEraser {
 		model: Model::with_capacities(&model.entity_counts()),
@@ -433,7 +436,7 @@ pub fn erase_opt(db: &dyn Thir, model: Model) -> Model {
 		needs_opt_erase: FxHashMap::default(),
 	};
 	c.add_model(db, &model);
-	c.model
+	Ok(c.model)
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ use crate::{
 		Model, ResolvedIdentifier, SetComprehension, VarType,
 	},
 	utils::maybe_grow_stack,
+	Result,
 };
 
 use super::top_down_type::add_coercion;
@@ -437,7 +438,7 @@ impl<'a, T: Marker> ScopeTester<'a, T> {
 }
 
 /// Desugar comprehensions
-pub fn desugar_comprehension(db: &dyn Thir, model: Model) -> Model {
+pub fn desugar_comprehension(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Desugaring comprehensions");
 	let mut r = ComprehensionRewriter {
 		ids: db.identifier_registry(),
@@ -445,7 +446,7 @@ pub fn desugar_comprehension(db: &dyn Thir, model: Model) -> Model {
 		result: Model::default(),
 	};
 	r.add_model(db, &model);
-	r.result
+	Ok(r.result)
 }
 
 #[cfg(test)]
