@@ -24,13 +24,14 @@ use data::{
 	serde::SerdeFileVisitor,
 	ParserVal,
 };
-use db::{CompilerDatabase, Inputs};
-use diagnostics::{FileError, IdentifierAlreadyDefined, InternalError, ShackleError};
+use db::{CompilerDatabase, Inputs, InternedString, Interner};
+use diagnostics::{FileError, IdentifierAlreadyDefined, ShackleError};
 use file::{InputFile, SourceFile};
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserializer;
 use syntax::ast::{AstNode, Identifier};
+use thir::db::ModelIoInterface;
 use ty::{Ty, TyData};
 
 use std::{
@@ -96,33 +97,19 @@ impl Model {
 		}
 		let prg_model = self.db.final_thir()?;
 
-		let input_types = self
-			.db
-			.input_type_map()
-			.iter()
-			.map(|(ident, ty)| match Type::from_compiler(&self.db, *ty) {
-				Ok(nty) => Ok((ident.0.value(&self.db), nty)),
-				Err(e) => Err(e),
-			})
-			.collect::<Result<FxHashMap<_, _>, _>>()?;
-
-		let output_types = self
-			.db
-			.output_type_map()
-			.iter()
-			.map(|(ident, ty)| match Type::from_compiler(&self.db, *ty) {
-				Ok(nty) => Ok((ident.0.value(&self.db), nty)),
-				Err(e) => Err(e),
-			})
-			.collect::<Result<FxHashMap<_, _>, _>>()?;
+		let ModelIoInterface {
+			input,
+			output,
+			enums: _,
+		} = (*self.db.model_io_interface()).clone();
 
 		Ok(Program {
 			db: self.db,
 			slv: slv.clone(),
 			code: prg_model,
-			_input_types: input_types,
-			_input_data: FxHashMap::default(),
-			_output_types: output_types,
+			input_types: input,
+			input_data: FxHashMap::default(),
+			output_types: output,
 			enable_stats: false,
 			time_limit: None,
 		})
@@ -154,10 +141,10 @@ pub struct Program {
 	slv: Solver,
 
 	// Model instance data
-	_input_types: FxHashMap<String, Type>,
-	_input_data: FxHashMap<String, Value>,
+	input_types: FxHashMap<Arc<str>, Type>,
+	input_data: FxHashMap<Arc<str>, Value>,
 
-	_output_types: FxHashMap<String, Type>,
+	output_types: FxHashMap<Arc<str>, Type>,
 	// run() options
 	enable_stats: bool,
 	time_limit: Option<Duration>,
@@ -188,7 +175,7 @@ pub enum Type {
 	/// Float scalar
 	Float(OptType),
 	/// Enumerated type scalar
-	Enum(OptType, Option<Arc<Enum>>),
+	Enum(OptType, Arc<Enum>),
 
 	/// String scalar
 	String(OptType),
@@ -213,74 +200,110 @@ pub enum Type {
 }
 
 impl Type {
-	fn from_compiler(db: &CompilerDatabase, value: Ty) -> Result<Self, ShackleError> {
+	fn from_compiler<S: FnMut(InternedString) -> Arc<str>>(
+		db: &dyn Interner,
+		str_interner: &mut S,
+		type_map: &mut FxHashMap<Ty, Type>,
+		enum_map: &FxHashMap<Arc<str>, Arc<Enum>>,
+		value: Ty,
+	) -> Self {
 		let data = value.lookup(db);
 		match data {
-			TyData::Boolean(_, opt) => Ok(Type::Boolean(opt)),
-			TyData::Integer(_, opt) => Ok(Type::Integer(opt)),
-			TyData::Float(_, opt) => Ok(Type::Float(opt)),
-			TyData::Enum(_, opt, _) => Ok(Type::Enum(opt, None)), // TODO: Fix None
-			TyData::String(opt) => Ok(Type::String(opt)),
-			TyData::Annotation(opt) => Ok(Type::Annotation(opt)),
+			TyData::Boolean(_, opt) => Type::Boolean(opt),
+			TyData::Integer(_, opt) => Type::Integer(opt),
+			TyData::Float(_, opt) => Type::Float(opt),
+			TyData::Enum(_, opt, e) => Type::Enum(opt, enum_map[&str_interner(e.name(db))].clone()),
+			TyData::String(opt) => Type::String(opt),
+			TyData::Annotation(opt) => Type::Annotation(opt),
 			TyData::Array { opt, dim, element } => {
-				let elem = Type::from_compiler(db, element)?;
-				let index_conv = |nty| -> Result<Type, ShackleError> {
+				let elem = Type::from_compiler(db, str_interner, type_map, enum_map, element);
+				let mut index_conv = |nty| -> Type {
 					match nty {
 						TyData::Integer(ty::VarType::Par, OptType::NonOpt) => {
-							Ok(Type::Integer(OptType::NonOpt))
+							Type::Integer(OptType::NonOpt)
 						}
-						TyData::Enum(ty::VarType::Par, OptType::NonOpt, _) => {
-							Ok(Type::Enum(OptType::NonOpt, None)) // TODO: Fix None
+						TyData::Enum(ty::VarType::Par, OptType::NonOpt, e) => {
+							Type::Enum(OptType::NonOpt, enum_map[&str_interner(e.name(db))].clone())
 						}
-						_ => Err(InternalError::new(format!(
-							"Unexpected index set type on user facing type {:?}",
-							nty
-						))
-						.into()),
+						_ => {
+							unreachable!("invalid index set type {:?}", nty)
+						}
 					}
 				};
 				let ndim = match dim.lookup(db) {
-					TyData::Tuple(OptType::NonOpt, li) => li
-						.iter()
-						.map(|ty| index_conv(ty.lookup(db)))
-						.collect::<Result<Vec<_>, _>>()?,
+					TyData::Tuple(OptType::NonOpt, li) => {
+						li.iter().map(|ty| index_conv(ty.lookup(db))).collect()
+					}
 					x => {
-						let nty = index_conv(x)?;
-						vec![nty]
+						vec![index_conv(x)]
 					}
 				};
-				Ok(Type::Array {
+				Type::Array {
 					opt,
 					dim: ndim.into_boxed_slice(),
 					element: Box::new(elem),
-				})
+				}
 			}
-			TyData::Set(_, opt, elem) => {
-				Ok(Type::Set(opt, Box::new(Type::from_compiler(db, elem)?)))
+			TyData::Set(_, opt, elem) => Type::Set(
+				opt,
+				Box::new(Type::from_compiler(
+					db,
+					str_interner,
+					type_map,
+					enum_map,
+					elem,
+				)),
+			),
+			TyData::Tuple(opt, li) => {
+				let tmp = if opt == OptType::NonOpt {
+					value
+				} else {
+					todo!()
+				};
+				let Type::Tuple(_, li) = (if let Some(x) = type_map.get(&tmp) {
+					x
+				} else {
+					let mut v = Vec::with_capacity(li.len());
+					for ty in li.iter() {
+						v.push(Type::from_compiler(
+							db,
+							str_interner,
+							type_map,
+							enum_map,
+							*ty,
+						))
+					}
+					type_map.insert(tmp, Type::Tuple(opt, v.into_boxed_slice().into()));
+					&type_map[&tmp]
+				}) else {
+					unreachable!()
+				};
+				Type::Tuple(opt, li.clone())
 			}
-			TyData::Tuple(opt, li) => Ok(Type::Tuple(
-				opt,
-				li.iter()
-					.map(|ty| Type::from_compiler(db, *ty))
-					.collect::<Result<Vec<_>, _>>()?
-					.into_boxed_slice()
-					.into(),
-			)),
-			TyData::Record(opt, li) => Ok(Type::Record(
-				opt,
-				li.iter()
-					.map(|(name, ty)| match Type::from_compiler(db, *ty) {
-						Ok(nty) => Ok((name.value(db).into(), nty)),
-						Err(e) => Err(e),
-					})
-					.collect::<Result<Vec<_>, _>>()?
-					.into(),
-			)),
-			_ => Err(InternalError::new(format!(
-				"Unable to create user facing type from {:?}",
-				data
-			))
-			.into()),
+			TyData::Record(opt, li) => {
+				let tmp = if opt == OptType::NonOpt {
+					value
+				} else {
+					todo!()
+				};
+				let Type::Record(_, li) = (if let Some(x) = type_map.get(&tmp) {
+					x
+				} else {
+					let mut v = Vec::with_capacity(li.len());
+					for (name, ty) in li.iter() {
+						v.push((
+							str_interner(*name),
+							Type::from_compiler(db, str_interner, type_map, enum_map, *ty),
+						))
+					}
+					type_map.insert(tmp, Type::Record(opt, v.into_boxed_slice().into()));
+					&type_map[&tmp]
+				}) else {
+					unreachable!()
+				};
+				Type::Record(opt, li.clone())
+			}
+			_ => unreachable!("invalid user facing type {:?}", data),
 		}
 	}
 
@@ -409,12 +432,12 @@ impl Program {
 					// Match the parser
 					for asg in assignments {
 						let ident = asg.assignee().cast::<Identifier>().unwrap();
-						if let Some((k, ty)) = self._input_types.get_key_value::<str>(&ident.name())
+						if let Some((k, ty)) = self.input_types.get_key_value::<str>(&ident.name())
 						{
 							let val = typecheck_dzn(&src, &ident.name(), &asg.definition(), ty)?;
 							data.push((k, ty, val));
 							// Identifier already seen
-							if names.contains(k) || self._input_data.contains_key(k) {
+							if names.contains(k) || self.input_data.contains_key(k) {
 								return Err(IdentifierAlreadyDefined {
 									src,
 									span: asg.cst_node().as_ref().byte_range().into(),
@@ -436,14 +459,14 @@ impl Program {
 				}
 				Some("json") => {
 					let assignments = serde_json::Deserializer::from_str(src.contents())
-						.deserialize_map(SerdeFileVisitor(&self._input_types))
+						.deserialize_map(SerdeFileVisitor(&self.input_types))
 						.map_err(|err| ShackleError::from_serde_json(err, &src))?;
 
 					data.reserve(assignments.len());
 					names.reserve(assignments.len());
 					for asg in assignments {
 						// Identifier already seen
-						if names.contains(asg.0) || self._input_data.contains_key(asg.0) {
+						if names.contains(asg.0) || self.input_data.contains_key(asg.0) {
 							return Err(IdentifierAlreadyDefined {
 								src,
 								span: (0, 0).into(), // TODO: actual byte range
@@ -476,9 +499,7 @@ impl Program {
 			if let ParserVal::EnumCtor(_) = val {
 				todo!()
 			} else {
-				let _none = self
-					._input_data
-					.insert(key.to_string(), val.resolve_value(ty)?);
+				let _none = self.input_data.insert(key.clone(), val.resolve_value(ty)?);
 				debug_assert_eq!(_none, None);
 			}
 		}

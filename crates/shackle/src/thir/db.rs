@@ -6,8 +6,13 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 use rustc_hash::FxHashMap;
 
-use super::{transform::thir_transforms, Identifier, Model};
-use crate::{db::Upcast, diagnostics::Diagnostics, hir::db::Hir, ty, Error, Result};
+use super::{transform::thir_transforms, Declaration, Model};
+use crate::{
+	db::{InternedString, Upcast},
+	diagnostics::Diagnostics,
+	hir::db::Hir,
+	Enum, Error, Result,
+};
 
 /// THIR queries
 #[salsa::query_group(ThirStorage)]
@@ -23,11 +28,15 @@ pub trait Thir: Hir + Upcast<dyn Hir> {
 	#[salsa::invoke(super::sanity_check::sanity_check_thir)]
 	fn sanity_check_thir(&self) -> Arc<Diagnostics<Error>>;
 
-	/// Get a mapping from variable identifiers to their computed types
-	fn input_type_map(&self) -> Arc<FxHashMap<Identifier, ty::Ty>>;
+	/// Get a mapping from input/output identifiers to their computed types or enumerated type declaration
+	fn model_io_interface(&self) -> Arc<ModelIoInterface>;
+}
 
-	/// Get a mapping from variable identifiers to their computed types
-	fn output_type_map(&self) -> Arc<FxHashMap<Identifier, ty::Ty>>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelIoInterface {
+	pub input: FxHashMap<Arc<str>, crate::Type>,
+	pub output: FxHashMap<Arc<str>, crate::Type>,
+	pub enums: FxHashMap<Arc<str>, Arc<crate::Enum>>,
 }
 
 /// Represents an intermediate query result which can be taken
@@ -77,39 +86,70 @@ impl<T: PartialEq> PartialEq for Intermediate<T> {
 impl<T: Eq> Eq for Intermediate<T> {}
 
 fn final_thir(db: &dyn Thir) -> Result<Arc<Model>> {
+	let _ = db.model_io_interface();
 	let model = db.model_thir();
 	thir_transforms()(db, model.take()).map(Arc::new)
 }
 
-fn input_type_map(db: &dyn Thir) -> Arc<FxHashMap<Identifier, ty::Ty>> {
-	let model = db.final_thir().unwrap();
+fn model_io_interface(db: &dyn Thir) -> Arc<ModelIoInterface> {
+	let sh = db.model_thir();
+	let val = sh.get();
+	let model = val.as_ref();
 
-	let mut result = FxHashMap::default();
+	// Local interner
+	let mut interner: FxHashMap<InternedString, Arc<str>> = FxHashMap::default();
+	let mut resolve_name = |s| {
+		interner
+			.entry(s)
+			.or_insert_with(|| Arc::from(s.value(db.upcast())))
+			.clone()
+	};
+	let mut type_map = FxHashMap::default();
+
+	// Create a map of enumerations
+	let mut enums = FxHashMap::default();
+	for (_, e) in model.enumerations() {
+		let name = resolve_name(e.enum_type().name(db.upcast()));
+		if let Some(_) = e.definition() {
+			todo!();
+		} else {
+			enums.insert(name.clone(), Arc::new(Enum::from_data(name)));
+		}
+	}
+
+	// Find the annotation identifiers
+	let reg = db.identifier_registry();
+	let output_ann = reg.output;
+	let no_output_ann = reg.no_output;
+
+	// Determine input and output from declarations
+	let mut input = FxHashMap::default();
+	let mut output = FxHashMap::default();
+	let mut insert_decl = |map: &mut FxHashMap<Arc<str>, crate::Type>, decl: &Declaration| {
+		let name = resolve_name(decl.name().unwrap().0);
+		let ty = crate::Type::from_compiler(
+			db.upcast(),
+			&mut resolve_name,
+			&mut type_map,
+			&enums,
+			decl.domain().ty(),
+		);
+		map.insert(name, ty);
+	};
 	for (_, decl) in model.all_declarations() {
+		// Determine whether declaration is part of input
 		if decl.top_level()
 			&& decl.domain().ty().known_par(db.upcast())
 			&& decl.definition().is_none()
 		{
-			result.insert(decl.name().unwrap(), decl.domain().ty());
+			insert_decl(&mut input, decl)
 		}
-	}
-	Arc::new(result)
-}
 
-fn output_type_map(db: &dyn Thir) -> Arc<FxHashMap<Identifier, ty::Ty>> {
-	let model = db.final_thir().unwrap();
-
-	// Find the annotation identifiers
-	let reg = db.identifier_registry();
-	let output = reg.output;
-	let no_output = reg.no_output;
-
-	let mut result = FxHashMap::default();
-	for (_, decl) in model.all_declarations() {
+		// Determine whether declaration is part of output
 		let mut should_output = None;
-		if decl.annotations().has(&model, output) {
+		if decl.annotations().has(&model, output_ann) {
 			should_output = Some(true)
-		} else if decl.annotations().has(&model, no_output) {
+		} else if decl.annotations().has(&model, no_output_ann) {
 			should_output = Some(false)
 		}
 		if should_output == Some(true)
@@ -118,8 +158,13 @@ fn output_type_map(db: &dyn Thir) -> Arc<FxHashMap<Identifier, ty::Ty>> {
 				&& !decl.domain().ty().known_par(db.upcast())
 				&& decl.definition().is_none())
 		{
-			result.insert(decl.name().unwrap(), decl.domain().ty());
+			insert_decl(&mut output, decl)
 		}
 	}
-	Arc::new(result)
+
+	Arc::new(ModelIoInterface {
+		input,
+		output,
+		enums,
+	})
 }

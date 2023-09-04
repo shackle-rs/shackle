@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use serde::{
@@ -356,10 +358,10 @@ impl<'de, 'a> Visitor<'de> for SerdeArrayVisitor<'a> {
 	}
 }
 
-pub(crate) struct SerdeFileVisitor<'a>(pub &'a FxHashMap<String, Type>);
+pub(crate) struct SerdeFileVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
 
 impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
-	type Value = Vec<(&'a String, &'a Type, ParserVal)>;
+	type Value = Vec<(&'a Arc<str>, &'a Type, ParserVal)>;
 
 	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(formatter, "assignment mapping")
@@ -613,10 +615,10 @@ impl Serialize for Set {
 }
 impl Serialize for EnumValue {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		let mut map = serializer.serialize_map(Some(if self.arg().is_some() { 2 } else { 1 }))?;
-		map.serialize_entry("e", self.constructor().unwrap())?;
-		if let Some(arg) = self.arg() {
-			map.serialize_entry("a", &[arg])?
+		let mut map = serializer.serialize_map(Some(if self.args().is_empty() { 1 } else { 2 }))?;
+		map.serialize_entry("e", &**self.constructor())?;
+		if !self.args().is_empty() {
+			map.serialize_entry("a", &self.args())?
 		}
 		map.end()
 	}
@@ -677,7 +679,7 @@ mod tests {
 	use crate::{diagnostics::ShackleError, file::SourceFile, OptType, Type};
 
 	fn check_serialization(input: &str, ty: &Type, expected: Expect) {
-		let type_map = FxHashMap::from_iter([("x".to_string(), ty.clone())].into_iter());
+		let type_map = FxHashMap::from_iter([("x".into(), ty.clone())].into_iter());
 		let src = SourceFile::from(Arc::new(format!("{{ \"x\": {input} }}")));
 		let assignments = serde_json::Deserializer::from_str(src.contents())
 			.deserialize_map(SerdeFileVisitor(&type_map))

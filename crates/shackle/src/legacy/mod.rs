@@ -49,8 +49,8 @@ impl Program {
 		};
 		let file_mut = tmpfile.as_file_mut();
 		self.write(file_mut).map_err(write_err)?;
-		for (name, ty) in &self._input_types {
-			let val = if let Some(val) = self._input_data.get(name) {
+		for (name, ty) in &self.input_types {
+			let val = if let Some(val) = self.input_data.get(name) {
 				val
 			} else if ty.is_opt() {
 				&Value::Absent
@@ -100,7 +100,7 @@ impl Program {
 				}
 				Ok(line) => {
 					match serde_json::Deserializer::from_str(&line)
-						.deserialize_map(SerdeMessageVisitor(&self._output_types))
+						.deserialize_map(SerdeMessageVisitor(&self.output_types))
 						.map_err(|e| {
 							ShackleError::from_serde_json(e, &Arc::new(line.clone()).into())
 						})? {
@@ -288,7 +288,7 @@ fn write_legacy_dummy_value<W: Write>(out: &mut W, ty: &Type) -> Result<(), std:
 	}
 }
 
-struct SerdeMessageVisitor<'a>(pub &'a FxHashMap<String, Type>);
+struct SerdeMessageVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
 
 enum LegacyOutput<'a> {
 	Status(Status),
@@ -425,7 +425,7 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 }
 
 #[derive(Clone)]
-struct SerdeOutputVisitor<'a>(pub &'a FxHashMap<String, Type>);
+struct SerdeOutputVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
 
 impl<'de, 'a> Visitor<'de> for SerdeOutputVisitor<'a> {
 	type Value = Result<FxHashMap<&'de str, Value>, ShackleError>;

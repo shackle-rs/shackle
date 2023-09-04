@@ -57,6 +57,11 @@ impl From<f64> for Value {
 		Self::Float(value)
 	}
 }
+impl From<EnumValue> for Value {
+	fn from(value: EnumValue) -> Self {
+		Self::Enum(value)
+	}
+}
 impl From<Array> for Value {
 	fn from(value: Array) -> Self {
 		Self::Array(value)
@@ -203,21 +208,17 @@ impl std::ops::Index<&[Value]> for Array {
 				}
 				Index::Enum(e) => {
 					if let Value::Enum(val) = ii {
-						if e.set == val.set {
-							idx += val.val
+						if e.ty == val.ty {
+							idx += val.pos
 						} else {
 							panic!("incorrect index type: using value of type {} for an index of type {}", 
-							if let Some(name) = &e.set.name {name.as_str()} else{"anonymous enum"},
-							if let Some(name) = &val.set.name {name.as_str()} else{"anonymous enum"},)
+							e.ty.name,
+							val.ty.name)
 						}
 					} else {
 						panic!(
 							"incorrect index type: using {ii} for an index of type {}",
-							if let Some(name) = &e.set.name {
-								name.as_str()
-							} else {
-								"anonymous enum"
-							}
+							e.ty.name
 						)
 					}
 				}
@@ -350,45 +351,79 @@ impl Iterator for IndexIter {
 /// Member declaration of an enumerated type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Enum {
-	name: Option<String>,
-	constructors: Vec<(String, Option<Index>)>,
+	name: Arc<str>,
+	state: EnumInner,
 }
 
 impl Enum {
+	pub(crate) fn from_data(name: Arc<str>) -> Self {
+		Self {
+			name,
+			state: EnumInner::NoDefinition,
+		}
+	}
+
 	/// Returns the number of members of the enumerated type
+	///
+	/// ## Warning
+	/// This function will panic if Enum type is uninitialized
 	pub fn len(&self) -> usize {
-		self.constructors
-			.iter()
-			.map(|(_, i)| if let Some(i) = i { i.len() } else { 1 })
-			.sum()
+		self.constructors().iter().map(|(_, _, len)| len).sum()
 	}
 
 	/// Returns whether the enumerated type has any members
+	///
+	/// ## Warning
+	/// This function will panic if Enum type is uninitialized
 	pub fn is_empty(&self) -> bool {
-		self.constructors.is_empty()
+		self.constructors().is_empty()
+	}
+
+	/// Returns the list of
+	///
+	/// ## Warning
+	/// This function will panic if Enum type is uninitialized
+	fn constructors(&self) -> &[Constructor] {
+		let EnumInner::Constructors(ref cons) = self.state else {
+			panic!("cannot access constructors of an uninitialized enumerated type")
+		};
+		&(*cons)
 	}
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum EnumInner {
+	NoDefinition,
+	AwaitData(Box<[Arc<str>]>),
+	Constructors(Box<[Constructor]>),
+}
+
+type Constructor = (Arc<str>, Box<[Index]>, usize);
 
 /// Member declaration of an enumerated type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumValue {
-	set: Arc<Enum>,
-	val: usize,
+	ty: Arc<Enum>,
+	pos: usize,
 }
 
 impl EnumValue {
+	pub(crate) fn from_enum_and_pos(ty: Arc<Enum>, pos: usize) -> Self {
+		debug_assert!(pos >= 1 && pos <= ty.len());
+		Self { ty, pos }
+	}
+
 	/// Internal function used to find the constructor definition in the
-	/// enumerated type and the position the value has within this constructor
-	pub(crate) fn constructor_and_pos(&self) -> (&String, &Option<Index>, usize) {
-		let mut i = self.val;
-		let c = self
-			.set
-			.constructors
+	/// enumerated type and the arguments to the constructor to create the value
+	pub(crate) fn constructor_and_args(&self) -> (&Arc<str>, Vec<Value>) {
+		let mut val = self.pos - 1;
+		let (name, idx, _) = self
+			.ty
+			.constructors()
 			.iter()
-			.skip_while(|c| {
-				let len = if let Some(ii) = &c.1 { ii.len() } else { 1 };
-				if i > len {
-					i -= len;
+			.skip_while(|(_, _, len)| {
+				if val > *len {
+					val -= len;
 					true
 				} else {
 					false
@@ -397,73 +432,55 @@ impl EnumValue {
 			.take(1)
 			.next()
 			.unwrap();
-		(&c.0, &c.1, i)
+		let mut args = vec![Value::Absent; idx.len()];
+		for i in (0..idx.len()).rev() {
+			let offset = val % idx[i].len();
+			args[i] = match &idx[i] {
+				Index::Integer(ii) => Value::Integer(ii.start() + offset as i64),
+				Index::Enum(ii) => EnumValue::from_enum_and_pos(ii.enum_type(), offset + 1).into(),
+			};
+			val /= idx[i].len();
+		}
+		(&name, args)
 	}
 
 	/// Returns the enumerated type to which this enumerated value belongs
-	///
-	/// ## Warning
-	/// On parsed data the enumerated type might be a placeholder with only
-	/// information required to fit the data to a `Program`.
 	pub fn enum_type(&self) -> Arc<Enum> {
-		self.set.clone()
+		self.ty.clone()
 	}
 
 	/// Returns the name used to construct the value of the enumerated type
 	///
 	/// The method returns [`None`] if the enumerated type is anonymous
-	pub fn constructor(&self) -> Option<&str> {
-		let (c, _, _) = self.constructor_and_pos();
-		if c == "_" {
-			None
-		} else {
-			Some(c.as_str())
-		}
+	pub fn constructor(&self) -> &Arc<str> {
+		let (c, _) = self.constructor_and_args();
+		c
 	}
 
 	/// Returns the argument used to construct the value of the enumerated type
 	///
 	/// This method resturns [`None`] if no argument was used to construct the
 	/// value
-	pub fn arg(&self) -> Option<Value> {
-		let (_, index, i) = self.constructor_and_pos();
-		match index {
-			Some(Index::Enum(idx)) => Some(Value::Enum(EnumValue {
-				set: idx.set.clone(),
-				val: i,
-			})),
-			Some(Index::Integer(idx)) => Some(Value::Integer(idx.start() + i as i64 - 1)),
-			None => {
-				debug_assert!(i == 1);
-				None
-			}
-		}
+	pub fn args(&self) -> Vec<Value> {
+		let (_, args) = self.constructor_and_args();
+		args
 	}
 
 	/// Returns the integer value that is internally used to represent the value
 	/// of the enumerated types after enumerated types have been type erased.
 	pub(crate) fn int_val(&self) -> usize {
-		self.val
+		self.pos
 	}
 }
 
 impl Display for EnumValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self.constructor() {
-			Some(constructor) => match self.arg() {
-				Some(arg) => write!(f, "{constructor}({arg})"),
-				None => write!(f, "{}", constructor),
-			},
-			None => write!(
-				f,
-				"to_enum({}, {})",
-				if let Some(name) = &self.set.name {
-					name.as_str()
-				} else {
-					"_"
-				},
-				self.arg().unwrap()
-			),
+		let (c, a) = self.constructor_and_args();
+		write!(f, "{c}")?;
+		if !a.is_empty() {
+			write!(f, "({})", a.iter().format(","))
+		} else {
+			Ok(())
 		}
 	}
 }
@@ -481,7 +498,7 @@ impl Display for EnumValue {
 /// [`.is_empty()`]: EnumRangeInclusive::is_empty
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumRangeInclusive {
-	set: Arc<Enum>,
+	ty: Arc<Enum>,
 	start: usize,
 	end: usize,
 }
@@ -492,26 +509,35 @@ impl EnumRangeInclusive {
 	/// ## Warning
 	/// This function will panic if the arguments contained are of two different Enum types
 	pub fn new(start: EnumValue, end: EnumValue) -> Self {
-		if start.set != end.set {
+		if start.ty != end.ty {
 			panic!("creating EnumRangeInclusive using two different enum types")
 		}
 		EnumRangeInclusive {
-			set: start.set,
-			start: start.val,
-			end: end.val,
+			ty: start.ty,
+			start: start.pos,
+			end: end.pos,
 		}
 	}
 
-	pub(crate) fn from_internal_values(set: Arc<Enum>, start: usize, end: usize) -> Self {
-		EnumRangeInclusive { set, start, end }
+	pub(crate) fn from_enum_and_positions(set: Arc<Enum>, start: usize, end: usize) -> Self {
+		EnumRangeInclusive {
+			ty: set,
+			start,
+			end,
+		}
+	}
+
+	/// Returns the enumerated type to which this enumerated value belongs
+	pub fn enum_type(&self) -> Arc<Enum> {
+		self.ty.clone()
 	}
 
 	/// Returns `true` if item is contained in the range.
 	pub fn contains(&self, item: EnumValue) -> bool {
-		if item.set != self.set {
+		if item.ty != self.ty {
 			false
 		} else {
-			item.val >= self.start && item.val <= self.end
+			item.pos >= self.start && item.pos <= self.end
 		}
 	}
 
@@ -534,8 +560,8 @@ impl EnumRangeInclusive {
 	/// [`is_empty()`]: EnumRangeInclusive::is_empty
 	pub fn start(&self) -> EnumValue {
 		EnumValue {
-			set: self.set.clone(),
-			val: self.start,
+			ty: self.ty.clone(),
+			pos: self.start,
 		}
 	}
 	/// Returns the upper bound of the EnumRangeInclusive
@@ -552,8 +578,8 @@ impl EnumRangeInclusive {
 	/// [`is_empty()`]: EnumRangeInclusive::is_empty
 	pub fn end(&self) -> EnumValue {
 		EnumValue {
-			set: self.set.clone(),
-			val: self.end,
+			ty: self.ty.clone(),
+			pos: self.end,
 		}
 	}
 }
@@ -566,13 +592,13 @@ impl From<(EnumValue, EnumValue)> for EnumRangeInclusive {
 impl From<(&EnumValue, &EnumValue)> for EnumRangeInclusive {
 	fn from(value: (&EnumValue, &EnumValue)) -> Self {
 		assert_eq!(
-			value.0.set, value.1.set,
+			value.0.ty, value.1.ty,
 			"EnumRangeInclusive must be of a single enumerated type"
 		);
 		Self {
-			set: value.0.set.clone(),
-			start: value.0.val,
-			end: value.1.val,
+			ty: value.0.ty.clone(),
+			start: value.0.pos,
+			end: value.1.pos,
 		}
 	}
 }
@@ -583,12 +609,12 @@ impl Display for EnumRangeInclusive {
 			f,
 			"{}..{}",
 			EnumValue {
-				set: self.set.clone(),
-				val: self.start,
+				ty: self.ty.clone(),
+				pos: self.start,
 			},
 			EnumValue {
-				set: self.set.clone(),
-				val: self.end,
+				ty: self.ty.clone(),
+				pos: self.end,
 			},
 		)
 	}
@@ -602,8 +628,8 @@ impl Iterator for EnumRangeInclusive {
 			None
 		} else {
 			let val = EnumValue {
-				set: self.set.clone(),
-				val: self.start,
+				ty: self.ty.clone(),
+				pos: self.start,
 			};
 			self.start += 1;
 			Some(val)
@@ -624,8 +650,8 @@ impl Iterator for EnumRangeInclusive {
 			None
 		} else {
 			Some(EnumValue {
-				set: self.set,
-				val: self.end,
+				ty: self.ty,
+				pos: self.end,
 			})
 		}
 	}
@@ -636,8 +662,8 @@ impl DoubleEndedIterator for EnumRangeInclusive {
 			None
 		} else {
 			let val = EnumValue {
-				set: self.set.clone(),
-				val: self.end,
+				ty: self.ty.clone(),
+				pos: self.end,
 			};
 			self.end -= 1;
 			Some(val)

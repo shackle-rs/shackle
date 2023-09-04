@@ -3,6 +3,8 @@
 //! This module contains a parser for the DataZinc format (i.e., `.dzn`) files.
 //! These files are often used to provide data for MiniZinc models.
 
+use std::sync::Arc;
+
 use itertools::Itertools;
 use tree_sitter::Parser;
 
@@ -20,7 +22,7 @@ use crate::{
 		cst::{Cst, CstNode},
 	},
 	value::Polarity,
-	OptType, Type,
+	Enum, OptType, Type,
 };
 
 /// Parses a DataZinc file, returning a mapping of the name of the left hand
@@ -398,8 +400,8 @@ pub(crate) fn typecheck_dzn(
 							msg: e.to_string(),
 						})?)),
 						Expression::Identifier(_) | Expression::Call(_) => {
-							const UNKNOWN_ENUM: Type = Type::Enum(OptType::NonOpt, None);
-							typecheck_dzn(file, name, &expr, &UNKNOWN_ENUM)
+							let unknown_enum: Type = Type::Enum(OptType::NonOpt, Arc::new(Enum::from_data("".into())));
+							typecheck_dzn(file, name, &expr, &unknown_enum)
 						},
 						_ => Err(TypeMismatch {
 							src: file.clone(),

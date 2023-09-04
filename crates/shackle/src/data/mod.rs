@@ -114,7 +114,7 @@ impl ParserVal {
 							// }
 							// .into())
 							} else {
-								Ok(Index::Enum(EnumRangeInclusive::from_internal_values(
+								Ok(Index::Enum(EnumRangeInclusive::from_enum_and_positions(
 									start.enum_type(),
 									start.int_val(),
 									start.int_val() + elements.len(),
