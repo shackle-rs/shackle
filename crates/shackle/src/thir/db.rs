@@ -110,7 +110,7 @@ fn model_io_interface(db: &dyn Thir) -> Arc<ModelIoInterface> {
 	let mut enums = FxHashMap::default();
 	for (_, e) in model.enumerations() {
 		let name = resolve_name(e.enum_type().name(db.upcast()));
-		if let Some(_) = e.definition() {
+		if e.definition().is_some() {
 			todo!();
 		} else {
 			enums.insert(name.clone(), Arc::new(Enum::from_data(name)));
@@ -147,9 +147,9 @@ fn model_io_interface(db: &dyn Thir) -> Arc<ModelIoInterface> {
 
 		// Determine whether declaration is part of output
 		let mut should_output = None;
-		if decl.annotations().has(&model, output_ann) {
+		if decl.annotations().has(model, output_ann) {
 			should_output = Some(true)
-		} else if decl.annotations().has(&model, no_output_ann) {
+		} else if decl.annotations().has(model, no_output_ann) {
 			should_output = Some(false)
 		}
 		if should_output == Some(true)

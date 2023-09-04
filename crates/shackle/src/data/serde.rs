@@ -42,7 +42,6 @@ impl<'de, 'a> Visitor<'de> for SerdeValueVisitor<'a> {
 			_ => Err(Error::invalid_type(Unexpected::Signed(v), &self)),
 		}
 	}
-
 	fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
 		match v.try_into() {
 			Ok(x) => self.visit_i64(x),
@@ -258,9 +257,18 @@ impl<'de> Visitor<'de> for SerdeEnumVisitor {
 	fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
 		Ok(ParserVal::Integer(v))
 	}
+	fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
+		match v.try_into() {
+			Ok(x) => self.visit_i64(x),
+			Err(e) => Err(Error::custom(e.to_string())),
+		}
+	}
 
 	fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
 		Ok(ParserVal::Enum(v, Vec::new()))
+	}
+	fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+		Ok(ParserVal::Enum(v.into(), Vec::new()))
 	}
 
 	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
@@ -372,6 +380,9 @@ impl<'de> Deserialize<'de> for EnumInner {
 			fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
 				Ok((v.into(), Vec::new().into_boxed_slice(), 1))
 			}
+			fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
+				Ok((v.into(), Vec::new().into_boxed_slice(), 1))
+			}
 
 			fn visit_map<A: serde::de::MapAccess<'de>>(
 				self,
@@ -400,7 +411,7 @@ impl<'de> Deserialize<'de> for EnumInner {
 								.members
 								.iter()
 								.map(|i| {
-									let Value::Set(Set::IntRangeList(s)) = i else {
+									let Value::Set(Set::Int(s)) = i else {
 										unreachable!()
 									};
 									if s.len() != 1 {
@@ -465,7 +476,6 @@ pub(crate) struct SerdeFileVisitor<'a> {
 	pub(crate) input_types: &'a FxHashMap<Arc<str>, Type>,
 	pub(crate) enum_types: &'a FxHashMap<Arc<str>, Arc<Enum>>,
 }
-
 impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
 	type Value = Vec<(&'a Arc<str>, &'a Type, ParserVal)>;
 
@@ -496,7 +506,6 @@ impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
 }
 
 struct SerdeSeqVisitor<X: Clone>(X);
-
 impl<'de, X: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SerdeSeqVisitor<X> {
 	type Value = Vec<X::Value>;
 
@@ -526,7 +535,6 @@ impl<'de, X: DeserializeSeed<'de> + Clone> Visitor<'de> for SerdeSeqVisitor<X> {
 
 #[derive(Clone)]
 struct SerdeMaybePairVisitor<X: Clone>(X);
-
 impl<
 		'de,
 		X: DeserializeSeed<'de> + Visitor<'de, Value = <X as DeserializeSeed<'de>>::Value> + Clone,
@@ -569,7 +577,7 @@ impl<
 		};
 
 		let mut i = 0;
-		while let Some(_) = seq.next_element::<IgnoredAny>()? {
+		while seq.next_element::<IgnoredAny>()?.is_some() {
 			i += 1;
 		}
 		if i > 0 {
@@ -673,7 +681,7 @@ impl Serialize for Value {
 			Value::Boolean(v) => serializer.serialize_bool(*v),
 			Value::Integer(v) => serializer.serialize_i64(*v),
 			Value::Float(v) => serializer.serialize_f64(*v),
-			Value::String(v) => serializer.serialize_str(&*v),
+			Value::String(v) => serializer.serialize_str(v),
 			Value::Enum(v) => v.serialize(serializer),
 			Value::Ann(_, _) => todo!(),
 			Value::Array(v) => v.serialize(serializer),
@@ -712,13 +720,13 @@ impl Serialize for Set {
 		let mut map = serializer.serialize_map(Some(1))?;
 		// Note: constructing the vector might not be very efficient. Might be worthwhile implementing Serialize on a "SetInner"/"RangeList" type
 		match self {
-			Set::EnumRangeList(v) => {
+			Set::Enum(v) => {
 				map.serialize_entry("set", &v.iter().map(|v| (v.start(), v.end())).collect_vec())?
 			}
-			Set::FloatRangeList(v) => {
+			Set::Float(v) => {
 				map.serialize_entry("set", &v.iter().map(|v| (v.start(), v.end())).collect_vec())?
 			}
-			Set::IntRangeList(v) => {
+			Set::Int(v) => {
 				map.serialize_entry("set", &v.iter().map(|v| (v.start(), v.end())).collect_vec())?
 			}
 		}
@@ -732,6 +740,46 @@ impl Serialize for EnumValue {
 		if !self.args().is_empty() {
 			map.serialize_entry("a", &self.args())?
 		}
+		map.end()
+	}
+}
+impl Serialize for Index {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		match self {
+			Index::Integer(r) => Set::Int(vec![r.clone()]).serialize(serializer),
+			Index::Enum(_) => todo!(),
+		}
+	}
+}
+impl Serialize for Enum {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		struct Ctor<'a> {
+			c: &'a str,
+			a: &'a [Index],
+		}
+		impl<'a> Serialize for Ctor<'a> {
+			fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+				let mut map =
+					serializer.serialize_map(Some(if self.a.is_empty() { 1 } else { 2 }))?;
+				map.serialize_entry("c", self.c)?;
+				if !self.a.is_empty() {
+					map.serialize_entry("a", self.a)?;
+				}
+				map.end()
+			}
+		}
+
+		let mut map = serializer.serialize_map(Some(1))?;
+		map.serialize_key(&**self.name())?;
+		let lock = self.lock();
+		let v: Vec<Ctor> = lock
+			.iter()
+			.map(|ctor| Ctor {
+				c: &ctor.0,
+				a: &ctor.1,
+			})
+			.collect();
+		map.serialize_value(&v)?;
 		map.end()
 	}
 }
@@ -752,7 +800,7 @@ impl<'a> ArraySliceSerializer<'a> {
 }
 impl<'a> Serialize for ArraySliceSerializer<'a> {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		debug_assert!(self.indices.len() > 0);
+		debug_assert!(!self.indices.is_empty());
 		let idx = &self.indices[0];
 		debug_assert_eq!(self.step * idx.len(), self.members.len());
 		let mut seq = serializer.serialize_seq(Some(idx.len()))?;
@@ -788,9 +836,9 @@ mod tests {
 	use serde::Deserializer;
 
 	use super::SerdeFileVisitor;
-	use crate::{diagnostics::ShackleError, file::SourceFile, OptType, Type};
+	use crate::{diagnostics::ShackleError, file::SourceFile, Enum, OptType, Type};
 
-	fn check_serialization(input: &str, ty: &Type, expected: Expect) {
+	fn check_serialization(input: &str, ty: &Type, expected: &Expect) {
 		let input_types = FxHashMap::from_iter([("x".into(), ty.clone())].into_iter());
 		let enum_types = FxHashMap::default();
 		let src = SourceFile::from(Arc::new(format!("{{ \"x\": {input} }}")));
@@ -824,68 +872,112 @@ mod tests {
 			.map_err(|err| ShackleError::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);
-		let val = assignments[0]
+		let val2 = assignments[0]
 			.clone()
 			.2
 			.clone()
 			.resolve_value(ty)
 			.expect("unexpected resolve error");
-		assert_eq!(s, val.to_string());
+		assert_eq!(&val.to_string(), &val2.to_string());
+		assert_eq!(val, val2);
+	}
+
+	fn check_enum_serialization<'a, V: IntoIterator<Item = &'a str>>(
+		ty_input: &'a str,
+		vals: V,
+		expected: &[Expect],
+	) {
+		let a = Arc::new(Enum::from_data("A".into()));
+		let input_types = FxHashMap::default();
+		let enum_types = FxHashMap::from_iter([("A".into(), a.clone())].into_iter());
+
+		let src = SourceFile::from(Arc::new(format!("{{ \"A\": {ty_input} }}")));
+		let assignments = serde_json::Deserializer::from_str(src.contents())
+			.deserialize_map(SerdeFileVisitor {
+				input_types: &input_types,
+				enum_types: &enum_types,
+			})
+			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.expect("unexpected syntax error");
+		assert!(assignments.is_empty());
+		expected[0].assert_eq(&a.to_string());
+
+		let b = Arc::new(Enum::from_data("A".into()));
+		let src = SourceFile::from(Arc::new(
+			serde_json::to_string(&*a).expect("unexpected serialization error"),
+		));
+		let enum_types = FxHashMap::from_iter([("A".into(), b.clone())].into_iter());
+		let assignments = serde_json::Deserializer::from_str(src.contents())
+			.deserialize_map(SerdeFileVisitor {
+				input_types: &input_types,
+				enum_types: &enum_types,
+			})
+			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.expect("unexpected syntax error");
+		assert!(assignments.is_empty());
+		assert_eq!(a, b);
+
+		let ty = Type::Enum(OptType::NonOpt, a.clone());
+		let mut i = 1;
+		for v in vals {
+			check_serialization(v, &ty, &expected[i]);
+			i += 1;
+		}
 	}
 
 	#[test]
 	fn test_parse_absent() {
-		check_serialization("null", &Type::Integer(OptType::Opt), expect!("<>"));
+		check_serialization("null", &Type::Integer(OptType::Opt), &expect!("<>"));
 	}
 
 	#[test]
 	fn test_parse_boolean() {
-		check_serialization("true", &Type::Boolean(OptType::NonOpt), expect!("true"));
-		check_serialization("false", &Type::Boolean(OptType::NonOpt), expect!("false"));
+		check_serialization("true", &Type::Boolean(OptType::NonOpt), &expect!("true"));
+		check_serialization("false", &Type::Boolean(OptType::NonOpt), &expect!("false"));
 	}
 
 	#[test]
 	fn test_parse_integer() {
-		check_serialization("0", &Type::Integer(OptType::NonOpt), expect!("0"));
-		check_serialization("1", &Type::Integer(OptType::NonOpt), expect!("1"));
-		check_serialization("99", &Type::Integer(OptType::NonOpt), expect!("99"));
-		check_serialization("-1", &Type::Integer(OptType::NonOpt), expect!("-1"));
+		check_serialization("0", &Type::Integer(OptType::NonOpt), &expect!("0"));
+		check_serialization("1", &Type::Integer(OptType::NonOpt), &expect!("1"));
+		check_serialization("99", &Type::Integer(OptType::NonOpt), &expect!("99"));
+		check_serialization("-1", &Type::Integer(OptType::NonOpt), &expect!("-1"));
 	}
 
 	#[test]
 	fn test_parse_float() {
-		check_serialization("0.1", &Type::Float(OptType::NonOpt), expect!("0.1"));
-		check_serialization("3.65", &Type::Float(OptType::NonOpt), expect!("3.65"));
-		check_serialization("-3.65", &Type::Float(OptType::NonOpt), expect!("-3.65"));
+		check_serialization("0.1", &Type::Float(OptType::NonOpt), &expect!("0.1"));
+		check_serialization("3.65", &Type::Float(OptType::NonOpt), &expect!("3.65"));
+		check_serialization("-3.65", &Type::Float(OptType::NonOpt), &expect!("-3.65"));
 		check_serialization(
 			"4.5e10",
 			&Type::Float(OptType::NonOpt),
-			expect!("45000000000"),
+			&expect!("45000000000"),
 		);
 		check_serialization(
 			"5E-10",
 			&Type::Float(OptType::NonOpt),
-			expect!("0.0000000005"),
+			&expect!("0.0000000005"),
 		);
 	}
 
 	#[test]
 	fn test_parse_string() {
-		check_serialization("\"\"", &Type::String(OptType::NonOpt), expect!([r#""""#]));
+		check_serialization("\"\"", &Type::String(OptType::NonOpt), &expect!([r#""""#]));
 		check_serialization(
 			"\"test\"",
 			&Type::String(OptType::NonOpt),
-			expect!([r#""test""#]),
+			&expect!([r#""test""#]),
 		);
 		check_serialization(
 			"\"    Another test    \"",
 			&Type::String(OptType::NonOpt),
-			expect!([r#""    Another test    ""#]),
+			&expect!([r#""    Another test    ""#]),
 		);
 		check_serialization(
 			"\"\\t\\n\"",
 			&Type::String(OptType::NonOpt),
-			expect!([r#""\t\n""#]),
+			&expect!([r#""\t\n""#]),
 		);
 	}
 
@@ -894,7 +986,7 @@ mod tests {
 		check_serialization(
 			"[1]",
 			&Type::Tuple(OptType::NonOpt, Arc::new([Type::Integer(OptType::NonOpt)])),
-			expect!("(1,)"),
+			&expect!("(1,)"),
 		);
 		check_serialization(
 			"[1, \"foo\"]",
@@ -905,7 +997,7 @@ mod tests {
 					Type::String(OptType::NonOpt),
 				]),
 			),
-			expect!([r#"(1, "foo")"#]),
+			&expect!([r#"(1, "foo")"#]),
 		);
 		check_serialization(
 			"[2.5, true, null]",
@@ -917,7 +1009,7 @@ mod tests {
 					Type::Boolean(OptType::Opt),
 				]),
 			),
-			expect!("(2.5, true, <>)"),
+			&expect!("(2.5, true, <>)"),
 		);
 		check_serialization(
 			"[[1, 2], { \"set\": [3, 4]}, 5]",
@@ -933,7 +1025,7 @@ mod tests {
 					Type::Integer(OptType::NonOpt),
 				]),
 			),
-			expect!("([1, 2], 3..3 ∪ 4..4, 5)"),
+			&expect!("([1, 2], 3..3 ∪ 4..4, 5)"),
 		);
 		check_serialization(
 			"[1, [2, [4, 5]], 6]",
@@ -957,7 +1049,7 @@ mod tests {
 					Type::Integer(OptType::NonOpt),
 				]),
 			),
-			expect!("(1, (2, (4, 5)), 6)"),
+			&expect!("(1, (2, (4, 5)), 6)"),
 		);
 	}
 
@@ -966,27 +1058,27 @@ mod tests {
 		check_serialization(
 			"{\"set\": []}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
-			expect!("∅"),
+			&expect!("∅"),
 		);
 		check_serialization(
 			"{\"set\": [1.0]}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
-			expect!("1..1"),
+			&expect!("1..1"),
 		);
 		check_serialization(
 			"{\"set\": [1, 1.0]}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
-			expect!("1..1"),
+			&expect!("1..1"),
 		);
 		check_serialization(
 			"{\"set\": [[1, 3]]}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
-			expect!("1..3"),
+			&expect!("1..3"),
 		);
 		check_serialization(
 			"{\"set\": [[1.0, 3.3]]}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
-			expect!("1..3.3"),
+			&expect!("1..3.3"),
 		);
 	}
 
@@ -1008,7 +1100,7 @@ mod tests {
 					(b.clone(), Type::Float(OptType::NonOpt)),
 				]),
 			),
-			expect!("(a: 1, b: 2.5)"),
+			&expect!("(a: 1, b: 2.5)"),
 		);
 		check_serialization(
 			"{\"b\": [3.5, true], \"a\": {\"set\": [1, 2] }, \"c\": [null]}",
@@ -1039,7 +1131,7 @@ mod tests {
 					),
 				]),
 			),
-			expect!("(a: 1..1 ∪ 2..2, b: (3.5, true), c: [<>])"),
+			&expect!("(a: 1..1 ∪ 2..2, b: (3.5, true), c: [<>])"),
 		);
 
 		check_serialization(
@@ -1069,7 +1161,7 @@ mod tests {
 					),
 				]),
 			),
-			expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
+			&expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
 		);
 	}
 
@@ -1082,7 +1174,7 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Integer(OptType::NonOpt).into(),
 			},
-			expect!("[]"),
+			&expect!("[]"),
 		);
 		check_serialization(
 			"[1.0]",
@@ -1091,7 +1183,7 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Float(OptType::NonOpt).into(),
 			},
-			expect!("[1]"),
+			&expect!("[1]"),
 		);
 		check_serialization(
 			"[1, 2.2]",
@@ -1100,7 +1192,7 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Float(OptType::NonOpt).into(),
 			},
-			expect!("[1, 2.2]"),
+			&expect!("[1, 2.2]"),
 		);
 		check_serialization(
 			"[null, null, 1, null]",
@@ -1109,7 +1201,76 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Integer(OptType::Opt).into(),
 			},
-			expect!("[<>, <>, 1, <>]"),
+			&expect!("[<>, <>, 1, <>]"),
+		);
+	}
+
+	#[test]
+	fn test_enum_list_definition() {
+		check_enum_serialization("[]", [], &[expect!("A = {}")]);
+		check_enum_serialization(
+			r#"[{"c": "Albus"}]"#,
+			["\"Albus\"", r#"{"e": "Albus"}"#],
+			&[expect!("A = {Albus}"), expect!("Albus"), expect!("Albus")],
+		);
+		check_enum_serialization(
+			r#"[{"c": "Albus"}, {"c": "Audrey"}]"#,
+			["\"Audrey\"", "\"Albus\""],
+			&[
+				expect!("A = {Albus} ++ {Audrey}"),
+				expect!("Audrey"),
+				expect!("Albus"),
+			],
+		);
+	}
+
+	#[test]
+	fn test_parse_enum_generators() {
+		check_enum_serialization(
+			r#"[{"c": "X", "a": [{"set": [[1,6]] }]}]"#,
+			[
+				r#"{"e": "X", "a": [1]}"#,
+				r#"{"e": "X", "a": [6]}"#,
+				r#"{"e": "X", "a": [3]}"#,
+			],
+			&[
+				expect!("A = X(1..6)"),
+				expect!("X(1)"),
+				expect!("X(6)"),
+				expect!("X(3)"),
+			],
+		);
+
+		check_enum_serialization(
+			r#"[{"c": "Y", "a": [{"set": [[-3,2]]}]}]"#,
+			[
+				r#"{"e": "Y", "a": [-3]}"#,
+				r#"{"e": "Y", "a": [0]}"#,
+				r#"{"e": "Y", "a": [2]}"#,
+			],
+			&[
+				expect!("A = Y(-3..2)"),
+				expect!("Y(-3)"),
+				expect!("Y(0)"),
+				expect!("Y(2)"),
+			],
+		);
+
+		check_enum_serialization(
+			r#"[{"c": "X", "a": [{"set": [[-1,1]]}]}, {"c": "Y"}, {"c": "Z", "a": [{"set": [[1,3]]}]}]"#,
+			[
+				r#"{"e": "X", "a": [0]}"#,
+				r#"{"e": "Y"}"#,
+				r#"{"e": "Z", "a": [1]}"#,
+				r#"{"e": "Z", "a": [3]}"#,
+			],
+			&[
+				expect!("A = X(-1..1) ++ {Y} ++ Z(1..3)"),
+				expect!("X(0)"),
+				expect!("Y"),
+				expect!("Z(1)"),
+				expect!("Z(3)"),
+			],
 		);
 	}
 }

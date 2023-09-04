@@ -198,7 +198,7 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 			}
 		}
 		Value::Set(s) => match s {
-			Set::EnumRangeList(s) => write!(
+			Set::Enum(s) => write!(
 				out,
 				"{}",
 				s.iter().format_with(" union ", |elt, f| f(&format_args!(
@@ -207,7 +207,7 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 					elt.end().int_val()
 				)))
 			)?,
-			Set::IntRangeList(s) => write!(
+			Set::Int(s) => write!(
 				out,
 				"{}",
 				s.iter().format_with(" union ", |elt, f| f(&format_args!(
@@ -216,7 +216,7 @@ fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(
 					elt.end()
 				)))
 			)?,
-			Set::FloatRangeList(s) => write!(
+			Set::Float(s) => write!(
 				out,
 				"{}",
 				s.iter().format_with(" union ", |elt, f| f(&format_args!(

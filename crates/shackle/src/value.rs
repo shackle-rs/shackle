@@ -313,6 +313,15 @@ impl Index {
 	}
 }
 
+impl Display for Index {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Index::Integer(v) => write!(f, "{}..{}", v.start(), v.end()),
+			Index::Enum(v) => write!(f, "{v}"),
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 enum IndexIter {
 	Integer(RangeInclusive<i64>),
@@ -371,6 +380,11 @@ impl Enum {
 		self.lock().iter().map(|(_, _, len)| len).sum()
 	}
 
+	/// Returns the name of the enumerated type
+	pub fn name(&self) -> &Arc<str> {
+		&self.name
+	}
+
 	/// Returns whether the enumerated type has any members
 	///
 	/// ## Warning
@@ -379,10 +393,21 @@ impl Enum {
 		self.lock().iter().next().is_none()
 	}
 
-	fn lock(&self) -> CtorLock {
+	pub(crate) fn lock(&self) -> CtorLock {
 		CtorLock {
 			lock: self.state.lock().unwrap(),
 		}
+	}
+
+	pub(crate) fn get(&self, name: &str) -> Option<(usize, Box<[Index]>)> {
+		let mut offset = 1;
+		for ctor in self.lock().iter() {
+			if &*ctor.0 == name {
+				return Some((offset, ctor.1.clone()));
+			}
+			offset += ctor.2;
+		}
+		None
 	}
 }
 
@@ -393,8 +418,28 @@ impl PartialEq for Enum {
 	}
 }
 impl Eq for Enum {}
+impl Display for Enum {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		if self.is_empty() {
+			write!(f, "{} = {{}}", self.name)
+		} else {
+			write!(
+				f,
+				"{} = {}",
+				self.name,
+				self.lock().iter().format_with(" ++ ", |ctor, f| {
+					if ctor.1.is_empty() {
+						f(&format_args!("{{{}}}", ctor.0)) // TODO: repeated constructors with no arguments should be grouped together
+					} else {
+						f(&format_args!("{}({})", ctor.0, ctor.1.iter().format(",")))
+					}
+				})
+			)
+		}
+	}
+}
 
-struct CtorLock<'a> {
+pub(crate) struct CtorLock<'a> {
 	lock: MutexGuard<'a, EnumInner>,
 }
 
@@ -403,7 +448,7 @@ impl<'a> CtorLock<'a> {
 	///
 	/// ## Warning
 	/// This function will panic if Enum type is uninitialized
-	fn iter(&self) -> impl Iterator<Item = &Constructor> {
+	pub fn iter(&self) -> impl Iterator<Item = &Constructor> {
 		let EnumInner::Constructors(ref cons) = self.lock.deref() else {
 			panic!("cannot access constructors of an uninitialized enumerated type")
 		};
@@ -441,7 +486,7 @@ impl EnumValue {
 		let (name, idx, _) = lock
 			.iter()
 			.skip_while(|(_, _, len)| {
-				if val > *len {
+				if val >= *len {
 					val -= len;
 					true
 				} else {
@@ -456,7 +501,9 @@ impl EnumValue {
 			let offset = val % idx[i].len();
 			args[i] = match &idx[i] {
 				Index::Integer(ii) => Value::Integer(ii.start() + offset as i64),
-				Index::Enum(ii) => EnumValue::from_enum_and_pos(ii.enum_type(), offset + 1).into(),
+				Index::Enum(ii) => {
+					EnumValue::from_enum_and_pos(ii.enum_type(), ii.start + offset).into()
+				}
 			};
 			val /= idx[i].len();
 		}
@@ -551,7 +598,7 @@ impl EnumRangeInclusive {
 	}
 
 	/// Returns `true` if item is contained in the range.
-	pub fn contains(&self, item: EnumValue) -> bool {
+	pub fn contains(&self, item: &EnumValue) -> bool {
 		if item.ty != self.ty {
 			false
 		} else {
@@ -699,16 +746,16 @@ impl FusedIterator for EnumRangeInclusive {}
 #[derive(Debug, Clone, PartialEq)]
 pub enum Set {
 	/// Set that spans all members of an enumerated type
-	EnumRangeList(Vec<EnumRangeInclusive>),
+	Enum(Vec<EnumRangeInclusive>),
 	/// Sorted list of non-overlapping inclusive floating point ranges
-	FloatRangeList(Vec<RangeInclusive<f64>>),
+	Float(Vec<RangeInclusive<f64>>),
 	/// Sorted list of non-overlapping inclusive integer ranges
-	IntRangeList(Vec<RangeInclusive<i64>>),
+	Int(Vec<RangeInclusive<i64>>),
 }
 
 impl From<EnumRangeInclusive> for Set {
 	fn from(value: EnumRangeInclusive) -> Self {
-		Self::EnumRangeList(vec![value])
+		Self::Enum(vec![value])
 	}
 }
 impl FromIterator<EnumRangeInclusive> for Set {
@@ -721,24 +768,24 @@ impl FromIterator<EnumRangeInclusive> for Set {
 		if let Some(r) = iter.next() {
 			let mut ranges = vec![r];
 			// Combine overlapping ranges
-			while let Some(r) = iter.next() {
+			for r in iter {
 				let last = ranges.last().unwrap();
 				if last.end >= r.start {
-					(*ranges.last_mut().unwrap()).end = r.end
+					ranges.last_mut().unwrap().end = r.end
 				} else {
 					ranges.push(r)
 				}
 			}
-			Self::EnumRangeList(ranges)
+			Self::Enum(ranges)
 		} else {
-			Self::EnumRangeList(Vec::new())
+			Self::Enum(Vec::new())
 		}
 	}
 }
 
 impl From<RangeInclusive<f64>> for Set {
 	fn from(value: RangeInclusive<f64>) -> Self {
-		Self::FloatRangeList(vec![value])
+		Self::Float(vec![value])
 	}
 }
 impl FromIterator<RangeInclusive<f64>> for Set {
@@ -751,7 +798,7 @@ impl FromIterator<RangeInclusive<f64>> for Set {
 		if let Some(r) = iter.next() {
 			let mut ranges = vec![r];
 			// Combine overlapping ranges
-			while let Some(r) = iter.next() {
+			for r in iter {
 				let last = ranges.last().unwrap();
 				if last.end() >= r.start() {
 					*ranges.last_mut().unwrap() = *last.start()..=*r.end()
@@ -759,16 +806,16 @@ impl FromIterator<RangeInclusive<f64>> for Set {
 					ranges.push(r)
 				}
 			}
-			Self::FloatRangeList(ranges)
+			Self::Float(ranges)
 		} else {
-			Self::FloatRangeList(Vec::new())
+			Self::Float(Vec::new())
 		}
 	}
 }
 
 impl From<RangeInclusive<i64>> for Set {
 	fn from(value: RangeInclusive<i64>) -> Self {
-		Self::IntRangeList(vec![value])
+		Self::Int(vec![value])
 	}
 }
 impl FromIterator<RangeInclusive<i64>> for Set {
@@ -781,7 +828,7 @@ impl FromIterator<RangeInclusive<i64>> for Set {
 		if let Some(r) = iter.next() {
 			let mut ranges = vec![r];
 			// Combine overlapping ranges
-			while let Some(r) = iter.next() {
+			for r in iter {
 				let last = ranges.last().unwrap();
 				if last.end() >= r.start() {
 					*ranges.last_mut().unwrap() = *last.start()..=*r.end()
@@ -789,9 +836,9 @@ impl FromIterator<RangeInclusive<i64>> for Set {
 					ranges.push(r)
 				}
 			}
-			Self::IntRangeList(ranges)
+			Self::Int(ranges)
 		} else {
-			Self::IntRangeList(Vec::new())
+			Self::Int(Vec::new())
 		}
 	}
 }
@@ -799,13 +846,13 @@ impl FromIterator<RangeInclusive<i64>> for Set {
 impl Display for Set {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Set::EnumRangeList(ranges) => {
+			Set::Enum(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}
 				write!(f, "{}", ranges.iter().format(" ∪ "))
 			}
-			Set::IntRangeList(ranges) => {
+			Set::Int(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}
@@ -819,7 +866,7 @@ impl Display for Set {
 					)))
 				)
 			}
-			Set::FloatRangeList(ranges) => {
+			Set::Float(ranges) => {
 				if ranges.is_empty() || (ranges.len() == 1 && ranges.last().unwrap().is_empty()) {
 					return write!(f, "∅");
 				}

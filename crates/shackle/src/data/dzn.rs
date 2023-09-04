@@ -195,7 +195,7 @@ pub(crate) fn collect_dzn_value(
 		Expression::Infinity(v) => {
 			if matches!(ty, Type::Integer(_) | Type::Float(_)) {
 				debug_assert_eq!(v.cst_text().trim_start(), v.cst_text());
-				Ok(ParserVal::Infinity(if v.cst_text().starts_with("-") {
+				Ok(ParserVal::Infinity(if v.cst_text().starts_with('-') {
 					Polarity::Neg
 				} else {
 					Polarity::Pos
@@ -263,7 +263,7 @@ pub(crate) fn collect_dzn_value(
 									Expression::TupleLiteral(v) => {
 										let mut i = 0;
 										for (idx, idx_ty) in v.members().zip_eq(dim.iter()) {
-											elems.push(collect_dzn_value(file,  &idx, &idx_ty)?);
+											elems.push(collect_dzn_value(file, &idx, idx_ty)?);
 											i += 1;
 										}
 										if i != dim.len() {
@@ -326,7 +326,7 @@ pub(crate) fn collect_dzn_value(
 				for row in al.rows() {
 					let members = row
 						.members()
-						.map(|m| collect_dzn_value(file, &m, &element))
+						.map(|m| collect_dzn_value(file, &m, element))
 						.collect::<Result<Vec<_>, _>>()?;
 					let index = row.index();
 					if let Some(ref i) = index {
@@ -415,7 +415,7 @@ pub(crate) fn collect_dzn_value(
 						},
 						_ => Err(TypeMismatch {
 							src: file.clone(),
-							msg: format!("Constructor arguments for an enumerated type must be integers or values of enumerated types"),
+							msg: "Constructor arguments for an enumerated type must be integers or values of enumerated types".to_string(),
 							span: expr.cst_node().as_ref().byte_range().into(),
 						}.into())
 					}
@@ -486,7 +486,7 @@ pub(crate) fn collect_dzn_value(
 				}
 				"++" => Err(TypeMismatch {
 					src: file.clone(),
-					msg: format!("concatenation is not allow as part of a DZN value"),
+					msg: "concatenation is not allow as part of a DZN value".to_string(),
 					span: op.cst_node().as_ref().byte_range().into(),
 				}
 				.into()),
@@ -535,7 +535,7 @@ impl EnumInner {
 							Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt)));
 						let val = collect_dzn_value(file, &arg, &int_set_ty)?;
 						let val = val.resolve_value(&int_set_ty).unwrap();
-						let Value::Set(Set::IntRangeList(x)) = val else {
+						let Value::Set(Set::Int(x)) = val else {
 							unreachable!()
 						};
 						if x.len() != 1 {
@@ -560,7 +560,7 @@ impl EnumInner {
 						}
 						stack.push(cur);
 					}
-					x @ _ => {
+					x => {
 						return Err(SyntaxError {
 							src: file.clone(),
 							msg: format!(
@@ -597,9 +597,9 @@ mod tests {
 	use expect_test::{expect, Expect};
 
 	use super::parse_dzn;
-	use crate::{data::dzn::collect_dzn_value, file::SourceFile, OptType, Type};
+	use crate::{data::dzn::collect_dzn_value, file::SourceFile, Enum, OptType, Type};
 
-	fn check_serialization(input: &str, ty: &Type, expected: Expect) {
+	fn check_serialization(input: &str, ty: &Type, expected: &Expect) {
 		let src = SourceFile::from(Arc::new(format!("x = {input};")));
 		let assignments = parse_dzn(&src).expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);
@@ -607,85 +607,120 @@ mod tests {
 		let val = collect_dzn_value(&src, &assignments[0].definition(), ty)
 			.expect("unexpected type error");
 		let val = val.resolve_value(ty).expect("unexpected resolve error");
-		let s = val.to_string();
-		expected.assert_eq(&s);
+		expected.assert_eq(&val.to_string());
 
 		// Serialize as DZN and then deserialize again ensuring it is equal
 		let src = SourceFile::from(Arc::new(format!("x = {val};")));
 		let assignments = parse_dzn(&src).expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);
-		let val = collect_dzn_value(&src, &assignments[0].definition(), ty)
+		let val2 = collect_dzn_value(&src, &assignments[0].definition(), ty)
 			.expect("unexpected type error");
-		let val = val.resolve_value(ty).expect("unexpected resolve error");
-		assert_eq!(s, val.to_string());
+		let val2 = val2.resolve_value(ty).expect("unexpected resolve error");
+		assert_eq!(&val.to_string(), &val2.to_string());
+		assert_eq!(val, val2);
 	}
 
-	// fn check_enum_serialization(input: &str, )
+	fn check_enum_serialization<'a, V: IntoIterator<Item = &'a str>>(
+		ty_input: &'a str,
+		vals: V,
+		expected: &[Expect],
+	) {
+		let a = Arc::new(Enum::from_data("A".into()));
+		let src = SourceFile::from(Arc::new(format!("A = {ty_input};")));
+		let assignments = parse_dzn(&src).expect("unexpected syntax error");
+		assert_eq!(assignments.len(), 1);
+		{
+			let mut inner = a.state.lock().unwrap();
+			inner
+				.collect_definition(&src, &assignments[0].definition())
+				.expect("unexpected error defining enum");
+		}
+		expected[0].assert_eq(&a.to_string());
+
+		let b = Arc::new(Enum::from_data("A".into()));
+		let src = SourceFile::from(Arc::new(format!("{a};")));
+		let assignments = parse_dzn(&src).expect("unexpected syntax error");
+		assert_eq!(assignments.len(), 1);
+		{
+			let mut inner = b.state.lock().unwrap();
+			inner
+				.collect_definition(&src, &assignments[0].definition())
+				.expect("unexpected error defining enum");
+		}
+		assert_eq!(a, b);
+
+		let ty = Type::Enum(OptType::NonOpt, a.clone());
+		let mut i = 1;
+		for v in vals {
+			check_serialization(v, &ty, &expected[i]);
+			i += 1;
+		}
+	}
 
 	#[test]
 	fn test_parse_absent() {
-		check_serialization("<>", &Type::Integer(OptType::Opt), expect!("<>"));
+		check_serialization("<>", &Type::Integer(OptType::Opt), &expect!("<>"));
 	}
 
 	#[test]
 	fn test_parse_inf() {
-		check_serialization("infinity", &Type::Integer(OptType::NonOpt), expect!("∞"));
-		check_serialization("-infinity", &Type::Float(OptType::NonOpt), expect!("-∞"));
-		check_serialization("∞", &Type::Float(OptType::NonOpt), expect!("∞"));
-		check_serialization("-∞", &Type::Integer(OptType::NonOpt), expect!("-∞"));
+		check_serialization("infinity", &Type::Integer(OptType::NonOpt), &expect!("∞"));
+		check_serialization("-infinity", &Type::Float(OptType::NonOpt), &expect!("-∞"));
+		check_serialization("∞", &Type::Float(OptType::NonOpt), &expect!("∞"));
+		check_serialization("-∞", &Type::Integer(OptType::NonOpt), &expect!("-∞"));
 	}
 
 	#[test]
 	fn test_parse_boolean() {
-		check_serialization("true", &Type::Boolean(OptType::NonOpt), expect!("true"));
-		check_serialization("false", &Type::Boolean(OptType::NonOpt), expect!("false"));
+		check_serialization("true", &Type::Boolean(OptType::NonOpt), &expect!("true"));
+		check_serialization("false", &Type::Boolean(OptType::NonOpt), &expect!("false"));
 	}
 
 	#[test]
 	fn test_parse_integer() {
-		check_serialization("0", &Type::Integer(OptType::NonOpt), expect!("0"));
-		check_serialization("1", &Type::Integer(OptType::NonOpt), expect!("1"));
-		check_serialization("99", &Type::Integer(OptType::NonOpt), expect!("99"));
-		check_serialization("-1", &Type::Integer(OptType::NonOpt), expect!("-1"));
-		check_serialization("0b1010", &Type::Integer(OptType::NonOpt), expect!("10"));
-		check_serialization("0o70", &Type::Integer(OptType::NonOpt), expect!("56"));
-		check_serialization("0xFF", &Type::Integer(OptType::NonOpt), expect!("255"));
+		check_serialization("0", &Type::Integer(OptType::NonOpt), &expect!("0"));
+		check_serialization("1", &Type::Integer(OptType::NonOpt), &expect!("1"));
+		check_serialization("99", &Type::Integer(OptType::NonOpt), &expect!("99"));
+		check_serialization("-1", &Type::Integer(OptType::NonOpt), &expect!("-1"));
+		check_serialization("0b1010", &Type::Integer(OptType::NonOpt), &expect!("10"));
+		check_serialization("0o70", &Type::Integer(OptType::NonOpt), &expect!("56"));
+		check_serialization("0xFF", &Type::Integer(OptType::NonOpt), &expect!("255"));
 	}
 
 	#[test]
 	fn test_parse_float() {
-		check_serialization("0.1", &Type::Float(OptType::NonOpt), expect!("0.1"));
-		check_serialization("3.65", &Type::Float(OptType::NonOpt), expect!("3.65"));
-		check_serialization("-3.65", &Type::Float(OptType::NonOpt), expect!("-3.65"));
+		check_serialization("0.1", &Type::Float(OptType::NonOpt), &expect!("0.1"));
+		check_serialization("3.65", &Type::Float(OptType::NonOpt), &expect!("3.65"));
+		check_serialization("-3.65", &Type::Float(OptType::NonOpt), &expect!("-3.65"));
 		check_serialization(
 			"4.5e10",
 			&Type::Float(OptType::NonOpt),
-			expect!("45000000000"),
+			&expect!("45000000000"),
 		);
 		check_serialization(
 			"5E-10",
 			&Type::Float(OptType::NonOpt),
-			expect!("0.0000000005"),
+			&expect!("0.0000000005"),
 		);
 	}
 
 	#[test]
 	fn test_parse_string() {
-		check_serialization("\"\"", &Type::String(OptType::NonOpt), expect!([r#""""#]));
+		check_serialization("\"\"", &Type::String(OptType::NonOpt), &expect!([r#""""#]));
 		check_serialization(
 			"\"test\"",
 			&Type::String(OptType::NonOpt),
-			expect!([r#""test""#]),
+			&expect!([r#""test""#]),
 		);
 		check_serialization(
 			"\"    Another test    \"",
 			&Type::String(OptType::NonOpt),
-			expect!([r#""    Another test    ""#]),
+			&expect!([r#""    Another test    ""#]),
 		);
 		check_serialization(
 			"\"\\t\\n\"",
 			&Type::String(OptType::NonOpt),
-			expect!([r#""\t\n""#]),
+			&expect!([r#""\t\n""#]),
 		);
 	}
 
@@ -694,7 +729,7 @@ mod tests {
 		check_serialization(
 			"(1,)",
 			&Type::Tuple(OptType::NonOpt, Arc::new([Type::Integer(OptType::NonOpt)])),
-			expect!("(1,)"),
+			&expect!("(1,)"),
 		);
 		check_serialization(
 			"(1, \"foo\")",
@@ -705,7 +740,7 @@ mod tests {
 					Type::String(OptType::NonOpt),
 				]),
 			),
-			expect!([r#"(1, "foo")"#]),
+			&expect!([r#"(1, "foo")"#]),
 		);
 		check_serialization(
 			"(2.5, true, <>,)",
@@ -717,7 +752,7 @@ mod tests {
 					Type::Boolean(OptType::Opt),
 				]),
 			),
-			expect!("(2.5, true, <>)"),
+			&expect!("(2.5, true, <>)"),
 		);
 		check_serialization(
 			"([1, 2], {3, 4}, 5)",
@@ -733,7 +768,7 @@ mod tests {
 					Type::Integer(OptType::NonOpt),
 				]),
 			),
-			expect!("([1, 2], 3..3 ∪ 4..4, 5)"),
+			&expect!("([1, 2], 3..3 ∪ 4..4, 5)"),
 		);
 		check_serialization(
 			"(1, (2, (4, 5)), 6)",
@@ -757,7 +792,7 @@ mod tests {
 					Type::Integer(OptType::NonOpt),
 				]),
 			),
-			expect!("(1, (2, (4, 5)), 6)"),
+			&expect!("(1, (2, (4, 5)), 6)"),
 		);
 	}
 
@@ -766,32 +801,32 @@ mod tests {
 		check_serialization(
 			"{ }",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
-			expect!("∅"),
+			&expect!("∅"),
 		);
 		check_serialization(
 			"∅",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
-			expect!("∅"),
+			&expect!("∅"),
 		);
 		check_serialization(
 			"{1.0}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
-			expect!("1..1"),
+			&expect!("1..1"),
 		);
 		check_serialization(
 			"{1,2.2}",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
-			expect!("1..1 ∪ 2.2..2.2"),
+			&expect!("1..1 ∪ 2.2..2.2"),
 		);
 		check_serialization(
 			"1..3",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt))),
-			expect!("1..3"),
+			&expect!("1..3"),
 		);
 		check_serialization(
 			"1.0..3.3",
 			&Type::Set(OptType::NonOpt, Box::new(Type::Float(OptType::NonOpt))),
-			expect!("1..3.3"),
+			&expect!("1..3.3"),
 		);
 	}
 
@@ -813,7 +848,7 @@ mod tests {
 					(b.clone(), Type::Float(OptType::NonOpt)),
 				]),
 			),
-			expect!("(a: 1, b: 2.5)"),
+			&expect!("(a: 1, b: 2.5)"),
 		);
 		check_serialization(
 			"( b: (3.5, true), a: {1, 2}, c: [<>])",
@@ -844,7 +879,7 @@ mod tests {
 					),
 				]),
 			),
-			expect!("(a: 1..1 ∪ 2..2, b: (3.5, true), c: [<>])"),
+			&expect!("(a: 1..1 ∪ 2..2, b: (3.5, true), c: [<>])"),
 		);
 
 		check_serialization(
@@ -874,7 +909,7 @@ mod tests {
 					),
 				]),
 			),
-			expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
+			&expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
 		);
 	}
 
@@ -887,7 +922,7 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Integer(OptType::NonOpt).into(),
 			},
-			expect!("[]"),
+			&expect!("[]"),
 		);
 		check_serialization(
 			"[1.0]",
@@ -896,7 +931,7 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Float(OptType::NonOpt).into(),
 			},
-			expect!("[1]"),
+			&expect!("[1]"),
 		);
 		check_serialization(
 			"[1, 2.2]",
@@ -905,7 +940,7 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Float(OptType::NonOpt).into(),
 			},
-			expect!("[1, 2.2]"),
+			&expect!("[1, 2.2]"),
 		);
 		check_serialization(
 			"[<>, <>, 1, <>,]",
@@ -914,80 +949,63 @@ mod tests {
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Type::Integer(OptType::Opt).into(),
 			},
-			expect!("[<>, <>, 1, <>]"),
+			&expect!("[<>, <>, 1, <>]"),
 		);
 	}
 
-	// #[test]
-	// fn test_parse_ident() {
-	// 	let (_, out) = identifier(span("Albus")).unwrap();
-	// 	assert_eq!(out, "Albus");
-	// 	assert!(identifier(span("1")).is_err());
-	// }
+	#[test]
+	fn test_enum_list_definition() {
+		check_enum_serialization("{}", [], &[expect!("A = {}")]);
+		check_enum_serialization(
+			"{Albus}",
+			["Albus"],
+			&[expect!("A = {Albus}"), expect!("Albus")],
+		);
+		check_enum_serialization(
+			"{Albus, Audrey}",
+			["Audrey", "Albus"],
+			&[
+				expect!("A = {Albus} ++ {Audrey}"),
+				expect!("Audrey"),
+				expect!("Albus"),
+			],
+		);
+	}
 
-	// #[test]
-	// fn test_parse_enum_val() {
-	// 	// Simple identifier representing an enum value
-	// 	let (_, out) = value_or_enum(span("A")).unwrap();
-	// 	assert_eq!(out, ParsedVal::EnumVal(EnumVal::Ident("A".to_owned())));
+	#[test]
+	fn test_parse_enum_generators() {
+		check_enum_serialization(
+			"X(1..6)",
+			["X(1)", "X(6)", "X(3)"],
+			&[
+				expect!("A = X(1..6)"),
+				expect!("X(1)"),
+				expect!("X(6)"),
+				expect!("X(3)"),
+			],
+		);
 
-	// 	// Enum value with integer argument
-	// 	let (_, out) = value_or_enum(span("A(1)")).unwrap();
-	// 	assert_eq!(
-	// 		out,
-	// 		ParsedVal::EnumVal(EnumVal::IntArg(("A".to_owned(), 1)))
-	// 	);
+		check_enum_serialization(
+			"Y(-3..2)",
+			["Y(-3)", "Y(0)", "Y(2)"],
+			&[
+				expect!("A = Y(-3..2)"),
+				expect!("Y(-3)"),
+				expect!("Y(0)"),
+				expect!("Y(2)"),
+			],
+		);
 
-	// 	// Enum value with another enum value as argument
-	// 	let (_, out) = value_or_enum(span("A(B)")).unwrap();
-	// 	assert_eq!(
-	// 		out,
-	// 		ParsedVal::EnumVal(EnumVal::EnumArg((
-	// 			"A".to_owned(),
-	// 			Box::new(EnumVal::Ident("B".to_owned()))
-	// 		)))
-	// 	);
-
-	// 	// Complex chain of enum constructors to make value
-	// 	let (_, out) = value_or_enum(span("A(B(C(D(-60))))")).unwrap();
-	// 	assert_eq!(out.to_string(), "A(B(C(D(-60))))");
-	// }
-
-	// #[test]
-	// fn test_parse_enum_members() {
-	// 	let (_, out) = value_or_enum(span("{ A }")).unwrap();
-	// 	assert_eq!(
-	// 		out,
-	// 		ParsedVal::EnumSetList(vec![EnumVal::Ident("A".to_owned())])
-	// 	);
-
-	// 	let (_, out) = value_or_enum(span("{ A, B, C }")).unwrap();
-	// 	assert_eq!(
-	// 		out,
-	// 		ParsedVal::EnumSetList(vec![
-	// 			EnumVal::Ident("A".to_owned()),
-	// 			EnumVal::Ident("B".to_owned()),
-	// 			EnumVal::Ident("C".to_owned())
-	// 		])
-	// 	);
-
-	// 	let (_, out) = value_or_enum(span("X(1..6)")).unwrap();
-	// 	assert_eq!(
-	// 		out,
-	// 		ParsedVal::EnumCtor(EnumCtor::SetArg((
-	// 			"X".to_owned(),
-	// 			Set::IntRangeList(vec![1..=6])
-	// 		)))
-	// 	);
-
-	// 	let (_, out) = value_or_enum(span("{ A } ++ Z(-1..1) ++ X(Y)")).unwrap();
-	// 	assert_eq!(
-	// 		out,
-	// 		ParsedVal::EnumCtor(EnumCtor::Concat(vec![
-	// 			EnumCtor::ValueList(vec!["A".to_owned()]),
-	// 			EnumCtor::SetArg(("Z".to_owned(), Set::IntRangeList(vec![-1..=1]))),
-	// 			EnumCtor::NameArg(("X".to_owned(), "Y".to_owned()))
-	// 		]))
-	// 	)
-	// }
+		check_enum_serialization(
+			"X(-1..1) ++ {Y} ++ Z(1..3)",
+			["X(0)", "Y", "Z(1)", "Z(3)"],
+			&[
+				expect!("A = X(-1..1) ++ {Y} ++ Z(1..3)"),
+				expect!("X(0)"),
+				expect!("Y"),
+				expect!("Z(1)"),
+				expect!("Z(3)"),
+			],
+		);
+	}
 }

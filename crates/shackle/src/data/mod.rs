@@ -9,7 +9,7 @@ use itertools::Itertools;
 
 use crate::{
 	diagnostics::ShackleError,
-	value::{Array, EnumRangeInclusive, Index, Polarity, Record, Set, Value},
+	value::{Array, EnumRangeInclusive, EnumValue, Index, Polarity, Record, Set, Value},
 	OptType, Type,
 };
 
@@ -62,7 +62,43 @@ impl ParserVal {
 			ParserVal::Integer(v) => Ok(Value::Integer(v)),
 			ParserVal::Float(v) => Ok(Value::Float(v)),
 			ParserVal::String(v) => Ok(Value::String(v.into())),
-			ParserVal::Enum(_, _) => todo!(),
+			ParserVal::Enum(name, args) => {
+				let Type::Enum(_, e) = ty else { unreachable!() };
+				let Some((offset, doms)) = e.get(&name) else {
+					todo!("add location to throw error for undefined constructor")
+				};
+				if args.len() != doms.len() {
+					todo!("add error for non-matching constructor call");
+				}
+				let mut offset = offset;
+				for (arg, dom) in args.into_iter().zip_eq(doms.iter()) {
+					match dom {
+						Index::Integer(r) => {
+							let Value::Integer(arg) =
+								arg.resolve_value(&Type::Integer(OptType::NonOpt))?
+							else {
+								unreachable!()
+							};
+							if !r.contains(&arg) {
+								todo!("invalid argument - out of domain")
+							}
+							offset += (arg - r.start()) as usize;
+						}
+						Index::Enum(r) => {
+							let Value::Enum(arg) =
+								arg.resolve_value(&Type::Enum(OptType::NonOpt, r.enum_type()))?
+							else {
+								unreachable!()
+							};
+							if !r.contains(&arg) {
+								todo!("invalid argument - out of domain")
+							}
+							offset += r.start().int_val() - arg.int_val();
+						}
+					}
+				}
+				Ok(Value::Enum(EnumValue::from_enum_and_pos(e.clone(), offset)))
+			}
 			ParserVal::Ann(_, _) => todo!(),
 			ParserVal::SimpleArray(ranges, elements) => {
 				let Type::Array {
@@ -192,8 +228,7 @@ impl ParserVal {
 								},
 								Err(e) => Err(e),
 							})
-							.collect::<Result<Vec<EnumRangeInclusive>, _>>()?
-							.into_iter(),
+							.collect::<Result<Vec<EnumRangeInclusive>, _>>()?,
 					)
 					.into(),
 					_ => unreachable!("invalid set type"),
