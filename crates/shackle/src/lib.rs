@@ -20,9 +20,8 @@ mod legacy;
 mod value;
 
 use data::{
-	dzn::{parse_dzn, typecheck_dzn},
+	dzn::{collect_dzn_value, parse_dzn},
 	serde::SerdeFileVisitor,
-	ParserVal,
 };
 use db::{CompilerDatabase, Inputs, InternedString, Interner};
 use diagnostics::{FileError, IdentifierAlreadyDefined, ShackleError};
@@ -33,6 +32,7 @@ use serde::Deserializer;
 use syntax::ast::{AstNode, Identifier};
 use thir::db::ModelIoInterface;
 use ty::{Ty, TyData};
+use value::EnumInner;
 
 use std::{
 	ffi::OsStr,
@@ -100,7 +100,7 @@ impl Model {
 		let ModelIoInterface {
 			input,
 			output,
-			enums: _,
+			enums,
 		} = (*self.db.model_io_interface()).clone();
 
 		Ok(Program {
@@ -109,6 +109,7 @@ impl Model {
 			code: prg_model,
 			input_types: input,
 			input_data: FxHashMap::default(),
+			enum_types: enums,
 			output_types: output,
 			enable_stats: false,
 			time_limit: None,
@@ -143,6 +144,7 @@ pub struct Program {
 	// Model instance data
 	input_types: FxHashMap<Arc<str>, Type>,
 	input_data: FxHashMap<Arc<str>, Value>,
+	enum_types: FxHashMap<Arc<str>, Arc<Enum>>,
 
 	output_types: FxHashMap<Arc<str>, Type>,
 	// run() options
@@ -434,7 +436,7 @@ impl Program {
 						let ident = asg.assignee().cast::<Identifier>().unwrap();
 						if let Some((k, ty)) = self.input_types.get_key_value::<str>(&ident.name())
 						{
-							let val = typecheck_dzn(&src, &ident.name(), &asg.definition(), ty)?;
+							let val = collect_dzn_value(&src, &asg.definition(), ty)?;
 							data.push((k, ty, val));
 							// Identifier already seen
 							if names.contains(k) || self.input_data.contains_key(k) {
@@ -446,6 +448,20 @@ impl Program {
 								.into());
 							}
 							names.insert(k);
+						} else if let Some((k, e)) =
+							self.enum_types.get_key_value::<str>(&ident.name())
+						{
+							let mut inner = e.state.lock().unwrap();
+							if matches!(*inner, EnumInner::NoDefinition) {
+								(*inner).collect_definition(&src, &asg.definition())?
+							} else {
+								return Err(IdentifierAlreadyDefined {
+									src,
+									span: asg.cst_node().as_ref().byte_range().into(),
+									identifier: k.to_string(),
+								}
+								.into());
+							}
 						} else {
 							// Unknown identifier
 							return Err(UndefinedIdentifier {
@@ -459,7 +475,10 @@ impl Program {
 				}
 				Some("json") => {
 					let assignments = serde_json::Deserializer::from_str(src.contents())
-						.deserialize_map(SerdeFileVisitor(&self.input_types))
+						.deserialize_map(SerdeFileVisitor {
+							input_types: &self.input_types,
+							enum_types: &self.enum_types,
+						})
 						.map_err(|err| ShackleError::from_serde_json(err, &src))?;
 
 					data.reserve(assignments.len());
@@ -496,12 +515,8 @@ impl Program {
 
 		// Itererate between initializing the enumerated types and creating the final values for the interpreter
 		for (key, ty, val) in data {
-			if let ParserVal::EnumCtor(_) = val {
-				todo!()
-			} else {
-				let _none = self.input_data.insert(key.clone(), val.resolve_value(ty)?);
-				debug_assert_eq!(_none, None);
-			}
+			let _none = self.input_data.insert(key.clone(), val.resolve_value(ty)?);
+			debug_assert_eq!(_none, None);
 		}
 
 		Ok(())

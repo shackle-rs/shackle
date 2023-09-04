@@ -4,9 +4,9 @@ use std::{
 	cmp::max,
 	fmt::{self, Display},
 	iter::FusedIterator,
-	ops::RangeInclusive,
+	ops::{Deref, RangeInclusive},
 	rc::Rc,
-	sync::Arc,
+	sync::{Arc, Mutex, MutexGuard},
 };
 
 use itertools::Itertools;
@@ -349,17 +349,17 @@ impl Iterator for IndexIter {
 }
 
 /// Member declaration of an enumerated type
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Enum {
 	name: Arc<str>,
-	state: EnumInner,
+	pub(crate) state: Mutex<EnumInner>,
 }
 
 impl Enum {
 	pub(crate) fn from_data(name: Arc<str>) -> Self {
 		Self {
 			name,
-			state: EnumInner::NoDefinition,
+			state: EnumInner::NoDefinition.into(),
 		}
 	}
 
@@ -368,7 +368,7 @@ impl Enum {
 	/// ## Warning
 	/// This function will panic if Enum type is uninitialized
 	pub fn len(&self) -> usize {
-		self.constructors().iter().map(|(_, _, len)| len).sum()
+		self.lock().iter().map(|(_, _, len)| len).sum()
 	}
 
 	/// Returns whether the enumerated type has any members
@@ -376,29 +376,49 @@ impl Enum {
 	/// ## Warning
 	/// This function will panic if Enum type is uninitialized
 	pub fn is_empty(&self) -> bool {
-		self.constructors().is_empty()
+		self.lock().iter().next().is_none()
 	}
 
-	/// Returns the list of
+	fn lock(&self) -> CtorLock {
+		CtorLock {
+			lock: self.state.lock().unwrap(),
+		}
+	}
+}
+
+impl PartialEq for Enum {
+	fn eq(&self, other: &Self) -> bool {
+		self.name == other.name
+			&& self.state.lock().unwrap().deref() == other.state.lock().unwrap().deref()
+	}
+}
+impl Eq for Enum {}
+
+struct CtorLock<'a> {
+	lock: MutexGuard<'a, EnumInner>,
+}
+
+impl<'a> CtorLock<'a> {
+	/// Returns the list of the constructors of the enumerated type
 	///
 	/// ## Warning
 	/// This function will panic if Enum type is uninitialized
-	fn constructors(&self) -> &[Constructor] {
-		let EnumInner::Constructors(ref cons) = self.state else {
+	fn iter(&self) -> impl Iterator<Item = &Constructor> {
+		let EnumInner::Constructors(ref cons) = self.lock.deref() else {
 			panic!("cannot access constructors of an uninitialized enumerated type")
 		};
-		&(*cons)
+		cons.iter().filter(|ctor| ctor.2 > 0)
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum EnumInner {
+pub(crate) enum EnumInner {
 	NoDefinition,
 	AwaitData(Box<[Arc<str>]>),
 	Constructors(Box<[Constructor]>),
 }
 
-type Constructor = (Arc<str>, Box<[Index]>, usize);
+pub(crate) type Constructor = (Arc<str>, Box<[Index]>, usize);
 
 /// Member declaration of an enumerated type
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -415,11 +435,10 @@ impl EnumValue {
 
 	/// Internal function used to find the constructor definition in the
 	/// enumerated type and the arguments to the constructor to create the value
-	pub(crate) fn constructor_and_args(&self) -> (&Arc<str>, Vec<Value>) {
+	pub(crate) fn constructor_and_args(&self) -> (Arc<str>, Vec<Value>) {
 		let mut val = self.pos - 1;
-		let (name, idx, _) = self
-			.ty
-			.constructors()
+		let lock = self.ty.lock();
+		let (name, idx, _) = lock
 			.iter()
 			.skip_while(|(_, _, len)| {
 				if val > *len {
@@ -441,7 +460,7 @@ impl EnumValue {
 			};
 			val /= idx[i].len();
 		}
-		(&name, args)
+		(name.clone(), args)
 	}
 
 	/// Returns the enumerated type to which this enumerated value belongs
@@ -452,9 +471,8 @@ impl EnumValue {
 	/// Returns the name used to construct the value of the enumerated type
 	///
 	/// The method returns [`None`] if the enumerated type is anonymous
-	pub fn constructor(&self) -> &Arc<str> {
-		let (c, _) = self.constructor_and_args();
-		c
+	pub fn constructor(&self) -> Arc<str> {
+		self.constructor_and_args().0
 	}
 
 	/// Returns the argument used to construct the value of the enumerated type

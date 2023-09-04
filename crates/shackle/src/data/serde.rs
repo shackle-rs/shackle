@@ -5,13 +5,13 @@ use rustc_hash::FxHashMap;
 use serde::{
 	de::{DeserializeSeed, Error, IgnoredAny, Unexpected, Visitor},
 	ser::{SerializeMap, SerializeSeq},
-	Serialize,
+	Deserialize, Serialize,
 };
 
 use super::ParserVal;
 use crate::{
-	value::{Array, EnumValue, Index, Record, Set},
-	OptType, Type, Value,
+	value::{Array, Constructor, EnumInner, EnumValue, Index, Record, Set},
+	Enum, OptType, Type, Value,
 };
 
 #[derive(Clone)]
@@ -358,7 +358,113 @@ impl<'de, 'a> Visitor<'de> for SerdeArrayVisitor<'a> {
 	}
 }
 
-pub(crate) struct SerdeFileVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
+impl<'de> Deserialize<'de> for EnumInner {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		// Internal Visitor that deserialises a single constructor object
+		struct EnumCtor;
+		impl<'de> Visitor<'de> for EnumCtor {
+			type Value = Constructor;
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(formatter, "enumerated type constructor")
+			}
+
+			fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
+				Ok((v.into(), Vec::new().into_boxed_slice(), 1))
+			}
+
+			fn visit_map<A: serde::de::MapAccess<'de>>(
+				self,
+				mut map: A,
+			) -> Result<Self::Value, A::Error> {
+				const FIELDS: &[&str] = &["k", "a"];
+				let mut name: Option<&str> = None;
+				let mut args = Vec::new();
+				while let Some(k) = map.next_key()? {
+					match k {
+						"c" => name = Some(map.next_value()?),
+						"a" => {
+							let intset_list = Type::Array {
+								opt: OptType::NonOpt,
+								dim: Box::new([Type::Integer(OptType::NonOpt)]),
+								element: Box::new(Type::Set(
+									OptType::NonOpt,
+									Box::new(Type::Integer(OptType::NonOpt)),
+								)),
+							};
+							let val = map.next_value_seed(SerdeValueVisitor(&intset_list))?;
+							let Value::Array(x) = val.resolve_value(&intset_list).unwrap() else {
+								unreachable!()
+							};
+							args = x
+								.members
+								.iter()
+								.map(|i| {
+									let Value::Set(Set::IntRangeList(s)) = i else {
+										unreachable!()
+									};
+									if s.len() != 1 {
+										todo!("handle non-continuous (and empty) integer sets for constructors")
+									}
+									Index::Integer(s[0].clone())
+								})
+								.collect();
+						}
+						_ => return Err(Error::unknown_field(k, FIELDS)),
+					}
+				}
+				let count = if args.is_empty() {
+					1
+				} else {
+					args.iter().map(|x| x.len()).sum()
+				};
+				if let Some(name) = name {
+					Ok((name.into(), args.into_boxed_slice(), count))
+				} else {
+					Err(Error::missing_field("c"))
+				}
+			}
+		}
+		impl<'de> DeserializeSeed<'de> for EnumCtor {
+			type Value = <EnumCtor as Visitor<'de>>::Value;
+
+			fn deserialize<D: serde::Deserializer<'de>>(
+				self,
+				deserializer: D,
+			) -> Result<Self::Value, D::Error> {
+				deserializer.deserialize_any(self)
+			}
+		}
+		// Helper visitor that visits a list of enum constructors
+		struct EnumDefVisitor;
+		impl<'de> Visitor<'de> for EnumDefVisitor {
+			type Value = Box<[Constructor]>;
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(formatter, "list of constructors of an enumerated type")
+			}
+
+			fn visit_seq<A: serde::de::SeqAccess<'de>>(
+				self,
+				mut seq: A,
+			) -> Result<Self::Value, A::Error> {
+				let mut v = Vec::new();
+				while let Some(el) = seq.next_element_seed(EnumCtor)? {
+					v.push(el);
+				}
+				Ok(v.into_boxed_slice())
+			}
+		}
+
+		let ctors = deserializer.deserialize_seq(EnumDefVisitor)?;
+		Ok(EnumInner::Constructors(ctors))
+	}
+}
+
+pub(crate) struct SerdeFileVisitor<'a> {
+	pub(crate) input_types: &'a FxHashMap<Arc<str>, Type>,
+	pub(crate) enum_types: &'a FxHashMap<Arc<str>, Arc<Enum>>,
+}
 
 impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
 	type Value = Vec<(&'a Arc<str>, &'a Type, ParserVal)>;
@@ -368,13 +474,19 @@ impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
 	}
 
 	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-		let type_map = self.0;
 		let mut assignments = Vec::with_capacity(map.size_hint().unwrap_or(0));
 
 		while let Some(k) = map.next_key::<&str>()? {
-			if let Some((ident, ty)) = type_map.get_key_value(k) {
+			if let Some((ident, ty)) = self.input_types.get_key_value(k) {
 				let value = map.next_value_seed(SerdeValueVisitor(ty))?;
 				assignments.push((ident, ty, value));
+			} else if let Some(e) = self.enum_types.get(k) {
+				let mut inner = e.state.lock().unwrap();
+				if *inner == EnumInner::NoDefinition {
+					*inner = map.next_value::<EnumInner>()?;
+				} else {
+					todo!("create custom serde error that will be converted into ShackleError")
+				}
 			} else {
 				map.next_value::<IgnoredAny>()?; // Ignore unknown
 			}
@@ -616,7 +728,7 @@ impl Serialize for Set {
 impl Serialize for EnumValue {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		let mut map = serializer.serialize_map(Some(if self.args().is_empty() { 1 } else { 2 }))?;
-		map.serialize_entry("e", &**self.constructor())?;
+		map.serialize_entry("e", &*self.constructor())?;
 		if !self.args().is_empty() {
 			map.serialize_entry("a", &self.args())?
 		}
@@ -679,10 +791,14 @@ mod tests {
 	use crate::{diagnostics::ShackleError, file::SourceFile, OptType, Type};
 
 	fn check_serialization(input: &str, ty: &Type, expected: Expect) {
-		let type_map = FxHashMap::from_iter([("x".into(), ty.clone())].into_iter());
+		let input_types = FxHashMap::from_iter([("x".into(), ty.clone())].into_iter());
+		let enum_types = FxHashMap::default();
 		let src = SourceFile::from(Arc::new(format!("{{ \"x\": {input} }}")));
 		let assignments = serde_json::Deserializer::from_str(src.contents())
-			.deserialize_map(SerdeFileVisitor(&type_map))
+			.deserialize_map(SerdeFileVisitor {
+				input_types: &input_types,
+				enum_types: &enum_types,
+			})
 			.map_err(|err| ShackleError::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);
@@ -701,7 +817,10 @@ mod tests {
 			serde_json::to_string(&val).expect("unexpected serialization error")
 		)));
 		let assignments = serde_json::Deserializer::from_str(src.contents())
-			.deserialize_map(SerdeFileVisitor(&type_map))
+			.deserialize_map(SerdeFileVisitor {
+				input_types: &input_types,
+				enum_types: &enum_types,
+			})
 			.map_err(|err| ShackleError::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);

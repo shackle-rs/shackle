@@ -3,7 +3,7 @@
 pub(crate) mod dzn;
 pub(crate) mod serde;
 
-use std::{ops::RangeInclusive, sync::Arc};
+use std::sync::Arc;
 
 use itertools::Itertools;
 
@@ -48,19 +48,6 @@ pub(crate) enum ParserVal {
 	Tuple(Vec<ParserVal>),
 	/// A record of values
 	Record(Vec<(Arc<str>, ParserVal)>),
-	/// Constructor used to define an enumerated type, or create a value of an enumerated type.
-	EnumCtor(EnumCtor),
-}
-
-/// Constructor for an enumerated type
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum EnumCtor {
-	/// List of identifiers describing an enumerated type
-	ValueList(Vec<String>),
-	/// Constructor call with a set as an argument
-	SetArg((String, RangeInclusive<i64>)),
-	/// The concatenation of multiple other types of constructors
-	Concat(Vec<EnumCtor>),
 }
 
 impl ParserVal {
@@ -251,7 +238,6 @@ impl ParserVal {
 					.collect::<Result<Record, ShackleError>>()?;
 				Ok(Value::Record(rec))
 			}
-			ParserVal::EnumCtor(_) => unreachable!("not a value"),
 		}
 	}
 }
