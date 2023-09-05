@@ -18,8 +18,8 @@ use tempfile::Builder;
 use crate::{
 	data::serde::SerdeValueVisitor,
 	diagnostics::{FileError, InternalError, ShackleError},
-	value::{EnumInner, Polarity, Set, Value},
-	Enum, Message, Program, Status, Type,
+	value::{Array, EnumInner, EnumRangeInclusive, EnumValue, Index, Polarity, Set, Value},
+	Enum, Message, OptType, Program, Status, Type,
 };
 
 impl Program {
@@ -500,9 +500,11 @@ impl<'de, 'a> Visitor<'de> for SerdeOutputVisitor<'a> {
 		sol.reserve(type_map.len());
 		while let Some(k) = map.next_key()? {
 			if let Some(ty) = type_map.get(k) {
-				let v = map.next_value_seed(SerdeValueVisitor(ty))?;
-				match v.resolve_value(ty) {
+				let out_type = ty.type_erase();
+				let v = map.next_value_seed(SerdeValueVisitor(&out_type))?;
+				match v.resolve_value(&out_type) {
 					Ok(v) => {
+						let v = v.reverse_type_erase(ty);
 						sol.insert(k, v);
 					}
 					Err(e) => return Ok(Err(e)),
@@ -562,6 +564,137 @@ impl<'de, X: DeserializeSeed<'de> + Clone> Visitor<'de> for SerdeWrappedName<X> 
 		match ret {
 			None => Err(Error::missing_field(self.name)),
 			Some(x) => Ok(x),
+		}
+	}
+}
+
+impl Type {
+	fn type_erase(&self) -> Type {
+		let ty = match self {
+			Type::Boolean(_) => Type::Boolean(OptType::NonOpt),
+			Type::Integer(_) => Type::Integer(OptType::NonOpt),
+			Type::Float(_) => Type::Float(OptType::NonOpt),
+			Type::Enum(_, _) => Type::Integer(OptType::NonOpt),
+			Type::String(_) => Type::String(OptType::NonOpt),
+			Type::Annotation(_) => Type::Annotation(OptType::NonOpt),
+			Type::Array {
+				opt: _,
+				dim,
+				element,
+			} => Type::Array {
+				opt: OptType::NonOpt,
+				dim: dim.iter().map(|t| t.type_erase()).collect(),
+				element: element.type_erase().into(),
+			},
+			Type::Set(_, elt) => Type::Set(OptType::NonOpt, elt.type_erase().into()),
+			Type::Tuple(_, elts) => Type::Tuple(
+				OptType::NonOpt,
+				elts.iter().map(|t| t.type_erase()).collect(),
+			),
+			Type::Record(_, elts) => Type::Tuple(
+				OptType::NonOpt,
+				elts.iter().map(|(_, t)| t.type_erase()).collect(),
+			),
+		};
+		if self.is_opt() {
+			Type::Tuple(
+				OptType::NonOpt,
+				Arc::new([Type::Boolean(OptType::NonOpt), ty]),
+			)
+		} else {
+			ty
+		}
+	}
+}
+
+impl Value {
+	fn reverse_type_erase(self, ty: &Type) -> Value {
+		let mut v = self;
+		if ty.is_opt() {
+			let Value::Tuple(mut tup) = v else {
+				panic!("expected opt type tuple")
+			};
+			debug_assert_eq!(tup.len(), 2);
+			let Value::Boolean(occurs) = tup[0] else {
+				panic!("expected opt type tuple")
+			};
+			if !occurs {
+				return Value::Absent;
+			}
+			v = tup.pop().unwrap();
+		}
+		match ty {
+			Type::Enum(_, e) => {
+				let Value::Integer(pos) = v else {
+					panic!("expected integer value")
+				};
+				EnumValue::from_enum_and_pos(e.clone(), pos as usize).into()
+			}
+			Type::Array {
+				opt: _,
+				dim,
+				element,
+			} => {
+				let Value::Array(x) = v else {
+					panic!("expected array");
+				};
+				let indices = x
+					.indices
+					.iter()
+					.cloned()
+					.zip(dim.iter())
+					.map(|(idx, t)| {
+						if let Type::Enum(_, e) = t {
+							let Index::Integer(r) = idx else {
+								panic!("expected integer index")
+							};
+							Index::Enum(EnumRangeInclusive::from_enum_and_positions(
+								e.clone(),
+								*r.start() as usize,
+								*r.end() as usize,
+							))
+						} else {
+							idx
+						}
+					})
+					.collect();
+				let members = if matches!(
+					**element,
+					Type::Enum(_, _) | Type::Tuple(_, _) | Type::Record(_, _) | Type::Set(_, _)
+				) {
+					x.members
+						.iter()
+						.cloned()
+						.map(|elt| elt.reverse_type_erase(element))
+						.collect()
+				} else {
+					x.members
+				};
+				Array { indices, members }.into()
+			}
+			Type::Tuple(_, tys) => {
+				let Value::Tuple(tup) = v else {
+					panic!("expected tuple")
+				};
+				Value::Tuple(
+					tup.into_iter()
+						.zip_eq(tys.iter())
+						.map(|(elt, t)| elt.reverse_type_erase(t))
+						.collect(),
+				)
+			}
+			Type::Record(_, tys) => {
+				let Value::Tuple(tup) = v else {
+					panic!("expected tuple")
+				};
+				Value::Record(
+					tup.into_iter()
+						.zip_eq(tys.iter())
+						.map(|(elt, (n, t))| (n.clone(), elt.reverse_type_erase(t)))
+						.collect(),
+				)
+			}
+			_ => v,
 		}
 	}
 }

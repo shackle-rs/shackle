@@ -112,7 +112,7 @@ impl Model {
 					None
 				}
 			})
-			.collect_vec();
+			.collect();
 
 		Ok(Program {
 			db: self.db,
@@ -350,7 +350,7 @@ impl Display for Type {
 			Type::Boolean(opt) => write!(f, "{}bool", opt_str(opt)),
 			Type::Integer(opt) => write!(f, "{}int", opt_str(opt)),
 			Type::Float(opt) => write!(f, "{}float", opt_str(opt)),
-			Type::Enum(_opt, _e) => todo!(),
+			Type::Enum(opt, e) => write!(f, "{}{}", opt_str(opt), e.name()),
 			Type::String(opt) => write!(f, "{}string", opt_str(opt)),
 			Type::Annotation(opt) => write!(f, "{}ann", opt_str(opt)),
 			Type::Array { opt, dim, element } => {
