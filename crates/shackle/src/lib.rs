@@ -38,6 +38,7 @@ use std::{
 	ffi::OsStr,
 	fmt::Display,
 	io::Write,
+	ops::Deref,
 	path::{Path, PathBuf},
 	sync::Arc,
 	time::Duration,
@@ -102,6 +103,16 @@ impl Model {
 			output,
 			enums,
 		} = (*self.db.model_io_interface()).clone();
+		let legacy_enums = enums
+			.iter()
+			.filter_map(|(_, e)| {
+				if e.state.lock().unwrap().deref() == &EnumInner::NoDefinition {
+					Some(e.clone())
+				} else {
+					None
+				}
+			})
+			.collect_vec();
 
 		Ok(Program {
 			db: self.db,
@@ -110,6 +121,7 @@ impl Model {
 			input_types: input,
 			input_data: FxHashMap::default(),
 			enum_types: enums,
+			legacy_enums,
 			output_types: output,
 			enable_stats: false,
 			time_limit: None,
@@ -145,6 +157,9 @@ pub struct Program {
 	input_types: FxHashMap<Arc<str>, Type>,
 	input_data: FxHashMap<Arc<str>, Value>,
 	enum_types: FxHashMap<Arc<str>, Arc<Enum>>,
+
+	// LEGACY: names of the enumerated types that have to be given to the legacy interpreter
+	legacy_enums: Vec<Arc<Enum>>,
 
 	output_types: FxHashMap<Arc<str>, Type>,
 	// run() options

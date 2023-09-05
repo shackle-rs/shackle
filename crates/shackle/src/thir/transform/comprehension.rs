@@ -500,12 +500,12 @@ mod test {
 	fn test_desugar_array_comprehension_complex() {
 		check(
 			desugar_comprehension,
-			r#"
+			r"
 				var set of int: x;
 				predicate foo(var int: x);
 				test bar(int: x);
 				any: y = [x_i | x_i in x where foo(x_i), x_j in x where bar(x_j) /\ bar(x_i)];
-			"#,
+			",
 			expect!([r#"
     var set of int: x;
     function var bool: foo(var int: x);
@@ -545,11 +545,11 @@ mod test {
 				var set of int: S;
 				constraint exists (i in S) (foo(i));
 			"#,
-			expect!([r#"
+			expect!([r"
     function var bool: foo(var int: x);
     var set of int: S;
     constraint exists(['/\'('in'(i, S), foo(i)) | i in ub(S)]);
-"#]),
+"]),
 		)
 	}
 

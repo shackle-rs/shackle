@@ -839,7 +839,7 @@ mod tests {
 	use crate::{diagnostics::ShackleError, file::SourceFile, Enum, OptType, Type};
 
 	fn check_serialization(input: &str, ty: &Type, expected: &Expect) {
-		let input_types = FxHashMap::from_iter([("x".into(), ty.clone())].into_iter());
+		let input_types = FxHashMap::from_iter([("x".into(), ty.clone())]);
 		let enum_types = FxHashMap::default();
 		let src = SourceFile::from(Arc::new(format!("{{ \"x\": {input} }}")));
 		let assignments = serde_json::Deserializer::from_str(src.contents())
@@ -889,7 +889,7 @@ mod tests {
 	) {
 		let a = Arc::new(Enum::from_data("A".into()));
 		let input_types = FxHashMap::default();
-		let enum_types = FxHashMap::from_iter([("A".into(), a.clone())].into_iter());
+		let enum_types = FxHashMap::from_iter([("A".into(), a.clone())]);
 
 		let src = SourceFile::from(Arc::new(format!("{{ \"A\": {ty_input} }}")));
 		let assignments = serde_json::Deserializer::from_str(src.contents())
@@ -906,7 +906,7 @@ mod tests {
 		let src = SourceFile::from(Arc::new(
 			serde_json::to_string(&*a).expect("unexpected serialization error"),
 		));
-		let enum_types = FxHashMap::from_iter([("A".into(), b.clone())].into_iter());
+		let enum_types = FxHashMap::from_iter([("A".into(), b.clone())]);
 		let assignments = serde_json::Deserializer::from_str(src.contents())
 			.deserialize_map(SerdeFileVisitor {
 				input_types: &input_types,

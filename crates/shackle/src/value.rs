@@ -372,6 +372,13 @@ impl Enum {
 		}
 	}
 
+	pub(crate) fn model_defined<I: IntoIterator<Item = Arc<str>>>(name: Arc<str>, deps: I) -> Self {
+		Self {
+			name,
+			state: EnumInner::AwaitData(Vec::from_iter(deps).into_boxed_slice()).into(),
+		}
+	}
+
 	/// Returns the number of members of the enumerated type
 	///
 	/// ## Warning

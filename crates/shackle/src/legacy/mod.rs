@@ -1,5 +1,7 @@
 use std::{
+	fmt::Display,
 	io::{BufRead, BufReader, Write},
+	ops::Deref,
 	path::PathBuf,
 	process::{Command, Stdio},
 	sync::Arc,
@@ -16,8 +18,8 @@ use tempfile::Builder;
 use crate::{
 	data::serde::SerdeValueVisitor,
 	diagnostics::{FileError, InternalError, ShackleError},
-	value::{Polarity, Set, Value},
-	Message, Program, Status, Type,
+	value::{EnumInner, Polarity, Set, Value},
+	Enum, Message, Program, Status, Type,
 };
 
 impl Program {
@@ -27,6 +29,7 @@ impl Program {
 		&mut self,
 		msg_callback: F,
 	) -> Result<Status, ShackleError> {
+		// Create new (temporary) file used as input for the interpreter
 		let tmpfile = Builder::new().suffix(".shackle.mzn").tempfile();
 		let mut tmpfile = match tmpfile {
 			Err(err) => {
@@ -47,22 +50,29 @@ impl Program {
 				other: vec![],
 			})
 		};
+		// Write content to file
 		let file_mut = tmpfile.as_file_mut();
+		// Write model to file
 		self.write(file_mut).map_err(write_err)?;
+		// Write data to file
 		for (name, ty) in &self.input_types {
 			let val = if let Some(val) = self.input_data.get(name) {
 				val
 			} else if ty.is_opt() {
 				&Value::Absent
 			} else {
-				// TODO: throw error that non-opt thing is not defined
-				todo!()
+				todo!("add new error type - {} is not initialized", name)
 			};
-			write!(file_mut, "{name} = ").map_err(write_err)?;
-			write_legacy_value(file_mut, ty, val).map_err(write_err)?;
-			writeln!(file_mut, ";").map_err(write_err)?;
+			writeln!(file_mut, "{name} = {};", LegacyValue { val, ty }).map_err(write_err)?;
+		}
+		for e in &self.legacy_enums {
+			if e.state.lock().unwrap().deref() == &EnumInner::NoDefinition {
+				todo!("add new error type - {} is not initialized", e.name())
+			}
+			writeln!(file_mut, "{};", LegacyEnum(e)).map_err(write_err)?;
 		}
 
+		// Construct command for the MiniZinc intepreter
 		let mut cmd = Command::new("minizinc");
 		cmd.stdin(Stdio::null())
 			.stdout(Stdio::piped())
@@ -133,158 +143,207 @@ impl Program {
 	}
 }
 
-fn write_legacy_value<W: Write>(out: &mut W, ty: &Type, val: &Value) -> Result<(), std::io::Error> {
-	let is_opt = ty.is_opt();
-	if is_opt {
-		if val == &Value::Absent {
-			write!(out, "(false, ")?;
-			write_legacy_dummy_value(out, ty)?;
-			return write!(out, ")");
-		} else {
-			write!(out, "(true, ")?;
-		}
-	}
-	match val {
-		Value::Absent => unreachable!("found absent assigned to non-opt parameter"),
-		Value::Infinity(p) => write!(
-			out,
-			"{}infinity",
-			if p == &Polarity::Neg { "-" } else { "" }
-		)?,
-		Value::Boolean(v) => write!(out, "{}", v)?,
-		Value::Integer(v) => write!(out, "{}", v)?,
-		Value::Float(v) => write!(out, "{}", v)?,
-		Value::String(v) => write!(out, "\"{}\"", v)?,
-		Value::Enum(v) => write!(out, "{}", v.int_val())?,
-		Value::Ann(name, args) => {
-			if args.is_empty() {
-				write!(out, "{name}")?
-			} else {
-				write!(out, "{name}({})", args.iter().format(", "))?
-			}
-		}
-		Value::Array(v) => {
-			let Type::Array {
-				opt: _,
-				dim: _,
-				element,
-			} = ty
-			else {
-				unreachable!()
-			};
-			let extract_idx = |x: &Value| match x {
-				Value::Integer(i) => *i,
-				Value::Enum(v) => v.int_val() as i64,
-				_ => unreachable!(),
-			};
-			if v.is_empty() {
-				write!(out, "[]")?;
-			} else if v.dim() == 1 {
-				let first = extract_idx(&(v.iter().next().unwrap().0[0]));
-				write!(out, "[{first}:")?;
-				for el in v.iter().map(|(_, el)| el) {
-					write_legacy_value(out, element, el)?;
-					write!(out, ", ")?;
-				}
-				write!(out, "]")?;
-			} else {
-				write!(out, "[")?;
-				for (ii, el) in v.iter() {
-					write!(out, "({}): ", ii.iter().map(extract_idx).format(","))?;
-					write_legacy_value(out, element, el)?;
-					write!(out, ", ")?;
-				}
-				write!(out, "]")?;
-			}
-		}
-		Value::Set(s) => match s {
-			Set::Enum(s) => write!(
-				out,
-				"{}",
-				s.iter().format_with(" union ", |elt, f| f(&format_args!(
-					"{}..{}",
-					elt.start().int_val(),
-					elt.end().int_val()
-				)))
-			)?,
-			Set::Int(s) => write!(
-				out,
-				"{}",
-				s.iter().format_with(" union ", |elt, f| f(&format_args!(
-					"{}..{}",
-					elt.start(),
-					elt.end()
-				)))
-			)?,
-			Set::Float(s) => write!(
-				out,
-				"{}",
-				s.iter().format_with(" union ", |elt, f| f(&format_args!(
-					"{}..{}",
-					elt.start(),
-					elt.end()
-				)))
-			)?,
-		},
-		Value::Tuple(v) => {
-			let Type::Tuple(_, tys) = ty else {
-				unreachable!()
-			};
-			write!(out, "(")?;
-			for (ty, val) in tys.iter().zip_eq(v) {
-				write_legacy_value(out, ty, val)?;
-				write!(out, ",")?
-			}
-			write!(out, ")")?;
-		}
-		Value::Record(v) => {
-			let Type::Record(_, tys) = ty else {
-				unreachable!()
-			};
-			write!(out, "(")?;
-			for (ty, val) in tys.iter().map(|(_, t)| t).zip_eq(v.iter().map(|(_, v)| v)) {
-				write_legacy_value(out, ty, val)?;
-				write!(out, ",")?
-			}
-			write!(out, ")")?;
-		}
-	}
-	if is_opt {
-		write!(out, ")")?
-	}
-	Ok(())
+struct LegacyValue<'a> {
+	val: &'a Value,
+	ty: &'a Type,
 }
 
-fn write_legacy_dummy_value<W: Write>(out: &mut W, ty: &Type) -> Result<(), std::io::Error> {
-	match ty {
-		Type::Boolean(_) => write!(out, "true"),
-		Type::Integer(_) => write!(out, "0"),
-		Type::Float(_) => write!(out, "0.0"),
-		Type::Enum(_, _) => write!(out, "1"),
-		Type::String(_) => write!(out, "\"\""),
-		Type::Annotation(_) => write!(out, "empty_annotation"),
-		Type::Array {
-			opt: _,
-			dim: _,
-			element: _,
-		} => write!(out, "[]"),
-		Type::Set(_, _) => write!(out, "{{}}"),
-		Type::Tuple(_, tys) => {
-			write!(out, "(")?;
-			for ty in tys.iter() {
-				write_legacy_dummy_value(out, ty)?;
-				write!(out, ",")?;
+impl<'a> Display for LegacyValue<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let val = self.val;
+		let ty = self.ty;
+
+		let is_opt = ty.is_opt();
+		if is_opt {
+			if val == &Value::Absent {
+				return write!(f, "(false, {})", DummyValue(ty));
+			} else {
+				write!(f, "(true, ")?;
 			}
-			write!(out, ")")
 		}
-		Type::Record(_, tys) => {
-			write!(out, "(")?;
-			for (_, ty) in tys.iter() {
-				write_legacy_dummy_value(out, ty)?;
-				write!(out, ",")?;
+		match val {
+			Value::Absent => unreachable!("found absent assigned to non-opt parameter"),
+			Value::Infinity(p) => {
+				write!(f, "{}infinity", if p == &Polarity::Neg { "-" } else { "" })?
 			}
-			write!(out, ")")
+			Value::Boolean(v) => write!(f, "{}", v)?,
+			Value::Integer(v) => write!(f, "{}", v)?,
+			Value::Float(v) => write!(f, "{}", v)?,
+			Value::String(v) => write!(f, "\"{}\"", v)?,
+			Value::Enum(v) => write!(f, "{}", v.int_val())?,
+			Value::Ann(name, args) => {
+				if args.is_empty() {
+					write!(f, "{name}")?
+				} else {
+					write!(f, "{name}({})", args.iter().format(", "))?
+				}
+			}
+			Value::Array(v) => {
+				let Type::Array {
+					opt: _,
+					dim: _,
+					element,
+				} = ty
+				else {
+					unreachable!()
+				};
+				let extract_idx = |x: &Value| match x {
+					Value::Integer(i) => *i,
+					Value::Enum(v) => v.int_val() as i64,
+					_ => unreachable!(),
+				};
+				if v.is_empty() {
+					write!(f, "[]")?;
+				} else if v.dim() == 1 {
+					let first = extract_idx(&(v.iter().next().unwrap().0[0]));
+					write!(
+						f,
+						"[{first}: {}]",
+						v.iter()
+							.map(|(_, val)| LegacyValue { val, ty: element })
+							.format(",")
+					)?;
+				} else {
+					write!(
+						f,
+						"[{}]",
+						v.iter().format_with(",", |(ii, val), f| f(&format_args!(
+							"({}): {}",
+							ii.iter().map(extract_idx).format(","),
+							LegacyValue { val, ty: element }
+						)))
+					)?;
+				}
+			}
+			Value::Set(s) => match s {
+				Set::Enum(s) => write!(
+					f,
+					"{}",
+					s.iter().format_with(" union ", |elt, f| f(&format_args!(
+						"{}..{}",
+						elt.start().int_val(),
+						elt.end().int_val()
+					)))
+				)?,
+				Set::Int(s) => write!(
+					f,
+					"{}",
+					s.iter().format_with(" union ", |elt, f| f(&format_args!(
+						"{}..{}",
+						elt.start(),
+						elt.end()
+					)))
+				)?,
+				Set::Float(s) => write!(
+					f,
+					"{}",
+					s.iter().format_with(" union ", |elt, f| f(&format_args!(
+						"{}..{}",
+						elt.start(),
+						elt.end()
+					)))
+				)?,
+			},
+			Value::Tuple(v) => {
+				let Type::Tuple(_, tys) = ty else {
+					unreachable!()
+				};
+				write!(
+					f,
+					"({}{})",
+					tys.iter()
+						.zip_eq(v)
+						.map(|(ty, val)| LegacyValue { val, ty })
+						.format(","),
+					if tys.len() == 1 { "," } else { "" }
+				)?;
+			}
+			Value::Record(v) => {
+				let Type::Record(_, tys) = ty else {
+					unreachable!()
+				};
+				write!(
+					f,
+					"({}{})",
+					tys.iter()
+						.map(|(_, t)| t)
+						.zip_eq(v.iter().map(|(_, v)| v))
+						.map(|(ty, val)| LegacyValue { val, ty })
+						.format(","),
+					if tys.len() == 1 { "," } else { "" }
+				)?;
+			}
 		}
+		if is_opt {
+			write!(f, ")")?
+		}
+		Ok(())
+	}
+}
+struct DummyValue<'a>(&'a Type);
+impl<'a> Display for DummyValue<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let ty = self.0;
+		match ty {
+			Type::Boolean(_) => write!(f, "true"),
+			Type::Integer(_) => write!(f, "0"),
+			Type::Float(_) => write!(f, "0.0"),
+			Type::Enum(_, _) => write!(f, "1"),
+			Type::String(_) => write!(f, "\"\""),
+			Type::Annotation(_) => write!(f, "empty_annotation"),
+			Type::Array {
+				opt: _,
+				dim: _,
+				element: _,
+			} => write!(f, "[]"),
+			Type::Set(_, _) => write!(f, "{{}}"),
+			Type::Tuple(_, tys) => {
+				write!(
+					f,
+					"({}{})",
+					tys.iter().map(DummyValue).format(","),
+					if tys.len() == 1 { "," } else { "" }
+				)
+			}
+			Type::Record(_, tys) => {
+				write!(
+					f,
+					"({}{})",
+					tys.iter().map(|(_, ty)| DummyValue(ty)).format(","),
+					if tys.len() == 1 { "," } else { "" }
+				)
+			}
+		}
+	}
+}
+
+struct LegacyEnum<'a>(&'a Enum);
+impl<'a> Display for LegacyEnum<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		const INT: Type = Type::Integer(crate::OptType::NonOpt);
+		write!(
+			f,
+			"mzn_enum_{} = [{}]",
+			self.0.name(),
+			self.0
+				.lock()
+				.iter()
+				.format_with(",", |(name, idxs, _), f| f(&format_args!(
+					"({:?}, [{}])",
+					name,
+					idxs.iter().format_with(",", |idx, g| g(&format_args!(
+						"(0, {}..{})",
+						LegacyValue {
+							val: &idx.start(),
+							ty: &INT
+						},
+						LegacyValue {
+							val: &idx.end(),
+							ty: &INT
+						}
+					)))
+				)))
+		)
 	}
 }
 

@@ -110,8 +110,10 @@ fn model_io_interface(db: &dyn Thir) -> Arc<ModelIoInterface> {
 	let mut enums = FxHashMap::default();
 	for (_, e) in model.enumerations() {
 		let name = resolve_name(e.enum_type().name(db.upcast()));
-		if e.definition().is_some() {
-			todo!();
+		if let Some(_ctor) = e.definition() {
+			log::warn!("TODO: enumerated type {} is defined in the model and member can currently not be constructed in data", name);
+			// TODO: determine dependencies or directly initialize the enumerated type
+			enums.insert(name.clone(), Arc::new(Enum::model_defined(name, [])));
 		} else {
 			enums.insert(name.clone(), Arc::new(Enum::from_data(name)));
 		}
