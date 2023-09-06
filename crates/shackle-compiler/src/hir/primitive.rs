@@ -1,9 +1,9 @@
 //! HIR representation of primitive values
 //!
-use crate::db::{InternedString, InternedStringData};
+use std::fmt;
 
 use super::{db::Hir, Identifier};
-use std::fmt;
+use crate::db::{InternedString, InternedStringData};
 
 /// An integer literal
 #[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq)]

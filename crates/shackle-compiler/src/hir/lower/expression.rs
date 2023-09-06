@@ -4,13 +4,11 @@ use crate::{
 	constants::IdentifierRegistry,
 	db::InternedStringData,
 	diagnostics::{InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError},
-	hir::source::Origin,
+	hir::{db::Hir, source::Origin, *},
 	syntax::ast::{self, AstNode},
 	utils::{arena::ArenaIndex, maybe_grow_stack},
 	Error,
 };
-
-use crate::hir::{db::Hir, *};
 
 /// Collects AST expressions for owned by an item and lowers them into HIR recursively.
 pub struct ExpressionCollector<'a> {

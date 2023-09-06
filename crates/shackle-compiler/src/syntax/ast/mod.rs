@@ -185,8 +185,9 @@ impl Debug for Model {
 
 #[cfg(test)]
 mod test {
-	use crate::syntax::ast::helpers::test::*;
 	use expect_test::{expect, expect_file};
+
+	use crate::syntax::ast::helpers::test::*;
 
 	#[test]
 	fn test_model() {

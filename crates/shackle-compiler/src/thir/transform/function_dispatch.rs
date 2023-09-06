@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::top_down_type::add_coercion;
 use crate::{
 	constants::IdentifierRegistry,
 	hir::{Identifier, IntegerLiteral, OptType, VarType},
@@ -19,8 +20,6 @@ use crate::{
 	ty::{Ty, TyData},
 	Result,
 };
-
-use super::top_down_type::add_coercion;
 
 struct DispatchRewriter<Dst: Marker, Src: Marker = ()> {
 	model: Model<Dst>,
@@ -617,9 +616,8 @@ pub fn function_dispatch(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check;
-
 	use super::function_dispatch;
+	use crate::thir::transform::test::check;
 
 	#[test]
 	fn test_function_dispatch() {

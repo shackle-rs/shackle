@@ -2,8 +2,6 @@
 //!
 //! `FileRef` is an interned data structure used to represent a pointer to a file (or inline string).
 
-use crate::{db::FileReader, diagnostics::FileError};
-use miette::{MietteSpanContents, SourceCode};
 use std::{
 	fs::read_to_string,
 	ops::Deref,
@@ -11,6 +9,10 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+
+use miette::{MietteSpanContents, SourceCode};
+
+use crate::{db::FileReader, diagnostics::FileError};
 
 /// Input files
 #[derive(Debug, Clone, Eq, PartialEq)]

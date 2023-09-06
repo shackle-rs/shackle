@@ -146,10 +146,10 @@ pub fn inline_call_by_name(db: &dyn Thir, model: Model) -> Result<Model> {
 
 #[cfg(test)]
 mod test {
-	use crate::thir::transform::test::check_no_stdlib;
 	use expect_test::expect;
 
 	use super::inline_call_by_name;
+	use crate::thir::transform::test::check_no_stdlib;
 
 	#[test]
 	fn test_inline_call_by_name() {

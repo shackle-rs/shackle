@@ -5,6 +5,7 @@
 /// - Variable declaration LHS types
 use rustc_hash::FxHashMap;
 
+use super::{EnumConstructorEntry, PatternTy, TypeCompletionMode, TypeContext, Typer};
 use crate::{
 	diagnostics::{SyntaxError, TypeInferenceFailure, TypeMismatch},
 	hir::{
@@ -18,8 +19,6 @@ use crate::{
 	},
 	Error,
 };
-
-use super::{EnumConstructorEntry, PatternTy, TypeCompletionMode, TypeContext, Typer};
 
 /// Collected types for an item signature
 #[derive(Clone, Debug, PartialEq, Eq)]

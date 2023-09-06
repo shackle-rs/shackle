@@ -7,9 +7,9 @@ use miette::SourceCode;
 use shackle_compiler::{
 	db::CompilerDatabase,
 	file::ModelRef,
-	hir::{db::Hir, ids::NodeRef},
 	hir::{
-		ids::{LocalEntityRef, PatternRef},
+		db::Hir,
+		ids::{LocalEntityRef, NodeRef, PatternRef},
 		PatternTy,
 	},
 	syntax::db::SourceParser,
@@ -171,9 +171,8 @@ mod test {
 	use expect_test::expect;
 	use lsp_types::Url;
 
-	use crate::handlers::test::test_handler;
-
 	use super::SemanticTokensHandler;
+	use crate::handlers::test::test_handler;
 
 	#[test]
 	fn test_semantic_tokens() {

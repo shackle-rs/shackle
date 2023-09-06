@@ -36,6 +36,11 @@ use std::{
 	sync::Arc,
 };
 
+use super::{
+	db::Hir,
+	ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
+	Expression, ItemData, Pattern,
+};
 use crate::{
 	ty::{FunctionEntry, Ty, TyData, TyVar},
 	utils::{
@@ -45,21 +50,12 @@ use crate::{
 	Error,
 };
 
-use super::{
-	db::Hir,
-	ids::{ExpressionRef, ItemRef, LocalItemRef, PatternRef},
-	Expression, ItemData, Pattern,
-};
-
 mod body;
 mod signature;
 mod toposort;
 mod typer;
 
-pub use self::body::*;
-pub use self::signature::*;
-pub use self::toposort::*;
-pub use self::typer::*;
+pub use self::{body::*, signature::*, toposort::*, typer::*};
 
 /// Collected types for an item
 ///

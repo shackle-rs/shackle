@@ -3,14 +3,11 @@
 
 use std::ops::Index;
 
-use crate::hir::Identifier;
-use crate::ty::FunctionEntry;
-use crate::ty::FunctionResolutionError;
-use crate::ty::OverloadedFunction;
-use crate::ty::Ty;
-use crate::ty::TyParamInstantiations;
-use crate::utils::arena::Arena;
-use crate::utils::impl_index;
+use crate::{
+	hir::Identifier,
+	ty::{FunctionEntry, FunctionResolutionError, OverloadedFunction, Ty, TyParamInstantiations},
+	utils::{arena::Arena, impl_index},
+};
 
 mod annotations;
 mod domain;
@@ -18,11 +15,7 @@ mod expression;
 mod item;
 pub mod traverse;
 
-pub use self::annotations::*;
-pub use self::domain::*;
-pub use self::expression::*;
-pub use self::item::*;
-
+pub use self::{annotations::*, domain::*, expression::*, item::*};
 use super::db::Thir;
 
 /// Entity counts

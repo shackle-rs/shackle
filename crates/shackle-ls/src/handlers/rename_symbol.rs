@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use lsp_server::{ErrorCode::InvalidRequest, ResponseError};
 use lsp_types::{request::Rename, RenameParams, TextEdit, WorkspaceEdit};
 use shackle_compiler::{
@@ -11,7 +13,6 @@ use shackle_compiler::{
 	syntax::db::SourceParser,
 	utils,
 };
-use std::collections::HashMap;
 
 use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::node_ref_to_location};
 
@@ -146,9 +147,8 @@ mod test {
 	use expect_test::expect;
 	use lsp_types::{RenameParams, TextDocumentPositionParams, Url};
 
-	use crate::handlers::test::test_handler;
-
 	use super::RenameHandler;
+	use crate::handlers::test::test_handler;
 
 	#[test]
 	fn test_references() {

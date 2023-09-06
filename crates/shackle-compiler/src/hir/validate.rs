@@ -11,6 +11,11 @@ use std::{collections::hash_map::Entry, sync::Arc};
 
 use rustc_hash::FxHashMap;
 
+use super::{
+	db::Hir,
+	ids::{EntityRef, LocalItemRef},
+	PatternTy,
+};
 use crate::{
 	diagnostics::{
 		AdditionalSolveItem, ConstructorAlreadyDefined, DuplicateAssignment, DuplicateConstructor,
@@ -20,12 +25,6 @@ use crate::{
 	hir::ids::{ItemRef, NodeRef},
 	ty::{FunctionEntry, OverloadingError},
 	Error,
-};
-
-use super::{
-	db::Hir,
-	ids::{EntityRef, LocalItemRef},
-	PatternTy,
 };
 
 /// Validate HIR

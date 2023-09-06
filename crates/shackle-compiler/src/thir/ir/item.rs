@@ -2,6 +2,7 @@
 
 use std::ops::{Deref, DerefMut};
 
+use super::{domain::Domain, Annotations, Expression, Identifier, Marker, Model};
 use crate::{
 	thir::{db::Thir, source::Origin},
 	ty::{
@@ -10,8 +11,6 @@ use crate::{
 	},
 	utils::{arena::ArenaIndex, impl_enum_from},
 };
-
-use super::{domain::Domain, Annotations, Expression, Identifier, Marker, Model};
 
 /// An item of type `T`.
 #[derive(Clone, Debug, PartialEq, Eq)]

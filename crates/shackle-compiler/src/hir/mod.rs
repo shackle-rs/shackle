@@ -39,12 +39,11 @@ pub use scope::*;
 pub use typecheck::*;
 pub use types::*;
 
+use self::ids::LocalItemRef;
 use crate::utils::{
 	arena::{Arena, ArenaIndex},
 	impl_index,
 };
-
-use self::ids::LocalItemRef;
 
 /// A model (a single `.mzn` file)
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

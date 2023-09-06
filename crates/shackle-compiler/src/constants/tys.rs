@@ -1,5 +1,4 @@
-use crate::db::Interner;
-use crate::ty::Ty;
+use crate::{db::Interner, ty::Ty};
 
 macro_rules! type_registry {
 	($struct:ident, $db:ident, $($name:ident: $value:expr),+$(,)?) => {

@@ -1,6 +1,8 @@
-use rustc_hash::FxHashMap;
 use std::{collections::hash_map::Entry, fmt::Write, sync::Arc};
 
+use rustc_hash::FxHashMap;
+
+use super::{PatternTy, TypeContext};
 use crate::{
 	constants::{IdentifierRegistry, TypeRegistry},
 	diagnostics::{
@@ -22,8 +24,6 @@ use crate::{
 	utils::{arena::ArenaIndex, maybe_grow_stack},
 	Error,
 };
-
-use super::{PatternTy, TypeContext};
 
 /// Mode for completing types
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

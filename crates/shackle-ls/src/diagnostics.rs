@@ -1,9 +1,11 @@
-use lsp_types::notification::Notification;
-use lsp_types::Url;
+use std::{
+	path::{Path, PathBuf},
+	str::FromStr,
+};
+
+use lsp_types::{notification::Notification, Url};
 use miette::{Diagnostic, Severity};
 use shackle_compiler::hir::db::Hir;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use crate::utils::span_contents_to_range;
 

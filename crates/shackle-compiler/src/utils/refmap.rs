@@ -1,8 +1,10 @@
 //! `HashMap` using pointers as keys
 
-use std::hash::{Hash, Hasher};
-use std::ops::Index;
-use std::ptr;
+use std::{
+	hash::{Hash, Hasher},
+	ops::Index,
+	ptr,
+};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 

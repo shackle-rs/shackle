@@ -4,19 +4,14 @@
 #![warn(unused_crate_dependencies, unused_extern_crates)]
 #![warn(variant_size_differences)]
 
+use std::{ffi::OsStr, fs::File, ops::Deref, panic, path::PathBuf};
+
 use clap::{crate_version, Args, Parser, Subcommand};
 use env_logger::{fmt::TimestampPrecision, Builder};
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, Report, Result};
-use shackle::error::InternalError;
-use shackle::{Error, Message, Model, Solver, Status};
-
-use std::ffi::OsStr;
-use std::fs::File;
-use std::ops::Deref;
-use std::panic;
-use std::path::PathBuf;
+use shackle::{error::InternalError, Error, Message, Model, Solver, Status};
 
 /// The main function is the entry point for the `shackle` executable.
 ///

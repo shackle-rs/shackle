@@ -2,11 +2,9 @@
 //!
 //! See the `typecheck` module for computing types.
 
-use crate::utils::arena::ArenaIndex;
-
 use super::{Expression, ItemData, Pattern};
-
 pub use crate::syntax::ast::{OptType, PrimitiveType, VarType};
+use crate::utils::arena::ArenaIndex;
 
 /// Type of an expression
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

@@ -6,19 +6,18 @@ use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::{
+	db::Hir,
+	ids::{EntityRef, ItemRef, NodeRef, PatternRef},
+	BooleanLiteral, Expression, FloatLiteral, Identifier, IntegerLiteral, ItemData, OptType,
+	Pattern, PatternTy, StringLiteral, TypeResult,
+};
 use crate::{
 	constants::TypeRegistry,
 	diagnostics::{NonExhaustivePatternMatching, UnreachablePattern, Warning},
 	ty::{EnumRef, Ty, TyData},
 	utils::arena::ArenaIndex,
 	Error,
-};
-
-use super::{
-	db::Hir,
-	ids::{EntityRef, ItemRef, NodeRef, PatternRef},
-	BooleanLiteral, Expression, FloatLiteral, Identifier, IntegerLiteral, ItemData, OptType,
-	Pattern, PatternTy, StringLiteral, TypeResult,
 };
 
 /// Compute a mapping from (non-introduced) enum types to the constructors for the enum

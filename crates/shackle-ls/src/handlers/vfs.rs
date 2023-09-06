@@ -1,7 +1,8 @@
-use crate::LanguageServerDatabase;
 use lsp_types::{
 	DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
 };
+
+use crate::LanguageServerDatabase;
 
 pub fn on_document_open(db: &mut LanguageServerDatabase, params: DidOpenTextDocumentParams) {
 	let file = params

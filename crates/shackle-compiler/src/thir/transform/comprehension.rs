@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
+use super::top_down_type::add_coercion;
 use crate::{
 	constants::IdentifierRegistry,
 	hir::OptType,
@@ -21,8 +22,6 @@ use crate::{
 	utils::maybe_grow_stack,
 	Result,
 };
-
-use super::top_down_type::add_coercion;
 
 enum SurroundingCall {
 	Forall,
@@ -451,10 +450,10 @@ pub fn desugar_comprehension(db: &dyn Thir, model: Model) -> Result<Model> {
 
 #[cfg(test)]
 mod test {
-	use crate::thir::transform::test::check;
 	use expect_test::expect;
 
 	use super::desugar_comprehension;
+	use crate::thir::transform::test::check;
 
 	#[test]
 	fn test_desugar_array_comprehension_var_where() {

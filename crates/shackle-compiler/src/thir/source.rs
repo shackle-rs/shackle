@@ -4,12 +4,11 @@
 
 use miette::SourceSpan;
 
+use super::db::Thir;
 use crate::{
 	file::SourceFile,
 	hir::ids::{EntityRef, ItemRef, NodeRef},
 };
-
-use super::db::Thir;
 
 /// The HIR node which produced a THIR node
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]

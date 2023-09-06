@@ -8,23 +8,6 @@ mod data;
 mod legacy;
 mod value;
 
-use data::{
-	dzn::{collect_dzn_value, parse_dzn},
-	serde::SerdeFileVisitor,
-};
-use itertools::Itertools;
-use rustc_hash::{FxHashMap, FxHashSet};
-use serde::Deserializer;
-use shackle_compiler::file::{InputFile, SourceFile};
-use shackle_compiler::syntax::ast::{AstNode, Identifier};
-use shackle_compiler::thir;
-use shackle_compiler::ty::{Ty, TyData};
-use shackle_compiler::{
-	db::{CompilerDatabase, Inputs, InternedString, Interner},
-	thir::Declaration,
-};
-use value::EnumInner;
-
 use std::{
 	ffi::OsStr,
 	fmt::Display,
@@ -35,19 +18,31 @@ use std::{
 	time::Duration,
 };
 
-use shackle_compiler::hir::db::Hir;
-use shackle_compiler::thir::{db::Thir, pretty_print::PrettyPrinter};
-// Export OptType enumeration used in [`Type`]
-pub use shackle_compiler::ty::OptType;
-
+use data::{
+	dzn::{collect_dzn_value, parse_dzn},
+	serde::SerdeFileVisitor,
+};
 /// Result type for Shackle operations
 pub use error::{Error, Result};
+use itertools::Itertools;
+use rustc_hash::{FxHashMap, FxHashSet};
+use serde::Deserializer;
+// Export OptType enumeration used in [`Type`]
+pub use shackle_compiler::ty::OptType;
+use shackle_compiler::{
+	db::{CompilerDatabase, Inputs, InternedString, Interner},
+	file::{InputFile, SourceFile},
+	hir::db::Hir,
+	syntax::ast::{AstNode, Identifier},
+	thir::{self, db::Thir, pretty_print::PrettyPrinter, Declaration},
+	ty::{Ty, TyData},
+};
+use value::EnumInner;
 pub use value::{Enum, Value};
 
 /// Shackle errors
 pub mod error {
-	pub use shackle_compiler::diagnostics::error::*;
-	pub use shackle_compiler::Result;
+	pub use shackle_compiler::{diagnostics::error::*, Result};
 }
 
 /// Shackle warnings

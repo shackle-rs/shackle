@@ -1,13 +1,13 @@
+use std::error::Error;
+
 use db::LanguageServerDatabase;
+use lsp_server::{Connection, ExtractError, Message};
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
 	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, SemanticTokensFullOptions,
 	SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
 	ServerCapabilities, TextDocumentSyncKind,
 };
-use std::error::Error;
-
-use lsp_server::{Connection, ExtractError, Message};
 
 use crate::{
 	dispatch::{DispatchNotification, DispatchRequest},

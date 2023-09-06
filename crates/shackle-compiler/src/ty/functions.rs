@@ -1,12 +1,11 @@
 /// Function overloading and instantiation
 use rustc_hash::FxHashMap;
 
+use super::{OptType, Ty, TyData, TyVarRef, VarType};
 use crate::{
 	db::{InternedString, Interner},
 	utils::{maybe_grow_stack, DebugPrint},
 };
-
-use super::{OptType, Ty, TyData, TyVarRef, VarType};
 
 /// Represents failure to resolve overloading
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

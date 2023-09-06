@@ -1,16 +1,14 @@
 //! Representation of variable domains
 use std::ops::Deref;
 
+use super::{Expression, Marker};
+pub use crate::hir::{OptType, VarType};
 use crate::{
 	hir::Identifier,
 	thir::{db::Thir, source::Origin},
 	ty::{Ty, TyData},
 	utils::maybe_grow_stack,
 };
-
-use super::{Expression, Marker};
-
-pub use crate::hir::{OptType, VarType};
 
 /// Ascribed domain of a variable
 #[derive(Debug, Hash, PartialEq, Eq)]

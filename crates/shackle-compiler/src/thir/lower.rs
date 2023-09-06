@@ -15,6 +15,11 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
+use super::{
+	db::{Intermediate, Thir},
+	source::Origin,
+	*,
+};
 use crate::{
 	constants::IdentifierRegistry,
 	hir::{
@@ -24,12 +29,6 @@ use crate::{
 	},
 	ty::{OptType, Ty, TyData, VarType},
 	utils::{arena::ArenaIndex, impl_enum_from, maybe_grow_stack},
-};
-
-use super::{
-	db::{Intermediate, Thir},
-	source::Origin,
-	*,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

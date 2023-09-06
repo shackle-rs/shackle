@@ -8,16 +8,15 @@ use rustc_hash::FxHashMap;
 use tree_sitter::Node;
 pub use tree_sitter::Point;
 
-use crate::{
-	file::{FileRef, SourceFile},
-	syntax::{ast::*, cst::CstNode},
-	utils::{debug_print_strings, DebugPrint},
-};
-
 use super::{
 	db::Hir,
 	ids::{EntityRef, ExpressionRef, ItemRef, LocalEntityRef, NodeRef},
 	ItemDataSourceMap, Type,
+};
+use crate::{
+	file::{FileRef, SourceFile},
+	syntax::{ast::*, cst::CstNode},
+	utils::{debug_print_strings, DebugPrint},
 };
 
 /// Source mapping between HIR and AST nodes.

@@ -14,16 +14,16 @@
 //! changed when modified, so always causes all items in that file to be lowered
 //! again (but not ones in other files).
 
-use std::fmt::Write;
-use std::ops::{Deref, DerefMut};
+use std::{
+	fmt::Write,
+	ops::{Deref, DerefMut},
+};
 
+use super::{db::Hir, source::Origin, Expression, Pattern, Type};
 use crate::utils::{
 	arena::{Arena, ArenaIndex, ArenaMap},
 	debug_print_strings, impl_enum_from, impl_index, DebugPrint,
 };
-
-use super::db::Hir;
-use super::{source::Origin, Expression, Pattern, Type};
 
 /// An item with its data
 #[derive(Clone, Debug, PartialEq, Eq)]

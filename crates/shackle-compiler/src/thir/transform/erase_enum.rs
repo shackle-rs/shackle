@@ -5,8 +5,11 @@
 //! Since this transform generates optional types and var set comprehensions, it must be run before
 //! option type erasure and comprehension desugaring comprehensions.
 
+use std::sync::Arc;
+
 use rustc_hash::FxHashMap;
 
+use super::top_down_type::add_coercion;
 use crate::{
 	constants::{IdentifierRegistry, TypeRegistry},
 	hir::{Identifier, IntegerLiteral, StringLiteral, VarType},
@@ -24,9 +27,6 @@ use crate::{
 	utils::{arena::ArenaMap, maybe_grow_stack},
 	Result,
 };
-use std::sync::Arc;
-
-use super::top_down_type::add_coercion;
 
 struct EnumEraser<Dst: Marker, Src: Marker = ()> {
 	model: Model<Dst>,
@@ -418,9 +418,8 @@ pub fn erase_enum(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::{test::check, transformer, type_specialise::type_specialise};
-
 	use super::erase_enum;
+	use crate::thir::transform::{test::check, transformer, type_specialise::type_specialise};
 
 	#[test]
 	fn test_enum_type_erasure() {

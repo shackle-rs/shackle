@@ -1,16 +1,19 @@
 use std::sync::Arc;
 
-use crate::constants::IdentifierRegistry;
-use crate::diagnostics::SyntaxError;
-use crate::file::ModelRef;
-use crate::hir::db::Hir;
-use crate::hir::ids::ItemRef;
-use crate::hir::source::{Origin, SourceMap};
-use crate::hir::*;
-use crate::syntax::ast::{self, AstNode};
-use crate::Error;
-
 use super::{ExpressionCollector, TypeInstIdentifiers};
+use crate::{
+	constants::IdentifierRegistry,
+	diagnostics::SyntaxError,
+	file::ModelRef,
+	hir::{
+		db::Hir,
+		ids::ItemRef,
+		source::{Origin, SourceMap},
+		*,
+	},
+	syntax::ast::{self, AstNode},
+	Error,
+};
 
 /// Lower a model to HIR
 pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>, Arc<Vec<Error>>) {

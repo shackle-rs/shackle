@@ -899,10 +899,10 @@ pub fn rewrite_domains(db: &dyn Thir, model: Model) -> Result<Model> {
 
 #[cfg(test)]
 mod test {
-	use crate::thir::transform::test::check;
 	use expect_test::expect;
 
 	use super::rewrite_domains;
+	use crate::thir::transform::test::check;
 
 	#[test]
 	fn test_rewrite_struct_domains() {

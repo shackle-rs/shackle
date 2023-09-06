@@ -3,7 +3,8 @@ name: Check Format
 on: [push, pull_request]
 
 env:
-  RUST_CHANNEL: stable
+  # Lets us format with unstable rustfmt options
+  RUST_CHANNEL: nightly
 
 jobs:
   check_format:
@@ -17,8 +18,8 @@ jobs:
         run: |
           rustup toolchain install --profile minimal --component rustfmt --no-self-update ${{ env.RUST_CHANNEL }}
           rustup default ${{ env.RUST_CHANNEL }}
-      - name: Run cargo check
-        run: cargo fmt --all --check
+      - name: Run cargo format
+        run: cargo +nightly fmt --all --check
 
       # Check formatting of other files
       - name: Setup Node.js

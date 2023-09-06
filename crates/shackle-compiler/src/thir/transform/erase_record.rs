@@ -117,9 +117,8 @@ pub fn erase_record(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check_no_stdlib;
-
 	use super::erase_record;
+	use crate::thir::transform::test::check_no_stdlib;
 
 	#[test]
 	fn test_record_type_erasure() {

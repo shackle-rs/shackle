@@ -42,9 +42,8 @@ pub fn mangle_names(_db: &dyn Thir, mut model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check_no_stdlib;
-
 	use super::mangle_names;
+	use crate::thir::transform::test::check_no_stdlib;
 
 	#[test]
 	fn test_name_mangling() {

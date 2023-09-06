@@ -20,8 +20,7 @@
 mod expression;
 mod item;
 
-pub use self::expression::*;
-pub use self::item::*;
+pub use self::{expression::*, item::*};
 
 #[cfg(test)]
 mod test;
