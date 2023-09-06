@@ -10,25 +10,22 @@ use std::{
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use serde::{
-	de::{DeserializeSeed, Error, IgnoredAny, Visitor},
+	de::{DeserializeSeed, Error as SerdeError, IgnoredAny, Visitor},
 	Deserializer,
 };
 use tempfile::Builder;
 
 use crate::{
 	data::serde::SerdeValueVisitor,
-	diagnostics::{FileError, InternalError, ShackleError},
+	error::{FileError, InternalError},
 	value::{Array, EnumInner, EnumRangeInclusive, EnumValue, Index, Polarity, Set, Value},
-	Enum, Message, OptType, Program, Status, Type,
+	Enum, Error, Message, OptType, Program, Result, Status, Type,
 };
 
 impl Program {
 	/// Run the program in the current state
 	/// Solutions are emitted to the callback, and the resulting status is returned.
-	pub fn run<F: Fn(&Message) -> Result<(), ShackleError>>(
-		&mut self,
-		msg_callback: F,
-	) -> Result<Status, ShackleError> {
+	pub fn run<F: Fn(&Message) -> Result<()>>(&mut self, msg_callback: F) -> Result<Status> {
 		// Create new (temporary) file used as input for the interpreter
 		let tmpfile = Builder::new().suffix(".shackle.mzn").tempfile();
 		let mut tmpfile = match tmpfile {
@@ -44,7 +41,7 @@ impl Program {
 		};
 		let tmp_path = tmpfile.path().to_owned();
 		let write_err = |err| {
-			ShackleError::from(FileError {
+			Error::from(FileError {
 				file: tmp_path.clone(),
 				message: format!("unable to write model to temporary file: {}", err),
 				other: vec![],
@@ -111,9 +108,8 @@ impl Program {
 				Ok(line) => {
 					match serde_json::Deserializer::from_str(&line)
 						.deserialize_map(SerdeMessageVisitor(&self.output_types))
-						.map_err(|e| {
-							ShackleError::from_serde_json(e, &Arc::new(line.clone()).into())
-						})? {
+						.map_err(|e| Error::from_serde_json(e, &Arc::new(line.clone()).into()))?
+					{
 						LegacyOutput::Status(s) => status = s,
 						LegacyOutput::Msg(msg) => {
 							if let Message::Solution(_) = msg {
@@ -352,7 +348,7 @@ struct SerdeMessageVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
 enum LegacyOutput<'a> {
 	Status(Status),
 	Msg(Message<'a>),
-	Error(ShackleError),
+	Error(Error),
 }
 
 impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
@@ -386,19 +382,19 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 			match k {
 				"type" => {
 					if msg_type.is_some() {
-						return Err(Error::duplicate_field("type"));
+						return Err(SerdeError::duplicate_field("type"));
 					}
 					msg_type = Some(map.next_value()?);
 				}
 				"message" => {
 					if message.is_some() {
-						return Err(Error::duplicate_field("message"));
+						return Err(SerdeError::duplicate_field("message"));
 					}
 					message = Some(map.next_value::<&str>()?);
 				}
 				"output" => {
 					if solution.is_some() {
-						return Err(Error::duplicate_field("output"));
+						return Err(SerdeError::duplicate_field("output"));
 					}
 					match map.next_value_seed(SerdeWrappedName {
 						name: "json",
@@ -410,13 +406,13 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 				}
 				"statistics" => {
 					if statistics.is_some() {
-						return Err(Error::duplicate_field("statistics"));
+						return Err(SerdeError::duplicate_field("statistics"));
 					}
 					statistics = Some(map.next_value()?);
 				}
 				"status" => {
 					if status.is_some() {
-						return Err(Error::duplicate_field("status"));
+						return Err(SerdeError::duplicate_field("status"));
 					}
 					status = Some(match map.next_value()? {
 						"ALL_SOLUTIONS" => Status::AllSolutions,
@@ -432,7 +428,7 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 							))
 						} // TODO: Probably should do something, but we now rely on another error message type
 						s => {
-							return Err(Error::unknown_variant(
+							return Err(SerdeError::unknown_variant(
 								s,
 								&[
 									"ALL_SOLUTIONS",
@@ -450,35 +446,38 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 				"location" | "stack" | "sections" | "what" => {
 					map.next_value::<IgnoredAny>()?; // TODO: parse additional error/warning information
 				}
-				_ => return Err(Error::unknown_field(k, FIELDS)),
+				_ => return Err(SerdeError::unknown_field(k, FIELDS)),
 			}
 		}
 
 		match msg_type {
 			Some("solution") => match solution {
-				None => Err(Error::missing_field("output")),
+				None => Err(SerdeError::missing_field("output")),
 				Some(x) => Ok(LegacyOutput::Msg(Message::Solution(x))),
 			},
 			Some("statistics") => match statistics {
-				None => Err(Error::missing_field("statistics")),
+				None => Err(SerdeError::missing_field("statistics")),
 				Some(x) => Ok(LegacyOutput::Msg(Message::Statistic(x))),
 			},
 			Some("error") => match message {
-				None => Err(Error::missing_field("message")),
+				None => Err(SerdeError::missing_field("message")),
 				Some(msg) => Ok(LegacyOutput::Error(
 					InternalError::new(format!("minizinc error: {msg}")).into(),
 				)),
 			},
 			Some("warning") => match message {
-				None => Err(Error::missing_field("message")),
+				None => Err(SerdeError::missing_field("message")),
 				Some(msg) => Ok(LegacyOutput::Msg(Message::Warning(msg))),
 			},
 			Some("status") => match status {
-				None => Err(Error::missing_field("status")),
+				None => Err(SerdeError::missing_field("status")),
 				Some(s) => Ok(LegacyOutput::Status(s)),
 			},
-			None => Err(Error::missing_field("type")),
-			Some(ty) => Err(Error::unknown_variant(ty, &["statistics", "status", ""])),
+			None => Err(SerdeError::missing_field("type")),
+			Some(ty) => Err(SerdeError::unknown_variant(
+				ty,
+				&["statistics", "status", ""],
+			)),
 		}
 	}
 }
@@ -487,7 +486,7 @@ impl<'de, 'a> Visitor<'de> for SerdeMessageVisitor<'a> {
 struct SerdeOutputVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
 
 impl<'de, 'a> Visitor<'de> for SerdeOutputVisitor<'a> {
-	type Value = Result<FxHashMap<&'de str, Value>, ShackleError>;
+	type Value = Result<FxHashMap<&'de str, Value>, Error>;
 
 	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(formatter, "minizinc output assignment")
@@ -518,7 +517,7 @@ impl<'de, 'a> Visitor<'de> for SerdeOutputVisitor<'a> {
 }
 
 impl<'a, 'de> DeserializeSeed<'de> for SerdeOutputVisitor<'a> {
-	type Value = Result<FxHashMap<&'de str, Value>, ShackleError>;
+	type Value = Result<FxHashMap<&'de str, Value>, Error>;
 
 	fn deserialize<D: serde::Deserializer<'de>>(
 		self,
@@ -562,7 +561,7 @@ impl<'de, X: DeserializeSeed<'de> + Clone> Visitor<'de> for SerdeWrappedName<X> 
 			}
 		}
 		match ret {
-			None => Err(Error::missing_field(self.name)),
+			None => Err(SerdeError::missing_field(self.name)),
 			Some(x) => Ok(x),
 		}
 	}

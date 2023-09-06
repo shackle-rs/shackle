@@ -1,6 +1,6 @@
 use lsp_server::ResponseError;
 use lsp_types::TextDocumentPositionParams;
-use shackle::{db::CompilerDatabase, file::ModelRef, syntax::db::SourceParser};
+use shackle_compiler::{db::CompilerDatabase, file::ModelRef, syntax::db::SourceParser};
 
 use crate::{db::LanguageServerContext, dispatch::RequestHandler, extensions::ViewAst};
 

@@ -1,7 +1,7 @@
 use lsp_types::notification::Notification;
 use lsp_types::Url;
 use miette::{Diagnostic, Severity};
-use shackle::hir::db::Hir;
+use shackle_compiler::hir::db::Hir;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 

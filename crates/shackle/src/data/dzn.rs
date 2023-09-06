@@ -10,9 +10,12 @@ use tree_sitter::Parser;
 
 use crate::{
 	data::ParserVal,
-	diagnostics::{
-		InvalidArrayLiteral, InvalidNumericLiteral, ShackleError, SyntaxError, TypeMismatch,
-	},
+	value::{EnumInner, Index, Polarity, Set},
+	Enum, OptType, Type, Value,
+};
+
+use shackle_compiler::{
+	diagnostics::{Error, InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError, TypeMismatch},
 	file::SourceFile,
 	syntax::{
 		ast::{
@@ -21,8 +24,6 @@ use crate::{
 		},
 		cst::{Cst, CstNode},
 	},
-	value::{EnumInner, Index, Polarity, Set},
-	Enum, OptType, Type, Value,
 };
 
 /// Parses a DataZinc file, returning a mapping of the name of the left hand
@@ -30,7 +31,7 @@ use crate::{
 ///
 /// An optional filename can be given that will be used to indicate the location
 /// if an error occurs
-pub(crate) fn parse_dzn(src: &SourceFile) -> Result<Vec<Assignment>, ShackleError> {
+pub(crate) fn parse_dzn(src: &SourceFile) -> Result<Vec<Assignment>, Error> {
 	let mut parser = Parser::new();
 	parser
 		.set_language(tree_sitter_datazinc::language())
@@ -53,7 +54,7 @@ pub(crate) fn collect_dzn_value(
 	file: &SourceFile,
 	val: &Expression,
 	ty: &Type,
-) -> Result<ParserVal, ShackleError> {
+) -> Result<ParserVal, Error> {
 	let type_err = |val_kind| {
 		Err(TypeMismatch {
 			src: file.clone(),
@@ -434,7 +435,7 @@ pub(crate) fn collect_dzn_value(
 			let extract_range = |op: &InfixOperator, ty| {
 				let left = collect_dzn_value(file, &op.left(), ty)?;
 				let right = collect_dzn_value(file, &op.right(), ty)?;
-				Ok::<_, ShackleError>((left, right))
+				Ok::<_, Error>((left, right))
 			};
 			match op.operator().name() {
 				".." => {
@@ -502,7 +503,7 @@ impl EnumInner {
 		&mut self,
 		file: &SourceFile,
 		def: &Expression,
-	) -> Result<(), ShackleError> {
+	) -> Result<(), Error> {
 		debug_assert_eq!(self, &EnumInner::NoDefinition);
 		let mut ctors = Vec::new();
 
@@ -595,9 +596,10 @@ mod tests {
 	use std::sync::Arc;
 
 	use expect_test::{expect, Expect};
+	use shackle_compiler::file::SourceFile;
 
 	use super::parse_dzn;
-	use crate::{data::dzn::collect_dzn_value, file::SourceFile, Enum, OptType, Type};
+	use crate::{data::dzn::collect_dzn_value, Enum, OptType, Type};
 
 	fn check_serialization(input: &str, ty: &Type, expected: &Expect) {
 		let src = SourceFile::from(Arc::new(format!("x = {input};")));

@@ -495,7 +495,7 @@ impl<'de, 'a> Visitor<'de> for SerdeFileVisitor<'a> {
 				if *inner == EnumInner::NoDefinition {
 					*inner = map.next_value::<EnumInner>()?;
 				} else {
-					todo!("create custom serde error that will be converted into ShackleError")
+					todo!("create custom serde error that will be converted into Error")
 				}
 			} else {
 				map.next_value::<IgnoredAny>()?; // Ignore unknown
@@ -834,9 +834,10 @@ mod tests {
 	use expect_test::{expect, Expect};
 	use rustc_hash::FxHashMap;
 	use serde::Deserializer;
+	use shackle_compiler::file::SourceFile;
 
 	use super::SerdeFileVisitor;
-	use crate::{diagnostics::ShackleError, file::SourceFile, Enum, OptType, Type};
+	use crate::{Enum, Error, OptType, Type};
 
 	fn check_serialization(input: &str, ty: &Type, expected: &Expect) {
 		let input_types = FxHashMap::from_iter([("x".into(), ty.clone())]);
@@ -847,7 +848,7 @@ mod tests {
 				input_types: &input_types,
 				enum_types: &enum_types,
 			})
-			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.map_err(|err| Error::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);
 
@@ -869,7 +870,7 @@ mod tests {
 				input_types: &input_types,
 				enum_types: &enum_types,
 			})
-			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.map_err(|err| Error::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert_eq!(assignments.len(), 1);
 		let val2 = assignments[0]
@@ -897,7 +898,7 @@ mod tests {
 				input_types: &input_types,
 				enum_types: &enum_types,
 			})
-			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.map_err(|err| Error::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert!(assignments.is_empty());
 		expected[0].assert_eq(&a.to_string());
@@ -912,7 +913,7 @@ mod tests {
 				input_types: &input_types,
 				enum_types: &enum_types,
 			})
-			.map_err(|err| ShackleError::from_serde_json(err, &src))
+			.map_err(|err| Error::from_serde_json(err, &src))
 			.expect("unexpected syntax error");
 		assert!(assignments.is_empty());
 		assert_eq!(a, b);

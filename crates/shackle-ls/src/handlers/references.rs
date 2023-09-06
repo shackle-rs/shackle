@@ -1,6 +1,6 @@
 use lsp_server::ResponseError;
 use lsp_types::{request::References, Location, ReferenceParams};
-use shackle::{
+use shackle_compiler::{
 	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{db::Hir, ids::NodeRef},

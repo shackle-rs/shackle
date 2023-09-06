@@ -2,7 +2,7 @@ use lsp_server::ResponseError;
 use lsp_types::{
 	request::HoverRequest, Hover, HoverContents, HoverParams, LanguageString, MarkedString,
 };
-use shackle::{
+use shackle_compiler::{
 	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{db::Hir, ids::NodeRef},

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use lsp_types::Url;
 use miette::{SourceCode, SpanContents};
-use shackle::hir::{db::Hir, ids::NodeRef};
+use shackle_compiler::hir::{db::Hir, ids::NodeRef};
 
 pub fn span_contents_to_range(r: &dyn SpanContents) -> lsp_types::Range {
 	let mut range = lsp_types::Range::default();

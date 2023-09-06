@@ -82,7 +82,8 @@ pub struct Children<'a, T> {
 }
 
 impl<'a, T: From<CstNode>> Children<'a, T> {
-	pub(crate) fn from_cst(parent: &'a CstNode, field: &str) -> Self {
+	/// Get the children of a `CstNode`
+	pub fn from_cst(parent: &'a CstNode, field: &str) -> Self {
 		let tree = parent.cst();
 		let id = tree.language().field_id_for_name(field).unwrap();
 		let mut cursor = parent.as_ref().walk();

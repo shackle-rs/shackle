@@ -28,7 +28,7 @@ pub use self::view_scope::*;
 pub mod test {
 	use expect_test::Expect;
 	use lsp_server::ResponseError;
-	use shackle::{
+	use shackle_compiler::{
 		db::{CompilerDatabase, FileReader, Inputs},
 		diagnostics::FileError,
 		file::{FileHandler, InputFile},
@@ -84,7 +84,7 @@ pub mod test {
 		fn set_active_file_from_document(
 			&mut self,
 			_doc: &lsp_types::TextDocumentIdentifier,
-		) -> Result<shackle::file::ModelRef, lsp_server::ResponseError> {
+		) -> Result<shackle_compiler::file::ModelRef, lsp_server::ResponseError> {
 			Ok(self.input_models()[0])
 		}
 		fn get_workspace_uri(&self) -> Option<&lsp_types::Url> {

@@ -5,7 +5,7 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
-use shackle::{diagnostics::FileError, file::FileHandler};
+use shackle_compiler::{diagnostics::FileError, file::FileHandler};
 
 /// Virtual filesystem allowing us to override file reads
 ///

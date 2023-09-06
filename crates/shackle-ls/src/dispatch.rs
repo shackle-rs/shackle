@@ -3,7 +3,7 @@ use std::panic::{catch_unwind, UnwindSafe};
 use lsp_server::{
 	ErrorCode, ExtractError, Message, Notification, Request, Response, ResponseError,
 };
-use shackle::db::CompilerDatabase;
+use shackle_compiler::db::CompilerDatabase;
 
 use crate::{db::LanguageServerContext, LanguageServerDatabase};
 
