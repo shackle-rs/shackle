@@ -63,9 +63,8 @@ mod test {
 	use expect_test::expect;
 	use lsp_types::Url;
 
-	use crate::handlers::test::test_handler_display;
-
 	use super::ViewHirHandler;
+	use crate::handlers::test::test_handler_display;
 
 	#[test]
 	fn test_view_hir() {

@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use lsp_server::ResponseError;
 use lsp_types::TextDocumentPositionParams;
 use shackle_compiler::{
@@ -9,7 +11,6 @@ use shackle_compiler::{
 		source::{find_node, Point},
 	},
 };
-use std::fmt::Write;
 
 use crate::{db::LanguageServerContext, dispatch::RequestHandler, extensions::ViewScope};
 
@@ -76,9 +77,8 @@ mod test {
 	use expect_test::expect;
 	use lsp_types::Url;
 
-	use crate::handlers::test::test_handler_display;
-
 	use super::ViewScopeHandler;
+	use crate::handlers::test::test_handler_display;
 
 	#[test]
 	fn test_view_scope() {

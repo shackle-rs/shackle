@@ -6,14 +6,6 @@
 use std::sync::Arc;
 
 use itertools::Itertools;
-use tree_sitter::Parser;
-
-use crate::{
-	data::ParserVal,
-	value::{EnumInner, Index, Polarity, Set},
-	Enum, OptType, Type, Value,
-};
-
 use shackle_compiler::{
 	diagnostics::{Error, InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError, TypeMismatch},
 	file::SourceFile,
@@ -24,6 +16,13 @@ use shackle_compiler::{
 		},
 		cst::{Cst, CstNode},
 	},
+};
+use tree_sitter::Parser;
+
+use crate::{
+	data::ParserVal,
+	value::{EnumInner, Index, Polarity, Set},
+	Enum, OptType, Type, Value,
 };
 
 /// Parses a DataZinc file, returning a mapping of the name of the left hand

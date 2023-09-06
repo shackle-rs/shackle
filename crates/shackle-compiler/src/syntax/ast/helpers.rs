@@ -2,9 +2,8 @@
 
 use std::marker::PhantomData;
 
-use crate::syntax::cst::CstNode;
-
 use super::{AstNode, Children};
+use crate::syntax::cst::CstNode;
 
 /// Helper to retrieve a child node by its field name
 pub fn child_with_field_name<T: AstNode, U: From<CstNode>>(parent: &T, field: &str) -> U {
@@ -263,10 +262,10 @@ pub(crate) use ast_enum;
 
 #[cfg(test)]
 pub mod test {
-	use crate::syntax::ast::Model;
-	use crate::syntax::cst::Cst;
 	use expect_test::{Expect, ExpectFile};
 	use tree_sitter::Parser;
+
+	use crate::syntax::{ast::Model, cst::Cst};
 
 	/// Helper to check parsed AST
 	pub fn check_ast(source: &str, expected: Expect) {

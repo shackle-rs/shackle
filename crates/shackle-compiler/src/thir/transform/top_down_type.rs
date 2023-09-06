@@ -325,9 +325,8 @@ pub fn top_down_type(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check_no_stdlib;
-
 	use super::top_down_type;
+	use crate::thir::transform::test::check_no_stdlib;
 
 	#[test]
 	fn test_top_down_type_bottom() {

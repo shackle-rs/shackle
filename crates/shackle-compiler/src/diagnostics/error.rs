@@ -1,15 +1,16 @@
 //! Error handling
 
+use std::{
+	fmt::{Display, Formatter},
+	panic::Location,
+	path::PathBuf,
+};
+
 use miette::{Diagnostic, SourceOffset, SourceSpan};
 use thiserror::Error;
 
-use std::fmt::{Display, Formatter};
-use std::panic::Location;
-use std::path::PathBuf;
-
-use crate::file::SourceFile;
-
 use super::Diagnostics;
+use crate::file::SourceFile;
 
 /// An error internal to Shackle.
 ///

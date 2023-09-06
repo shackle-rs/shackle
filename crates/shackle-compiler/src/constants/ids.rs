@@ -1,5 +1,4 @@
-use crate::hir::db::Hir;
-use crate::hir::Identifier;
+use crate::hir::{db::Hir, Identifier};
 
 macro_rules! id_registry {
 	($struct:ident, $($tail:tt)*) => {

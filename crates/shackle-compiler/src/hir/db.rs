@@ -2,26 +2,29 @@
 
 //! Salsa database for HIR operations
 
-use std::collections::HashSet;
-use std::path::Path;
-use std::sync::Arc;
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::constants::IdentifierRegistry;
-use crate::db::{CompilerSettings, FileReader, Interner, Upcast};
-use crate::diagnostics::{Diagnostics, IncludeError, MultipleErrors};
-use crate::file::{FileRef, ModelRef, SourceFile};
-use crate::syntax::ast::{self, AstNode};
-use crate::syntax::db::SourceParser;
-use crate::ty::EnumRef;
-use crate::{Error, Result, Warning};
-
-use super::ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef};
-use super::scope::{ScopeData, ScopeResult};
-use super::source::SourceMap;
-use super::typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult};
-use super::{Identifier, Model, ScopeCollectorResult};
+use super::{
+	ids::{EntityRef, EntityRefData, ItemRef, ItemRefData, PatternRef},
+	scope::{ScopeData, ScopeResult},
+	source::SourceMap,
+	typecheck::{BodyTypes, SignatureTypes, TypeDiagnostics, TypeResult},
+	Identifier, Model, ScopeCollectorResult,
+};
+use crate::{
+	constants::IdentifierRegistry,
+	db::{CompilerSettings, FileReader, Interner, Upcast},
+	diagnostics::{Diagnostics, IncludeError, MultipleErrors},
+	file::{FileRef, ModelRef, SourceFile},
+	syntax::{
+		ast::{self, AstNode},
+		db::SourceParser,
+	},
+	ty::EnumRef,
+	Error, Result, Warning,
+};
 
 /// HIR queries
 #[salsa::query_group(HirStorage)]

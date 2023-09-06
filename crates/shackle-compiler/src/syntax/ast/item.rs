@@ -459,8 +459,9 @@ impl TypeAlias {
 
 #[cfg(test)]
 mod test {
-	use crate::syntax::ast::helpers::test::*;
 	use expect_test::expect;
+
+	use crate::syntax::ast::helpers::test::*;
 
 	#[test]
 	fn test_include() {

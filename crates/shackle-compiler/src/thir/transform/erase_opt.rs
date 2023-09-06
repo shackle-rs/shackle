@@ -443,9 +443,8 @@ pub fn erase_opt(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::{test::check_no_stdlib, top_down_type, transformer};
-
 	use super::erase_opt;
+	use crate::thir::transform::{test::check_no_stdlib, top_down_type, transformer};
 
 	#[test]
 	fn test_option_type_erasure() {

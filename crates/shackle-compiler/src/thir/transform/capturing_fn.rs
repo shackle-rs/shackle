@@ -355,9 +355,8 @@ pub fn decapture_model(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check_no_stdlib;
-
 	use super::decapture_model;
+	use crate::thir::transform::test::check_no_stdlib;
 
 	#[test]
 	fn test_decapture() {

@@ -3,21 +3,22 @@
 //! Compiler query database
 //!
 
-use super::hir::db::HirStorage;
-use super::syntax::db::SourceParserStorage;
-use super::thir::db::ThirStorage;
-use crate::constants::TypeRegistry;
-use crate::diagnostics::FileError;
-use crate::file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef};
-use crate::hir::db::Hir;
-use crate::syntax::db::SourceParser;
-use crate::thir::db::Thir;
-use crate::ty::{NewType, NewTypeData, Ty, TyData};
+use std::{
+	fmt::Display,
+	panic::RefUnwindSafe,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
-use std::fmt::Display;
-use std::panic::RefUnwindSafe;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use crate::{
+	constants::TypeRegistry,
+	diagnostics::FileError,
+	file::{DefaultFileHandler, FileHandler, FileRef, FileRefData, InputFile, ModelRef},
+	hir::db::{Hir, HirStorage},
+	syntax::db::{SourceParser, SourceParserStorage},
+	thir::db::{Thir, ThirStorage},
+	ty::{NewType, NewTypeData, Ty, TyData},
+};
 
 /// Queries for inputs
 #[salsa::query_group(InputsStorage)]

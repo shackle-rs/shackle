@@ -1,7 +1,6 @@
 //! AST Representation for containers
 
-use super::{helpers::*, Identifier};
-use super::{AstNode, Children, Expression, Pattern};
+use super::{helpers::*, AstNode, Children, Expression, Identifier, Pattern};
 
 ast_node!(
 	/// Tuple literal
@@ -273,8 +272,9 @@ impl AssignmentGenerator {
 
 #[cfg(test)]
 mod test {
-	use crate::syntax::ast::helpers::test::*;
 	use expect_test::expect;
+
+	use crate::syntax::ast::helpers::test::*;
 
 	#[test]
 	fn test_tuple_literal() {

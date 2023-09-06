@@ -7,6 +7,7 @@ use std::{collections::hash_map::Entry, fmt::Debug, sync::Arc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::{Constructor, EnumConstructor, Generator, MaybeIndexSet};
 use crate::{
 	diagnostics::{IdentifierAlreadyDefined, IdentifierShadowing, InvalidPattern},
 	hir::{
@@ -20,8 +21,6 @@ use crate::{
 	},
 	Error, Result, Warning,
 };
-
-use super::{Constructor, EnumConstructor, Generator, MaybeIndexSet};
 
 /// Gets all variables in global scope.
 ///

@@ -1,15 +1,14 @@
 //! Pretty printing of THIR as MiniZinc
 //!
 
-use crate::utils::maybe_grow_stack;
-
-use super::db::Thir;
-use super::{
-	AnnotationId, Callable, ConstraintId, DeclarationId, Domain, DomainData, EnumerationId,
-	Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Marker, Model,
-	OutputId, Pattern, PatternData, ResolvedIdentifier,
-};
 use std::fmt::Write;
+
+use super::{
+	db::Thir, AnnotationId, Callable, ConstraintId, DeclarationId, Domain, DomainData,
+	EnumerationId, Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem,
+	Marker, Model, OutputId, Pattern, PatternData, ResolvedIdentifier,
+};
+use crate::utils::maybe_grow_stack;
 
 static MINIZINC_COMPAT: &str = include_str!("../../../../share/minizinc/compat.mzn");
 

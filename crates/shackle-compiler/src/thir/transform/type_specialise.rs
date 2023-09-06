@@ -582,9 +582,8 @@ pub fn type_specialise(db: &dyn Thir, model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::{name_mangle::mangle_names, test::check_no_stdlib, transformer};
-
 	use super::type_specialise;
+	use crate::thir::transform::{name_mangle::mangle_names, test::check_no_stdlib, transformer};
 
 	#[test]
 	fn test_type_specialisation_basic_1() {

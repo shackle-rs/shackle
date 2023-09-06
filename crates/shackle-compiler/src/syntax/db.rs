@@ -3,12 +3,12 @@
 
 use tree_sitter::Parser;
 
-use super::ast::Model;
-use super::cst::Cst;
-
-use crate::db::{FileReader, Upcast};
-use crate::file::FileRef;
-use crate::Result;
+use super::{ast::Model, cst::Cst};
+use crate::{
+	db::{FileReader, Upcast},
+	file::FileRef,
+	Result,
+};
 
 /// Syntax parsing queries
 #[salsa::query_group(SourceParserStorage)]

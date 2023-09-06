@@ -4,22 +4,15 @@
 //! The `crate::thir::Visitor` and `crate::thir::Folder` traits are useful for implementing these.
 //! It is the responsibility of implementors to know what constructs are expected to be present at the stage they run.
 
+use self::{
+	call_by_name::inline_call_by_name, capturing_fn::decapture_model,
+	comprehension::desugar_comprehension, domain_constraint::rewrite_domains,
+	erase_enum::erase_enum, erase_opt::erase_opt, erase_record::erase_record,
+	function_dispatch::function_dispatch, name_mangle::mangle_names, output::generate_output,
+	top_down_type::top_down_type, type_specialise::type_specialise,
+};
+use super::{db::Thir, Model};
 use crate::Result;
-
-use self::call_by_name::inline_call_by_name;
-use self::capturing_fn::decapture_model;
-use self::comprehension::desugar_comprehension;
-use self::domain_constraint::rewrite_domains;
-use self::erase_enum::erase_enum;
-use self::erase_opt::erase_opt;
-use self::erase_record::erase_record;
-use self::function_dispatch::function_dispatch;
-use self::name_mangle::mangle_names;
-use self::output::generate_output;
-use self::top_down_type::top_down_type;
-use self::type_specialise::type_specialise;
-use super::db::Thir;
-use super::Model;
 
 pub mod call_by_name;
 pub mod capturing_fn;

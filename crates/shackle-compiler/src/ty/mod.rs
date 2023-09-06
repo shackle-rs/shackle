@@ -10,15 +10,15 @@
 //! - Function types are never generic - since function expressions have all type-inst parameters already bound
 //!   (although the bound type-inst may itself be a type-inst variable, such as when calling a generic function from another generic function).
 
-use rustc_hash::FxHashMap;
-use std::collections::hash_map::Entry;
-use std::sync::atomic::AtomicU32;
+use std::{collections::hash_map::Entry, sync::atomic::AtomicU32};
 
-use crate::db::{InternedString, Interner};
-use crate::hir::db::Hir;
-use crate::hir::ids::PatternRef;
-use crate::hir::Identifier;
-use crate::utils::maybe_grow_stack;
+use rustc_hash::FxHashMap;
+
+use crate::{
+	db::{InternedString, Interner},
+	hir::{db::Hir, ids::PatternRef, Identifier},
+	utils::maybe_grow_stack,
+};
 
 mod functions;
 pub use self::functions::*;

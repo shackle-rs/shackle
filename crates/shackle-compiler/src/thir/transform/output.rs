@@ -115,9 +115,8 @@ pub fn generate_output(db: &dyn Thir, mut model: Model) -> Result<Model> {
 mod test {
 	use expect_test::expect;
 
-	use crate::thir::transform::test::check;
-
 	use super::generate_output;
+	use crate::thir::transform::test::check;
 
 	#[test]
 	fn test_output_generation() {

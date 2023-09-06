@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::PatternTy;
 use crate::{
 	diagnostics::CyclicDefinition,
 	hir::{
@@ -21,8 +22,6 @@ use crate::{
 	utils::DebugPrint,
 	Error,
 };
-
-use super::PatternTy;
 
 /// Topologically sort items
 pub fn topological_sort(db: &dyn Hir) -> (Arc<Vec<ItemRef>>, Arc<Vec<Error>>) {

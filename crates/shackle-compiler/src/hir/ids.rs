@@ -4,15 +4,14 @@ use std::sync::Arc;
 
 use miette::SourceSpan;
 
-use crate::{
-	file::{ModelRef, SourceFile},
-	utils::{arena::ArenaIndex, impl_enum_from, DebugPrint},
-};
-
 use super::{
 	db::Hir, Annotation, Assignment, Constraint, Declaration, EnumAssignment, Enumeration,
 	Expression, Function, Identifier, Item, ItemData, Model, Output, Pattern, Solve, Type,
 	TypeAlias,
+};
+use crate::{
+	file::{ModelRef, SourceFile},
+	utils::{arena::ArenaIndex, impl_enum_from, DebugPrint},
 };
 
 /// Reference to an item local to a model.

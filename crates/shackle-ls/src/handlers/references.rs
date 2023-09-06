@@ -3,9 +3,9 @@ use lsp_types::{request::References, Location, ReferenceParams};
 use shackle_compiler::{
 	db::CompilerDatabase,
 	file::ModelRef,
-	hir::{db::Hir, ids::NodeRef},
 	hir::{
-		ids::{LocalEntityRef, PatternRef},
+		db::Hir,
+		ids::{LocalEntityRef, NodeRef, PatternRef},
 		source::{find_node, Point},
 	},
 	syntax::db::SourceParser,
@@ -112,9 +112,8 @@ mod test {
 	use expect_test::expect;
 	use lsp_types::Url;
 
-	use crate::handlers::test::test_handler;
-
 	use super::ReferencesHandler;
+	use crate::handlers::test::test_handler;
 
 	#[test]
 	fn test_references() {

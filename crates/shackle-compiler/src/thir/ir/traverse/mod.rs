@@ -7,5 +7,4 @@
 mod fold;
 mod visit;
 
-pub use self::fold::*;
-pub use self::visit::*;
+pub use self::{fold::*, visit::*};

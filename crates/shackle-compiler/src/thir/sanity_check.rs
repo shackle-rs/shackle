@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use super::{db::Thir, pretty_print::PrettyPrinter};
 use crate::{
 	db::{CompilerDatabase, Inputs},
 	diagnostics::Diagnostics,
@@ -10,8 +11,6 @@ use crate::{
 	hir::db::Hir,
 	Error,
 };
-
-use super::{db::Thir, pretty_print::PrettyPrinter};
 
 /// Get the diagnostics for running the pretty printed THIR.
 ///

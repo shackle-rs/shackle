@@ -1,12 +1,8 @@
 //! AST representation of primitive values
 
-use std::num::IntErrorKind;
-use std::num::ParseFloatError;
-use std::num::ParseIntError;
+use std::num::{IntErrorKind, ParseFloatError, ParseIntError};
 
-use super::AstNode;
-
-use super::helpers::*;
+use super::{helpers::*, AstNode};
 
 ast_node!(
 	/// Integer literal
@@ -227,10 +223,10 @@ pub fn parse_float_literal(text: &str) -> Result<f64, FloatParsingError> {
 
 #[cfg(test)]
 mod test {
-	use crate::syntax::ast::{helpers::test::*, FloatParsingError};
 	use expect_test::expect;
 
 	use super::parse_float_literal;
+	use crate::syntax::ast::{helpers::test::*, FloatParsingError};
 
 	#[test]
 	fn test_parse_float() {

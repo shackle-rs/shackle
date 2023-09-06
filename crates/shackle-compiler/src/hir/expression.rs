@@ -4,14 +4,13 @@
 
 use std::fmt;
 
-use crate::utils::{arena::ArenaIndex, impl_enum_from};
-
 use super::{
 	ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, BooleanLiteral, Constraint,
 	Declaration, FloatLiteral, Generator, Identifier, IndexedArrayLiteral, IntegerLiteral,
 	ItemData, MaybeIndexSet, Parameter, Pattern, RecordLiteral, SetComprehension, SetLiteral,
 	StringLiteral, TupleLiteral, Type,
 };
+use crate::utils::{arena::ArenaIndex, impl_enum_from};
 
 /// An expression
 #[derive(Clone, Hash, PartialEq, Eq)]

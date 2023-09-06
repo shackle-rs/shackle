@@ -1,17 +1,21 @@
 //! Wrappers around the tree-sitter tree to allow for usage with salsa.
 
+use std::{
+	fmt::Debug,
+	hash::{Hash, Hasher},
+	ops::Deref,
+	sync::Arc,
+};
+
 use miette::SourceSpan;
-use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
-use std::ops::Deref;
-use std::sync::Arc;
 use tree_sitter::{Node, Tree, TreeCursor};
 
-use crate::db::FileReader;
-use crate::diagnostics::SyntaxError;
-use crate::file::{FileRef, SourceFile};
-
 use super::db::SourceParser;
+use crate::{
+	db::FileReader,
+	diagnostics::SyntaxError,
+	file::{FileRef, SourceFile},
+};
 
 /// Wrapper for a tree sitter tree.
 ///

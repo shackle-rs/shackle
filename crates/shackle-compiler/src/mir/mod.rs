@@ -2,13 +2,13 @@
 
 pub mod ty;
 
+use ty::Ty;
+
 use crate::{
 	hir::{BooleanLiteral, FloatLiteral, Identifier, IntegerLiteral, StringLiteral},
 	thir::source::Origin,
 	utils::arena::{Arena, ArenaIndex},
 };
-
-use ty::Ty;
 
 /// A mid-level IR program (MicroZinc)
 pub struct Model {

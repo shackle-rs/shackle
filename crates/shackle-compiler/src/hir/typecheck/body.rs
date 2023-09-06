@@ -6,6 +6,7 @@
 /// - Bodies of functions
 use rustc_hash::FxHashMap;
 
+use super::{PatternTy, TypeContext, Typer};
 use crate::{
 	hir::{
 		db::Hir,
@@ -16,8 +17,6 @@ use crate::{
 	utils::arena::{ArenaIndex, ArenaMap},
 	Error,
 };
-
-use super::{PatternTy, TypeContext, Typer};
 
 /// Collected types for an item body
 #[derive(Clone, Debug, PartialEq, Eq)]

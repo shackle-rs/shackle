@@ -65,9 +65,11 @@ pub(crate) use impl_enum_from;
 pub(crate) use impl_index;
 use salsa::InternKey;
 
-use crate::db::InternedString;
-use crate::hir::db::Hir;
-use crate::syntax::ast::{parse_float_literal, parse_integer_literal};
+use crate::{
+	db::InternedString,
+	hir::db::Hir,
+	syntax::ast::{parse_float_literal, parse_integer_literal},
+};
 
 /// Trait for pretty printing for debugging with a Salsa database
 pub trait DebugPrint<'a> {

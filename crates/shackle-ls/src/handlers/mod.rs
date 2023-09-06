@@ -11,34 +11,28 @@ mod view_hir;
 mod view_pretty_print;
 mod view_scope;
 
-pub use self::completions::*;
-pub use self::goto_definition::*;
-pub use self::hover::*;
-pub use self::references::*;
-pub use self::rename_symbol::*;
-pub use self::semantic_tokens::*;
-pub use self::vfs::*;
-pub use self::view_ast::*;
-pub use self::view_cst::*;
-pub use self::view_hir::*;
-pub use self::view_pretty_print::*;
-pub use self::view_scope::*;
+pub use self::{
+	completions::*, goto_definition::*, hover::*, references::*, rename_symbol::*,
+	semantic_tokens::*, vfs::*, view_ast::*, view_cst::*, view_hir::*, view_pretty_print::*,
+	view_scope::*,
+};
 
 #[cfg(test)]
 pub mod test {
-	use expect_test::Expect;
-	use lsp_server::ResponseError;
-	use shackle_compiler::{
-		db::{CompilerDatabase, FileReader, Inputs},
-		diagnostics::FileError,
-		file::{FileHandler, InputFile},
-	};
 	use std::{
 		ops::Deref,
 		panic::RefUnwindSafe,
 		path::{Path, PathBuf},
 		str::FromStr,
 		sync::Arc,
+	};
+
+	use expect_test::Expect;
+	use lsp_server::ResponseError;
+	use shackle_compiler::{
+		db::{CompilerDatabase, FileReader, Inputs},
+		diagnostics::FileError,
+		file::{FileHandler, InputFile},
 	};
 
 	use crate::{db::LanguageServerContext, dispatch::RequestHandler};

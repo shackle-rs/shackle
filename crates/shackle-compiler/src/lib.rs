@@ -16,7 +16,6 @@ pub mod ty;
 pub mod utils;
 
 pub use diagnostics::Error;
-
 // Export OptType enumeration used in [`Type`]
 pub use ty::OptType;
 
