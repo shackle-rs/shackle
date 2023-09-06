@@ -1,7 +1,7 @@
 //! Handling of errors and warnings during compilation
 
-mod error;
-mod warning;
+pub mod error;
+pub mod warning;
 
 use std::sync::Arc;
 

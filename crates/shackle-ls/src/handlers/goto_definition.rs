@@ -1,6 +1,6 @@
 use lsp_server::ResponseError;
 use lsp_types::{request::GotoDefinition, GotoDefinitionParams, GotoDefinitionResponse};
-use shackle::{
+use shackle_compiler::{
 	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{

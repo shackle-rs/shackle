@@ -51,7 +51,7 @@ impl Display for InternalError {
 pub struct MultipleErrors {
 	/// The errors
 	#[related]
-	pub errors: Vec<ShackleError>,
+	pub errors: Vec<Error>,
 }
 
 /// A file error
@@ -491,7 +491,7 @@ pub struct TypeSpecialisationRecursionLimit {
 
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
-pub enum ShackleError {
+pub enum Error {
 	/// Multiple errors
 	#[error(transparent)]
 	#[diagnostic(transparent)]
@@ -603,10 +603,10 @@ pub enum ShackleError {
 #[diagnostic(code(shackle::empty_error_vec))]
 pub struct EmptyErrorVec;
 
-impl TryFrom<Vec<ShackleError>> for ShackleError {
+impl TryFrom<Vec<Error>> for Error {
 	type Error = EmptyErrorVec;
 
-	fn try_from(value: Vec<ShackleError>) -> Result<Self, Self::Error> {
+	fn try_from(value: Vec<Error>) -> Result<Self, Self::Error> {
 		match value.len() {
 			0 => Err(EmptyErrorVec),
 			1 => Ok(value.last().unwrap().clone()),
@@ -615,10 +615,10 @@ impl TryFrom<Vec<ShackleError>> for ShackleError {
 	}
 }
 
-impl TryFrom<Diagnostics<ShackleError>> for ShackleError {
+impl TryFrom<Diagnostics<Error>> for Error {
 	type Error = EmptyErrorVec;
 
-	fn try_from(value: Diagnostics<ShackleError>) -> Result<Self, Self::Error> {
+	fn try_from(value: Diagnostics<Error>) -> Result<Self, Self::Error> {
 		match value.len() {
 			0 => Err(EmptyErrorVec),
 			1 => Ok(value.iter().next().unwrap().clone()),
@@ -630,8 +630,9 @@ impl TryFrom<Diagnostics<ShackleError>> for ShackleError {
 	}
 }
 
-impl ShackleError {
-	pub(crate) fn from_serde_json(err: serde_json::Error, src: &SourceFile) -> Self {
+impl Error {
+	/// Parse an error from JSON
+	pub fn from_serde_json(err: serde_json::Error, src: &SourceFile) -> Self {
 		use serde_json::error::Category;
 
 		match err.classify() {

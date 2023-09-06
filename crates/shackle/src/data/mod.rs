@@ -8,9 +8,8 @@ use std::sync::Arc;
 use itertools::Itertools;
 
 use crate::{
-	diagnostics::ShackleError,
 	value::{Array, EnumRangeInclusive, EnumValue, Index, Polarity, Record, Set, Value},
-	OptType, Type,
+	Error, OptType, Result, Type,
 };
 
 /// Value parsed in a data file.
@@ -54,7 +53,7 @@ impl ParserVal {
 	/// Resolve parsed data value into final value for users and the interpreter
 	///
 	/// This is the final step in the parsing of data files, resolving enumerated types and creating
-	pub(crate) fn resolve_value(self, ty: &Type) -> Result<Value, ShackleError> {
+	pub(crate) fn resolve_value(self, ty: &Type) -> Result<Value> {
 		match self {
 			ParserVal::Absent => Ok(Value::Absent),
 			ParserVal::Infinity(v) => Ok(Value::Infinity(v)),
@@ -121,7 +120,7 @@ impl ParserVal {
 					.zip_eq(dim.iter())
 					.map(|(range, ty)| match range {
 						(ParserVal::Integer(start), ParserVal::Integer(end)) => {
-							Ok::<_, ShackleError>(Index::Integer(start..=end))
+							Ok::<_, Error>(Index::Integer(start..=end))
 						}
 						(start @ ParserVal::Enum(_, _), ParserVal::Infinity(Polarity::Pos)) => {
 							debug_assert_eq!(dim.len(), 1);
@@ -270,7 +269,7 @@ impl ParserVal {
 						debug_assert_eq!(&n, name);
 						Ok((name.clone(), v.resolve_value(ty)?))
 					})
-					.collect::<Result<Record, ShackleError>>()?;
+					.collect::<Result<Record>>()?;
 				Ok(Value::Record(rec))
 			}
 		}

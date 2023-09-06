@@ -4,17 +4,6 @@
 #![warn(unused_crate_dependencies, unused_extern_crates)]
 #![warn(variant_size_differences)]
 
-pub mod constants;
-pub mod db;
-pub mod diagnostics;
-pub mod file;
-pub mod hir;
-pub mod mir;
-pub mod syntax;
-pub mod thir;
-pub mod ty;
-pub mod utils;
-
 mod data;
 mod legacy;
 mod value;
@@ -23,15 +12,17 @@ use data::{
 	dzn::{collect_dzn_value, parse_dzn},
 	serde::SerdeFileVisitor,
 };
-use db::{CompilerDatabase, Inputs, InternedString, Interner};
-use diagnostics::{FileError, IdentifierAlreadyDefined, ShackleError};
-use file::{InputFile, SourceFile};
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserializer;
-use syntax::ast::{AstNode, Identifier};
-use thir::db::ModelIoInterface;
-use ty::{Ty, TyData};
+use shackle_compiler::file::{InputFile, SourceFile};
+use shackle_compiler::syntax::ast::{AstNode, Identifier};
+use shackle_compiler::thir;
+use shackle_compiler::ty::{Ty, TyData};
+use shackle_compiler::{
+	db::{CompilerDatabase, Inputs, InternedString, Interner},
+	thir::Declaration,
+};
 use value::EnumInner;
 
 use std::{
@@ -44,23 +35,26 @@ use std::{
 	time::Duration,
 };
 
-use crate::{
-	diagnostics::UndefinedIdentifier,
-	hir::db::Hir,
-	thir::{db::Thir, pretty_print::PrettyPrinter},
-};
-
+use shackle_compiler::hir::db::Hir;
+use shackle_compiler::thir::{db::Thir, pretty_print::PrettyPrinter};
 // Export OptType enumeration used in [`Type`]
-pub use ty::OptType;
+pub use shackle_compiler::ty::OptType;
 
-/// Shackle error type
-pub type Error = ShackleError;
 /// Result type for Shackle operations
-pub type Result<T, E = Error> = std::result::Result<T, E>;
-
-pub use diagnostics::Warning;
+pub use error::{Error, Result};
 pub use value::{Enum, Value};
 
+/// Shackle errors
+pub mod error {
+	pub use shackle_compiler::diagnostics::error::*;
+	pub use shackle_compiler::Result;
+}
+
+/// Shackle warnings
+pub mod warning {
+
+	pub use shackle_compiler::diagnostics::warning::*;
+}
 /// Structure used to build a shackle model
 pub struct Model {
 	db: CompilerDatabase,
@@ -69,14 +63,14 @@ pub struct Model {
 impl Model {
 	/// Create a Model from the file at the given path
 	pub fn from_file(path: PathBuf) -> Model {
-		let mut db = db::CompilerDatabase::default();
+		let mut db = CompilerDatabase::default();
 		db.set_input_files(Arc::new(vec![InputFile::Path(path)]));
 		Model { db }
 	}
 
 	/// Create a Model from the given string
 	pub fn from_string(m: String) -> Model {
-		let mut db = db::CompilerDatabase::default();
+		let mut db = CompilerDatabase::default();
 		db.set_input_files(Arc::new(vec![InputFile::ModelString(m)]));
 		Model { db }
 	}
@@ -94,15 +88,13 @@ impl Model {
 	pub fn compile(self, slv: &Solver) -> Result<Program> {
 		let errors = self.check(slv, &[], false);
 		if !errors.is_empty() {
-			return Err(ShackleError::try_from(errors).unwrap());
+			return Err(Error::try_from(errors).unwrap());
 		}
-		let prg_model = self.db.final_thir()?;
-
 		let ModelIoInterface {
 			input,
 			output,
 			enums,
-		} = (*self.db.model_io_interface()).clone();
+		} = ModelIoInterface::new(&self.db);
 		let legacy_enums = enums
 			.iter()
 			.filter_map(|(_, e)| {
@@ -113,6 +105,8 @@ impl Model {
 				}
 			})
 			.collect();
+
+		let prg_model = self.db.final_thir()?;
 
 		Ok(Program {
 			db: self.db,
@@ -236,10 +230,8 @@ impl Type {
 				let elem = Type::from_compiler(db, str_interner, type_map, enum_map, element);
 				let mut index_conv = |nty| -> Type {
 					match nty {
-						TyData::Integer(ty::VarType::Par, OptType::NonOpt) => {
-							Type::Integer(OptType::NonOpt)
-						}
-						TyData::Enum(ty::VarType::Par, OptType::NonOpt, e) => {
+						TyData::Integer(_, _) => Type::Integer(OptType::NonOpt),
+						TyData::Enum(_, _, e) => {
 							Type::Enum(OptType::NonOpt, enum_map[&str_interner(e.name(db))].clone())
 						}
 						_ => {
@@ -431,7 +423,7 @@ impl Program {
 	pub fn add_data_files<'a>(
 		&mut self,
 		files: impl Iterator<Item = &'a Path>,
-	) -> Result<(), ShackleError> {
+	) -> Result<(), Error> {
 		// First parse all files:
 		// - most values will be simple values that can be directly assigned
 		// - some values will be values of enumerated types, possible part of tuples, records, or indices.
@@ -455,7 +447,7 @@ impl Program {
 							data.push((k, ty, val));
 							// Identifier already seen
 							if names.contains(k) || self.input_data.contains_key(k) {
-								return Err(IdentifierAlreadyDefined {
+								return Err(error::IdentifierAlreadyDefined {
 									src,
 									span: asg.cst_node().as_ref().byte_range().into(),
 									identifier: k.to_string(),
@@ -470,7 +462,7 @@ impl Program {
 							if matches!(*inner, EnumInner::NoDefinition) {
 								(*inner).collect_definition(&src, &asg.definition())?
 							} else {
-								return Err(IdentifierAlreadyDefined {
+								return Err(error::IdentifierAlreadyDefined {
 									src,
 									span: asg.cst_node().as_ref().byte_range().into(),
 									identifier: k.to_string(),
@@ -479,7 +471,7 @@ impl Program {
 							}
 						} else {
 							// Unknown identifier
-							return Err(UndefinedIdentifier {
+							return Err(error::UndefinedIdentifier {
 								src,
 								span: ident.cst_node().as_ref().byte_range().into(),
 								identifier: ident.name().to_string(),
@@ -494,14 +486,14 @@ impl Program {
 							input_types: &self.input_types,
 							enum_types: &self.enum_types,
 						})
-						.map_err(|err| ShackleError::from_serde_json(err, &src))?;
+						.map_err(|err| Error::from_serde_json(err, &src))?;
 
 					data.reserve(assignments.len());
 					names.reserve(assignments.len());
 					for asg in assignments {
 						// Identifier already seen
 						if names.contains(asg.0) || self.input_data.contains_key(asg.0) {
-							return Err(IdentifierAlreadyDefined {
+							return Err(error::IdentifierAlreadyDefined {
 								src,
 								span: (0, 0).into(), // TODO: actual byte range
 								identifier: asg.0.to_string(),
@@ -513,7 +505,7 @@ impl Program {
 					}
 				}
 				_ => {
-					return Err(FileError {
+					return Err(error::FileError {
 						file: f.into(),
 						message: format!(
 							"Attempting to read data file using unknown extension \"{}\"",
@@ -535,6 +527,95 @@ impl Program {
 		}
 
 		Ok(())
+	}
+}
+
+/// Get a mapping from input/output identifiers to their computed types or enumerated type declaration
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ModelIoInterface {
+	pub input: FxHashMap<Arc<str>, crate::Type>,
+	pub output: FxHashMap<Arc<str>, crate::Type>,
+	pub enums: FxHashMap<Arc<str>, Arc<crate::Enum>>,
+}
+
+impl ModelIoInterface {
+	fn new(db: &dyn Thir) -> Self {
+		let sh = db.model_thir();
+		let val = sh.get();
+		let model = val.as_ref();
+
+		// Local interner
+		let mut interner: FxHashMap<InternedString, Arc<str>> = FxHashMap::default();
+		let mut resolve_name = |s| {
+			interner
+				.entry(s)
+				.or_insert_with(|| Arc::from(s.value(db.upcast())))
+				.clone()
+		};
+		let mut type_map = FxHashMap::default();
+
+		// Create a map of enumerations
+		let mut enums = FxHashMap::default();
+		for (_, e) in model.enumerations() {
+			let name = resolve_name(e.enum_type().name(db.upcast()));
+			if let Some(_ctor) = e.definition() {
+				log::warn!("TODO: enumerated type {} is defined in the model and member can currently not be constructed in data", name);
+				// TODO: determine dependencies or directly initialize the enumerated type
+				enums.insert(name.clone(), Arc::new(Enum::model_defined(name, [])));
+			} else {
+				enums.insert(name.clone(), Arc::new(Enum::from_data(name)));
+			}
+		}
+
+		// Find the annotation identifiers
+		let reg = db.identifier_registry();
+		let output_ann = reg.output;
+		let no_output_ann = reg.no_output;
+
+		// Determine input and output from declarations
+		let mut input = FxHashMap::default();
+		let mut output = FxHashMap::default();
+		let mut insert_decl = |map: &mut FxHashMap<Arc<str>, crate::Type>, decl: &Declaration| {
+			let name = resolve_name(decl.name().unwrap().0);
+			let ty = crate::Type::from_compiler(
+				db.upcast(),
+				&mut resolve_name,
+				&mut type_map,
+				&enums,
+				decl.domain().ty(),
+			);
+			map.insert(name, ty);
+		};
+		for (_, decl) in model.all_declarations() {
+			// Determine whether declaration is part of input
+			if decl.top_level()
+				&& decl.domain().ty().known_par(db.upcast())
+				&& decl.definition().is_none()
+			{
+				insert_decl(&mut input, decl)
+			}
+
+			// Determine whether declaration is part of output
+			let mut should_output = None;
+			if decl.annotations().has(model, output_ann) {
+				should_output = Some(true)
+			} else if decl.annotations().has(model, no_output_ann) {
+				should_output = Some(false)
+			}
+			if should_output == Some(true)
+				|| (should_output.is_none()
+					&& decl.top_level() && !decl.domain().ty().known_par(db.upcast())
+					&& decl.definition().is_none())
+			{
+				insert_decl(&mut output, decl)
+			}
+		}
+
+		ModelIoInterface {
+			input,
+			output,
+			enums,
+		}
 	}
 }
 

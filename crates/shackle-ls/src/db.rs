@@ -3,7 +3,7 @@ use std::{ops::Deref, path::Path, sync::Arc};
 use crossbeam_channel::{SendError, Sender};
 use lsp_server::{Connection, ErrorCode, Message, ResponseError};
 use lsp_types::{TextDocumentIdentifier, Url};
-use shackle::{
+use shackle_compiler::{
 	db::{CompilerDatabase, FileReader, HasFileHandler, Inputs},
 	file::{InputFile, ModelRef},
 };

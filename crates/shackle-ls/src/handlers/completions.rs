@@ -2,14 +2,14 @@ use lsp_server::ResponseError;
 use lsp_types::{
 	request::Completion, CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse,
 };
-use shackle::db::CompilerDatabase;
-use shackle::file::ModelRef;
-use shackle::hir::{
+use shackle_compiler::db::CompilerDatabase;
+use shackle_compiler::file::ModelRef;
+use shackle_compiler::hir::{
 	db::Hir,
 	source::{find_expression, Point},
 	Expression, PatternTy,
 };
-use shackle::ty::TyData;
+use shackle_compiler::ty::TyData;
 
 use crate::db::LanguageServerContext;
 use crate::dispatch::RequestHandler;

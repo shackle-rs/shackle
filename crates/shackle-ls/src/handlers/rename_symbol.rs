@@ -1,6 +1,6 @@
 use lsp_server::{ErrorCode::InvalidRequest, ResponseError};
 use lsp_types::{request::Rename, RenameParams, TextEdit, WorkspaceEdit};
-use shackle::{
+use shackle_compiler::{
 	db::CompilerDatabase,
 	file::ModelRef,
 	hir::{

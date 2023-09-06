@@ -9,8 +9,8 @@ use env_logger::{fmt::TimestampPrecision, Builder};
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, Report, Result};
-use shackle::diagnostics::{InternalError, ShackleError};
-use shackle::{Message, Model, Solver, Status};
+use shackle::error::InternalError;
+use shackle::{Error, Message, Model, Solver, Status};
 
 use std::ffi::OsStr;
 use std::fs::File;
@@ -165,7 +165,7 @@ impl Check {
 		if errors.is_empty() {
 			Ok(())
 		} else {
-			Err(ShackleError::try_from(errors).unwrap().into())
+			Err(Error::try_from(errors).unwrap().into())
 		}
 	}
 }
