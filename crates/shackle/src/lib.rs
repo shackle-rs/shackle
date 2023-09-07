@@ -1,4 +1,4 @@
-//! Shackle library
+//! Shackle user-facing library.
 
 #![warn(missing_docs)]
 #![warn(unused_crate_dependencies, unused_extern_crates)]
@@ -22,7 +22,7 @@ use data::{
 	dzn::{collect_dzn_value, parse_dzn},
 	serde::SerdeFileVisitor,
 };
-/// Result type for Shackle operations
+// Result type for Shackle operations
 pub use error::{Error, Result};
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -47,9 +47,9 @@ pub mod error {
 
 /// Shackle warnings
 pub mod warning {
-
 	pub use shackle_compiler::diagnostics::warning::*;
 }
+
 /// Structure used to build a shackle model
 pub struct Model {
 	db: CompilerDatabase,
