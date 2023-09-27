@@ -49,12 +49,12 @@
     }
   },
   {
-    "type": "if_then_else",
+    "type": "function_call",
     "named": true,
     "fields": {
-      "condition": {
+      "argument": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "(",
@@ -66,6 +66,10 @@
           },
           {
             "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "function_call",
             "named": true
           },
           {
@@ -86,6 +90,80 @@
           },
           {
             "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "unary_operator",
+            "named": true
+          }
+        ]
+      },
+      "function": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "if_then_else",
+    "named": true,
+    "fields": {
+      "condition": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_then_else",
+            "named": true
+          },
+          {
+            "type": "indexing",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
             "named": true
           },
           {
@@ -115,6 +193,10 @@
             "named": true
           },
           {
+            "type": "function_call",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -132,6 +214,10 @@
           },
           {
             "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
             "named": true
           },
           {
@@ -161,6 +247,10 @@
             "named": true
           },
           {
+            "type": "function_call",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -178,6 +268,10 @@
           },
           {
             "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
             "named": true
           },
           {
@@ -205,6 +299,10 @@
           "named": true
         },
         {
+          "type": "function_call",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         },
@@ -222,6 +320,10 @@
         },
         {
           "type": "number_literal",
+          "named": true
+        },
+        {
+          "type": "reduction",
           "named": true
         },
         {
@@ -256,6 +358,10 @@
             "named": true
           },
           {
+            "type": "function_call",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -276,6 +382,10 @@
             "named": true
           },
           {
+            "type": "reduction",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           },
@@ -290,7 +400,19 @@
         "required": true,
         "types": [
           {
+            "type": "!=",
+            "named": false
+          },
+          {
+            "type": "&&",
+            "named": false
+          },
+          {
             "type": "*",
+            "named": false
+          },
+          {
+            "type": "**",
             "named": false
           },
           {
@@ -302,11 +424,71 @@
             "named": false
           },
           {
+            "type": "..",
+            "named": false
+          },
+          {
             "type": "/",
             "named": false
           },
           {
+            "type": "<",
+            "named": false
+          },
+          {
+            "type": "<=",
+            "named": false
+          },
+          {
+            "type": "<>",
+            "named": false
+          },
+          {
+            "type": "=",
+            "named": false
+          },
+          {
+            "type": "==",
+            "named": false
+          },
+          {
+            "type": ">",
+            "named": false
+          },
+          {
+            "type": ">=",
+            "named": false
+          },
+          {
+            "type": "^",
+            "named": false
+          },
+          {
+            "type": "and",
+            "named": false
+          },
+          {
+            "type": "by",
+            "named": false
+          },
+          {
+            "type": "cross",
+            "named": false
+          },
+          {
+            "type": "diff",
+            "named": false
+          },
+          {
             "type": "div",
+            "named": false
+          },
+          {
+            "type": "in",
+            "named": false
+          },
+          {
+            "type": "inter",
             "named": false
           },
           {
@@ -315,6 +497,34 @@
           },
           {
             "type": "mod",
+            "named": false
+          },
+          {
+            "type": "not in",
+            "named": false
+          },
+          {
+            "type": "not within",
+            "named": false
+          },
+          {
+            "type": "or",
+            "named": false
+          },
+          {
+            "type": "symdiff",
+            "named": false
+          },
+          {
+            "type": "union",
+            "named": false
+          },
+          {
+            "type": "within",
+            "named": false
+          },
+          {
+            "type": "||",
             "named": false
           }
         ]
@@ -336,6 +546,10 @@
             "named": true
           },
           {
+            "type": "function_call",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -353,6 +567,10 @@
           },
           {
             "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
             "named": true
           },
           {
@@ -401,6 +619,10 @@
           "named": true
         },
         {
+          "type": "function_call",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         },
@@ -421,6 +643,10 @@
           "named": true
         },
         {
+          "type": "reduction",
+          "named": true
+        },
+        {
           "type": "string_literal",
           "named": true
         },
@@ -429,6 +655,118 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "reduction",
+    "named": true,
+    "fields": {
+      "expression": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "if_then_else",
+            "named": true
+          },
+          {
+            "type": "indexing",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          },
+          {
+            "type": "unary_operator",
+            "named": true
+          }
+        ]
+      },
+      "indexing": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "indexing",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "exists",
+            "named": false
+          },
+          {
+            "type": "forall",
+            "named": false
+          },
+          {
+            "type": "inter",
+            "named": false
+          },
+          {
+            "type": "max",
+            "named": false
+          },
+          {
+            "type": "min",
+            "named": false
+          },
+          {
+            "type": "prod",
+            "named": false
+          },
+          {
+            "type": "setof",
+            "named": false
+          },
+          {
+            "type": "sum",
+            "named": false
+          },
+          {
+            "type": "union",
+            "named": false
+          }
+        ]
+      }
     }
   },
   {
@@ -492,6 +830,10 @@
             "named": true
           },
           {
+            "type": "function_call",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -509,6 +851,10 @@
           },
           {
             "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "reduction",
             "named": true
           },
           {
@@ -562,7 +908,15 @@
     "named": false
   },
   {
+    "type": "!=",
+    "named": false
+  },
+  {
     "type": "\"",
+    "named": false
+  },
+  {
+    "type": "&&",
     "named": false
   },
   {
@@ -582,6 +936,10 @@
     "named": false
   },
   {
+    "type": "**",
+    "named": false
+  },
+  {
     "type": "+",
     "named": false
   },
@@ -591,6 +949,10 @@
   },
   {
     "type": "-",
+    "named": false
+  },
+  {
+    "type": "..",
     "named": false
   },
   {
@@ -610,6 +972,34 @@
     "named": false
   },
   {
+    "type": "<",
+    "named": false
+  },
+  {
+    "type": "<=",
+    "named": false
+  },
+  {
+    "type": "<>",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": "==",
+    "named": false
+  },
+  {
+    "type": ">",
+    "named": false
+  },
+  {
+    "type": ">=",
+    "named": false
+  },
+  {
     "type": "\\",
     "named": false
   },
@@ -626,8 +1016,28 @@
     "named": false
   },
   {
+    "type": "^",
+    "named": false
+  },
+  {
+    "type": "and",
+    "named": false
+  },
+  {
     "type": "block_comment",
     "named": true
+  },
+  {
+    "type": "by",
+    "named": false
+  },
+  {
+    "type": "cross",
+    "named": false
+  },
+  {
+    "type": "diff",
+    "named": false
   },
   {
     "type": "div",
@@ -638,7 +1048,15 @@
     "named": false
   },
   {
+    "type": "exists",
+    "named": false
+  },
+  {
     "type": "false",
+    "named": false
+  },
+  {
+    "type": "forall",
     "named": false
   },
   {
@@ -654,6 +1072,14 @@
     "named": false
   },
   {
+    "type": "in",
+    "named": false
+  },
+  {
+    "type": "inter",
+    "named": false
+  },
+  {
     "type": "less",
     "named": false
   },
@@ -666,11 +1092,27 @@
     "named": true
   },
   {
+    "type": "max",
+    "named": false
+  },
+  {
+    "type": "min",
+    "named": false
+  },
+  {
     "type": "mod",
     "named": false
   },
   {
     "type": "not",
+    "named": false
+  },
+  {
+    "type": "not in",
+    "named": false
+  },
+  {
+    "type": "not within",
     "named": false
   },
   {
@@ -682,8 +1124,28 @@
     "named": false
   },
   {
+    "type": "or",
+    "named": false
+  },
+  {
+    "type": "prod",
+    "named": false
+  },
+  {
+    "type": "setof",
+    "named": false
+  },
+  {
     "type": "string_characters",
     "named": true
+  },
+  {
+    "type": "sum",
+    "named": false
+  },
+  {
+    "type": "symdiff",
+    "named": false
   },
   {
     "type": "then",
@@ -694,7 +1156,19 @@
     "named": false
   },
   {
+    "type": "union",
+    "named": false
+  },
+  {
+    "type": "within",
+    "named": false
+  },
+  {
     "type": "{",
+    "named": false
+  },
+  {
+    "type": "||",
     "named": false
   },
   {

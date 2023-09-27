@@ -1,18 +1,17 @@
 /*
 TODO:
-A.3 Indexing expressions and subscripts
-    Indexing 
-    Set Expression List
+A.3 Indexing expressions and subscripts | Fields?
 A.4 Expressions
     Expression
     Logical Expressions
     Set Expressions
+	Infix Operator (done) (tested)
     Strings (done) (tested)
     Number (done) (tested)
     Identifier (done) (tested)
-    Infix Operator
-    Unary Operator
-    Function Call
+	Set Constructors
+    Unary Operator (done) (tested)
+    Function Call (done) (tested)
     if-then-else (done)
 A.4.2 Builtins
     Concat &
@@ -45,7 +44,6 @@ A.9 Constraint Declaration
     Suffixe Initialization
 A.9.1 Complementarity Constraints
     Complements
-
 A.10 Objective Declaration
     Objective Declaration
     Objective Expression
@@ -69,8 +67,7 @@ const PREC = {
 	set_in: 6,
 	set_within: 6,
 	negation: 7,
-	union: 8,
-	difference: 8,
+	set_union_diff: 8,
 	intersection: 9,
 	crossjoin: 10,
 	set_constructor: 11,
@@ -81,12 +78,20 @@ const PREC = {
 	exponetiation: 16,
 }
 
-const COMPARISON_OPERATORS = ["==", "!=", "<", "<=", ">", ">=", "<>"]
+const CONJUNCTION_OPERATORS = ["and", "&&"]
+const DISJUNCTION_OPERATORS = ["or", "||"]
+const SET_OPERATORS = ["union", "diff", "symdiff"]
+const COMPARISON_OPERATORS = ["=", "==", "!=", "<", "<=", ">", ">=", "<>"]
+const IN_OPERATORS = ["in", "not in"]
+const WITHIN_OPERATORS = ["within", "not within"]
 const MULTIPLICATIVE_OPERATORS = ["*", "/", "mod", "div"]
 const ADDITIVE_OPERATORS = ["+", "-", "less"]
 const EXPONENTIAL_OPERATORS = ["^", "**"]
 const UNARY_OPERATORS = ["+", "-"]
 const LOGICAL_NOT = ["not", "!"]
+const ARITHMETIC_REDUCTION_OPERATORS = ["sum", "prod", "min", "max"]
+const LOGICAL_REDUCTION_OPERATORS = ["exists", "forall"]
+const SET_RANGE_OPERATORS = ["..", "by"]
 
 module.exports = grammar({
 	name: "ampl",
@@ -96,19 +101,20 @@ module.exports = grammar({
 	rules: {
 		source_file: ($) => sepBy(";", field("item", $._item)),
 
-		_item: ($) => choice($.indexing, $.let_decl),
+		_item: ($) => 
+			choice(
+				$.indexing, 
+				$._declaration
+			),
 
 		indexing: ($) =>
 			choice(
-				seq("{", $._sexpr_list, "}"),
-				seq("{", $._sexpr_list, ":", $._expr, "}")
+				seq("{", $._expr_list, "}"),
+				seq("{", $._expr_list, ":", $._expr, "}")
 			),
 
-		_sexpr_list: ($) =>
-			choice(
-				sepBy1(",", $._expr)
-				// seq(field("name", $.identifier), "in", field("set", $._expr)) // Name could he called dummy member
-			),
+		_expr_list: ($) =>
+			sepBy1(",", $._expr),
 
 		_expr: ($) =>
 			choice(
@@ -118,9 +124,12 @@ module.exports = grammar({
 				$.identifier,
 				$.infix_operator,
 				$.unary_operator,
-				// $.function_call,
+				$.function_call,
 				$.if_then_else,
-				// $.reduction,
+				$.reduction,
+				// $.set_constructor,
+				// $.interval,
+				// set {3,12,3,etc}
 				$.indexing,
 				seq("(", $._expr, ")")
 			),
@@ -145,8 +154,20 @@ module.exports = grammar({
 
 		infix_operator: ($) => {
 			const table = [
+				[prec.left, PREC.logicalOr, choice(...DISJUNCTION_OPERATORS)],
+				[prec.left, PREC.logicalAnd, choice(...CONJUNCTION_OPERATORS)],
+				[prec.left, PREC.comparitive, choice(...COMPARISON_OPERATORS)],
+				[prec.left, PREC.set_in, choice(...IN_OPERATORS)],
+				[prec.left, PREC.set_within, choice(...WITHIN_OPERATORS)],
+				[prec.left, PREC.set_union_diff, choice(...SET_OPERATORS)],
+				[prec.left, PREC.intersection, "inter"],
+				[prec.left, PREC.crossjoin, "cross"],
+				[prec.left, PREC.additive, choice(...ADDITIVE_OPERATORS)],
 				[prec.left, PREC.additive, choice(...ADDITIVE_OPERATORS)],
 				[prec.left, PREC.multiplicative, choice(...MULTIPLICATIVE_OPERATORS)],
+				[prec.right, PREC.exponetiation, choice(...EXPONENTIAL_OPERATORS)],
+				[prec.left, PREC.set_constructor, choice(...SET_RANGE_OPERATORS)],
+				[prec.left, PREC.set_constructor, "&"] // Concat "precedence below arithmetic operators"
 			]
 			return choice(
 				...table.map(([assoc, precedence, operator]) =>
@@ -161,6 +182,26 @@ module.exports = grammar({
 				)
 			)
 		},
+
+		function_call: ($) =>
+			seq(
+				field("function", $.identifier),
+				"(",
+				sepBy(",", field("argument", $._expr)),
+				")"
+			),
+
+		_declaration: ($) =>
+			choice(
+				$.let_decl
+			),
+
+		_decl: ($) =>
+		    seq(
+		        field("name", $.identifier),
+		        optional(field("alias", $.identifier)),
+		        optional(field("indexing",$.indexing))
+		    ),
 
 		let_decl: ($) =>
 			choice(
@@ -185,13 +226,25 @@ module.exports = grammar({
 				)
 			),
 
-		// _decl: ($) =>
-		//     seq(
-		//         field("name", $.identifier),
-		//         optional(field("alias", $.identifier)),
-		//         optional(field("indexing",$.indexing))
-		//     ),
-
+		reduction: ($) => {
+			const reducers = [
+				[PREC.arithmetic_reduction, choice(...ARITHMETIC_REDUCTION_OPERATORS)],
+				[PREC.logical_reduction, choice(...LOGICAL_REDUCTION_OPERATORS)],
+				[PREC.intersection, "inter"],
+				[PREC.set_union_diff, "union"],
+				[PREC.set_constructor, "setof"]
+			]
+			return choice(
+				...reducers.map(([precedence, operator]) =>
+					prec.left(precedence, // I think left associativity should be correct
+						seq(
+							field("operator", operator),
+							field("indexing", $.indexing),
+							field("expression", $._expr)
+						)
+					)
+				))
+			},
 		number_literal: ($) =>
 			token(choice(/[0-9]+(\.[0-9]+)?((d|D|e|E)-?[0-9]+)?/)),
 		boolean_literal: ($) => choice("true", "false"),

@@ -12,24 +12,24 @@ let simple_exponent_float := 5E-10;
 ---
 
 (source_file
-  item: (let_decl
-    name: (identifier)
+    item: (let_decl
+        name: (identifier)
+        (number_literal))
+    item: (let_decl
+        name: (identifier)
+        (number_literal))
+    item: (let_decl
+        name: (identifier)
     (number_literal))
-  item: (let_decl
-    name: (identifier)
-    (number_literal))
-  item: (let_decl
-    name: (identifier)
-    (number_literal))
-  item: (let_decl
-    name: (identifier)
-    (number_literal))
-  item: (let_decl
-    name: (identifier)
-    (number_literal))
-  item: (let_decl
-    name: (identifier)
-    (number_literal)))
+    item: (let_decl
+        name: (identifier)
+        (number_literal))
+    item: (let_decl
+        name: (identifier)
+        (number_literal))
+    item: (let_decl
+        name: (identifier)
+        (number_literal)))
 
 ======
 String
@@ -43,26 +43,47 @@ let escaped_string := "\t\n";
 ---
 
 (source_file
-  item: (let_decl
-    name: (identifier)
-    (string_literal))
-  item: (let_decl
-    name: (identifier)
-    (string_literal
+    item: (let_decl
+        name: (identifier)
+        (string_literal))
+    item: (let_decl
+        name: (identifier)
+        (string_literal
+            content: (string_characters)))
+    item: (let_decl
+        name: (identifier)
+        (string_literal
       content: (string_characters)))
-  item: (let_decl
-    name: (identifier)
-    (string_literal
-      content: (string_characters)))
-  item: (let_decl
-    name: (identifier)
-    (string_literal
-      content: (escape_sequence)
-      content: (escape_sequence))))
+    item: (let_decl
+        name: (identifier)
+        (string_literal
+            content: (escape_sequence)
+            content: (escape_sequence))))
 
 ===
 Set
 ===
 
-{"a","b","c"};
-{1,2,3,4,5,6,7,8,9};
+let x := {"a","b","c"};
+let y := {1,2,3,4,5};
+
+---
+
+(source_file
+    item: (let_decl
+        name: (identifier)
+        (indexing
+            (string_literal
+                content: (string_characters))
+            (string_literal
+                content: (string_characters))
+            (string_literal
+                content: (string_characters))))
+    item: (let_decl
+        name: (identifier)
+        (indexing
+            (number_literal)
+            (number_literal)
+            (number_literal)
+            (number_literal)
+            (number_literal))))
