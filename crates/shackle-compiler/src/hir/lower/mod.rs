@@ -1,26 +1,38 @@
 //! Functionality for converting AST nodes to HIR nodes
-//!
-//! The AST is lowered to HIR by performing the following syntactic desugarings:
-//!
-//! - predicate/test rewritten as functions
-//! - prefix/infix/postfix operators rewritten as calls
-//! - generator calls rewritten as calls using array comprehensions
-//! - string interpolation rewritten into `concat` of `show` calls
-//!
-//! Any performed desugaring steps need must be formulated to guarantee that no
-//! future error messages could refer to non-user-written constructs.
-//!
-//! During lowering, the AST is also partially validated:
-//!
-//! - reject invalid array literals
-//!   - non-uniform 2d array literals
-//!   - mixing index kinds
-//!
+//! for the respective modelling languages.
 
-mod expression;
-mod item;
+pub mod eprime;
+pub mod minizinc;
 
-pub use self::{expression::*, item::*};
+use std::sync::Arc;
 
-#[cfg(test)]
-mod test;
+use self::minizinc::ItemCollector;
+use crate::{
+	constants::IdentifierRegistry,
+	file::ModelRef,
+	hir::{db::Hir, source::SourceMap, *},
+	syntax::ast::ConstraintModel,
+	Error,
+};
+
+/// Lower a model to HIR
+pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>, Arc<Vec<Error>>) {
+	let ast = match db.ast(*model) {
+		Ok(m) => m,
+		Err(e) => return (Default::default(), Default::default(), Arc::new(vec![e])),
+	};
+	match ast {
+		ConstraintModel::MznModel(ast) => {
+			let identifiers = IdentifierRegistry::new(db);
+			let mut ctx = ItemCollector::new(db, &identifiers, model);
+			for item in ast.items() {
+				ctx.collect_item(item);
+			}
+			let (m, sm, e) = ctx.finish();
+			(Arc::new(m), Arc::new(sm), Arc::new(e))
+		}
+		ConstraintModel::EPrimeModel(_) => {
+			unimplemented!("EPrimeModel not yet implemented")
+		}
+	}
+}

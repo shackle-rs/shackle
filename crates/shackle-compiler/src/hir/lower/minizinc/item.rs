@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::{ExpressionCollector, TypeInstIdentifiers};
 use crate::{
 	constants::IdentifierRegistry,
@@ -11,35 +9,9 @@ use crate::{
 		source::{Origin, SourceMap},
 		*,
 	},
-	syntax::{
-		ast::{AstNode, ConstraintModel},
-		minizinc,
-	},
+	syntax::{ast::AstNode, minizinc},
 	Error,
 };
-
-/// Lower a model to HIR
-pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>, Arc<Vec<Error>>) {
-	log::info!("Lowering {} to HIR", model.pretty_print(db.upcast()));
-	let ast = match db.ast(*model) {
-		Ok(m) => m,
-		Err(e) => return (Default::default(), Default::default(), Arc::new(vec![e])),
-	};
-	match ast {
-		ConstraintModel::MznModel(ast) => {
-			let identifiers = IdentifierRegistry::new(db);
-			let mut ctx = ItemCollector::new(db, &identifiers, model);
-			for item in ast.items() {
-				ctx.collect_item(item);
-			}
-			let (m, sm, e) = ctx.finish();
-			(Arc::new(m), Arc::new(sm), Arc::new(e))
-		}
-		ConstraintModel::EPrimeModel(_) => {
-			todo!("Nathan: this is where the main transformation to HIR has to happen")
-		}
-	}
-}
 
 /// Collects AST items into an HIR model
 pub struct ItemCollector<'a> {
