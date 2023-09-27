@@ -288,6 +288,7 @@ mod test {
 		y = (1, (2, 3));
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -378,7 +379,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -391,6 +393,7 @@ mod test {
 		y = (a: 1, b: (c: 2, d: 3));
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -535,7 +538,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -545,6 +549,7 @@ mod test {
 		check_ast(
 			"x = {1, 2};",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -584,7 +589,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		)
 	}
@@ -599,6 +605,7 @@ mod test {
 		w = [(1, 1): 1, (1, 2): 3];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -853,7 +860,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -871,6 +879,7 @@ mod test {
 		w = [| 1: 1, 2 |];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1120,7 +1129,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1134,6 +1144,7 @@ mod test {
 		z = foo[1, .., 3..];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1286,7 +1297,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1301,6 +1313,7 @@ mod test {
 		a = [j | i in s, j = i + 1];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1659,7 +1672,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1674,6 +1688,7 @@ mod test {
 		a = {j | i in s, j = i + 1};
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1999,7 +2014,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}

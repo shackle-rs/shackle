@@ -470,19 +470,21 @@ mod test {
 		check_ast(
 			r#"include "foo.mzn";"#,
 			expect!([r#"
-    Model {
-        items: [
-            Include(
-                Include {
-                    cst_kind: "include",
-                    file: StringLiteral {
-                        cst_kind: "string_literal",
-                        value: "foo.mzn",
+    MznModel(
+        Model {
+            items: [
+                Include(
+                    Include {
+                        cst_kind: "include",
+                        file: StringLiteral {
+                            cst_kind: "string_literal",
+                            value: "foo.mzn",
+                        },
                     },
-                },
-            ),
-        ],
-    }
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -492,48 +494,50 @@ mod test {
 		check_ast(
 			"int: x = 3;",
 			expect!([r#"
-    Model {
-        items: [
-            Declaration(
-                Declaration {
-                    cst_kind: "declaration",
-                    pattern: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
-                            },
-                        ),
-                    ),
-                    declared_type: TypeBase(
-                        TypeBase {
-                            cst_kind: "type_base",
-                            var_type: None,
-                            opt_type: None,
-                            any_type: false,
-                            domain: Unbounded(
-                                UnboundedDomain {
-                                    cst_kind: "primitive_type",
-                                    primitive_type: Int,
+    MznModel(
+        Model {
+            items: [
+                Declaration(
+                    Declaration {
+                        cst_kind: "declaration",
+                        pattern: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
                                 },
                             ),
-                        },
-                    ),
-                    definition: Some(
-                        IntegerLiteral(
-                            IntegerLiteral {
-                                cst_kind: "integer_literal",
-                                value: Ok(
-                                    3,
+                        ),
+                        declared_type: TypeBase(
+                            TypeBase {
+                                cst_kind: "type_base",
+                                var_type: None,
+                                opt_type: None,
+                                any_type: false,
+                                domain: Unbounded(
+                                    UnboundedDomain {
+                                        cst_kind: "primitive_type",
+                                        primitive_type: Int,
+                                    },
                                 ),
                             },
                         ),
-                    ),
-                    annotations: [],
-                },
-            ),
-        ],
-    }
+                        definition: Some(
+                            IntegerLiteral(
+                                IntegerLiteral {
+                                    cst_kind: "integer_literal",
+                                    value: Ok(
+                                        3,
+                                    ),
+                                },
+                            ),
+                        ),
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -543,49 +547,51 @@ mod test {
 		check_ast(
 			"enum Foo = {A, B, C};",
 			expect!([r#"
-    Model {
-        items: [
-            Enumeration(
-                Enumeration {
-                    cst_kind: "enumeration",
-                    id: UnquotedIdentifier(
-                        UnquotedIdentifier {
-                            cst_kind: "identifier",
-                            name: "Foo",
-                        },
-                    ),
-                    cases: [
-                        Members(
-                            EnumerationMembers {
-                                cst_kind: "enumeration_members",
-                                members: [
-                                    UnquotedIdentifier(
-                                        UnquotedIdentifier {
-                                            cst_kind: "identifier",
-                                            name: "A",
-                                        },
-                                    ),
-                                    UnquotedIdentifier(
-                                        UnquotedIdentifier {
-                                            cst_kind: "identifier",
-                                            name: "B",
-                                        },
-                                    ),
-                                    UnquotedIdentifier(
-                                        UnquotedIdentifier {
-                                            cst_kind: "identifier",
-                                            name: "C",
-                                        },
-                                    ),
-                                ],
+    MznModel(
+        Model {
+            items: [
+                Enumeration(
+                    Enumeration {
+                        cst_kind: "enumeration",
+                        id: UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "Foo",
                             },
                         ),
-                    ],
-                    annotations: [],
-                },
-            ),
-        ],
-    }
+                        cases: [
+                            Members(
+                                EnumerationMembers {
+                                    cst_kind: "enumeration_members",
+                                    members: [
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "A",
+                                            },
+                                        ),
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "B",
+                                            },
+                                        ),
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "C",
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ),
+                        ],
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -595,31 +601,33 @@ mod test {
 		check_ast(
 			"x = 1;",
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: IntegerLiteral(
+                            IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: Ok(
+                                    1,
+                                ),
                             },
                         ),
-                    ),
-                    definition: IntegerLiteral(
-                        IntegerLiteral {
-                            cst_kind: "integer_literal",
-                            value: Ok(
-                                1,
-                            ),
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -629,172 +637,13 @@ mod test {
 		check_ast(
 			"constraint x > 1;",
 			expect!([r#"
-    Model {
-        items: [
-            Constraint(
-                Constraint {
-                    cst_kind: "constraint",
-                    expression: InfixOperator(
-                        InfixOperator {
-                            cst_kind: "infix_operator",
-                            left: Identifier(
-                                UnquotedIdentifier(
-                                    UnquotedIdentifier {
-                                        cst_kind: "identifier",
-                                        name: "x",
-                                    },
-                                ),
-                            ),
-                            operator: Operator {
-                                cst_kind: ">",
-                                name: ">",
-                            },
-                            right: IntegerLiteral(
-                                IntegerLiteral {
-                                    cst_kind: "integer_literal",
-                                    value: Ok(
-                                        1,
-                                    ),
-                                },
-                            ),
-                        },
-                    ),
-                    annotations: [],
-                },
-            ),
-        ],
-    }
-"#]),
-		);
-	}
-
-	#[test]
-	fn test_solve() {
-		check_ast(
-			"solve minimize x;",
-			expect!([r#"
-    Model {
-        items: [
-            Solve(
-                Solve {
-                    cst_kind: "goal",
-                    goal: Minimize(
-                        Identifier(
-                            UnquotedIdentifier(
-                                UnquotedIdentifier {
-                                    cst_kind: "identifier",
-                                    name: "x",
-                                },
-                            ),
-                        ),
-                    ),
-                    annotations: [],
-                },
-            ),
-        ],
-    }
-"#]),
-		);
-	}
-
-	#[test]
-	fn test_output() {
-		check_ast(
-			r#"output ["foo"];"#,
-			expect!([r#"
-    Model {
-        items: [
-            Output(
-                Output {
-                    cst_kind: "output",
-                    expression: ArrayLiteral(
-                        ArrayLiteral {
-                            cst_kind: "array_literal",
-                            members: [
-                                ArrayLiteralMember {
-                                    cst_kind: "array_literal_member",
-                                    indices: None,
-                                    value: StringLiteral(
-                                        StringLiteral {
-                                            cst_kind: "string_literal",
-                                            value: "foo",
-                                        },
-                                    ),
-                                },
-                            ],
-                        },
-                    ),
-                    section: None,
-                },
-            ),
-        ],
-    }
-"#]),
-		);
-	}
-
-	#[test]
-	fn test_function() {
-		check_ast(
-			"function int: foo(int: x) = x + 1;",
-			expect!([r#"
-    Model {
-        items: [
-            Function(
-                Function {
-                    cst_kind: "function_item",
-                    return_type: TypeBase(
-                        TypeBase {
-                            cst_kind: "type_base",
-                            var_type: None,
-                            opt_type: None,
-                            any_type: false,
-                            domain: Unbounded(
-                                UnboundedDomain {
-                                    cst_kind: "primitive_type",
-                                    primitive_type: Int,
-                                },
-                            ),
-                        },
-                    ),
-                    id: UnquotedIdentifier(
-                        UnquotedIdentifier {
-                            cst_kind: "identifier",
-                            name: "foo",
-                        },
-                    ),
-                    parameters: [
-                        Parameter {
-                            cst_kind: "parameter",
-                            declared_type: TypeBase(
-                                TypeBase {
-                                    cst_kind: "type_base",
-                                    var_type: None,
-                                    opt_type: None,
-                                    any_type: false,
-                                    domain: Unbounded(
-                                        UnboundedDomain {
-                                            cst_kind: "primitive_type",
-                                            primitive_type: Int,
-                                        },
-                                    ),
-                                },
-                            ),
-                            pattern: Some(
-                                Identifier(
-                                    UnquotedIdentifier(
-                                        UnquotedIdentifier {
-                                            cst_kind: "identifier",
-                                            name: "x",
-                                        },
-                                    ),
-                                ),
-                            ),
-                            annotations: [],
-                        },
-                    ],
-                    body: Some(
-                        InfixOperator(
+    MznModel(
+        Model {
+            items: [
+                Constraint(
+                    Constraint {
+                        cst_kind: "constraint",
+                        expression: InfixOperator(
                             InfixOperator {
                                 cst_kind: "infix_operator",
                                 left: Identifier(
@@ -806,8 +655,8 @@ mod test {
                                     ),
                                 ),
                                 operator: Operator {
-                                    cst_kind: "+",
-                                    name: "+",
+                                    cst_kind: ">",
+                                    name: ">",
                                 },
                                 right: IntegerLiteral(
                                     IntegerLiteral {
@@ -819,12 +668,179 @@ mod test {
                                 ),
                             },
                         ),
-                    ),
-                    annotations: [],
-                },
-            ),
-        ],
-    }
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_solve() {
+		check_ast(
+			"solve minimize x;",
+			expect!([r#"
+    MznModel(
+        Model {
+            items: [
+                Solve(
+                    Solve {
+                        cst_kind: "goal",
+                        goal: Minimize(
+                            Identifier(
+                                UnquotedIdentifier(
+                                    UnquotedIdentifier {
+                                        cst_kind: "identifier",
+                                        name: "x",
+                                    },
+                                ),
+                            ),
+                        ),
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_output() {
+		check_ast(
+			r#"output ["foo"];"#,
+			expect!([r#"
+    MznModel(
+        Model {
+            items: [
+                Output(
+                    Output {
+                        cst_kind: "output",
+                        expression: ArrayLiteral(
+                            ArrayLiteral {
+                                cst_kind: "array_literal",
+                                members: [
+                                    ArrayLiteralMember {
+                                        cst_kind: "array_literal_member",
+                                        indices: None,
+                                        value: StringLiteral(
+                                            StringLiteral {
+                                                cst_kind: "string_literal",
+                                                value: "foo",
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        ),
+                        section: None,
+                    },
+                ),
+            ],
+        },
+    )
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_function() {
+		check_ast(
+			"function int: foo(int: x) = x + 1;",
+			expect!([r#"
+    MznModel(
+        Model {
+            items: [
+                Function(
+                    Function {
+                        cst_kind: "function_item",
+                        return_type: TypeBase(
+                            TypeBase {
+                                cst_kind: "type_base",
+                                var_type: None,
+                                opt_type: None,
+                                any_type: false,
+                                domain: Unbounded(
+                                    UnboundedDomain {
+                                        cst_kind: "primitive_type",
+                                        primitive_type: Int,
+                                    },
+                                ),
+                            },
+                        ),
+                        id: UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "foo",
+                            },
+                        ),
+                        parameters: [
+                            Parameter {
+                                cst_kind: "parameter",
+                                declared_type: TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Int,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                pattern: Some(
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "x",
+                                            },
+                                        ),
+                                    ),
+                                ),
+                                annotations: [],
+                            },
+                        ],
+                        body: Some(
+                            InfixOperator(
+                                InfixOperator {
+                                    cst_kind: "infix_operator",
+                                    left: Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "x",
+                                            },
+                                        ),
+                                    ),
+                                    operator: Operator {
+                                        cst_kind: "+",
+                                        name: "+",
+                                    },
+                                    right: IntegerLiteral(
+                                        IntegerLiteral {
+                                            cst_kind: "integer_literal",
+                                            value: Ok(
+                                                1,
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ),
+                        ),
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -834,43 +850,45 @@ mod test {
 		check_ast(
 			"type Foo = set of int",
 			expect!([r#"
-    Model {
-        items: [
-            TypeAlias(
-                TypeAlias {
-                    cst_kind: "type_alias",
-                    name: UnquotedIdentifier(
-                        UnquotedIdentifier {
-                            cst_kind: "identifier",
-                            name: "Foo",
-                        },
-                    ),
-                    aliased_type: SetType(
-                        SetType {
-                            cst_kind: "set_type",
-                            var_type: Par,
-                            opt_type: NonOpt,
-                            element_type: TypeBase(
-                                TypeBase {
-                                    cst_kind: "type_base",
-                                    var_type: None,
-                                    opt_type: None,
-                                    any_type: false,
-                                    domain: Unbounded(
-                                        UnboundedDomain {
-                                            cst_kind: "primitive_type",
-                                            primitive_type: Int,
-                                        },
-                                    ),
-                                },
-                            ),
-                        },
-                    ),
-                    annotations: [],
-                },
-            ),
-        ],
-    }
+    MznModel(
+        Model {
+            items: [
+                TypeAlias(
+                    TypeAlias {
+                        cst_kind: "type_alias",
+                        name: UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "Foo",
+                            },
+                        ),
+                        aliased_type: SetType(
+                            SetType {
+                                cst_kind: "set_type",
+                                var_type: Par,
+                                opt_type: NonOpt,
+                                element_type: TypeBase(
+                                    TypeBase {
+                                        cst_kind: "type_base",
+                                        var_type: None,
+                                        opt_type: None,
+                                        any_type: false,
+                                        domain: Unbounded(
+                                            UnboundedDomain {
+                                                cst_kind: "primitive_type",
+                                                primitive_type: Int,
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}

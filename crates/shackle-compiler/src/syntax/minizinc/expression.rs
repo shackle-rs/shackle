@@ -512,6 +512,7 @@ mod test {
 		x = foo :: bar :: qux;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -559,7 +560,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -573,6 +575,7 @@ mod test {
 		bool: ✔️;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Declaration(
@@ -663,7 +666,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -677,6 +681,7 @@ mod test {
 		z = if a then b endif;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -837,7 +842,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -851,6 +857,7 @@ mod test {
 		z = foo(bar)(qux);
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -976,7 +983,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -986,6 +994,7 @@ mod test {
 		check_ast(
 			"x = -a;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1019,7 +1028,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1032,6 +1042,7 @@ mod test {
 		y = a + b * c;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1128,7 +1139,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1138,6 +1150,7 @@ mod test {
 		check_ast(
 			"x = a..;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1171,7 +1184,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1184,6 +1198,7 @@ mod test {
 			constraint exists (i, j in s, k in t where p) (true);
 			"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Constraint(
@@ -1330,7 +1345,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1340,6 +1356,7 @@ mod test {
 		check_ast(
 			r#"x = "foo\(y)bar";"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1379,7 +1396,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1394,6 +1412,7 @@ mod test {
 			} in true;
 			"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Constraint(
@@ -1459,7 +1478,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1474,6 +1494,7 @@ mod test {
 				endcase;
 			"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1549,7 +1570,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1559,6 +1581,7 @@ mod test {
 		check_ast(
 			"x = foo.1;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1594,7 +1617,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1604,6 +1628,7 @@ mod test {
 		check_ast(
 			"x = foo.bar;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1639,7 +1664,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1650,6 +1676,7 @@ mod test {
 		check_ast(
 			"x = lambda int: (int: x) => x;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1725,7 +1752,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}

@@ -76,9 +76,11 @@ mod test {
 		check_ast(
 			r#"% Line comment"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [],
-    }
+    },
+)
 "#]),
 		);
 	}

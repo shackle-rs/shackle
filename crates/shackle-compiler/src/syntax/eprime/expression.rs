@@ -40,34 +40,31 @@ mod test {
 
 	#[test]
 	fn test_identifier() {
-		check_ast(
+		check_ast_eprime(
 			"letting x = a",
 			expect![[r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "letting",
-                            },
-                        ),
-                    ),
-                    definition: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
+    EPrimeModel(
+        Model {
+            items: [
+                ConstDefinition(
+                    ConstDefinition {
+                        cst_kind: "const_def",
+                        name: Identifier {
+                            cst_kind: "identifier",
+                            name: "x",
+                        },
+                        definition: Identifier(
+                            Identifier {
                                 cst_kind: "identifier",
                                 name: "a",
                             },
                         ),
-                    ),
-                },
-            ),
-        ],
-    }
+                        domain: None,
+                    },
+                ),
+            ],
+        },
+    )
 "#]],
 		);
 	}

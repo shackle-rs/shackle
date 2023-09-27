@@ -14,7 +14,7 @@ A.4 Expressions
     Function Call (done) (tested)
     if-then-else (done)
 A.4.2 Builtins
-    Concat &
+    Concat & (done) (tested)
     Printf
     Match, Sub, GSub
 A.4.3 Piecewise-linear terms

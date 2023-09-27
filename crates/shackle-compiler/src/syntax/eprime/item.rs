@@ -9,7 +9,7 @@ ast_enum!(
 	/// Item
 	Item,
 	// "param_decl" => ParamDecl,
-	"const_def" => ConstDef,
+	"const_def" => ConstDefinition,
 	// "domain_alias" => DomAlias,
 	// "decision_decl" => DecisionDecl,
 	// "objective" => Objective,
@@ -45,13 +45,13 @@ ast_enum!(
 
 ast_node!(
 	/// Constant Definition
-	ConstDef,
+	ConstDefinition,
 	name,
 	definition,
 	domain,
 );
 
-impl ConstDef {
+impl ConstDefinition {
 	/// Get constant being declared
 	pub fn name(&self) -> Identifier {
 		child_with_field_name(self, "name")

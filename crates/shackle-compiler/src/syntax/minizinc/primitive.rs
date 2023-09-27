@@ -274,31 +274,33 @@ mod test {
 		check_ast(
 			"x = 1;",
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: IntegerLiteral(
+                            IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: Ok(
+                                    1,
+                                ),
                             },
                         ),
-                    ),
-                    definition: IntegerLiteral(
-                        IntegerLiteral {
-                            cst_kind: "integer_literal",
-                            value: Ok(
-                                1,
-                            ),
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -308,6 +310,7 @@ mod test {
 		check_ast(
 			"x = 1.2;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -332,7 +335,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -342,6 +346,7 @@ mod test {
 		check_ast(
 			r#"x = "foo";"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -364,7 +369,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -374,6 +380,7 @@ mod test {
 		check_ast(
 			"x = <>;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -395,7 +402,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -405,28 +413,30 @@ mod test {
 		check_ast(
 			r#"x = infinity;"#,
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: Infinity(
+                            Infinity {
+                                cst_kind: "infinity",
                             },
                         ),
-                    ),
-                    definition: Infinity(
-                        Infinity {
-                            cst_kind: "infinity",
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -436,93 +446,99 @@ mod test {
 		check_ast(
 			r#"x = 0xFF;"#,
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: IntegerLiteral(
+                            IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: Ok(
+                                    255,
+                                ),
                             },
                         ),
-                    ),
-                    definition: IntegerLiteral(
-                        IntegerLiteral {
-                            cst_kind: "integer_literal",
-                            value: Ok(
-                                255,
-                            ),
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 
 		check_ast(
 			r#"x = 0b11;"#,
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: IntegerLiteral(
+                            IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: Ok(
+                                    3,
+                                ),
                             },
                         ),
-                    ),
-                    definition: IntegerLiteral(
-                        IntegerLiteral {
-                            cst_kind: "integer_literal",
-                            value: Ok(
-                                3,
-                            ),
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 
 		check_ast(
 			r#"x = 0o77;"#,
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: IntegerLiteral(
+                            IntegerLiteral {
+                                cst_kind: "integer_literal",
+                                value: Ok(
+                                    63,
+                                ),
                             },
                         ),
-                    ),
-                    definition: IntegerLiteral(
-                        IntegerLiteral {
-                            cst_kind: "integer_literal",
-                            value: Ok(
-                                63,
-                            ),
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}

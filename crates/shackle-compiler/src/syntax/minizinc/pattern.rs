@@ -143,6 +143,7 @@ mod test {
 		endcase;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Declaration(
@@ -501,7 +502,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}

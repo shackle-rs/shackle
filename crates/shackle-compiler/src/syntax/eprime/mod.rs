@@ -69,7 +69,6 @@ Temporary Check List
 ====================
 
 source_file
-lang_version
 param_decl
 const_def
 domain_alias
@@ -96,8 +95,7 @@ boolean_domain
 integer_domain
 matrix_literal
 range_literal
-boolean_literal
-integer_literal
-identifier
-line_comment
+boolean_literal (done) (tested)
+integer_literal (done) (tested)
+identifier (done) (tested)
 */
