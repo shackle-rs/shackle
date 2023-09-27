@@ -371,7 +371,7 @@
         },
         {
           "type": "FIELD",
-          "name": "expression",
+          "name": "objective_expr",
           "content": {
             "type": "SYMBOL",
             "name": "_expression"
@@ -391,53 +391,12 @@
           "value": "on"
         },
         {
-          "type": "STRING",
-          "value": "["
-        },
-        {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "REPEAT",
-              "content": {
-                "type": "SEQ",
-                "members": [
-                  {
-                    "type": "FIELD",
-                    "name": "expression",
-                    "content": {
-                      "type": "SYMBOL",
-                      "name": "_expression"
-                    }
-                  },
-                  {
-                    "type": "STRING",
-                    "value": ","
-                  }
-                ]
-              }
-            },
-            {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "FIELD",
-                  "name": "expression",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "_expression"
-                  }
-                },
-                {
-                  "type": "BLANK"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "STRING",
-          "value": "]"
+          "type": "FIELD",
+          "name": "branching_array",
+          "content": {
+            "type": "SYMBOL",
+            "name": "matrix_literal"
+          }
         }
       ]
     },
@@ -591,10 +550,6 @@
         {
           "type": "SYMBOL",
           "name": "absolute_operator"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "_base_domain"
         },
         {
           "type": "SEQ",

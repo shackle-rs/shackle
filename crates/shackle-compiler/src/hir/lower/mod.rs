@@ -38,7 +38,7 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 			for item in ast.items() {
 				ctx.collect_item(item);
 			}
-			ctx.check_solve();
+			ctx.add_solve();
 			let (m, sm, e) = ctx.finish();
 			(Arc::new(m), Arc::new(sm), Arc::new(e))
 		}

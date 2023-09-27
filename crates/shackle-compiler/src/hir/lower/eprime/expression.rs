@@ -43,7 +43,7 @@ impl ExpressionCollector<'_> {
 			eprime::Expression::ArrayAccess(aa) => self.collect_array_access(aa).into(),
 			eprime::Expression::InfixOperator(o) => return self.collect_infix_operator(o),
 			eprime::Expression::IntegerLiteral(i) => IntegerLiteral(i.value()).into(),
-			// eprime::Expression::MatrixLiteral(m) => ,
+			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m),
 			eprime::Expression::PrefixOperator(o) => return self.collect_prefix_operator(o),
 			eprime::Expression::PostfixOperator(o) => return self.collect_postfix_operator(o),
 			// eprime::Expression::Quantification(q) => ,
@@ -132,6 +132,18 @@ impl ExpressionCollector<'_> {
 			} else {
 				self.alloc_expression(Origin::new(&aa), TupleLiteral { fields: indices })
 			},
+		}
+	}
+
+	pub fn collect_matrix_literal(&mut self, ml: eprime::MatrixLiteral) -> ArenaIndex<Expression> {
+		let members = ml
+			.members()
+			.map(|m| self.collect_expression(m))
+			.collect::<Box<_>>();
+		if ml.index().is_none() {
+			self.alloc_expression(Origin::new(&ml), ArrayLiteral { members })
+		} else {
+			todo!("Implement Indexes as bounded type");
 		}
 	}
 

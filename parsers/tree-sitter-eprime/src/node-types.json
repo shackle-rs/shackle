@@ -76,64 +76,12 @@
     "type": "branching",
     "named": true,
     "fields": {
-      "expression": {
-        "multiple": true,
-        "required": false,
+      "branching_array": {
+        "multiple": false,
+        "required": true,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "absolute_operator",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "indexed_access",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "matrix_comprehension",
-            "named": true
-          },
-          {
             "type": "matrix_literal",
-            "named": true
-          },
-          {
-            "type": "postfix_operator",
-            "named": true
-          },
-          {
-            "type": "prefix_operator",
-            "named": true
-          },
-          {
-            "type": "quantification",
             "named": true
           }
         ]
@@ -1357,7 +1305,7 @@
     "type": "objective",
     "named": true,
     "fields": {
-      "expression": {
+      "objective_expr": {
         "multiple": true,
         "required": true,
         "types": [

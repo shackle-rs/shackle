@@ -1,6 +1,6 @@
 //! AST representation of Eprime items
 
-use super::{Domain, Expression, Identifier};
+use super::{Domain, Expression, Identifier, MatrixLiteral};
 use crate::syntax::ast::{
 	ast_enum, ast_node, child_with_field_name, children_with_field_name,
 	optional_child_with_field_name, AstNode, Children,
@@ -13,7 +13,7 @@ ast_enum!(
 	"const_def" => ConstDefinition,
 	"domain_alias" => DomainAlias,
 	"decision_decl" => DecisionDeclaration,
-	"objective" => Objective,
+	"objective" => Solve,
 	"branching" => Branching,
 	"heuristic" => Heuristic,
 	"constraint" => Constraint,
@@ -109,44 +109,59 @@ impl DecisionDeclaration {
 
 ast_node!(
 	/// Objective
-	Objective,
-	strategy,
-	expression,
+	Solve,
+	goal,
 );
 
-impl Objective {
+impl Solve {
 	/// Get objective strategy
-	pub fn strategy(&self) -> ObjectiveStrategy {
+	pub fn goal(&self) -> Goal {
+		let tree = self.cst_node().cst();
 		let node = self.cst_node().as_ref();
 		match node.child_by_field_name("strategy").unwrap().kind() {
-			"minimising" => ObjectiveStrategy::Minimising,
-			"maximising" => ObjectiveStrategy::Maximising,
+			"minimising" => Goal::Minimising(Expression::new(
+				tree.node(node.child_by_field_name("objective_expr").unwrap()),
+			)),
+			"maximising" => Goal::Maximising(Expression::new(
+				tree.node(node.child_by_field_name("objective_expr").unwrap()),
+			)),
 			_ => unreachable!(),
 		}
 	}
-
-	/// Get objective expression
-	pub fn expression(&self) -> Expression {
-		child_with_field_name(self, "expression")
-	}
 }
 
+/// Solve goal
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum ObjectiveStrategy {
-	Minimising,
-	Maximising,
+pub enum Goal {
+	/// Default Satisifaction Constraint
+	Satisfy,
+	/// Minimising Objective
+	Minimising(Expression),
+	/// Maximising Objective
+	Maximising(Expression),
+}
+
+impl Goal {
+	/// Get objective expression if there is one
+	pub fn objective(&self) -> Option<Expression> {
+		match self {
+			Goal::Minimising(e) => Some(e.clone()),
+			Goal::Maximising(e) => Some(e.clone()),
+			_ => None,
+		}
+	}
 }
 
 ast_node!(
 	/// Branching
 	Branching,
-	expressions,
+	branching_array,
 );
 
 impl Branching {
 	/// Get branching expressions
-	pub fn expressions(&self) -> Children<'_, Expression> {
-		children_with_field_name(self, "expression")
+	pub fn branching_array(&self) -> MatrixLiteral {
+		child_with_field_name(self, "branching_array")
 	}
 }
 

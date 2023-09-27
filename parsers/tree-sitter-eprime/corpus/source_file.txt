@@ -103,8 +103,8 @@ maximising y
 ---
 
 (source_file
-  item: (objective expression: (identifier))
-  item: (objective expression: (identifier)))
+  item: (objective objective_expr: (identifier))
+  item: (objective objective_expr: (identifier)))
 
 =========
 Branching
@@ -116,8 +116,13 @@ branching on [x, y]
 ---
 
 (source_file
-  item: (branching expression: (identifier))
-  item: (branching expression: (identifier) expression: (identifier)))
+  (branching
+    (matrix_literal
+      (identifier)))
+  (branching
+    (matrix_literal
+      (identifier)
+      (identifier))))
 
 ==========
 Constraint

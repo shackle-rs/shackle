@@ -196,7 +196,27 @@ fn test_lower_heuristic() {
 // Possibly remove this test
 #[test]
 fn test_lower_branching() {
-	check_lower_item_eprime("branching on [x]", expect![r#""#])
+	check_lower_item_eprime(
+		r#"
+        minimising x
+        branching on [x]
+        "#,
+		expect![[r#"
+        Item: Solve { goal: Minimize { pattern: <Pattern::1>, objective: <Expression::7> }, annotations: [<Expression::6>] }
+            Expressions:
+            <Expression::1>: Identifier("x")
+            <Expression::2>: ArrayLiteral { members: [<Expression::1>] }
+            <Expression::3>: Identifier("input_order")
+            <Expression::4>: Identifier("indomain_min")
+            <Expression::5>: Identifier("int_search")
+            <Expression::6>: Call { function: <Expression::5>, arguments: [<Expression::2>, <Expression::3>, <Expression::4>] }
+            <Expression::7>: Identifier("x")
+            Types:
+            Patterns:
+            <Pattern::1>: Identifier(Identifier("_objective"))
+            Annotations:
+        "#]],
+	)
 }
 
 // This test is bad as it only tests the last constraint thus multiple constraints

@@ -20,9 +20,9 @@ const_def (done) (tested)
 domain_alias
 decision_decl
 objective (done) (tested)
-branching
+branching (done) (tested)
 constraint (done) (tested)
-heuristic
+heuristic (Not Needed)
 _expression
 call (done) (tested)
 quantification
