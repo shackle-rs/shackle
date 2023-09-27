@@ -223,7 +223,7 @@ mod test {
                                                 IntegerDomain(
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
-                                                        range_members: [
+                                                        domain: [
                                                             InfixOperator(
                                                                 InfixOperator {
                                                                     cst_kind: "infix_operator",
@@ -251,7 +251,7 @@ mod test {
                                                 IntegerDomain(
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
-                                                        range_members: [
+                                                        domain: [
                                                             InfixOperator(
                                                                 InfixOperator {
                                                                     cst_kind: "infix_operator",
@@ -280,7 +280,7 @@ mod test {
                                             base: IntegerDomain(
                                                 IntegerDomain {
                                                     cst_kind: "integer_domain",
-                                                    range_members: [
+                                                    domain: [
                                                         InfixOperator(
                                                             InfixOperator {
                                                                 cst_kind: "infix_operator",

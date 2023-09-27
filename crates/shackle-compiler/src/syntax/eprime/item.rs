@@ -288,7 +288,7 @@ mod test {
                                     domain: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [
+                                            domain: [
                                                 InfixOperator(
                                                     InfixOperator {
                                                         cst_kind: "infix_operator",
@@ -328,7 +328,7 @@ mod test {
                                     domain: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [
+                                            domain: [
                                                 InfixOperator(
                                                     InfixOperator {
                                                         cst_kind: "infix_operator",
@@ -403,7 +403,7 @@ mod test {
                                     definition: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [
+                                            domain: [
                                                 InfixOperator(
                                                     InfixOperator {
                                                         cst_kind: "infix_operator",
@@ -472,7 +472,7 @@ mod test {
                                     domain: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [
+                                            domain: [
                                                 InfixOperator(
                                                     InfixOperator {
                                                         cst_kind: "infix_operator",
@@ -514,18 +514,16 @@ mod test {
                 EPrimeModel(
                     Model {
                         items: [
-                            Objective(
-                                Objective {
+                            Solve(
+                                Solve {
                                     cst_kind: "objective",
-                                    strategy: ObjectiveStrategy {
-                                        cst_kind: "minimising",
-                                        name: "minimising",
-                                    },
-                                    expression: Identifier(
-                                        Identifier {
-                                            cst_kind: "identifier",
-                                            name: "x",
-                                        },
+                                    goal: Minimising(
+                                        Identifier(
+                                            Identifier {
+                                                cst_kind: "identifier",
+                                                name: "x",
+                                            },
+                                        ),
                                     ),
                                 },
                             ),
@@ -574,14 +572,18 @@ mod test {
                             Branching(
                                 Branching {
                                     cst_kind: "branching",
-                                    expressions: [
-                                        Identifier(
-                                            Identifier {
-                                                cst_kind: "identifier",
-                                                name: "x",
-                                            },
-                                        ),
-                                    ],
+                                    branching_array: MatrixLiteral {
+                                        cst_kind: "matrix_literal",
+                                        members: [
+                                            Identifier(
+                                                Identifier {
+                                                    cst_kind: "identifier",
+                                                    name: "x",
+                                                },
+                                            ),
+                                        ],
+                                        index: None,
+                                    },
                                 },
                             ),
                         ],

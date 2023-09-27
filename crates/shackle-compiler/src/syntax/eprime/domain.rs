@@ -108,7 +108,7 @@ mod test {
                                     domain: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [
+                                            domain: [
                                                 InfixOperator(
                                                     InfixOperator {
                                                         cst_kind: "infix_operator",
@@ -148,7 +148,7 @@ mod test {
                                     domain: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [
+                                            domain: [
                                                 IntegerLiteral(
                                                     IntegerLiteral {
                                                         cst_kind: "integer_literal",
@@ -221,7 +221,7 @@ mod test {
                                     domain: IntegerDomain(
                                         IntegerDomain {
                                             cst_kind: "integer_domain",
-                                            range_members: [],
+                                            domain: [],
                                         },
                                     ),
                                     wheres: [],
@@ -314,7 +314,7 @@ mod test {
                                                 IntegerDomain(
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
-                                                        range_members: [
+                                                        domain: [
                                                             InfixOperator(
                                                                 InfixOperator {
                                                                     cst_kind: "infix_operator",

@@ -678,7 +678,7 @@ mod test {
                                             },
                                             generator: Generator {
                                                 cst_kind: "generator",
-                                                name: [
+                                                names: [
                                                     Identifier {
                                                         cst_kind: "identifier",
                                                         name: "i",
@@ -691,7 +691,7 @@ mod test {
                                                 collection: IntegerDomain(
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
-                                                        range_members: [
+                                                        domain: [
                                                             InfixOperator(
                                                                 InfixOperator {
                                                                     cst_kind: "infix_operator",
@@ -809,7 +809,7 @@ mod test {
                                             generators: [
                                                 Generator {
                                                     cst_kind: "generator",
-                                                    name: [
+                                                    names: [
                                                         Identifier {
                                                             cst_kind: "identifier",
                                                             name: "i",
@@ -818,7 +818,7 @@ mod test {
                                                     collection: IntegerDomain(
                                                         IntegerDomain {
                                                             cst_kind: "integer_domain",
-                                                            range_members: [
+                                                            domain: [
                                                                 InfixOperator(
                                                                     InfixOperator {
                                                                         cst_kind: "infix_operator",
@@ -846,7 +846,7 @@ mod test {
                                                 },
                                                 Generator {
                                                     cst_kind: "generator",
-                                                    name: [
+                                                    names: [
                                                         Identifier {
                                                             cst_kind: "identifier",
                                                             name: "j",
@@ -855,7 +855,7 @@ mod test {
                                                     collection: IntegerDomain(
                                                         IntegerDomain {
                                                             cst_kind: "integer_domain",
-                                                            range_members: [
+                                                            domain: [
                                                                 InfixOperator(
                                                                     InfixOperator {
                                                                         cst_kind: "infix_operator",
@@ -905,11 +905,11 @@ mod test {
                                                     },
                                                 ),
                                             ],
-                                            index: Some(
+                                            indices: Some(
                                                 IntegerDomain(
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
-                                                        range_members: [
+                                                        domain: [
                                                             PostfixOperator(
                                                                 PostfixOperator {
                                                                     cst_kind: "postfix_operator",
