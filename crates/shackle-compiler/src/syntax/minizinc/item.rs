@@ -470,16 +470,15 @@ mod test {
 		check_ast(
 			r#"include "foo.mzn";"#,
 			expect!([r#"
-    MznModel(
-        Model {
-            items: [
-                Include(
-                    Include {
-                        cst_kind: "include",
-                        file: StringLiteral {
-                            cst_kind: "string_literal",
-                            value: "foo.mzn",
-                        },
+MznModel(
+    Model {
+        items: [
+            Include(
+                Include {
+                    cst_kind: "include",
+                    file: StringLiteral {
+                        cst_kind: "string_literal",
+                        value: "foo.mzn",
                     },
                 ),
             ],
@@ -494,32 +493,17 @@ mod test {
 		check_ast(
 			"int: x = 3;",
 			expect!([r#"
-    MznModel(
-        Model {
-            items: [
-                Declaration(
-                    Declaration {
-                        cst_kind: "declaration",
-                        pattern: Identifier(
-                            UnquotedIdentifier(
-                                UnquotedIdentifier {
-                                    cst_kind: "identifier",
-                                    name: "x",
-                                },
-                            ),
-                        ),
-                        declared_type: TypeBase(
-                            TypeBase {
-                                cst_kind: "type_base",
-                                var_type: None,
-                                opt_type: None,
-                                any_type: false,
-                                domain: Unbounded(
-                                    UnboundedDomain {
-                                        cst_kind: "primitive_type",
-                                        primitive_type: Int,
-                                    },
-                                ),
+MznModel(
+    Model {
+        items: [
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
                             },
                         ),
                         definition: Some(

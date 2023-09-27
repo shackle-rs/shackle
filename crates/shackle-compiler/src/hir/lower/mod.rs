@@ -3,6 +3,8 @@
 
 pub mod eprime;
 pub mod minizinc;
+#[cfg(test)]
+pub mod test;
 
 use std::sync::Arc;
 
@@ -21,9 +23,9 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 		Ok(m) => m,
 		Err(e) => return (Default::default(), Default::default(), Arc::new(vec![e])),
 	};
+	let identifiers = IdentifierRegistry::new(db);
 	match ast {
 		ConstraintModel::MznModel(ast) => {
-			let identifiers = IdentifierRegistry::new(db);
 			let mut ctx = ItemCollector::new(db, &identifiers, model);
 			for item in ast.items() {
 				ctx.collect_item(item);
@@ -32,7 +34,12 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 			(Arc::new(m), Arc::new(sm), Arc::new(e))
 		}
 		ConstraintModel::EPrimeModel(_) => {
-			unimplemented!("EPrimeModel not yet implemented")
+			let mut ctx = ItemCollector::new(db, &identifiers, model);
+			// for item in ast.items() {
+			// 	ctx.collect_item(item);
+			// }
+			let (m, sm, e) = ctx.finish();
+			(Arc::new(m), Arc::new(sm), Arc::new(e))
 		}
 	}
 }

@@ -5,5 +5,7 @@
 
 mod expression;
 mod item;
+#[cfg(test)]
+mod test;
 
 pub use self::{expression::*, item::*};
