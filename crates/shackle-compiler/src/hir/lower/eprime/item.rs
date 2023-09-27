@@ -45,7 +45,7 @@ impl ItemCollector<'_> {
 			eprime::Item::ConstDefinition(c) => self.collect_const_definition(c),
 			// eprime::Item::DomainAlias(d) => self.collect_domain_alias(d),
 			// eprime::Item::DecisionDeclaration(d) => ,
-			// eprime::Item::Objective(o) => ,
+			eprime::Item::Objective(o) => self.collect_objective(o),
 			// eprime::Item::ParamDeclaration(p) =>,
 			// eprime::Item::Branching(_) => return, // TODO: Currently Supported With Annotations
 			eprime::Item::Heuristic(_) => return, // Currently not supported
@@ -58,6 +58,26 @@ impl ItemCollector<'_> {
 	/// Finish lowering
 	pub fn finish(self) -> (Model, SourceMap, Vec<Error>) {
 		(self.model, self.source_map, self.diagnostics)
+	}
+
+	/// Checks if a solve item exists, if not, adds satisfy solve
+	/// TODO: Check if Source Map is Needed for this
+	pub fn check_solve(&mut self) {
+		if self.model.solves.is_empty() {
+			let index = self.model.solves.insert(Item::new(
+				Solve {
+					goal: Goal::Satisfy,
+					annotations: Box::new([]),
+				},
+				ItemData::default(),
+			));
+			self.model
+				.items
+				.insert((self.model.items.len() - 1).max(0), index.into());
+		};
+		// let it = ItemRef::new(self.db, self.owner, index);
+		// self.source_map.insert(it.into(), Origin::default());
+		// self.source_map.add_from_item_data(self.db, it, &ItemDataSourceMap::default());
 	}
 
 	fn collect_const_definition(
@@ -84,7 +104,7 @@ impl ItemCollector<'_> {
 			let mut ctx =
 				ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
 			let expression = ctx.collect_expression(expr);
-			let (data, source_map) = ctx.finish();
+			let (data, sm) = ctx.finish();
 			let index = self.model.constraints.insert(Item::new(
 				Constraint {
 					annotations: Box::new([]),
@@ -92,10 +112,41 @@ impl ItemCollector<'_> {
 				},
 				data,
 			));
+			self.model.items.push(index.into());
 			let it = ItemRef::new(self.db, self.owner, index);
 			self.source_map.insert(it.into(), Origin::new(&c));
-			self.source_map.add_from_item_data(self.db, it, &source_map);
+			self.source_map.add_from_item_data(self.db, it, &sm);
 		}
+	}
+
+	fn collect_objective(&mut self, o: eprime::Objective) -> (ItemRef, ItemDataSourceMap) {
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
+		let goal = match o.strategy() {
+			eprime::ObjectiveStrategy::Minimising => Goal::Minimize {
+				pattern: ctx.alloc_pattern(
+					Origin::new(&o.expression()),
+					Pattern::Identifier(self.identifiers.objective),
+				),
+				objective: ctx.collect_expression(o.expression()),
+			},
+			eprime::ObjectiveStrategy::Maximising => Goal::Maximize {
+				pattern: ctx.alloc_pattern(
+					Origin::new(&o.expression()),
+					Pattern::Identifier(self.identifiers.objective),
+				),
+				objective: ctx.collect_expression(o.expression()),
+			},
+		};
+		let (data, source_map) = ctx.finish();
+		let index = self.model.solves.insert(Item::new(
+			Solve {
+				goal,
+				annotations: Box::new([]),
+			},
+			data,
+		));
+		self.model.items.push(index.into());
+		(ItemRef::new(self.db, self.owner, index), source_map)
 	}
 
 	// fn collect_domain_alias(&mut self, d: eprime::DomainAlias) -> (ItemRef, ItemDataSourceMap) {

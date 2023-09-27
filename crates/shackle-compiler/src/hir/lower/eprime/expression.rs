@@ -199,13 +199,13 @@ impl ExpressionCollector<'_> {
 
 	/// Collect a list of expressions as the union of one expression
 	/// TODO: Better Implementation must exist
-	// fn fold_expression(&mut self, expressions: Children<'_, eprime::Expression>, func:String) -> ArenaIndex<Expression> {
+	// fn fold_expression(&mut self, expressions: Children<'_, eprime:: Expression>, func:String) -> ArenaIndex<Expression> {
+	// 	let origin = Origin::new(&expressions);
 	// 	let reduced_expr = expressions
-	// 		.reduce(|acc:ArenaIndex<Expression>, e| self.alloc_expression(Origin::new(&e), Call {
+	// 		.reduce(|acc, e| self.alloc_expression(Origin::new(&e), Call {
 	// 			function: self.ident_exp(Origin::new(&e), func),
 	// 			arguments: Box::new([acc, self.collect_expression(e)]),
 	// 		}));
-	// 	let origin = Origin::new(&reduced_expr);
 	// 	match reduced_expr {
 	// 		Some(e) => self.alloc_expression(origin, reduced_expr),
 	// 		None => self.alloc_expression(origin, Expression::Missing),

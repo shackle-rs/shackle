@@ -19,9 +19,9 @@ param_decl
 const_def (done) (tested)
 domain_alias
 decision_decl
-objective
+objective (done) (tested)
 branching
-constraint
+constraint (done) (tested)
 heuristic
 _expression
 call (done) (tested)

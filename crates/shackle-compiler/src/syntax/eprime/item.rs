@@ -117,7 +117,12 @@ ast_node!(
 impl Objective {
 	/// Get objective strategy
 	pub fn strategy(&self) -> ObjectiveStrategy {
-		child_with_field_name(self, "strategy")
+		let node = self.cst_node().as_ref();
+		match node.child_by_field_name("strategy").unwrap().kind() {
+			"minimising" => ObjectiveStrategy::Minimising,
+			"maximising" => ObjectiveStrategy::Maximising,
+			_ => unreachable!(),
+		}
 	}
 
 	/// Get objective expression
@@ -126,17 +131,10 @@ impl Objective {
 	}
 }
 
-ast_node!(
-	/// Objective Strategy
-	ObjectiveStrategy,
-	name,
-);
-
-impl ObjectiveStrategy {
-	/// Get objective strategy name
-	pub fn name(&self) -> &str {
-		self.cst_text()
-	}
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ObjectiveStrategy {
+	Minimising,
+	Maximising,
 }
 
 ast_node!(
