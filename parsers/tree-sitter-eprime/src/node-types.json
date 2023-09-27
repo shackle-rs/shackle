@@ -58,10 +58,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       }
@@ -131,10 +127,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       }
@@ -198,10 +190,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -276,10 +264,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -380,10 +364,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -671,10 +651,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       },
@@ -736,10 +712,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -804,10 +776,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -903,6 +871,10 @@
           {
             "type": "\\/",
             "named": false
+          },
+          {
+            "type": "in",
+            "named": false
           }
         ]
       },
@@ -960,10 +932,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -1033,10 +1001,6 @@
           {
             "type": "range_literal",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       }
@@ -1105,10 +1069,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -1199,10 +1159,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -1340,10 +1296,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       }
@@ -1407,10 +1359,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -1526,10 +1474,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       }
@@ -1593,10 +1537,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]
@@ -1696,10 +1636,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       }
@@ -1764,10 +1700,6 @@
           {
             "type": "quantification",
             "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
           }
         ]
       },
@@ -1825,150 +1757,6 @@
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "set_in",
-    "named": true,
-    "fields": {
-      "left": {
-        "multiple": true,
-        "required": true,
-        "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "absolute_operator",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "indexed_access",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "matrix_comprehension",
-            "named": true
-          },
-          {
-            "type": "matrix_literal",
-            "named": true
-          },
-          {
-            "type": "prefix_operator",
-            "named": true
-          },
-          {
-            "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
-            "named": true
-          }
-        ]
-      },
-      "operator": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "in",
-            "named": false
-          }
-        ]
-      },
-      "right": {
-        "multiple": true,
-        "required": true,
-        "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "absolute_operator",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "indexed_access",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "matrix_comprehension",
-            "named": true
-          },
-          {
-            "type": "matrix_literal",
-            "named": true
-          },
-          {
-            "type": "prefix_operator",
-            "named": true
-          },
-          {
-            "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "set_in",
             "named": true
           }
         ]

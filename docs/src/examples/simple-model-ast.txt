@@ -1,113 +1,115 @@
-Model {
-    items: [
-        Predicate(
-            Predicate {
-                cst_kind: "predicate",
-                declared_type: Test,
-                id: UnquotedIdentifier(
-                    UnquotedIdentifier {
-                        cst_kind: "identifier",
-                        name: "foo",
-                    },
-                ),
-                parameters: [],
-                body: Some(
-                    BooleanLiteral(
-                        BooleanLiteral {
-                            cst_kind: "boolean_literal",
-                            value: true,
-                        },
-                    ),
-                ),
-                annotations: [],
-            },
-        ),
-        Function(
-            Function {
-                cst_kind: "function_item",
-                return_type: TypeBase(
-                    TypeBase {
-                        cst_kind: "type_base",
-                        var_type: None,
-                        opt_type: None,
-                        any_type: false,
-                        domain: Unbounded(
-                            UnboundedDomain {
-                                cst_kind: "primitive_type",
-                                primitive_type: Bool,
-                            },
-                        ),
-                    },
-                ),
-                id: UnquotedIdentifier(
-                    UnquotedIdentifier {
-                        cst_kind: "identifier",
-                        name: "bar",
-                    },
-                ),
-                parameters: [],
-                body: Some(
-                    BooleanLiteral(
-                        BooleanLiteral {
-                            cst_kind: "boolean_literal",
-                            value: true,
-                        },
-                    ),
-                ),
-                annotations: [],
-            },
-        ),
-        Declaration(
-            Declaration {
-                cst_kind: "declaration",
-                pattern: Identifier(
-                    UnquotedIdentifier(
+MznModel(
+    Model {
+        items: [
+            Predicate(
+                Predicate {
+                    cst_kind: "predicate",
+                    declared_type: Test,
+                    id: UnquotedIdentifier(
                         UnquotedIdentifier {
                             cst_kind: "identifier",
-                            name: "x",
+                            name: "foo",
                         },
                     ),
-                ),
-                declared_type: TypeBase(
-                    TypeBase {
-                        cst_kind: "type_base",
-                        var_type: Some(
-                            Var,
+                    parameters: [],
+                    body: Some(
+                        BooleanLiteral(
+                            BooleanLiteral {
+                                cst_kind: "boolean_literal",
+                                value: true,
+                            },
                         ),
-                        opt_type: None,
-                        any_type: false,
-                        domain: Bounded(
-                            InfixOperator(
-                                InfixOperator {
-                                    cst_kind: "infix_operator",
-                                    left: IntegerLiteral(
-                                        IntegerLiteral {
-                                            cst_kind: "integer_literal",
-                                            value: Ok(
-                                                1,
-                                            ),
-                                        },
-                                    ),
-                                    operator: Operator {
-                                        cst_kind: "..",
-                                        name: "..",
-                                    },
-                                    right: IntegerLiteral(
-                                        IntegerLiteral {
-                                            cst_kind: "integer_literal",
-                                            value: Ok(
-                                                3,
-                                            ),
-                                        },
-                                    ),
+                    ),
+                    annotations: [],
+                },
+            ),
+            Function(
+                Function {
+                    cst_kind: "function_item",
+                    return_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: "primitive_type",
+                                    primitive_type: Bool,
                                 },
                             ),
+                        },
+                    ),
+                    id: UnquotedIdentifier(
+                        UnquotedIdentifier {
+                            cst_kind: "identifier",
+                            name: "bar",
+                        },
+                    ),
+                    parameters: [],
+                    body: Some(
+                        BooleanLiteral(
+                            BooleanLiteral {
+                                cst_kind: "boolean_literal",
+                                value: true,
+                            },
                         ),
-                    },
-                ),
-                definition: None,
-                annotations: [],
-            },
-        ),
-    ],
-}
+                    ),
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: "declaration",
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: "type_base",
+                            var_type: Some(
+                                Var,
+                            ),
+                            opt_type: None,
+                            any_type: false,
+                            domain: Bounded(
+                                InfixOperator(
+                                    InfixOperator {
+                                        cst_kind: "infix_operator",
+                                        left: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: Ok(
+                                                    1,
+                                                ),
+                                            },
+                                        ),
+                                        operator: Operator {
+                                            cst_kind: "..",
+                                            name: "..",
+                                        },
+                                        right: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: "integer_literal",
+                                                value: Ok(
+                                                    3,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    },
+)

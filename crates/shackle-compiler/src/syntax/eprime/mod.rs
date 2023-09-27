@@ -8,13 +8,11 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use super::{ast::Children, cst::Cst};
 
-pub mod container;
 pub mod domain;
 pub mod expression;
 pub mod item;
 pub mod primitive;
 
-pub use container::*;
 pub use domain::*;
 pub use expression::*;
 pub use item::*;
@@ -62,40 +60,3 @@ impl Debug for EPrimeModel {
 			.finish()
 	}
 }
-
-/*
-====================
-Temporary Check List
-====================
-
-source_file
-param_decl
-const_def
-domain_alias
-decision_decl
-objective
-branching
-constraint
-heuristic
-_expression
-call
-quantification
-matrix_comprehension
-generator
-indexed_access
-infix_operator
-set_in
-absolute_operator
-prefix_operator
-_domain
-matrix_domain
-_base_domain
-domain_operation
-boolean_domain
-integer_domain
-matrix_literal
-range_literal
-boolean_literal (done) (tested)
-integer_literal (done) (tested)
-identifier (done) (tested)
-*/

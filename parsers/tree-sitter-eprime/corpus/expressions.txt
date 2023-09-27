@@ -121,7 +121,7 @@ letting set_in = x in y
   item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
   item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
   item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  item: (const_def name: (identifier) definition: (set_in left: (identifier) right: (identifier))))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier))))
 
 ===========================
 Matrix Indexing and Slicing
@@ -165,7 +165,7 @@ Quantifications
 
 letting simple = forAll i:D.E
 letting expr = exists i,j : int(1..3) . x[i] = i
-letting leveled = 
+letting leveled =   
   forAll row : int(1..9) .
     forAll col1 : int(1..9) .
         forAll col2: int(col1+1..9) . M[row, col1] != M[row, col2]
