@@ -588,22 +588,29 @@
     "type": "heuristic",
     "named": true,
     "fields": {
-      "name": {
+      "heuristic": {
         "multiple": false,
         "required": false,
         "types": [
           {
-            "type": "heuristicType",
-            "named": true
+            "type": "conflict",
+            "named": false
+          },
+          {
+            "type": "sdf",
+            "named": false
+          },
+          {
+            "type": "srf",
+            "named": false
+          },
+          {
+            "type": "static",
+            "named": false
           }
         ]
       }
     }
-  },
-  {
-    "type": "heuristicType",
-    "named": true,
-    "fields": {}
   },
   {
     "type": "indexed_access",
@@ -1971,48 +1978,55 @@
   {
     "type": "source_file",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "branching",
-          "named": true
-        },
-        {
-          "type": "const_def",
-          "named": true
-        },
-        {
-          "type": "constraint",
-          "named": true
-        },
-        {
-          "type": "decision_decl",
-          "named": true
-        },
-        {
-          "type": "domain_alias",
-          "named": true
-        },
-        {
-          "type": "heuristic",
-          "named": true
-        },
-        {
-          "type": "lang_version",
-          "named": true
-        },
-        {
-          "type": "objective",
-          "named": true
-        },
-        {
-          "type": "param_decl",
-          "named": true
-        }
-      ]
+    "fields": {
+      "item": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "branching",
+            "named": true
+          },
+          {
+            "type": "const_def",
+            "named": true
+          },
+          {
+            "type": "constraint",
+            "named": true
+          },
+          {
+            "type": "decision_decl",
+            "named": true
+          },
+          {
+            "type": "domain_alias",
+            "named": true
+          },
+          {
+            "type": "heuristic",
+            "named": true
+          },
+          {
+            "type": "objective",
+            "named": true
+          },
+          {
+            "type": "param_decl",
+            "named": true
+          }
+        ]
+      },
+      "lang_version": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "lang_version",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

@@ -8,8 +8,8 @@ given x, y: bool
 ---
 
 (source_file
-  (param_decl name: (identifier) domain: (boolean_domain))
-  (param_decl name: (identifier) name: (identifier) domain: (boolean_domain)))
+  item: (param_decl name: (identifier) domain: (boolean_domain))
+  item: (param_decl name: (identifier) name: (identifier) domain: (boolean_domain)))
 
 ==============
 Integer domain
@@ -29,37 +29,37 @@ given j: int
 ---
 
 (source_file
-  (param_decl name: (identifier) domain:
+  item: (param_decl name: (identifier) domain:
     (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
-  (param_decl name: (identifier) domain:
+  item: (param_decl name: (identifier) domain:
     (integer_domain member: (range_literal min: (prefix_operator operand: (integer_literal)) max: (prefix_operator operand: (integer_literal)))))
-  (param_decl name: (identifier) domain:
+  item: (param_decl name: (identifier) domain:
     (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
-  (param_decl name: (identifier) domain:
+  item: (param_decl name: (identifier) domain:
     (integer_domain
       member: (range_literal min: (integer_literal) max: (integer_literal))
       member: (range_literal min: (integer_literal) max: (integer_literal))
       member: (integer_literal)))
-  (param_decl name: (identifier) domain: (domain_operation
+  item: (param_decl name: (identifier) domain: (domain_operation
     left: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     right: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))))
-  (param_decl name: (identifier) domain: (domain_operation
+  item: (param_decl name: (identifier) domain: (domain_operation
     left: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     right: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))))
-  (param_decl name: (identifier) domain: (domain_operation
+  item: (param_decl name: (identifier) domain: (domain_operation
     left: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     right: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))))
-  (param_decl name: (identifier) domain: (domain_operation left: (domain_operation
+  item: (param_decl name: (identifier) domain: (domain_operation left: (domain_operation
     left: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     right: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
     right: (integer_domain member: (integer_literal) member: (integer_literal) member: (integer_literal))))
-  (param_decl name: (identifier) domain:
+  item: (param_decl name: (identifier) domain:
     (integer_domain
       member: (integer_literal)
       member: (integer_literal)
       member: (range_literal min: (integer_literal) max: (integer_literal))
       member: (range_literal min: (integer_literal) max: (integer_literal))))
-  (param_decl
+  item: (param_decl
     name: (identifier)
     domain: (integer_domain)))
 =============
@@ -73,14 +73,14 @@ given split_index: matrix indexed by [int(-2..5),int(-10..10,15,17)] of int(1..5
 ---
 
 (source_file
-  (param_decl name: (identifier) domain: (matrix_domain
+  item: (param_decl name: (identifier) domain: (matrix_domain
     index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     base: (boolean_domain)))
-  (param_decl name: (identifier) domain: (matrix_domain
+  item: (param_decl name: (identifier) domain: (matrix_domain
     index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
     base: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))))
-  (param_decl
+  item: (param_decl
     name: (identifier)
     domain: (matrix_domain
       index: (integer_domain member: (range_literal min: (prefix_operator operand: (integer_literal)) max: (integer_literal)))

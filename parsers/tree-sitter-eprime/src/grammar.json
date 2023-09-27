@@ -9,8 +9,12 @@
           "type": "CHOICE",
           "members": [
             {
-              "type": "SYMBOL",
-              "name": "lang_version"
+              "type": "FIELD",
+              "name": "lang_version",
+              "content": {
+                "type": "SYMBOL",
+                "name": "lang_version"
+              }
             },
             {
               "type": "BLANK"
@@ -20,41 +24,45 @@
         {
           "type": "REPEAT",
           "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "param_decl"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "const_def"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "domain_alias"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "decision_decl"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "objective"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "branching"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "heuristic"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "constraint"
-              }
-            ]
+            "type": "FIELD",
+            "name": "item",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "param_decl"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "const_def"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "domain_alias"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "decision_decl"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "objective"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "branching"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "heuristic"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "constraint"
+                }
+              ]
+            }
           }
         }
       ]
@@ -503,37 +511,33 @@
           "members": [
             {
               "type": "FIELD",
-              "name": "name",
+              "name": "heuristic",
               "content": {
-                "type": "SYMBOL",
-                "name": "heuristicType"
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "static"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "sdf"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "srf"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "conflict"
+                  }
+                ]
               }
             },
             {
               "type": "BLANK"
             }
           ]
-        }
-      ]
-    },
-    "heuristicType": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "static"
-        },
-        {
-          "type": "STRING",
-          "value": "sdf"
-        },
-        {
-          "type": "STRING",
-          "value": "srf"
-        },
-        {
-          "type": "STRING",
-          "value": "conflict"
         }
       ]
     },

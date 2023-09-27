@@ -8,8 +8,8 @@ letting F = false
 ---
 
 (source_file
-  (const_def (identifier) (boolean_literal))
-  (const_def (identifier) (boolean_literal)))
+  item: (const_def name: (identifier) definition: (boolean_literal))
+  item: (const_def name: (identifier) definition: (boolean_literal)))
 
 ================
 Integer Literals
@@ -22,9 +22,9 @@ letting all = 1234567890
 ---
 
 (source_file
-  (const_def (identifier) (integer_literal))
-  (const_def (identifier) (integer_literal))
-  (const_def (identifier) (integer_literal)))
+  item: (const_def name: (identifier) definition: (integer_literal))
+  item: (const_def name: (identifier) definition: (integer_literal))
+  item: (const_def name: (identifier) definition: (integer_literal)))
 
 ================
 Indentifier
@@ -36,8 +36,8 @@ letting A_0 = A_9
 ---
 
 (source_file
-  (const_def (identifier) (identifier))
-  (const_def (identifier) (identifier)))
+  item: (const_def name: (identifier) definition: (identifier))
+  item: (const_def name: (identifier) definition: (identifier)))
 
 ================
 Prefix Operators
@@ -51,10 +51,10 @@ letting negated_ident = !y
 ---
 
 (source_file
-  (const_def name: (identifier) definition: (prefix_operator operand: (integer_literal)))
-  (const_def name: (identifier) definition: (prefix_operator operand: (identifier)))
-  (const_def name: (identifier) definition: (prefix_operator operand: (boolean_literal)))
-  (const_def name: (identifier) definition: (prefix_operator operand: (identifier))))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (integer_literal)))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (identifier)))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (boolean_literal)))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (identifier))))
 
 ========
 Absolute
@@ -65,11 +65,10 @@ letting absolute = | x |
 ---
 
 (source_file
-  (const_def
-    (identifier)
-    (absolute_operator
-      (identifier))))
-
+  item: (const_def
+    name: (identifier)
+    definition: (absolute_operator
+      operand: (identifier))))
 
 ===============
 Infix Operators
@@ -101,28 +100,28 @@ letting set_in = x in y
 ---
 
 (source_file
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
-  (const_def name: (identifier) definition: (set_in left: (identifier) right: (identifier))))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (set_in left: (identifier) right: (identifier))))
 
 ===========================
 Matrix Indexing and Slicing
@@ -137,13 +136,13 @@ letting double_slice = Ms[.., 1 ,..]
 ---
 
 (source_file
-  (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (identifier)))
-  (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (identifier) index: (identifier) index: (identifier)))
-  (const_def name: (identifier) definition: (indexed_access
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (identifier)))
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (identifier) index: (identifier) index: (identifier)))
+  item: (const_def name: (identifier) definition: (indexed_access
     collection: (matrix_literal member: (integer_literal) member: (integer_literal) member: (integer_literal))
     index: (integer_literal)))
-  (const_def name: (identifier) definition: (indexed_access collection: (identifier)))
-  (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (integer_literal))))
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier)))
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (integer_literal))))
 
 =====
 Calls
@@ -156,9 +155,9 @@ letting another = alldifferent_except (X, 0)
 ---
 
 (source_file
-  (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier)))
-  (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier) argument: (identifier) argument: (identifier)))
-  (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier) argument: (integer_literal))))
+  item: (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier)))
+  item: (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier) argument: (identifier) argument: (identifier)))
+  item: (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier) argument: (integer_literal))))
 
 ===============
 Quantifications
@@ -174,7 +173,7 @@ letting leveled =
 ---
 
 (source_file
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (quantification
       function: (identifier)
@@ -182,7 +181,7 @@ letting leveled =
         name: (identifier)
         collection: (identifier))
       template: (identifier)))
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (quantification
       function: (identifier)
@@ -198,7 +197,7 @@ letting leveled =
           collection: (identifier)
           index: (identifier))
         right: (identifier))))
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (quantification
       function: (identifier)
@@ -248,7 +247,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
 ---
 
 (source_file
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (matrix_comprehension
       template: (infix_operator
@@ -260,7 +259,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
           member: (range_literal
             min: (integer_literal)
             max: (integer_literal))))))
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (matrix_comprehension
       template: (infix_operator
@@ -284,7 +283,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
       index: (integer_domain
         member: (range_literal
           min: (integer_literal)))))
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (matrix_comprehension
       template: (matrix_comprehension
@@ -314,7 +313,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
           left: (identifier)
           right: (integer_literal))
         right: (integer_literal))))
-  (const_def
+  item: (const_def
     name: (identifier)
     definition: (matrix_comprehension
       template: (identifier)

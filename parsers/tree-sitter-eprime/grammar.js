@@ -46,20 +46,23 @@ module.exports = grammar({
 			seq(
 				// Note: this is not optional in the language specification, but this
 				// makes the parser a bit more flexible
-				optional($.lang_version),
+				optional(field("lang_version", $.lang_version)),
 				// Note: some of these items must be in a particular order in the
 				// language specification, but this makes the parser a bit more
 				// flexible
 				repeat(
-					choice(
-						$.param_decl,
-						$.const_def,
-						$.domain_alias,
-						$.decision_decl,
-						$.objective,
-						$.branching,
-						$.heuristic,
-						$.constraint
+					field(
+						"item",
+						choice(
+							$.param_decl,
+							$.const_def,
+							$.domain_alias,
+							$.decision_decl,
+							$.objective,
+							$.branching,
+							$.heuristic,
+							$.constraint
+						)
 					)
 				)
 			),
@@ -126,8 +129,7 @@ module.exports = grammar({
 			seq("such", "that", sepBy1(",", field("expression", $._expression))),
 
 		heuristic: ($) =>
-			seq("heuristic", optional(field("name", $.heuristicType))),
-		heuristicType: ($) => choice("static", "sdf", "srf", "conflict"),
+			seq("heuristic", optional(field("heuristic", choice("static", "sdf", "srf", "conflict")))),
 
 		_expression: ($) =>
 			choice(
