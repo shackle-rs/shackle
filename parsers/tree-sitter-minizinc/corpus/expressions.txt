@@ -284,6 +284,8 @@ dot_dot_right = ..y;
 le_dot_dot_right = <..y;
 le_dot_dot_le_right = <..<y;
 
+negative_range = -5..-1;
+
 ---
 
 (source_file
@@ -293,7 +295,8 @@ le_dot_dot_le_right = <..<y;
   (assignment (identifier) (prefix_operator (identifier)))
   (assignment (identifier) (prefix_operator (identifier)))
   (assignment (identifier) (prefix_operator (identifier)))
-  (assignment (identifier) (prefix_operator (identifier))))
+  (assignment (identifier) (prefix_operator (identifier)))
+  (assignment (identifier) (infix_operator (prefix_operator (integer_literal)) (prefix_operator (integer_literal)))))
 
 
 ================

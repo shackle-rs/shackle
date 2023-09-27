@@ -2856,7 +2856,7 @@
       ]
     },
     "postfix_operator": {
-      "type": "PREC_LEFT",
+      "type": "PREC_RIGHT",
       "value": 10,
       "content": {
         "type": "SEQ",

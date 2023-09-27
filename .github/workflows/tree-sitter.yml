@@ -27,7 +27,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
         with:
-          name: tree-sitter
+          name: tree-sitter-${{matrix.parser}}
           path: |
             parsers/tree-sitter-${{matrix.parser}}/src
             parsers/tree-sitter-${{matrix.parser}}/bindings/node

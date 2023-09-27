@@ -28,9 +28,9 @@ const EXCLUSIVE_DISJUNCTION_OPERATORS = ["xor", "⊻"]
 const CONJUNCTION_OPERATORS = ["/\\", "∧"]
 // prettier-ignore
 const COMPARISON_OPERATORS = [
-  "=", "==", "!=", "≠", "<", "<=", "≤", ">", ">=",
-  "≥", "in", "∈", "subset", "⊆", "superset", "⊇",
-  "~=", "~!=",
+	"=", "==", "!=", "≠", "<", "<=", "≤", ">", ">=",
+	"≥", "in", "∈", "subset", "⊆", "superset", "⊇",
+	"~=", "~!=",
 ];
 const UNION_OPERATORS = ["union", "∪"]
 const SET_DIFF_OPERATORS = ["diff", "∖"]
@@ -468,7 +468,7 @@ module.exports = grammar({
 
 		postfix_operator: ($) =>
 			// TODO: Could be nonassoc, will always give type error
-			prec.left(
+			prec.right(
 				PREC.range,
 				seq(
 					field("operand", $._expression),
