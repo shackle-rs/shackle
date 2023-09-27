@@ -387,67 +387,52 @@ pub enum ConstraintModel {
 #[cfg(test)]
 pub mod test {
 	use expect_test::{Expect, ExpectFile};
-	use tree_sitter::{Language, Parser};
+	use tree_sitter::Parser;
 
-	use crate::syntax::{cst::Cst, SyntaxModel};
+	use super::ConstraintModel;
+	use crate::{
+		file::InputLang,
+		syntax::{cst::Cst, eprime::EPrimeModel, minizinc::MznModel},
+	};
 
 	/// Helper to check parsed AST
-	pub fn check_ast_with_lang(
-		language: Language,
-		model: SyntaxModel,
-		source: &str,
-		expected: Expect,
-	) {
+	pub fn check_ast_with_lang(language: InputLang, source: &str, expected: Expect) {
+		let lang = match language {
+			InputLang::MiniZinc => tree_sitter_minizinc::language(),
+			InputLang::EPrime => tree_sitter_eprime::language(),
+			_ => unreachable!("check_ast_with_lang should only be called on model files"),
+		};
 		let mut parser = Parser::new();
-		parser.set_language(language).unwrap();
+		parser.set_language(lang).unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
-		let model = model.new(cst);
+		let model = match language {
+			InputLang::MiniZinc => ConstraintModel::MznModel(MznModel::new(cst)),
+			InputLang::EPrime => ConstraintModel::EPrimeModel(EPrimeModel::new(cst)),
+			_ => unreachable!("check_ast_with_lang should only be called on model files"),
+		};
 		expected.assert_debug_eq(&model);
 	}
 
 	/// Helper to check parsed AST in MiniZinc
 	pub fn check_ast(source: &str, expected: Expect) {
-		check_ast_with_lang(
-			tree_sitter_minizinc::language(),
-			SyntaxModel::MznModel,
-			source,
-			expected,
-		)
+		check_ast_with_lang(InputLang::MiniZinc, source, expected)
 	}
 
 	/// Helper to check parsed AST in EPrime
 	pub fn check_ast_eprime(source: &str, expected: Expect) {
-		check_ast_with_lang(
-			tree_sitter_eprime::language(),
-			SyntaxModel::EPrimeModel,
-			source,
-			expected,
-		)
+		check_ast_with_lang(InputLang::EPrime, source, expected)
 	}
 
 	/// Helper to check parsed AST storing the expected result in a file
-	pub fn check_ast_file_with_lang(
-		language: Language,
-		model: SyntaxModel,
-		source: &str,
-		expected: ExpectFile,
-	) {
+	pub fn check_ast_file(source: &str, expected: ExpectFile) {
 		let mut parser = Parser::new();
-		parser.set_language(language).unwrap();
+		parser
+			.set_language(tree_sitter_minizinc::language())
+			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
-		let model = model.new(cst);
+		let model = ConstraintModel::MznModel(MznModel::new(cst));
 		expected.assert_debug_eq(&model);
-	}
-
-	/// Helper to check parsed AST in MiniZinc storing the expected result in a file
-	pub fn check_ast_file(source: &str, expected: ExpectFile) {
-		check_ast_file_with_lang(
-			tree_sitter_minizinc::language(),
-			SyntaxModel::MznModel,
-			source,
-			expected,
-		)
 	}
 }

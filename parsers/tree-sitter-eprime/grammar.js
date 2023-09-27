@@ -13,12 +13,13 @@ const PREC = {
 	intersect: 2,
 	additive: 1,
 	union: 1,
-	comparative: 0,
+	range: 0, // Not in the language specification
 	set_in: 0,
-	conjunction: -1,
-	disjunction: -2,
+	comparative: -1,
+	conjunction: -2,
+	disjunction: -3,
 	implication: -4,
-	equivalence: -4,
+	equivalence: -5,
 	quantifiers: -10,
 }
 
@@ -144,6 +145,7 @@ module.exports = grammar({
 				$.integer_literal,
 				$.matrix_literal,
 				$.prefix_operator,
+				$.postfix_operator,
 				$.quantification,
 				$.matrix_comprehension,
 				$.absolute_operator,
@@ -214,6 +216,7 @@ module.exports = grammar({
 				[prec.left, PREC.implication, "=>"],
 				[prec.left, PREC.equivalence, "<=>"],
 				[prec.left, PREC.set_in, "in"],
+				[prec.left, PREC.range, ".."],
 			]
 
 			return choice(
@@ -241,13 +244,23 @@ module.exports = grammar({
 
 			return choice(
 				...table.map(([precedence, operator]) =>
-					prec(
+					prec.left(
 						precedence,
 						seq(field("operator", operator), field("operand", $._expression))
 					)
+				),
+				prec.left(
+					PREC.range,
+					seq(field("operator", ".."), field("operand", $._expression))
 				)
 			)
 		},
+
+		postfix_operator: ($) =>
+			prec.right(
+				PREC.range,
+				seq(field("operand", $._expression), field("operator", ".."))
+			),
 
 		_domain: ($) => choice($._base_domain, $.matrix_domain),
 
@@ -296,13 +309,7 @@ module.exports = grammar({
 		integer_domain: ($) =>
 			seq(
 				"int",
-				optional(
-					seq(
-						"(",
-						sepBy(",", field("member", choice($._expression, $.range_literal))),
-						")"
-					)
-				)
+				optional(seq("(", sepBy(",", field("member", $._expression)), ")"))
 			),
 
 		matrix_literal: ($) =>
@@ -313,12 +320,6 @@ module.exports = grammar({
 				"]"
 			),
 
-		range_literal: ($) =>
-			choice(
-				seq(field("min", $._expression), ".."),
-				seq("..", field("max", $._expression)),
-				seq(field("min", $._expression), "..", field("max", $._expression))
-			),
 		boolean_literal: ($) => choice("true", "false"),
 		integer_literal: ($) => /\d+/,
 

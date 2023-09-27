@@ -510,6 +510,7 @@ mod test {
 		check_ast(
 			r#"
 		x = foo :: bar :: qux;
+        var 1..n: y;
 		"#,
 			expect!([r#"
 MznModel(

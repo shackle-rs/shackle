@@ -8,7 +8,7 @@ pub mod test;
 
 use std::sync::Arc;
 
-use self::minizinc::ItemCollector;
+use self::{eprime::ItemCollector as EPrimeItemCollector, minizinc::ItemCollector};
 use crate::{
 	constants::IdentifierRegistry,
 	file::ModelRef,
@@ -33,11 +33,11 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 			let (m, sm, e) = ctx.finish();
 			(Arc::new(m), Arc::new(sm), Arc::new(e))
 		}
-		ConstraintModel::EPrimeModel(_) => {
-			let mut ctx = ItemCollector::new(db, &identifiers, model);
-			// for item in ast.items() {
-			// 	ctx.collect_item(item);
-			// }
+		ConstraintModel::EPrimeModel(ast) => {
+			let mut ctx = EPrimeItemCollector::new(db, &identifiers, model);
+			for item in ast.items() {
+				ctx.collect_item(item);
+			}
 			let (m, sm, e) = ctx.finish();
 			(Arc::new(m), Arc::new(sm), Arc::new(e))
 		}

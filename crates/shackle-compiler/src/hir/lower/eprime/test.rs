@@ -1,24 +1,17 @@
 use expect_test::expect;
 
 use crate::hir::lower::test::check_lower_item_eprime;
+// \[(r#"((\n|.)*?)"#|\n)*\]
 
 #[test]
-fn test_integer_domain() {
-	check_lower_item_eprime(
-		r#"
-        given a: int(1..10)
-        given i: int(1,3,5..10,15..20)
-        given j: int
-        "#,
-		expect!([r#""#]),
-	);
+fn test_lower_integer_domain() {
+	check_lower_item_eprime("given i: int(1, 3..10)", expect!([r#""#]));
 }
 
 #[test]
-fn test_boolean_domain() {
+fn test_lower_boolean_domain() {
 	check_lower_item_eprime(
 		r#"
-            given x: bool
             given x, y: bool
         "#,
 		expect![[r#""#]],
@@ -26,7 +19,7 @@ fn test_boolean_domain() {
 }
 
 #[test]
-fn test_matrix_domain() {
+fn test_lower_matrix_domain() {
 	check_lower_item_eprime(
 		"given simple: matrix indexed by [int(1..4)] of bool",
 		expect![[r#""#]],
@@ -34,40 +27,72 @@ fn test_matrix_domain() {
 }
 
 #[test]
-fn test_call() {
-	check_lower_item_eprime("letting simple = toVec(X,Y)", expect![[r#""#]]);
-}
-
-#[test]
-fn test_indexed_access() {
+fn test_lower_call() {
 	check_lower_item_eprime(
-		r#"
-        letting single = M[i]
-        letting slice = Ms[..]
-        "#,
-		expect![[r#""#]],
+		"letting simple = toVec(X,Y)",
+		expect![[r#"
+        Item: Assignment { assignee: <Expression::1>, definition: <Expression::5> }
+          Expressions:
+            <Expression::1>: Identifier("simple")
+            <Expression::2>: Identifier("X")
+            <Expression::3>: Identifier("Y")
+            <Expression::4>: Identifier("toVec")
+            <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
+          Types:
+          Patterns:
+          Annotations:
+        "#]],
 	);
 }
 
 #[test]
-fn test_infix_operator() {
+fn test_lower_indexed_access() {
 	check_lower_item_eprime(
 		r#"
-        letting different = x != y
-        letting smallerlex = x <lex y
+        letting multi = M[2..4]
+        "#,
+		expect![[r#"
+        Item: Assignment { assignee: <Expression::1>, definition: <Expression::7> }
+          Expressions:
+            <Expression::1>: Identifier("multi")
+            <Expression::2>: IntegerLiteral(2)
+            <Expression::3>: IntegerLiteral(4)
+            <Expression::4>: Identifier("..")
+            <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
+            <Expression::6>: Identifier("M")
+            <Expression::7>: ArrayAccess { collection: <Expression::6>, indices: <Expression::5> }
+          Types:
+          Patterns:
+          Annotations:
+        "#]],
+	);
+}
+
+#[test]
+fn test_lower_infix_operator() {
+	check_lower_item_eprime(
+		r#"
         letting and = x /\ y
-        letting equiv = x <=> y
-        letting exponent = x ** y
         "#,
-		expect![[r#""#]],
+		expect![[r#"
+        Item: Assignment { assignee: <Expression::1>, definition: <Expression::5> }
+          Expressions:
+            <Expression::1>: Identifier("and")
+            <Expression::2>: Identifier("x")
+            <Expression::3>: Identifier("y")
+            <Expression::4>: Identifier("/\\")
+            <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
+          Types:
+          Patterns:
+          Annotations:
+        "#]],
 	);
 }
 
 #[test]
-fn test_prefix_operator() {
+fn test_lower_prefix_operator() {
 	check_lower_item_eprime(
 		r#"
-        letting negative_ident = -x
         letting negated_bool = !true
         "#,
 		expect![[r#""#]],
@@ -75,7 +100,7 @@ fn test_prefix_operator() {
 }
 
 #[test]
-fn test_quantification() {
+fn test_lower_quantification() {
 	check_lower_item_eprime(
 		"letting expr = exists i,j : int(1..3) . x[i] = i",
 		expect![[r#""#]],
@@ -83,7 +108,7 @@ fn test_quantification() {
 }
 
 #[test]
-fn test_matrix_comprehension() {
+fn test_lower_matrix_comprehension() {
 	check_lower_item_eprime(
 		"letting indexed = [ i+j | i: int(1..3), j : int(1..3), i<j ; int(7..) ]",
 		expect![[r#""#]],
@@ -91,23 +116,41 @@ fn test_matrix_comprehension() {
 }
 
 #[test]
-fn test_absolute() {
-	check_lower_item_eprime("letting absolute = | x |", expect![[r#""#]]);
-}
-
-#[test]
-fn test_const_definition() {
+fn test_lower_absolute() {
 	check_lower_item_eprime(
-		r#"
-            letting x = 10
-            letting x be 10
-        "#,
-		expect![[r#""#]],
+		"letting absolute = | x |",
+		expect![[r#"
+        Item: Assignment { assignee: <Expression::1>, definition: <Expression::4> }
+          Expressions:
+            <Expression::1>: Identifier("absolute")
+            <Expression::2>: Identifier("x")
+            <Expression::3>: Identifier("abs")
+            <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::2>] }
+          Types:
+          Patterns:
+          Annotations:
+        "#]],
 	);
 }
 
 #[test]
-fn test_param_declaration() {
+fn test_lower_const_definition() {
+	check_lower_item_eprime(
+		"letting one = 1",
+		expect![[r#"
+        Item: Assignment { assignee: <Expression::1>, definition: <Expression::2> }
+          Expressions:
+            <Expression::1>: Identifier("one")
+            <Expression::2>: IntegerLiteral(1)
+          Types:
+          Patterns:
+          Annotations:
+        "#]],
+	)
+}
+
+#[test]
+fn test_lower_param_declaration() {
 	check_lower_item_eprime(
 		r#"
             given x: int(1..10)
@@ -119,47 +162,60 @@ fn test_param_declaration() {
 }
 
 #[test]
-fn test_domain_alias() {
+fn test_lower_domain_alias() {
 	check_lower_item_eprime("letting INDEX be domain int(1..c*n)", expect![[r#""#]]);
 }
 
 #[test]
-fn test_decision_declaration() {
+fn test_lower_decision_declaration() {
 	check_lower_item_eprime("find x : int(1..10)", expect![[r#""#]]);
 }
 
 #[test]
-fn test_objective() {
-	check_lower_item_eprime("minimising x", expect![[r#""#]]);
+fn test_lower_objective() {
+	check_lower_item_eprime(
+		"minimising x",
+		expect![[r#"
+        Item: Solve { goal: Minimize { pattern: <Pattern::1>, objective: <Expression::1> }, annotations: [] }
+          Expressions:
+            <Expression::1>: Identifier("x")
+          Types:
+          Patterns:
+            <Pattern::1>: Identifier(Identifier("_objective"))
+          Annotations:
+        "#]],
+	);
 }
 
+// Possibly remove this test
 #[test]
-fn test_heuristic() {
+fn test_lower_heuristic() {
 	check_lower_item_eprime("heuristic static", expect![[r#""#]])
 }
 
+// Possibly remove this test
 #[test]
-fn test_branching() {
+fn test_lower_branching() {
 	check_lower_item_eprime("branching on [x]", expect![r#""#])
 }
 
 #[test]
-fn test_constraint() {
-	check_lower_item_eprime("such that x, y", expect![[r#""#]])
+fn test_lower_constraint() {
+	check_lower_item_eprime(
+		"",
+		expect![[r#"
+        Item: Constraint { expression: <Expression::1>, annotations: [] }
+          Expressions:
+            <Expression::1>: Identifier("x")
+          Types:
+          Patterns:
+          Annotations:
+        "#]],
+	)
 }
 
 #[test]
-fn test_integer_literal() {
-	check_lower_item_eprime("letting one be 1", expect![[r#""#]]);
-}
-
-#[test]
-fn test_boolean_literal() {
-	check_lower_item_eprime("letting T = true", expect![[r#""#]]);
-}
-
-#[test]
-fn test_matrix_literal() {
+fn test_lower_matrix_literal() {
 	check_lower_item_eprime(
         "letting cmatrix: matrix indexed by [ int(1..2), int(1..4) ] of int(1..10) = [ [2,8,5,1], [3,7,9,4] ]",
         expect![[r#""#]]

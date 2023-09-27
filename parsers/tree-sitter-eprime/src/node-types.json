@@ -52,6 +52,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -121,6 +125,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -182,6 +190,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -256,6 +268,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -356,6 +372,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -645,6 +665,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -704,6 +728,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -771,6 +799,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -810,6 +842,10 @@
           },
           {
             "type": "->",
+            "named": false
+          },
+          {
+            "type": "..",
             "named": false
           },
           {
@@ -927,6 +963,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -991,15 +1031,15 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
           {
             "type": "quantification",
-            "named": true
-          },
-          {
-            "type": "range_literal",
             "named": true
           }
         ]
@@ -1061,6 +1101,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -1151,6 +1195,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -1290,6 +1338,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -1351,6 +1403,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
             "named": true
           },
           {
@@ -1468,12 +1524,94 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
           {
             "type": "quantification",
             "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "postfix_operator",
+    "named": true,
+    "fields": {
+      "operand": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "absolute_operator",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "matrix_comprehension",
+            "named": true
+          },
+          {
+            "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
+            "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "quantification",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "..",
+            "named": false
           }
         ]
       }
@@ -1532,6 +1670,10 @@
             "named": true
           },
           {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
             "type": "prefix_operator",
             "named": true
           },
@@ -1551,6 +1693,10 @@
           },
           {
             "type": "-",
+            "named": false
+          },
+          {
+            "type": "..",
             "named": false
           }
         ]
@@ -1630,125 +1776,7 @@
             "named": true
           },
           {
-            "type": "prefix_operator",
-            "named": true
-          },
-          {
-            "type": "quantification",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "range_literal",
-    "named": true,
-    "fields": {
-      "max": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "absolute_operator",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "indexed_access",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "matrix_comprehension",
-            "named": true
-          },
-          {
-            "type": "matrix_literal",
-            "named": true
-          },
-          {
-            "type": "prefix_operator",
-            "named": true
-          },
-          {
-            "type": "quantification",
-            "named": true
-          }
-        ]
-      },
-      "min": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "absolute_operator",
-            "named": true
-          },
-          {
-            "type": "boolean_literal",
-            "named": true
-          },
-          {
-            "type": "call",
-            "named": true
-          },
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "indexed_access",
-            "named": true
-          },
-          {
-            "type": "infix_operator",
-            "named": true
-          },
-          {
-            "type": "integer_literal",
-            "named": true
-          },
-          {
-            "type": "matrix_comprehension",
-            "named": true
-          },
-          {
-            "type": "matrix_literal",
+            "type": "postfix_operator",
             "named": true
           },
           {

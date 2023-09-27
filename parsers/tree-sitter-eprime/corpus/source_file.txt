@@ -38,9 +38,9 @@ given y: int(1..10)
 
 (source_file
   item: (param_decl name: (identifier)
-    domain: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
+    domain: (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal))))
   item: (param_decl name: (identifier)
-    domain: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
+    domain: (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal)))
     where: (infix_operator left: (identifier) right: (identifier))))
 
 ====================
@@ -58,9 +58,9 @@ letting cmatrix: matrix indexed by [ int(1..2), int(1..4) ] of int(1..10) = [ [2
   item: (const_def name: (identifier) definition: (integer_literal))
   item: (const_def name: (identifier) 
     domain: (matrix_domain 
-      index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
-      index: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))
-      base: (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))        
+      index: (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal)))
+      index: (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal)))
+      base: (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal))))        
       definition: (matrix_literal
         member: (matrix_literal member: (integer_literal) member: (integer_literal) member: (integer_literal) member: (integer_literal))
         member: (matrix_literal member: (integer_literal) member: (integer_literal) member: (integer_literal) member: (integer_literal)))))
@@ -74,9 +74,9 @@ letting INDEX be domain int(1..c*n)
 ---
 
 (source_file item: (domain_alias name: (identifier)
-    definition: (integer_domain member: (range_literal
-        min: (integer_literal)
-        max: (infix_operator left: (identifier) right: (identifier))))))
+    definition: (integer_domain member: (infix_operator
+        left: (integer_literal)
+        right: (infix_operator left: (identifier) right: (identifier))))))
 
 ====================
 Decision Declaration
@@ -89,9 +89,9 @@ find x, y: int(1..10)
 
 (source_file
   item: (decision_decl name: (identifier) domain:
-    (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal))))
+    (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal))))
   item: (decision_decl name: (identifier) name: (identifier) domain:
-    (integer_domain member: (range_literal min: (integer_literal) max: (integer_literal)))))
+    (integer_domain member: (infix_operator left: (integer_literal) right: (integer_literal)))))
 
 =========
 Objective
@@ -154,7 +154,6 @@ Heuristics
 =========
 
 heuristic conflict
-
 ---
 
 (source_file
