@@ -317,6 +317,7 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 		let model = match db.ast(*file) {
 			Ok(ConstraintModel::MznModel(m)) => m,
 			Ok(ConstraintModel::EPrimeModel(_)) => {
+				models.push(file);
 				continue;
 			}
 			Err(e) => {

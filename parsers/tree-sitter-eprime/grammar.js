@@ -129,7 +129,10 @@ module.exports = grammar({
 			seq("such", "that", sepBy1(",", field("expression", $._expression))),
 
 		heuristic: ($) =>
-			seq("heuristic", optional(field("heuristic", choice("static", "sdf", "srf", "conflict")))),
+			seq(
+				"heuristic",
+				optional(field("heuristic", choice("static", "sdf", "srf", "conflict")))
+			),
 
 		_expression: ($) =>
 			choice(

@@ -101,11 +101,7 @@ module.exports = grammar({
 	rules: {
 		source_file: ($) => sepBy(";", field("item", $._item)),
 
-		_item: ($) => 
-			choice(
-				$.indexing, 
-				$._declaration
-			),
+		_item: ($) => choice($.indexing, $._declaration),
 
 		indexing: ($) =>
 			choice(
@@ -113,8 +109,7 @@ module.exports = grammar({
 				seq("{", $._expr_list, ":", $._expr, "}")
 			),
 
-		_expr_list: ($) =>
-			sepBy1(",", $._expr),
+		_expr_list: ($) => sepBy1(",", $._expr),
 
 		_expr: ($) =>
 			choice(
@@ -167,7 +162,7 @@ module.exports = grammar({
 				[prec.left, PREC.multiplicative, choice(...MULTIPLICATIVE_OPERATORS)],
 				[prec.right, PREC.exponetiation, choice(...EXPONENTIAL_OPERATORS)],
 				[prec.left, PREC.set_constructor, choice(...SET_RANGE_OPERATORS)],
-				[prec.left, PREC.set_constructor, "&"] // Concat "precedence below arithmetic operators"
+				[prec.left, PREC.set_constructor, "&"], // Concat "precedence below arithmetic operators"
 			]
 			return choice(
 				...table.map(([assoc, precedence, operator]) =>
@@ -191,17 +186,14 @@ module.exports = grammar({
 				")"
 			),
 
-		_declaration: ($) =>
-			choice(
-				$.let_decl
-			),
+		_declaration: ($) => choice($.let_decl),
 
 		_decl: ($) =>
-		    seq(
-		        field("name", $.identifier),
-		        optional(field("alias", $.identifier)),
-		        optional(field("indexing",$.indexing))
-		    ),
+			seq(
+				field("name", $.identifier),
+				optional(field("alias", $.identifier)),
+				optional(field("indexing", $.indexing))
+			),
 
 		let_decl: ($) =>
 			choice(
@@ -232,19 +224,21 @@ module.exports = grammar({
 				[PREC.logical_reduction, choice(...LOGICAL_REDUCTION_OPERATORS)],
 				[PREC.intersection, "inter"],
 				[PREC.set_union_diff, "union"],
-				[PREC.set_constructor, "setof"]
+				[PREC.set_constructor, "setof"],
 			]
 			return choice(
 				...reducers.map(([precedence, operator]) =>
-					prec.left(precedence, // I think left associativity should be correct
+					prec.left(
+						precedence, // I think left associativity should be correct
 						seq(
 							field("operator", operator),
 							field("indexing", $.indexing),
 							field("expression", $._expr)
 						)
 					)
-				))
-			},
+				)
+			)
+		},
 		number_literal: ($) =>
 			token(choice(/[0-9]+(\.[0-9]+)?((d|D|e|E)-?[0-9]+)?/)),
 		boolean_literal: ($) => choice("true", "false"),
