@@ -47,7 +47,7 @@ impl ItemCollector<'_> {
 		let (it, sm) = match item.clone() {
 			eprime::Item::Constraint(c) => return self.collect_constraint(c),
 			eprime::Item::ConstDefinition(c) => self.collect_const_definition(c),
-			// eprime::Item::DomainAlias(d) => self.collect_domain_alias(d),
+			eprime::Item::DomainAlias(d) => self.collect_domain_alias(d),
 			// eprime::Item::DecisionDeclaration(d) => ,
 			eprime::Item::Solve(o) => {
 				self.goal = o.goal().clone();
@@ -166,20 +166,21 @@ impl ItemCollector<'_> {
 		self.branching_annotations = Some(b.branching_array());
 	}
 
-	// fn collect_domain_alias(&mut self, d: eprime::DomainAlias) -> (ItemRef, ItemDataSourceMap) {
-	// 	let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
-	// 	let name = ctx.collect_identifier_pattern(d.name());
-	// 	let aliased_type = ctx.collect_domain(d.definition());
-	// 	let (data, source_map) = ctx.finish();
-	// 	let index = self.model.type_aliases.insert(Item::new(
-	// 		TypeAlias {
-	// 			name,
-	// 			aliased_type,
-	// 			annotations: Box::new([]),
-	// 		},
-	// 		data,
-	// 	));
-	// 	self.model.items.push(index.into());
-	// 	(ItemRef::new(self.db, self.owner, index), source_map)
-	// }
+	fn collect_domain_alias(&mut self, d: eprime::DomainAlias) -> (ItemRef, ItemDataSourceMap) {
+		let origin = Origin::new(&d);
+		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
+		let name = ctx.alloc_ident_pattern(origin.clone(), d.name());
+		let aliased_type = ctx.collect_domain(d.definition(), VarType::Par);
+		let (data, source_map) = ctx.finish();
+		let index = self.model.type_aliases.insert(Item::new(
+			TypeAlias {
+				name,
+				aliased_type,
+				annotations: Box::new([]),
+			},
+			data,
+		));
+		self.model.items.push(index.into());
+		(ItemRef::new(self.db, self.owner, index), source_map)
+	}
 }

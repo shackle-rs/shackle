@@ -54,32 +54,101 @@ impl ExpressionCollector<'_> {
 		self.alloc_expression(origin, collected)
 	}
 
-	// pub fn collect_domain(&mut self, t: eprime::Domain, var_type:VarType) -> ArenaIndex<Type> {
-	// 	let mut tiids = TypeInstIdentifiers::default(); // Not Anonymous so with tiids
-	// 	let origin = Origin::new(&t);
-	// 	if t.is_missing() {
-	// 		return self.alloc_type(origin, Type::Missing);
-	// 	}
-	// 	let domain = match t {
-	// 		eprime::Domain::BooleanDomain(_) => Type::Primitive {
-	// 			inst: var_type,
-	// 			opt: OptType::NonOpt, // No Option type Support
-	// 			primitive_type: PrimitiveType::Bool,
-	// 		},
-	// 		eprime::Domain::IntegerDomain(i) => {
-	// 			// if i.domain().
-	// 			// let x = i.domain();
-	// 			// Type::Bounded {
-	// 			// inst:Some(var_type),
-	// 			// opt: Some(OptType::NonOpt),
-	// 			// domain: self.collect_expr_union(i.domain()),
-	// 		}},
-	// 		eprime::Domain::MatrixDomain(_) => todo!(),
-	// 		eprime::Domain::DomainOperation(_) => todo!(),
-	// 		eprime::Domain::Identifier(_) => todo!(),
-	// 	};
-	// 	self.alloc_type(origin, domain)
-	// }
+	pub fn collect_domain(&mut self, t: eprime::Domain, var_type: VarType) -> ArenaIndex<Type> {
+		// Possibly add var_type: VarType
+		let origin = Origin::new(&t);
+		if t.is_missing() {
+			return self.alloc_type(origin, Type::Missing);
+		}
+		let domain = match t {
+			eprime::Domain::Identifier(i) => Type::Bounded {
+				inst: Some(var_type),
+				opt: Some(OptType::NonOpt),
+				domain: self.alloc_expression(origin.clone(), Identifier::new(i.name(), self.db))
+			},
+			eprime::Domain::DomainOperation(_) | /*=> {
+				let left = self.collect_domain(d.left(), var_type);
+				let right = self.collect_domain(d.right(), var_type);
+				let operator = d.operator();
+				let domain = self.alloc_type(origin, Call {
+					function: self.ident_exp(Origin::new(&operator), operator.name()),
+					arguments: Box::new([left, right]),
+				});
+				Type::Bounded {
+					inst: Some(var_type),
+					opt: Some(OptType::NonOpt),
+					domain
+				}
+			}, */
+			eprime::Domain::MatrixDomain(_) | // TODO
+			eprime::Domain::BooleanDomain(_) => Type::Primitive {
+				inst: var_type,
+				opt: OptType::NonOpt, // No Option type Support
+				primitive_type: PrimitiveType::Bool,
+			},
+			eprime::Domain::IntegerDomain(i) => {
+				if i.domain().peekable().peek().is_none() {
+					return self.alloc_type(origin, Type::Primitive {
+						inst: var_type,
+						opt: OptType::NonOpt,
+						primitive_type: PrimitiveType::Int,
+					});
+				}
+				let union_expr = self.ident_exp(origin.clone(), "union");
+				let mut call_domain_members = Vec::new();
+				let literal_domain_members: Box<[ArenaIndex<Expression>]> = i
+					.domain()
+					.filter_map(|l| match l {
+						eprime::Expression::IntegerLiteral(i) =>
+							Some(self.alloc_expression(Origin::new(&i), IntegerLiteral(i.value()))),
+						eprime::Expression::InfixOperator(i) => {
+							call_domain_members.push(self.collect_infix_operator(i));
+							None
+						}
+						_ => None,
+					})
+					.collect();
+				let call_domain = if call_domain_members.len() > 1 {
+					call_domain_members
+						.into_iter()
+						.reduce(|acc, e| self.alloc_expression(origin.clone(), Call {
+							function: union_expr,
+							arguments: Box::new([acc, e]),
+						}))
+				} else {
+					call_domain_members.into_iter().next()
+				};
+				let literal_domain = if literal_domain_members.len() > 0 {
+					Some(self.alloc_expression(
+						origin.clone(),
+						ArrayLiteral {
+							members: literal_domain_members,
+						}
+					))
+				} else { None };
+
+				let domain =  match (literal_domain, call_domain) {
+					(Some(l), Some(d)) => self.alloc_expression(origin.clone(), Call {
+						function: union_expr,
+						arguments: Box::new([l, d]),
+					}),
+					(None, Some(d)) => d,
+					(Some(l), None) => l,
+					(None, None) => return self.alloc_type(origin,Type::Primitive {
+						inst: var_type,
+						opt: OptType::NonOpt,
+						primitive_type: PrimitiveType::Int
+					}),
+				};
+				Type::Bounded {
+					inst: Some(var_type),
+					opt: Some(OptType::NonOpt),
+					domain,
+				}
+			}
+		};
+		self.alloc_type(origin, domain)
+	}
 
 	pub fn collect_call(&mut self, c: eprime::Call) -> Call {
 		Call {
@@ -251,6 +320,20 @@ impl ExpressionCollector<'_> {
 	pub(super) fn alloc_type<V: Into<Type>>(&mut self, origin: Origin, v: V) -> ArenaIndex<Type> {
 		let index = self.data.types.insert(v);
 		self.source_map.type_source.insert(index, origin);
+		index
+	}
+
+	/// Helper to convert an identifier into a pattern
+	pub(super) fn alloc_ident_pattern(
+		&mut self,
+		origin: Origin,
+		i: eprime::Identifier,
+	) -> ArenaIndex<Pattern> {
+		let index = self
+			.data
+			.patterns
+			.insert(Pattern::Identifier(Identifier::new(i.name(), self.db)));
+		self.source_map.pattern_source.insert(index, origin);
 		index
 	}
 

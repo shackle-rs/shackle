@@ -85,6 +85,99 @@ mod test {
 	use crate::syntax::ast::test::check_ast_eprime;
 
 	#[test]
+	fn test_domain_operation() {
+		check_ast_eprime(
+			"given a: int(1..2) union int(3..4)",
+			expect![
+				r#"
+        EPrimeModel(
+    Model {
+        items: [
+            ParamDeclaration(
+                ParamDeclaration {
+                    cst_kind: "param_decl",
+                    names: [
+                        Identifier {
+                            cst_kind: "identifier",
+                            name: "a",
+                        },
+                    ],
+                    domain: DomainOperation(
+                        DomainOperation {
+                            cst_kind: "domain_operation",
+                            operator: Operator {
+                                cst_kind: "union",
+                                name: "union",
+                            },
+                            left: IntegerDomain(
+                                IntegerDomain {
+                                    cst_kind: "integer_domain",
+                                    domain: [
+                                        InfixOperator(
+                                            InfixOperator {
+                                                cst_kind: "infix_operator",
+                                                operator: Operator {
+                                                    cst_kind: "..",
+                                                    name: "..",
+                                                },
+                                                left: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 1,
+                                                    },
+                                                ),
+                                                right: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 2,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ),
+                            right: IntegerDomain(
+                                IntegerDomain {
+                                    cst_kind: "integer_domain",
+                                    domain: [
+                                        InfixOperator(
+                                            InfixOperator {
+                                                cst_kind: "infix_operator",
+                                                operator: Operator {
+                                                    cst_kind: "..",
+                                                    name: "..",
+                                                },
+                                                left: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 3,
+                                                    },
+                                                ),
+                                                right: IntegerLiteral(
+                                                    IntegerLiteral {
+                                                        cst_kind: "integer_literal",
+                                                        value: 4,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ),
+                        },
+                    ),
+                    wheres: [],
+                },
+            ),
+        ],
+    },
+)"#
+			],
+		)
+	}
+
+	#[test]
 	fn test_integer_domain() {
 		check_ast_eprime(
 			r#"

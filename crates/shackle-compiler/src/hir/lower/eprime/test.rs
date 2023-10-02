@@ -163,7 +163,50 @@ fn test_lower_param_declaration() {
 
 #[test]
 fn test_lower_domain_alias() {
-	check_lower_item_eprime("letting INDEX be domain int(1..c*n)", expect![[r#""#]]);
+	check_lower_item_eprime(
+		"letting x be domain bool",
+		expect![[r#"
+        Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::1>, annotations: [] }
+          Expressions:
+          Types:
+            <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Bool }
+          Patterns:
+            <Pattern::1>: Identifier(Identifier("x"))
+          Annotations:
+        "#]],
+	);
+	check_lower_item_eprime(
+		"letting x be domain int",
+		expect![[r#"
+        Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::1>, annotations: [] }
+          Expressions:
+          Types:
+            <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
+          Patterns:
+            <Pattern::1>: Identifier(Identifier("x"))
+          Annotations:
+        "#]],
+	);
+	check_lower_item_eprime(
+		"letting x be domain int(1, 2..3)",
+		expect![[r#"
+      Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::1>, annotations: [] }
+        Expressions:
+          <Expression::1>: Identifier("union")
+          <Expression::2>: IntegerLiteral(1)
+          <Expression::3>: IntegerLiteral(2)
+          <Expression::4>: IntegerLiteral(3)
+          <Expression::5>: Identifier("..")
+          <Expression::6>: Call { function: <Expression::5>, arguments: [<Expression::3>, <Expression::4>] }
+          <Expression::7>: ArrayLiteral { members: [<Expression::2>] }
+          <Expression::8>: Call { function: <Expression::1>, arguments: [<Expression::7>, <Expression::6>] }
+        Types:
+          <Type::1>: Bounded { inst: Some(Par), opt: Some(NonOpt), domain: <Expression::8> }
+        Patterns:
+          <Pattern::1>: Identifier(Identifier("x"))
+        Annotations:
+      "#]],
+	);
 }
 
 #[test]
