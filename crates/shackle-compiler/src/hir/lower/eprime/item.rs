@@ -47,16 +47,15 @@ impl ItemCollector<'_> {
 		let (it, sm) = match item.clone() {
 			eprime::Item::Constraint(c) => return self.collect_constraint(c),
 			eprime::Item::ConstDefinition(c) => self.collect_const_definition(c),
+			eprime::Item::DecisionDeclaration(d) => return self.collect_decision_declaration(d),
+			eprime::Item::ParamDeclaration(p) => return self.collect_param_declaration(p),
 			eprime::Item::DomainAlias(d) => self.collect_domain_alias(d),
-			// eprime::Item::DecisionDeclaration(d) => ,
 			eprime::Item::Solve(o) => {
 				self.goal = o.goal().clone();
 				return;
 			}
-			// eprime::Item::ParamDeclaration(p) =>,
 			eprime::Item::Branching(b) => return self.collect_branching(b),
-			eprime::Item::Heuristic(_) => return, // Currently not supported
-			_ => unimplemented!("Item not implemented"),
+			eprime::Item::Heuristic(_) => return, // Currently not 1fffsupported
 		};
 		self.source_map.insert(it.into(), Origin::new(&item));
 		self.source_map.add_from_item_data(self.db, it, &sm);
@@ -68,9 +67,9 @@ impl ItemCollector<'_> {
 	}
 
 	/// Checks if a solve item exists, if not, adds satisfy solve
-	/// TODO: Check if Source Map is Needed for this
+	/// TODO: Broken SourceMap
 	pub fn add_solve(&mut self) {
-		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 
 		let annotations = match &self.branching_annotations {
 			Some(b) => {
@@ -109,7 +108,7 @@ impl ItemCollector<'_> {
 				objective: ctx.collect_expression(e.clone()),
 			},
 		};
-		let (data, sm) = ctx.finish();
+		let (data, _) = ctx.finish();
 		let index = self
 			.model
 			.solves
@@ -119,7 +118,7 @@ impl ItemCollector<'_> {
 			index.into(),
 		);
 		// let it = ItemRef::new(self.db, self.owner, index);
-		// self.source_map.insert(it.into(), Origin::new(&goal)); TODO: There is no node so ????
+		// self.source_map.insert(it.into(), Origin::new(&goal));
 		// self.source_map.add_from_item_data(self.db, it, &sm);
 	}
 
@@ -127,7 +126,7 @@ impl ItemCollector<'_> {
 		&mut self,
 		c: eprime::ConstDefinition,
 	) -> (ItemRef, ItemDataSourceMap) {
-		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 		let assignee = ctx.collect_expression(c.name());
 		let definition = ctx.collect_expression(c.definition());
 		let (data, source_map) = ctx.finish();
@@ -142,24 +141,66 @@ impl ItemCollector<'_> {
 		(ItemRef::new(self.db, self.owner, index), source_map)
 	}
 
-	fn collect_constraint(&mut self, c: eprime::Constraint) {
-		for expr in c.expressions() {
-			let mut ctx =
-				ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
-			let expression = ctx.collect_expression(expr);
+	fn collect_param_declaration(&mut self, p: eprime::ParamDeclaration) {
+		self.collect_declarations(p.names(), p.domain());
+
+		// Collect where expression as constraint
+		if p.wheres().is_some() {
+			self.collect_constraint_expression(p.wheres().unwrap());
+		}
+	}
+
+	fn collect_decision_declaration(&mut self, d: eprime::DecisionDeclaration) {
+		self.collect_declarations(d.names(), d.domain());
+	}
+
+	fn collect_declarations<I: Iterator<Item = eprime::Identifier>>(
+		&mut self,
+		names: I,
+		domain: eprime::Domain,
+	) {
+		for name in names {
+			let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+			let declared_type = ctx.collect_domain(domain.clone(), VarType::Var);
+			let pattern = ctx.alloc_ident_pattern(Origin::new(&name), name.clone());
 			let (data, sm) = ctx.finish();
-			let index = self.model.constraints.insert(Item::new(
-				Constraint {
+			let index = self.model.declarations.insert(Item::new(
+				Declaration {
+					declared_type,
+					pattern,
+					definition: None,
 					annotations: Box::new([]),
-					expression,
 				},
 				data,
 			));
 			self.model.items.push(index.into());
 			let it = ItemRef::new(self.db, self.owner, index);
-			self.source_map.insert(it.into(), Origin::new(&c));
+			self.source_map.insert(it.into(), Origin::new(&name));
 			self.source_map.add_from_item_data(self.db, it, &sm);
 		}
+	}
+
+	fn collect_constraint(&mut self, c: eprime::Constraint) {
+		for expr in c.expressions() {
+			self.collect_constraint_expression(expr);
+		}
+	}
+
+	fn collect_constraint_expression(&mut self, expr: eprime::Expression) {
+		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let expression = ctx.collect_expression(expr.clone());
+		let (data, sm) = ctx.finish();
+		let index = self.model.constraints.insert(Item::new(
+			Constraint {
+				annotations: Box::new([]),
+				expression,
+			},
+			data,
+		));
+		self.model.items.push(index.into());
+		let it = ItemRef::new(self.db, self.owner, index);
+		self.source_map.insert(it.into(), Origin::new(&expr));
+		self.source_map.add_from_item_data(self.db, it, &sm);
 	}
 
 	fn collect_branching(&mut self, b: eprime::Branching) {
@@ -168,7 +209,7 @@ impl ItemCollector<'_> {
 
 	fn collect_domain_alias(&mut self, d: eprime::DomainAlias) -> (ItemRef, ItemDataSourceMap) {
 		let origin = Origin::new(&d);
-		let mut ctx = ExpressionCollector::new(self.db, self.identifiers, &mut self.diagnostics);
+		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 		let name = ctx.alloc_ident_pattern(origin.clone(), d.name());
 		let aliased_type = ctx.collect_domain(d.definition(), VarType::Par);
 		let (data, source_map) = ctx.finish();

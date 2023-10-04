@@ -32,7 +32,7 @@ ast_node!(
 
 impl Call {
 	/// Get the name of this call
-	pub fn function(&self) -> Expression {
+	pub fn function(&self) -> Identifier {
 		child_with_field_name(self, "function")
 	}
 
@@ -265,50 +265,48 @@ mod test {
 		check_ast_eprime(
 			"letting simple = toVec(X,Y)",
 			expect![[r#"
-                EPrimeModel(
-                    Model {
-                        items: [
-                            ConstDefinition(
-                                ConstDefinition {
-                                    cst_kind: "const_def",
-                                    name: Identifier(
+    EPrimeModel(
+        Model {
+            items: [
+                ConstDefinition(
+                    ConstDefinition {
+                        cst_kind: "const_def",
+                        name: Identifier(
+                            Identifier {
+                                cst_kind: "identifier",
+                                name: "simple",
+                            },
+                        ),
+                        definition: Call(
+                            Call {
+                                cst_kind: "call",
+                                function: Identifier {
+                                    cst_kind: "identifier",
+                                    name: "toVec",
+                                },
+                                arguments: [
+                                    Identifier(
                                         Identifier {
                                             cst_kind: "identifier",
-                                            name: "simple",
+                                            name: "X",
                                         },
                                     ),
-                                    definition: Call(
-                                        Call {
-                                            cst_kind: "call",
-                                            function: Identifier(
-                                                Identifier {
-                                                    cst_kind: "identifier",
-                                                    name: "toVec",
-                                                },
-                                            ),
-                                            arguments: [
-                                                Identifier(
-                                                    Identifier {
-                                                        cst_kind: "identifier",
-                                                        name: "X",
-                                                    },
-                                                ),
-                                                Identifier(
-                                                    Identifier {
-                                                        cst_kind: "identifier",
-                                                        name: "Y",
-                                                    },
-                                                ),
-                                            ],
+                                    Identifier(
+                                        Identifier {
+                                            cst_kind: "identifier",
+                                            name: "Y",
                                         },
                                     ),
-                                    domain: None,
-                                },
-                            ),
-                        ],
+                                ],
+                            },
+                        ),
+                        domain: None,
                     },
-                )
-            "#]],
+                ),
+            ],
+        },
+    )
+"#]],
 		);
 	}
 

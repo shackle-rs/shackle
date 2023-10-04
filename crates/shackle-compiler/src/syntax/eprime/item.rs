@@ -39,8 +39,8 @@ impl ParamDeclaration {
 	}
 
 	/// Where clauses
-	pub fn wheres(&self) -> Children<'_, Expression> {
-		children_with_field_name(self, "where")
+	pub fn wheres(&self) -> Option<Expression> {
+		optional_child_with_field_name(self, "where")
 	}
 }
 
