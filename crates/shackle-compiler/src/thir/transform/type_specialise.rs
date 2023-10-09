@@ -772,4 +772,27 @@ mod test {
 			expect!("Function instantiation error"),
 		)
 	}
+
+	#[test]
+	fn test_type_specialisation_nested() {
+		check_no_stdlib(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+			function $T: foo($T: x) = bar(x);
+			function $T: bar($T: x) = x;
+			function float: bar(float: x) = 2.4;
+			any: a = foo(1);
+			any: b = foo(1.5);
+		"#,
+			expect!([r#"
+    function int: 'bar<int>'(int: x) = x;
+    function float: 'foo<float>'(float: x) = 'bar<float>'(x);
+    function int: 'foo<int>'(int: x) = 'bar<int>'(x);
+    function float: 'bar<float>'(float: x) = 2.4;
+    int: a = 'foo<int>'(1);
+    float: b = 'foo<float>'(1.5);
+    solve satisfy;
+"#]),
+		)
+	}
 }
