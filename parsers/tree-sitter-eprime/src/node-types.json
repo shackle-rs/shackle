@@ -4,17 +4,9 @@
     "named": true,
     "fields": {
       "operand": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -49,6 +41,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -97,14 +93,6 @@
         "required": false,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
             "type": "absolute_operator",
             "named": true
           },
@@ -138,6 +126,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -171,17 +163,9 @@
     "named": true,
     "fields": {
       "definition": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -216,6 +200,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -279,14 +267,6 @@
         "required": true,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
             "type": "absolute_operator",
             "named": true
           },
@@ -320,6 +300,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -565,17 +549,9 @@
     "named": true,
     "fields": {
       "collection": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -613,6 +589,10 @@
             "named": true
           },
           {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
             "type": "postfix_operator",
             "named": true
           },
@@ -630,14 +610,6 @@
         "multiple": true,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "..",
             "named": false
@@ -679,6 +651,10 @@
             "named": true
           },
           {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
             "type": "postfix_operator",
             "named": true
           },
@@ -699,17 +675,9 @@
     "named": true,
     "fields": {
       "left": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -744,6 +712,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -863,17 +835,9 @@
         ]
       },
       "right": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -908,6 +872,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -935,14 +903,6 @@
         "required": false,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
             "type": "absolute_operator",
             "named": true
           },
@@ -976,6 +936,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1008,14 +972,6 @@
         "required": false,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
             "type": "absolute_operator",
             "named": true
           },
@@ -1049,6 +1005,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1098,17 +1058,9 @@
         ]
       },
       "template": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -1143,6 +1095,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1242,14 +1198,6 @@
         "required": false,
         "types": [
           {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
             "type": "absolute_operator",
             "named": true
           },
@@ -1283,6 +1231,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1306,17 +1258,9 @@
     "named": true,
     "fields": {
       "objective_expr": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -1351,6 +1295,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1424,17 +1372,9 @@
         ]
       },
       "where": {
-        "multiple": true,
+        "multiple": false,
         "required": false,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -1469,6 +1409,74 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
+            "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "quantification",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "parenthesised_expression",
+    "named": true,
+    "fields": {
+      "expression": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absolute_operator",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "matrix_comprehension",
+            "named": true
+          },
+          {
+            "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1492,17 +1500,9 @@
     "named": true,
     "fields": {
       "operand": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -1537,6 +1537,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1570,17 +1574,9 @@
     "named": true,
     "fields": {
       "operand": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -1615,6 +1611,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {
@@ -1676,17 +1676,9 @@
         ]
       },
       "template": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "absolute_operator",
             "named": true
@@ -1721,6 +1713,10 @@
           },
           {
             "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
             "named": true
           },
           {

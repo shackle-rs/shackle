@@ -21,6 +21,7 @@ ast_enum!(
 	"quantification" => Quantification,
 	"matrix_comprehension" => MatrixComprehension,
 	"absolute_operator" => AbsoluteOperator,
+	"parenthesised_expression" => "expression" // Turn parenthesised_expression into Expression node
 );
 
 ast_node!(
@@ -975,5 +976,38 @@ mod test {
                 )
             "#]],
 		);
+	}
+
+	#[test]
+	fn test_parenthesis() {
+		check_ast_eprime(
+			"letting x = ( y )",
+			expect![[r#"
+                EPrimeModel(
+                    Model {
+                        items: [
+                            ConstDefinition(
+                                ConstDefinition {
+                                    cst_kind: "const_def",
+                                    name: Identifier(
+                                        Identifier {
+                                            cst_kind: "identifier",
+                                            name: "x",
+                                        },
+                                    ),
+                                    definition: Identifier(
+                                        Identifier {
+                                            cst_kind: "identifier",
+                                            name: "y",
+                                        },
+                                    ),
+                                    domain: None,
+                                },
+                            ),
+                        ],
+                    },
+                )
+            "#]],
+		)
 	}
 }

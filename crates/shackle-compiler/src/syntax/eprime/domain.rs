@@ -86,95 +86,91 @@ mod test {
 
 	#[test]
 	fn test_domain_operation() {
-		check_ast_eprime(
-			"given a: int(1..2) union int(3..4)",
-			expect![
-				r#"
-EPrimeModel(
-    Model {
-        items: [
-            ParamDeclaration(
-                ParamDeclaration {
-                    cst_kind: "param_decl",
-                    names: [
-                        Identifier {
-                            cst_kind: "identifier",
-                            name: "a",
-                        },
-                    ],
-                    domain: DomainOperation(
-                        DomainOperation {
-                            cst_kind: "domain_operation",
-                            operator: Operator {
-                                cst_kind: "union",
-                                name: "union",
+		check_ast_eprime("given a: int(1..2) union int(3..4)", expect![[r#"
+    EPrimeModel(
+        Model {
+            items: [
+                ParamDeclaration(
+                    ParamDeclaration {
+                        cst_kind: "param_decl",
+                        names: [
+                            Identifier {
+                                cst_kind: "identifier",
+                                name: "a",
                             },
-                            left: IntegerDomain(
-                                IntegerDomain {
-                                    cst_kind: "integer_domain",
-                                    domain: [
-                                        InfixOperator(
-                                            InfixOperator {
-                                                cst_kind: "infix_operator",
-                                                operator: Operator {
-                                                    cst_kind: "..",
-                                                    name: "..",
-                                                },
-                                                left: IntegerLiteral(
-                                                    IntegerLiteral {
-                                                        cst_kind: "integer_literal",
-                                                        value: 1,
-                                                    },
-                                                ),
-                                                right: IntegerLiteral(
-                                                    IntegerLiteral {
-                                                        cst_kind: "integer_literal",
-                                                        value: 2,
-                                                    },
-                                                ),
-                                            },
-                                        ),
-                                    ],
+                        ],
+                        domain: DomainOperation(
+                            DomainOperation {
+                                cst_kind: "domain_operation",
+                                operator: Operator {
+                                    cst_kind: "union",
+                                    name: "union",
                                 },
-                            ),
-                            right: IntegerDomain(
-                                IntegerDomain {
-                                    cst_kind: "integer_domain",
-                                    domain: [
-                                        InfixOperator(
-                                            InfixOperator {
-                                                cst_kind: "infix_operator",
-                                                operator: Operator {
-                                                    cst_kind: "..",
-                                                    name: "..",
+                                left: IntegerDomain(
+                                    IntegerDomain {
+                                        cst_kind: "integer_domain",
+                                        domain: [
+                                            InfixOperator(
+                                                InfixOperator {
+                                                    cst_kind: "infix_operator",
+                                                    operator: Operator {
+                                                        cst_kind: "..",
+                                                        name: "..",
+                                                    },
+                                                    left: IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 1,
+                                                        },
+                                                    ),
+                                                    right: IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 2,
+                                                        },
+                                                    ),
                                                 },
-                                                left: IntegerLiteral(
-                                                    IntegerLiteral {
-                                                        cst_kind: "integer_literal",
-                                                        value: 3,
+                                            ),
+                                        ],
+                                    },
+                                ),
+                                right: IntegerDomain(
+                                    IntegerDomain {
+                                        cst_kind: "integer_domain",
+                                        domain: [
+                                            InfixOperator(
+                                                InfixOperator {
+                                                    cst_kind: "infix_operator",
+                                                    operator: Operator {
+                                                        cst_kind: "..",
+                                                        name: "..",
                                                     },
-                                                ),
-                                                right: IntegerLiteral(
-                                                    IntegerLiteral {
-                                                        cst_kind: "integer_literal",
-                                                        value: 4,
-                                                    },
-                                                ),
-                                            },
-                                        ),
-                                    ],
-                                },
-                            ),
-                        },
-                    ),
-                    wheres: None,
-                },
-            ),
-        ],
-    },
-)"#
-			],
-		)
+                                                    left: IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 3,
+                                                        },
+                                                    ),
+                                                    right: IntegerLiteral(
+                                                        IntegerLiteral {
+                                                            cst_kind: "integer_literal",
+                                                            value: 4,
+                                                        },
+                                                    ),
+                                                },
+                                            ),
+                                        ],
+                                    },
+                                ),
+                            },
+                        ),
+                        wheres: None,
+                    },
+                ),
+            ],
+        },
+    )
+"#]])
 	}
 
 	#[test]

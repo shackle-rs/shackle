@@ -273,115 +273,115 @@ mod test {
                     where y < x
             "#,
 			expect![[r#"
-                EPrimeModel(
-                    Model {
-                        items: [
-                            ParamDeclaration(
-                                ParamDeclaration {
-                                    cst_kind: "param_decl",
-                                    names: [
-                                        Identifier {
-                                            cst_kind: "identifier",
-                                            name: "x",
-                                        },
-                                    ],
-                                    domain: IntegerDomain(
-                                        IntegerDomain {
-                                            cst_kind: "integer_domain",
-                                            domain: [
-                                                InfixOperator(
-                                                    InfixOperator {
-                                                        cst_kind: "infix_operator",
-                                                        operator: Operator {
-                                                            cst_kind: "..",
-                                                            name: "..",
-                                                        },
-                                                        left: IntegerLiteral(
-                                                            IntegerLiteral {
-                                                                cst_kind: "integer_literal",
-                                                                value: 1,
-                                                            },
-                                                        ),
-                                                        right: IntegerLiteral(
-                                                            IntegerLiteral {
-                                                                cst_kind: "integer_literal",
-                                                                value: 10,
-                                                            },
-                                                        ),
-                                                    },
-                                                ),
-                                            ],
+    EPrimeModel(
+        Model {
+            items: [
+                ParamDeclaration(
+                    ParamDeclaration {
+                        cst_kind: "param_decl",
+                        names: [
+                            Identifier {
+                                cst_kind: "identifier",
+                                name: "x",
+                            },
+                        ],
+                        domain: IntegerDomain(
+                            IntegerDomain {
+                                cst_kind: "integer_domain",
+                                domain: [
+                                    InfixOperator(
+                                        InfixOperator {
+                                            cst_kind: "infix_operator",
+                                            operator: Operator {
+                                                cst_kind: "..",
+                                                name: "..",
+                                            },
+                                            left: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 1,
+                                                },
+                                            ),
+                                            right: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 10,
+                                                },
+                                            ),
                                         },
                                     ),
-                                    wheres: [],
-                                },
-                            ),
-                            ParamDeclaration(
-                                ParamDeclaration {
-                                    cst_kind: "param_decl",
-                                    names: [
+                                ],
+                            },
+                        ),
+                        wheres: None,
+                    },
+                ),
+                ParamDeclaration(
+                    ParamDeclaration {
+                        cst_kind: "param_decl",
+                        names: [
+                            Identifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ],
+                        domain: IntegerDomain(
+                            IntegerDomain {
+                                cst_kind: "integer_domain",
+                                domain: [
+                                    InfixOperator(
+                                        InfixOperator {
+                                            cst_kind: "infix_operator",
+                                            operator: Operator {
+                                                cst_kind: "..",
+                                                name: "..",
+                                            },
+                                            left: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 1,
+                                                },
+                                            ),
+                                            right: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 10,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                ],
+                            },
+                        ),
+                        wheres: Some(
+                            InfixOperator(
+                                InfixOperator {
+                                    cst_kind: "infix_operator",
+                                    operator: Operator {
+                                        cst_kind: "<",
+                                        name: "<",
+                                    },
+                                    left: Identifier(
                                         Identifier {
                                             cst_kind: "identifier",
                                             name: "y",
                                         },
-                                    ],
-                                    domain: IntegerDomain(
-                                        IntegerDomain {
-                                            cst_kind: "integer_domain",
-                                            domain: [
-                                                InfixOperator(
-                                                    InfixOperator {
-                                                        cst_kind: "infix_operator",
-                                                        operator: Operator {
-                                                            cst_kind: "..",
-                                                            name: "..",
-                                                        },
-                                                        left: IntegerLiteral(
-                                                            IntegerLiteral {
-                                                                cst_kind: "integer_literal",
-                                                                value: 1,
-                                                            },
-                                                        ),
-                                                        right: IntegerLiteral(
-                                                            IntegerLiteral {
-                                                                cst_kind: "integer_literal",
-                                                                value: 10,
-                                                            },
-                                                        ),
-                                                    },
-                                                ),
-                                            ],
+                                    ),
+                                    right: Identifier(
+                                        Identifier {
+                                            cst_kind: "identifier",
+                                            name: "x",
                                         },
                                     ),
-                                    wheres: [
-                                        InfixOperator(
-                                            InfixOperator {
-                                                cst_kind: "infix_operator",
-                                                operator: Operator {
-                                                    cst_kind: "<",
-                                                    name: "<",
-                                                },
-                                                left: Identifier(
-                                                    Identifier {
-                                                        cst_kind: "identifier",
-                                                        name: "y",
-                                                    },
-                                                ),
-                                                right: Identifier(
-                                                    Identifier {
-                                                        cst_kind: "identifier",
-                                                        name: "x",
-                                                    },
-                                                ),
-                                            },
-                                        ),
-                                    ],
                                 },
                             ),
-                        ],
+                        ),
                     },
-                )
-            "#]],
+                ),
+            ],
+        },
+    )
+"#]],
 		);
 	}
 

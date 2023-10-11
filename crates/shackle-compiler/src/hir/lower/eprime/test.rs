@@ -10,11 +10,11 @@ fn test_lower_integer_domain() {
     Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
       Expressions:
       Types:
-        <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Int }
+        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
       Patterns:
         <Pattern::1>: Identifier(Identifier("i"))
       Annotations:
-    "#]),
+"#]),
 	);
 	check_lower_item_eprime(
 		"find i: int(1, 3..10)",
@@ -30,11 +30,11 @@ fn test_lower_integer_domain() {
         <Expression::7>: Identifier("union")
         <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::6>, <Expression::5>] }
       Types:
-        <Type::1>: Bounded { inst: Some(Var), opt: None, domain: <Expression::8> }
+        <Type::1>: Bounded { inst: Some(Par), opt: None, domain: <Expression::8> }
       Patterns:
         <Pattern::1>: Identifier(Identifier("i"))
       Annotations:
-    "#]),
+"#]),
 	)
 }
 
@@ -45,14 +45,14 @@ fn test_lower_boolean_domain() {
           find x: bool
       "#,
 		expect![[r#"
-      Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
-        Expressions:
-        Types:
-          <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Bool }
-        Patterns:
-          <Pattern::1>: Identifier(Identifier("x"))
-        Annotations:
-      "#]],
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
+      Expressions:
+      Types:
+        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Bool }
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("x"))
+      Annotations:
+"#]],
 	);
 }
 
@@ -90,13 +90,13 @@ fn test_lower_matrix_domain() {
         <Expression::3>: Identifier("..")
         <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
       Types:
-        <Type::1>: Bounded { inst: Some(Var), opt: None, domain: <Expression::4> }
-        <Type::2>: Primitive { inst: Var, opt: NonOpt, primitive_type: Bool }
+        <Type::1>: Bounded { inst: Some(Par), opt: None, domain: <Expression::4> }
+        <Type::2>: Primitive { inst: Par, opt: NonOpt, primitive_type: Bool }
         <Type::3>: Array { opt: NonOpt, dimensions: <Type::1>, element: <Type::2> }
       Patterns:
         <Pattern::1>: Identifier(Identifier("simple"))
       Annotations:
-    "#]],
+"#]],
 	);
 	check_lower_item_eprime(
 		"letting x be domain matrix indexed by [ int(1..10), int(1..10) ] of int(1..5)",
@@ -357,11 +357,11 @@ fn test_lower_param_declaration() {
     Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
       Expressions:
       Types:
-        <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Int }
+        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
       Patterns:
         <Pattern::1>: Identifier(Identifier("x"))
       Annotations:
-    "#]],
+"#]],
 	);
 	// This test results in a constraint output due to the where clause
 	check_lower_item_eprime(
@@ -424,14 +424,14 @@ fn test_lower_decision_declaration() {
 	check_lower_item_eprime(
 		"find x : int",
 		expect![[r#"
-      Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
-        Expressions:
-        Types:
-          <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Int }
-        Patterns:
-          <Pattern::1>: Identifier(Identifier("x"))
-        Annotations:
-      "#]],
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
+      Expressions:
+      Types:
+        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("x"))
+      Annotations:
+"#]],
 	);
 }
 

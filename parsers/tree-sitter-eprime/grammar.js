@@ -143,8 +143,11 @@ module.exports = grammar({
 				$.quantification,
 				$.matrix_comprehension,
 				$.absolute_operator,
-				seq("(", $._expression, ")")
+				$.parenthesised_expression
 			),
+
+		parenthesised_expression: ($) =>
+			seq("(", field("expression", $._expression), ")"),
 
 		call: ($) =>
 			prec(

@@ -318,6 +318,16 @@ fn resolve_includes(db: &dyn Hir) -> Result<Arc<Vec<ModelRef>>> {
 			Ok(ConstraintModel::MznModel(m)) => m,
 			Ok(ConstraintModel::EPrimeModel(_)) => {
 				models.push(file);
+				let eprime_globals_dir = "eprime_globals.mzn";
+				let dir = search_dirs
+					.iter()
+					.find(|p| p.join(eprime_globals_dir).exists());
+				match dir {
+					Some(dir) => {
+						todo.push(FileRef::new(&dir.join(eprime_globals_dir), db.upcast()).into())
+					}
+					None => continue,
+				}
 				continue;
 			}
 			Err(e) => {
