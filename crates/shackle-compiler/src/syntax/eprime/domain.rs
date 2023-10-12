@@ -86,7 +86,9 @@ mod test {
 
 	#[test]
 	fn test_domain_operation() {
-		check_ast_eprime("given a: int(1..2) union int(3..4)", expect![[r#"
+		check_ast_eprime(
+			"given a: int(1..2) union int(3..4)",
+			expect![[r#"
     EPrimeModel(
         Model {
             items: [
@@ -170,7 +172,8 @@ mod test {
             ],
         },
     )
-"#]])
+"#]],
+		)
 	}
 
 	#[test]

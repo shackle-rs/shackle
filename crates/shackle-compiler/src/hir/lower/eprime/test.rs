@@ -507,19 +507,17 @@ fn test_lower_matrix_literal() {
 	check_lower_item_eprime(
 		"letting cmatrix: matrix indexed by [ int(1..2), int(1..2) ] of int = [ [2,8], [3,7] ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::8> }
+    Item: Assignment { assignee: <Expression::1>, definition: <Expression::6> }
       Expressions:
         <Expression::1>: Identifier("cmatrix")
         <Expression::2>: IntegerLiteral(2)
         <Expression::3>: IntegerLiteral(8)
-        <Expression::4>: ArrayLiteral { members: [<Expression::2>, <Expression::3>] }
-        <Expression::5>: IntegerLiteral(3)
-        <Expression::6>: IntegerLiteral(7)
-        <Expression::7>: ArrayLiteral { members: [<Expression::5>, <Expression::6>] }
-        <Expression::8>: ArrayLiteral { members: [<Expression::4>, <Expression::7>] }
+        <Expression::4>: IntegerLiteral(3)
+        <Expression::5>: IntegerLiteral(7)
+        <Expression::6>: ArrayLiteral2D { rows: NonIndexed(2), columns: NonIndexed(2), members: [<Expression::2>, <Expression::3>, <Expression::4>, <Expression::5>] }
       Types:
       Patterns:
       Annotations:
-    "#]],
+"#]],
 	)
 }

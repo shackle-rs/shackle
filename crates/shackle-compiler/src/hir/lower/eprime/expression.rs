@@ -2,6 +2,7 @@ use std::iter;
 
 use crate::{
 	db::InternedStringData,
+	diagnostics::InvalidArrayLiteral,
 	hir::{db::Hir, source::Origin, *},
 	syntax::{ast::AstNode, eprime},
 	utils::arena::ArenaIndex,
@@ -259,33 +260,105 @@ impl ExpressionCollector<'_> {
 	/// Collect a matrix literal into HIR
 	pub fn collect_matrix_literal(&mut self, ml: eprime::MatrixLiteral) -> ArenaIndex<Expression> {
 		let origin = Origin::new(&ml);
-		let members = ml
-			.members()
-			.map(|m| self.collect_expression(m))
-			.collect::<Box<_>>();
-		let matrix_literal = self.alloc_expression(origin.clone(), ArrayLiteral { members });
-		if ml.index().is_none() {
-			matrix_literal
-		} else {
-			let indices = ml
-				.index()
-				.and_then(|i| Some(self.collect_domain_expressions(i).into_expression()));
-			let dummy_id = Identifier::new("i", self.db);
-			let template = self.alloc_expression(origin.clone(), dummy_id.clone());
-			let pattern = self.alloc_pattern(origin.clone(), dummy_id);
-			let generators = Box::new([Generator::Iterator {
-				patterns: Box::new([pattern]),
-				collection: matrix_literal,
-				where_clause: None,
-			}]);
-			self.alloc_expression(
-				origin,
-				ArrayComprehension {
-					template,
-					indices,
-					generators,
-				},
-			)
+		let mut dimensions = Vec::new();
+		let mut is_finding_dimensions = true;
+		let mut elem_stack = vec![eprime::Expression::MatrixLiteral(ml.clone())];
+		let mut index_sets = Vec::new();
+		let mut array_values = Vec::new();
+
+		// Iterate through the matrix literal in depth first manner, with first path used to find
+		// dimensions and index set of the matrix before collecting the values.
+		// Due to this matrix literals need to be of equal size in each dimension.
+		while let Some(elem) = elem_stack.pop() {
+			match elem {
+				eprime::Expression::MatrixLiteral(ml) => {
+					if is_finding_dimensions {
+						dimensions.push(ml.members().count());
+						if let Some(i) = ml.index() {
+							index_sets.push(self.collect_domain_expressions(i).into_expression());
+						}
+					}
+					let mut members = ml.members().collect::<Vec<_>>();
+					members.reverse();
+					elem_stack.append(&mut members);
+				}
+				e => {
+					is_finding_dimensions = false;
+					array_values.push(self.collect_expression(e))
+				}
+			}
+		}
+		let members = array_values.into_boxed_slice();
+
+		match (dimensions.len(), index_sets.len()) {
+			// Case of 1d array without index set
+			(1, 0) => return self.alloc_expression(origin, ArrayLiteral { members }),
+			// Case of 2d array without index set
+			(2, 0) => {
+				return self.alloc_expression(
+					origin,
+					ArrayLiteral2D {
+						members,
+						rows: MaybeIndexSet::NonIndexed(dimensions[0]),
+						columns: MaybeIndexSet::NonIndexed(dimensions[1]),
+					},
+				)
+			}
+			// Case of nd array with possible index set
+			(d, i) => {
+				let (src, span) = ml.cst_node().source_span(self.db.upcast());
+				if d > 6 {
+					self.add_diagnostic(InvalidArrayLiteral {
+						src,
+						span,
+						msg:
+							"Support for matrix literals with >6 dimensions not currently supported"
+								.to_string(),
+					});
+					return self.alloc_expression(origin, Expression::Missing);
+				}
+				if d != i && i != 0 {
+					self.add_diagnostic(InvalidArrayLiteral {
+						src,
+						span,
+						msg: "Matrix literal has mismatched dimensions and index sets".to_string(),
+					});
+					return self.alloc_expression(origin, Expression::Missing);
+				}
+				// If no index set exists guess the index set dimensions
+				if i == 0 {
+					self.add_diagnostic(InvalidArrayLiteral{
+						src,
+						span,
+						msg: "Matrix literal has unknown index sets, guessing set of 1..n, prone to failure".to_string()
+					});
+					index_sets = dimensions
+						.iter()
+						.map(|n| {
+							let one = self.alloc_expression(origin.clone(), IntegerLiteral(1));
+							let n =
+								self.alloc_expression(origin.clone(), IntegerLiteral(*n as i64));
+							let function = self.ident_exp(origin.clone(), "..");
+							self.alloc_expression(
+								origin.clone(),
+								Call {
+									function,
+									arguments: Box::new([one, n]),
+								},
+							)
+						})
+						.collect::<Vec<_>>();
+				}
+				index_sets.push(self.alloc_expression(origin.clone(), ArrayLiteral { members }));
+				let function = self.ident_exp(origin.clone(), format!("array{}d", d));
+				return self.alloc_expression(
+					origin,
+					Call {
+						function,
+						arguments: index_sets.into_boxed_slice(),
+					},
+				);
+			}
 		}
 	}
 
@@ -397,6 +470,11 @@ impl ExpressionCollector<'_> {
 		id: T,
 	) -> ArenaIndex<Expression> {
 		self.alloc_expression(origin, Identifier::new(id, self.db))
+	}
+
+	/// Add a diagnostic
+	fn add_diagnostic<E: Into<Error>>(&mut self, error: E) {
+		self.diagnostics.push(error.into());
 	}
 
 	/// Get the collected expressions
