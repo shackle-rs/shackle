@@ -17,6 +17,7 @@ ast_enum!(
 	"branching" => Branching,
 	"heuristic" => Heuristic,
 	"constraint" => Constraint,
+	"output" => Output,
 );
 
 ast_node!(
@@ -201,6 +202,19 @@ impl Constraint {
 	/// Get constraint expressions
 	pub fn expressions(&self) -> Children<'_, Expression> {
 		children_with_field_name(self, "expression")
+	}
+}
+
+ast_node!(
+	/// Output
+	Output,
+	expression,
+);
+
+impl Output {
+	/// Get output expressions
+	pub fn expression(&self) -> Expression {
+		child_with_field_name(self, "expression")
 	}
 }
 
@@ -619,6 +633,40 @@ mod test {
                                             },
                                         ),
                                     ],
+                                },
+                            ),
+                        ],
+                    },
+                )
+            "#]],
+		)
+	}
+
+	#[test]
+	fn test_output() {
+		check_ast_eprime(
+			r#"output["foo"]"#,
+			expect![[r#"
+                EPrimeModel(
+                    Model {
+                        items: [
+                            Output(
+                                Output {
+                                    cst_kind: "output",
+                                    expression: MatrixLiteral(
+                                        MatrixLiteral {
+                                            cst_kind: "matrix_literal",
+                                            members: [
+                                                StringLiteral(
+                                                    StringLiteral {
+                                                        cst_kind: "string_literal",
+                                                        value: "foo",
+                                                    },
+                                                ),
+                                            ],
+                                            index: None,
+                                        },
+                                    ),
                                 },
                             ),
                         ],

@@ -56,7 +56,8 @@ impl ItemCollector<'_> {
 				return;
 			}
 			eprime::Item::Branching(b) => return self.collect_branching(b),
-			eprime::Item::Heuristic(_) => return, // Currently not 1fffsupported
+			eprime::Item::Heuristic(_) => return, // Currently not supported
+			eprime::Item::Output(i) => self.collect_output(i),
 		};
 		self.source_map.insert(it.into(), Origin::new(&item));
 		self.source_map.add_from_item_data(self.db, it, &sm);
@@ -219,6 +220,21 @@ impl ItemCollector<'_> {
 				name,
 				aliased_type,
 				annotations: Box::new([]),
+			},
+			data,
+		));
+		self.model.items.push(index.into());
+		(ItemRef::new(self.db, self.owner, index), source_map)
+	}
+
+	fn collect_output(&mut self, i: eprime::Output) -> (ItemRef, ItemDataSourceMap) {
+		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
+		let expression = ctx.collect_expression(i.expression());
+		let (data, source_map) = ctx.finish();
+		let index = self.model.outputs.insert(Item::new(
+			Output {
+				section: None,
+				expression,
 			},
 			data,
 		));

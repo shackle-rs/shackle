@@ -60,6 +60,10 @@
                 {
                   "type": "SYMBOL",
                   "name": "constraint"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "output"
                 }
               ]
             }
@@ -500,12 +504,37 @@
         }
       ]
     },
+    "output": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "output"
+        },
+        {
+          "type": "FIELD",
+          "name": "expression",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_expression"
+          }
+        }
+      ]
+    },
     "_expression": {
       "type": "CHOICE",
       "members": [
         {
           "type": "SYMBOL",
           "name": "boolean_literal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "integer_literal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "string_literal"
         },
         {
           "type": "SYMBOL",
@@ -522,10 +551,6 @@
         {
           "type": "SYMBOL",
           "name": "infix_operator"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "integer_literal"
         },
         {
           "type": "SYMBOL",
@@ -1913,6 +1938,125 @@
     "integer_literal": {
       "type": "PATTERN",
       "value": "\\d+"
+    },
+    "string_literal": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "\""
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_string_content"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": "\""
+        }
+      ]
+    },
+    "_string_content": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "FIELD",
+        "name": "content",
+        "content": {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "string_characters"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "escape_sequence"
+            }
+          ]
+        }
+      }
+    },
+    "string_characters": {
+      "type": "IMMEDIATE_TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": -11,
+        "content": {
+          "type": "PATTERN",
+          "value": "[^\"\\n\\\\]+"
+        }
+      }
+    },
+    "escape_sequence": {
+      "type": "FIELD",
+      "name": "escape",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "STRING",
+              "value": "\\'"
+            },
+            "named": false,
+            "value": "'"
+          },
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "STRING",
+              "value": "\\\""
+            },
+            "named": false,
+            "value": "\""
+          },
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "STRING",
+              "value": "\\\\"
+            },
+            "named": false,
+            "value": "\\"
+          },
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "STRING",
+              "value": "\\r"
+            },
+            "named": false,
+            "value": "\r"
+          },
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "STRING",
+              "value": "\\n"
+            },
+            "named": false,
+            "value": "\n"
+          },
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "STRING",
+              "value": "\\t"
+            },
+            "named": false,
+            "value": "\t"
+          }
+        ]
+      }
     },
     "identifier": {
       "type": "PATTERN",

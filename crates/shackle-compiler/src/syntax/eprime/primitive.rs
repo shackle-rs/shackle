@@ -2,7 +2,8 @@
 
 use super::{Domain, Expression};
 use crate::syntax::ast::{
-	ast_node, children_with_field_name, optional_child_with_field_name, AstNode, Children,
+	ast_node, children_with_field_name, decode_string, optional_child_with_field_name, AstNode,
+	Children,
 };
 
 ast_node!(
@@ -32,6 +33,19 @@ impl BooleanLiteral {
 			"false" => false,
 			_ => unreachable!(),
 		}
+	}
+}
+
+ast_node!(
+	/// String literal (without interpolation)
+	StringLiteral,
+	value
+);
+
+impl StringLiteral {
+	/// Get the value of this string literal
+	pub fn value(&self) -> String {
+		decode_string(self.cst_node())
 	}
 }
 
@@ -124,6 +138,39 @@ mod test {
             )
             "#]),
 		);
+	}
+
+	#[test]
+	fn test_string_literal() {
+		check_ast_eprime(
+			r#"letting s = "foo""#,
+			expect![[r#"
+            EPrimeModel(
+                Model {
+                    items: [
+                        ConstDefinition(
+                            ConstDefinition {
+                                cst_kind: "const_def",
+                                name: Identifier(
+                                    Identifier {
+                                        cst_kind: "identifier",
+                                        name: "s",
+                                    },
+                                ),
+                                definition: StringLiteral(
+                                    StringLiteral {
+                                        cst_kind: "string_literal",
+                                        value: "foo",
+                                    },
+                                ),
+                                domain: None,
+                            },
+                        ),
+                    ],
+                },
+            )
+            "#]],
+		)
 	}
 
 	#[test]

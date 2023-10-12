@@ -58,6 +58,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -143,6 +147,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       },
@@ -216,6 +224,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -316,6 +328,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -475,6 +491,42 @@
     }
   },
   {
+    "type": "escape_sequence",
+    "named": true,
+    "fields": {
+      "escape": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "\t",
+            "named": false
+          },
+          {
+            "type": "\n",
+            "named": false
+          },
+          {
+            "type": "\r",
+            "named": false
+          },
+          {
+            "type": "\"",
+            "named": false
+          },
+          {
+            "type": "'",
+            "named": false
+          },
+          {
+            "type": "\\",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "generator",
     "named": true,
     "fields": {
@@ -603,6 +655,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       },
@@ -664,6 +720,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -728,6 +788,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -889,6 +953,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -952,6 +1020,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1021,6 +1093,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1111,6 +1187,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1248,6 +1328,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -1312,6 +1396,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       },
@@ -1326,6 +1414,74 @@
           {
             "type": "minimising",
             "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "output",
+    "named": true,
+    "fields": {
+      "expression": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absolute_operator",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "matrix_comprehension",
+            "named": true
+          },
+          {
+            "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
+            "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -1426,6 +1582,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -1490,6 +1650,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -1553,6 +1717,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1627,6 +1795,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -1730,6 +1902,10 @@
           {
             "type": "quantification",
             "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       }
@@ -1772,6 +1948,10 @@
             "named": true
           },
           {
+            "type": "output",
+            "named": true
+          },
+          {
             "type": "param_decl",
             "named": true
           }
@@ -1790,6 +1970,38 @@
     }
   },
   {
+    "type": "string_literal",
+    "named": true,
+    "fields": {
+      "content": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "escape_sequence",
+            "named": true
+          },
+          {
+            "type": "string_characters",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "\t",
+    "named": false
+  },
+  {
+    "type": "\n",
+    "named": false
+  },
+  {
+    "type": "\r",
+    "named": false
+  },
+  {
     "type": "!",
     "named": false
   },
@@ -1798,7 +2010,15 @@
     "named": false
   },
   {
+    "type": "\"",
+    "named": false
+  },
+  {
     "type": "%",
+    "named": false
+  },
+  {
+    "type": "'",
     "named": false
   },
   {
@@ -1914,6 +2134,10 @@
     "named": false
   },
   {
+    "type": "\\",
+    "named": false
+  },
+  {
     "type": "\\/",
     "named": false
   },
@@ -2018,6 +2242,10 @@
     "named": false
   },
   {
+    "type": "output",
+    "named": false
+  },
+  {
     "type": "sdf",
     "named": false
   },
@@ -2028,6 +2256,10 @@
   {
     "type": "static",
     "named": false
+  },
+  {
+    "type": "string_characters",
+    "named": true
   },
   {
     "type": "such",

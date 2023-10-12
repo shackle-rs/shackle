@@ -45,14 +45,14 @@ fn test_lower_boolean_domain() {
           find x: bool
       "#,
 		expect![[r#"
-    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
-      Expressions:
-      Types:
-        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Bool }
-      Patterns:
-        <Pattern::1>: Identifier(Identifier("x"))
-      Annotations:
-"#]],
+      Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
+        Expressions:
+        Types:
+          <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Bool }
+        Patterns:
+          <Pattern::1>: Identifier(Identifier("x"))
+        Annotations:
+      "#]],
 	);
 }
 
@@ -424,14 +424,14 @@ fn test_lower_decision_declaration() {
 	check_lower_item_eprime(
 		"find x : int",
 		expect![[r#"
-    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
-      Expressions:
-      Types:
-        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
-      Patterns:
-        <Pattern::1>: Identifier(Identifier("x"))
-      Annotations:
-"#]],
+      Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
+        Expressions:
+        Types:
+          <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
+        Patterns:
+          <Pattern::1>: Identifier(Identifier("x"))
+        Annotations:
+      "#]],
 	);
 }
 
@@ -505,16 +505,86 @@ fn test_lower_constraint() {
 #[test]
 fn test_lower_matrix_literal() {
 	check_lower_item_eprime(
-		"letting cmatrix: matrix indexed by [ int(1..2), int(1..2) ] of int = [ [2,8], [3,7] ]",
+		"letting matrix1d = [3,4]",
+		expect![[r#"
+    Item: Assignment { assignee: <Expression::1>, definition: <Expression::4> }
+      Expressions:
+        <Expression::1>: Identifier("matrix1d")
+        <Expression::2>: IntegerLiteral(3)
+        <Expression::3>: IntegerLiteral(4)
+        <Expression::4>: ArrayLiteral { members: [<Expression::2>, <Expression::3>] }
+      Types:
+      Patterns:
+      Annotations:
+    "#]],
+	);
+	check_lower_item_eprime(
+		"letting matrix2d = [ [2,8], [3,7] ]",
 		expect![[r#"
     Item: Assignment { assignee: <Expression::1>, definition: <Expression::6> }
       Expressions:
-        <Expression::1>: Identifier("cmatrix")
+        <Expression::1>: Identifier("matrix2d")
         <Expression::2>: IntegerLiteral(2)
         <Expression::3>: IntegerLiteral(8)
         <Expression::4>: IntegerLiteral(3)
         <Expression::5>: IntegerLiteral(7)
         <Expression::6>: ArrayLiteral2D { rows: NonIndexed(2), columns: NonIndexed(2), members: [<Expression::2>, <Expression::3>, <Expression::4>, <Expression::5>] }
+      Types:
+      Patterns:
+      Annotations:
+    "#]],
+	);
+	check_lower_item_eprime(
+		"letting matrix3d = [ [[1,2,3],[4,5,6]], [[7,8,9],[10,11,12]] ]",
+		expect![[r#"
+    Item: Assignment { assignee: <Expression::1>, definition: <Expression::28> }
+      Expressions:
+        <Expression::1>: Identifier("matrix3d")
+        <Expression::2>: IntegerLiteral(1)
+        <Expression::3>: IntegerLiteral(2)
+        <Expression::4>: IntegerLiteral(3)
+        <Expression::5>: IntegerLiteral(4)
+        <Expression::6>: IntegerLiteral(5)
+        <Expression::7>: IntegerLiteral(6)
+        <Expression::8>: IntegerLiteral(7)
+        <Expression::9>: IntegerLiteral(8)
+        <Expression::10>: IntegerLiteral(9)
+        <Expression::11>: IntegerLiteral(10)
+        <Expression::12>: IntegerLiteral(11)
+        <Expression::13>: IntegerLiteral(12)
+        <Expression::14>: IntegerLiteral(1)
+        <Expression::15>: IntegerLiteral(2)
+        <Expression::16>: Identifier("..")
+        <Expression::17>: Call { function: <Expression::16>, arguments: [<Expression::14>, <Expression::15>] }
+        <Expression::18>: IntegerLiteral(1)
+        <Expression::19>: IntegerLiteral(2)
+        <Expression::20>: Identifier("..")
+        <Expression::21>: Call { function: <Expression::20>, arguments: [<Expression::18>, <Expression::19>] }
+        <Expression::22>: IntegerLiteral(1)
+        <Expression::23>: IntegerLiteral(3)
+        <Expression::24>: Identifier("..")
+        <Expression::25>: Call { function: <Expression::24>, arguments: [<Expression::22>, <Expression::23>] }
+        <Expression::26>: ArrayLiteral { members: [<Expression::2>, <Expression::3>, <Expression::4>, <Expression::5>, <Expression::6>, <Expression::7>, <Expression::8>, <Expression::9>, <Expression::10>, <Expression::11>, <Expression::12>, <Expression::13>] }
+        <Expression::27>: Identifier("array3d")
+        <Expression::28>: Call { function: <Expression::27>, arguments: [<Expression::17>, <Expression::21>, <Expression::25>, <Expression::26>] }
+      Types:
+      Patterns:
+      Annotations:
+    "#]],
+	);
+}
+
+#[test]
+fn test_output() {
+	check_lower_item_eprime(
+		"output[show(x)]",
+		expect![[r#"
+    Item: Output { section: None, expression: <Expression::4> }
+      Expressions:
+        <Expression::1>: Identifier("show")
+        <Expression::2>: Identifier("x")
+        <Expression::3>: Call { function: <Expression::1>, arguments: [<Expression::2>] }
+        <Expression::4>: ArrayLiteral { members: [<Expression::3>] }
       Types:
       Patterns:
       Annotations:

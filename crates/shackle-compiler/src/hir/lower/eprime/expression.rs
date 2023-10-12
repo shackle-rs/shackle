@@ -37,11 +37,12 @@ impl ExpressionCollector<'_> {
 		let collected: Expression = match expression {
 			eprime::Expression::BooleanLiteral(b) => BooleanLiteral(b.value()).into(),
 			eprime::Expression::IntegerLiteral(i) => IntegerLiteral(i.value()).into(),
+			eprime::Expression::StringLiteral(s) => StringLiteral::new(s.value(), self.db).into(),
+			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m),
 			eprime::Expression::Call(c) => self.collect_call(c).into(),
 			eprime::Expression::Identifier(i) => Identifier::new(i.name(), self.db).into(),
 			eprime::Expression::ArrayAccess(aa) => self.collect_array_access(aa).into(),
 			eprime::Expression::InfixOperator(o) => return self.collect_infix_operator(o),
-			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m),
 			eprime::Expression::PrefixOperator(o) => return self.collect_prefix_operator(o),
 			eprime::Expression::PostfixOperator(o) => return self.collect_postfix_operator(o),
 			eprime::Expression::Quantification(q) => self.collect_quantification(q).into(),

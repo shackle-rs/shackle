@@ -62,7 +62,8 @@ module.exports = grammar({
 							$.objective,
 							$.branching,
 							$.heuristic,
-							$.constraint
+							$.constraint,
+							$.output
 						)
 					)
 				)
@@ -129,15 +130,18 @@ module.exports = grammar({
 				optional(field("heuristic", choice("static", "sdf", "srf", "conflict")))
 			),
 
+		output: ($) => seq("output", field("expression", $._expression)),
+
 		_expression: ($) =>
 			choice(
 				$.boolean_literal,
+				$.integer_literal,
+				$.string_literal,
+				$.matrix_literal,
 				$.call,
 				$.identifier,
 				$.indexed_access,
 				$.infix_operator,
-				$.integer_literal,
-				$.matrix_literal,
 				$.prefix_operator,
 				$.postfix_operator,
 				$.quantification,
@@ -302,7 +306,7 @@ module.exports = grammar({
 			)
 		},
 
-		boolean_domain: ($) => "bool",
+		boolean_domain: (_) => "bool",
 		integer_domain: ($) =>
 			seq(
 				"int",
@@ -317,10 +321,29 @@ module.exports = grammar({
 				"]"
 			),
 
-		boolean_literal: ($) => choice("true", "false"),
-		integer_literal: ($) => /\d+/,
+		boolean_literal: (_) => choice("true", "false"),
+		integer_literal: (_) => /\d+/,
 
-		identifier: ($) => /[A-Za-z][A-Za-z0-9_]*/,
+		string_literal: ($) => seq('"', optional($._string_content), '"'),
+		_string_content: ($) =>
+			repeat1(field("content", choice($.string_characters, $.escape_sequence))),
+		string_characters: (_) => token.immediate(prec(-11, /[^"\n\\]+/)),
+		escape_sequence: (_) => {
+			const simpleEscape = [
+				["\\'", "'"],
+				['\\"', '"'],
+				["\\\\", "\\"],
+				["\\r", "\r"],
+				["\\n", "\n"],
+				["\\t", "\t"],
+			]
+			return field(
+				"escape",
+				choice(...simpleEscape.map(([e, v]) => alias(e, v)))
+			)
+		},
+
+		identifier: (_) => /[A-Za-z][A-Za-z0-9_]*/,
 
 		line_comment: ($) => token(seq("$", /.*/)),
 	},
