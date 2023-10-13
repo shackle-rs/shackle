@@ -55,17 +55,17 @@ impl ExpressionCollector<'_> {
 	}
 
 	/// Lower Domain/Type into HIR
-	pub fn collect_domain(&mut self, d: eprime::Domain) -> ArenaIndex<Type> {
+	pub fn collect_domain(&mut self, d: eprime::Domain, var_type: VarType) -> ArenaIndex<Type> {
 		let origin = Origin::new(&d);
-		let domain_expr = self.collect_domain_expressions(d);
+		let domain_expr = self.collect_domain_expressions(d, var_type);
 		let domain = match domain_expr {
 			CollectedDomain::PrimitiveDomain(p) => Type::Primitive {
-				inst: VarType::Par,
+				inst: var_type,
 				opt: OptType::NonOpt,
 				primitive_type: p,
 			},
 			CollectedDomain::BoundedDomain(b) => Type::Bounded {
-				inst: Some(VarType::Par),
+				inst: Some(var_type),
 				opt: None,
 				domain: b,
 			},
@@ -76,15 +76,23 @@ impl ExpressionCollector<'_> {
 
 	/// Helper function that collects the expressions within the domain. Important for
 	/// compatibility with domain operations
-	fn collect_domain_expressions(&mut self, t: eprime::Domain) -> CollectedDomain {
+	fn collect_domain_expressions(
+		&mut self,
+		t: eprime::Domain,
+		var_type: VarType,
+	) -> CollectedDomain {
 		let origin = Origin::new(&t);
 		CollectedDomain::BoundedDomain(match t {
 			eprime::Domain::Identifier(i) => {
 				self.alloc_expression(origin.clone(), Identifier::new(i.name(), self.db))
 			}
 			eprime::Domain::DomainOperation(d) => {
-				let left = self.collect_domain_expressions(d.left()).into_expression();
-				let right = self.collect_domain_expressions(d.right()).into_expression();
+				let left = self
+					.collect_domain_expressions(d.left(), var_type)
+					.into_expression();
+				let right = self
+					.collect_domain_expressions(d.right(), var_type)
+					.into_expression();
 				let op = d.operator();
 				let operator = if op.name() == "-" { "diff" } else { op.name() }; // Convert Eprime operators to MiniZinc ones
 				let function = self.ident_exp(Origin::new(&op), operator);
@@ -99,7 +107,7 @@ impl ExpressionCollector<'_> {
 			eprime::Domain::MatrixDomain(m) => {
 				let domain_indexes = m
 					.indexes()
-					.map(|i| self.collect_domain(i))
+					.map(|i| self.collect_domain(i, VarType::Par))
 					.collect::<Box<_>>();
 				let dimensions = if domain_indexes.len() > 1 {
 					self.alloc_type(
@@ -112,17 +120,17 @@ impl ExpressionCollector<'_> {
 				} else {
 					*domain_indexes.first().unwrap()
 				};
-				let domain_base = self.collect_domain_expressions(m.base());
+				let domain_base = self.collect_domain_expressions(m.base(), var_type);
 				let element = self.alloc_type(
 					origin,
 					match domain_base {
 						CollectedDomain::PrimitiveDomain(p) => Type::Primitive {
-							inst: VarType::Par,
+							inst: var_type,
 							opt: OptType::NonOpt,
 							primitive_type: p,
 						},
 						CollectedDomain::BoundedDomain(b) => Type::Bounded {
-							inst: Some(VarType::Par),
+							inst: Some(var_type),
 							opt: None,
 							domain: b,
 						},
@@ -204,6 +212,10 @@ impl ExpressionCollector<'_> {
 			match operator.name() {
 				"toInt" => "booltoint",
 				"toSet" => "arraytoset",
+				"and" => "forall",
+				"or" => "exists",
+				"gcc" => "global_cardinality",
+				"allDiff" => "all_different",
 				_ => operator.name(),
 			},
 		);
@@ -225,6 +237,10 @@ impl ExpressionCollector<'_> {
 			match operator.name() {
 				"==" => "eq",
 				"%" => "mod",
+				"<lex" => "lex_less",
+				"<=lex" => "lex_lesseq",
+				">lex" => "lex_greater",
+				">=lex" => "lex_greatereq",
 				_ => operator.name(),
 			},
 		);
@@ -276,7 +292,10 @@ impl ExpressionCollector<'_> {
 					if is_finding_dimensions {
 						dimensions.push(ml.members().count());
 						if let Some(i) = ml.index() {
-							index_sets.push(self.collect_domain_expressions(i).into_expression());
+							index_sets.push(
+								self.collect_domain_expressions(i, VarType::Par)
+									.into_expression(),
+							);
 						}
 					}
 					let mut members = ml.members().collect::<Vec<_>>();
@@ -423,14 +442,9 @@ impl ExpressionCollector<'_> {
 		}
 	}
 
-	fn collect_matrix_comprehension(
-		&mut self,
-		m: eprime::MatrixComprehension,
-	) -> ArrayComprehension {
+	fn collect_matrix_comprehension(&mut self, m: eprime::MatrixComprehension) -> Call {
+		let origin = Origin::new(&m);
 		let template = self.collect_expression(m.template());
-		let indices = m
-			.indices()
-			.and_then(|i| Some(self.collect_domain_expressions(i).into_expression()));
 		let generators = m
 			.generators()
 			.zip(m.conditions().map(Some).chain(iter::repeat(None)))
@@ -439,10 +453,30 @@ impl ExpressionCollector<'_> {
 				self.collect_generator(g, cond)
 			})
 			.collect();
-		ArrayComprehension {
-			template,
-			indices,
-			generators,
+		let matrix_comprehension = self.alloc_expression(
+			origin.clone(),
+			ArrayComprehension {
+				template,
+				indices: None,
+				generators,
+			},
+		);
+
+		// Either use provided index set or 0..n-1 index set
+		match m.indices() {
+			Some(i) => {
+				let index_set = self
+					.collect_domain_expressions(i, VarType::Par)
+					.into_expression();
+				Call {
+					function: self.ident_exp(origin, "array1d"),
+					arguments: Box::new([index_set, matrix_comprehension]),
+				}
+			}
+			None => Call {
+				function: self.ident_exp(origin, "indexing_0"),
+				arguments: Box::new([matrix_comprehension]),
+			},
 		}
 	}
 
@@ -456,7 +490,7 @@ impl ExpressionCollector<'_> {
 			.map(|i| self.alloc_ident_pattern(Origin::new(&i), i))
 			.collect();
 		let collection = self
-			.collect_domain_expressions(g.collection())
+			.collect_domain_expressions(g.collection(), VarType::Par)
 			.into_expression();
 		Generator::Iterator {
 			patterns,

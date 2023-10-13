@@ -10,7 +10,7 @@ fn test_lower_integer_domain() {
     Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
       Expressions:
       Types:
-        <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
+        <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Int }
       Patterns:
         <Pattern::1>: Identifier(Identifier("i"))
       Annotations:
@@ -30,7 +30,7 @@ fn test_lower_integer_domain() {
         <Expression::7>: Identifier("union")
         <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::6>, <Expression::5>] }
       Types:
-        <Type::1>: Bounded { inst: Some(Par), opt: None, domain: <Expression::8> }
+        <Type::1>: Bounded { inst: Some(Var), opt: None, domain: <Expression::8> }
       Patterns:
         <Pattern::1>: Identifier(Identifier("i"))
       Annotations:
@@ -48,7 +48,7 @@ fn test_lower_boolean_domain() {
       Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
         Expressions:
         Types:
-          <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Bool }
+          <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Bool }
         Patterns:
           <Pattern::1>: Identifier(Identifier("x"))
         Annotations:
@@ -240,7 +240,7 @@ fn test_lower_matrix_comprehension() {
 	check_lower_item_eprime(
 		"letting simple = [ num**2 | num : int(1..5) ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::10> }
+    Item: Assignment { assignee: <Expression::1>, definition: <Expression::12> }
       Expressions:
         <Expression::1>: Identifier("simple")
         <Expression::2>: Identifier("num")
@@ -252,6 +252,8 @@ fn test_lower_matrix_comprehension() {
         <Expression::8>: Identifier("..")
         <Expression::9>: Call { function: <Expression::8>, arguments: [<Expression::6>, <Expression::7>] }
         <Expression::10>: ArrayComprehension { template: <Expression::5>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::9>, where_clause: None }] }
+        <Expression::11>: Identifier("indexing_0")
+        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::10>] }
       Types:
       Patterns:
         <Pattern::1>: Identifier(Identifier("num"))
@@ -261,7 +263,7 @@ fn test_lower_matrix_comprehension() {
 	check_lower_item_eprime(
 		"letting where = [ i+j | i: int(1..3), j : int(1..3), i<j]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::18> }
+    Item: Assignment { assignee: <Expression::1>, definition: <Expression::20> }
       Expressions:
         <Expression::1>: Identifier("where")
         <Expression::2>: Identifier("i")
@@ -281,6 +283,8 @@ fn test_lower_matrix_comprehension() {
         <Expression::16>: Identifier("..")
         <Expression::17>: Call { function: <Expression::16>, arguments: [<Expression::14>, <Expression::15>] }
         <Expression::18>: ArrayComprehension { template: <Expression::5>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::13>, where_clause: Some(<Expression::9>) }, Iterator { patterns: [<Pattern::2>], collection: <Expression::17>, where_clause: None }] }
+        <Expression::19>: Identifier("indexing_0")
+        <Expression::20>: Call { function: <Expression::19>, arguments: [<Expression::18>] }
       Types:
       Patterns:
         <Pattern::1>: Identifier(Identifier("i"))
@@ -291,19 +295,21 @@ fn test_lower_matrix_comprehension() {
 	check_lower_item_eprime(
 		"letting indexed = [ i | i : int(1..5) ; int(1..2) ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::11> }
+    Item: Assignment { assignee: <Expression::1>, definition: <Expression::13> }
       Expressions:
         <Expression::1>: Identifier("indexed")
         <Expression::2>: Identifier("i")
         <Expression::3>: IntegerLiteral(1)
-        <Expression::4>: IntegerLiteral(2)
+        <Expression::4>: IntegerLiteral(5)
         <Expression::5>: Identifier("..")
         <Expression::6>: Call { function: <Expression::5>, arguments: [<Expression::3>, <Expression::4>] }
-        <Expression::7>: IntegerLiteral(1)
-        <Expression::8>: IntegerLiteral(5)
-        <Expression::9>: Identifier("..")
-        <Expression::10>: Call { function: <Expression::9>, arguments: [<Expression::7>, <Expression::8>] }
-        <Expression::11>: ArrayComprehension { template: <Expression::2>, indices: Some(<Expression::6>), generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::10>, where_clause: None }] }
+        <Expression::7>: ArrayComprehension { template: <Expression::2>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::6>, where_clause: None }] }
+        <Expression::8>: IntegerLiteral(1)
+        <Expression::9>: IntegerLiteral(2)
+        <Expression::10>: Identifier("..")
+        <Expression::11>: Call { function: <Expression::10>, arguments: [<Expression::8>, <Expression::9>] }
+        <Expression::12>: Identifier("array1d")
+        <Expression::13>: Call { function: <Expression::12>, arguments: [<Expression::11>, <Expression::7>] }
       Types:
       Patterns:
         <Pattern::1>: Identifier(Identifier("i"))
@@ -427,7 +433,7 @@ fn test_lower_decision_declaration() {
       Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: None, annotations: [] }
         Expressions:
         Types:
-          <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
+          <Type::1>: Primitive { inst: Var, opt: NonOpt, primitive_type: Int }
         Patterns:
           <Pattern::1>: Identifier(Identifier("x"))
         Annotations:

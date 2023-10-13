@@ -144,7 +144,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_param_declaration(&mut self, p: eprime::ParamDeclaration) {
-		self.collect_declarations(p.names(), p.domain());
+		self.collect_declarations(p.names(), p.domain(), VarType::Par);
 
 		// Collect where expression as constraint
 		if p.wheres().is_some() {
@@ -153,17 +153,18 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_decision_declaration(&mut self, d: eprime::DecisionDeclaration) {
-		self.collect_declarations(d.names(), d.domain());
+		self.collect_declarations(d.names(), d.domain(), VarType::Var);
 	}
 
 	fn collect_declarations<I: Iterator<Item = eprime::Identifier>>(
 		&mut self,
 		names: I,
 		domain: eprime::Domain,
+		var_type: VarType,
 	) {
 		for name in names {
 			let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
-			let declared_type = ctx.collect_domain(domain.clone());
+			let declared_type = ctx.collect_domain(domain.clone(), var_type);
 			let pattern = ctx.alloc_ident_pattern(Origin::new(&name), name.clone());
 			let (data, sm) = ctx.finish();
 			let index = self.model.declarations.insert(Item::new(
@@ -213,7 +214,7 @@ impl ItemCollector<'_> {
 		let origin = Origin::new(&d);
 		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 		let name = ctx.alloc_ident_pattern(origin.clone(), d.name());
-		let aliased_type = ctx.collect_domain(d.definition());
+		let aliased_type = ctx.collect_domain(d.definition(), VarType::Par);
 		let (data, source_map) = ctx.finish();
 		let index = self.model.type_aliases.insert(Item::new(
 			TypeAlias {
