@@ -26,6 +26,17 @@ letting all = 1234567890
   item: (const_def name: (identifier) definition: (integer_literal))
   item: (const_def name: (identifier) definition: (integer_literal)))
 
+========
+Infinity
+========
+
+letting inf = infinity
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (infinity)))
+
 ================
 Indentifier
 ================

@@ -1,3 +1,5 @@
+use std::iter;
+
 use crate::{
 	constants::IdentifierRegistry,
 	file::ModelRef,
@@ -50,7 +52,7 @@ impl ItemCollector<'_> {
 			eprime::Item::ConstDefinition(c) => self.collect_const_definition(c),
 			eprime::Item::DecisionDeclaration(d) => return self.collect_decision_declaration(d),
 			eprime::Item::ParamDeclaration(p) => return self.collect_param_declaration(p),
-			eprime::Item::DomainAlias(d) => self.collect_domain_alias(d),
+			eprime::Item::DomainAlias(d) => return self.collect_domain_alias(d),
 			eprime::Item::Solve(o) => {
 				self.goal = o.goal().clone();
 				return;
@@ -144,7 +146,7 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_param_declaration(&mut self, p: eprime::ParamDeclaration) {
-		self.collect_declarations(p.names(), p.domain(), VarType::Par);
+		self.collect_declarations(p.names(), p.domain(), false, VarType::Par);
 
 		// Collect where expression as constraint
 		if p.wheres().is_some() {
@@ -153,32 +155,61 @@ impl ItemCollector<'_> {
 	}
 
 	fn collect_decision_declaration(&mut self, d: eprime::DecisionDeclaration) {
-		self.collect_declarations(d.names(), d.domain(), VarType::Var);
+		self.collect_declarations(d.names(), d.domain(), false, VarType::Var);
+	}
+
+	fn collect_domain_alias(&mut self, d: eprime::DomainAlias) {
+		// As per the specification domain alias function more as a declaration where the aliased
+		// type is the definition as well as the declared type.
+		// This approach is inefficient as domain is collected twice
+		self.collect_declarations(iter::once(d.name()), d.definition(), true, VarType::Par);
 	}
 
 	fn collect_declarations<I: Iterator<Item = eprime::Identifier>>(
 		&mut self,
 		names: I,
 		domain: eprime::Domain,
+		domain_is_definition: bool,
 		var_type: VarType,
 	) {
 		for name in names {
+			let origin = Origin::new(&name);
 			let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 			let declared_type = ctx.collect_domain(domain.clone(), var_type);
-			let pattern = ctx.alloc_ident_pattern(Origin::new(&name), name.clone());
+			let pattern = ctx.alloc_ident_pattern(origin.clone(), name.clone());
+
+			// If the domain is a domain alias create set type and assign definition
+			let (definition, declared_type) = if domain_is_definition {
+				(
+					Some(
+						ctx.collect_domain_expressions(domain.clone(), VarType::Par)
+							.into_expression(&mut ctx, origin.clone()),
+					),
+					ctx.alloc_type(
+						origin.clone(),
+						Type::Set {
+							inst: VarType::Par,
+							opt: OptType::NonOpt,
+							element: declared_type,
+						},
+					),
+				)
+			} else {
+				(None, declared_type)
+			};
 			let (data, sm) = ctx.finish();
 			let index = self.model.declarations.insert(Item::new(
 				Declaration {
 					declared_type,
 					pattern,
-					definition: None,
+					definition,
 					annotations: Box::new([]),
 				},
 				data,
 			));
 			self.model.items.push(index.into());
 			let it = ItemRef::new(self.db, self.owner, index);
-			self.source_map.insert(it.into(), Origin::new(&name));
+			self.source_map.insert(it.into(), origin);
 			self.source_map.add_from_item_data(self.db, it, &sm);
 		}
 	}
@@ -208,24 +239,6 @@ impl ItemCollector<'_> {
 
 	fn collect_branching(&mut self, b: eprime::Branching) {
 		self.branching_annotations = Some(b.branching_array());
-	}
-
-	fn collect_domain_alias(&mut self, d: eprime::DomainAlias) -> (ItemRef, ItemDataSourceMap) {
-		let origin = Origin::new(&d);
-		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
-		let name = ctx.alloc_ident_pattern(origin.clone(), d.name());
-		let aliased_type = ctx.collect_domain(d.definition(), VarType::Par);
-		let (data, source_map) = ctx.finish();
-		let index = self.model.type_aliases.insert(Item::new(
-			TypeAlias {
-				name,
-				aliased_type,
-				annotations: Box::new([]),
-			},
-			data,
-		));
-		self.model.items.push(index.into());
-		(ItemRef::new(self.db, self.owner, index), source_map)
 	}
 
 	fn collect_output(&mut self, i: eprime::Output) -> (ItemRef, ItemDataSourceMap) {

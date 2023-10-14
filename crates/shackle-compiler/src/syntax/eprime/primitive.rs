@@ -68,6 +68,11 @@ impl MatrixLiteral {
 	}
 }
 
+ast_node!(
+	/// Infinity literal
+	Infinity,
+);
+
 #[cfg(test)]
 mod test {
 	use expect_test::expect;
@@ -95,6 +100,38 @@ mod test {
                                         IntegerLiteral {
                                             cst_kind: "integer_literal",
                                             value: 1,
+                                        },
+                                    ),
+                                    domain: None,
+                                },
+                            ),
+                        ],
+                    },
+                )
+            "#]),
+		);
+	}
+
+	#[test]
+	fn test_infinity_literal() {
+		check_ast_eprime(
+			"letting inf be infinity",
+			expect!([r#"
+                EPrimeModel(
+                    Model {
+                        items: [
+                            ConstDefinition(
+                                ConstDefinition {
+                                    cst_kind: "const_def",
+                                    name: Identifier(
+                                        Identifier {
+                                            cst_kind: "identifier",
+                                            name: "inf",
+                                        },
+                                    ),
+                                    definition: Infinity(
+                                        Infinity {
+                                            cst_kind: "infinity",
                                         },
                                     ),
                                     domain: None,

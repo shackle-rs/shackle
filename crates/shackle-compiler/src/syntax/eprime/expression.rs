@@ -1,6 +1,6 @@
 //! AST representation of Eprime Expressions
 
-use super::{BooleanLiteral, Domain, IntegerLiteral, MatrixLiteral, StringLiteral};
+use super::{BooleanLiteral, Domain, Infinity, IntegerLiteral, MatrixLiteral, StringLiteral};
 use crate::syntax::ast::{
 	ast_enum, ast_node, child_with_field_name, children_with_field_name,
 	optional_child_with_field_name, AstNode, Children,
@@ -13,6 +13,7 @@ ast_enum!(
 	"integer_literal" => IntegerLiteral,
 	"string_literal" => StringLiteral,
 	"matrix_literal" => MatrixLiteral,
+	"infinity" => Infinity,
 	"call" => Call,
 	"identifier" => Identifier,
 	"indexed_access" => ArrayAccess,

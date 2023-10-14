@@ -61,7 +61,7 @@ fn test_domain_expressions() {
 	check_lower_item_eprime(
 		"letting x be domain int(1) intersect int(1)",
 		expect![[r#"
-    Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::1>, annotations: [] }
+    Item: Declaration { declared_type: <Type::2>, pattern: <Pattern::1>, definition: Some(<Expression::12>), annotations: [] }
       Expressions:
         <Expression::1>: IntegerLiteral(1)
         <Expression::2>: SetLiteral { members: [<Expression::1>] }
@@ -69,8 +69,15 @@ fn test_domain_expressions() {
         <Expression::4>: SetLiteral { members: [<Expression::3>] }
         <Expression::5>: Identifier("intersect")
         <Expression::6>: Call { function: <Expression::5>, arguments: [<Expression::2>, <Expression::4>] }
+        <Expression::7>: IntegerLiteral(1)
+        <Expression::8>: SetLiteral { members: [<Expression::7>] }
+        <Expression::9>: IntegerLiteral(1)
+        <Expression::10>: SetLiteral { members: [<Expression::9>] }
+        <Expression::11>: Identifier("intersect")
+        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::8>, <Expression::10>] }
       Types:
         <Type::1>: Bounded { inst: Some(Par), opt: None, domain: <Expression::6> }
+        <Type::2>: Set { inst: Par, opt: NonOpt, element: <Type::1> }
       Patterns:
         <Pattern::1>: Identifier(Identifier("x"))
       Annotations:
@@ -95,34 +102,6 @@ fn test_lower_matrix_domain() {
         <Type::3>: Array { opt: NonOpt, dimensions: <Type::1>, element: <Type::2> }
       Patterns:
         <Pattern::1>: Identifier(Identifier("simple"))
-      Annotations:
-"#]],
-	);
-	check_lower_item_eprime(
-		"letting x be domain matrix indexed by [ int(1..10), int(1..10) ] of int(1..5)",
-		expect![[r#"
-    Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::5>, annotations: [] }
-      Expressions:
-        <Expression::1>: IntegerLiteral(1)
-        <Expression::2>: IntegerLiteral(10)
-        <Expression::3>: Identifier("..")
-        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
-        <Expression::5>: IntegerLiteral(1)
-        <Expression::6>: IntegerLiteral(10)
-        <Expression::7>: Identifier("..")
-        <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::5>, <Expression::6>] }
-        <Expression::9>: IntegerLiteral(1)
-        <Expression::10>: IntegerLiteral(5)
-        <Expression::11>: Identifier("..")
-        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::9>, <Expression::10>] }
-      Types:
-        <Type::1>: Bounded { inst: Some(Par), opt: None, domain: <Expression::4> }
-        <Type::2>: Bounded { inst: Some(Par), opt: None, domain: <Expression::8> }
-        <Type::3>: Tuple { opt: NonOpt, fields: [<Type::1>, <Type::2>] }
-        <Type::4>: Bounded { inst: Some(Par), opt: None, domain: <Expression::12> }
-        <Type::5>: Array { opt: NonOpt, dimensions: <Type::3>, element: <Type::4> }
-      Patterns:
-        <Pattern::1>: Identifier(Identifier("x"))
       Annotations:
     "#]],
 	);
@@ -394,10 +373,17 @@ fn test_lower_domain_alias() {
 	check_lower_item_eprime(
 		"letting x be domain int",
 		expect![[r#"
-      Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::1>, annotations: [] }
+      Item: Declaration { declared_type: <Type::2>, pattern: <Pattern::1>, definition: Some(<Expression::6>), annotations: [] }
         Expressions:
+          <Expression::1>: Infinity
+          <Expression::2>: Identifier("-")
+          <Expression::3>: Call { function: <Expression::2>, arguments: [<Expression::1>] }
+          <Expression::4>: Infinity
+          <Expression::5>: Identifier("..")
+          <Expression::6>: Call { function: <Expression::5>, arguments: [<Expression::3>, <Expression::4>] }
         Types:
           <Type::1>: Primitive { inst: Par, opt: NonOpt, primitive_type: Int }
+          <Type::2>: Set { inst: Par, opt: NonOpt, element: <Type::1> }
         Patterns:
           <Pattern::1>: Identifier(Identifier("x"))
         Annotations:
@@ -406,7 +392,7 @@ fn test_lower_domain_alias() {
 	check_lower_item_eprime(
 		"letting x be domain int(1, 2..3)",
 		expect![[r#"
-    Item: TypeAlias { name: <Pattern::1>, aliased_type: <Type::1>, annotations: [] }
+    Item: Declaration { declared_type: <Type::2>, pattern: <Pattern::1>, definition: Some(<Expression::16>), annotations: [] }
       Expressions:
         <Expression::1>: IntegerLiteral(1)
         <Expression::2>: IntegerLiteral(2)
@@ -416,8 +402,17 @@ fn test_lower_domain_alias() {
         <Expression::6>: SetLiteral { members: [<Expression::1>] }
         <Expression::7>: Identifier("union")
         <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::6>, <Expression::5>] }
+        <Expression::9>: IntegerLiteral(1)
+        <Expression::10>: IntegerLiteral(2)
+        <Expression::11>: IntegerLiteral(3)
+        <Expression::12>: Identifier("..")
+        <Expression::13>: Call { function: <Expression::12>, arguments: [<Expression::10>, <Expression::11>] }
+        <Expression::14>: SetLiteral { members: [<Expression::9>] }
+        <Expression::15>: Identifier("union")
+        <Expression::16>: Call { function: <Expression::15>, arguments: [<Expression::14>, <Expression::13>] }
       Types:
         <Type::1>: Bounded { inst: Some(Par), opt: None, domain: <Expression::8> }
+        <Type::2>: Set { inst: Par, opt: NonOpt, element: <Type::1> }
       Patterns:
         <Pattern::1>: Identifier(Identifier("x"))
       Annotations:

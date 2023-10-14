@@ -28,201 +28,205 @@ forAll option : int(1..numoptions) .
     ),
  
 gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
+
 ---
 
 (source_file
-(lang_version)
-(param_decl
-(identifier)
-(integer_domain
-    (postfix_operator
-    (integer_literal))))
-(param_decl
-(identifier)
-(integer_domain
-    (postfix_operator
-    (integer_literal))))
-(param_decl
-(identifier)
-(integer_domain
-    (postfix_operator
-    (integer_literal))))
-(param_decl
-(identifier)
-(matrix_domain
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))
-    (integer_domain
-    (postfix_operator
-        (integer_literal)))))
-(param_decl
-(identifier)
-(matrix_domain
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))
-    (integer_domain
-    (postfix_operator
-        (integer_literal)))))
-(param_decl
-(identifier)
-(matrix_domain
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))
-    (boolean_domain)))
-(param_decl
-(identifier)
-(matrix_domain
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))
-    (integer_domain
-    (postfix_operator
-        (integer_literal)))))
-(line_comment)
-(decision_decl
-(identifier)
-(matrix_domain
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))
-    (integer_domain
-    (infix_operator
-        (integer_literal)
-        (identifier)))))
-(constraint
-(quantification
-    (identifier)
-    (generator
-    (identifier)
-    (integer_domain
-        (infix_operator
-        (integer_literal)
-        (identifier))))
-    (quantification
-    (identifier)
-    (generator
+      (lang_version)
+      (param_decl
         (identifier)
         (integer_domain
-        (infix_operator
-            (integer_literal)
-            (infix_operator
-            (infix_operator
-                (identifier)
-                (indexed_access
-                (identifier)
-                (identifier)))
-            (integer_literal)))))
-    (infix_operator
-        (quantification
+          (postfix_operator
+            (integer_literal))))
+      (param_decl
         (identifier)
-        (generator
+        (integer_domain
+          (postfix_operator
+            (integer_literal))))
+      (param_decl
+        (identifier)
+        (integer_domain
+          (postfix_operator
+            (integer_literal))))
+      (param_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (postfix_operator
+              (integer_literal)))))
+      (param_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (postfix_operator
+              (integer_literal)))))
+      (param_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))
+          (boolean_domain)))
+      (param_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (postfix_operator
+              (integer_literal)))))
+      (line_comment)
+      (decision_decl
+        (identifier)
+        (matrix_domain
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))
+          (integer_domain
+            (infix_operator
+              (integer_literal)
+              (identifier)))))
+      (constraint
+        (quantification
+          (identifier)
+          (generator
             (identifier)
             (integer_domain
-            (infix_operator
-                (identifier)
-                (infix_operator
-                (infix_operator
-                    (identifier)
-                    (indexed_access
-                    (identifier)
-                    (identifier)))
-                (integer_literal)))))
-        (infix_operator
-            (indexed_access
-            (identifier)
-            (identifier))
-            (call
-            (identifier)
-            (matrix_comprehension
-                (identifier)
-                (generator
-                (identifier)
-                (integer_domain
-                    (infix_operator
-                    (integer_literal)
-                    (identifier))))
-                (indexed_access
-                (identifier)
-                (identifier)
-                (identifier))))))
-        (indexed_access
-        (identifier)
-        (identifier)))))
-(quantification
-    (identifier)
-    (generator
-    (identifier)
-    (integer_domain
-        (infix_operator
-        (integer_literal)
-        (identifier))))
-    (infix_operator
-    (quantification
-        (identifier)
-        (generator
-        (identifier)
-        (integer_domain
-            (infix_operator
-            (integer_literal)
-            (identifier))))
-        (infix_operator
-        (indexed_access
-            (identifier)
-            (identifier))
-        (call
-            (identifier)
-            (matrix_comprehension
+              (infix_operator
+                (integer_literal)
+                (identifier))))
+          (quantification
             (identifier)
             (generator
-                (identifier)
-                (integer_domain
+              (identifier)
+              (integer_domain
                 (infix_operator
-                    (integer_literal)
-                    (identifier))))
-            (indexed_access
-                (identifier)
-                (identifier)
-                (identifier))))))
-    (quantification
-        (identifier)
-        (generator
-        (identifier)
-        (integer_domain
+                  (integer_literal)
+                  (infix_operator
+                    (infix_operator
+                      (identifier)
+                      (indexed_access
+                        (identifier)
+                        (identifier)))
+                    (integer_literal)))))
             (infix_operator
-            (integer_literal)
-            (identifier))))
-        (infix_operator
-        (indexed_access
+              (parenthesised_expression
+                (quantification
+                  (identifier)
+                  (generator
+                    (identifier)
+                    (integer_domain
+                      (infix_operator
+                        (identifier)
+                        (infix_operator
+                          (infix_operator
+                            (identifier)
+                            (indexed_access
+                              (identifier)
+                              (identifier)))
+                          (integer_literal)))))
+                  (infix_operator
+                    (indexed_access
+                      (identifier)
+                      (identifier))
+                    (call
+                      (identifier)
+                      (matrix_comprehension
+                        (identifier)
+                        (generator
+                          (identifier)
+                          (integer_domain
+                            (infix_operator
+                              (integer_literal)
+                              (identifier))))
+                        (indexed_access
+                          (identifier)
+                          (identifier)
+                          (identifier)))))))
+              (indexed_access
+                (identifier)
+                (identifier)))))
+        (quantification
+          (identifier)
+          (generator
             (identifier)
+            (integer_domain
+              (infix_operator
+                (integer_literal)
+                (identifier))))
+          (infix_operator
+            (parenthesised_expression
+              (quantification
+                (identifier)
+                (generator
+                  (identifier)
+                  (integer_domain
+                    (infix_operator
+                      (integer_literal)
+                      (identifier))))
+                (infix_operator
+                  (indexed_access
+                    (identifier)
+                    (identifier))
+                  (call
+                    (identifier)
+                    (matrix_comprehension
+                      (identifier)
+                      (generator
+                        (identifier)
+                        (integer_domain
+                          (infix_operator
+                            (integer_literal)
+                            (identifier))))
+                      (indexed_access
+                        (identifier)
+                        (identifier)
+                        (identifier)))))))
+            (parenthesised_expression
+              (quantification
+                (identifier)
+                (generator
+                  (identifier)
+                  (integer_domain
+                    (infix_operator
+                      (integer_literal)
+                      (identifier))))
+                (infix_operator
+                  (indexed_access
+                    (identifier)
+                    (identifier)
+                    (identifier))
+                  (indexed_access
+                    (identifier)
+                    (identifier)))))))
+        (call
+          (identifier)
+          (identifier)
+          (matrix_comprehension
             (identifier)
-            (identifier))
-        (indexed_access
-            (identifier)
-            (identifier))))))
-(call
-    (identifier)
-    (identifier)
-    (matrix_comprehension
-    (identifier)
-    (generator
-        (identifier)
-        (integer_domain
-        (infix_operator
-            (integer_literal)
-            (identifier)))))
-    (identifier))))
+            (generator
+              (identifier)
+              (integer_domain
+                (infix_operator
+                  (integer_literal)
+                  (identifier)))))
+          (identifier))))
 
 ===================
 All-Interval Series
@@ -249,80 +253,80 @@ such that
 ---
 
 (source_file
-(line_comment)
-(line_comment)
-(lang_version)
-(const_def
-(identifier)
-(integer_literal))
-(domain_alias
-(identifier)
-(integer_domain
+  (line_comment)
+  (line_comment)
+  (lang_version)
+  (const_def
+    (identifier)
+    (integer_literal))
+  (domain_alias
+    (identifier)
+    (integer_domain
+      (infix_operator
+        (integer_literal)
+        (identifier))))
+  (domain_alias
+    (identifier)
+    (integer_domain
+      (infix_operator
+        (integer_literal)
+        (infix_operator
+          (identifier)
+          (integer_literal)))))
+  (decision_decl
+    (identifier)
+    (matrix_domain
+      (identifier)
+      (identifier)))
+  (decision_decl
+    (identifier)
+    (matrix_domain
+      (identifier)
+      (identifier)))
+  (constraint
+    (call
+      (identifier)
+      (identifier))
+    (call
+      (identifier)
+      (identifier))
+    (quantification
+      (identifier)
+      (generator
+        (identifier)
+        (identifier))
+      (infix_operator
+        (indexed_access
+          (identifier)
+          (identifier))
+        (absolute_operator
+          (infix_operator
+            (indexed_access
+              (identifier)
+              (infix_operator
+                (identifier)
+                (integer_literal)))
+            (indexed_access
+              (identifier)
+              (identifier))))))
     (infix_operator
-    (integer_literal)
-    (identifier))))
-(domain_alias
-(identifier)
-(integer_domain
+      (indexed_access
+        (identifier)
+        (ERROR
+          (identifier))
+        (integer_literal))
+      (indexed_access
+        (identifier)
+        (infix_operator
+          (identifier)
+          (integer_literal))))
     (infix_operator
-    (integer_literal)
-    (infix_operator
+      (indexed_access
+        (identifier)
+        (integer_literal))
+      (indexed_access
         (identifier)
         (integer_literal)))))
-(decision_decl
-(identifier)
-(matrix_domain
-    (identifier)
-    (identifier)))
-(decision_decl
-(identifier)
-(matrix_domain
-    (identifier)
-    (identifier)))
-(constraint
-(call
-    (identifier)
-    (identifier))
-(call
-    (identifier)
-    (identifier))
-(quantification
-    (identifier)
-    (generator
-    (identifier)
-    (identifier))
-    (infix_operator
-    (indexed_access
-        (identifier)
-        (identifier))
-    (absolute_operator
-        (infix_operator
-        (indexed_access
-            (identifier)
-            (infix_operator
-            (identifier)
-            (integer_literal)))
-        (indexed_access
-            (identifier)
-            (identifier))))))
-(infix_operator
-    (indexed_access
-    (identifier)
-    (ERROR
-        (identifier))
-    (integer_literal))
-    (indexed_access
-    (identifier)
-    (infix_operator
-        (identifier)
-        (integer_literal))))
-(infix_operator
-    (indexed_access
-    (identifier)
-    (integer_literal))
-    (indexed_access
-    (identifier)
-    (integer_literal)))))
 
 ===================
 Number Partitioning
@@ -355,6 +359,7 @@ such that
    a[1] = 1
 
 ---
+
 (source_file
       (line_comment)
       (line_comment)
@@ -421,21 +426,23 @@ such that
               (indexed_access
                 (identifier)
                 (identifier))
-              (quantification
-                (identifier)
-                (generator
+              (parenthesised_expression
+                (quantification
                   (identifier)
-                  (integer_domain
-                    (infix_operator
-                      (integer_literal)
-                      (identifier))))
-                (infix_operator
-                  (identifier)
+                  (generator
+                    (identifier)
+                    (integer_domain
+                      (infix_operator
+                        (integer_literal)
+                        (identifier))))
                   (infix_operator
-                    (indexed_access
-                      (identifier)
-                      (identifier))
-                    (identifier)))))
+                    (identifier)
+                    (parenthesised_expression
+                      (infix_operator
+                        (indexed_access
+                          (identifier)
+                          (identifier))
+                        (identifier)))))))
             (infix_operator
               (indexed_access
                 (identifier)
@@ -452,11 +459,12 @@ such that
                   (infix_operator
                     (identifier)
                     (integer_literal))
-                  (infix_operator
-                    (indexed_access
-                      (identifier)
-                      (identifier))
-                    (identifier)))))))
+                  (parenthesised_expression
+                    (infix_operator
+                      (indexed_access
+                        (identifier)
+                        (identifier))
+                      (identifier))))))))
         (line_comment)
         (quantification
           (identifier)
@@ -469,34 +477,36 @@ such that
           (infix_operator
             (infix_operator
               (infix_operator
-                (quantification
-                  (identifier)
-                  (generator
+                (parenthesised_expression
+                  (quantification
                     (identifier)
-                    (integer_domain
-                      (infix_operator
-                        (integer_literal)
-                        (identifier))))
-                  (infix_operator
-                    (indexed_access
+                    (generator
                       (identifier)
-                      (identifier))
+                      (integer_domain
+                        (infix_operator
+                          (integer_literal)
+                          (identifier))))
                     (infix_operator
-                      (identifier)
-                      (integer_literal))))
-                (quantification
-                  (identifier)
-                  (generator
-                    (identifier)
-                    (integer_domain
+                      (indexed_access
+                        (identifier)
+                        (identifier))
                       (infix_operator
-                        (integer_literal)
-                        (identifier))))
-                  (infix_operator
-                    (indexed_access
+                        (identifier)
+                        (integer_literal)))))
+                (parenthesised_expression
+                  (quantification
+                    (identifier)
+                    (generator
                       (identifier)
-                      (identifier))
-                    (identifier))))
+                      (integer_domain
+                        (infix_operator
+                          (integer_literal)
+                          (identifier))))
+                    (infix_operator
+                      (indexed_access
+                        (identifier)
+                        (identifier))
+                      (identifier)))))
               (infix_operator
                 (indexed_access
                   (identifier)
@@ -658,155 +668,6 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
                   (identifier)
                   (identifier))))))))
 
-==============
-Traffic Lights
-==============
-$ CSPLib problem 16
-$ http://www.csplib.org/Problems/prob016
-$ This Essence' model was created by Hakan Kjellerstrand, hakank@gmail.com
-$ See also my Essence' page: http://www.hakank.org/savile_row/
-$ Licenced under CC-BY-4.0 : http://creativecommons.org/licenses/by/4.0/
- 
-language ESSENCE' 1.0
- 
-letting n  be 4
-letting range be domain int(1..n)
- 
-letting r  be 1 $ red
-letting ry be 2 $ red-yellow
-letting g  be 3 $ green
-letting y  be 4 $ yellow
- 
-letting allowed =
-   [
-     [r,r,g,g],
-     [ry,r,y,r],
-     [g,g,r,r],
-     [y,r,ry,r]
-   ]
- 
-letting Cars be domain int(r,ry,g,y)
-letting Pedestrians be domain int(r,g)
- 
-$ decision variables
-find V: matrix indexed by [range] of Cars
-find P: matrix indexed by [range] of Pedestrians
- 
-such that
-  forall i, j: range .
-       (j = (1+i) % 4) => table([V[i], P[i], V[j], P[j]], allowed)
----
-
-(source_file
-      (line_comment)
-      (line_comment)
-      (line_comment)
-      (line_comment)
-      (line_comment)
-      (lang_version)
-      (const_def
-        (identifier)
-        (integer_literal))
-      (domain_alias
-        (identifier)
-        (integer_domain
-          (infix_operator
-            (integer_literal)
-            (identifier))))
-      (const_def
-        (identifier)
-        (integer_literal))
-      (line_comment)
-      (const_def
-        (identifier)
-        (integer_literal))
-      (line_comment)
-      (const_def
-        (identifier)
-        (integer_literal))
-      (line_comment)
-      (const_def
-        (identifier)
-        (integer_literal))
-      (line_comment)
-      (const_def
-        (identifier)
-        (matrix_literal
-          (matrix_literal
-            (identifier)
-            (identifier)
-            (identifier)
-            (identifier))
-          (matrix_literal
-            (identifier)
-            (identifier)
-            (identifier)
-            (identifier))
-          (matrix_literal
-            (identifier)
-            (identifier)
-            (identifier)
-            (identifier))
-          (matrix_literal
-            (identifier)
-            (identifier)
-            (identifier)
-            (identifier))))
-      (domain_alias
-        (identifier)
-        (integer_domain
-          (identifier)
-          (identifier)
-          (identifier)
-          (identifier)))
-      (domain_alias
-        (identifier)
-        (integer_domain
-          (identifier)
-          (identifier)))
-      (line_comment)
-      (decision_decl
-        (identifier)
-        (matrix_domain
-          (identifier)
-          (identifier)))
-      (decision_decl
-        (identifier)
-        (matrix_domain
-          (identifier)
-          (identifier)))
-      (constraint
-        (quantification
-          (identifier)
-          (generator
-            (identifier)
-            (identifier)
-            (identifier))
-          (infix_operator
-            (infix_operator
-              (identifier)
-              (infix_operator
-                (infix_operator
-                  (integer_literal)
-                  (identifier))
-                (integer_literal)))
-            (call
-              (identifier)
-              (matrix_literal
-                (indexed_access
-                  (identifier)
-                  (identifier))
-                (indexed_access
-                  (identifier)
-                  (identifier))
-                (indexed_access
-                  (identifier)
-                  (identifier))
-                (indexed_access
-                  (identifier)
-                  (identifier)))
-              (identifier))))))
-
 =================
 Antichain problem
 =================
@@ -876,41 +737,44 @@ forall i : int(1..m-1).
                     (identifier)
                     (integer_literal))
                   (identifier))))
-            (infix_operator
-              (quantification
-                (identifier)
-                (generator
-                  (identifier)
-                  (integer_domain
+            (parenthesised_expression
+              (infix_operator
+                (parenthesised_expression
+                  (quantification
+                    (identifier)
+                    (generator
+                      (identifier)
+                      (integer_domain
+                        (infix_operator
+                          (integer_literal)
+                          (identifier))))
                     (infix_operator
-                      (integer_literal)
-                      (identifier))))
-                (infix_operator
-                  (indexed_access
+                      (indexed_access
+                        (identifier)
+                        (identifier)
+                        (identifier))
+                      (indexed_access
+                        (identifier)
+                        (identifier)
+                        (identifier)))))
+                (parenthesised_expression
+                  (quantification
                     (identifier)
-                    (identifier)
-                    (identifier))
-                  (indexed_access
-                    (identifier)
-                    (identifier)
-                    (identifier))))
-              (quantification
-                (identifier)
-                (generator
-                  (identifier)
-                  (integer_domain
+                    (generator
+                      (identifier)
+                      (integer_domain
+                        (infix_operator
+                          (integer_literal)
+                          (identifier))))
                     (infix_operator
-                      (integer_literal)
-                      (identifier))))
-                (infix_operator
-                  (indexed_access
-                    (identifier)
-                    (identifier)
-                    (identifier))
-                  (indexed_access
-                    (identifier)
-                    (identifier)
-                    (identifier)))))))
+                      (indexed_access
+                        (identifier)
+                        (identifier)
+                        (identifier))
+                      (indexed_access
+                        (identifier)
+                        (identifier)
+                        (identifier)))))))))
         (line_comment)
         (quantification
           (identifier)
