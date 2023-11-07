@@ -1,13 +1,18 @@
 use std::{
+	collections::HashMap,
 	fmt::Debug,
-	mem::{swap, MaybeUninit},
+	hash::Hash,
+	mem::MaybeUninit,
 	num::NonZeroU64,
 	pin::Pin,
 	ptr::NonNull,
 	str::{from_utf8, from_utf8_unchecked},
-	sync::atomic::{
-		self, AtomicU16, AtomicU8,
-		Ordering::{Acquire, Relaxed, Release},
+	sync::{
+		atomic::{
+			self, AtomicU16, AtomicU8,
+			Ordering::{Acquire, Relaxed, Release},
+		},
+		Mutex,
 	},
 };
 
@@ -96,9 +101,19 @@ impl PartialEq for Value {
 					return false;
 				}
 				match a.ty {
-					BoxedType::Seq => todo!(),
+					BoxedType::Seq => self.get_slice().iter().eq(other.get_slice().iter()),
 					BoxedType::Str => self.get_str() == other.get_str(),
 					BoxedType::View => todo!(),
+					BoxedType::Int => {
+						let a: IntVal = self.try_into().unwrap();
+						let b: IntVal = other.try_into().unwrap();
+						a == b
+					}
+					BoxedType::Float => {
+						let a: FloatVal = self.try_into().unwrap();
+						let b: FloatVal = other.try_into().unwrap();
+						a == b
+					}
 					BoxedType::BoolVar => todo!(),
 					BoxedType::IntVar => todo!(),
 					BoxedType::FloatVar => todo!(),
@@ -140,6 +155,8 @@ impl Debug for Value {
 							.format_with(",", |v, f| f(&format_args!("{v:?}")))
 					),
 					BoxedType::Str => write!(f, "Value::Str {{ {:?} }}", self.get_str()),
+					BoxedType::Int => write!(f, "Value::Str {{ {:?} }}", self.get_str()),
+					BoxedType::Float => todo!(),
 					BoxedType::View => todo!(),
 					BoxedType::BoolVar => todo!(),
 					BoxedType::IntVar => todo!(),
@@ -193,6 +210,40 @@ impl Value {
 				raw: NonZeroU64::new_unchecked(p << 2),
 			}
 		}
+	}
+
+	fn new_boxed_int(i: IntVal) -> Value {
+		let (b, i) = match i {
+			IntVal::InfPos => (true, 1),
+			IntVal::InfNeg => (true, -1),
+			IntVal::Int(i) => (false, i),
+		};
+		let it = [b as u8].into_iter().chain(i.to_le_bytes());
+		Self::new_box(boxed_value::Init {
+			ty: BoxedType::Int,
+			len: 0,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
+			values: InitEmpty,
+			raw: FromIterPrefix(it),
+		})
+	}
+
+	fn new_boxed_float(i: FloatVal) -> Value {
+		let (b, f) = match i {
+			FloatVal::InfPos => (true, 1.0),
+			FloatVal::InfNeg => (true, -1.0),
+			FloatVal::Float(f) => (false, f),
+		};
+		let it = [b as u8].into_iter().chain(f.to_le_bytes());
+		Self::new_box(boxed_value::Init {
+			ty: BoxedType::Float,
+			len: 0,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
+			values: InitEmpty,
+			raw: FromIterPrefix(it),
+		})
 	}
 
 	pub fn new_tuple<I: ExactSizeIterator<Item = Value>, C: IntoIterator<IntoIter = I>>(
@@ -269,8 +320,7 @@ impl Value {
 			BoxedType::Seq => {
 				// Replace all values in the sequence with non-reference counted objects
 				for v in b.muts().values {
-					let mut i: Value = 0.into();
-					swap(v, &mut i);
+					*v = 0.into();
 				}
 			}
 			BoxedType::View => todo!(),
@@ -316,6 +366,36 @@ pub static EMPTY_SEQ: Lazy<Value> = Lazy::new(|| {
 	})
 });
 
+static INT_MAP: Lazy<Mutex<HashMap<IntVal, Value>>> = Lazy::new(|| HashMap::new().into());
+pub static INT_INF_POS: Lazy<Value> = Lazy::new(|| {
+	let mut map = INT_MAP.lock().unwrap();
+	let inf = map
+		.entry(IntVal::InfPos)
+		.or_insert_with(|| Value::new_boxed_int(IntVal::InfPos));
+	inf.clone()
+});
+pub static INT_INF_NEG: Lazy<Value> = Lazy::new(|| {
+	let mut map = INT_MAP.lock().unwrap();
+	let inf = map
+		.entry(IntVal::InfNeg)
+		.or_insert_with(|| Value::new_boxed_int(IntVal::InfNeg));
+	inf.clone()
+});
+static FLOAT_MAP: Lazy<Mutex<HashMap<FloatValWrap, Value>>> = Lazy::new(|| HashMap::new().into());
+pub static FLOAT_INF_POS: Lazy<Value> = Lazy::new(|| {
+	let mut map = FLOAT_MAP.lock().unwrap();
+	let inf = map
+		.entry(FloatValWrap(FloatVal::InfPos))
+		.or_insert_with(|| Value::new_boxed_float(FloatVal::InfPos));
+	inf.clone()
+});
+pub static FLOAT_INF_NEG: Lazy<Value> = Lazy::new(|| {
+	let mut map = FLOAT_MAP.lock().unwrap();
+	let inf = map
+		.entry(FloatValWrap(FloatVal::InfNeg))
+		.or_insert_with(|| Value::new_boxed_float(FloatVal::InfNeg));
+	inf.clone()
+});
 struct InitEmpty;
 
 unsafe impl<T> ArrayInitializer<T> for InitEmpty {
@@ -323,6 +403,42 @@ unsafe impl<T> ArrayInitializer<T> for InitEmpty {
 		assert_eq!(dst.len(), 0);
 	}
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum IntVal {
+	InfPos,
+	InfNeg,
+	Int(i64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum FloatVal {
+	InfPos,
+	InfNeg,
+	Float(f64),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FloatValWrap(FloatVal);
+
+impl Hash for FloatValWrap {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		core::mem::discriminant(&self.0).hash(state);
+		if let FloatVal::Float(f) = self.0 {
+			state.write_u64(f.to_bits());
+		}
+	}
+}
+impl PartialEq for FloatValWrap {
+	fn eq(&self, other: &Self) -> bool {
+		if let (FloatVal::Float(a), FloatVal::Float(b)) = (self.0, other.0) {
+			a.to_bits() == b.to_bits()
+		} else {
+			self.0 == other.0
+		}
+	}
+}
+impl Eq for FloatValWrap {}
 
 impl From<bool> for Value {
 	fn from(value: bool) -> Self {
@@ -347,27 +463,53 @@ impl TryInto<bool> for Value {
 	}
 }
 
-impl TryFrom<i64> for Value {
-	type Error = ();
-
-	fn try_from(value: i64) -> Result<Self, Self::Error> {
-		if !(Self::MIN_INT..=Self::MAX_INT).contains(&value) {
-			todo!()
+impl From<IntVal> for Value {
+	fn from(value: IntVal) -> Self {
+		match value {
+			IntVal::InfPos => INT_INF_POS.clone(),
+			IntVal::InfNeg => INT_INF_NEG.clone(),
+			IntVal::Int(i) if (Self::MIN_INT..=Self::MAX_INT).contains(&i) => {
+				// Can box integer (fits in 62 bits)
+				let mut x = i.unsigned_abs() << 3;
+				if i.is_negative() {
+					x |= Self::INT_SIGN_BIT;
+				}
+				x |= Self::INT_TAG;
+				Self {
+					raw: NonZeroU64::new(x).unwrap(),
+				}
+			}
+			iv => {
+				// Try and find integer in map or allocate new integer
+				let mut map = INT_MAP.lock().unwrap();
+				let v = map.entry(iv).or_insert_with(|| Value::new_boxed_int(iv));
+				v.clone()
+			}
 		}
-		let mut x = value.unsigned_abs() << 3;
-		if value.is_negative() {
-			x |= Self::INT_SIGN_BIT;
-		}
-		x |= Self::INT_TAG;
-		Ok(Self {
-			raw: NonZeroU64::new(x).unwrap(),
-		})
 	}
 }
-impl TryInto<i64> for &Value {
+impl TryInto<IntVal> for &Value {
 	type Error = ();
 
-	fn try_into(self) -> Result<i64, Self::Error> {
+	fn try_into(self) -> Result<IntVal, Self::Error> {
+		if matches!(self.ty(), ValType::Boxed) {
+			let b = self.get_box();
+			if !matches!(b.ty, BoxedType::Int) {
+				todo!()
+			}
+			debug_assert_eq!(b.refs().raw.len(), 1 + std::mem::size_of::<i64>());
+			let inf = b.refs().raw[0] != 0;
+			let val = i64::from_le_bytes(b.refs().raw[1..].try_into().unwrap());
+			return Ok(if inf {
+				if val >= 0 {
+					IntVal::InfPos
+				} else {
+					IntVal::InfNeg
+				}
+			} else {
+				IntVal::Int(val)
+			});
+		}
 		if !matches!(self.ty(), ValType::Int) {
 			todo!()
 		}
@@ -381,13 +523,34 @@ impl TryInto<i64> for &Value {
 			-val
 		};
 		debug_assert!((Value::MIN_INT..=Value::MAX_INT).contains(&val));
-		Ok(val)
+		Ok(IntVal::Int(val))
+	}
+}
+impl TryInto<IntVal> for Value {
+	type Error = ();
+	fn try_into(self) -> Result<IntVal, Self::Error> {
+		(&self).try_into()
+	}
+}
+impl TryInto<i64> for &Value {
+	type Error = ();
+	fn try_into(self) -> Result<i64, Self::Error> {
+		if let IntVal::Int(i) = self.try_into()? {
+			Ok(i)
+		} else {
+			Err(())
+		}
 	}
 }
 impl TryInto<i64> for Value {
 	type Error = ();
 	fn try_into(self) -> Result<i64, Self::Error> {
 		(&self).try_into()
+	}
+}
+impl From<i64> for Value {
+	fn from(value: i64) -> Self {
+		IntVal::Int(value).into()
 	}
 }
 impl From<i32> for Value {
@@ -431,39 +594,69 @@ impl From<u8> for Value {
 	}
 }
 
-impl TryFrom<f64> for Value {
-	type Error = ();
+impl From<FloatVal> for Value {
+	fn from(value: FloatVal) -> Self {
+		match value {
+			FloatVal::InfPos => FLOAT_INF_POS.clone(),
+			FloatVal::InfNeg => FLOAT_INF_NEG.clone(),
+			FloatVal::Float(f) => {
+				const EXPONENT_MASK: u64 = 0x7FF << 52;
+				let bits = f.to_bits();
+				let mut exponent = (bits & EXPONENT_MASK) >> 52;
+				if exponent != 0 {
+					if !(513..=1534).contains(&exponent) {
+						// Exponent doesn't fit in 10 bits
+						let mut map = FLOAT_MAP.lock().unwrap();
+						let v = map
+							.entry(FloatValWrap(value))
+							.or_insert_with(|| Value::new_boxed_float(value));
+						return v.clone();
+					}
+					exponent -= 512; // Make exponent fit in 10 bits, with bias 511
+				}
+				debug_assert!(exponent <= <u10 as Number>::MAX.value().into());
+				let sign = (bits & (1 << 63)) != 0;
 
-	fn try_from(value: f64) -> Result<Self, Self::Error> {
-		const EXPONENT_MASK: u64 = 0x7FF << 52;
-		let value = value.to_bits();
-		let mut exponent = (value & EXPONENT_MASK) >> 52;
-		if exponent != 0 {
-			if !(513..=1534).contains(&exponent) {
-				// Exponent doesn't fit in 10 bits
-				todo!()
+				const FRACTION_MASK: u64 = 0xFFFFFFFFFFFFF;
+				let fraction = bits & FRACTION_MASK; // Remove one bit of precision
+				debug_assert!(fraction <= <u52 as Number>::MAX.value());
+				let mut raw = (fraction << 1) | (exponent << 53) | Self::FLOAT_TAG;
+				if sign {
+					raw |= Self::FLOAT_SIGN_BIT;
+				}
+				Value {
+					raw: NonZeroU64::new(raw).unwrap(),
+				}
 			}
-			exponent -= 512; // Make exponent fit in 10 bits, with bias 511
 		}
-		debug_assert!(exponent <= <u10 as Number>::MAX.value().into());
-		let sign = (value & (1 << 63)) != 0;
-
-		const FRACTION_MASK: u64 = 0xFFFFFFFFFFFFF;
-		let fraction = value & FRACTION_MASK; // Remove one bit of precision
-		debug_assert!(fraction <= <u52 as Number>::MAX.value());
-		let mut raw = (fraction << 1) | (exponent << 53) | Self::FLOAT_TAG;
-		if sign {
-			raw |= Self::FLOAT_SIGN_BIT;
-		}
-		Ok(Value {
-			raw: NonZeroU64::new(raw).unwrap(),
-		})
 	}
 }
-impl TryInto<f64> for &Value {
+impl From<f64> for Value {
+	fn from(value: f64) -> Self {
+		FloatVal::Float(value).into()
+	}
+}
+impl TryInto<FloatVal> for &Value {
 	type Error = ();
 
-	fn try_into(self) -> Result<f64, Self::Error> {
+	fn try_into(self) -> Result<FloatVal, Self::Error> {
+		if matches!(self.ty(), ValType::Boxed) {
+			let b = self.get_box();
+			if !matches!(b.ty, BoxedType::Float) {
+				todo!()
+			}
+			let inf = b.refs().raw[0] != 0;
+			let val = f64::from_le_bytes(b.refs().raw[1..].try_into().unwrap());
+			return Ok(if inf {
+				if val >= 0.0 {
+					FloatVal::InfPos
+				} else {
+					FloatVal::InfNeg
+				}
+			} else {
+				FloatVal::Float(val)
+			});
+		}
 		if !matches!(self.ty(), ValType::Float) {
 			todo!()
 		}
@@ -480,7 +673,24 @@ impl TryInto<f64> for &Value {
 		if !pos {
 			value |= Value::FLOAT_SIGN_BIT;
 		}
-		Ok(f64::from_bits(value))
+		Ok(FloatVal::Float(f64::from_bits(value)))
+	}
+}
+impl TryInto<FloatVal> for Value {
+	type Error = ();
+	fn try_into(self) -> Result<FloatVal, Self::Error> {
+		(&self).try_into()
+	}
+}
+impl TryInto<f64> for &Value {
+	type Error = ();
+
+	fn try_into(self) -> Result<f64, Self::Error> {
+		let fv: FloatVal = self.try_into()?;
+		match fv {
+			FloatVal::Float(f) => Ok(f),
+			_ => Err(()),
+		}
 	}
 }
 impl TryInto<f64> for Value {
@@ -515,6 +725,10 @@ enum BoxedType {
 	Str,
 	/// View into an array
 	View,
+	/// Boxed integers (cannot fit in 62 bits)
+	Int,
+	/// Boxed floats (cannot fit in 63 bits)
+	Float,
 	/// Boolean decision variable
 	BoolVar,
 	/// Integer decision variable
@@ -548,6 +762,8 @@ struct BoxedValue {
 	#[varlen_array]
 	raw: [u8; match *ty {
 		BoxedType::Str => *len as usize,
+		BoxedType::Int => 1 + std::mem::size_of::<i64>(),
+		BoxedType::Float => 1 + std::mem::size_of::<f64>(),
 		_ => 0,
 	}],
 }
@@ -574,31 +790,56 @@ mod tests {
 
 	#[test]
 	fn test_integer_value() {
-		let zero: i64 = Value::try_from(0i64).unwrap().try_into().unwrap();
+		let zero: i64 = Value::from(0i64).try_into().unwrap();
 		assert_eq!(zero, 0i64);
 
-		let one: i64 = Value::try_from(1i64).unwrap().try_into().unwrap();
+		let one: i64 = Value::from(1i64).try_into().unwrap();
 		assert_eq!(one, 1i64);
-		let minus_one: i64 = Value::try_from(-1i64).unwrap().try_into().unwrap();
+		let minus_one: i64 = Value::from(-1i64).try_into().unwrap();
 		assert_eq!(minus_one, -1i64);
 
-		let minimum: i64 = Value::try_from(Value::MIN_INT).unwrap().try_into().unwrap();
+		// Unboxed min and max
+		let minimum: i64 = Value::from(Value::MIN_INT).try_into().unwrap();
 		assert_eq!(minimum, Value::MIN_INT);
-		let maximum: i64 = Value::try_from(Value::MAX_INT).unwrap().try_into().unwrap();
+		let maximum: i64 = Value::from(Value::MAX_INT).try_into().unwrap();
 		assert_eq!(maximum, Value::MAX_INT);
+
+		// Positive and Negative Infinity
+		let pos_inf: IntVal = Value::from(IntVal::InfPos).try_into().unwrap();
+		assert_eq!(pos_inf, IntVal::InfPos);
+		let neg_inf: IntVal = Value::from(IntVal::InfNeg).try_into().unwrap();
+		assert_eq!(neg_inf, IntVal::InfNeg);
+
+		// i64 min and max
+		let minimum: i64 = Value::from(i64::MAX).try_into().unwrap();
+		assert_eq!(minimum, i64::MAX);
+		let maximum: i64 = Value::from(i64::MIN).try_into().unwrap();
+		assert_eq!(maximum, i64::MIN);
 	}
 
 	#[test]
 	fn test_float_value() {
-		let zero: f64 = Value::try_from(0.0f64).unwrap().try_into().unwrap();
+		let zero: f64 = Value::from(0.0f64).try_into().unwrap();
 		assert_eq!(zero, 0.0);
-		let one: f64 = Value::try_from(1.0f64).unwrap().try_into().unwrap();
+		let one: f64 = Value::from(1.0f64).try_into().unwrap();
 		assert_eq!(one, 1.0);
-		let minus_one: f64 = Value::try_from(-1.0f64).unwrap().try_into().unwrap();
+		let minus_one: f64 = Value::from(-1.0f64).try_into().unwrap();
 		assert_eq!(minus_one, -1.0);
 
-		let twodottwo: f64 = Value::try_from(2.2f64).unwrap().try_into().unwrap();
+		let twodottwo: f64 = Value::from(2.2f64).try_into().unwrap();
 		assert_eq!(twodottwo, 2.2);
+
+		// Positive and Negative Infinity
+		let pos_inf: FloatVal = Value::from(FloatVal::InfPos).try_into().unwrap();
+		assert_eq!(pos_inf, FloatVal::InfPos);
+		let neg_inf: FloatVal = Value::from(FloatVal::InfNeg).try_into().unwrap();
+		assert_eq!(neg_inf, FloatVal::InfNeg);
+
+		// f64 min and max
+		let minimum: f64 = Value::from(f64::MAX).try_into().unwrap();
+		assert_eq!(minimum, f64::MAX);
+		let maximum: f64 = Value::from(f64::MIN).try_into().unwrap();
+		assert_eq!(maximum, f64::MIN);
 	}
 
 	#[test]
