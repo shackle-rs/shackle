@@ -1,6 +1,6 @@
 use std::{
 	collections::HashMap,
-	fmt::Debug,
+	fmt::{Debug, Display},
 	hash::Hash,
 	mem::MaybeUninit,
 	num::NonZeroU64,
@@ -21,7 +21,6 @@ use bilge::{
 	prelude::{u10, u2, u52, u61, Number},
 	Bitsized, TryFromBits,
 };
-use itertools::Itertools;
 use once_cell::sync::Lazy;
 use varlen::{
 	define_varlen,
@@ -85,86 +84,21 @@ impl PartialEq for Value {
 		if self.raw == other.raw {
 			return true;
 		}
-		match self.ty() {
-			ValType::Float => {
-				if other.ty() != ValType::Float {
-					return false;
-				}
-				let a: f64 = self.try_into().unwrap();
-				let b: f64 = other.try_into().unwrap();
-				a.eq(&b)
-			}
-			ValType::Boxed => {
-				let a = self.get_box();
-				let b = other.get_box();
-				if a.ty != b.ty {
-					return false;
-				}
-				match a.ty {
-					BoxedType::Seq => self.get_slice().iter().eq(other.get_slice().iter()),
-					BoxedType::Str => self.get_str() == other.get_str(),
-					BoxedType::View => todo!(),
-					BoxedType::Int => {
-						let a: IntVal = self.try_into().unwrap();
-						let b: IntVal = other.try_into().unwrap();
-						a == b
-					}
-					BoxedType::Float => {
-						let a: FloatVal = self.try_into().unwrap();
-						let b: FloatVal = other.try_into().unwrap();
-						a == b
-					}
-					BoxedType::BoolVar => todo!(),
-					BoxedType::IntVar => todo!(),
-					BoxedType::FloatVar => todo!(),
-					BoxedType::IntSetVar => todo!(),
-				}
-			}
-			_ => false, // Would have been bitwise identical
+		// Interned or boxed data would have been bitwise identical
+		if !matches!(self.ty(), ValType::Boxed)
+			|| matches!(self.get_box().ty, BoxedType::Int | BoxedType::Float)
+		{
+			// TODO: is this okay for Float??
+			return false;
 		}
+		// Compare
+		self.unbox().eq(&self.unbox())
 	}
 }
 
 impl Debug for Value {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self.ty() {
-			ValType::Int => {
-				write!(
-					f,
-					"Value::Int {{ {:?} }}",
-					self.try_into()
-						.map(|i: i64| i.to_string())
-						.unwrap_or_default()
-				)
-			}
-			ValType::Float => write!(
-				f,
-				"Value::Float {{ {:?} }}",
-				self.try_into()
-					.map(|f: f64| f.to_string())
-					.unwrap_or_default()
-			),
-			ValType::Boxed => {
-				let b = self.get_box();
-				match b.ty {
-					BoxedType::Seq => write!(
-						f,
-						"Value::Seq {{ ⟨{}⟩ }}",
-						self.get_slice()
-							.iter()
-							.format_with(",", |v, f| f(&format_args!("{v:?}")))
-					),
-					BoxedType::Str => write!(f, "Value::Str {{ {:?} }}", self.get_str()),
-					BoxedType::Int => write!(f, "Value::Str {{ {:?} }}", self.get_str()),
-					BoxedType::Float => todo!(),
-					BoxedType::View => todo!(),
-					BoxedType::BoolVar => todo!(),
-					BoxedType::IntVar => todo!(),
-					BoxedType::FloatVar => todo!(),
-					BoxedType::IntSetVar => todo!(),
-				}
-			}
-		}
+		self.unbox().fmt(f)
 	}
 }
 
@@ -192,15 +126,92 @@ impl Value {
 		}
 	}
 
-	fn new_box(init: impl Initializer<BoxedValue>) -> Value {
+	pub fn unbox(&self) -> BoxedValue<'_> {
+		match self.ty() {
+			ValType::Float => {
+				let pos = (self.raw.get() & Value::FLOAT_SIGN_BIT) == 0;
+				let value = self.raw.get() >> 1;
+				const EXPONENT_MASK: u64 = 0x3FF << 52;
+				let mut exponent = (value & EXPONENT_MASK) >> 52;
+				if exponent != 0 {
+					exponent += 512; // reconstruct original bias of 1023
+				}
+				const FRACTION_MASK: u64 = 0xFFFFFFFFFFFFF;
+				let fraction = value & FRACTION_MASK;
+				let mut value = fraction | (exponent << 52);
+				if !pos {
+					value |= Value::FLOAT_SIGN_BIT;
+				}
+				BoxedValue::Float(FloatVal::Float(f64::from_bits(value)))
+			}
+			ValType::Int => {
+				let pos = (self.raw.get() & Value::INT_SIGN_BIT) == 0;
+				let val = (self.raw.get() >> 3) as i64;
+				let val = if pos {
+					val
+				} else if val == 0 {
+					Value::MIN_INT
+				} else {
+					-val
+				};
+				debug_assert!((Value::MIN_INT..=Value::MAX_INT).contains(&val));
+				BoxedValue::Int(IntVal::Int(val))
+			}
+			ValType::Boxed => unsafe {
+				let v = &*self.get_ptr();
+				match v.ty {
+					BoxedType::Int => {
+						debug_assert_eq!(v.refs().raw.len(), 1 + std::mem::size_of::<i64>());
+						let inf = v.refs().raw[0] != 0;
+						let val = i64::from_le_bytes(v.refs().raw[1..].try_into().unwrap());
+						BoxedValue::Int(if inf {
+							if val >= 0 {
+								IntVal::InfPos
+							} else {
+								IntVal::InfNeg
+							}
+						} else {
+							IntVal::Int(val)
+						})
+					}
+					BoxedType::Float => {
+						let inf = v.refs().raw[0] != 0;
+						let val = f64::from_le_bytes(v.refs().raw[1..].try_into().unwrap());
+						BoxedValue::Float(if inf {
+							if val >= 0.0 {
+								FloatVal::InfPos
+							} else {
+								FloatVal::InfNeg
+							}
+						} else {
+							FloatVal::Float(val)
+						})
+					}
+					BoxedType::Seq => BoxedValue::Seq(v.refs().values),
+					BoxedType::Str => BoxedValue::Str(from_utf8_unchecked(v.refs().raw)),
+					BoxedType::View => todo!(),
+					BoxedType::BoolVar => todo!(),
+					BoxedType::IntVar => todo!(),
+					BoxedType::FloatVar => todo!(),
+					BoxedType::IntSetVar => todo!(),
+				}
+			},
+		}
+	}
+
+	pub fn is_constant(&self, c: &'static Value) -> bool {
+		self.raw == c.raw
+	}
+
+	fn new_box(init: impl Initializer<BoxedStorage>) -> Value {
 		// Note: This code is inspired by the initialisation code of varlen::VBox::new
 		let layout = init
 			.calculate_layout_cautious()
 			.unwrap_or_else(|| allocation_overflow());
-		let alloc_layout = std::alloc::Layout::from_size_align(layout.size(), BoxedValue::ALIGN)
+		let alloc_layout = std::alloc::Layout::from_size_align(layout.size(), BoxedStorage::ALIGN)
 			.unwrap_or_else(|_| allocation_overflow());
 		unsafe {
-			let p = std::alloc::alloc(alloc_layout) as *mut BoxedValue;
+			let p = std::alloc::alloc(alloc_layout) as *mut BoxedStorage;
 			let layout_size = layout.size();
 			init.initialize(NonNull::new_unchecked(p), layout);
 			debug_assert_eq!((*p).calculate_layout().size(), layout_size);
@@ -219,7 +230,7 @@ impl Value {
 			IntVal::Int(i) => (false, i),
 		};
 		let it = [b as u8].into_iter().chain(i.to_le_bytes());
-		Self::new_box(boxed_value::Init {
+		Self::new_box(boxed_storage::Init {
 			ty: BoxedType::Int,
 			len: 0,
 			ref_count: 1.into(),
@@ -236,7 +247,7 @@ impl Value {
 			FloatVal::Float(f) => (false, f),
 		};
 		let it = [b as u8].into_iter().chain(f.to_le_bytes());
-		Self::new_box(boxed_value::Init {
+		Self::new_box(boxed_storage::Init {
 			ty: BoxedType::Float,
 			len: 0,
 			ref_count: 1.into(),
@@ -253,7 +264,7 @@ impl Value {
 		if iter.len() == 0 {
 			return EMPTY_SEQ.clone();
 		}
-		Self::new_box(boxed_value::Init {
+		Self::new_box(boxed_storage::Init {
 			ty: BoxedType::Seq,
 			ref_count: 1.into(),
 			weak_count: 0.into(),
@@ -268,7 +279,7 @@ impl Value {
 		if s.len() == 0 {
 			return EMPTY_STRING.clone();
 		}
-		let v = Self::new_box(boxed_value::Init {
+		let v = Self::new_box(boxed_storage::Init {
 			ty: BoxedType::Str,
 			len: s.len() as u32,
 			ref_count: 1.into(),
@@ -280,35 +291,12 @@ impl Value {
 		v
 	}
 
-	pub fn get_str(&self) -> &str {
-		assert_eq!(self.ty(), ValType::Boxed);
-		unsafe {
-			let v = &*self.get_ptr();
-			from_utf8_unchecked(v.refs().raw)
-		}
-	}
-
-	pub fn get_slice(&self) -> &[Value] {
-		assert_eq!(self.ty(), ValType::Boxed);
-		unsafe {
-			let v = &*self.get_ptr();
-			v.refs().values
-		}
-	}
-
-	pub fn len(&self) -> u32 {
-		match self.ty() {
-			ValType::Boxed => self.get_box().len,
-			_ => unreachable!(),
-		}
-	}
-
-	unsafe fn get_ptr(&self) -> *mut BoxedValue {
+	unsafe fn get_ptr(&self) -> *mut BoxedStorage {
 		debug_assert_eq!(self.ty(), ValType::Boxed);
-		(self.raw.get() >> 2) as *mut BoxedValue
+		(self.raw.get() >> 2) as *mut BoxedStorage
 	}
 
-	fn get_box(&self) -> Pin<&mut BoxedValue> {
+	fn get_box(&self) -> Pin<&mut BoxedStorage> {
 		assert_eq!(self.ty(), ValType::Boxed);
 		unsafe { Pin::new_unchecked(&mut (*self.get_ptr())) }
 	}
@@ -336,16 +324,16 @@ impl Value {
 		debug_assert_eq!(self.ty(), ValType::Boxed);
 		let ptr = self.get_ptr();
 		let b = self.get_box();
-		let layout = BoxedValue::calculate_layout(&b);
+		let layout = BoxedStorage::calculate_layout(&b);
 		let alloc_layout =
-			std::alloc::Layout::from_size_align_unchecked(layout.size(), BoxedValue::ALIGN);
-		BoxedValue::vdrop(self.get_box(), layout);
+			std::alloc::Layout::from_size_align_unchecked(layout.size(), BoxedStorage::ALIGN);
+		BoxedStorage::vdrop(self.get_box(), layout);
 		std::alloc::dealloc(ptr as *mut u8, alloc_layout);
 	}
 }
 
 pub static EMPTY_STRING: Lazy<Value> = Lazy::new(|| {
-	Value::new_box(boxed_value::Init {
+	Value::new_box(boxed_storage::Init {
 		ty: BoxedType::Str,
 		len: 0u32,
 		ref_count: 1.into(),
@@ -356,7 +344,7 @@ pub static EMPTY_STRING: Lazy<Value> = Lazy::new(|| {
 });
 
 pub static EMPTY_SEQ: Lazy<Value> = Lazy::new(|| {
-	Value::new_box(boxed_value::Init {
+	Value::new_box(boxed_storage::Init {
 		ty: BoxedType::Seq,
 		len: 0u32,
 		ref_count: 1.into(),
@@ -411,11 +399,31 @@ pub enum IntVal {
 	Int(i64),
 }
 
+impl Display for IntVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			IntVal::InfPos => write!(f, "+∞"),
+			IntVal::InfNeg => write!(f, "-∞"),
+			IntVal::Int(i) => write!(f, "{i}"),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum FloatVal {
 	InfPos,
 	InfNeg,
 	Float(f64),
+}
+
+impl Display for FloatVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			FloatVal::InfPos => write!(f, "+∞"),
+			FloatVal::InfNeg => write!(f, "-∞"),
+			FloatVal::Float(x) => write!(f, "{x}"),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -442,7 +450,7 @@ impl Eq for FloatValWrap {}
 
 impl From<bool> for Value {
 	fn from(value: bool) -> Self {
-		Value::from(if value { 1i32 } else { 0i32 })
+		Value::from(if value { 1 } else { 0 })
 	}
 }
 impl TryInto<bool> for &Value {
@@ -490,40 +498,12 @@ impl From<IntVal> for Value {
 }
 impl TryInto<IntVal> for &Value {
 	type Error = ();
-
 	fn try_into(self) -> Result<IntVal, Self::Error> {
-		if matches!(self.ty(), ValType::Boxed) {
-			let b = self.get_box();
-			if !matches!(b.ty, BoxedType::Int) {
-				todo!()
-			}
-			debug_assert_eq!(b.refs().raw.len(), 1 + std::mem::size_of::<i64>());
-			let inf = b.refs().raw[0] != 0;
-			let val = i64::from_le_bytes(b.refs().raw[1..].try_into().unwrap());
-			return Ok(if inf {
-				if val >= 0 {
-					IntVal::InfPos
-				} else {
-					IntVal::InfNeg
-				}
-			} else {
-				IntVal::Int(val)
-			});
-		}
-		if !matches!(self.ty(), ValType::Int) {
+		if let BoxedValue::Int(i) = self.unbox() {
+			Ok(i)
+		} else {
 			todo!()
 		}
-		let pos = (self.raw.get() & Value::INT_SIGN_BIT) == 0;
-		let val = (self.raw.get() >> 3) as i64;
-		let val = if pos {
-			val
-		} else if val == 0 {
-			Value::MIN_INT
-		} else {
-			-val
-		};
-		debug_assert!((Value::MIN_INT..=Value::MAX_INT).contains(&val));
-		Ok(IntVal::Int(val))
 	}
 }
 impl TryInto<IntVal> for Value {
@@ -551,46 +531,6 @@ impl TryInto<i64> for Value {
 impl From<i64> for Value {
 	fn from(value: i64) -> Self {
 		IntVal::Int(value).into()
-	}
-}
-impl From<i32> for Value {
-	fn from(value: i32) -> Self {
-		let mut raw = (value.unsigned_abs() as u64) << 3;
-		if value.is_negative() {
-			raw |= Self::INT_SIGN_BIT;
-		}
-		raw |= Self::INT_TAG;
-		Self {
-			raw: NonZeroU64::new(raw).unwrap(),
-		}
-	}
-}
-impl From<i16> for Value {
-	fn from(value: i16) -> Self {
-		Value::from(value as i32)
-	}
-}
-impl From<i8> for Value {
-	fn from(value: i8) -> Self {
-		Value::from(value as i32)
-	}
-}
-impl From<u32> for Value {
-	fn from(value: u32) -> Self {
-		let raw = (value << 3) as u64 | Self::INT_TAG;
-		Value {
-			raw: NonZeroU64::new(raw).unwrap(),
-		}
-	}
-}
-impl From<u16> for Value {
-	fn from(value: u16) -> Self {
-		Value::from(value as u32)
-	}
-}
-impl From<u8> for Value {
-	fn from(value: u8) -> Self {
-		Value::from(value as u32)
 	}
 }
 
@@ -638,42 +578,12 @@ impl From<f64> for Value {
 }
 impl TryInto<FloatVal> for &Value {
 	type Error = ();
-
 	fn try_into(self) -> Result<FloatVal, Self::Error> {
-		if matches!(self.ty(), ValType::Boxed) {
-			let b = self.get_box();
-			if !matches!(b.ty, BoxedType::Float) {
-				todo!()
-			}
-			let inf = b.refs().raw[0] != 0;
-			let val = f64::from_le_bytes(b.refs().raw[1..].try_into().unwrap());
-			return Ok(if inf {
-				if val >= 0.0 {
-					FloatVal::InfPos
-				} else {
-					FloatVal::InfNeg
-				}
-			} else {
-				FloatVal::Float(val)
-			});
-		}
-		if !matches!(self.ty(), ValType::Float) {
+		if let BoxedValue::Float(f) = self.unbox() {
+			Ok(f)
+		} else {
 			todo!()
 		}
-		let pos = (self.raw.get() & Value::FLOAT_SIGN_BIT) == 0;
-		let value = self.raw.get() >> 1;
-		const EXPONENT_MASK: u64 = 0x3FF << 52;
-		let mut exponent = (value & EXPONENT_MASK) >> 52;
-		if exponent != 0 {
-			exponent += 512; // reconstruct original bias of 1023
-		}
-		const FRACTION_MASK: u64 = 0xFFFFFFFFFFFFF;
-		let fraction = value & FRACTION_MASK;
-		let mut value = fraction | (exponent << 52);
-		if !pos {
-			value |= Value::FLOAT_SIGN_BIT;
-		}
-		Ok(FloatVal::Float(f64::from_bits(value)))
 	}
 }
 impl TryInto<FloatVal> for Value {
@@ -709,10 +619,11 @@ impl<'a> TryInto<&'a str> for &'a Value {
 	type Error = ();
 
 	fn try_into(self) -> Result<&'a str, Self::Error> {
-		if self.ty() != ValType::Boxed || self.get_box().ty != BoxedType::Str {
+		if let BoxedValue::Str(s) = self.unbox() {
+			Ok(s)
+		} else {
 			todo!()
 		}
-		Ok(self.get_str())
 	}
 }
 
@@ -740,7 +651,7 @@ enum BoxedType {
 }
 
 #[define_varlen]
-struct BoxedValue {
+struct BoxedStorage {
 	/// Type of the value
 	#[controls_layout]
 	ty: BoxedType,
@@ -768,6 +679,14 @@ struct BoxedValue {
 	}],
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum BoxedValue<'a> {
+	Int(IntVal),
+	Float(FloatVal),
+	Seq(&'a [Value]),
+	Str(&'a str),
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -776,15 +695,17 @@ mod tests {
 	fn memory_guarantees() {
 		assert_eq!(std::mem::size_of::<Value>(), 8);
 		const BOX_BASE_BYTES: usize = 8;
-		let val_str = Value::from("12");
+		const S: &str = "12";
+		let val_str = Value::from(S);
 		assert_eq!(
 			val_str.get_box().calculate_layout().size(),
-			BOX_BASE_BYTES + val_str.len() as usize * std::mem::size_of::<u8>()
+			BOX_BASE_BYTES + S.len() as usize * std::mem::size_of::<u8>()
 		);
-		let tup2 = Value::new_tuple([1.try_into().unwrap(), 2.2.try_into().unwrap()]);
+		let t: &[Value] = &[1.into(), 2.2.into()];
+		let tup2 = Value::new_tuple(t.iter().cloned());
 		assert_eq!(
 			tup2.get_box().calculate_layout().size(),
-			BOX_BASE_BYTES + tup2.len() as usize * std::mem::size_of::<Value>()
+			BOX_BASE_BYTES + t.len() as usize * std::mem::size_of::<Value>()
 		);
 	}
 
@@ -845,37 +766,36 @@ mod tests {
 	#[test]
 	fn test_string_value() {
 		let empty = Value::from("");
-		assert_eq!(empty.get_str(), "");
+		assert_eq!(empty.unbox(), BoxedValue::Str(""));
+		assert!(empty.is_constant(&EMPTY_STRING));
 
 		let single = Value::from("1");
-		assert_eq!(single.get_str(), "1");
+		assert_eq!(single.unbox(), BoxedValue::Str("1"));
 		let double = Value::from("12");
-		assert_eq!(double.get_str(), "12");
+		assert_eq!(double.unbox(), BoxedValue::Str("12"));
 
 		let lorem = r#"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 		Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 		Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
 		Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."#;
 		let vlorem = Value::from(lorem);
-		assert_eq!(vlorem.get_str(), lorem);
+		assert_eq!(vlorem.unbox(), BoxedValue::Str(lorem));
 	}
 
 	#[test]
 	fn test_tuple() {
 		let empty = Value::new_tuple([]);
-		assert_eq!(empty.get_slice(), &[]);
+		assert_eq!(empty.unbox(), BoxedValue::Seq(&[]));
+		assert!(empty.is_constant(&EMPTY_SEQ));
 
-		let single = Value::new_tuple([1.try_into().unwrap()]);
-		assert_eq!(single.get_slice(), &[1.try_into().unwrap()]);
+		let single = Value::new_tuple([1.into()]);
+		assert_eq!(single.unbox(), BoxedValue::Seq(&[1.into()]));
 
-		let tup2 = Value::new_tuple([1.try_into().unwrap(), 2.2.try_into().unwrap()]);
-		assert_eq!(
-			tup2.get_slice(),
-			&[1.try_into().unwrap(), 2.2.try_into().unwrap()]
-		);
+		let tup2 = Value::new_tuple([1.into(), 2.2.into()]);
+		assert_eq!(tup2.unbox(), BoxedValue::Seq(&[1.into(), 2.2.into()]));
 
 		let list: Vec<Value> = (1..=2000).map(|i| Value::from(i)).collect();
 		let vlist = Value::new_tuple(list.clone());
-		assert_eq!(vlist.get_slice(), &list)
+		assert_eq!(vlist.unbox(), BoxedValue::Seq(&list))
 	}
 }
