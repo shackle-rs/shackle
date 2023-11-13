@@ -6,6 +6,14 @@
 */
 
 /** @group stdlib.reflect Return lower bound of \a x */
+function $$E: lb(var $$E: x);
+/** @group stdlib.reflect Return upper bound of \a x */
+function $$E: ub(var $$E: x);
+/** @group stdlib.reflect Return lower bound of \a x */
+function float: lb(var float: x);
+/** @group stdlib.reflect Return upper bound of \a x */
+function float: ub(var float: x);
+/** @group stdlib.reflect Return lower bound of \a x */
 function $$E: lb(var opt $$E: x) = lb(mzn_destruct_opt(x).2);
 /** @group stdlib.reflect Return upper bound of \a x */
 function $$E: ub(var opt $$E: x) = ub(mzn_destruct_opt(x).2);
