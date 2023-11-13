@@ -111,7 +111,7 @@ var 1..3: x = foo(<>);
         <Expression::6>: op(var int: (opt int))
         <Expression::7>: var int
       Name resolution:
-        <Expression::3>: PatternRef(ItemRef(562), <Pattern::1>)
+        <Expression::3>: PatternRef(ItemRef(566), <Pattern::1>)
         <Expression::6>: PatternRef(ItemRef(0), <Pattern::1>)
 "#]),
 		)

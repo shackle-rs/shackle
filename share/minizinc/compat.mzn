@@ -75,3 +75,5 @@ predicate if_then_else(array[int] of var bool: c, array[int] of set of int: x, v
     fzn_if_then_else_set(c, x, y);
 predicate if_then_else(array[int] of var bool: c, array[int] of var set of int: x, var set of int: y) =
     fzn_if_then_else_var_set(c, x, y);
+
+function string: show_index_sets(array[$U] of any $T: x);
