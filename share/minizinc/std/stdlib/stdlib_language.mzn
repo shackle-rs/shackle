@@ -66,3 +66,11 @@ opt bool: mzn_ignore_redundant_constraints;
 test mzn_check_ignore_redundant_constraints() =
   if absent(mzn_ignore_redundant_constraints) then false
   else deopt(mzn_ignore_redundant_constraints) endif;
+
+ /** @group stdlib.options Whether to half reify bool_clause constraints */
+ opt bool: mzn_half_reify_clause;
+
+ /** @group stdlib.options Check to half reify bool_clause constraints  */
+ test mzn_check_half_reify_clause() =
+   if absent(mzn_half_reify_clause) then true
+   else deopt(mzn_half_reify_clause) endif;
