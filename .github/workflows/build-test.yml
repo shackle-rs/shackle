@@ -4,6 +4,8 @@ on: [push, pull_request]
 
 env:
   RUST_CHANNEL: stable
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 jobs:
   build:
@@ -18,8 +20,8 @@ jobs:
         run: |
           rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
           rustup default ${{ env.RUST_CHANNEL }}
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
       - name: Build ${{ matrix.crate }}
         run: cargo install --root dist/ --path crates/${{ matrix.crate }}
       - name: Upload build artifact
@@ -38,8 +40,8 @@ jobs:
         run: |
           rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
           rustup default ${{ env.RUST_CHANNEL }}
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
       - name: Run cargo test
         run: cargo test
   clippy:
@@ -50,7 +52,7 @@ jobs:
         run: |
           rustup toolchain install --profile minimal --component clippy --no-self-update ${{ env.RUST_CHANNEL }}
           rustup default ${{ env.RUST_CHANNEL }}
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
       - name: Run clippy
         run: cargo clippy -- -D warnings
