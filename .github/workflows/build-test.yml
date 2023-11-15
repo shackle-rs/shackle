@@ -3,7 +3,8 @@ name: Build and test
 on: [push, pull_request]
 
 env:
-  RUST_CHANNEL: stable
+  RUST_CHANNEL: "stable"
+  RUST_TEST_CHANNEL: "nightly"
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
 
@@ -13,7 +14,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        crate: [shackle-cli, shackle-ls]
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust toolchain
@@ -22,28 +22,44 @@ jobs:
           rustup default ${{ env.RUST_CHANNEL }}
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
-      - name: Build ${{ matrix.crate }}
-        run: cargo install --root dist/ --path crates/${{ matrix.crate }}
+      - name: Build shackle-cli
+        run: cargo install --root dist/ --path crates/shackle-cli
+      - name: Build shackle-ls
+        run: cargo install --root dist/ --path crates/shackle-ls
       - name: Upload build artifact
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.crate }}-${{ matrix.os }}
+          name: shackle-exe-${{ matrix.os }}
           path: dist/
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
-          rustup default ${{ env.RUST_CHANNEL }}
+          rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_TEST_CHANNEL }}
+          rustup default ${{ env.RUST_TEST_CHANNEL }}
+      - name: Install grcov
+        uses: SierraSoftworks/setup-grcov@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.3
       - name: Run cargo test
         run: cargo test
+        env:
+          CARGO_INCREMENTAL: "0"
+          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort"
+          RUSTDOCFLAGS: "-Cpanic=abort"
+      - name: Collect covereage data
+        run: grcov . --binary-path target/debug/deps/ -s . -t lcov --ignore-not-existing --ignore '../**' --ignore '/*' -o ./lcov.info
+      - uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./lcov.info
   clippy:
     runs-on: ubuntu-latest
     steps:
