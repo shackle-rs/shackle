@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust toolchain
         run: |
           rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
@@ -37,7 +37,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust toolchain
         run: |
           rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_TEST_CHANNEL }}
@@ -63,7 +63,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust toolchain
         run: |
           rustup toolchain install --profile minimal --component clippy --no-self-update ${{ env.RUST_CHANNEL }}
