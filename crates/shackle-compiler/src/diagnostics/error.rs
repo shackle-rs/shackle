@@ -598,7 +598,7 @@ pub enum Error {
 	InternalError(#[from] InternalError),
 }
 
-/// Unable to convert an empty vector into a ShackleError
+/// Unable to convert an empty vector into a [`ShackleError`]
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Unable to convert empty vector to a ShackleError")]
 #[diagnostic(code(shackle::empty_error_vec))]

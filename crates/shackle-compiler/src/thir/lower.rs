@@ -1398,7 +1398,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		LoweredAnnotation::Expression(self.collect_expression(ann))
 	}
 
-	/// Rewrite index slicing into slice_Xd() call
+	/// Rewrite index slicing into `slice_Xd()` call
 	fn collect_slice(
 		&mut self,
 		collection: ArenaIndex<hir::Expression>,

@@ -3,7 +3,7 @@
 Type specialisation involves generating concrete versions of polymorphic functions for each call to
 such a function. This is needed because the [MIR](../mir/mir.md) does not have polymorphic functions.
 
-We start by finding the the top-level polymorphic calls, and then create the concrete versions
+We start by finding the top-level polymorphic calls, and then create the concrete versions
 if we haven't already. We then traverse the bodies of the functions and recursively specialise
 polymorphic calls in them.
 
