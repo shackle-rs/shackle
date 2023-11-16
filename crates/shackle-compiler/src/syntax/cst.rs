@@ -62,7 +62,7 @@ impl Cst {
 			.expect("Called file() on Cst constructed without FileRef")
 	}
 
-	/// Get the the underlying source text.
+	/// Get the underlying source text.
 	pub fn text(&self) -> &str {
 		self.inner.source.as_str()
 	}
@@ -116,7 +116,7 @@ impl Cst {
 		result
 	}
 
-	/// Create a CstNode from the given raw node from the same tree.
+	/// Create a [`CstNode`] from the given raw node from the same tree.
 	pub fn node<'a>(&'a self, node: Node<'a>) -> CstNode {
 		let tree = self.clone();
 		unsafe { CstNode::new(tree, node) }

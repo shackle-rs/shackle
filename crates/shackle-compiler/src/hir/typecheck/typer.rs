@@ -1564,7 +1564,7 @@ impl<'a, T: TypeContext> Typer<'a, T> {
 		ty
 	}
 
-	/// Typecheck an annotation for a declaration (since these may be calls to annotations using ::annotated_expression)
+	/// Typecheck an annotation for a declaration (since these may be calls to annotations using `::annotated_expression`)
 	pub fn typecheck_declaration_annotation(
 		&mut self,
 		ann: ArenaIndex<Expression>,

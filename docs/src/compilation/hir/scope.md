@@ -23,7 +23,7 @@ declared in a single item, via destructuring or in a let expression, so it is no
 
 ## Scopes and generations
 
-A `Scope` keeps track of the variables and functions declared in a particular scope, along with the the parent scope (if
+A `Scope` keeps track of the variables and functions declared in a particular scope, along with the parent scope (if
 any). For example:
 
 ```mzn

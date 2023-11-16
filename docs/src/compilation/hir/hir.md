@@ -42,7 +42,7 @@ Lowering from AST is done on a per-model basis, accessed using the `db.lookup_mo
 The actual HIR trees are kept separate from the source-mapping back to AST, which allows analysis queries to ignore the
 source-mapping (unless they are emitting diagnostics) and avoid unnecessary recomputation when source locations change.
 
-Lowering AST expressions is done by walking the AST and allocating the the HIR expressions bottom up. We also apply some
+Lowering AST expressions is done by walking the AST and allocating the HIR expressions bottom up. We also apply some
 syntactic desugarings during this process. Patterns and types are also lowered in a similar way.
 
 As the HIR nodes are built up, a `SourceMap` containing the original AST nodes and the type of desugaring which occurred
@@ -223,7 +223,7 @@ cannot be resolved until the argument types are known (due to overloading).
 We also check to ensure that variable declarations and function parameters only use irrefutable patterns (i.e. those
 which always match every value of the type).
 
-See [Scope collection](./scope.md) for more detail about the proces.
+See [Scope collection](./scope.md) for more detail about the process.
 
 ### Type checking
 

@@ -79,7 +79,7 @@ impl Model {
 			.unwrap_or_else(|e| e.iter().cloned().collect())
 	}
 
-	/// Compile current model into a Program that can be used by the Shackle interpreter
+	/// Compile current model into a [`Program`] that can be used by the Shackle interpreter
 	pub fn compile(self, slv: &Solver) -> Result<Program> {
 		let errors = self.check(slv, &[], false);
 		if !errors.is_empty() {
@@ -156,7 +156,7 @@ pub struct Program {
 	time_limit: Option<Duration>,
 }
 
-/// Status of running and solving a Program
+/// Status of running and solving a [`Program`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
 	/// No solutions exist
@@ -408,7 +408,7 @@ impl Program {
 		self.time_limit = Some(dur);
 		self
 	}
-	/// Output the [`Pogram`] using the given output interface, using the [`Write`] trait
+	/// Output the [`Program`] using the given output interface, using the [`Write`] trait
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
 		let printer = PrettyPrinter::new_compat(&self.db, &self.code);
 		out.write_all(printer.pretty_print().as_bytes())

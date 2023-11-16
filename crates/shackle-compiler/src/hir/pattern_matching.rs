@@ -1,6 +1,6 @@
 //! Analysis of pattern matching to check exhaustiveness
 //!
-//! See http://moscova.inria.fr/~maranget/papers/warn/warn.pdf for algorithm details
+//! See <http://moscova.inria.fr/~maranget/papers/warn/warn.pdf> for algorithm details
 
 use std::sync::Arc;
 
