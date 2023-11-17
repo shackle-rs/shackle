@@ -559,7 +559,7 @@ to the <code>Ty</code> type, which is type computed by the type-checker, and is 
 <p>Lowering from AST is done on a per-model basis, accessed using the <code>db.lookup_model(model_ref)</code> query.
 The actual HIR trees are kept separate from the source-mapping back to AST, which allows analysis queries to ignore the
 source-mapping (unless they are emitting diagnostics) and avoid unnecessary recomputation when source locations change.</p>
-<p>Lowering AST expressions is done by walking the AST and allocating the the HIR expressions bottom up. We also apply some
+<p>Lowering AST expressions is done by walking the AST and allocating the HIR expressions bottom up. We also apply some
 syntactic desugarings during this process. Patterns and types are also lowered in a similar way.</p>
 <p>As the HIR nodes are built up, a <code>SourceMap</code> containing the original AST nodes and the type of desugaring which occurred
 (if any) is populated. This source mapping can be accessed with <code>db.lookup_source_map(model_ref)</code>. This should only
@@ -671,7 +671,7 @@ Note that this does not perform name resolution - that is done in the type-check
 cannot be resolved until the argument types are known (due to overloading).</p>
 <p>We also check to ensure that variable declarations and function parameters only use irrefutable patterns (i.e. those
 which always match every value of the type).</p>
-<p>See <a href="compilation/hir/./scope.html">Scope collection</a> for more detail about the proces.</p>
+<p>See <a href="compilation/hir/./scope.html">Scope collection</a> for more detail about the process.</p>
 <h3 id="type-checking"><a class="header" href="#type-checking">Type checking</a></h3>
 <p>Type checking is done for each HIR item, accessed through the <code>db.lookup_item_types(item_ref)</code> query. It produces:</p>
 <ul>
@@ -780,7 +780,7 @@ to find an identifier. Note that the result of looking up identifiers is a <code
 functions). These point to the declaring identifier pattern of the identifier (as there may be several identifiers
 declared in a single item, via destructuring or in a let expression, so it is not sufficient to give only the item).</p>
 <h2 id="scopes-and-generations"><a class="header" href="#scopes-and-generations">Scopes and generations</a></h2>
-<p>A <code>Scope</code> keeps track of the variables and functions declared in a particular scope, along with the the parent scope (if
+<p>A <code>Scope</code> keeps track of the variables and functions declared in a particular scope, along with the parent scope (if
 any). For example:</p>
 <pre><code class="language-mzn">function foo(int: a) =
     let {
@@ -1455,7 +1455,7 @@ tuples, the non-tuple occurring type will no longer be a subtype of the optional
 <div style="break-before: page; page-break-before: always;"></div><h1 id="type-specialisation"><a class="header" href="#type-specialisation">Type specialisation</a></h1>
 <p>Type specialisation involves generating concrete versions of polymorphic functions for each call to
 such a function. This is needed because the <a href="compilation/thir/../mir/mir.html">MIR</a> does not have polymorphic functions.</p>
-<p>We start by finding the the top-level polymorphic calls, and then create the concrete versions
+<p>We start by finding the top-level polymorphic calls, and then create the concrete versions
 if we haven't already. We then traverse the bodies of the functions and recursively specialise
 polymorphic calls in them.</p>
 <p>The end result is that all reachable calls are now non-polymorphic.</p>

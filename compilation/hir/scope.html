@@ -194,7 +194,7 @@ to find an identifier. Note that the result of looking up identifiers is a <code
 functions). These point to the declaring identifier pattern of the identifier (as there may be several identifiers
 declared in a single item, via destructuring or in a let expression, so it is not sufficient to give only the item).</p>
 <h2 id="scopes-and-generations"><a class="header" href="#scopes-and-generations">Scopes and generations</a></h2>
-<p>A <code>Scope</code> keeps track of the variables and functions declared in a particular scope, along with the the parent scope (if
+<p>A <code>Scope</code> keeps track of the variables and functions declared in a particular scope, along with the parent scope (if
 any). For example:</p>
 <pre><code class="language-mzn">function foo(int: a) =
     let {
