@@ -5,7 +5,7 @@ version = "0.0.1"
 keywords = ["incremental", "parsing", "datazinc"]
 categories = ["parsing", "text-editors"]
 repository = "https://github.com/tree-sitter/tree-sitter-datazinc"
-edition = "2018"
+edition = "2021"
 license = "MIT"
 
 build = "bindings/rust/build.rs"
