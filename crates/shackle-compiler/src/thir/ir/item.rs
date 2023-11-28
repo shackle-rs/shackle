@@ -263,8 +263,9 @@ impl<T: Marker> Declaration<T> {
 			let ty = rhs.ty();
 			assert!(
 				ty.is_subtype_of(db.upcast(), self.ty()),
-				"RHS type {} does not match declaration LHS type {}",
+				"RHS type {} ({}) does not match declaration LHS type {}",
 				ty.pretty_print(db.upcast()),
+				rhs.origin().debug_print(db),
 				self.ty().pretty_print(db.upcast())
 			);
 		}
@@ -408,6 +409,14 @@ impl FunctionName {
 		match *self {
 			FunctionName::Named(i) => FunctionName::Named(i.inversed(db.upcast())),
 			_ => Self::anonymous(),
+		}
+	}
+
+	/// Get as an identifier
+	pub fn as_identifier(&self, db: &dyn Thir) -> Identifier {
+		match self {
+			FunctionName::Named(identifier) => *identifier,
+			FunctionName::Anonymous(v) => Identifier::new(format!("FN_{}", v), db.upcast()),
 		}
 	}
 }

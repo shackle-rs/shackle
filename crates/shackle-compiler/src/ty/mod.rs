@@ -730,9 +730,15 @@ impl Ty {
 					(TyData::Bottom(o1), TyData::Function(o2, f))
 					| (TyData::Function(o2, f), TyData::Bottom(o1)) => TyData::Function(o1.max(o2), f),
 					(TyData::Bottom(o1), TyData::TyVar(inst, o2, tv))
-					| (TyData::TyVar(inst, o2, tv), TyData::Bottom(o1)) => {
-						TyData::TyVar(inst, o2.map(|o2| o1.max(o2)), tv)
-					}
+					| (TyData::TyVar(inst, o2, tv), TyData::Bottom(o1)) => TyData::TyVar(
+						inst,
+						if o1 == OptType::Opt {
+							Some(OptType::Opt)
+						} else {
+							o2.map(|o2| o1.max(o2))
+						},
+						tv,
+					),
 					(
 						TyData::Array {
 							opt: o1,

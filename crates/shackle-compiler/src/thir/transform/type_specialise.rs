@@ -3,8 +3,9 @@
 //! Creates concrete versions of polymorphic functions.
 //! This enables type erasure while ensuring we call the right versions of functions involving e.g. enums.
 //! We also create special versions of `show` if called on a type which will be erased later.
+//! Array access also has to be specialised (and var index access to arrays of structs has to be decomposed).
 
-use std::sync::Arc;
+use std::{collections::hash_map::Entry, sync::Arc};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -16,14 +17,16 @@ use crate::{
 		pretty_print::PrettyPrinter,
 		source::Origin,
 		traverse::{
-			add_function, fold_call, fold_declaration_id, fold_domain, Folder, ReplacementMap,
+			add_function, fold_call, fold_declaration_id, fold_domain, fold_expression, Folder,
+			ReplacementMap,
 		},
 		ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Declaration, DeclarationId,
-		Domain, DomainData, Expression, ExpressionBuilder, Function, FunctionId, Generator,
-		Identifier, IfThenElse, IntegerLiteral, Item, ItemId, Marker, Model, OptType, RecordAccess,
-		StringLiteral, TupleAccess,
+		Domain, DomainData, Expression, ExpressionBuilder, ExpressionData, Function, FunctionId,
+		FunctionName, Generator, Identifier, IfThenElse, IntegerLiteral, Item, ItemId, Let,
+		LetItem, LookupCall, Marker, Model, OptType, OverloadMap, RecordAccess, RecordLiteral,
+		StringLiteral, TupleAccess, TupleLiteral,
 	},
-	ty::{FunctionType, Ty, TyData, TyParamInstantiations},
+	ty::{FunctionType, PolymorphicFunctionType, Ty, TyData, TyParamInstantiations},
 	utils::{maybe_grow_stack, DebugPrint},
 	Result,
 };
@@ -35,7 +38,7 @@ struct SpecialisedFunction<Dst: Marker> {
 	depth: u16,
 }
 
-struct TypeSpecialiser<Dst: Marker> {
+struct TypeSpecialiser<'a, Dst: Marker> {
 	specialised_model: Model<Dst>,
 	replacement_map: ReplacementMap<Dst>,
 	concrete: FxHashMap<(FunctionId, FunctionType), FunctionId<Dst>>,
@@ -45,9 +48,10 @@ struct TypeSpecialiser<Dst: Marker> {
 	position: FxHashMap<FunctionId, ItemId<Dst>>,
 	count: usize,
 	reached_recursion_limit: Option<FunctionId>,
+	original_functions: OverloadMap<'a>,
 }
 
-impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
+impl<'a, Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<'a, Dst> {
 	fn model(&mut self) -> &mut Model<Dst> {
 		&mut self.specialised_model
 	}
@@ -148,23 +152,41 @@ impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 				.iter()
 				.map(|arg| self.fold_expression(db, model, arg))
 				.collect::<Vec<_>>();
-			if self.needs_specialisation(db, model, *f, arguments.iter().map(|arg| arg.ty())) {
-				return Call {
-					function: Callable::Function(self.instantiate(
-						db,
-						model,
-						*f,
-						&arguments.iter().map(|e| e.ty()).collect::<Vec<_>>(),
-					)),
-					arguments,
-				};
-			}
+			// Match the new argument types in the old model to find the most specific overload
+			let arg_tys = arguments.iter().map(|e| e.ty()).collect::<Vec<_>>();
 			return Call {
-				function: self.fold_callable(db, model, &call.function),
+				function: Callable::Function(self.instantiate(
+					db,
+					model,
+					model[*f].name(),
+					&arg_tys,
+				)),
 				arguments,
 			};
 		}
 		fold_call(self, db, model, call)
+	}
+
+	fn fold_expression(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model,
+		expression: &Expression,
+	) -> Expression<Dst> {
+		maybe_grow_stack(|| {
+			if let ExpressionData::ArrayAccess(aa) = &**expression {
+				let collection = self.fold_expression(db, model, &aa.collection);
+				let indices = self.fold_expression(db, model, &aa.indices);
+				return self.specialise_array_access(
+					db,
+					model,
+					expression.origin(),
+					collection,
+					indices,
+				);
+			}
+			fold_expression(self, db, model, expression)
+		})
 	}
 
 	fn fold_domain(&mut self, db: &dyn Thir, model: &Model, domain: &Domain) -> Domain<Dst> {
@@ -184,34 +206,98 @@ impl<Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<Dst> {
 	}
 }
 
-impl<Dst: Marker> TypeSpecialiser<Dst> {
-	fn needs_specialisation(
-		&self,
-		db: &dyn Thir,
-		model: &Model,
-		f: FunctionId,
-		args: impl IntoIterator<Item = Ty>,
-	) -> bool {
-		model[f].is_polymorphic()
-			&& (model[f].body().is_some()
-				|| (model[f].name() == self.ids.show
-					|| model[f].name() == self.ids.show_json
-					|| model[f].name() == self.ids.show_dzn)
-					&& args
-						.into_iter()
-						.next()
-						.unwrap()
-						.contains_erased_type(db.upcast()))
-	}
-
+impl<'a, Dst: Marker> TypeSpecialiser<'a, Dst> {
 	// Get or create the specialised version of a polymorphic function with the given argument types
 	fn instantiate(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model,
+		name: FunctionName,
+		args: &[Ty],
+	) -> FunctionId<Dst> {
+		let lookup = self
+			.original_functions
+			.lookup_function(db, name, args)
+			.unwrap_or_else(|e| panic!("{}", e.debug_print(db.upcast())));
+		let f = lookup.function;
+
+		// Also instantiate subtyped polymorphic functions so we can dispatch to them
+		let fns = self.original_functions.get(&name).unwrap().clone();
+		for idx in fns {
+			if f == idx
+				|| !model[idx].is_polymorphic()
+				|| model[idx].parameters().len() != args.len()
+			{
+				continue;
+			}
+			(|ts: &mut Self| {
+				let mut ty_vars = FxHashMap::default();
+				let fe = model[idx].function_entry(model);
+				let mut add_instantiation = |tv, ty| {
+					match ty_vars.entry(tv) {
+						Entry::Occupied(mut e) => {
+							let p = e.get_mut();
+							let Some(st) = Ty::most_specific_supertype(db.upcast(), [*p, ty])
+							else {
+								return false;
+							};
+							*p = st;
+						}
+						Entry::Vacant(e) => {
+							e.insert(ty);
+						}
+					}
+					true
+				};
+				for (arg, param) in args.iter().zip(fe.overload.params().iter()) {
+					if !PolymorphicFunctionType::collect_instantiations(
+						db.upcast(),
+						&mut add_instantiation,
+						*arg,
+						*param,
+					) {
+						return;
+					}
+				}
+				let ft = fe.overload.instantiate(db.upcast(), &ty_vars);
+				if ft
+					.params
+					.iter()
+					.zip(args.iter())
+					.all(|(p, a)| p.is_subtype_of(db.upcast(), *a))
+				{
+					ts.instantiate_inner(
+						db,
+						model,
+						ts.original_functions
+							.lookup_function(db, name, &ft.params)
+							.unwrap()
+							.function,
+						&ft.params,
+					);
+				}
+			})(self);
+		}
+		self.instantiate_inner(db, model, f, args)
+	}
+
+	fn instantiate_inner(
 		&mut self,
 		db: &dyn Thir,
 		model: &Model,
 		f: FunctionId,
 		args: &[Ty],
 	) -> FunctionId<Dst> {
+		let needs_instantiation = model[f].is_polymorphic()
+			&& (model[f].body().is_some()
+				|| (model[f].name() == self.ids.show
+					|| model[f].name() == self.ids.show_json
+					|| model[f].name() == self.ids.show_dzn)
+					&& args[0].contains_erased_type(db.upcast()));
+		if !needs_instantiation {
+			return self.fold_function_id(db, model, f);
+		}
+
 		assert!(model[f].is_polymorphic());
 		assert!(model[f].top_level());
 
@@ -344,28 +430,8 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 	) -> Expression<Dst> {
 		let origin = self.specialised_model[arg].origin();
 		let call = |ts: &mut Self, name: Identifier, args: Vec<Expression<Dst>>| {
-			let lookup = model
-				.lookup_function(
-					db,
-					name.into(),
-					&args.iter().map(|arg| arg.ty()).collect::<Vec<_>>(),
-				)
-				.unwrap();
-			let idx = if ts.needs_specialisation(
-				db,
-				model,
-				lookup.function,
-				args.iter().map(|arg| arg.ty()),
-			) {
-				ts.instantiate(
-					db,
-					model,
-					lookup.function,
-					&args.iter().map(|arg| arg.ty()).collect::<Vec<_>>(),
-				)
-			} else {
-				ts.fold_function_id(db, model, lookup.function)
-			};
+			let arg_tys = args.iter().map(|arg| arg.ty()).collect::<Vec<_>>();
+			let idx = ts.instantiate(db, model, name.into(), &arg_tys);
 			Call {
 				function: Callable::Function(idx),
 				arguments: args,
@@ -547,6 +613,193 @@ impl<Dst: Marker> TypeSpecialiser<Dst> {
 			_ => unreachable!(),
 		}
 	}
+
+	fn specialise_array_access(
+		&mut self,
+		db: &dyn Thir,
+		model: &Model,
+		origin: Origin,
+		collection: Expression<Dst>,
+		indices: Expression<Dst>,
+	) -> Expression<Dst> {
+		maybe_grow_stack(|| {
+			if indices.ty().contains_var(db.upcast()) {
+				// Accessing arrays of structured types requires decomposition
+				let elem = collection.ty().elem_ty(db.upcast()).unwrap();
+				if let Some(fields) = elem.record_fields(db.upcast()) {
+					let c_origin = collection.origin();
+					let c_decl = Declaration::from_expression(db, false, collection);
+					let c_idx = self
+						.specialised_model
+						.add_declaration(Item::new(c_decl, c_origin));
+					let c_ident = Expression::new(db, &self.specialised_model, c_origin, c_idx);
+					let i_origin = indices.origin();
+					let i_decl = Declaration::from_expression(db, false, indices);
+					let i_idx = self
+						.specialised_model
+						.add_declaration(Item::new(i_decl, i_origin));
+					let i_ident = Expression::new(db, &self.specialised_model, i_origin, i_idx);
+					let mut decomposed = Vec::with_capacity(fields.len());
+					for (k, _) in fields {
+						let field = Identifier::from(k);
+						let decl = Declaration::new(false, Domain::unbounded(db, c_origin, elem));
+						let decl_idx = self
+							.specialised_model
+							.add_declaration(Item::new(decl, c_origin));
+						let generators = vec![Generator::Iterator {
+							declarations: vec![decl_idx],
+							collection: c_ident.clone(),
+							where_clause: None,
+						}];
+						let template = Expression::new(
+							db,
+							&self.specialised_model,
+							origin,
+							RecordAccess {
+								record: Box::new(Expression::new(
+									db,
+									&self.specialised_model,
+									c_origin,
+									decl_idx,
+								)),
+								field,
+							},
+						);
+						let comprehension = Expression::new(
+							db,
+							&self.specialised_model,
+							origin,
+							ArrayComprehension {
+								generators,
+								indices: None,
+								template: Box::new(template),
+							},
+						);
+						let array = Expression::new(
+							db,
+							&self.specialised_model,
+							origin,
+							LookupCall {
+								function: self.ids.array_xd.into(),
+								arguments: vec![c_ident.clone(), comprehension],
+							},
+						);
+						decomposed.push((
+							field,
+							self.specialise_array_access(db, model, origin, array, i_ident.clone()),
+						));
+					}
+					return Expression::new(
+						db,
+						&self.specialised_model,
+						origin,
+						Let {
+							items: vec![LetItem::Declaration(c_idx), LetItem::Declaration(i_idx)],
+							in_expression: Box::new(Expression::new(
+								db,
+								&self.specialised_model,
+								origin,
+								RecordLiteral(decomposed),
+							)),
+						},
+					);
+				}
+				if let Some(fields) = elem.fields(db.upcast()) {
+					let c_origin = collection.origin();
+					let c_decl = Declaration::from_expression(db, false, collection);
+					let c_idx = self
+						.specialised_model
+						.add_declaration(Item::new(c_decl, c_origin));
+					let c_ident = Expression::new(db, &self.specialised_model, c_origin, c_idx);
+					let i_origin = indices.origin();
+					let i_decl = Declaration::from_expression(db, false, indices);
+					let i_idx = self
+						.specialised_model
+						.add_declaration(Item::new(i_decl, i_origin));
+					let i_ident = Expression::new(db, &self.specialised_model, i_origin, i_idx);
+					let mut decomposed = Vec::with_capacity(fields.len());
+					for (i, _) in fields.iter().enumerate() {
+						let field = IntegerLiteral(i as i64 + 1);
+						let decl = Declaration::new(false, Domain::unbounded(db, c_origin, elem));
+						let decl_idx = self
+							.specialised_model
+							.add_declaration(Item::new(decl, c_origin));
+						let generators = vec![Generator::Iterator {
+							declarations: vec![decl_idx],
+							collection: c_ident.clone(),
+							where_clause: None,
+						}];
+						let template = Expression::new(
+							db,
+							&self.specialised_model,
+							origin,
+							TupleAccess {
+								tuple: Box::new(Expression::new(
+									db,
+									&self.specialised_model,
+									c_origin,
+									decl_idx,
+								)),
+								field,
+							},
+						);
+						let comprehension = Expression::new(
+							db,
+							&self.specialised_model,
+							origin,
+							ArrayComprehension {
+								generators,
+								indices: None,
+								template: Box::new(template),
+							},
+						);
+						let array = Expression::new(
+							db,
+							&self.specialised_model,
+							origin,
+							LookupCall {
+								function: self.ids.array_xd.into(),
+								arguments: vec![c_ident.clone(), comprehension],
+							},
+						);
+						decomposed.push(self.specialise_array_access(
+							db,
+							model,
+							origin,
+							array,
+							i_ident.clone(),
+						));
+					}
+					return Expression::new(
+						db,
+						&self.specialised_model,
+						origin,
+						Let {
+							items: vec![LetItem::Declaration(c_idx), LetItem::Declaration(i_idx)],
+							in_expression: Box::new(Expression::new(
+								db,
+								&self.specialised_model,
+								origin,
+								TupleLiteral(decomposed),
+							)),
+						},
+					);
+				}
+			}
+
+			let tys = &[collection.ty(), indices.ty()];
+			let call = Call {
+				function: Callable::Function(self.instantiate(
+					db,
+					model,
+					self.ids.array_access.into(),
+					tys,
+				)),
+				arguments: vec![collection, indices],
+			};
+			Expression::new(db, &self.specialised_model, origin, call)
+		})
+	}
 }
 
 /// Type specialise a model
@@ -563,6 +816,7 @@ pub fn type_specialise(db: &dyn Thir, model: Model) -> Result<Model> {
 		position: FxHashMap::default(),
 		count: 0,
 		reached_recursion_limit: None,
+		original_functions: model.overload_map(),
 	};
 	ts.add_model(db, &model);
 	log::info!("Created {} specialised functions", ts.count);
@@ -583,7 +837,11 @@ mod test {
 	use expect_test::expect;
 
 	use super::type_specialise;
-	use crate::thir::transform::{name_mangle::mangle_names, test::check_no_stdlib, transformer};
+	use crate::thir::transform::{
+		name_mangle::mangle_names,
+		test::{check, check_no_stdlib},
+		transformer,
+	};
 
 	#[test]
 	fn test_type_specialisation_basic_1() {
@@ -663,8 +921,8 @@ mod test {
     function bool: occurs(opt $T: x);
     function $T: deopt(opt $T: x);
     function string: 'show<opt int>'(opt int: x) = if occurs(x) then 'show<any $T>'(deopt(x)) else "<>" endif;
-    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = concat(["(", 'show<opt int>'(x.1), ", ", 'show<any $T>'(x.2), ")"]);
-    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = concat(["(", "a", ": ", 'show<any $T>'(x.a), ", ", "b", ": ", 'show<any $T>'(x.b), ")"]);
+    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = concat(["(", 'show<opt int>'((x).1), ", ", 'show<any $T>'((x).2), ")"]);
+    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = concat(["(", "a", ": ", 'show<any $T>'((x).a), ", ", "b", ": ", 'show<any $T>'((x).b), ")"]);
     function string: 'show<any $T>'(any $T: x);
     function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = concat(["[", join(", ", ['show<tuple(opt int, bool)>'(_DECL_11) | _DECL_11 in x]), "]"]);
     function string: 'show<array [$X] of any $T>'(array [$X] of any $T: x);
@@ -792,6 +1050,109 @@ mod test {
     int: a = 'foo<int>'(1);
     float: b = 'foo<float>'(1.5);
     solve satisfy;
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_specialise_array_access_1() {
+		check(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+			any: x = [1, 2, 3];
+			any: v = x[1];
+			var 1..3: i;
+			any: u = x[i];
+		"#,
+			expect!([r#"
+    array [int] of int: x = [1, 2, 3];
+    int: v = '[]<array [int] of int, int>'(x, 1);
+    var '..<int, int>'(1, 3): i;
+    var int: u = '[]<array [int] of var int, var int>'(x, i);
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_specialise_array_access_2() {
+		check(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+			enum Foo = {A, B, C};
+			array [Foo] of var 1..3: x;
+			any: v = x[A];
+			var Foo: i;
+			any: u = x[i];
+		"#,
+			expect!([r#"
+    enum Foo = { A } ++ { B } ++ { C };
+    array [Foo] of var '..<int, int>'(1, 3): x;
+    var int: v = '[]<array [Foo] of var int, Foo>'(x, A);
+    var Foo: i;
+    var int: u = '[]<array [Foo] of var int, var Foo>'(x, i);
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_specialise_array_access_3() {
+		check(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+			array [1..3] of tuple(int, int): x;
+			var 1..3: i;
+			any: v = x[i];
+		"#,
+			expect!([r#"
+    array ['..<int, int>'(1, 3)] of tuple(int, int): x;
+    var '..<int, int>'(1, 3): i;
+    tuple(var int, var int): v = let {
+      array [int] of tuple(int, int): _DECL_1 = x;
+      var int: _DECL_2 = i;
+    } in ('[]<array [int] of var int, var int>'(arrayXd(_DECL_1, [(_DECL_3).1 | _DECL_3 in _DECL_1]), _DECL_2), '[]<array [int] of var int, var int>'(arrayXd(_DECL_1, [(_DECL_4).2 | _DECL_4 in _DECL_1]), _DECL_2));
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_specialise_array_access_4() {
+		check(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+			array [1..3] of record(int: foo, int: bar): x;
+			var 1..3: i;
+			any: v = x[i];
+		"#,
+			expect!([r#"
+    array ['..<int, int>'(1, 3)] of record(int: foo, int: bar): x;
+    var '..<int, int>'(1, 3): i;
+    record(var int: foo, var int: bar): v = let {
+      array [int] of record(int: foo, int: bar): _DECL_1 = x;
+      var int: _DECL_2 = i;
+    } in (foo: '[]<array [int] of var int, var int>'(arrayXd(_DECL_1, [(_DECL_3).foo | _DECL_3 in _DECL_1]), _DECL_2), bar: '[]<array [int] of var int, var int>'(arrayXd(_DECL_1, [(_DECL_4).bar | _DECL_4 in _DECL_1]), _DECL_2));
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_specialise_dispatch() {
+		check(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+			function int: foo(var opt $$E: x) = 1;
+			function int: foo(var $$E: x) = 2;
+			function int: foo($$E: x) = 3;
+			function int: foo(opt $$E: x) = 4;
+			var opt int: x;
+			any: y = foo(x);
+		"#,
+			expect!([r#"
+    function int: 'foo<var opt int>'(var opt int: x) = 1;
+    function int: 'foo<opt int>'(opt int: x) = 4;
+    function int: 'foo<int>'(int: x) = 3;
+    function int: 'foo<var int>'(var int: x) = 2;
+    var opt int: x;
+    int: y = 'foo<var opt int>'(x);
 "#]),
 		)
 	}

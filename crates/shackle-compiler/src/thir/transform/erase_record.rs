@@ -131,8 +131,8 @@ mod test {
             "#,
 			expect!([r#"
     tuple(int, float): x = (1, 2.5);
-    int: y = x.1;
-    float: z = x.2;
+    int: y = (x).1;
+    float: z = (x).2;
     solve satisfy;
 "#]),
 		);
@@ -149,8 +149,8 @@ mod test {
             "#,
 			expect!([r#"
     tuple(int, float): x = (1, 2.5);
-    int: y = x.1;
-    float: z = x.2;
+    int: y = (x).1;
+    float: z = (x).2;
     solve satisfy;
 "#]),
 		);

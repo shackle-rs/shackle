@@ -58,7 +58,10 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 	}
 
 	fn add_function(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
-		if model[f].name() == self.ids.erase_enum && model[f].body().is_some() {
+		if model[f].name() == self.ids.erase_enum
+			|| model[f].name() == self.ids.mzn_to_enum
+			|| model[f].name() == self.ids.mzn_erase_index_sets
+		{
 			// Remove unnecessary functions
 			return;
 		}
@@ -66,7 +69,10 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 	}
 
 	fn fold_function_body(&mut self, db: &dyn Thir, model: &Model<Src>, f: FunctionId<Src>) {
-		if model[f].name() == self.ids.erase_enum && model[f].body().is_some() {
+		if model[f].name() == self.ids.erase_enum
+			|| model[f].name() == self.ids.mzn_to_enum
+			|| model[f].name() == self.ids.mzn_erase_index_sets
+		{
 			// Remove unnecessary functions
 			return;
 		}
@@ -169,20 +175,6 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 				.resolve(db, &self.model)
 				.0
 			}
-			Callable::Function(f)
-				if model[*f].name() == self.ids.to_enum && model[*f].body().is_none() =>
-			{
-				LookupCall {
-					function: self.ids.mzn_to_enum.into(),
-					arguments: call
-						.arguments
-						.iter()
-						.map(|arg| self.fold_expression(db, model, arg))
-						.collect(),
-				}
-				.resolve(db, &self.model)
-				.0
-			}
 			_ => fold_call(self, db, model, call),
 		}
 	}
@@ -196,8 +188,12 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for EnumEraser<Dst, Src> {
 		maybe_grow_stack(|| {
 			if let ExpressionData::Call(c) = &**expression {
 				if let Callable::Function(f) = &c.function {
-					if model[*f].name() == self.ids.erase_enum {
+					if model[*f].name() == self.ids.erase_enum
+						|| model[*f].name() == self.ids.mzn_erase_index_sets
+					{
 						return self.fold_expression(db, model, &c.arguments[0]);
+					} else if model[*f].name() == self.ids.mzn_to_enum {
+						return self.fold_expression(db, model, &c.arguments[1]);
 					}
 				}
 			}
@@ -508,7 +504,7 @@ mod test {
     } in _DECL_2)]);
     set of int: Foo = mzn_defining_set(_DECL_1);
     int: A = mzn_construct_enum(_DECL_1, 1);
-    Foo: x = mzn_to_enum(Foo, 1);
+    Foo: x = to_enum(Foo, 1);
     int: y = A;
 "#]),
 		);

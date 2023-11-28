@@ -54,7 +54,7 @@ function var opt $$E: arg_min_weak(array[$$E] of var opt $$V: x) :: promise_tota
 			set of int: idx = min(erase_enum(index_set(x))) .. max(erase_enum(index_set(x))) + 1;
 			any: xx = array1d(idx, erase_enum(x) ++ [erase_enum(ub_array(x))]);
 			var idx: i;
-			var opt index_set(x): ii = if i in erase_enum(index_set(x)) then to_enum(index_set(x), i) else <> endif;
+			var opt index_set(x): ii = if i in erase_enum(index_set(x)) then mzn_to_enum(index_set(x), i) else <> endif;
 			constraint fzn_minimum_arg_int_opt(xx, i);
 		} in ii
 	endif;
@@ -86,7 +86,7 @@ function var opt $$E: arg_min_weak(array[$$E] of var opt bool: x) :: promise_tot
 			set of int: idx = min(erase_enum(index_set(x))) .. max(erase_enum(index_set(x))) + 1;
 			any: xx = array1d(idx, x ++ [true]);
 			var idx: i;
-			var opt index_set(x): ii = if i in erase_enum(index_set(x)) then to_enum(index_set(x), i) else <> endif;
+			var opt index_set(x): ii = if i in erase_enum(index_set(x)) then mzn_to_enum(index_set(x), i) else <> endif;
 			constraint fzn_minimum_arg_bool_opt(xx, i);
 		} in ii
 	endif;
@@ -118,14 +118,14 @@ function var opt $$E: arg_min_weak(array[$$E] of var opt float: x) :: promise_to
 			set of int: idx = min(erase_enum(index_set(x))) .. max(erase_enum(index_set(x))) + 1;
 			any: xx = array1d(idx, x ++ [ub_array(x)]);
 			var idx: i;
-			var opt index_set(x): ii = if i in erase_enum(index_set(x)) then to_enum(index_set(x), i) else <> endif;
+			var opt index_set(x): ii = if i in erase_enum(index_set(x)) then mzn_to_enum(index_set(x), i) else <> endif;
 			constraint fzn_minimum_arg_float_opt(xx, i);
 		} in ii
 	endif;
 
 function var $$E: arg_min_total(array[$$E] of var $$V: x) :: promise_total = 
 	if length(x) = 0 then
-		to_enum(index_set(x), 0)
+		mzn_to_enum(index_set(x), 0)
 	else
 		let {
 			var min(index_set(x)) .. max(index_set(x)): i;
@@ -135,7 +135,7 @@ function var $$E: arg_min_total(array[$$E] of var $$V: x) :: promise_total =
 
 function var $$E: arg_min_total(array[$$E] of var bool: x) :: promise_total = 
 	if length(x) = 0 then
-		to_enum(index_set(x), 0)
+		mzn_to_enum(index_set(x), 0)
 	else
 		let {
 			var min(index_set(x)) .. max(index_set(x)): i;
@@ -145,7 +145,7 @@ function var $$E: arg_min_total(array[$$E] of var bool: x) :: promise_total =
 
 function var $$E: arg_min_total(array[$$E] of var float: x) :: promise_total = 
 	if length(x) = 0 then
-		to_enum(index_set(x), 0)
+		mzn_to_enum(index_set(x), 0)
 	else
 		let {
 			var min(index_set(x)) .. max(index_set(x)): i;
@@ -156,7 +156,7 @@ function var $$E: arg_min_total(array[$$E] of var float: x) :: promise_total =
 
 function var $$E: arg_min_total(array[$$E] of var opt $$V: x) :: promise_total = 
 	if length(x) = 0 then
-		to_enum(index_set(x), 0)
+		mzn_to_enum(index_set(x), 0)
 	elseif exists (xi in x) (is_fixed(occurs(xi)) /\ (fix(occurs(xi)))) then
 		let {
 			var index_set(x): i;
@@ -167,14 +167,14 @@ function var $$E: arg_min_total(array[$$E] of var opt $$V: x) :: promise_total =
 			set of int: idx = min(erase_enum(index_set(x))) .. max(erase_enum(index_set(x))) + 1;
 			any: xx = array1d(idx, erase_enum(x) ++ [erase_enum(ub_array(x))]);
 			var idx: i;
-			var index_set(x): ii = if i in erase_enum(index_set(x)) then to_enum(index_set(x), i) else min(index_set(x)) endif;
+			var index_set(x): ii = if i in erase_enum(index_set(x)) then mzn_to_enum(index_set(x), i) else min(index_set(x)) endif;
 			constraint fzn_minimum_arg_int_opt(xx, i);
 		} in ii
 	endif;
 
 function var $$E: arg_min_total(array[$$E] of var opt bool: x) :: promise_total = 
 	if length(x) = 0 then
-		to_enum(index_set(x), 0)
+		mzn_to_enum(index_set(x), 0)
 	elseif exists (xi in x) (is_fixed(occurs(xi)) /\ (fix(occurs(xi)))) then
 		let {
 			var index_set(x): i;
@@ -185,14 +185,14 @@ function var $$E: arg_min_total(array[$$E] of var opt bool: x) :: promise_total 
 			set of int: idx = min(erase_enum(index_set(x))) .. max(erase_enum(index_set(x))) + 1;
 			any: xx = array1d(idx, x ++ [true]);
 			var idx: i;
-			var index_set(x): ii = if i in erase_enum(index_set(x)) then to_enum(index_set(x), i) else min(index_set(x)) endif;
+			var index_set(x): ii = if i in erase_enum(index_set(x)) then mzn_to_enum(index_set(x), i) else min(index_set(x)) endif;
 			constraint fzn_minimum_arg_bool_opt(xx, i);
 		} in ii
 	endif;
 
 function var $$E: arg_min_total(array[$$E] of var opt float: x) :: promise_total = 
 	if length(x) = 0 then
-		to_enum(index_set(x), 0)
+		mzn_to_enum(index_set(x), 0)
 	elseif exists (xi in x) (is_fixed(occurs(xi)) /\ (fix(occurs(xi)))) then
 		let {
 			var index_set(x): i;
@@ -203,7 +203,7 @@ function var $$E: arg_min_total(array[$$E] of var opt float: x) :: promise_total
 			set of int: idx = min(erase_enum(index_set(x))) .. max(erase_enum(index_set(x))) + 1;
 			any: xx = array1d(idx, x ++ [ub_array(x)]);
 			var idx: i;
-			var index_set(x): ii = if i in erase_enum(index_set(x)) then to_enum(index_set(x), i) else min(index_set(x)) endif;
+			var index_set(x): ii = if i in erase_enum(index_set(x)) then mzn_to_enum(index_set(x), i) else min(index_set(x)) endif;
 			constraint fzn_minimum_arg_float_opt(xx, i);
 		} in ii
 	endif;

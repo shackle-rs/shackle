@@ -166,7 +166,7 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 		model: &Model<Src>,
 		expression: &Expression<Src>,
 	) -> Expression<Dst> {
-		maybe_grow_stack(|| {
+		let folded = maybe_grow_stack(|| {
 			if let ExpressionData::Call(c) = &**expression {
 				// Remove calls to mzn_construct_opt/mzn_destruct_opt
 				if let Callable::Function(f) = &c.function {
@@ -178,7 +178,20 @@ impl<Dst: Marker, Src: Marker> Folder<'_, Dst, Src> for OptEraser<Dst, Src> {
 				}
 			}
 			fold_expression(self, db, model, expression)
-		})
+		});
+		if expression.ty() == self.tys.par_opt_bool || expression.ty() == self.tys.var_opt_bool {
+			// Implement partial semantics for optional booleans
+			return Expression::new(
+				db,
+				&self.model,
+				expression.origin(),
+				LookupCall {
+					function: self.ids.mzn_opt_bool.into(),
+					arguments: vec![folded],
+				},
+			);
+		}
+		folded
 	}
 }
 
@@ -487,7 +500,7 @@ mod test {
       tuple(bool, int): _DECL_15 = (false, 0);
     } in _DECL_15];
     tuple(int, tuple(bool, int)): d;
-    tuple(tuple(bool, int), tuple(bool, int)): e = ((true, d.1), d.2);
+    tuple(tuple(bool, int), tuple(bool, int)): e = ((true, (d).1), (d).2);
     function tuple(bool, int): foo(tuple(bool, int): x) = let {
       tuple(bool, int): _DECL_22 = (true, 1);
     } in _DECL_22;
