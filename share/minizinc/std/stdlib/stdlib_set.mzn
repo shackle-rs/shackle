@@ -52,7 +52,8 @@ function     set of $T:  'symdiff'(    set of $T: x,      set of $T: y) ::mzn_in
 function var set of $$T: 'symdiff'(var set of $$T: x, var set of $$T: y) ::mzn_internal_representation;
 
 /** @group stdlib.builtins.set Return the set \(\{\a a,\ldots,\a b\}\) */
-function set of $$E: '..'($$E: a,$$E: b) ::mzn_internal_representation;
+function set of $$E: '..'($$E: a, $$E: b) = mzn_to_enum(enum_of(a), erase_enum(a)..erase_enum(b));
+function set of int: '..'(int: a, int: b) ::mzn_internal_representation;
 /** @group stdlib.builtins.set Return the set \(\{\a a,\ldots,\a b\}\) */
 function set of float: '..'(float: a,float: b) ::mzn_internal_representation;
 /** @group stdlib.builtins.set Return the set \(\{\a a,\ldots,\a b\}\) */

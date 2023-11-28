@@ -65,18 +65,15 @@ annotation is_defined_var;
 annotation var_is_introduced;
 /** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
   by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(var $t: c);
-/** @group stdlib.annotations.general Declare variable: \a c as being functionally defined
-  by the annotated constraint. This annotation is introduced into FlatZinc code by the compiler. */
-function ann: defines_var(var opt $t: c);
+function ann: defines_var(any $T: c) ::mzn_internal_representation;
 /** @group stdlib.annotations.general Declare an array of variables \a arr as being
   functionally defined by the annotated constraint. This annotation is introduced into FlatZinc
   code by the compiler. */
-function ann: defines_var(array[$u] of var opt $t: arr);
+function ann: defines_var(array[$X] of any $T: arr) ::mzn_internal_representation;
 /** @group stdlib.annotations.general Declare that the annotated array should be printed by
   the solver with the given index sets \a a. This annotation is introduced into FlatZinc code by
   the compiler. */
-annotation output_array(array[int] of set of int:a);
+function ann: output_array(array[int] of set of int:a) ::mzn_internal_representation;
 /** @group stdlib.annotations.general Declare that the annotated variable should be printed by
   the solver. This annotation is introduced into FlatZinc code by
   the compiler. */

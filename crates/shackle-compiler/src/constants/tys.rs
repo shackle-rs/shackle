@@ -36,6 +36,8 @@ type_registry!(
 	error: Ty::error(db),
 	par_bool: Ty::par_bool(db),
 	var_bool: par_bool.make_var(db).unwrap(),
+	par_opt_bool: par_bool.make_opt(db),
+	var_opt_bool: var_bool.make_opt(db),
 	par_int: Ty::par_int(db),
 	var_int: par_int.make_var(db).unwrap(),
 	par_float: Ty::par_float(db),

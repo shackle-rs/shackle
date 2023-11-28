@@ -1570,40 +1570,41 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			}
 		}
 		let collection_ident = alloc_expression(collection_decl, self, collection_entity);
-		let slice_array = alloc_expression(
-			ArrayLiteral(
+		let slice_tuple = alloc_expression(
+			TupleLiteral(
 				slices
 					.iter()
-					.map(|(decl, _, origin)| {
-						alloc_expression(
-							LookupCall {
-								function: self.parent.ids.erase_enum.into(),
-								arguments: vec![alloc_expression(*decl, self, *origin)],
-							},
-							self,
-							*origin,
-						)
-					})
+					.map(|(decl, _, origin)| alloc_expression(*decl, self, *origin))
 					.collect(),
 			),
 			self,
 			indices_entity,
 		);
-		let mut arguments = vec![collection_ident, slice_array];
-		arguments.extend(slices.iter().filter_map(|(decl, is_slice, origin)| {
-			if *is_slice {
-				Some(alloc_expression(*decl, self, *origin))
-			} else {
-				None
-			}
-		}));
+		let arguments = slices
+			.iter()
+			.filter_map(|(decl, is_slice, origin)| {
+				if *is_slice {
+					Some(alloc_expression(*decl, self, *origin))
+				} else {
+					None
+				}
+			})
+			.chain([alloc_expression(
+				LookupCall {
+					function: self.parent.ids.array_access.into(),
+					arguments: vec![collection_ident, slice_tuple],
+				},
+				self,
+				origin,
+			)])
+			.collect::<Vec<_>>();
 		alloc_expression(
 			Let {
 				items: decls.into_iter().map(LetItem::Declaration).collect(),
 				in_expression: Box::new(alloc_expression(
 					LookupCall {
 						function: Identifier::new(
-							format!("slice_{}d", arguments.len() - 2),
+							format!("array{}d", arguments.len() - 1),
 							self.parent.db.upcast(),
 						)
 						.into(),

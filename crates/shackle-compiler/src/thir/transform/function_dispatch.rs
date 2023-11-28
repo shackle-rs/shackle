@@ -555,14 +555,15 @@ fn dispatches_to(db: &dyn Thir, a: Ty, b: Ty) -> bool {
 pub fn function_dispatch(db: &dyn Thir, model: Model) -> Result<Model> {
 	log::info!("Generating function dispatch preambles");
 
-	let mut overloaded: FxHashMap<_, Vec<FunctionId>> = FxHashMap::default();
-	for (idx, function) in model.top_level_functions() {
-		if function.body().is_some() {
-			if let FunctionName::Named(ident) = function.name() {
-				overloaded.entry(ident).or_default().push(idx);
-			}
-		}
-	}
+	let ids = db.identifier_registry();
+	let mut overloaded = model.overload_map();
+	overloaded.filter(|function| {
+		!function
+			.annotations()
+			.has(&model, ids.mzn_inline_call_by_name)
+			&& function.body().is_some()
+	});
+
 	let mut dispatch_to: FxHashMap<_, Vec<_>> = FxHashMap::default();
 	for overloads in overloaded.values() {
 		if overloads.len() <= 1 {
@@ -604,7 +605,7 @@ pub fn function_dispatch(db: &dyn Thir, model: Model) -> Result<Model> {
 	let mut c = DispatchRewriter {
 		model: Model::with_capacities(&model.entity_counts()),
 		replacement_map: ReplacementMap::default(),
-		ids: db.identifier_registry(),
+		ids,
 		dispatch_to,
 		overloaded: FxHashMap::default(),
 	};
@@ -649,9 +650,9 @@ mod test {
             predicate foo(int: x) = true;
             "#,
 			expect!([r#"
-    function var bool: foo(var opt int: x) = if forall([is_fixed(mzn_destruct_opt(x).1), fix(mzn_destruct_opt(x).1)]) then foo(mzn_destruct_opt(x).2) elseif is_fixed(mzn_destruct_opt(x)) then foo(mzn_construct_opt(fix(mzn_destruct_opt(x)))) else true endif;
+    function var bool: foo(var opt int: x) = if forall([is_fixed((mzn_destruct_opt(x)).1), fix((mzn_destruct_opt(x)).1)]) then foo((mzn_destruct_opt(x)).2) elseif is_fixed(mzn_destruct_opt(x)) then foo(mzn_construct_opt(fix(mzn_destruct_opt(x)))) else true endif;
     function var bool: foo(var int: x) = if is_fixed(x) then foo(fix(x)) else true endif;
-    function var bool: foo(opt int: x) = if mzn_destruct_opt(x).1 then foo(mzn_destruct_opt(x).2) else true endif;
+    function var bool: foo(opt int: x) = if (mzn_destruct_opt(x)).1 then foo((mzn_destruct_opt(x)).2) else true endif;
     function var bool: foo(int: x) = true;
 "#]),
 		);
@@ -668,9 +669,9 @@ mod test {
             predicate bar(tuple(tuple(var int, int)): x) = true;
             "#,
 			expect!([r#"
-    function var bool: foo(tuple(tuple(var int)): x) = if is_fixed(x.1.1) then foo(((fix(x.1.1),),)) else true endif;
+    function var bool: foo(tuple(tuple(var int)): x) = if is_fixed(((x).1).1) then foo(((fix(((x).1).1),),)) else true endif;
     function var bool: foo(tuple(tuple(int)): x) = true;
-    function var bool: bar(tuple(tuple(var int, var int)): x) = if is_fixed(x.1.2) then bar(((x.1.1, fix(x.1.2)),)) else true endif;
+    function var bool: bar(tuple(tuple(var int, var int)): x) = if is_fixed(((x).1).2) then bar(((((x).1).1, fix(((x).1).2)),)) else true endif;
     function var bool: bar(tuple(tuple(var int, int)): x) = true;
 "#]),
 		);

@@ -63,7 +63,10 @@ function var opt $$E: enum_prev(set of $$E: e, var opt $$E: x) =
   if occurs(x) then enum_prev(e,deopt(x)) else <> endif;
 
 /** @group stdlib.builtins.enum Convert \a x to enum type \a X */
-function $$E: to_enum(set of $$E: X, int: x);
+function $$E: to_enum(set of $$E: X, int: x) = let {
+  constraint mzn_assert_warn(x in erase_enum(X), "The value \(x) is outside the enum range.");
+} in mzn_to_enum(X, x);
+
 /** @group stdlib.builtins.enum Convert \a x to enum type \a X */
 function opt $$E: to_enum(set of $$E: X, opt int: x) =
   if occurs(x) then to_enum(X, deopt(x)) else <> endif;
@@ -281,6 +284,7 @@ function array [int] of tuple(array [int] of int): mzn_cartesian_product(array [
 
 function array [int] of tuple(array [int] of int): mzn_cartesian_product(array [int] of set of int: x) = mzn_cartesian_product(x, 1);
 
-function int: mzn_to_enum(set of int: X, int: x) = let {
-  constraint mzn_assert_warn(x in X, "The value \(x) is outside the enum range.");
-} in x;
+function $$E: mzn_to_enum(set of $$E: X, int: x);
+function var $$E: mzn_to_enum(set of $$E: X, var int: x);
+function set of $$E: mzn_to_enum(set of $$E: X, set of int: x);
+function var set of $$E: mzn_to_enum(set of $$E: X, var set of int: x);

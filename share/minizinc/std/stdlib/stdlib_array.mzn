@@ -30,65 +30,60 @@ function array[$$E] of any $T: reverse(array[$$E] of any $T: x) =
 test index_sets_agree(array[$T] of any $U: x, array[$T] of any $W: y);
 
 /** @group stdlib.builtins.array Return index set of one-dimensional array \a x */
-function set of $$E: index_set(array[$$E] of any $U: x);
+function set of $$E: index_set(array[$$E] of any $U: x) = index_sets(x).1;
 /** @group stdlib.builtins.array Return index set of first dimension of two-dimensional array \a x */
-function set of $$E: index_set_1of2(array[$$E,_] of any $U: x);
+function set of $$E: index_set_1of2(array[$$E,_] of any $U: x) = index_sets(x).1;
 /** @group stdlib.builtins.array Return index set of second dimension of two-dimensional array \a x */
-function set of $$E: index_set_2of2(array[_,$$E] of any $U: x);
+function set of $$E: index_set_2of2(array[_,$$E] of any $U: x) = index_sets(x).2;
 /** @group stdlib.builtins.array Return index set of first dimension of 3-dimensional array \a x */
-function set of $$E: index_set_1of3(array[$$E,_,_] of any $U: x);
+function set of $$E: index_set_1of3(array[$$E,_,_] of any $U: x) = index_sets(x).1;
 /** @group stdlib.builtins.array Return index set of second dimension of 3-dimensional array \a x */
-function set of $$E: index_set_2of3(array[_,$$E,_] of any $U: x);
+function set of $$E: index_set_2of3(array[_,$$E,_] of any $U: x) = index_sets(x).2;
 /** @group stdlib.builtins.array Return index set of third dimension of 3-dimensional array \a x */
-function set of $$E: index_set_3of3(array[_,_,$$E] of any $U: x);
+function set of $$E: index_set_3of3(array[_,_,$$E] of any $U: x) = index_sets(x).3;
 /** @group stdlib.builtins.array Return index set of first dimension of 4-dimensional array \a x */
-function set of $$E: index_set_1of4(array[$$E,_,_,_] of any $U: x);
+function set of $$E: index_set_1of4(array[$$E,_,_,_] of any $U: x) = index_sets(x).1;
 /** @group stdlib.builtins.array Return index set of second dimension of 4-dimensional array \a x */
-function set of $$E: index_set_2of4(array[_,$$E,_,_] of any $U: x);
+function set of $$E: index_set_2of4(array[_,$$E,_,_] of any $U: x) = index_sets(x).2;
 /** @group stdlib.builtins.array Return index set of third dimension of 4-dimensional array \a x */
-function set of $$E: index_set_3of4(array[_,_,$$E,_] of any $U: x);
+function set of $$E: index_set_3of4(array[_,_,$$E,_] of any $U: x) = index_sets(x).3;
 /** @group stdlib.builtins.array Return index set of fourth dimension of 4-dimensional array \a x */
-function set of $$E: index_set_4of4(array[_,_,_,$$E] of any $U: x);
+function set of $$E: index_set_4of4(array[_,_,_,$$E] of any $U: x) = index_sets(x).4;
 /** @group stdlib.builtins.array Return index set of first dimension of 5-dimensional array \a x */
-function set of $$E: index_set_1of5(array[$$E,_,_,_,_] of any $U: x);
+function set of $$E: index_set_1of5(array[$$E,_,_,_,_] of any $U: x) = index_sets(x).1;
 /** @group stdlib.builtins.array Return index set of second dimension of 5-dimensional array \a x */
-function set of $$E: index_set_2of5(array[_,$$E,_,_,_] of any $U: x);
+function set of $$E: index_set_2of5(array[_,$$E,_,_,_] of any $U: x) = index_sets(x).2;
 /** @group stdlib.builtins.array Return index set of third dimension of 5-dimensional array \a x */
-function set of $$E: index_set_3of5(array[_,_,$$E,_,_] of any $U: x);
+function set of $$E: index_set_3of5(array[_,_,$$E,_,_] of any $U: x) = index_sets(x).3;
 /** @group stdlib.builtins.array Return index set of fourth dimension of 5-dimensional array \a x */
-function set of $$E: index_set_4of5(array[_,_,_,$$E,_] of any $U: x);
+function set of $$E: index_set_4of5(array[_,_,_,$$E,_] of any $U: x) = index_sets(x).4;
 /** @group stdlib.builtins.array Return index set of fifth dimension of 5-dimensional array \a x */
-function set of $$E: index_set_5of5(array[_,_,_,_,$$E] of any $U: x);
+function set of $$E: index_set_5of5(array[_,_,_,_,$$E] of any $U: x) = index_sets(x).5;
 /** @group stdlib.builtins.array Return index set of first dimension of 6-dimensional array \a x */
-function set of $$E: index_set_1of6(array[$$E,_,_,_,_,_] of any $U: x);
+function set of $$E: index_set_1of6(array[$$E,_,_,_,_,_] of any $U: x) = index_sets(x).1;
 /** @group stdlib.builtins.array Return index set of second dimension of 6-dimensional array \a x */
-function set of $$E: index_set_2of6(array[_,$$E,_,_,_,_] of any $U: x);
+function set of $$E: index_set_2of6(array[_,$$E,_,_,_,_] of any $U: x) = index_sets(x).2;
 /** @group stdlib.builtins.array Return index set of third dimension of 6-dimensional array \a x */
-function set of $$E: index_set_3of6(array[_,_,$$E,_,_,_] of any $U: x);
+function set of $$E: index_set_3of6(array[_,_,$$E,_,_,_] of any $U: x) = index_sets(x).3;
 /** @group stdlib.builtins.array Return index set of fourth dimension of 6-dimensional array \a x */
-function set of $$E: index_set_4of6(array[_,_,_,$$E,_,_] of any $U: x);
+function set of $$E: index_set_4of6(array[_,_,_,$$E,_,_] of any $U: x) = index_sets(x).4;
 /** @group stdlib.builtins.array Return index set of fifth dimension of 6-dimensional array \a x */
-function set of $$E: index_set_5of6(array[_,_,_,_,$$E,_] of any $U: x);
+function set of $$E: index_set_5of6(array[_,_,_,_,$$E,_] of any $U: x) = index_sets(x).5;
 /** @group stdlib.builtins.array Return index set of sixth dimension of 6-dimensional array \a x */
-function set of $$E: index_set_6of6(array[_,_,_,_,_,$$E] of any $U: x);
+function set of $$E: index_set_6of6(array[_,_,_,_,_,$$E] of any $U: x) = index_sets(x).6;
 
 /** @group stdlib.builtins.array Return index sets of the array \a x */
-function tuple(set of $$E): index_sets(array[$$E] of any $U: x) = (index_set(x),);
+function tuple(set of $$E): index_sets(array[$$E] of any $U: x);
 /** @group stdlib.builtins.array Return index sets of the array \a x */
-function tuple(set of $$E, set of $$F): index_sets(array[$$E, $$F] of any $U: x) =
-  (index_set_1of2(x), index_set_2of2(x));
+function tuple(set of $$E, set of $$F): index_sets(array[$$E, $$F] of any $U: x);
 /** @group stdlib.builtins.array Return index sets of the array \a x */
-function tuple(set of $$E, set of $$F, set of $$G): index_sets(array[$$E, $$F, $$G] of any $U: x) =
-  (index_set_1of3(x), index_set_2of3(x), index_set_3of3(x));
+function tuple(set of $$E, set of $$F, set of $$G): index_sets(array[$$E, $$F, $$G] of any $U: x);
 /** @group stdlib.builtins.array Return index sets of the array \a x */
-function tuple(set of $$E, set of $$F, set of $$G, set of $$H): index_sets(array[$$E, $$F, $$G, $$H] of any $U: x) =
-  (index_set_1of4(x), index_set_2of4(x), index_set_3of4(x), index_set_4of4(x));
+function tuple(set of $$E, set of $$F, set of $$G, set of $$H): index_sets(array[$$E, $$F, $$G, $$H] of any $U: x);
 /** @group stdlib.builtins.array Return index sets of the array \a x */
-function tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): index_sets(array[$$E, $$F, $$G, $$H, $$I] of any $U: x) =
-  (index_set_1of5(x), index_set_2of5(x), index_set_3of5(x), index_set_4of5(x), index_set_5of5(x));
+function tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): index_sets(array[$$E, $$F, $$G, $$H, $$I] of any $U: x);
 /** @group stdlib.builtins.array Return index sets of the array \a x */
-function tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): index_sets(array[$$E, $$F, $$G, $$H, $$I, $$J] of any $U: x) =
-  (index_set_1of6(x), index_set_2of6(x), index_set_3of6(x), index_set_4of6(x), index_set_5of6(x), index_set_6of6(x));
+function tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): index_sets(array[$$E, $$F, $$G, $$H, $$I, $$J] of any $U: x);
 
 /** @group stdlib.builtins.array Return array \a x coerced to index set 1..length(\a x).
   Coercions are performed by considering the array \a x in row-major order. */
@@ -186,23 +181,6 @@ function array[$$E] of any $T: row(array[int, $$E] of any $T: x, int: r) = x[r,.
 /** @group stdlib.builtins.array Return column \a c of array \a x */
 function array[$$E] of any $T: col(array[$$E,int] of any $T: x, int: c) = x[..,c];
 
-/** @group stdlib.builtins.array Return slice of array \a x specified by sets \a s, coerced to new 1d array with index set \a dims1 */
-function array[$$F] of any $T: slice_1d(array[$E] of any $T: x, array[int] of set of int: s, set of $$F: dims1);
-/** @group stdlib.builtins.array Return slice of array \a x specified by sets \a s, coerced to new 2d array with index sets \a dims1 and \a dims2 */
-function array[$$F,$$G] of any $T: slice_2d(array[$E] of any $T: x, array[int] of set of int: s, set of $$F: dims1, set of $$G: dims2);
-/** @group stdlib.builtins.array Return slice of array \a x specified by sets \a s, coerced to new 3d array with index sets \a dims1, \a dims2 and \a dims3 */
-function array[$$F,$$G,$$H] of any $T: slice_3d(array[$E] of any $T: x, array[int] of set of int: s,
-                                                set of $$F: dims1, set of $$G: dims2, set of $$H: dims3);
-/** @group stdlib.builtins.array Return slice of array \a x specified by sets \a s, coerced to new 4d array with index sets \a dims1, \a dims2, \a dims3, \a dims4 */
-function array[$$F,$$G,$$H,$$I] of any $T: slice_4d(array[$E] of any $T: x, array[int] of set of int: s,
-  set of $$F: dims1, set of $$G: dims2, set of $$H: dims3, set of $$I: dims4);
-/** @group stdlib.builtins.array Return slice of array \a x specified by sets \a s, coerced to new 5d array with index sets \a dims1, \a dims2, \a dims3, \a dims4, \a dims5 */
-function array[$$F,$$G,$$H,$$I,$$J] of any $T: slice_5d(array[$E] of any $T: x, array[int] of set of int: s,
-  set of $$F: dims1, set of $$G: dims2, set of $$H: dims3, set of $$I: dims4, set of $$J: dims5);
-/** @group stdlib.builtins.array Return slice of array \a x specified by sets \a s, coerced to new 6d array with index sets \a dims1, \a dims2, \a dims3, \a dims4, \a dims5, \a dims6 */
-function array[$$F,$$G,$$H,$$I,$$J,$$K] of any $T: slice_6d(array[$E] of any $T: x, array[int] of set of int: s,
-  set of $$F: dims1, set of $$G: dims2, set of $$H: dims3, set of $$I: dims4, set of $$J: dims5, set of $$K: dims6);
-
 /** @group stdlib.builtins.array Test if \a i is in the index set of \a x */
 test has_index($$E: i, array[$$E] of any $T: x) = i in index_set(x);
 /** @group stdlib.builtins.array Test if \a e is an element of array \a x */
@@ -214,7 +192,7 @@ predicate has_element($T: e, array[$X] of any $T: x) = exists (x_i in x) (x_i = 
 
 /** @group stdlib.builtins.array Return the set containing the elements of \a x */
 function var set of $$T: array2set(array[int] of var $$T: x) ::promise_total =
-  to_enum(enum_of(x), array2set(erase_enum(x)));
+  mzn_to_enum(enum_of(x), array2set(erase_enum(x)));
 function var set of int: array2set(array[int] of var int: x) ::promise_total =
   if length(x) = 0 then {}
   else let {
@@ -226,7 +204,7 @@ function var set of int: array2set(array[int] of var int: x) ::promise_total =
   endif;
 
 function var set of $$T: array2set(array[int] of var opt $$T: x) ::promise_total =
-  to_enum(enum_of(x), array2set(erase_enum(x)));
+  mzn_to_enum(enum_of(x), array2set(erase_enum(x)));
 function var set of int: array2set(array[int] of var opt int: x) ::promise_total =
   if length(x) = 0 then {}
   else let {
@@ -284,7 +262,8 @@ function bool: 'in'(set of $X: x, array[$T] of set of $X: y) =
 function var bool: 'in'(var set of $$X: x, array[$T] of var set of $$X: y) =
   exists (z in array1d(y)) (z=x);
 
-function array [$$E] of any $V: mzn_array_kd(tuple(set of $$E): i, array [$U] of any $V: x) = array1d(i.1, x);
+function array [$$E] of any $V: mzn_array_kd(set of $$E: i, array [$U] of any $V: x) = array1d(i, x);
+function array [$$E] of any $V: mzn_array_kd(tuple(set of $$E): i, array [$U] of any $V: x) = mzn_array_kd(i.1, x);
 function array [$$E, $$F] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F): i, array [$U] of any $V: x) = array2d(i.1, i.2, x);
 function array [$$E, $$F, $$G] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F, set of $$G): i, array [$U] of any $V: x) = array3d(i.1, i.2, i.3, x);
 function array [$$E, $$F, $$G, $$H] of any $V: mzn_array_kd(tuple(set of $$E, set of $$F, set of $$G, set of $$H): i, array [$U] of any $V: x) = array4d(i.1, i.2, i.3, i.4, x);

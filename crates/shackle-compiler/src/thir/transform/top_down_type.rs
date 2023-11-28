@@ -239,6 +239,7 @@ impl<'a, Src: Marker, Dst: Marker> TopDownTyper<'a, Dst, Src> {
 			ExpressionData::TupleLiteral(tl) => {
 				self.extend(tl.iter().zip(ty.fields(db.upcast()).unwrap()))
 			}
+			ExpressionData::Let(l) => self.insert(&l.in_expression, ty),
 			ExpressionData::Call(c) => {
 				let params = match &c.function {
 					Callable::Annotation(a) => model[*a]
@@ -382,6 +383,9 @@ mod test {
                     any: x = ([1, <>],);
                     function int: foo(opt int);
                     any: y = foo(3);
+					opt int: z = let {
+						any: b = 1;
+					} in (<>, 1).1;
 					"#,
 			expect!([r#"
     tuple(array [int] of opt int): x = ([let {
@@ -393,6 +397,13 @@ mod test {
     int: y = foo(let {
       opt int: _DECL_5 = 3;
     } in _DECL_5);
+    opt int: z = let {
+      int: b = 1;
+    } in let {
+      opt int: _DECL_9 = ((let {
+      opt ..: _DECL_8 = <>;
+    } in _DECL_8, 1)).1;
+    } in _DECL_9;
     solve satisfy;
 "#]),
 		)
