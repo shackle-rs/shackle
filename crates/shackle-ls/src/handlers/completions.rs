@@ -245,9 +245,9 @@ any: y = he
     {
       "Ok": [
         {
-          "label": "Foo",
-          "kind": 13,
-          "detail": "set of Foo"
+          "label": "A",
+          "kind": 20,
+          "detail": "Foo"
         },
         {
           "label": "B",
@@ -255,19 +255,19 @@ any: y = he
           "detail": "Foo"
         },
         {
-          "label": "y",
-          "kind": 6,
-          "detail": "error"
-        },
-        {
-          "label": "A",
-          "kind": 20,
-          "detail": "Foo"
+          "label": "Foo",
+          "kind": 13,
+          "detail": "set of Foo"
         },
         {
           "label": "hello",
           "kind": 6,
           "detail": "Foo"
+        },
+        {
+          "label": "y",
+          "kind": 6,
+          "detail": "error"
         }
       ]
     }"#]),

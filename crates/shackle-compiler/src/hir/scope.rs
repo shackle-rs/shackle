@@ -849,7 +849,9 @@ impl ScopeResult {
 								.collect()
 						});
 					}
-					return combined.into_iter().collect();
+					let mut result = combined.into_iter().collect::<Vec<_>>();
+					result.sort_by_cached_key(|(i, _)| i.lookup(db));
+					return result;
 				}
 			}
 		}
@@ -882,7 +884,9 @@ impl ScopeResult {
 							combined.entry(*k).or_insert(*v);
 						}
 					}
-					return combined.into_iter().collect();
+					let mut result = combined.into_iter().collect::<Vec<_>>();
+					result.sort_by_cached_key(|(i, _)| i.lookup(db));
+					return result;
 				}
 			}
 		}
