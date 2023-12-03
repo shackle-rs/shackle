@@ -702,14 +702,9 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				if is_slice {
 					self.collect_slice(aa.collection, aa.indices, origin)
 				} else {
-					alloc_expression(
-						ArrayAccess {
-							collection: Box::new(self.collect_expression(aa.collection)),
-							indices: Box::new(self.collect_expression(aa.indices)),
-						},
-						self,
-						origin,
-					)
+					let c = self.collect_expression(aa.collection);
+					let i = self.collect_expression(aa.indices);
+					self.collect_array_access(c, i, origin)
 				}
 			}
 			hir::Expression::ArrayComprehension(c) => {
@@ -1398,7 +1393,9 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		LoweredAnnotation::Expression(self.collect_expression(ann))
 	}
 
-	/// Rewrite index slicing into `slice_Xd()` call
+	/// Rewrite index slicing into a call
+	///
+	/// Turns all indices into sets to match the slicing builtin function, and then coerces to the correct output index set.
 	fn collect_slice(
 		&mut self,
 		collection: ArenaIndex<hir::Expression>,
@@ -1617,6 +1614,152 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			self,
 			origin,
 		)
+	}
+
+	fn collect_array_access(
+		&mut self,
+		collection: Expression,
+		indices: Expression,
+		origin: impl Into<Origin>,
+	) -> Expression {
+		maybe_grow_stack(|| {
+			let origin = origin.into();
+			if indices.ty().contains_var(self.parent.db.upcast()) {
+				let elem = collection.ty().elem_ty(self.parent.db.upcast()).unwrap();
+				if elem.is_tuple(self.parent.db.upcast()) || elem.is_record(self.parent.db.upcast())
+				{
+					// Decompose access to array of structured types
+					let c_origin = collection.origin();
+					let c_idx = self.introduce_declaration(false, c_origin, |_| collection);
+					let c_ident = alloc_expression(c_idx, self, c_origin);
+					let i_origin = indices.origin();
+					let i_idx = self.introduce_declaration(false, c_origin, |_| indices);
+					let i_ident = alloc_expression(i_idx, self, i_origin);
+
+					if let Some(fields) = elem.record_fields(self.parent.db.upcast()) {
+						let mut decomposed = Vec::with_capacity(fields.len());
+						for (k, _) in fields {
+							let field = Identifier::from(k);
+							let decl = Declaration::new(
+								false,
+								Domain::unbounded(self.parent.db, c_origin, elem),
+							);
+							let decl_idx =
+								self.parent.model.add_declaration(Item::new(decl, c_origin));
+							let generators = vec![Generator::Iterator {
+								declarations: vec![decl_idx],
+								collection: c_ident.clone(),
+								where_clause: None,
+							}];
+							let comprehension = alloc_expression(
+								ArrayComprehension {
+									generators,
+									indices: None,
+									template: Box::new(alloc_expression(
+										RecordAccess {
+											record: Box::new(alloc_expression(
+												decl_idx, self, c_origin,
+											)),
+											field,
+										},
+										self,
+										origin,
+									)),
+								},
+								self,
+								origin,
+							);
+							let array = alloc_expression(
+								LookupCall {
+									function: self.parent.ids.array_xd.into(),
+									arguments: vec![c_ident.clone(), comprehension],
+								},
+								self,
+								origin,
+							);
+							decomposed.push((
+								field,
+								self.collect_array_access(array, i_ident.clone(), origin),
+							));
+						}
+						return alloc_expression(
+							Let {
+								items: vec![
+									LetItem::Declaration(c_idx),
+									LetItem::Declaration(i_idx),
+								],
+								in_expression: Box::new(alloc_expression(
+									RecordLiteral(decomposed),
+									self,
+									origin,
+								)),
+							},
+							self,
+							origin,
+						);
+					}
+					let fields = elem.field_len(self.parent.db.upcast()).unwrap();
+					let mut decomposed = Vec::with_capacity(fields);
+					for i in 1..=(fields as i64) {
+						let decl = Declaration::new(
+							false,
+							Domain::unbounded(self.parent.db, c_origin, elem),
+						);
+						let decl_idx = self.parent.model.add_declaration(Item::new(decl, c_origin));
+						let generators = vec![Generator::Iterator {
+							declarations: vec![decl_idx],
+							collection: c_ident.clone(),
+							where_clause: None,
+						}];
+						let comprehension = alloc_expression(
+							ArrayComprehension {
+								generators,
+								indices: None,
+								template: Box::new(alloc_expression(
+									TupleAccess {
+										tuple: Box::new(alloc_expression(decl_idx, self, c_origin)),
+										field: IntegerLiteral(i),
+									},
+									self,
+									origin,
+								)),
+							},
+							self,
+							origin,
+						);
+						let array = alloc_expression(
+							LookupCall {
+								function: self.parent.ids.array_xd.into(),
+								arguments: vec![c_ident.clone(), comprehension],
+							},
+							self,
+							origin,
+						);
+						decomposed.push(self.collect_array_access(array, i_ident.clone(), origin));
+					}
+					return alloc_expression(
+						Let {
+							items: vec![LetItem::Declaration(c_idx), LetItem::Declaration(i_idx)],
+							in_expression: Box::new(alloc_expression(
+								TupleLiteral(decomposed),
+								self,
+								origin,
+							)),
+						},
+						self,
+						origin,
+					);
+				}
+			}
+			alloc_expression(
+				LookupCall {
+					function: self.parent.ids.array_access.into(),
+					arguments: vec![collection, indices],
+				},
+				self,
+				origin,
+			)
+		})
 	}
 
 	fn collect_generator(&mut self, generator: &hir::Generator, generators: &mut Vec<Generator>) {

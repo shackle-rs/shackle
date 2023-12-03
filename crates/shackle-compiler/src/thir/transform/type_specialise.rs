@@ -17,14 +17,12 @@ use crate::{
 		pretty_print::PrettyPrinter,
 		source::Origin,
 		traverse::{
-			add_function, fold_call, fold_declaration_id, fold_domain, fold_expression, Folder,
-			ReplacementMap,
+			add_function, fold_call, fold_declaration_id, fold_domain, Folder, ReplacementMap,
 		},
 		ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Declaration, DeclarationId,
-		Domain, DomainData, Expression, ExpressionBuilder, ExpressionData, Function, FunctionId,
-		FunctionName, Generator, Identifier, IfThenElse, IntegerLiteral, Item, ItemId, Let,
-		LetItem, LookupCall, Marker, Model, OptType, OverloadMap, RecordAccess, RecordLiteral,
-		StringLiteral, TupleAccess, TupleLiteral,
+		Domain, DomainData, Expression, ExpressionBuilder, Function, FunctionId, FunctionName,
+		Generator, Identifier, IfThenElse, IntegerLiteral, Item, ItemId, Marker, Model, OptType,
+		OverloadMap, RecordAccess, StringLiteral, TupleAccess,
 	},
 	ty::{FunctionType, PolymorphicFunctionType, Ty, TyData, TyParamInstantiations},
 	utils::{maybe_grow_stack, DebugPrint},
@@ -165,28 +163,6 @@ impl<'a, Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<'a, Dst> {
 			};
 		}
 		fold_call(self, db, model, call)
-	}
-
-	fn fold_expression(
-		&mut self,
-		db: &dyn Thir,
-		model: &Model,
-		expression: &Expression,
-	) -> Expression<Dst> {
-		maybe_grow_stack(|| {
-			if let ExpressionData::ArrayAccess(aa) = &**expression {
-				let collection = self.fold_expression(db, model, &aa.collection);
-				let indices = self.fold_expression(db, model, &aa.indices);
-				return self.specialise_array_access(
-					db,
-					model,
-					expression.origin(),
-					collection,
-					indices,
-				);
-			}
-			fold_expression(self, db, model, expression)
-		})
 	}
 
 	fn fold_domain(&mut self, db: &dyn Thir, model: &Model, domain: &Domain) -> Domain<Dst> {
@@ -612,193 +588,6 @@ impl<'a, Dst: Marker> TypeSpecialiser<'a, Dst> {
 			}
 			_ => unreachable!(),
 		}
-	}
-
-	fn specialise_array_access(
-		&mut self,
-		db: &dyn Thir,
-		model: &Model,
-		origin: Origin,
-		collection: Expression<Dst>,
-		indices: Expression<Dst>,
-	) -> Expression<Dst> {
-		maybe_grow_stack(|| {
-			if indices.ty().contains_var(db.upcast()) {
-				// Accessing arrays of structured types requires decomposition
-				let elem = collection.ty().elem_ty(db.upcast()).unwrap();
-				if let Some(fields) = elem.record_fields(db.upcast()) {
-					let c_origin = collection.origin();
-					let c_decl = Declaration::from_expression(db, false, collection);
-					let c_idx = self
-						.specialised_model
-						.add_declaration(Item::new(c_decl, c_origin));
-					let c_ident = Expression::new(db, &self.specialised_model, c_origin, c_idx);
-					let i_origin = indices.origin();
-					let i_decl = Declaration::from_expression(db, false, indices);
-					let i_idx = self
-						.specialised_model
-						.add_declaration(Item::new(i_decl, i_origin));
-					let i_ident = Expression::new(db, &self.specialised_model, i_origin, i_idx);
-					let mut decomposed = Vec::with_capacity(fields.len());
-					for (k, _) in fields {
-						let field = Identifier::from(k);
-						let decl = Declaration::new(false, Domain::unbounded(db, c_origin, elem));
-						let decl_idx = self
-							.specialised_model
-							.add_declaration(Item::new(decl, c_origin));
-						let generators = vec![Generator::Iterator {
-							declarations: vec![decl_idx],
-							collection: c_ident.clone(),
-							where_clause: None,
-						}];
-						let template = Expression::new(
-							db,
-							&self.specialised_model,
-							origin,
-							RecordAccess {
-								record: Box::new(Expression::new(
-									db,
-									&self.specialised_model,
-									c_origin,
-									decl_idx,
-								)),
-								field,
-							},
-						);
-						let comprehension = Expression::new(
-							db,
-							&self.specialised_model,
-							origin,
-							ArrayComprehension {
-								generators,
-								indices: None,
-								template: Box::new(template),
-							},
-						);
-						let array = Expression::new(
-							db,
-							&self.specialised_model,
-							origin,
-							LookupCall {
-								function: self.ids.array_xd.into(),
-								arguments: vec![c_ident.clone(), comprehension],
-							},
-						);
-						decomposed.push((
-							field,
-							self.specialise_array_access(db, model, origin, array, i_ident.clone()),
-						));
-					}
-					return Expression::new(
-						db,
-						&self.specialised_model,
-						origin,
-						Let {
-							items: vec![LetItem::Declaration(c_idx), LetItem::Declaration(i_idx)],
-							in_expression: Box::new(Expression::new(
-								db,
-								&self.specialised_model,
-								origin,
-								RecordLiteral(decomposed),
-							)),
-						},
-					);
-				}
-				if let Some(fields) = elem.fields(db.upcast()) {
-					let c_origin = collection.origin();
-					let c_decl = Declaration::from_expression(db, false, collection);
-					let c_idx = self
-						.specialised_model
-						.add_declaration(Item::new(c_decl, c_origin));
-					let c_ident = Expression::new(db, &self.specialised_model, c_origin, c_idx);
-					let i_origin = indices.origin();
-					let i_decl = Declaration::from_expression(db, false, indices);
-					let i_idx = self
-						.specialised_model
-						.add_declaration(Item::new(i_decl, i_origin));
-					let i_ident = Expression::new(db, &self.specialised_model, i_origin, i_idx);
-					let mut decomposed = Vec::with_capacity(fields.len());
-					for (i, _) in fields.iter().enumerate() {
-						let field = IntegerLiteral(i as i64 + 1);
-						let decl = Declaration::new(false, Domain::unbounded(db, c_origin, elem));
-						let decl_idx = self
-							.specialised_model
-							.add_declaration(Item::new(decl, c_origin));
-						let generators = vec![Generator::Iterator {
-							declarations: vec![decl_idx],
-							collection: c_ident.clone(),
-							where_clause: None,
-						}];
-						let template = Expression::new(
-							db,
-							&self.specialised_model,
-							origin,
-							TupleAccess {
-								tuple: Box::new(Expression::new(
-									db,
-									&self.specialised_model,
-									c_origin,
-									decl_idx,
-								)),
-								field,
-							},
-						);
-						let comprehension = Expression::new(
-							db,
-							&self.specialised_model,
-							origin,
-							ArrayComprehension {
-								generators,
-								indices: None,
-								template: Box::new(template),
-							},
-						);
-						let array = Expression::new(
-							db,
-							&self.specialised_model,
-							origin,
-							LookupCall {
-								function: self.ids.array_xd.into(),
-								arguments: vec![c_ident.clone(), comprehension],
-							},
-						);
-						decomposed.push(self.specialise_array_access(
-							db,
-							model,
-							origin,
-							array,
-							i_ident.clone(),
-						));
-					}
-					return Expression::new(
-						db,
-						&self.specialised_model,
-						origin,
-						Let {
-							items: vec![LetItem::Declaration(c_idx), LetItem::Declaration(i_idx)],
-							in_expression: Box::new(Expression::new(
-								db,
-								&self.specialised_model,
-								origin,
-								TupleLiteral(decomposed),
-							)),
-						},
-					);
-				}
-			}
-
-			let tys = &[collection.ty(), indices.ty()];
-			let call = Call {
-				function: Callable::Function(self.instantiate(
-					db,
-					model,
-					self.ids.array_access.into(),
-					tys,
-				)),
-				arguments: vec![collection, indices],
-			};
-			Expression::new(db, &self.specialised_model, origin, call)
-		})
 	}
 }
 

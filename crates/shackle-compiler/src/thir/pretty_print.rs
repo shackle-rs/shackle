@@ -440,18 +440,6 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	fn pretty_print_expression_inner(&self, expression: &Expression<T>) -> String {
 		let mut out = match &**expression {
 			ExpressionData::Absent => "<>".to_owned(),
-			ExpressionData::ArrayAccess(aa) => format!(
-				"({})[{}]",
-				self.pretty_print_expression(&aa.collection),
-				match &**aa.indices {
-					ExpressionData::TupleLiteral(es) => es
-						.iter()
-						.map(|e| self.pretty_print_expression(e))
-						.collect::<Vec<_>>()
-						.join(", "),
-					_ => self.pretty_print_expression(&aa.indices),
-				}
-			),
 			ExpressionData::ArrayComprehension(c) => {
 				let mut buf = String::new();
 				write!(&mut buf, "[").unwrap();
