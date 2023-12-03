@@ -142,8 +142,6 @@ pub enum ExpressionData<T: Marker = ()> {
 	ArrayComprehension(ArrayComprehension<T>),
 	/// Set comprehension
 	SetComprehension(SetComprehension<T>),
-	/// Array access
-	ArrayAccess(ArrayAccess<T>),
 	/// Tuple access
 	TupleAccess(TupleAccess<T>),
 	/// Record access
@@ -171,7 +169,6 @@ impl_enum_from!(ExpressionData<T: Marker>::TupleLiteral(TupleLiteral<T>));
 impl_enum_from!(ExpressionData<T: Marker>::RecordLiteral(RecordLiteral<T>));
 impl_enum_from!(ExpressionData<T: Marker>::ArrayComprehension(ArrayComprehension<T>));
 impl_enum_from!(ExpressionData<T: Marker>::SetComprehension(SetComprehension<T>));
-impl_enum_from!(ExpressionData<T: Marker>::ArrayAccess(ArrayAccess<T>));
 impl_enum_from!(ExpressionData<T: Marker>::TupleAccess(TupleAccess<T>));
 impl_enum_from!(ExpressionData<T: Marker>::RecordAccess(RecordAccess<T>));
 impl_enum_from!(ExpressionData<T: Marker>::IfThenElse(IfThenElse<T>));
@@ -496,49 +493,6 @@ impl<T: Marker> ExpressionBuilder<T> for SetComprehension<T> {
 				st
 			}
 		};
-		Expression::new_unchecked(ty, self, origin)
-	}
-}
-
-/// Array access
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ArrayAccess<T: Marker = ()> {
-	/// The array being indexed into
-	pub collection: Box<Expression<T>>,
-	/// The indices
-	pub indices: Box<Expression<T>>,
-}
-
-impl<T: Marker> ExpressionBuilder<T> for ArrayAccess<T> {
-	fn build(self, db: &dyn Thir, _model: &Model<T>, origin: Origin) -> Expression<T> {
-		let (mut make_opt, mut ty) = match self.collection.ty().lookup(db.upcast()) {
-			TyData::Array { opt, element, .. } => (opt == OptType::Opt, element),
-			_ => unreachable!("Not an array"),
-		};
-		let mut make_var = false;
-		let idx_ty = self.indices.ty();
-		if idx_ty.inst(db.upcast()).expect("No inst for index") == VarType::Var {
-			make_var = true;
-		}
-		if idx_ty.opt(db.upcast()).expect("No optionality for index") == OptType::Opt {
-			make_opt = true;
-		}
-		if let TyData::Tuple(_, fields) = idx_ty.lookup(db.upcast()) {
-			for ty in fields.iter() {
-				if ty.inst(db.upcast()).expect("No inst for index") == VarType::Var {
-					make_var = true;
-				}
-				if ty.opt(db.upcast()).expect("No optionality for index") == OptType::Opt {
-					make_opt = true;
-				}
-			}
-		}
-		if make_var {
-			ty = ty.make_var(db.upcast()).expect("Cannot make var");
-		}
-		if make_opt {
-			ty = ty.make_opt(db.upcast());
-		}
 		Expression::new_unchecked(ty, self, origin)
 	}
 }
