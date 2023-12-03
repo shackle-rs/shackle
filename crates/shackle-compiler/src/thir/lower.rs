@@ -1620,6 +1620,34 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 	}
 
 	fn collect_generator(&mut self, generator: &hir::Generator, generators: &mut Vec<Generator>) {
+		let pattern_to_where = |c: &mut Self,
+		                        decl: DeclarationId,
+		                        p: ArenaIndex<hir::Pattern>,
+		                        origin: Origin| {
+			// Turn destructuring into where clause of case matching pattern
+			let pattern = c.collect_pattern(p);
+			alloc_expression(
+				Case {
+					scrutinee: Box::new(alloc_expression(decl, c, origin)),
+					branches: vec![
+						CaseBranch::new(pattern, alloc_expression(BooleanLiteral(true), c, origin)),
+						CaseBranch::new(
+							Pattern::anonymous(
+								match &c.types[p] {
+									PatternTy::Destructuring(ty) => *ty,
+									_ => unreachable!(),
+								},
+								origin,
+							),
+							alloc_expression(BooleanLiteral(false), c, origin),
+						),
+					],
+				},
+				c,
+				origin,
+			)
+		};
+
 		match generator {
 			hir::Generator::Iterator {
 				patterns,
@@ -1644,32 +1672,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							.add_declaration(Item::new(declaration, origin));
 						let asgs = self.collect_destructuring(decl, false, *p);
 						if !asgs.is_empty() && hir::Pattern::is_refutable(*p, self.data) {
-							// Turn destructuring into where clause of case matching pattern
-							let pattern = self.collect_pattern(*p);
-							let case = alloc_expression(
-								Case {
-									scrutinee: Box::new(alloc_expression(decl, self, origin)),
-									branches: vec![
-										CaseBranch::new(
-											pattern,
-											alloc_expression(BooleanLiteral(true), self, origin),
-										),
-										CaseBranch::new(
-											Pattern::anonymous(
-												match &self.types[*p] {
-													PatternTy::Destructuring(ty) => *ty,
-													_ => unreachable!(),
-												},
-												origin,
-											),
-											alloc_expression(BooleanLiteral(false), self, origin),
-										),
-									],
-								},
-								self,
-								origin,
-							);
-							where_clauses.push(case);
+							where_clauses.push(pattern_to_where(self, decl, *p, origin.into()));
 						}
 						assignments.extend(asgs);
 						decl
@@ -1733,22 +1736,40 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			} => {
 				let def = ExpressionCollector::new(self.parent, self.data, self.item, self.types)
 					.collect_expression(*value);
-				let mut assignment = Declaration::from_expression(self.parent.db, false, def);
-				if let Some(name) = self.data[*pattern].identifier() {
-					assignment.set_name(name);
-				}
+				let assignment = Declaration::from_expression(self.parent.db, false, def);
 				let idx = self.parent.model.add_declaration(Item::new(
 					assignment,
 					EntityRef::new(self.parent.db.upcast(), self.item, *pattern),
 				));
-				self.parent.resolutions.insert(
-					PatternRef::new(self.item, *pattern),
-					LoweredIdentifier::ResolvedIdentifier(idx.into()),
-				);
 				generators.push(Generator::Assignment {
 					assignment: idx,
 					where_clause: where_clause.map(|w| self.collect_expression(w)),
 				});
+				let mut asgs = self.collect_destructuring(idx, false, *pattern);
+				if !asgs.is_empty() {
+					if hir::Pattern::is_refutable(*pattern, self.data) {
+						let w = pattern_to_where(
+							self,
+							idx,
+							*pattern,
+							EntityRef::new(self.parent.db.upcast(), self.item, *pattern).into(),
+						);
+						let last = asgs.pop().unwrap();
+						generators.extend(asgs.iter().map(|asg| Generator::Assignment {
+							assignment: *asg,
+							where_clause: None,
+						}));
+						generators.push(Generator::Assignment {
+							assignment: last,
+							where_clause: Some(w),
+						});
+					} else {
+						generators.extend(asgs.iter().map(|asg| Generator::Assignment {
+							assignment: *asg,
+							where_clause: None,
+						}));
+					}
+				}
 			}
 		}
 	}
