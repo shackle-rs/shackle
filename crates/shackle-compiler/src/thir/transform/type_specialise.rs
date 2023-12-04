@@ -325,7 +325,7 @@ impl<'a, Dst: Marker> TypeSpecialiser<'a, Dst> {
 			model[f].name(),
 			self.fold_domain(db, model, model[f].domain()),
 		);
-		function.set_specialised(true);
+		function.set_specialised(Some(f.into()));
 		function.annotations_mut().extend(
 			model[f]
 				.annotations()

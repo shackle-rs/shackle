@@ -81,6 +81,12 @@ impl<T> From<ArenaIndex<T>> for u32 {
 	}
 }
 
+impl<T> From<ArenaIndex<T>> for NonZeroU32 {
+	fn from(i: ArenaIndex<T>) -> Self {
+		i.index
+	}
+}
+
 /// A vector-based single-type arena
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Arena<T> {

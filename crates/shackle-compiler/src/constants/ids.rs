@@ -153,6 +153,7 @@ id_registry!(
 	mzn_show_tuple_access,
 	mzn_show_record_access,
 	return_value: "<return value>",
+	mzn_inline,
 	mzn_inline_call_by_name,
 	mzn_opt_bool,
 	array_access: "[]",

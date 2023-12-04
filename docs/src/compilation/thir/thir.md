@@ -108,7 +108,7 @@ tuple(var A, var B): x;
 <td>
 
 ```mzn
-array2d(1..2, 1..2, [1, 2, 3, 4])
+array2d('..'(1, 2), '..'(1, 2), [1, 2, 3, 4])
 ```
 
 </td>
@@ -177,7 +177,7 @@ arrayNd([3, 4, 5], [a, b, c])
 
 </table>
 
-Slicing is rewritten using `slice_xd` function calls:
+Array access is rewritten into a call to `'[]'`:
 
 <table style="width:100%">
 
@@ -188,7 +188,7 @@ Slicing is rewritten using `slice_xd` function calls:
 
 ```mzn
 any: x = [1, 2, 3];
-any: y = x['..'(1, 2)];
+any: y = x[1];
 ```
 
 </td>
@@ -196,9 +196,41 @@ any: y = x['..'(1, 2)];
 
 ```mzn
 array [int] of int: x = [1, 2, 3];
+array [int] of int: y = '[]'(1);
+```
+
+</td>
+</tr>
+
+</table>
+
+Slicing is rewritten using `mzn_slice` function calls:
+
+<table style="width:100%">
+
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+
+<tr>
+<td>
+
+```mzn
+any: x = [|1, 2 | 3, 4 |];
+any: y = x['..'(1, 2), '..'(1, 1)];
+```
+
+</td>
+<td>
+
+```mzn
+array [int] of int: x = array2d(
+  '..'(1, 2),
+  '..'(1, 2),
+  [1, 2, 3, 4]
+);
 array [int] of int: y = let {
   set of int: A = '..'(1, 2);
-} in slice_1d(x, [A], A);
+  set of int: B = '..'(1, 1);
+} in array2d(A, B, mzn_slice(x, [A, B]));
 ```
 
 </td>
@@ -208,18 +240,23 @@ array [int] of int: y = let {
 <td>
 
 ```mzn
-any: x = [1, 2, 3];
-any: y = x[..<];
+any: x = [|1, 2 | 3, 4|];
+any: y = x[..<, 2];
 ```
 
 </td>
 <td>
 
 ```mzn
-array [int] of int: x = [1, 2, 3];
+array [int] of int: x = array2d(
+  '..'(1, 2),
+  '..'(1, 2),
+  [1, 2, 3, 4]
+);
 array [int] of int: y = let {
   set of int: A = '..<'(index_set(x));
-} in slice_1d(x, [A], A);
+  set of int: B = {2};
+} in array1d(A, mzn_slice(x, [A, B]));
 ```
 
 </td>
@@ -269,7 +306,7 @@ any: y = x.a;
 <td>
 
 ```mzn
-array [int] of record(int: a, string: b): x =[
+array [int] of record(int: a, string: b): x = [
   (a: 1, b: "hello"),
   (a: 2, b: "world")
 ];
