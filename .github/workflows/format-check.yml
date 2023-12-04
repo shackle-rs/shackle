@@ -1,6 +1,10 @@
 name: Check Format
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
 
 env:
   # Lets us format with unstable rustfmt options
