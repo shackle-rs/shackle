@@ -561,6 +561,7 @@ pub fn function_dispatch(db: &dyn Thir, model: Model) -> Result<Model> {
 		!function
 			.annotations()
 			.has(&model, ids.mzn_inline_call_by_name)
+			&& !function.annotations().has(&model, ids.mzn_inline)
 			&& function.body().is_some()
 	});
 
@@ -572,7 +573,12 @@ pub fn function_dispatch(db: &dyn Thir, model: Model) -> Result<Model> {
 		let mut edges = FxHashSet::default();
 		for a in overloads.iter().copied() {
 			for b in overloads.iter().copied() {
-				if a != b && model[a].parameters().len() == model[b].parameters().len() {
+				if a != b
+					&& model[a].parameters().len() == model[b].parameters().len()
+					&& (model[a].specialised_from().is_none()
+						|| model[a].specialised_from().is_none()
+						|| model[a].specialised_from() != model[b].specialised_from())
+				{
 					let b_more_specific = model[a]
 						.parameters()
 						.iter()
@@ -618,7 +624,7 @@ mod test {
 	use expect_test::expect;
 
 	use super::function_dispatch;
-	use crate::thir::transform::test::check;
+	use crate::thir::transform::{test::check, transformer, type_specialise};
 
 	#[test]
 	fn test_function_dispatch() {
@@ -673,6 +679,33 @@ mod test {
     function var bool: foo(tuple(tuple(int)): x) = true;
     function var bool: bar(tuple(tuple(var int, var int)): x) = if is_fixed(((x).1).2) then bar(((((x).1).1, fix(((x).1).2)),)) else true endif;
     function var bool: bar(tuple(tuple(var int, int)): x) = true;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_function_dispatch_specialised() {
+		check(
+			transformer(vec![type_specialise, function_dispatch]),
+			r#"
+            test foo(any $T: x) = true;
+            test foo($$E: x) = false;
+			var float: x;
+			var int: y;
+			constraint foo(x);
+			constraint foo(y);
+			constraint foo(1.5);
+            "#,
+			expect!([r#"
+    function bool: foo(float: x) = true;
+    function bool: foo(var int: x) = if is_fixed(x) then foo(fix(x)) else true endif;
+    function bool: foo(int: x) = false;
+    function bool: foo(var float: x) = true;
+    var float: x;
+    var int: y;
+    constraint foo(x);
+    constraint foo(y);
+    constraint foo(1.5);
 "#]),
 		);
 	}

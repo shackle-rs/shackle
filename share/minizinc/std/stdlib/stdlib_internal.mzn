@@ -199,39 +199,115 @@ function var float: objective_deopt_(var opt float: x, bool: direction) =
 %
 
 % Par element access
-function any $T: '[]'(array [$$E] of any $T: x, $$E: idx) = '[]'(x, idx, 0);
-function any $T: '[]'(array [$$E] of any $T: x, tuple($$E): idx) = '[]'(x, idx.1, 0);
-function any $T: '[]'(array [$$E, $$F] of any $T: x, tuple($$E, $$F): idx) = '[]'(x, idx, (1, 2));
-function any $T: '[]'(array [$$E, $$F, $$G] of any $T: x, tuple($$E, $$F, $$G): idx) = '[]'(x, idx, (1, 2, 3));
-function any $T: '[]'(array [$$E, $$F, $$G, $$H] of any $T: x, tuple($$E, $$F, $$G, $$H): idx) = '[]'(x, idx, (1, 2, 3, 4));
-function any $T: '[]'(array [$$E, $$F, $$G, $$H, $$I] of any $T: x, tuple($$E, $$F, $$G, $$H, $$I): idx) = '[]'(x, idx, (1, 2, 3, 4, 5));
-function any $T: '[]'(array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x, tuple($$E, $$F, $$G, $$H, $$I, $$J): idx) = '[]'(x, idx, (1, 2, 3, 4, 5, 6));
-function any $T: '[]'(array [$E] of any $T: x, $E: idx, $F: n) =
+function any $T: '[]'(array [$E] of any $T: x, $E: idx) :: mzn_inline =
   let {
-    constraint mzn_array_access_valid(x, idx, n);
+    constraint mzn_array_access_valid(x, idx);
   } in mzn_element_internal(x, idx);
 function any $T: mzn_element_internal(array [$E] of any $T: x, $E: idx);
 
+% To allow var dispatch to par version
+function any $T: element(array [$E] of any $T: x, $E: idx) = '[]'(x, idx);
+function any $T: element_total(array [$E] of any $T: x, $E: idx) = mzn_element_internal(x, idx);
+
 % Var array access
-function var $T: '[]'(array [$$E] of var $T: x, var $$E: idx) = '[]'(x, idx, 0);
-function var $T: '[]'(array [$$E] of var $T: x, var $$E: idx, int: n) = element(x, idx);
-function var $T: '[]'(array [$$E] of var $T: x, tuple(var $$E): idx, tuple(int): n) = '[]'(x, idx.1, n.1);
-function var $T: '[]'(array [$$E, $$F] of var $T: x, tuple(var $$E, var $$F): idx) = '[]'(x, idx, (1, 2));
-function var $T: '[]'(array [$$E, $$F] of var $T: x, tuple(var $$E, var $$F): idx, tuple(int, int): n) =
-  if is_fixed(idx.1) then
-    x[fix(idx.1), ..][idx.2]
-  elseif is_fixed(idx.2) then
-    x[.., fix(idx.2)][idx.1]
+function var $T: '[]'(array [$E] of var $T: x, var $F: idx) :: mzn_inline =
+  if mzn_array_access_known_valid(x, idx) then
+    element_total(x, idx)
   else
     element(x, idx)
   endif;
-function var $T: '[]'(array [$$E, $$F, $$G] of var $T: x, tuple(var $$E, var $$F, var $$G): idx) = '[]'(x, idx, (1, 2, 3));
-function var $T: '[]'(array [$$E, $$F, $$G, $$H] of var $T: x, tuple(var $$E, var $$F, var $$G, var $$H): idx) = '[]'(x, idx, (1, 2, 3, 4));
-function var $T: '[]'(array [$$E, $$F, $$G, $$H, $$I] of var $T: x, tuple(var $$E, var $$F, var $$G, var $$H, var $$I): idx) = '[]'(x, idx, (1, 2, 3, 4, 5));
-function var $T: '[]'(array [$$E, $$F, $$G, $$H, $$I, $$J] of var $T: x, tuple(var $$E, var $$F, var $$G, var $$H, var $$I, var $$J): idx) = '[]'(x, idx, (1, 2, 3, 4, 5, 6));
-function var $T: '[]'(array [$E] of var $T: x, var $F: idx, $G: n) =
+
+% 1D var array access not known to be total
+function var $T: element(array [$$E] of var $T: x, var $$E: idx) =
+  if mzn_in_root_context(idx) then
+    let {
+      constraint mzn_array_access_valid(x, idx);
+    } in element_t(mzn_erase_index_sets(x), erase_enum(idx))
+  elseif mzn_array_access_known_valid(x, idx) then
+    element_t(mzn_erase_index_sets(x), erase_enum(idx))
+  else let {
+    constraint mzn_array_access_valid(x, idx);
+  } in element_mt(mzn_erase_index_sets(x), erase_enum(idx))
+  endif;
+function var $$T: element(array [$$E] of var $$T: x, var $$E: idx) =
+  if mzn_in_root_context(idx) then
+    let {
+      constraint mzn_array_access_valid(x, idx);
+    } in mzn_to_enum(enum_of(x), element_t(erase_enum(x), erase_enum(idx)))
+  elseif mzn_array_access_known_valid(x, idx) then
+    mzn_to_enum(enum_of(x), element_t(erase_enum(x), erase_enum(idx)))
+  else let {
+    constraint mzn_array_access_valid(x, idx);
+  } in mzn_to_enum(enum_of(x), element_mt(erase_enum(x), erase_enum(idx)))
+  endif;
+function var $T: element(array [$$E] of var $T: x, tuple(var $$E): idx) = element(x, idx.1);
+
+% 1D var array access known to be total
+function var $T: element_total(array [$$E] of var $T: x, var $$E: idx) =
+  element_t(mzn_erase_index_sets(x), erase_enum(idx));
+function var $$T: element_total(array [$$E] of var $$T: x, var $$E: idx) =
+  mzn_to_enum(enum_of(x), element_t(erase_enum(x), erase_enum(idx)));
+function var $T: element_total(array [$$E] of var $T: x, tuple(var $$E): idx) = element_total(x, idx.1);
+
+% 2D var array access not known to be total
+function var $T: element(array[$$E, $$F] of var $T: x, tuple(var $$E, var $$F): idx) =
+  if is_fixed(idx.1) then
+    element(x[fix(idx.1), ..], idx.2)
+  elseif is_fixed(idx.2) then
+    element(x[.., fix(idx.2)], idx.1)
+  elseif mzn_in_root_context(idx) then
+    let {
+      constraint mzn_array_access_valid(x, idx);
+    } in element_t(mzn_erase_index_sets(x), erase_enum(idx.1), erase_enum(idx.2))
+  else let {
+    constraint mzn_array_access_valid(x, idx);
+  } in element_mt(mzn_erase_index_sets(x), erase_enum(idx.1), erase_enum(idx.2))
+  endif;
+function var $$T: element(array[$$E, $$F] of var $$T: x, tuple(var $$E, var $$F): idx) =
+  if is_fixed(idx.1) then
+    element(x[fix(idx.1), ..], idx.2)
+  elseif is_fixed(idx.2) then
+    element(x[.., fix(idx.2)], idx.1)
+  elseif mzn_in_root_context(idx) then
+    let {
+      constraint mzn_array_access_valid(x, idx);
+    } in mzn_to_enum(enum_of(x), element_t(erase_enum(x), erase_enum(idx.1), erase_enum(idx.2)))
+  else let {
+    constraint mzn_array_access_valid(x, idx);
+  } in mzn_to_enum(enum_of(x), element_mt(erase_enum(x), erase_enum(idx.1), erase_enum(idx.2)))
+  endif;
+
+% 2D var array access known to be total
+function var $T: element_total(array[$$E, $$F] of var $T: x, tuple(var $$E, var $$F): idx) =
+  if is_fixed(idx.1) then
+    let {
+      any: idx_set = index_sets(x);
+    } in element_total(array1d(idx_set.2, mzn_slice_internal(x, [{erase_enum(fix(idx.1))}, erase_enum(idx_set.2)])), idx.2)
+  elseif is_fixed(idx.2) then
+    let {
+      any: idx_set = index_sets(x);
+    } in element_total(array1d(idx_set.1, mzn_slice_internal(x, [erase_enum(idx_set.1), {erase_enum(fix(idx.2))}])), idx.1)
+  else
+    element_t(mzn_erase_index_sets(x), erase_enum(idx.1), erase_enum(idx.2))
+  endif;
+function var $$T: element_total(array[$$E, $$F] of var $$T: x, tuple(var $$E, var $$F): idx) =
+  if is_fixed(idx.1) then
+    let {
+      any: idx_set = index_sets(x);
+    } in element_total(array1d(idx_set.2, mzn_slice_internal(x, [{erase_enum(fix(idx.1))}, erase_enum(idx_set.2)])), idx.2)
+  elseif is_fixed(idx.2) then
+    let {
+      any: idx_set = index_sets(x);
+    } in element_total(array1d(idx_set.1, mzn_slice_internal(x, [erase_enum(idx_set.1), {erase_enum(fix(idx.2))}])), idx.1)
+  else
+    mzn_to_enum(enum_of(x), element_t(erase_enum(x), erase_enum(idx.1), erase_enum(idx.2)))
+  endif;
+
+% Multidimensional var array access
+function var $T: element(array [$E] of var $T: x, var $F: idx) =
   let {
-    any: pairs = mzn_index_pairs(x, idx, n);
+    any: pairs = mzn_index_pairs(x, idx);
+    constraint mzn_fixed_array_access_valid(x, idx);
     any: xx = mzn_slice_internal(x, [if is_fixed(i) then {fix(i)} else is endif | (i, is) in pairs]);
     any: var_pairs = [p | p in pairs where not is_fixed(p.1)];
   } in
@@ -251,22 +327,92 @@ function var $T: '[]'(array [$E] of var $T: x, var $F: idx, $G: n) =
         )) :: domain_propagation;
       } in element(xx, index)
     endif;
+function var $T: element_total(array [$E] of var $T: x, var $F: idx) =
+  let {
+    any: pairs = mzn_index_pairs(x, idx);
+    any: xx = mzn_slice_internal(x, [if is_fixed(i) then {fix(i)} else is endif | (i, is) in pairs]);
+    any: var_pairs = [p | p in pairs where not is_fixed(p.1)];
+  } in
+    if length(var_pairs) == 1 then
+      let {
+        any: (i, is) = mzn_element_internal(var_pairs, 1);
+      } in element_total(xx, i - min(is) + 1)
+    elseif length(var_pairs) == 2 then
+      let {
+        any: (i1, is1) = mzn_element_internal(var_pairs, 1);
+        any: (i2, is2) = mzn_element_internal(var_pairs, 2);
+      } in element_total(array2d(is1, is2, xx), (i1 - min(is1) + 1, i2 - min(is2) + 1))
+    else
+      let {
+        any: index = (1 + sum (a in index_set(var_pairs), (i, is) = mzn_element_internal(var_pairs, a)) (
+          (i - min(is)) * product (b in a + 1..max(index_set(var_pairs))) (card(mzn_element_internal(var_pairs, b).2))
+        )) :: domain_propagation;
+      } in element_total(xx, index)
+    endif;
 
-% Helpers for converting mixed var/par indexing into slicing
-function array [int] of tuple(var int, set of int): mzn_index_pairs(array [$E] of any $T: x, var $F: idx, $G: n) =
+% Helper to check validity of runtime fixed indices
+test mzn_fixed_array_access_valid(array [$E] of any $T: x, var $F: idx) = abort("Called internal function");
+test mzn_fixed_array_access_valid(
+  array [$$E, $$F, $$G] of any $T: x,
+  tuple(var $$E, var $$F, var $$G): idx
+) =
+   let {
+    any: idx_set = index_sets(x);
+    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, 1) endif;
+    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, 2) endif;
+    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, 3) endif;
+  } in true;
+test mzn_fixed_array_access_valid(
+  array [$$E, $$F, $$G, $$H] of any $T: x,
+  tuple(var $$E, var $$F, var $$G, var $$H): idx,
+  tuple(int, int, int, int): n
+) =
+   let {
+    any: idx_set = index_sets(x);
+    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, 1) endif;
+    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, 2) endif;
+    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, 3) endif;
+    constraint if is_fixed(idx.4) then mzn_array_access_valid(fix(idx.4), idx_set.4, 4) endif;
+  } in true;
+test mzn_fixed_array_access_valid(
+  array [$$E, $$F, $$G, $$H, $$I] of any $T: x,
+  tuple(var $$E, var $$F, var $$G, var $$H, var $$I): idx,
+  tuple(int, int, int, int, int): n
+) =
+   let {
+    any: idx_set = index_sets(x);
+    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, 1) endif;
+    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, 2) endif;
+    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, 3) endif;
+    constraint if is_fixed(idx.4) then mzn_array_access_valid(fix(idx.4), idx_set.4, 4) endif;
+    constraint if is_fixed(idx.5) then mzn_array_access_valid(fix(idx.5), idx_set.5, 5) endif;
+  } in true;
+test mzn_fixed_array_access_valid(
+  array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x,
+  tuple(var $$E, var $$F, var $$G, var $$H, var $$I, var $$J): idx,
+  tuple(int, int, int, int, int, int): n
+) =
+   let {
+    any: idx_set = index_sets(x);
+    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, 1) endif;
+    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, 2) endif;
+    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, 3) endif;
+    constraint if is_fixed(idx.4) then mzn_array_access_valid(fix(idx.4), idx_set.4, 4) endif;
+    constraint if is_fixed(idx.5) then mzn_array_access_valid(fix(idx.5), idx_set.5, 5) endif;
+    constraint if is_fixed(idx.6) then mzn_array_access_valid(fix(idx.6), idx_set.6, 6) endif;
+  } in true;
+
+% Helper to turn run fixed indexing into slicing
+function array [int] of tuple(var int, set of int): mzn_index_pairs(array [$E] of any $T: x, var $F: idx) =
   let {
     constraint abort("Called internal function");
   } in [];
 function array [int] of tuple(var int, set of int): mzn_index_pairs(
   array [$$E, $$F, $$G] of any $T: x,
-  tuple(var $$E, var $$F, var $$G): idx,
-  tuple(int, int, int): n
+  tuple(var $$E, var $$F, var $$G): idx
 ) =
-   let {
+  let {
     any: idx_set = index_sets(x);
-    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, n.1) endif;
-    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, n.2) endif;
-    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, n.3) endif;
   } in [
     (erase_enum(idx.1), erase_enum(idx_set.1)),
     (erase_enum(idx.2), erase_enum(idx_set.2)),
@@ -274,15 +420,10 @@ function array [int] of tuple(var int, set of int): mzn_index_pairs(
   ];
 function array [int] of tuple(var int, set of int): mzn_index_pairs(
   array [$$E, $$F, $$G, $$H] of any $T: x,
-  tuple(var $$E, var $$F, var $$G, var $$H): idx,
-  tuple(int, int, int, int): n
+  tuple(var $$E, var $$F, var $$G, var $$H): idx
 ) =
-   let {
+  let {
     any: idx_set = index_sets(x);
-    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, n.1) endif;
-    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, n.2) endif;
-    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, n.3) endif;
-    constraint if is_fixed(idx.4) then mzn_array_access_valid(fix(idx.4), idx_set.4, n.4) endif;
   } in [
     (erase_enum(idx.1), erase_enum(idx_set.1)),
     (erase_enum(idx.2), erase_enum(idx_set.2)),
@@ -291,16 +432,10 @@ function array [int] of tuple(var int, set of int): mzn_index_pairs(
   ];
 function array [int] of tuple(var int, set of int): mzn_index_pairs(
   array [$$E, $$F, $$G, $$H, $$I] of any $T: x,
-  tuple(var $$E, var $$F, var $$G, var $$H, var $$I): idx,
-  tuple(int, int, int, int, int): n
+  tuple(var $$E, var $$F, var $$G, var $$H, var $$I): idx
 ) =
-   let {
+  let {
     any: idx_set = index_sets(x);
-    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, n.1) endif;
-    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, n.2) endif;
-    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, n.3) endif;
-    constraint if is_fixed(idx.4) then mzn_array_access_valid(fix(idx.4), idx_set.4, n.4) endif;
-    constraint if is_fixed(idx.5) then mzn_array_access_valid(fix(idx.5), idx_set.5, n.5) endif;
   } in [
     (erase_enum(idx.1), erase_enum(idx_set.1)),
     (erase_enum(idx.2), erase_enum(idx_set.2)),
@@ -310,17 +445,10 @@ function array [int] of tuple(var int, set of int): mzn_index_pairs(
   ];
 function array [int] of tuple(var int, set of int): mzn_index_pairs(
   array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x,
-  tuple(var $$E, var $$F, var $$G, var $$H, var $$I, var $$J): idx,
-  tuple(int, int, int, int, int, int): n
+  tuple(var $$E, var $$F, var $$G, var $$H, var $$I, var $$J): idx
 ) =
-   let {
+  let {
     any: idx_set = index_sets(x);
-    constraint if is_fixed(idx.1) then mzn_array_access_valid(fix(idx.1), idx_set.1, n.1) endif;
-    constraint if is_fixed(idx.2) then mzn_array_access_valid(fix(idx.2), idx_set.2, n.2) endif;
-    constraint if is_fixed(idx.3) then mzn_array_access_valid(fix(idx.3), idx_set.3, n.3) endif;
-    constraint if is_fixed(idx.4) then mzn_array_access_valid(fix(idx.4), idx_set.4, n.4) endif;
-    constraint if is_fixed(idx.5) then mzn_array_access_valid(fix(idx.5), idx_set.5, n.5) endif;
-    constraint if is_fixed(idx.6) then mzn_array_access_valid(fix(idx.6), idx_set.6, n.6) endif;
   } in [
     (erase_enum(idx.1), erase_enum(idx_set.1)),
     (erase_enum(idx.2), erase_enum(idx_set.2)),
@@ -335,33 +463,6 @@ function var $T: element_t(array [int] of var $T: x, var int: idx);
 function var $T: element_t(array [int, int] of var $T: x, var int: idx1, var int: idx2);
 function var $T: element_mt(array [int] of var $T: x, var int: idx);
 function var $T: element_mt(array [int, int] of var $T: x, var int: idx1, var int: idx2);
-
-% 1D var array access
-function var $T: element(array [$$E] of var $T: x, var $$E: idx) =
-  if mzn_in_root_context(idx) then
-    let {
-      constraint mzn_array_access_valid(x, idx);
-    } in element_t(mzn_erase_index_sets(x), erase_enum(idx))
-  elseif mzn_array_access_known_valid(x, idx) then
-    element_t(mzn_erase_index_sets(x), erase_enum(idx))
-  else let {
-    constraint mzn_array_access_valid(x, idx);
-  } in element_mt(mzn_erase_index_sets(x), erase_enum(idx))
-  endif;
-function var $T: element(array [$$E] of var $T: x, tuple(var $$E): idx) = '[]'(x, idx.1);
-
-% 2D var array access
-function var $T: element(array[$$E, $$F] of var $T: x, tuple(var $$E, var $$F): idx) =
-  if mzn_in_root_context(idx) then
-    let {
-      constraint mzn_array_access_valid(x, idx);
-    } in element_t(mzn_erase_index_sets(x), erase_enum(idx.1), erase_enum(idx.2))
-  elseif mzn_array_access_known_valid(x, idx) then
-    element_t(mzn_erase_index_sets(x), erase_enum(idx.1), erase_enum(idx.2))
-  else let {
-    constraint mzn_array_access_valid(x, idx);
-  } in element_mt(mzn_erase_index_sets(x), erase_enum(idx.1), erase_enum(idx.2))
-  endif;
 
 % Element on integers
 function var int: element_t(array [int] of var int: x, var int: idx) :: promise_total =
@@ -1014,51 +1115,6 @@ function var opt $T: '[]'(array[$$E, $$F, $$G, $$H, $$I, $$J] of var opt $T: x, 
       endif
   endif;
 
-% Flattening of multidimensional indices to be 1-based
-function var int: mzn_flat_index(array [$E] of any $T: x, var $E: idx) = abort("Called internal function");
-function var int: mzn_flat_index(array [$$E, $$F, $$G] of any $T: x, tuple(var $$E, var $$F, var $$G): idx) = let {
-  any: idx_set = index_sets(x);
-  var int: index = sum([
-    (erase_enum(idx.1) - min(erase_enum(idx_set.1))) * card(idx_set.2) * card(idx_set.3),
-    (erase_enum(idx.2) - min(erase_enum(idx_set.2))) * card(idx_set.3),
-    (erase_enum(idx.3) - min(erase_enum(idx_set.3))),
-    1
-  ])
-} in index;
-function var int: mzn_flat_index(array [$$E, $$F, $$G, $$H] of any $T: x, tuple(var $$E, var $$F, var $$G, var $$H): idx) = let {
-  any: idx_set = index_sets(x);
-  var int: index = sum([
-    (erase_enum(idx.1) - min(erase_enum(idx_set.1))) * card(idx_set.2) * card(idx_set.3) * card(idx_set.4),
-    (erase_enum(idx.2) - min(erase_enum(idx_set.2))) * card(idx_set.3) * card(idx_set.4),
-    (erase_enum(idx.3) - min(erase_enum(idx_set.3))) * card(idx_set.4),
-    (erase_enum(idx.4) - min(erase_enum(idx_set.4))),
-    1
-  ])
-} in index;
-function var int: mzn_flat_index(array [$$E, $$F, $$G, $$H, $$I] of any $T: x, tuple(var $$E, var $$F, var $$G, var $$H, var $$I): idx) = let {
-  any: idx_set = index_sets(x);
-  var int: index = sum([
-    (erase_enum(idx.1) - min(erase_enum(idx_set.1))) * card(idx_set.2) * card(idx_set.3) * card(idx_set.4) * card(idx_set.5),
-    (erase_enum(idx.2) - min(erase_enum(idx_set.2))) * card(idx_set.3) * card(idx_set.4) * card(idx_set.5),
-    (erase_enum(idx.3) - min(erase_enum(idx_set.3))) * card(idx_set.4) * card(idx_set.5),
-    (erase_enum(idx.4) - min(erase_enum(idx_set.4))) * card(idx_set.5),
-    (erase_enum(idx.5) - min(erase_enum(idx_set.5))),
-    1
-  ])
-} in index;
-function var int: mzn_flat_index(array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x, tuple(var $$E, var $$F, var $$G, var $$H, var $$I, var $$J): idx) = let {
-  any: idx_set = index_sets(x);
-  var int: index = sum([
-    (erase_enum(idx.1) - min(erase_enum(idx_set.1))) * card(idx_set.2) * card(idx_set.3) * card(idx_set.4) * card(idx_set.5) * card(idx_set.6),
-    (erase_enum(idx.2) - min(erase_enum(idx_set.2))) * card(idx_set.3) * card(idx_set.4) * card(idx_set.5) * card(idx_set.6),
-    (erase_enum(idx.3) - min(erase_enum(idx_set.3))) * card(idx_set.4) * card(idx_set.5) * card(idx_set.6),
-    (erase_enum(idx.4) - min(erase_enum(idx_set.4))) * card(idx_set.5) * card(idx_set.6),
-    (erase_enum(idx.5) - min(erase_enum(idx_set.5))) * card(idx_set.6),
-    (erase_enum(idx.6) - min(erase_enum(idx_set.6))),
-    1
-  ])
-} in index;
-
 % Par index validity check
 test mzn_array_access_valid($$E: idx, set of $$E: idx_set, int: n) = 
   mzn_assert_warn(
@@ -1069,75 +1125,70 @@ test mzn_array_access_valid($$E: idx, set of $$E: idx_set, int: n) =
       "array access out of bounds, index set is \(idx_set), but given index is \(idx)"
     endif
   );
-test mzn_array_access_valid(array [$E] of any $T: x, $E: idx, $F: n) = abort("Called internal function");
-test mzn_array_access_valid(array [$$E] of any $T: x, $$E: idx, int: n) =
-  mzn_array_access_valid(idx, index_set(x), n);
-test mzn_array_access_valid(array [$$E] of any $T: x, tuple($$E): idx, tuple(int): n) =
-  mzn_array_access_valid(x, idx.1, n.1);
+test mzn_array_access_valid(array [$E] of any $T: x, $E: idx) = abort("Called internal function");
+test mzn_array_access_valid(array [$$E] of any $T: x, $$E: idx) =
+  mzn_array_access_valid(idx, index_set(x), 0);
+test mzn_array_access_valid(array [$$E] of any $T: x, tuple($$E): idx) =
+  mzn_array_access_valid(x, idx.1);
 test mzn_array_access_valid(
   array [$$E, $$F] of any $T: x,
-  tuple($$E, $$F): idx,
-  tuple(int, int): n
+  tuple($$E, $$F): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G] of any $T: x,
-  tuple($$E, $$F, $$G): idx,
-  tuple(int, int, int): n
+  tuple($$E, $$F, $$G): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G, $$H] of any $T: x,
-  tuple($$E, $$F, $$G, $$H): idx,
-  tuple(int, int, int, int): n
+  tuple($$E, $$F, $$G, $$H): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
-    mzn_array_access_valid(idx.4, idx_set.4, n.4),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
+    mzn_array_access_valid(idx.4, idx_set.4, 4),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G, $$H, $$I] of any $T: x,
-  tuple($$E, $$F, $$G, $$H, $$I): idx,
-  tuple(int, int, int, int, int): n
+  tuple($$E, $$F, $$G, $$H, $$I): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
-    mzn_array_access_valid(idx.4, idx_set.4, n.4),
-    mzn_array_access_valid(idx.5, idx_set.5, n.5),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
+    mzn_array_access_valid(idx.4, idx_set.4, 4),
+    mzn_array_access_valid(idx.5, idx_set.5, 5),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x,
-  tuple($$E, $$F, $$G, $$H, $$I, $$J): idx,
-  tuple(int, int, int, int, int, int): n
+  tuple($$E, $$F, $$G, $$H, $$I, $$J): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
-    mzn_array_access_valid(idx.4, idx_set.4, n.4),
-    mzn_array_access_valid(idx.5, idx_set.5, n.5),
-    mzn_array_access_valid(idx.6, idx_set.6, n.6),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
+    mzn_array_access_valid(idx.4, idx_set.4, 4),
+    mzn_array_access_valid(idx.5, idx_set.5, 5),
+    mzn_array_access_valid(idx.6, idx_set.6, 6),
   ]);
 
 % Slice validity check
@@ -1154,78 +1205,73 @@ test mzn_array_access_valid(set of $$E: idx, set of $$E: idx_set, int: n) =
       endif
     )
   endif;
-test mzn_array_access_valid(array [$$E] of any $T: x, set of $$E: idx, int: n) =
-  mzn_array_access_valid(idx, index_set(x), n);
-test mzn_array_access_valid(array [$$E] of any $T: x, tuple(set of $$E): idx, tuple(int): n) =
-  mzn_array_access_valid(x, idx.1, n.1);
+test mzn_array_access_valid(array [$$E] of any $T: x, set of $$E: idx) =
+  mzn_array_access_valid(idx, index_set(x), 0);
+test mzn_array_access_valid(array [$$E] of any $T: x, tuple(set of $$E): idx) =
+  mzn_array_access_valid(x, idx.1);
 test mzn_array_access_valid(
   array [$$E, $$F] of any $T: x,
-  tuple(set of $$E, set of $$F): idx,
-  tuple(int, int): n
+  tuple(set of $$E, set of $$F): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G): idx,
-  tuple(int, int, int): n
+  tuple(set of $$E, set of $$F, set of $$G): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G, $$H] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G, set of $$H): idx,
-  tuple(int, int, int, int): n
+  tuple(set of $$E, set of $$F, set of $$G, set of $$H): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
-    mzn_array_access_valid(idx.4, idx_set.4, n.4),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
+    mzn_array_access_valid(idx.4, idx_set.4, 4),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G, $$H, $$I] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): idx,
-  tuple(int, int, int, int, int): n
+  tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
-    mzn_array_access_valid(idx.4, idx_set.4, n.4),
-    mzn_array_access_valid(idx.5, idx_set.5, n.5),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
+    mzn_array_access_valid(idx.4, idx_set.4, 4),
+    mzn_array_access_valid(idx.5, idx_set.5, 5),
   ]);
 test mzn_array_access_valid(
   array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): idx,
-  tuple(int, int, int, int, int, int): n
+  tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): idx
 ) =
   let {
     any: idx_set = index_sets(x);
   } in forall([
-    mzn_array_access_valid(idx.1, idx_set.1, n.1),
-    mzn_array_access_valid(idx.2, idx_set.2, n.2),
-    mzn_array_access_valid(idx.3, idx_set.3, n.3),
-    mzn_array_access_valid(idx.4, idx_set.4, n.4),
-    mzn_array_access_valid(idx.5, idx_set.5, n.5),
-    mzn_array_access_valid(idx.6, idx_set.6, n.6),
+    mzn_array_access_valid(idx.1, idx_set.1, 1),
+    mzn_array_access_valid(idx.2, idx_set.2, 2),
+    mzn_array_access_valid(idx.3, idx_set.3, 3),
+    mzn_array_access_valid(idx.4, idx_set.4, 4),
+    mzn_array_access_valid(idx.5, idx_set.5, 5),
+    mzn_array_access_valid(idx.6, idx_set.6, 6),
   ]);
 
 % Var index validity check
-predicate mzn_array_access_valid(array [$E] of any $T: x, var $E: idx) =  abort("Called internal function");
+predicate mzn_array_access_valid(array [$E] of any $T: x, var $E: idx) = abort("Called internal function");
 predicate mzn_array_access_valid(array [$$E] of any $T: x, var $$E: idx) = idx in index_set(x);
 predicate mzn_array_access_valid(array [$$E] of any $T: x, tuple(var $$E): idx) = mzn_array_access_valid(x, idx.1);
 predicate mzn_array_access_valid(array [$$E, $$F] of any $T: x, tuple(var $$E, var $$F): idx) = let {
@@ -1270,7 +1316,7 @@ predicate mzn_array_access_valid(array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T:
 ]);
 
 % Var index bounds optimisation
-test mzn_array_access_known_valid(array [$E] of any $T: x, var $E: idx) = abort("Called internal function");
+test mzn_array_access_known_valid(array [$E] of any $T: x, var $F: idx) = abort("Called internal function");
 test mzn_array_access_known_valid(array [$$E] of any $T: x, var $$E: idx) =
   has_bounds(idx) /\ lb(idx)..ub(idx) subset index_set(x);
 test mzn_array_access_known_valid(array [$$E] of any $T: x, tuple(var $$E): idx) =
@@ -1319,81 +1365,50 @@ test mzn_array_access_known_valid(array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T
 % Array slicing
 function array [int] of any $T: mzn_slice_internal(array [$X] of any $T: x, array [int] of set of int: i);
 
-function array [int] of any $T: '[]'(array [$$E] of any $T: x, set of $$E: i) = '[]'(x, i, 0);
-function array [int] of any $T: '[]'(array [$$E] of any $T: x, tuple(set of $$E): i) = '[]'(x, i.1, 0);
-function array [int] of any $T: '[]'(array [$$E] of any $T: x, set of $$E: i, int: n) =
+function array [int] of any $T: '[]'(array [$$E] of any $T: x, set of $$E: i) =
   let {
-    constraint mzn_array_access_valid(x, i, n);
+    constraint mzn_array_access_valid(x, i);
   } in mzn_slice_internal(mzn_erase_index_sets(x), [erase_enum(i)]);
-function array [int] of any $T: '[]'(
-  array [$$E] of any $T: x,
-  tuple(set of $$E): i,
-  tuple(int): n
-) = '[]'(x, i.1, n.1);
+function array [int] of any $T: '[]'(array [$$E] of any $T: x, tuple(set of $$E): i) = '[]'(x, i.1);
 
 function array [int] of any $T: '[]'(
   array [$$E, $$F] of any $T: x,
   tuple(set of $$E, set of $$F): i
-) = '[]'(x, i, (1, 2));
-function array [int] of any $T: '[]'(
-  array [$$E, $$F] of any $T: x,
-  tuple(set of $$E, set of $$F): i,
-  tuple(int, int): n
 ) =
   let {
-    constraint mzn_array_access_valid(x, i, n);
+    constraint mzn_array_access_valid(x, i);
   } in mzn_slice_internal(mzn_erase_index_sets(x), [erase_enum(i.1), erase_enum(i.2)]);
 
 function array [int] of any $T: '[]'(
   array [$$E, $$F, $$G] of any $T: x,
   tuple(set of $$E, set of $$F, set of $$G): i
-) = '[]'(x, i, (1, 2, 3));
-function array [int] of any $T: '[]'(
-  array [$$E, $$F, $$G] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G): i,
-  tuple(int, int, int): n
 ) =
   let {
-    constraint mzn_array_access_valid(x, i, n);
+    constraint mzn_array_access_valid(x, i);
   } in mzn_slice_internal(mzn_erase_index_sets(x), [erase_enum(i.1), erase_enum(i.2), erase_enum(i.3)]);
 
 function array [int] of any $T: '[]'(
   array [$$E, $$F, $$G, $$H] of any $T: x,
   tuple(set of $$E, set of $$F, set of $$G, set of $$H): i
-) = '[]'(x, i, (1, 2, 3, 4));
-function array [int] of any $T: '[]'(
-  array [$$E, $$F, $$G, $$H] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G, set of $$H): i,
-  tuple(int, int, int, int): n
 ) =
   let {
-    constraint mzn_array_access_valid(x, i, n);
+    constraint mzn_array_access_valid(x, i);
   } in mzn_slice_internal(mzn_erase_index_sets(x), [erase_enum(i.1), erase_enum(i.2), erase_enum(i.3), erase_enum(i.4)]);
 
 function array [int] of any $T: '[]'(
   array [$$E, $$F, $$G, $$H, $$I] of any $T: x,
   tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): i
-) = '[]'(x, i, (1, 2, 3, 4, 5));
-function array [int] of any $T: '[]'(
-  array [$$E, $$F, $$G, $$H, $$I] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I): i,
-  tuple(int, int, int, int, int): n
 ) =
   let {
-    constraint mzn_array_access_valid(x, i, n);
+    constraint mzn_array_access_valid(x, i);
   } in mzn_slice_internal(mzn_erase_index_sets(x), [erase_enum(i.1), erase_enum(i.2), erase_enum(i.3), erase_enum(i.4), erase_enum(i.5)]);
 
 function array [int] of any $T: '[]'(
   array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x,
   tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): i
-) = '[]'(x, i, (1, 2, 3, 4, 5, 6));
-function array [int] of any $T: '[]'(
-  array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: x,
-  tuple(set of $$E, set of $$F, set of $$G, set of $$H, set of $$I, set of $$J): i,
-  tuple(int, int, int, int, int, int): n
 ) =
   let {
-    constraint mzn_array_access_valid(x, i, n);
+    constraint mzn_array_access_valid(x, i);
   } in mzn_slice_internal(mzn_erase_index_sets(x), [erase_enum(i.1), erase_enum(i.2), erase_enum(i.3), erase_enum(i.4), erase_enum(i.5), erase_enum(i.6)]);
 
 %-----------------------------------------------------------------------------%
@@ -1685,6 +1700,7 @@ test mzn_check_index_set(string: name, set of $$E: actual, set of $$E: expected)
 test mzn_check_index_set(string: name, int: d, int: dims, set of $$E: actual, set of $$E: expected) :: mzn_inline_call_by_name =
   assert(actual = expected, "Index set " ++ if dims > 1 then "\(d) " endif ++ "of '" ++ name ++ "' is \(expected), but is assigned an array with " ++ if dims > 1 then "the corresponding " endif ++ "index set \(actual). You may need to coerce the index sets using the array\(dims)d function.");
 
+annotation mzn_inline;
 annotation mzn_inline_call_by_name;
 
 function array [int] of any $T: mzn_erase_index_sets(array [_] of any $T: x);

@@ -374,7 +374,7 @@ impl<T: Marker> Model<T> {
 					None
 				}
 			})
-			.partition::<Vec<_>, _>(|(i, _)| self[*i].is_specialisation());
+			.partition::<Vec<_>, _>(|(i, _)| self[*i].specialised_from().is_some());
 
 		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
 
@@ -490,7 +490,7 @@ impl<'a, T: Marker> OverloadMap<'a, T> {
 			.ok_or_else(|| FunctionLookupError::NoMatchingFunction(Vec::new()))?
 			.iter()
 			.map(|f| (*f, self.model[*f].function_entry(self.model)))
-			.partition::<Vec<_>, _>(|(i, _)| self.model[*i].is_specialisation());
+			.partition::<Vec<_>, _>(|(i, _)| self.model[*i].specialised_from().is_some());
 
 		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
 

@@ -1,6 +1,9 @@
 //! THIR representation of items
 
-use std::ops::{Deref, DerefMut};
+use std::{
+	num::NonZeroU32,
+	ops::{Deref, DerefMut},
+};
 
 use super::{domain::Domain, Annotations, Expression, Identifier, Marker, Model};
 use crate::{
@@ -447,7 +450,7 @@ pub struct Function<T: Marker = ()> {
 	body: Option<Expression<T>>,
 	annotations: Annotations<T>,
 	top_level: bool,
-	is_specialisation: bool,
+	specialised_from: Option<SpecialisedFrom>,
 	mangled_param_tys: Option<Vec<Ty>>,
 }
 
@@ -468,7 +471,7 @@ impl<T: Marker> Function<T> {
 			parameters: Vec::new(),
 			type_inst_vars: Vec::new(),
 			top_level: true,
-			is_specialisation: false,
+			specialised_from: None,
 			mangled_param_tys: None,
 		}
 	}
@@ -487,7 +490,7 @@ impl<T: Marker> Function<T> {
 			parameters,
 			type_inst_vars: Vec::new(),
 			top_level: false,
-			is_specialisation: false,
+			specialised_from: None,
 			mangled_param_tys: None,
 		}
 	}
@@ -507,14 +510,14 @@ impl<T: Marker> Function<T> {
 		self.name = FunctionName::new(name);
 	}
 
-	/// Whether or not this function is the result of type specialisation
-	pub fn is_specialisation(&self) -> bool {
-		self.is_specialisation
+	/// Get a value uniquely representing the function this was specialised from
+	pub fn specialised_from(&self) -> Option<SpecialisedFrom> {
+		self.specialised_from
 	}
 
-	/// Set whether or not this function is the result of type specialisation
-	pub fn set_specialised(&mut self, specialised: bool) {
-		self.is_specialisation = specialised;
+	/// Set a value to represent which function this was specialised from
+	pub fn set_specialised(&mut self, from: Option<SpecialisedFrom>) {
+		self.specialised_from = from
 	}
 
 	/// Get the parameter types as stored for name mangling purposes
@@ -648,6 +651,19 @@ impl<T: Marker> Function<T> {
 				})
 			},
 		}
+	}
+}
+
+/// An identifier for the polymorphic function a specialised instantiation comes from.
+///
+/// This lets us keep track of which specialisations came from the same polymorphic
+/// definition and therefore should not be dispatched to one another.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SpecialisedFrom(NonZeroU32);
+
+impl<T: Marker> From<FunctionId<T>> for SpecialisedFrom {
+	fn from(value: FunctionId<T>) -> Self {
+		Self(value.into())
 	}
 }
 

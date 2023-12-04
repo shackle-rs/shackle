@@ -81,6 +81,11 @@ impl<T: Marker> Expression<T> {
 	pub fn origin(&self) -> Origin {
 		self.origin
 	}
+
+	/// Set the origin of this expression
+	pub fn set_origin(&mut self, origin: impl Into<Origin>) {
+		self.origin = origin.into()
+	}
 }
 
 impl<T: Marker> Deref for Expression<T> {
