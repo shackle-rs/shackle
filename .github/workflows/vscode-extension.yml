@@ -1,6 +1,10 @@
 name: VS Code Extension
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
 
 jobs:
   vscode-extension:
