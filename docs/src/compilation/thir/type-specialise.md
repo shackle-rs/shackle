@@ -72,9 +72,8 @@ original) given the argument types, and then instantiate calls using those types
 
 In this case, we have two other overloads and an argument of `var opt int`:
 
-- `foo(var $$E)` gives `$$E = var opt int`, and so the signature becomes `foo(var int)`.
-- `foo($U)` gives `$U = var opt int`, and so the signature becomes `foo(int)`
-  (since `$U` refers to the par non-opt version of `$U`).
+- `foo(var $$E)` gives `$$E = int`, and so the signature becomes `foo(var int)`.
+- `foo($U)` gives `$U = int`, and so the signature becomes `foo(int)`.
 
 We then instantiate `foo(var int)` and `foo(int)` and will be able to generate function dispatch
 preambles as required.
