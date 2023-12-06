@@ -295,11 +295,11 @@ impl Ty {
 	pub fn known_enumerable(&self, db: &dyn Interner) -> bool {
 		match self.lookup(db) {
 			TyData::Error
-			| TyData::Bottom(_)
-			| TyData::Boolean(_, _)
-			| TyData::Integer(_, _)
-			| TyData::Enum(_, _, _) => true,
-			TyData::TyVar(_, _, t) => t.enumerable,
+			| TyData::Bottom(OptType::NonOpt)
+			| TyData::Boolean(_, OptType::NonOpt)
+			| TyData::Integer(_, OptType::NonOpt)
+			| TyData::Enum(_, OptType::NonOpt, _) => true,
+			TyData::TyVar(_, Some(OptType::NonOpt), t) => t.enumerable,
 			_ => false,
 		}
 	}
@@ -308,8 +308,8 @@ impl Ty {
 	pub fn known_indexable(&self, db: &dyn Interner) -> bool {
 		self.known_enumerable(db)
 			|| match self.lookup(db) {
-				TyData::Tuple(_, fs) => fs.iter().all(|f| f.known_enumerable(db)),
-				TyData::TyVar(_, _, t) => t.indexable,
+				TyData::Tuple(OptType::NonOpt, fs) => fs.iter().all(|f| f.known_enumerable(db)),
+				TyData::TyVar(_, Some(OptType::NonOpt), t) => t.indexable,
 				_ => false,
 			}
 	}

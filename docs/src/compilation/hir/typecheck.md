@@ -180,6 +180,65 @@ it should be noted that in the case of two identical functions which have bodies
 at this stage to allow type checking to continue with a reasonable return type. The duplicate function error will be
 emitted during final validation of the HIR.
 
+### Type-inst variables
+
+There are two kinds of type-inst variables: `$T` and `$$E`. `$T` matches any type other than arrays and functions (this
+is because the old compiler doesn't accept arrays for these, but actually it seems like it would make more sense if it
+did). `$$E` matches any enumerable type (booleans, integers, enums) - unlike the old compiler, this is a a properly
+generic type parameter, and is not considered to a special `int`.
+
+It's also possible to restrict `$T` to accept only types valid for array indices if it is used as `array [$T] of int`.
+In this case only integers/enums or tuples of them would be accepted.
+
+One complication is that the way type-inst variables are used looks different to most other languages. Since omitting
+`var`/`opt` implies `par`, non-`opt`, a parameter declared to be `$T` is actually `par (non-opt) $T`. That is, the
+parameter will accept the par, non-optional version of whatever type the type parameter `$T` is given as. `any $T` is
+used to make the parameter accept the actual type of the type parameter `$T`.
+
+Note that the language is currently missing `anyvar` and `anyopt`, which would be needed for expressing parameters
+whose inst/optionality depend on the input type parameters (for type-inst variables used in parameters only, this is
+not really a problem since using `var $T` or `opt $T` will still let you match the needed combinations - the problem
+is that if you use the type-inst variable in the return type, specifying `opt $T` will force the return type to be
+`opt`, even if `$T` is non-optional).
+
+#### Determining the types substituted for type-inst variables
+
+Since calls do not explicitly set the types to give for each type-inst variable, we have to use the argument types to
+determine them. Consider the function:
+
+```mzn
+function var opt $T: foo(var $T: x, any $T: y);
+var 1..3: p;
+opt int: q;
+any: v = foo(p, q);
+```
+
+Then for the call `foo(p, q)` we start by considering the first argument `p`, which is of type `var int`. The function
+parameter is declared as `var $T`, so that means it applies its own inst (`var`) and optionality (non-`opt`) to the type
+of `$T` - therefore we strip off the inst and optionality from the given argument type and use that for `$T`. So
+`$T` for this argument is set to be (`par`, non-`opt`) `int`.
+
+Next we look at the second argument `q`, which is of type `opt int`. Since the function parameter is declared as
+`any $T`, it does not apply any modifiers to the type of `$T`, so we set the type of `$T` for this argument to be
+`opt int`.
+
+Then the final type for `$T` is the most specific supertype of `int` and `opt int`, meaning the final type is `opt int`.
+From this, we can compute the actual instantiated function signature by substituting `$T` = `opt int` for the parameters
+and return type.
+
+- The first parameter `var $T` becomes `var int` (again, since `var $T` is really `var`, non-`opt` `$T`).
+- The second parameter of `any $T` gives `opt int` (since `any` means don't apply any modifiers to `$T`).
+- The return type of `var opt $T` gives `var opt int` (since it applies the `var` and `opt` modifiers to `$T`).
+
+So the instantiated result is:
+
+```mzn
+function var opt int: foo(var int: x, opt int: y);
+var 1..3: p;
+opt int: q;
+var opt int: v = foo(p, q);
+```
+
 ## Output typing
 
 The expressions of output items, and definitions of `:: output_only` declarations are type-checked in a special mode
