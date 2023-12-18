@@ -31,7 +31,7 @@ jobs:
       - name: Build shackle-ls
         run: cargo install --root dist/ --path crates/shackle-ls
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: shackle-exe-${{ matrix.os }}
           path: dist/
