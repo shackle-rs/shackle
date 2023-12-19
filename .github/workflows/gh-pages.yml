@@ -2,8 +2,8 @@ name: github pages
 
 on:
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - "dependabot/*"
   pull_request:
 
 jobs:
