@@ -7,11 +7,12 @@ include "fzn_range_reif.mzn";
   assertion failure will occur.
 */
 predicate range(
-	array[$$X] of var $$Y: x,
+	array [$$X] of var $$Y: x,
 	var set of $$X: s,
-	var set of $$Y: t
-) =	assert(
-	ub(s) subset index_set(x),
-	"range: upper bound of 's' must be a subset of the index set of 'x'",
-	fzn_range(erase_enum(x), erase_enum(s), erase_enum(t))
-);
+	var set of $$Y: t,
+) =
+	assert(
+		ub(s) subset index_set(x),
+		"range: upper bound of 's' must be a subset of the index set of 'x'",
+		fzn_range(erase_enum(x), erase_enum(s), erase_enum(t)),
+	);

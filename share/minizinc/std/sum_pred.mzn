@@ -10,7 +10,7 @@ include "fzn_sum_pred_reif.mzn";
 */
 predicate sum_pred(
 	var $$X: i,
-	array[$$X] of set of $$Y: sets,
-	array[$$Y] of int: cs,
-	var int: s
+	array [$$X] of set of $$Y: sets,
+	array [$$Y] of int: cs,
+	var int: s,
 ) = fzn_sum_pred(erase_enum(i), erase_enum(sets), erase_enum(cs), s);

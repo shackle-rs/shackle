@@ -18,6 +18,15 @@ impl Request for ViewAst {
 	const METHOD: &'static str = "shackle-ls/viewAst";
 }
 
+/// Request to view formatting IR for a file
+pub enum ViewFormatIr {}
+
+impl Request for ViewFormatIr {
+	type Params = TextDocumentPositionParams;
+	type Result = String;
+	const METHOD: &'static str = "shackle-ls/viewFormatIr";
+}
+
 /// Request to view HIR for an item
 pub enum ViewHir {}
 

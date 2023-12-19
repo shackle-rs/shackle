@@ -3,4 +3,4 @@
 %-----------------------------------------------------------------------------%
 
 predicate fzn_set_member_reif(var set of int: x, var int: y, var bool: b) =
-    b <-> y in x;
+	b <-> y in x;

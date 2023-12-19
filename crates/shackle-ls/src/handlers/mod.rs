@@ -1,4 +1,5 @@
 mod completions;
+mod format;
 mod goto_definition;
 mod hover;
 mod references;
@@ -7,14 +8,15 @@ mod semantic_tokens;
 mod vfs;
 mod view_ast;
 mod view_cst;
+mod view_format_ir;
 mod view_hir;
 mod view_pretty_print;
 mod view_scope;
 
 pub use self::{
-	completions::*, goto_definition::*, hover::*, references::*, rename_symbol::*,
-	semantic_tokens::*, vfs::*, view_ast::*, view_cst::*, view_hir::*, view_pretty_print::*,
-	view_scope::*,
+	completions::*, format::*, goto_definition::*, hover::*, references::*, rename_symbol::*,
+	semantic_tokens::*, vfs::*, view_ast::*, view_cst::*, view_format_ir::*, view_hir::*,
+	view_pretty_print::*, view_scope::*,
 };
 
 #[cfg(test)]

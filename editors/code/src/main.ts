@@ -11,6 +11,7 @@ import { handleCstViewCommand } from "./view-cst"
 import { handleHirViewCommand } from "./view-hir"
 import { handlePrettyPrintViewCommand } from "./view-pretty-print"
 import { handleScopeViewCommand } from "./view-scope"
+import { handleFormatIrViewCommand } from "./view-format-ir"
 
 let client: LanguageClient
 
@@ -48,6 +49,11 @@ export function activate(context: ExtensionContext) {
 		context.subscriptions.push(
 			commands.registerCommand("shackleLanguageServer.viewAst", () =>
 				handleAstViewCommand(client)
+			)
+		)
+		context.subscriptions.push(
+			commands.registerCommand("shackleLanguageServer.viewFormatIr", () =>
+				handleFormatIrViewCommand(client)
 			)
 		)
 		context.subscriptions.push(

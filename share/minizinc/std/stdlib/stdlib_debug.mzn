@@ -9,7 +9,11 @@
 function any $T: assert(bool: b, string: msg, any $T: x);
 
 /** @group stdlib.debug If \a b is true, return \a x, otherwise abort with message \a msg. */
-function array[$U] of any $T: assert(bool: b, string: msg, array[$U] of any $T: x);
+function array [$U] of any $T: assert(
+	bool: b,
+	string: msg,
+	array [$U] of any $T: x,
+);
 
 /** @group stdlib.debug If \a b is true, return true, otherwise abort with message \a msg. */
 function bool: assert(bool: b, string: msg);
@@ -23,7 +27,7 @@ function array [$U] of any $T: trace(string: msg, array [$U] of any $T: x);
 /** @group stdlib.debug Return \a x, and print a string representation of it. */
 function any $T: trace_exp(any $T: x);
 /** @group stdlib.debug Return \a x, and print a string representation of it. */
-function array[$U] of any $T: trace_exp(array[$U] of any $T: x);
+function array [$U] of any $T: trace_exp(array [$U] of any $T: x);
 
 /** @group stdlib.debug Return true, and print message \a msg. */
 function bool: trace(string: msg);
@@ -31,35 +35,46 @@ function bool: trace(string: msg);
 function bool: trace_dbg(string: msg);
 
 /** @group stdlib.debug Return \a x, and print message \a msg to section \a section. */
-function any $T: trace_to_section(string: section, string: msg, any $T: x) = let {
-  constraint mzn_trace_to_section(section, msg, false);
-} in x;
+function any $T: trace_to_section(string: section, string: msg, any $T: x) =
+	let { constraint mzn_trace_to_section(section, msg, false) } in x;
 /** @group stdlib.debug Return \a x, and print message \a msg to section \a section. */
-function array [$U] of any $T: trace_to_section(string: section, string: msg, array [$U] of any $T: x) = let {
-  constraint mzn_trace_to_section(section, msg, false);
-} in x;
+function array [$U] of any $T: trace_to_section(
+	string: section,
+	string: msg,
+	array [$U] of any $T: x,
+) = let { constraint mzn_trace_to_section(section, msg, false) } in x;
 
 /** @group stdlib.debug Return true, and print message \a msg to section \a section. */
-function bool: trace_to_section(string: section, string: msg) = mzn_trace_to_section(section, msg, false);
+function bool: trace_to_section(string: section, string: msg) =
+	mzn_trace_to_section(section, msg, false);
 
 /** @group stdlib.debug Return true, and print \a x to the JSON section \a section. */
-function bool: trace_to_json_section(string: section, opt $T: x) = mzn_trace_to_section(section, showJSON(x) ++ "\n", true);
+function bool: trace_to_json_section(string: section, opt $T: x) =
+	mzn_trace_to_section(section, showJSON(x) ++ "\n", true);
 /** @group stdlib.debug Return true, and print \a x to the JSON section \a section. */
-function bool: trace_to_json_section(string: section, array [$U] of opt $T: x) = mzn_trace_to_section(section, showJSON(x) ++ "\n", true);
+function bool: trace_to_json_section(string: section, array [$U] of opt $T: x) =
+	mzn_trace_to_section(section, showJSON(x) ++ "\n", true);
 
-function bool: mzn_trace_to_section(string: section, string: x, bool: json) :: mzn_internal_representation;
+function bool: mzn_trace_to_section(string: section, string: x, bool: json)
+	:: mzn_internal_representation;
 
 /** @group stdlib.debug Return \a x, and print message \a msg. */
 function any $T: trace_stdout(string: msg, any $T: x);
 /** @group stdlib.debug Return \a x, and print message \a msg. */
-function array [$U] of any $T: trace_stdout(string: msg, array [$U] of any $T: x);
+function array [$U] of any $T: trace_stdout(
+	string: msg,
+	array [$U] of any $T: x,
+);
 /** @group stdlib.debug Return true, and print message \a msg. */
 function bool: trace_stdout(string: msg);
 
 /** @group stdlib.debug Return \a x, and print message \a msg to logging stream. */
 function any $T: trace_logstream(string: msg, any $T: x);
 /** @group stdlib.debug Return \a x, and print message \a msg to logging stream. */
-function array [$U] of any $T: trace_logstream(string: msg, array [$U] of any $T: x);
+function array [$U] of any $T: trace_logstream(
+	string: msg,
+	array [$U] of any $T: x,
+);
 /** @group stdlib.debug Return true, and print message \a msg to logging stream. */
 function bool: trace_logstream(string: msg);
 /** @group stdlib.debug Return logging stream as string */
@@ -75,7 +90,8 @@ function ann: expression_name_dbg(string: s) = expression_name(s);
 
 /** @group stdlib.debug Abort evaluation and print message \a msg. */
 function bool: abort(string: msg);
-function any $T: abort(string: msg, any $T: x) = let { constraint abort(msg) } in x;
+function any $T: abort(string: msg, any $T: x) =
+	let { constraint abort(msg) } in x;
 
 /** @group stdlib.debug Set to true iff ``--debug`` flag is set. */
 bool: debug_mode = mzn_internal_check_debug_mode();

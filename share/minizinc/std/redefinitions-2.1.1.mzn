@@ -2,9 +2,11 @@
 % that can be overridden by solvers.
 
 function var $$E: min(var set of $$E: xs) =
-         let { var set of int: s = erase_enum(xs);
-               var min(ub(s)) .. max(ub(s)): m = min([ e + (max(ub(s))+1-e)*(1 - (e in s)) | e in ub(s) ])
-             } in to_enum(ub(xs), m);
+	let {
+		var set of int: s = erase_enum(xs);
+		var min(ub(s))..max(ub(s)): m =
+			min([e + (max(ub(s)) + 1 - e) * (1 - (e in s)) | e in ub(s)]);
+	} in to_enum(ub(xs), m);
 
 %% The following can be used as an alternative if the solver supports
 %% a FlatZinc builtin set_min:
@@ -31,9 +33,11 @@ function var $$E: min(var set of $$E: xs) =
 %   } in min_t(x);
 
 function var $$E: max(var set of $$E: xs) =
-         let { var set of int: s = erase_enum(xs);
-               var min(ub(s)) .. max(ub(s)): m = max([ e + (min(ub(s))-1-e)*(1 - (e in s)) | e in ub(s) ])
-             } in to_enum(ub(xs), m);
+	let {
+		var set of int: s = erase_enum(xs);
+		var min(ub(s))..max(ub(s)): m =
+			max([e + (min(ub(s)) - 1 - e) * (1 - (e in s)) | e in ub(s)]);
+	} in to_enum(ub(xs), m);
 
 %% The following can be used as an alternative if the solver supports
 %% a FlatZinc builtin set_max:

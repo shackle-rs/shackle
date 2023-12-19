@@ -161,4 +161,5 @@ id_registry!(
 	mzn_slice_internal,
 	mzn_construct_partial,
 	mzn_destruct_partial,
+	mzn_unreachable,
 );

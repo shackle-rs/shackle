@@ -56,6 +56,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 				..Default::default()
 			},
 		)),
+		document_formatting_provider: Some(OneOf::Left(true)),
 		..Default::default()
 	})
 	.unwrap();
@@ -82,6 +83,7 @@ fn main_loop(
 				let result = DispatchRequest::new(req, &mut db)
 					.on::<ViewCstHandler, _, _>()
 					.on::<ViewAstHandler, _, _>()
+					.on::<ViewFormatIrHandler, _, _>()
 					.on::<ViewHirHandler, _, _>()
 					.on::<ViewScopeHandler, _, _>()
 					.on::<ViewPrettyPrintHandler, _, _>()
@@ -91,6 +93,7 @@ fn main_loop(
 					.on::<HoverHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()
 					.on::<SemanticTokensHandler, _, _>()
+					.on::<FormatHandler, _, _>()
 					.finish();
 
 				match result {

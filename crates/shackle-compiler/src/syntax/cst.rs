@@ -8,7 +8,7 @@ use std::{
 };
 
 use miette::SourceSpan;
-use tree_sitter::{Node, Tree, TreeCursor};
+use tree_sitter::{Node, Tree};
 
 use super::db::SourceParser;
 use crate::{
@@ -67,53 +67,94 @@ impl Cst {
 		self.inner.source.as_str()
 	}
 
+	/// Get the error/missing nodes if any
+	pub fn error_nodes(&self) -> impl Iterator<Item = CstNode> + '_ {
+		let mut cursor = self.walk();
+		let mut done = false;
+		std::iter::from_fn(move || {
+			while !done {
+				let node = cursor.node();
+				if !node.has_error() || !cursor.goto_first_child() {
+					while !cursor.goto_next_sibling() {
+						if !cursor.goto_parent() {
+							done = true;
+							let node = cursor.node();
+							if node.is_error() || node.is_missing() {
+								return Some(self.node(node));
+							}
+							return None;
+						}
+					}
+				}
+				if node.is_error() || node.is_missing() {
+					return Some(self.node(node));
+				}
+			}
+			None
+		})
+	}
+
 	/// Get the syntax error(s) if any
 	pub fn error<F: Fn(Option<FileRef>) -> SourceFile>(
 		&self,
 		get_source: F,
 	) -> Result<(), SyntaxError> {
-		// This would be ideal, but (MISSING) is currently not allowed.
-		// let q =
-		// 	Query::new(tree_sitter_minizinc::language(), "[(ERROR) (MISSING)] @err").unwrap();
-		let mut result: Result<(), SyntaxError> = Ok(());
-		let mut cursor = self.walk();
-		let next_node = |c: &mut TreeCursor| {
-			c.goto_next_sibling() || (c.goto_parent() && c.goto_next_sibling())
-		};
-		loop {
-			let node = cursor.node();
-			if node.is_error() || node.is_missing() {
-				let error = SyntaxError {
-					src: get_source(self.inner.file),
-					span: node.byte_range().into(),
-					msg: if node.is_missing() {
-						format!("Missing {}", node.kind())
-					} else {
-						format!(
-							"Unexpected {}",
-							node.child(0)
-								.expect("ERROR node must always have a child")
-								.kind()
-						)
-					},
-					other: Vec::new(),
-				};
-				match &mut result {
-					Err(e) => {
-						e.other.push(error);
+		let mut errors = self.error_nodes().map(|cst_node| {
+			let mut node = *cst_node.as_ref();
+			if node.is_error() {
+				if node.parent().is_none() {
+					// Root node is ERROR
+					let mut cursor = node.walk();
+					let mut had_semi = true;
+					if cursor.goto_first_child() {
+						loop {
+							if let Some("item") = cursor.field_name() {
+								if had_semi {
+									had_semi = false;
+								}
+							} else if cursor.node().kind() == ";" {
+								if had_semi {
+									// Invalid semicolon
+									node = cursor.node();
+									break;
+								}
+								had_semi = true;
+							} else if !cursor.node().is_extra() {
+								// Unexpected non-item
+								node = cursor.node();
+								break;
+							}
+							if !cursor.goto_next_sibling() {
+								break;
+							}
+						}
 					}
-					Ok(()) => result = Err(error),
-				};
-				if !next_node(&mut cursor) {
-					break;
+				} else if let Some(child) = node.child(0) {
+					node = child;
 				}
-			} else if node.has_error() && cursor.goto_first_child() {
-				continue;
-			} else if !next_node(&mut cursor) {
-				break;
 			}
-		}
-		result
+			let src = get_source(self.inner.file);
+			let msg = if node.is_missing() {
+				format!("Missing {}", node.kind())
+			} else if node.is_error() {
+				let c = self.node(node);
+				let text = c.text();
+				format!("Unexpected {}", text.chars().next().unwrap())
+			} else {
+				format!("Unexpected {}", node.kind())
+			};
+			SyntaxError {
+				src,
+				span: node.byte_range().into(),
+				msg,
+				other: Vec::new(),
+			}
+		});
+		let Some(mut error) = errors.next() else {
+			return Ok(());
+		};
+		error.other.extend(errors);
+		Err(error)
 	}
 
 	/// Create a [`CstNode`] from the given raw node from the same tree.
@@ -225,10 +266,11 @@ impl CstNode {
 			let node = cursor.node();
 			writeln!(
 				buf,
-				"{:i$}kind={:?}, named={:?}, error={:?}, missing={:?}, extra={:?}, field={:?}",
+				"{:i$}kind={:?}, named={:?}, has_error={:?}, error={:?}, missing={:?}, extra={:?}, field={:?}",
 				"",
 				node.kind(),
 				node.is_named(),
+				node.has_error(),
 				node.is_error(),
 				node.is_missing(),
 				node.is_extra(),
@@ -281,7 +323,7 @@ where
 
 #[cfg(test)]
 mod test {
-	use expect_test::{expect_file, ExpectFile};
+	use expect_test::{expect, expect_file, ExpectFile};
 	use tree_sitter::Parser;
 
 	use super::Cst;
@@ -304,5 +346,44 @@ mod test {
 			include_str!("../../../../docs/src/examples/simple-model.mzn"),
 			expect_file!("../../../../docs/src/examples/simple-model-cst.txt"),
 		)
+	}
+
+	#[test]
+	fn test_cst_errors() {
+		let source = r#"
+			int: x =;
+			int: = 1;
+			foo
+		"#;
+		let mut parser = Parser::new();
+		parser
+			.set_language(tree_sitter_minizinc::language())
+			.unwrap();
+		let tree = parser.parse(source.as_bytes(), None).unwrap();
+		let cst = Cst::from_str(tree, source);
+		let actual = cst
+			.error_nodes()
+			.map(|n| {
+				format!(
+					"{} {}",
+					if n.as_ref().is_missing() {
+						"missing"
+					} else {
+						"unexpected"
+					},
+					if n.as_ref().is_error() {
+						n.text()
+					} else {
+						n.as_ref().kind()
+					}
+				)
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
+		let expected = expect![[r#"
+    unexpected =
+    missing identifier
+    unexpected foo"#]];
+		expected.assert_eq(&actual);
 	}
 }

@@ -8,10 +8,11 @@ include "fzn_span_reif.mzn";
 predicate span(
 	var opt int: s0,
 	var int: d0,
-	array[$$E] of var opt int: s,
-	array[$$E] of var int: d
-) = assert(
+	array [$$E] of var opt int: s,
+	array [$$E] of var int: d,
+) =
+	assert(
 		index_set(s) = index_set(d),
 		"span: index sets of third and fourth argument must be identical",
-	)
-	/\ fzn_span(s0, d0, erase_enum(s), erase_enum(d));
+	) /\
+		fzn_span(s0, d0, erase_enum(s), erase_enum(d));
