@@ -2,8 +2,8 @@ name: Check Format
 
 on:
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - "dependabot/*"
   pull_request:
 
 env:

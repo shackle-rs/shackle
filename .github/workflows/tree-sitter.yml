@@ -2,8 +2,8 @@ name: Tree Sitter
 
 on:
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - "dependabot/*"
   pull_request:
 
 jobs:

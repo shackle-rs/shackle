@@ -2,8 +2,8 @@ name: VS Code Extension
 
 on:
   push:
-    branches:
-      - develop
+    branches-ignore:
+      - "dependabot/*"
   pull_request:
 
 jobs:
