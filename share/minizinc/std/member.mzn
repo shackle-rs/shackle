@@ -12,25 +12,25 @@ include "fzn_set_member_reif.mzn";
 /** @group globals.array
   Requires that \a y occurs in the array \a x.
 */
-predicate member(array[_] of var bool: x, var bool: y) =
+predicate member(array [_] of var bool: x, var bool: y) =
 	fzn_member_bool(erase_enum(x), y);
 
 /** @group globals.array
   Requires that \a y occurs in the array \a x.
 */
-predicate member(array[_] of var float: x, var float: y) =
+predicate member(array [_] of var float: x, var float: y) =
 	fzn_member_float(erase_enum(x), y);
 
 /** @group globals.array
   Requires that \a y occurs in the array \a x.
 */
-predicate member(array[_] of var $$E: x, var $$E: y) =
+predicate member(array [_] of var $$E: x, var $$E: y) =
 	fzn_member_int(erase_enum(x), erase_enum(y));
 
 /** @group globals.array
   Requires that \a y occurs in the array \a x.
 */
-predicate member(array[_] of var set of $$E: x, var set of $$E: y) =
+predicate member(array [_] of var set of $$E: x, var set of $$E: y) =
 	fzn_member_set(erase_enum(x), erase_enum(y));
 
 /** @group globals.array

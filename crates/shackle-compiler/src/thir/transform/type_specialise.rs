@@ -122,10 +122,14 @@ impl<'a, Dst: Marker> Folder<'_, Dst> for TypeSpecialiser<'a, Dst> {
 				self.position.insert(f, last);
 			}
 		}
-		if !model[f].is_polymorphic() || model[f].body().is_none() {
-			// Remove non-builtin polymorphic functions
-			add_function(self, db, model, f);
+		if model[f].is_polymorphic() && model[f].body().is_some()
+			|| model[f].annotations().has(model, self.ids.mzn_unreachable)
+		{
+			// Remove non-builtin polymorphic and unreachable functions
+			return;
 		}
+
+		add_function(self, db, model, f);
 	}
 
 	fn fold_declaration_id(
@@ -264,6 +268,12 @@ impl<'a, Dst: Marker> TypeSpecialiser<'a, Dst> {
 		f: FunctionId,
 		args: &[Ty],
 	) -> FunctionId<Dst> {
+		assert!(
+			!model[f].annotations().has(model, self.ids.mzn_unreachable),
+			"Tried to instantiate unreachable internal function {}",
+			PrettyPrinter::new(db, model).pretty_print_signature(f.into())
+		);
+
 		let needs_instantiation = model[f].is_polymorphic()
 			&& (model[f].body().is_some()
 				|| (model[f].name() == self.ids.show

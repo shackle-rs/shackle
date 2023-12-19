@@ -46,6 +46,31 @@ pub const IDENTIFIERS_QUERY: &str = include_str!("../../queries/identifiers.scm"
 /// Get case expressions
 pub const CASE_EXPRESSION_QUERY: &str = include_str!("../../queries/case_expressions.scm");
 
+/// Get comments
+pub const COMMENTS_QUERY: &str = include_str!("../../queries/comments.scm");
+
+/// Grammar precedence value
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Precedence {
+	/// Specified using `prec.left`
+	Left(i64),
+	/// Specified using `prec`
+	Prec(i64),
+	/// Specified using `prec.right`
+	Right(i64),
+}
+
+impl Precedence {
+	/// Get the precedence value
+	pub fn get(&self) -> i64 {
+		match self {
+			Precedence::Left(i) | Precedence::Prec(i) | Precedence::Right(i) => *i,
+		}
+	}
+}
+
+include!(concat!(env!("OUT_DIR"), "/precedence.rs"));
+
 #[cfg(test)]
 mod tests {
 	#[test]

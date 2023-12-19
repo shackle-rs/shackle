@@ -13,13 +13,38 @@ include "fzn_dpath_reif.mzn";
    @param ns: a Boolean for each node whether it is in the subgraph
    @param es: a Boolean for each edge whether it is in the subgraph
 */
-predicate dpath(array[$$E] of $$N: from, array[$$E] of $$N: to,
-                    var $$N: s, var $$N: t, array[$$N] of var bool: ns, array[$$E] of var bool: es) =
-   assert(index_set(from) = index_set(to),"dpath: index set of from and to must be identical") /\
-   assert(index_set(from) = index_set(es),"dpath: index set of from and es must be identical") /\
-   assert(dom_array(from) subset index_set(ns),"dpath: nodes in from must be in index set of ns") /\
-   assert(dom_array(to) subset index_set(ns),"dpath: nodes in to must be in index set of ns") /\
-   fzn_dpath(erase_enum(from),erase_enum(to),erase_enum(s),erase_enum(t),erase_enum(ns),erase_enum(es));
+predicate dpath(
+	array [$$E] of $$N: from,
+	array [$$E] of $$N: to,
+	var $$N: s,
+	var $$N: t,
+	array [$$N] of var bool: ns,
+	array [$$E] of var bool: es,
+) =
+	assert(
+		index_set(from) = index_set(to),
+		"dpath: index set of from and to must be identical",
+	) /\
+		assert(
+			index_set(from) = index_set(es),
+			"dpath: index set of from and es must be identical",
+		) /\
+		assert(
+			dom_array(from) subset index_set(ns),
+			"dpath: nodes in from must be in index set of ns",
+		) /\
+		assert(
+			dom_array(to) subset index_set(ns),
+			"dpath: nodes in to must be in index set of ns",
+		) /\
+		fzn_dpath(
+			erase_enum(from),
+			erase_enum(to),
+			erase_enum(s),
+			erase_enum(t),
+			erase_enum(ns),
+			erase_enum(es),
+		);
 
 %-----------------------------------------------------------------------------%
 
@@ -33,10 +58,35 @@ predicate dpath(array[$$E] of $$N: from, array[$$E] of $$N: to,
    @param ns: a Boolean for each node whether it is in the subgraph
    @param es: a Boolean for each edge whether it is in the subgraph
 */
-predicate path(array[$$E] of $$N: from, array[$$E] of $$N: to,
-                    var $$N: s, var $$N: t, array[$$N] of var bool: ns, array[$$E] of var bool: es) =
-   assert(index_set(from) = index_set(to),"path: index set of from and to must be identical") /\
-   assert(index_set(from) = index_set(es),"path: index set of from and es must be identical") /\
-   assert(dom_array(from) subset index_set(ns),"path: nodes in from must be in index set of ns") /\
-   assert(dom_array(to) subset index_set(ns),"path: nodes in to must be in index set of ns") /\
-   fzn_path(erase_enum(from),erase_enum(to),erase_enum(s),erase_enum(t),erase_enum(ns),erase_enum(es));
+predicate path(
+	array [$$E] of $$N: from,
+	array [$$E] of $$N: to,
+	var $$N: s,
+	var $$N: t,
+	array [$$N] of var bool: ns,
+	array [$$E] of var bool: es,
+) =
+	assert(
+		index_set(from) = index_set(to),
+		"path: index set of from and to must be identical",
+	) /\
+		assert(
+			index_set(from) = index_set(es),
+			"path: index set of from and es must be identical",
+		) /\
+		assert(
+			dom_array(from) subset index_set(ns),
+			"path: nodes in from must be in index set of ns",
+		) /\
+		assert(
+			dom_array(to) subset index_set(ns),
+			"path: nodes in to must be in index set of ns",
+		) /\
+		fzn_path(
+			erase_enum(from),
+			erase_enum(to),
+			erase_enum(s),
+			erase_enum(t),
+			erase_enum(ns),
+			erase_enum(es),
+		);

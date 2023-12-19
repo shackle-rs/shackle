@@ -11,12 +11,7 @@ repository = "https://github.com/shackle-rs/shackle"
 edition = "2021"
 
 build = "bindings/rust/build.rs"
-include = [
-  "bindings/rust/*",
-  "grammar.js",
-  "queries/*",
-  "src/*",
-]
+include = ["bindings/rust/*", "grammar.js", "queries/*", "src/*"]
 
 [lib]
 path = "bindings/rust/lib.rs"
@@ -26,3 +21,4 @@ tree-sitter = "~0.20"
 
 [build-dependencies]
 cc = "1.0"
+serde_json = "1.0.108"

@@ -44,6 +44,10 @@
 				"title": "MiniZinc: View AST"
 			},
 			{
+				"command": "shackleLanguageServer.viewFormatIr",
+				"title": "MiniZinc: View Formatting IR"
+			},
+			{
 				"command": "shackleLanguageServer.viewHir",
 				"title": "MiniZinc: View HIR"
 			},
