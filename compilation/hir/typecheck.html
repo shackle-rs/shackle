@@ -363,6 +363,51 @@ concrete types over either of those.</li>
 it should be noted that in the case of two identical functions which have bodies, we will simply arbitrarily choose one
 at this stage to allow type checking to continue with a reasonable return type. The duplicate function error will be
 emitted during final validation of the HIR.</p>
+<h3 id="type-inst-variables"><a class="header" href="#type-inst-variables">Type-inst variables</a></h3>
+<p>There are two kinds of type-inst variables: <code>$T</code> and <code>$$E</code>. <code>$T</code> matches any type other than arrays and functions (this
+is because the old compiler doesn't accept arrays for these, but actually it seems like it would make more sense if it
+did). <code>$$E</code> matches any enumerable type (booleans, integers, enums) - unlike the old compiler, this is a a properly
+generic type parameter, and is not considered to a special <code>int</code>.</p>
+<p>It's also possible to restrict <code>$T</code> to accept only types valid for array indices if it is used as <code>array [$T] of int</code>.
+In this case only integers/enums or tuples of them would be accepted.</p>
+<p>One complication is that the way type-inst variables are used looks different to most other languages. Since omitting
+<code>var</code>/<code>opt</code> implies <code>par</code>, non-<code>opt</code>, a parameter declared to be <code>$T</code> is actually <code>par (non-opt) $T</code>. That is, the
+parameter will accept the par, non-optional version of whatever type the type parameter <code>$T</code> is given as. <code>any $T</code> is
+used to make the parameter accept the actual type of the type parameter <code>$T</code>.</p>
+<p>Note that the language is currently missing <code>anyvar</code> and <code>anyopt</code>, which would be needed for expressing parameters
+whose inst/optionality depend on the input type parameters (for type-inst variables used in parameters only, this is
+not really a problem since using <code>var $T</code> or <code>opt $T</code> will still let you match the needed combinations - the problem
+is that if you use the type-inst variable in the return type, specifying <code>opt $T</code> will force the return type to be
+<code>opt</code>, even if <code>$T</code> is non-optional).</p>
+<h4 id="determining-the-types-substituted-for-type-inst-variables"><a class="header" href="#determining-the-types-substituted-for-type-inst-variables">Determining the types substituted for type-inst variables</a></h4>
+<p>Since calls do not explicitly set the types to give for each type-inst variable, we have to use the argument types to
+determine them. Consider the function:</p>
+<pre><code class="language-mzn">function var opt $T: foo(var $T: x, any $T: y);
+var 1..3: p;
+opt int: q;
+any: v = foo(p, q);
+</code></pre>
+<p>Then for the call <code>foo(p, q)</code> we start by considering the first argument <code>p</code>, which is of type <code>var int</code>. The function
+parameter is declared as <code>var $T</code>, so that means it applies its own inst (<code>var</code>) and optionality (non-<code>opt</code>) to the type
+of <code>$T</code> - therefore we strip off the inst and optionality from the given argument type and use that for <code>$T</code>. So
+<code>$T</code> for this argument is set to be (<code>par</code>, non-<code>opt</code>) <code>int</code>.</p>
+<p>Next we look at the second argument <code>q</code>, which is of type <code>opt int</code>. Since the function parameter is declared as
+<code>any $T</code>, it does not apply any modifiers to the type of <code>$T</code>, so we set the type of <code>$T</code> for this argument to be
+<code>opt int</code>.</p>
+<p>Then the final type for <code>$T</code> is the most specific supertype of <code>int</code> and <code>opt int</code>, meaning the final type is <code>opt int</code>.
+From this, we can compute the actual instantiated function signature by substituting <code>$T</code> = <code>opt int</code> for the parameters
+and return type.</p>
+<ul>
+<li>The first parameter <code>var $T</code> becomes <code>var int</code> (again, since <code>var $T</code> is really <code>var</code>, non-<code>opt</code> <code>$T</code>).</li>
+<li>The second parameter of <code>any $T</code> gives <code>opt int</code> (since <code>any</code> means don't apply any modifiers to <code>$T</code>).</li>
+<li>The return type of <code>var opt $T</code> gives <code>var opt int</code> (since it applies the <code>var</code> and <code>opt</code> modifiers to <code>$T</code>).</li>
+</ul>
+<p>So the instantiated result is:</p>
+<pre><code class="language-mzn">function var opt int: foo(var int: x, opt int: y);
+var 1..3: p;
+opt int: q;
+var opt int: v = foo(p, q);
+</code></pre>
 <h2 id="output-typing"><a class="header" href="#output-typing">Output typing</a></h2>
 <p>The expressions of output items, and definitions of <code>:: output_only</code> declarations are type-checked in a special mode
 where the types of top-level identifiers are assumed to be par. This alleviates the need to manually insert calls to

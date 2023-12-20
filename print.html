@@ -312,39 +312,39 @@ function bool: bar() = true;
 var 1..3: x;
 </code></pre>
 <p>Gives the CST</p>
-<pre><code>kind=&quot;source_file&quot;, named=true, error=false, missing=false, extra=false, field=None
-  kind=&quot;predicate&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
-    kind=&quot;test&quot;, named=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
-    kind=&quot;identifier&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
-    kind=&quot;(&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;)&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;=&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;boolean_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
-      kind=&quot;true&quot;, named=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;;&quot;, named=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;function_item&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
-    kind=&quot;function&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;type_base&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
-      kind=&quot;primitive_type&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
-        kind=&quot;bool&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;:&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;identifier&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
-    kind=&quot;(&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;)&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;=&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;boolean_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
-      kind=&quot;true&quot;, named=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;;&quot;, named=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;declaration&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
-    kind=&quot;type_base&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
-      kind=&quot;var&quot;, named=false, error=false, missing=false, extra=false, field=Some(&quot;var_par&quot;)
-      kind=&quot;infix_operator&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
-        kind=&quot;integer_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;left&quot;)
-        kind=&quot;..&quot;, named=false, error=false, missing=false, extra=false, field=Some(&quot;operator&quot;)
-        kind=&quot;integer_literal&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;right&quot;)
-    kind=&quot;:&quot;, named=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;identifier&quot;, named=true, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
-  kind=&quot;;&quot;, named=false, error=false, missing=false, extra=false, field=None
+<pre><code>kind=&quot;source_file&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;predicate&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
+    kind=&quot;test&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
+    kind=&quot;identifier&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
+    kind=&quot;(&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;)&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;=&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;boolean_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
+      kind=&quot;true&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;;&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;function_item&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
+    kind=&quot;function&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;type_base&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
+      kind=&quot;primitive_type&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
+        kind=&quot;bool&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;:&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;identifier&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
+    kind=&quot;(&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;)&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;=&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;boolean_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
+      kind=&quot;true&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;;&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=&quot;declaration&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
+    kind=&quot;type_base&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
+      kind=&quot;var&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;var_par&quot;)
+      kind=&quot;infix_operator&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
+        kind=&quot;integer_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;left&quot;)
+        kind=&quot;..&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;operator&quot;)
+        kind=&quot;integer_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;right&quot;)
+    kind=&quot;:&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=&quot;identifier&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
+  kind=&quot;;&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ast-generation"><a class="header" href="#ast-generation">AST generation</a></h1>
 <p>After parsing, a MiniZinc AST is generated from the CST. This provides type-safe accessors to the nodes in the syntax
@@ -1057,6 +1057,51 @@ concrete types over either of those.</li>
 it should be noted that in the case of two identical functions which have bodies, we will simply arbitrarily choose one
 at this stage to allow type checking to continue with a reasonable return type. The duplicate function error will be
 emitted during final validation of the HIR.</p>
+<h3 id="type-inst-variables"><a class="header" href="#type-inst-variables">Type-inst variables</a></h3>
+<p>There are two kinds of type-inst variables: <code>$T</code> and <code>$$E</code>. <code>$T</code> matches any type other than arrays and functions (this
+is because the old compiler doesn't accept arrays for these, but actually it seems like it would make more sense if it
+did). <code>$$E</code> matches any enumerable type (booleans, integers, enums) - unlike the old compiler, this is a a properly
+generic type parameter, and is not considered to a special <code>int</code>.</p>
+<p>It's also possible to restrict <code>$T</code> to accept only types valid for array indices if it is used as <code>array [$T] of int</code>.
+In this case only integers/enums or tuples of them would be accepted.</p>
+<p>One complication is that the way type-inst variables are used looks different to most other languages. Since omitting
+<code>var</code>/<code>opt</code> implies <code>par</code>, non-<code>opt</code>, a parameter declared to be <code>$T</code> is actually <code>par (non-opt) $T</code>. That is, the
+parameter will accept the par, non-optional version of whatever type the type parameter <code>$T</code> is given as. <code>any $T</code> is
+used to make the parameter accept the actual type of the type parameter <code>$T</code>.</p>
+<p>Note that the language is currently missing <code>anyvar</code> and <code>anyopt</code>, which would be needed for expressing parameters
+whose inst/optionality depend on the input type parameters (for type-inst variables used in parameters only, this is
+not really a problem since using <code>var $T</code> or <code>opt $T</code> will still let you match the needed combinations - the problem
+is that if you use the type-inst variable in the return type, specifying <code>opt $T</code> will force the return type to be
+<code>opt</code>, even if <code>$T</code> is non-optional).</p>
+<h4 id="determining-the-types-substituted-for-type-inst-variables"><a class="header" href="#determining-the-types-substituted-for-type-inst-variables">Determining the types substituted for type-inst variables</a></h4>
+<p>Since calls do not explicitly set the types to give for each type-inst variable, we have to use the argument types to
+determine them. Consider the function:</p>
+<pre><code class="language-mzn">function var opt $T: foo(var $T: x, any $T: y);
+var 1..3: p;
+opt int: q;
+any: v = foo(p, q);
+</code></pre>
+<p>Then for the call <code>foo(p, q)</code> we start by considering the first argument <code>p</code>, which is of type <code>var int</code>. The function
+parameter is declared as <code>var $T</code>, so that means it applies its own inst (<code>var</code>) and optionality (non-<code>opt</code>) to the type
+of <code>$T</code> - therefore we strip off the inst and optionality from the given argument type and use that for <code>$T</code>. So
+<code>$T</code> for this argument is set to be (<code>par</code>, non-<code>opt</code>) <code>int</code>.</p>
+<p>Next we look at the second argument <code>q</code>, which is of type <code>opt int</code>. Since the function parameter is declared as
+<code>any $T</code>, it does not apply any modifiers to the type of <code>$T</code>, so we set the type of <code>$T</code> for this argument to be
+<code>opt int</code>.</p>
+<p>Then the final type for <code>$T</code> is the most specific supertype of <code>int</code> and <code>opt int</code>, meaning the final type is <code>opt int</code>.
+From this, we can compute the actual instantiated function signature by substituting <code>$T</code> = <code>opt int</code> for the parameters
+and return type.</p>
+<ul>
+<li>The first parameter <code>var $T</code> becomes <code>var int</code> (again, since <code>var $T</code> is really <code>var</code>, non-<code>opt</code> <code>$T</code>).</li>
+<li>The second parameter of <code>any $T</code> gives <code>opt int</code> (since <code>any</code> means don't apply any modifiers to <code>$T</code>).</li>
+<li>The return type of <code>var opt $T</code> gives <code>var opt int</code> (since it applies the <code>var</code> and <code>opt</code> modifiers to <code>$T</code>).</li>
+</ul>
+<p>So the instantiated result is:</p>
+<pre><code class="language-mzn">function var opt int: foo(var int: x, opt int: y);
+var 1..3: p;
+opt int: q;
+var opt int: v = foo(p, q);
+</code></pre>
 <h2 id="output-typing"><a class="header" href="#output-typing">Output typing</a></h2>
 <p>The expressions of output items, and definitions of <code>:: output_only</code> declarations are type-checked in a special mode
 where the types of top-level identifiers are assumed to be par. This alleviates the need to manually insert calls to
@@ -1138,7 +1183,7 @@ tuple(var A, var B): x;
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">array2d(1..2, 1..2, [1, 2, 3, 4])
+<pre><code class="language-mzn">array2d('..'(1, 2), '..'(1, 2), [1, 2, 3, 4])
 </code></pre>
 </td>
 </tr>
@@ -1179,34 +1224,60 @@ tuple(var A, var B): x;
 </td>
 </tr>
 </table>
-<p>Slicing is rewritten using <code>slice_xd</code> function calls:</p>
+<p>Array access is rewritten into a call to <code>'[]'</code>:</p>
 <table style="width:100%">
 <tr><th>HIR syntax</th><th>Desugaring</th></tr>
 <tr>
 <td>
 <pre><code class="language-mzn">any: x = [1, 2, 3];
-any: y = x['..'(1, 2)];
+any: y = x[1];
 </code></pre>
 </td>
 <td>
 <pre><code class="language-mzn">array [int] of int: x = [1, 2, 3];
+array [int] of int: y = '[]'(1);
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Slicing is rewritten using <code>mzn_slice</code> function calls:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">any: x = [|1, 2 | 3, 4 |];
+any: y = x['..'(1, 2), '..'(1, 1)];
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">array [int] of int: x = array2d(
+  '..'(1, 2),
+  '..'(1, 2),
+  [1, 2, 3, 4]
+);
 array [int] of int: y = let {
   set of int: A = '..'(1, 2);
-} in slice_1d(x, [A], A);
+  set of int: B = '..'(1, 1);
+} in array2d(A, B, mzn_slice(x, [A, B]));
 </code></pre>
 </td>
 </tr>
 <tr>
 <td>
-<pre><code class="language-mzn">any: x = [1, 2, 3];
-any: y = x[..&lt;];
+<pre><code class="language-mzn">any: x = [|1, 2 | 3, 4|];
+any: y = x[..&lt;, 2];
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">array [int] of int: x = [1, 2, 3];
+<pre><code class="language-mzn">array [int] of int: x = array2d(
+  '..'(1, 2),
+  '..'(1, 2),
+  [1, 2, 3, 4]
+);
 array [int] of int: y = let {
   set of int: A = '..&lt;'(index_set(x));
-} in slice_1d(x, [A], A);
+  set of int: B = {2};
+} in array1d(A, mzn_slice(x, [A, B]));
 </code></pre>
 </td>
 </tr>
@@ -1238,7 +1309,7 @@ any: y = x.a;
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">array [int] of record(int: a, string: b): x =[
+<pre><code class="language-mzn">array [int] of record(int: a, string: b): x = [
   (a: 1, b: &quot;hello&quot;),
   (a: 2, b: &quot;world&quot;)
 ];
@@ -1462,7 +1533,8 @@ if we haven't already. We then traverse the bodies of the functions and recursiv
 polymorphic calls in them.</p>
 <p>The end result is that all reachable calls are now non-polymorphic.</p>
 <p>We can then remove all polymorphic which have bodies.</p>
-<p>Calls to polymorphic functions without bodies are left as-is and not specialised</p>
+<p>Calls to polymorphic functions without bodies are left as-is and not specialised since they would
+be interpreter builtins.</p>
 <h2 id="example-2"><a class="header" href="#example-2">Example</a></h2>
 <pre><code class="language-mzn">function any $T: foo(any $T: x) = bar(x);
 function any $T: bar(any $T: x) = x;
@@ -1483,13 +1555,46 @@ function int: bar(int: x) = x;
 any: a = foo(1);
 any: b = bar(2);
 </code></pre>
+<h2 id="dynamic-dispatch"><a class="header" href="#dynamic-dispatch">Dynamic dispatch</a></h2>
+<p>In order to facilitate <a href="compilation/thir/./dispatch.html">dynamic dispatch</a>, we need to ensure that when there are
+multiple compatible polymorphic overloads of a function, we instantiate all versions which are
+more specific that the one that has been called. Otherwise, the more specific versions won't be in
+the model which we create the function dispatch preambles.</p>
+<p>For example, consider:</p>
+<pre><code class="language-mzn">function int: foo(any $T: x) = 1;
+function int: foo(var $$E: x) = 2;
+function int: foo($U: x) = 3;
+var opt 1..1: x;
+constraint foo(x);
+</code></pre>
+<p>If we only instantiated the <code>var opt int</code> version of <code>foo(any $T)</code>, then we would not be able to
+dispatch to the other versions at runtime.</p>
+<p>To do this, we find the type-inst var instantiations for each polymorphic overload (other than the
+original) given the argument types, and then instantiate calls using those types.</p>
+<p>In this case, we have two other overloads and an argument of <code>var opt int</code>:</p>
+<ul>
+<li><code>foo(var $$E)</code> gives <code>$$E = int</code>, and so the signature becomes <code>foo(var int)</code>.</li>
+<li><code>foo($U)</code> gives <code>$U = int</code>, and so the signature becomes <code>foo(int)</code>.</li>
+</ul>
+<p>We then instantiate <code>foo(var int)</code> and <code>foo(int)</code> and will be able to generate function dispatch
+preambles as required.</p>
+<p>Note that it's possible for multiple overloads to give the same signature - so we actually have to
+re-lookup the best matches to prevent instantiating the wrong versions. For example, if the second
+overload was <code>foo($$E)</code>, then both <code>foo($$E)</code> and <code>foo($U)</code> would give <code>foo(int)</code> to instantiate,
+and in that case, we need to use the more specific <code>$$E</code> version and not the <code>$U</code> one.</p>
+<p>Finally, we also have keep track of which polymorphic function each specialised function comes from,
+because dynamic dispatch should not happen between different instantiations of the same polymorphic
+function.</p>
 <h2 id="generation-of-show-for-erased-types"><a class="header" href="#generation-of-show-for-erased-types">Generation of <code>show</code> for erased types</a></h2>
 <p>Enums, option types and records (and types containing them) need to have specialised versions of
 <code>show</code> generated. The definition of <code>show</code> for plain enums is actually generated during
 <a href="compilation/thir/./enums.html">enum erasure</a>, but the others are generated at this stage.</p>
 <h2 id="optimisation-for-enum-functions"><a class="header" href="#optimisation-for-enum-functions">Optimisation for enum functions</a></h2>
-<p>Functions which take a <code>$$E</code> can actually just specialise into the type-erased <code>int</code> version if
-the call does not lead to a <code>show($$E)</code> call somewhere down the line.</p>
+<p>In the future, it would be possible to add an optimisation for functions which are polymorphic over
+enum types. Functions which take a <code>$$E</code> can actually just specialise into the type-erased <code>int</code>
+version if the call does not lead to a <code>show($$E)</code> call somewhere down the line.</p>
+<p>However, it should be noted that since the <code>fzn_...</code> functions are never polymorphic, there probably
+aren't that many layers of depth to most calls.</p>
 <h2 id="looking-up-function-calls-after-specialisation"><a class="header" href="#looking-up-function-calls-after-specialisation">Looking up function calls after specialisation</a></h2>
 <p>Once specialisation has occurred, we it's no longer valid to perform function lookups on non-builtin
 polymorphic functions (as we would have had to specialise them in order to use them correctly).</p>

@@ -250,7 +250,7 @@ tuple(var A, var B): x;
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">array2d(1..2, 1..2, [1, 2, 3, 4])
+<pre><code class="language-mzn">array2d('..'(1, 2), '..'(1, 2), [1, 2, 3, 4])
 </code></pre>
 </td>
 </tr>
@@ -291,34 +291,60 @@ tuple(var A, var B): x;
 </td>
 </tr>
 </table>
-<p>Slicing is rewritten using <code>slice_xd</code> function calls:</p>
+<p>Array access is rewritten into a call to <code>'[]'</code>:</p>
 <table style="width:100%">
 <tr><th>HIR syntax</th><th>Desugaring</th></tr>
 <tr>
 <td>
 <pre><code class="language-mzn">any: x = [1, 2, 3];
-any: y = x['..'(1, 2)];
+any: y = x[1];
 </code></pre>
 </td>
 <td>
 <pre><code class="language-mzn">array [int] of int: x = [1, 2, 3];
+array [int] of int: y = '[]'(1);
+</code></pre>
+</td>
+</tr>
+</table>
+<p>Slicing is rewritten using <code>mzn_slice</code> function calls:</p>
+<table style="width:100%">
+<tr><th>HIR syntax</th><th>Desugaring</th></tr>
+<tr>
+<td>
+<pre><code class="language-mzn">any: x = [|1, 2 | 3, 4 |];
+any: y = x['..'(1, 2), '..'(1, 1)];
+</code></pre>
+</td>
+<td>
+<pre><code class="language-mzn">array [int] of int: x = array2d(
+  '..'(1, 2),
+  '..'(1, 2),
+  [1, 2, 3, 4]
+);
 array [int] of int: y = let {
   set of int: A = '..'(1, 2);
-} in slice_1d(x, [A], A);
+  set of int: B = '..'(1, 1);
+} in array2d(A, B, mzn_slice(x, [A, B]));
 </code></pre>
 </td>
 </tr>
 <tr>
 <td>
-<pre><code class="language-mzn">any: x = [1, 2, 3];
-any: y = x[..&lt;];
+<pre><code class="language-mzn">any: x = [|1, 2 | 3, 4|];
+any: y = x[..&lt;, 2];
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">array [int] of int: x = [1, 2, 3];
+<pre><code class="language-mzn">array [int] of int: x = array2d(
+  '..'(1, 2),
+  '..'(1, 2),
+  [1, 2, 3, 4]
+);
 array [int] of int: y = let {
   set of int: A = '..&lt;'(index_set(x));
-} in slice_1d(x, [A], A);
+  set of int: B = {2};
+} in array1d(A, mzn_slice(x, [A, B]));
 </code></pre>
 </td>
 </tr>
@@ -350,7 +376,7 @@ any: y = x.a;
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">array [int] of record(int: a, string: b): x =[
+<pre><code class="language-mzn">array [int] of record(int: a, string: b): x = [
   (a: 1, b: &quot;hello&quot;),
   (a: 2, b: &quot;world&quot;)
 ];
