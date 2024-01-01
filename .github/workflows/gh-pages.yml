@@ -3,7 +3,7 @@ name: github pages
 on:
   push:
     branches-ignore:
-      - "dependabot/*"
+      - "dependabot/**"
   pull_request:
 
 jobs:
