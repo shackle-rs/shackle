@@ -53,6 +53,7 @@ fn main() {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Prec {
 	Left(i64),
+	#[allow(clippy::enum_variant_names)]
 	Prec(i64),
 	Right(i64),
 }
