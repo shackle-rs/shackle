@@ -67,7 +67,7 @@ impl ExpressionCollector<'_> {
 				.into(),
 			eprime::Expression::Quantification(q) => self.collect_quantification(q).into(),
 			eprime::Expression::MatrixComprehension(m) => {
-				self.collect_matrix_comprehension(m).into()
+				return self.collect_matrix_comprehension(m)
 			}
 			eprime::Expression::AbsoluteOperator(a) => self
 				.collect_operator_call("abs", iter::once(a.operand()), origin.clone())
@@ -231,6 +231,7 @@ impl ExpressionCollector<'_> {
 					(None, None) => return CollectedDomain::PrimitiveDomain(PrimitiveType::Int),
 				}
 			}
+			eprime::Domain::AnyDomain(_) => return CollectedDomain::ArrayDomain(Type::Any),
 		})
 	}
 
@@ -255,11 +256,11 @@ impl ExpressionCollector<'_> {
 				">lex" => "lex_greater",
 				">=lex" => "lex_greatereq",
 				"!" => "not",
+				"/" => "div",
 				"toInt" => "booltoint",
 				"toSet" => "arraytoset",
 				"and" => "forall",
 				"or" => "exists",
-				"gcc" => "global_cardinality",
 				"allDiff" => "all_different",
 				o => o,
 			},
@@ -345,14 +346,8 @@ impl ExpressionCollector<'_> {
 			(d, i) => {
 				let (src, span) = ml.cst_node().source_span(self.db.upcast());
 				if d > 6 {
-					self.add_diagnostic(InvalidArrayLiteral {
-						src,
-						span,
-						msg:
-							"Support for matrix literals with >6 dimensions not currently supported"
-								.to_string(),
-					});
-					return self.alloc_expression(origin, Expression::Missing);
+					return self
+						.add_array_over_dims_diagnostic(eprime::Expression::MatrixLiteral(ml));
 				}
 				if d != i && i != 0 {
 					self.add_diagnostic(InvalidArrayLiteral {
@@ -362,13 +357,8 @@ impl ExpressionCollector<'_> {
 					});
 					return self.alloc_expression(origin, Expression::Missing);
 				}
-				// If no index set exists guess the index set dimensions
+				// If no index set exists use index set sized at dimensions
 				if i == 0 {
-					self.add_diagnostic(InvalidArrayLiteral{
-						src,
-						span,
-						msg: "Matrix literal has unknown index sets, guessing set of 1..n, prone to failure".to_string()
-					});
 					index_sets = dimensions
 						.iter()
 						.map(|n| {
@@ -420,7 +410,10 @@ impl ExpressionCollector<'_> {
 		}
 	}
 
-	fn collect_matrix_comprehension(&mut self, m: eprime::MatrixComprehension) -> Call {
+	fn collect_matrix_comprehension(
+		&mut self,
+		m: eprime::MatrixComprehension,
+	) -> ArenaIndex<Expression> {
 		let origin = Origin::new(&m);
 		let template = self.collect_expression(m.template());
 		let generators = m
@@ -440,21 +433,21 @@ impl ExpressionCollector<'_> {
 			},
 		);
 
-		// Either use provided index set or 0..n-1 index set
 		match m.indices() {
 			Some(i) => {
 				let index_set = self
 					.collect_domain_expressions(i, VarType::Par)
 					.into_expression(self, origin.clone());
-				Call {
-					function: self.ident_exp(origin, "array1d"),
-					arguments: Box::new([index_set, matrix_comprehension]),
-				}
+				let function = self.ident_exp(origin.clone(), "array1d");
+				self.alloc_expression(
+					origin,
+					Call {
+						function,
+						arguments: Box::new([index_set, matrix_comprehension]),
+					},
+				)
 			}
-			None => Call {
-				function: self.ident_exp(origin, "indexing_0"),
-				arguments: Box::new([matrix_comprehension]),
-			},
+			None => matrix_comprehension,
 		}
 	}
 
@@ -478,7 +471,8 @@ impl ExpressionCollector<'_> {
 		}
 	}
 
-	fn ident_exp<T: Into<InternedStringData>>(
+	/// Helper to create an identifier expression
+	pub fn ident_exp<T: Into<InternedStringData>>(
 		&mut self,
 		origin: Origin,
 		id: T,
@@ -487,8 +481,20 @@ impl ExpressionCollector<'_> {
 	}
 
 	/// Add a diagnostic
-	fn add_diagnostic<E: Into<Error>>(&mut self, error: E) {
+	pub fn add_diagnostic<E: Into<Error>>(&mut self, error: E) {
 		self.diagnostics.push(error.into());
+	}
+
+	/// Add diagnostic for array literals with >6 dimensions
+	pub fn add_array_over_dims_diagnostic<N: AstNode>(&mut self, n: N) -> ArenaIndex<Expression> {
+		let (src, span) = n.cst_node().source_span(self.db.upcast());
+		self.add_diagnostic(InvalidArrayLiteral {
+			src,
+			span,
+			msg: "Support for matrix literals with >6 dimensions not currently supported"
+				.to_string(),
+		});
+		self.alloc_expression(Origin::new(&n), Expression::Missing)
 	}
 
 	/// Get the collected expressions

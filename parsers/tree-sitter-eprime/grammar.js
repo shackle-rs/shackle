@@ -294,6 +294,7 @@ module.exports = grammar({
 			choice(
 				$.boolean_domain,
 				$.integer_domain,
+				$.any_domain,
 				$.domain_operation,
 				$.identifier
 			),
@@ -325,6 +326,7 @@ module.exports = grammar({
 				"int",
 				optional(seq("(", sepBy(",", field("member", $._expression)), ")"))
 			),
+		any_domain: (_) => "any",
 
 		matrix_literal: ($) =>
 			seq(

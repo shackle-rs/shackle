@@ -273,6 +273,10 @@
         "required": false,
         "types": [
           {
+            "type": "any_domain",
+            "named": true
+          },
+          {
             "type": "boolean_domain",
             "named": true
           },
@@ -395,6 +399,10 @@
         "required": true,
         "types": [
           {
+            "type": "any_domain",
+            "named": true
+          },
+          {
             "type": "boolean_domain",
             "named": true
           },
@@ -436,6 +444,10 @@
         "multiple": false,
         "required": true,
         "types": [
+          {
+            "type": "any_domain",
+            "named": true
+          },
           {
             "type": "boolean_domain",
             "named": true
@@ -479,6 +491,10 @@
         "required": true,
         "types": [
           {
+            "type": "any_domain",
+            "named": true
+          },
+          {
             "type": "boolean_domain",
             "named": true
           },
@@ -518,6 +534,10 @@
         "multiple": false,
         "required": true,
         "types": [
+          {
+            "type": "any_domain",
+            "named": true
+          },
           {
             "type": "boolean_domain",
             "named": true
@@ -582,6 +602,10 @@
         "multiple": false,
         "required": true,
         "types": [
+          {
+            "type": "any_domain",
+            "named": true
+          },
           {
             "type": "boolean_domain",
             "named": true
@@ -1237,6 +1261,10 @@
         "required": false,
         "types": [
           {
+            "type": "any_domain",
+            "named": true
+          },
+          {
             "type": "boolean_domain",
             "named": true
           },
@@ -1339,6 +1367,10 @@
         "required": true,
         "types": [
           {
+            "type": "any_domain",
+            "named": true
+          },
+          {
             "type": "boolean_domain",
             "named": true
           },
@@ -1360,6 +1392,10 @@
         "multiple": true,
         "required": true,
         "types": [
+          {
+            "type": "any_domain",
+            "named": true
+          },
           {
             "type": "boolean_domain",
             "named": true
@@ -1388,6 +1424,10 @@
         "multiple": false,
         "required": false,
         "types": [
+          {
+            "type": "any_domain",
+            "named": true
+          },
           {
             "type": "boolean_domain",
             "named": true
@@ -1664,6 +1704,10 @@
         "multiple": false,
         "required": true,
         "types": [
+          {
+            "type": "any_domain",
+            "named": true
+          },
           {
             "type": "boolean_domain",
             "named": true
@@ -2623,6 +2667,10 @@
   {
     "type": "]",
     "named": false
+  },
+  {
+    "type": "any_domain",
+    "named": true
   },
   {
     "type": "be",

@@ -12,8 +12,12 @@ function array[$U] of var opt $T: 'default'(array[$U] of var opt $T:x, array[$U]
 function set of $$E: enum_of(var opt $$E: x) ::mzn_internal_representation;
 function set of $$E: enum_of(array[$T] of var opt $$E: x) ::mzn_internal_representation;
 
+function $$E: lb(var $$E: x);
+function $$E: ub(var $$E: x);
 function $$E: lb(var opt $$E: x);
 function $$E: ub(var opt $$E: x);
+function float: lb(var float: x);
+function float: ub(var float: x);
 function float: lb(var opt float: x);
 function float: ub(var opt float: x);
 function $$E: lb_array(array[$U] of var opt $$E: x);
@@ -75,3 +79,12 @@ predicate if_then_else(array[int] of var bool: c, array[int] of set of int: x, v
     fzn_if_then_else_set(c, x, y);
 predicate if_then_else(array[int] of var bool: c, array[int] of var set of int: x, var set of int: y) =
     fzn_if_then_else_var_set(c, x, y);
+
+% This might be unnecessary
+function string: show_index_sets(array[$U] of any $T: x);
+
+mzn_opt_only_range_domains = false;
+mzn_opt_annotate_defines_var = true;
+mzn_ignore_symmetry_breaking_constraints = false;
+mzn_ignore_redundant_constraints = false;
+mzn_min_version_required = 0;

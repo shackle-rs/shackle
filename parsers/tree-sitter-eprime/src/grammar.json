@@ -1668,6 +1668,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "any_domain"
+        },
+        {
+          "type": "SYMBOL",
           "name": "domain_operation"
         },
         {
@@ -1854,6 +1858,10 @@
           ]
         }
       ]
+    },
+    "any_domain": {
+      "type": "STRING",
+      "value": "any"
     },
     "matrix_literal": {
       "type": "SEQ",

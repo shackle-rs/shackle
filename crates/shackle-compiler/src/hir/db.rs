@@ -499,7 +499,7 @@ fn items_with_case(db: &dyn Hir, model: ModelRef) -> Arc<Vec<ItemRef>> {
 	.expect("Failed to create query");
 	let mut cursor = tree_sitter::QueryCursor::new();
 	let ConstraintModel::MznModel(model) = db.ast(*model).unwrap() else {
-		unreachable!()
+		return Arc::new(Vec::new());
 	};
 	Arc::new(
 		model

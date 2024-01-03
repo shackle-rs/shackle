@@ -35,6 +35,7 @@ pub fn lower_items(db: &dyn Hir, model: ModelRef) -> (Arc<Model>, Arc<SourceMap>
 		}
 		ConstraintModel::EPrimeModel(ast) => {
 			let mut ctx = EPrimeItemCollector::new(db, &identifiers, model);
+			ctx.preprocess(ast.items());
 			for item in ast.items() {
 				ctx.collect_item(item);
 			}

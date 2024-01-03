@@ -6,9 +6,11 @@ use crate::syntax::ast::{
 };
 
 ast_enum!(
+    /// Domain
 	Domain,
 	"boolean_domain" => BooleanDomain,
 	"integer_domain" => IntegerDomain,
+    "any_domain" => AnyDomain,
 	"matrix_domain" => MatrixDomain,
 	"domain_operation" => DomainOperation,
 	_ => Identifier,
@@ -33,6 +35,11 @@ impl IntegerDomain {
 		children_with_field_name(self, "member")
 	}
 }
+
+ast_node!(
+	/// Type is inferred for RHS
+	AnyDomain,
+);
 
 ast_node!(
 	/// Matrix domain

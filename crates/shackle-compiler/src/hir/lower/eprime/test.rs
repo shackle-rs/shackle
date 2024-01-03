@@ -112,17 +112,18 @@ fn test_lower_call() {
 	check_lower_item_eprime(
 		"letting simple = toVec(X,Y)",
 		expect![[r#"
-      Item: Assignment { assignee: <Expression::1>, definition: <Expression::5> }
-        Expressions:
-          <Expression::1>: Identifier("simple")
-          <Expression::2>: Identifier("X")
-          <Expression::3>: Identifier("Y")
-          <Expression::4>: Identifier("toVec")
-          <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
-        Types:
-        Patterns:
-        Annotations:
-      "#]],
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::4>), annotations: [] }
+      Expressions:
+        <Expression::1>: Identifier("X")
+        <Expression::2>: Identifier("Y")
+        <Expression::3>: Identifier("toVec")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+      Types:
+        <Type::1>: Any
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("simple"))
+      Annotations:
+    "#]],
 	);
 }
 
@@ -133,19 +134,20 @@ fn test_lower_indexed_access() {
       letting multi = M[2..4]
       "#,
 		expect![[r#"
-      Item: Assignment { assignee: <Expression::1>, definition: <Expression::7> }
-        Expressions:
-          <Expression::1>: Identifier("multi")
-          <Expression::2>: IntegerLiteral(2)
-          <Expression::3>: IntegerLiteral(4)
-          <Expression::4>: Identifier("..")
-          <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
-          <Expression::6>: Identifier("M")
-          <Expression::7>: ArrayAccess { collection: <Expression::6>, indices: <Expression::5> }
-        Types:
-        Patterns:
-        Annotations:
-      "#]],
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::6>), annotations: [] }
+      Expressions:
+        <Expression::1>: IntegerLiteral(2)
+        <Expression::2>: IntegerLiteral(4)
+        <Expression::3>: Identifier("..")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+        <Expression::5>: Identifier("M")
+        <Expression::6>: ArrayAccess { collection: <Expression::5>, indices: <Expression::4> }
+      Types:
+        <Type::1>: Any
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("multi"))
+      Annotations:
+    "#]],
 	);
 }
 
@@ -156,17 +158,18 @@ fn test_lower_infix_operator() {
       letting and = x /\ y
       "#,
 		expect![[r#"
-      Item: Assignment { assignee: <Expression::1>, definition: <Expression::5> }
-        Expressions:
-          <Expression::1>: Identifier("and")
-          <Expression::2>: Identifier("x")
-          <Expression::3>: Identifier("y")
-          <Expression::4>: Identifier("/\\")
-          <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
-        Types:
-        Patterns:
-        Annotations:
-      "#]],
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::4>), annotations: [] }
+      Expressions:
+        <Expression::1>: Identifier("x")
+        <Expression::2>: Identifier("y")
+        <Expression::3>: Identifier("/\\")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+      Types:
+        <Type::1>: Any
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("and"))
+      Annotations:
+    "#]],
 	);
 }
 
@@ -177,16 +180,17 @@ fn test_lower_prefix_operator() {
       letting negated_bool = !true
       "#,
 		expect![[r#"
-      Item: Assignment { assignee: <Expression::1>, definition: <Expression::4> }
-        Expressions:
-          <Expression::1>: Identifier("negated_bool")
-          <Expression::2>: BooleanLiteral(true)
-          <Expression::3>: Identifier("not")
-          <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::2>] }
-        Types:
-        Patterns:
-        Annotations:
-      "#]],
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::3>), annotations: [] }
+      Expressions:
+        <Expression::1>: BooleanLiteral(true)
+        <Expression::2>: Identifier("not")
+        <Expression::3>: Call { function: <Expression::2>, arguments: [<Expression::1>] }
+      Types:
+        <Type::1>: Any
+      Patterns:
+        <Pattern::1>: Identifier(Identifier("negated_bool"))
+      Annotations:
+    "#]],
 	);
 }
 
@@ -195,20 +199,21 @@ fn test_lower_quantification() {
 	check_lower_item_eprime(
 		"letting simple_sum = sum i : int(1..2) . i",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::9> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::8>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("simple_sum")
-        <Expression::2>: IntegerLiteral(1)
-        <Expression::3>: IntegerLiteral(2)
-        <Expression::4>: Identifier("..")
-        <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
-        <Expression::6>: Identifier("i")
-        <Expression::7>: ArrayComprehension { template: <Expression::6>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::5>, where_clause: None }] }
-        <Expression::8>: Identifier("sum")
-        <Expression::9>: Call { function: <Expression::8>, arguments: [<Expression::7>] }
+        <Expression::1>: IntegerLiteral(1)
+        <Expression::2>: IntegerLiteral(2)
+        <Expression::3>: Identifier("..")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+        <Expression::5>: Identifier("i")
+        <Expression::6>: ArrayComprehension { template: <Expression::5>, indices: None, generators: [Iterator { patterns: [<Pattern::2>], collection: <Expression::4>, where_clause: None }] }
+        <Expression::7>: Identifier("sum")
+        <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::6>] }
       Types:
+        <Type::1>: Any
       Patterns:
-        <Pattern::1>: Identifier(Identifier("i"))
+        <Pattern::1>: Identifier(Identifier("simple_sum"))
+        <Pattern::2>: Identifier(Identifier("i"))
       Annotations:
     "#]],
 	);
@@ -219,79 +224,78 @@ fn test_lower_matrix_comprehension() {
 	check_lower_item_eprime(
 		"letting simple = [ num**2 | num : int(1..5) ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::12> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::9>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("simple")
-        <Expression::2>: Identifier("num")
-        <Expression::3>: IntegerLiteral(2)
-        <Expression::4>: Identifier("**")
-        <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
-        <Expression::6>: IntegerLiteral(1)
-        <Expression::7>: IntegerLiteral(5)
-        <Expression::8>: Identifier("..")
-        <Expression::9>: Call { function: <Expression::8>, arguments: [<Expression::6>, <Expression::7>] }
-        <Expression::10>: ArrayComprehension { template: <Expression::5>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::9>, where_clause: None }] }
-        <Expression::11>: Identifier("indexing_0")
-        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::10>] }
+        <Expression::1>: Identifier("num")
+        <Expression::2>: IntegerLiteral(2)
+        <Expression::3>: Identifier("**")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+        <Expression::5>: IntegerLiteral(1)
+        <Expression::6>: IntegerLiteral(5)
+        <Expression::7>: Identifier("..")
+        <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::5>, <Expression::6>] }
+        <Expression::9>: ArrayComprehension { template: <Expression::4>, indices: None, generators: [Iterator { patterns: [<Pattern::2>], collection: <Expression::8>, where_clause: None }] }
       Types:
+        <Type::1>: Any
       Patterns:
-        <Pattern::1>: Identifier(Identifier("num"))
+        <Pattern::1>: Identifier(Identifier("simple"))
+        <Pattern::2>: Identifier(Identifier("num"))
       Annotations:
     "#]],
 	);
 	check_lower_item_eprime(
 		"letting where = [ i+j | i: int(1..3), j : int(1..3), i<j]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::20> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::17>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("where")
-        <Expression::2>: Identifier("i")
-        <Expression::3>: Identifier("j")
-        <Expression::4>: Identifier("+")
-        <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
-        <Expression::6>: Identifier("i")
-        <Expression::7>: Identifier("j")
-        <Expression::8>: Identifier("<")
-        <Expression::9>: Call { function: <Expression::8>, arguments: [<Expression::6>, <Expression::7>] }
-        <Expression::10>: IntegerLiteral(1)
-        <Expression::11>: IntegerLiteral(3)
-        <Expression::12>: Identifier("..")
-        <Expression::13>: Call { function: <Expression::12>, arguments: [<Expression::10>, <Expression::11>] }
-        <Expression::14>: IntegerLiteral(1)
-        <Expression::15>: IntegerLiteral(3)
-        <Expression::16>: Identifier("..")
-        <Expression::17>: Call { function: <Expression::16>, arguments: [<Expression::14>, <Expression::15>] }
-        <Expression::18>: ArrayComprehension { template: <Expression::5>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::13>, where_clause: Some(<Expression::9>) }, Iterator { patterns: [<Pattern::2>], collection: <Expression::17>, where_clause: None }] }
-        <Expression::19>: Identifier("indexing_0")
-        <Expression::20>: Call { function: <Expression::19>, arguments: [<Expression::18>] }
+        <Expression::1>: Identifier("i")
+        <Expression::2>: Identifier("j")
+        <Expression::3>: Identifier("+")
+        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::1>, <Expression::2>] }
+        <Expression::5>: Identifier("i")
+        <Expression::6>: Identifier("j")
+        <Expression::7>: Identifier("<")
+        <Expression::8>: Call { function: <Expression::7>, arguments: [<Expression::5>, <Expression::6>] }
+        <Expression::9>: IntegerLiteral(1)
+        <Expression::10>: IntegerLiteral(3)
+        <Expression::11>: Identifier("..")
+        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::9>, <Expression::10>] }
+        <Expression::13>: IntegerLiteral(1)
+        <Expression::14>: IntegerLiteral(3)
+        <Expression::15>: Identifier("..")
+        <Expression::16>: Call { function: <Expression::15>, arguments: [<Expression::13>, <Expression::14>] }
+        <Expression::17>: ArrayComprehension { template: <Expression::4>, indices: None, generators: [Iterator { patterns: [<Pattern::2>], collection: <Expression::12>, where_clause: Some(<Expression::8>) }, Iterator { patterns: [<Pattern::3>], collection: <Expression::16>, where_clause: None }] }
       Types:
+        <Type::1>: Any
       Patterns:
-        <Pattern::1>: Identifier(Identifier("i"))
-        <Pattern::2>: Identifier(Identifier("j"))
+        <Pattern::1>: Identifier(Identifier("where"))
+        <Pattern::2>: Identifier(Identifier("i"))
+        <Pattern::3>: Identifier(Identifier("j"))
       Annotations:
     "#]],
 	);
 	check_lower_item_eprime(
 		"letting indexed = [ i | i : int(1..5) ; int(1..2) ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::13> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::12>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("indexed")
-        <Expression::2>: Identifier("i")
-        <Expression::3>: IntegerLiteral(1)
-        <Expression::4>: IntegerLiteral(5)
-        <Expression::5>: Identifier("..")
-        <Expression::6>: Call { function: <Expression::5>, arguments: [<Expression::3>, <Expression::4>] }
-        <Expression::7>: ArrayComprehension { template: <Expression::2>, indices: None, generators: [Iterator { patterns: [<Pattern::1>], collection: <Expression::6>, where_clause: None }] }
-        <Expression::8>: IntegerLiteral(1)
-        <Expression::9>: IntegerLiteral(2)
-        <Expression::10>: Identifier("..")
-        <Expression::11>: Call { function: <Expression::10>, arguments: [<Expression::8>, <Expression::9>] }
-        <Expression::12>: Identifier("array1d")
-        <Expression::13>: Call { function: <Expression::12>, arguments: [<Expression::11>, <Expression::7>] }
+        <Expression::1>: Identifier("i")
+        <Expression::2>: IntegerLiteral(1)
+        <Expression::3>: IntegerLiteral(5)
+        <Expression::4>: Identifier("..")
+        <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
+        <Expression::6>: ArrayComprehension { template: <Expression::1>, indices: None, generators: [Iterator { patterns: [<Pattern::2>], collection: <Expression::5>, where_clause: None }] }
+        <Expression::7>: IntegerLiteral(1)
+        <Expression::8>: IntegerLiteral(2)
+        <Expression::9>: Identifier("..")
+        <Expression::10>: Call { function: <Expression::9>, arguments: [<Expression::7>, <Expression::8>] }
+        <Expression::11>: Identifier("array1d")
+        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::10>, <Expression::6>] }
       Types:
+        <Type::1>: Any
       Patterns:
-        <Pattern::1>: Identifier(Identifier("i"))
+        <Pattern::1>: Identifier(Identifier("indexed"))
+        <Pattern::2>: Identifier(Identifier("i"))
       Annotations:
     "#]],
 	);
@@ -302,14 +306,15 @@ fn test_lower_absolute() {
 	check_lower_item_eprime(
 		"letting absolute = | x |",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::4> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::3>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("absolute")
-        <Expression::2>: Identifier("x")
-        <Expression::3>: Identifier("abs")
-        <Expression::4>: Call { function: <Expression::3>, arguments: [<Expression::2>] }
+        <Expression::1>: Identifier("x")
+        <Expression::2>: Identifier("abs")
+        <Expression::3>: Call { function: <Expression::2>, arguments: [<Expression::1>] }
       Types:
+        <Type::1>: Any
       Patterns:
+        <Pattern::1>: Identifier(Identifier("absolute"))
       Annotations:
     "#]],
 	);
@@ -320,12 +325,13 @@ fn test_lower_const_definition() {
 	check_lower_item_eprime(
 		"letting one = 1",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::2> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::1>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("one")
-        <Expression::2>: IntegerLiteral(1)
+        <Expression::1>: IntegerLiteral(1)
       Types:
+        <Type::1>: Any
       Patterns:
+        <Pattern::1>: Identifier(Identifier("one"))
       Annotations:
     "#]],
 	)
@@ -508,75 +514,74 @@ fn test_lower_matrix_literal() {
 	check_lower_item_eprime(
 		"letting matrix1d = [3,4]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::4> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::3>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("matrix1d")
-        <Expression::2>: IntegerLiteral(3)
-        <Expression::3>: IntegerLiteral(4)
-        <Expression::4>: ArrayLiteral { members: [<Expression::2>, <Expression::3>] }
+        <Expression::1>: IntegerLiteral(3)
+        <Expression::2>: IntegerLiteral(4)
+        <Expression::3>: ArrayLiteral { members: [<Expression::1>, <Expression::2>] }
       Types:
+        <Type::1>: Any
       Patterns:
+        <Pattern::1>: Identifier(Identifier("matrix1d"))
       Annotations:
     "#]],
 	);
 	check_lower_item_eprime(
 		"letting matrix2d = [ [2,8], [3,7] ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::6> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::5>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("matrix2d")
-        <Expression::2>: IntegerLiteral(2)
-        <Expression::3>: IntegerLiteral(8)
-        <Expression::4>: IntegerLiteral(3)
-        <Expression::5>: IntegerLiteral(7)
-        <Expression::6>: ArrayLiteral2D { rows: NonIndexed(2), columns: NonIndexed(2), members: [<Expression::2>, <Expression::3>, <Expression::4>, <Expression::5>] }
+        <Expression::1>: IntegerLiteral(2)
+        <Expression::2>: IntegerLiteral(8)
+        <Expression::3>: IntegerLiteral(3)
+        <Expression::4>: IntegerLiteral(7)
+        <Expression::5>: ArrayLiteral2D { rows: NonIndexed(2), columns: NonIndexed(2), members: [<Expression::1>, <Expression::2>, <Expression::3>, <Expression::4>] }
       Types:
+        <Type::1>: Any
       Patterns:
+        <Pattern::1>: Identifier(Identifier("matrix2d"))
       Annotations:
     "#]],
 	);
 	check_lower_item_eprime(
-		"letting matrix3d = [ [[1,2,3],[4,5,6]], [[7,8,9],[10,11,12]] ]",
+		"letting matrix3d = [ [[1,2],[3,4]], [[5,6],[7,8]] ]",
 		expect![[r#"
-    Item: Assignment { assignee: <Expression::1>, definition: <Expression::28> }
+    Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::23>), annotations: [] }
       Expressions:
-        <Expression::1>: Identifier("matrix3d")
-        <Expression::2>: IntegerLiteral(1)
-        <Expression::3>: IntegerLiteral(2)
-        <Expression::4>: IntegerLiteral(3)
-        <Expression::5>: IntegerLiteral(4)
-        <Expression::6>: IntegerLiteral(5)
-        <Expression::7>: IntegerLiteral(6)
-        <Expression::8>: IntegerLiteral(7)
-        <Expression::9>: IntegerLiteral(8)
-        <Expression::10>: IntegerLiteral(9)
-        <Expression::11>: IntegerLiteral(10)
-        <Expression::12>: IntegerLiteral(11)
-        <Expression::13>: IntegerLiteral(12)
-        <Expression::14>: IntegerLiteral(1)
-        <Expression::15>: IntegerLiteral(2)
-        <Expression::16>: Identifier("..")
-        <Expression::17>: Call { function: <Expression::16>, arguments: [<Expression::14>, <Expression::15>] }
-        <Expression::18>: IntegerLiteral(1)
-        <Expression::19>: IntegerLiteral(2)
-        <Expression::20>: Identifier("..")
-        <Expression::21>: Call { function: <Expression::20>, arguments: [<Expression::18>, <Expression::19>] }
-        <Expression::22>: IntegerLiteral(1)
-        <Expression::23>: IntegerLiteral(3)
-        <Expression::24>: Identifier("..")
-        <Expression::25>: Call { function: <Expression::24>, arguments: [<Expression::22>, <Expression::23>] }
-        <Expression::26>: ArrayLiteral { members: [<Expression::2>, <Expression::3>, <Expression::4>, <Expression::5>, <Expression::6>, <Expression::7>, <Expression::8>, <Expression::9>, <Expression::10>, <Expression::11>, <Expression::12>, <Expression::13>] }
-        <Expression::27>: Identifier("array3d")
-        <Expression::28>: Call { function: <Expression::27>, arguments: [<Expression::17>, <Expression::21>, <Expression::25>, <Expression::26>] }
+        <Expression::1>: IntegerLiteral(1)
+        <Expression::2>: IntegerLiteral(2)
+        <Expression::3>: IntegerLiteral(3)
+        <Expression::4>: IntegerLiteral(4)
+        <Expression::5>: IntegerLiteral(5)
+        <Expression::6>: IntegerLiteral(6)
+        <Expression::7>: IntegerLiteral(7)
+        <Expression::8>: IntegerLiteral(8)
+        <Expression::9>: IntegerLiteral(1)
+        <Expression::10>: IntegerLiteral(2)
+        <Expression::11>: Identifier("..")
+        <Expression::12>: Call { function: <Expression::11>, arguments: [<Expression::9>, <Expression::10>] }
+        <Expression::13>: IntegerLiteral(1)
+        <Expression::14>: IntegerLiteral(2)
+        <Expression::15>: Identifier("..")
+        <Expression::16>: Call { function: <Expression::15>, arguments: [<Expression::13>, <Expression::14>] }
+        <Expression::17>: IntegerLiteral(1)
+        <Expression::18>: IntegerLiteral(2)
+        <Expression::19>: Identifier("..")
+        <Expression::20>: Call { function: <Expression::19>, arguments: [<Expression::17>, <Expression::18>] }
+        <Expression::21>: ArrayLiteral { members: [<Expression::1>, <Expression::2>, <Expression::3>, <Expression::4>, <Expression::5>, <Expression::6>, <Expression::7>, <Expression::8>] }
+        <Expression::22>: Identifier("array3d")
+        <Expression::23>: Call { function: <Expression::22>, arguments: [<Expression::12>, <Expression::16>, <Expression::20>, <Expression::21>] }
       Types:
+        <Type::1>: Any
       Patterns:
+        <Pattern::1>: Identifier(Identifier("matrix3d"))
       Annotations:
     "#]],
 	);
 }
 
 #[test]
-fn test_output() {
+fn test_lower_output() {
 	check_lower_item_eprime(
 		"output[show(x)]",
 		expect![[r#"
