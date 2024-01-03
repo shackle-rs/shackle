@@ -19,8 +19,7 @@ ast_enum!(
 	"indexed_access" => ArrayAccess,
 	"infix_operator" => InfixOperator,
 	"prefix_operator" => PrefixOperator,
-	"prefix_set_constructor" => PrefixSetConstructor,
-	"postfix_set_constructor" => PostfixSetConstructor,
+	"unary_set_constructor" => UnarySetConstructor,
 	"quantification" => Quantification,
 	"matrix_comprehension" => MatrixComprehension,
 	"absolute_operator" => AbsoluteOperator,
@@ -141,37 +140,18 @@ impl PrefixOperator {
 
 ast_node!(
 	/// Prefix Operator
-	PrefixSetConstructor,
+	UnarySetConstructor,
 	operator,
 	operand
 );
 
-impl PrefixSetConstructor {
-	/// Get the operator of this prefix operator
+impl UnarySetConstructor {
+	/// Get the operator of this unary operator
 	pub fn operator(&self) -> Operator {
 		child_with_field_name(self, "operator")
 	}
 
-	/// Get the operand of this prefix operator
-	pub fn operand(&self) -> Expression {
-		child_with_field_name(self, "operand")
-	}
-}
-
-ast_node!(
-	/// Postfix Operator
-	PostfixSetConstructor,
-	operator,
-	operand
-);
-
-impl PostfixSetConstructor {
-	/// Get the operator of this postfix operator
-	pub fn operator(&self) -> Operator {
-		child_with_field_name(self, "operator")
-	}
-
-	/// Get the operand of this postfix operator
+	/// Get the operand of this unary operator
 	pub fn operand(&self) -> Expression {
 		child_with_field_name(self, "operand")
 	}
@@ -957,12 +937,12 @@ mod test {
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
                                                         domain: [
-                                                            PostfixSetConstructor(
-                                                                PostfixSetConstructor {
-                                                                    cst_kind: "postfix_set_constructor",
+                                                            UnarySetConstructor(
+                                                                UnarySetConstructor {
+                                                                    cst_kind: "unary_set_constructor",
                                                                     operator: Operator {
-                                                                        cst_kind: "..",
-                                                                        name: "..",
+                                                                        cst_kind: "..o",
+                                                                        name: "..o",
                                                                     },
                                                                     operand: IntegerLiteral(
                                                                         IntegerLiteral {

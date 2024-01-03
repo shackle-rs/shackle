@@ -4,7 +4,10 @@ use crate::{
 	db::InternedStringData,
 	diagnostics::InvalidArrayLiteral,
 	hir::{db::Hir, source::Origin, *},
-	syntax::{ast::AstNode, eprime},
+	syntax::{
+		ast::AstNode,
+		eprime::{self, MatrixComprehension},
+	},
 	utils::arena::ArenaIndex,
 	Error,
 };
@@ -39,7 +42,7 @@ impl ExpressionCollector<'_> {
 			eprime::Expression::IntegerLiteral(i) => IntegerLiteral(i.value()).into(),
 			eprime::Expression::Infinity(_) => Expression::Infinity,
 			eprime::Expression::StringLiteral(s) => StringLiteral::new(s.value(), self.db).into(),
-			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m),
+			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m, false),
 			eprime::Expression::Call(c) => self
 				.collect_operator_call(c.function().name(), c.arguments(), origin.clone())
 				.into(),
@@ -55,15 +58,8 @@ impl ExpressionCollector<'_> {
 			eprime::Expression::PrefixOperator(o) => self
 				.collect_operator_call(o.operator().name(), iter::once(o.operand()), origin.clone())
 				.into(),
-			eprime::Expression::PrefixSetConstructor(o) => self
+			eprime::Expression::UnarySetConstructor(o) => self
 				.collect_operator_call(o.operator().name(), iter::once(o.operand()), origin.clone())
-				.into(),
-			eprime::Expression::PostfixSetConstructor(o) => self
-				.collect_operator_call(
-					format!("{}o", o.operator().name()).as_str(),
-					iter::once(o.operand()),
-					origin.clone(),
-				)
 				.into(),
 			eprime::Expression::Quantification(q) => self.collect_quantification(q).into(),
 			eprime::Expression::MatrixComprehension(m) => {
@@ -180,8 +176,7 @@ impl ExpressionCollector<'_> {
 				let mut domain_members = Vec::new();
 				for e in i.domain() {
 					match e {
-						eprime::Expression::PrefixSetConstructor(_)
-						| eprime::Expression::PostfixSetConstructor(_)
+						eprime::Expression::UnarySetConstructor(_)
 						| eprime::Expression::SetConstructor(_) => {
 							set_constructor_domain_members.push(self.collect_expression(e.into()))
 						}
@@ -293,7 +288,12 @@ impl ExpressionCollector<'_> {
 	}
 
 	/// Collect a matrix literal into HIR
-	pub fn collect_matrix_literal(&mut self, ml: eprime::MatrixLiteral) -> ArenaIndex<Expression> {
+	/// is_comprehension_template is used for array comprehensions to turn the first dimension into a tuple
+	pub fn collect_matrix_literal(
+		&mut self,
+		ml: eprime::MatrixLiteral,
+		is_comp_template: bool,
+	) -> ArenaIndex<Expression> {
 		let origin = Origin::new(&ml);
 		let mut dimensions = Vec::new();
 		let mut is_finding_dimensions = true;
@@ -328,11 +328,13 @@ impl ExpressionCollector<'_> {
 		}
 		let members = array_values.into_boxed_slice();
 
-		match (dimensions.len(), index_sets.len()) {
+		match (dimensions.len(), index_sets.len(), is_comp_template) {
 			// Case of 1d array without index set
-			(1, 0) => return self.alloc_expression(origin, ArrayLiteral { members }),
+			(1, 0, false) => return self.alloc_expression(origin, ArrayLiteral { members }),
+			// Case of 1d array in matrix comprehension without index set
+			(1, 0, true) => return self.alloc_expression(origin, TupleLiteral { fields: members }),
 			// Case of 2d array without index set
-			(2, 0) => {
+			(2, 0, false) => {
 				return self.alloc_expression(
 					origin,
 					ArrayLiteral2D {
@@ -343,7 +345,7 @@ impl ExpressionCollector<'_> {
 				)
 			}
 			// Case of nd array with possible index set
-			(d, i) => {
+			(d, i, c) => {
 				let (src, span) = ml.cst_node().source_span(self.db.upcast());
 				if d > 6 {
 					return self
@@ -376,8 +378,19 @@ impl ExpressionCollector<'_> {
 						})
 						.collect::<Vec<_>>();
 				}
-				index_sets.push(self.alloc_expression(origin.clone(), ArrayLiteral { members }));
-				let function = self.ident_exp(origin.clone(), format!("array{}d", d));
+				if c {
+					index_sets.remove(0);
+					index_sets.push(
+						self.alloc_expression(origin.clone(), TupleLiteral { fields: members }),
+					);
+				} else {
+					index_sets
+						.push(self.alloc_expression(origin.clone(), ArrayLiteral { members }));
+				}
+				let function = self.ident_exp(
+					origin.clone(),
+					format!("array{}d", if c { d - 1 } else { d }),
+				);
 				return self.alloc_expression(
 					origin,
 					Call {
@@ -415,21 +428,43 @@ impl ExpressionCollector<'_> {
 		m: eprime::MatrixComprehension,
 	) -> ArenaIndex<Expression> {
 		let origin = Origin::new(&m);
-		let template = self.collect_expression(m.template());
-		let generators = m
-			.generators()
-			.zip(m.conditions().map(Some).chain(iter::repeat(None)))
-			.map(|(g, c)| {
-				let cond = c.and_then(|c| Some(self.collect_expression(c)));
-				self.collect_generator(g, cond)
-			})
-			.collect();
+		let mut generators = self.collect_generators(m.clone());
+		let mut indices: Vec<eprime::Identifier> = self.get_generator_names(m.clone());
+		let initial_indices_len = indices.len();
+		let template = match m.template() {
+			eprime::Expression::MatrixLiteral(ml) => self.collect_matrix_literal(ml, true),
+			eprime::Expression::MatrixComprehension(_) => {
+				let mut current_comp = m.template();
+				while let eprime::Expression::MatrixComprehension(mc) = current_comp {
+					generators.extend(self.collect_generators(mc.clone()));
+					indices.extend(self.get_generator_names(mc.clone()));
+					current_comp = mc.template();
+				}
+				self.collect_expression(current_comp)
+			}
+			t => self.collect_expression(t),
+		};
+		// If it is a nested matrix comprehension, create a tuple literal for the indices (e.g. (i,j))
+		let indices = if indices.len() > initial_indices_len {
+			let indices_elems = indices
+				.into_iter()
+				.map(|i| self.alloc_expression(origin.clone(), Identifier::new(i.name(), self.db)))
+				.collect();
+			Some(self.alloc_expression(
+				origin.clone(),
+				TupleLiteral {
+					fields: indices_elems,
+				},
+			))
+		} else {
+			None
+		};
 		let matrix_comprehension = self.alloc_expression(
 			origin.clone(),
 			ArrayComprehension {
 				template,
-				indices: None,
-				generators,
+				indices,
+				generators: generators.into_boxed_slice(),
 			},
 		);
 
@@ -449,6 +484,22 @@ impl ExpressionCollector<'_> {
 			}
 			None => matrix_comprehension,
 		}
+	}
+
+	fn get_generator_names(&mut self, m: MatrixComprehension) -> Vec<eprime::Identifier> {
+		m.generators()
+			.flat_map(|g| g.names().collect::<Vec<_>>())
+			.collect::<Vec<_>>()
+	}
+
+	fn collect_generators(&mut self, m: eprime::MatrixComprehension) -> Vec<Generator> {
+		m.generators()
+			.zip(m.conditions().map(Some).chain(iter::repeat(None)))
+			.map(|(g, c)| {
+				let cond = c.map(|c| self.collect_expression(c));
+				self.collect_generator(g, cond)
+			})
+			.collect::<Vec<_>>()
 	}
 
 	fn collect_generator(

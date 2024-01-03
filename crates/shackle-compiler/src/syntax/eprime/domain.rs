@@ -6,11 +6,11 @@ use crate::syntax::ast::{
 };
 
 ast_enum!(
-    /// Domain
+	/// Domain
 	Domain,
 	"boolean_domain" => BooleanDomain,
 	"integer_domain" => IntegerDomain,
-    "any_domain" => AnyDomain,
+	"any_domain" => AnyDomain,
 	"matrix_domain" => MatrixDomain,
 	"domain_operation" => DomainOperation,
 	_ => Identifier,
@@ -174,7 +174,7 @@ mod test {
                                             ),
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                         ],
@@ -234,7 +234,7 @@ mod test {
                                             ],
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                             ParamDeclaration(
@@ -307,7 +307,7 @@ mod test {
                                             ],
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                             ParamDeclaration(
@@ -325,7 +325,7 @@ mod test {
                                             domain: [],
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                         ],
@@ -360,7 +360,7 @@ mod test {
                                             cst_kind: "boolean_domain",
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                             ParamDeclaration(
@@ -381,7 +381,7 @@ mod test {
                                             cst_kind: "boolean_domain",
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                         ],
@@ -448,7 +448,7 @@ mod test {
                                             ),
                                         },
                                     ),
-                                    wheres: None,
+                                    wheres: [],
                                 },
                             ),
                         ],

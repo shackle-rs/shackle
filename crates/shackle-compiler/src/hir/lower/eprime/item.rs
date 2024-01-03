@@ -82,16 +82,16 @@ impl ItemCollector<'_> {
 			Some(b) => {
 				let origin = Origin::new(b);
 				let arguments = Box::new([
-					ctx.collect_matrix_literal(b.clone()),
+					ctx.collect_matrix_literal(b.clone(), false),
 					ctx.alloc_expression(origin.clone(), Identifier::new("input_order", self.db)),
 					ctx.alloc_expression(origin.clone(), Identifier::new("indomain_min", self.db)),
 				]);
-				let search =
+				let function =
 					ctx.alloc_expression(origin.clone(), Identifier::new("int_search", self.db));
 				Box::new([ctx.alloc_expression(
 					origin.clone(),
 					Call {
-						function: search,
+						function,
 						arguments,
 					},
 				)])
@@ -169,9 +169,9 @@ impl ItemCollector<'_> {
 	fn collect_param_declaration(&mut self, p: eprime::ParamDeclaration) {
 		self.collect_declarations(p.names(), Some(p.domain()), false, None, VarType::Par);
 
-		// Collect where expression as constraint
-		if p.wheres().is_some() {
-			self.collect_constraint_expression(p.wheres().unwrap());
+		// Collect where expressions as constraints
+		for w in p.wheres() {
+			self.collect_constraint_expression(w);
 		}
 	}
 
@@ -199,7 +199,7 @@ impl ItemCollector<'_> {
 			let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 			let declared_type = domain
 				.as_ref()
-				.and_then(|d| Some(ctx.collect_domain(d.clone(), var_type)))
+				.map(|d| ctx.collect_domain(d.clone(), var_type))
 				.unwrap_or_else(|| ctx.alloc_type(origin.clone(), Type::Any));
 			let pattern = ctx.alloc_ident_pattern(origin.clone(), name.clone());
 
@@ -222,7 +222,7 @@ impl ItemCollector<'_> {
 			} else {
 				(
 					// If the definition isn't a domain see if it is an expression
-					definition.as_ref().and_then(|d| Some(ctx.collect_expression(d.clone()))), 
+					definition.as_ref().map(|d| ctx.collect_expression(d.clone())), 
 					declared_type
 				)
 			};

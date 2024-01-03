@@ -40,8 +40,8 @@ impl ParamDeclaration {
 	}
 
 	/// Where clauses
-	pub fn wheres(&self) -> Option<Expression> {
-		optional_child_with_field_name(self, "where")
+	pub fn wheres(&self) -> Children<'_, Expression> {
+		children_with_field_name(self, "where")
 	}
 }
 
@@ -298,42 +298,59 @@ mod test {
                                             cst_kind: "identifier",
                                             name: "x",
                                         },
-                                    ],
-                                    domain: IntegerDomain(
-                                        IntegerDomain {
-                                            cst_kind: "integer_domain",
-                                            domain: [
-                                                SetConstructor(
-                                                    SetConstructor {
-                                                        cst_kind: "set_constructor",
-                                                        operator: Operator {
-                                                            cst_kind: "..",
-                                                            name: "..",
-                                                        },
-                                                        left: IntegerLiteral(
-                                                            IntegerLiteral {
-                                                                cst_kind: "integer_literal",
-                                                                value: 1,
-                                                            },
-                                                        ),
-                                                        right: IntegerLiteral(
-                                                            IntegerLiteral {
-                                                                cst_kind: "integer_literal",
-                                                                value: 10,
-                                                            },
-                                                        ),
-                                                    },
-                                                ),
-                                            ],
+                                    ),
+                                ],
+                            },
+                        ),
+                        wheres: [],
+                    },
+                ),
+                ParamDeclaration(
+                    ParamDeclaration {
+                        cst_kind: "param_decl",
+                        names: [
+                            Identifier {
+                                cst_kind: "identifier",
+                                name: "y",
+                            },
+                        ],
+                        domain: IntegerDomain(
+                            IntegerDomain {
+                                cst_kind: "integer_domain",
+                                domain: [
+                                    SetConstructor(
+                                        SetConstructor {
+                                            cst_kind: "set_constructor",
+                                            operator: Operator {
+                                                cst_kind: "..",
+                                                name: "..",
+                                            },
+                                            left: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 1,
+                                                },
+                                            ),
+                                            right: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: 10,
+                                                },
+                                            ),
                                         },
                                     ),
-                                    wheres: None,
-                                },
-                            ),
-                            ParamDeclaration(
-                                ParamDeclaration {
-                                    cst_kind: "param_decl",
-                                    names: [
+                                ],
+                            },
+                        ),
+                        wheres: [
+                            InfixOperator(
+                                InfixOperator {
+                                    cst_kind: "infix_operator",
+                                    operator: Operator {
+                                        cst_kind: "<",
+                                        name: "<",
+                                    },
+                                    left: Identifier(
                                         Identifier {
                                             cst_kind: "identifier",
                                             name: "y",
