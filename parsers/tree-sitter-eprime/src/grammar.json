@@ -566,7 +566,11 @@
         },
         {
           "type": "SYMBOL",
-          "name": "postfix_operator"
+          "name": "prefix_set_constructor"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "postfix_set_constructor"
         },
         {
           "type": "SYMBOL",
@@ -1503,35 +1507,10 @@
               }
             ]
           }
-        },
-        {
-          "type": "PREC_LEFT",
-          "value": 0,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "operator",
-                "content": {
-                  "type": "STRING",
-                  "value": ".."
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "operand",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "_expression"
-                }
-              }
-            ]
-          }
         }
       ]
     },
-    "postfix_operator": {
+    "postfix_set_constructor": {
       "type": "PREC_RIGHT",
       "value": 0,
       "content": {
@@ -1551,6 +1530,31 @@
             "content": {
               "type": "STRING",
               "value": ".."
+            }
+          }
+        ]
+      }
+    },
+    "prefix_set_constructor": {
+      "type": "PREC_LEFT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "operator",
+            "content": {
+              "type": "STRING",
+              "value": ".."
+            }
+          },
+          {
+            "type": "FIELD",
+            "name": "operand",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_expression"
             }
           }
         ]

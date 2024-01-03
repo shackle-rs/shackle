@@ -19,7 +19,8 @@ ast_enum!(
 	"indexed_access" => ArrayAccess,
 	"infix_operator" => InfixOperator,
 	"prefix_operator" => PrefixOperator,
-	"postfix_operator" => PostfixOperator,
+	"prefix_set_constructor" => PrefixSetConstructor,
+	"postfix_set_constructor" => PostfixSetConstructor,
 	"quantification" => Quantification,
 	"matrix_comprehension" => MatrixComprehension,
 	"absolute_operator" => AbsoluteOperator,
@@ -139,13 +140,32 @@ impl PrefixOperator {
 }
 
 ast_node!(
-	/// Postfix Operator
-	PostfixOperator,
+	/// Prefix Operator
+	PrefixSetConstructor,
 	operator,
 	operand
 );
 
-impl PostfixOperator {
+impl PrefixSetConstructor {
+	/// Get the operator of this prefix operator
+	pub fn operator(&self) -> Operator {
+		child_with_field_name(self, "operator")
+	}
+
+	/// Get the operand of this prefix operator
+	pub fn operand(&self) -> Expression {
+		child_with_field_name(self, "operand")
+	}
+}
+
+ast_node!(
+	/// Postfix Operator
+	PostfixSetConstructor,
+	operator,
+	operand
+);
+
+impl PostfixSetConstructor {
 	/// Get the operator of this postfix operator
 	pub fn operator(&self) -> Operator {
 		child_with_field_name(self, "operator")
@@ -937,9 +957,9 @@ mod test {
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
                                                         domain: [
-                                                            PostfixOperator(
-                                                                PostfixOperator {
-                                                                    cst_kind: "postfix_operator",
+                                                            PostfixSetConstructor(
+                                                                PostfixSetConstructor {
+                                                                    cst_kind: "postfix_set_constructor",
                                                                     operator: Operator {
                                                                         cst_kind: "..",
                                                                         name: "..",

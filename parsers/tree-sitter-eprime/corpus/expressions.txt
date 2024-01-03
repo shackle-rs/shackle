@@ -292,7 +292,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
         left: (identifier)
         right: (identifier))
       index: (integer_domain
-        member: (postfix_operator
+        member: (postfix_set_constructor
           operand: (integer_literal)))))
   item: (const_def
     name: (identifier)

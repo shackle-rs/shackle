@@ -28,8 +28,8 @@ const MAX_PREC = Math.max(...Object.values(PREC))
 const ADDITIVE_OPERATORS = ["+", "-"]
 // prettier-ignore
 const COMPARISON_OPERATORS = [
-  "=", "!=","<", "<=", ">", ">=",
-  "<lex" ,"<=lex", ">=lex", ">lex"
+	"=", "!=", "<", "<=", ">", ">=",
+	"<lex", "<=lex", ">=lex", ">lex"
 ];
 const MULTIPLICATIVE_OPERATORS = ["*", "/", "%"]
 
@@ -143,13 +143,13 @@ module.exports = grammar({
 				$.identifier,
 				$.indexed_access,
 				$.infix_operator,
-				$.prefix_operator,
-				$.postfix_operator,
+				$.prefix_set_constructor,
+				$.postfix_set_constructor,
 				$.quantification,
 				$.matrix_comprehension,
 				$.absolute_operator,
 				$.parenthesised_expression,
-				$.set_constructor,
+				$.set_constructor
 			),
 
 		parenthesised_expression: ($) =>
@@ -206,9 +206,9 @@ module.exports = grammar({
 				)
 			),
 
-		set_constructor: ($) => 
+		set_constructor: ($) =>
 			prec.left(
-				PREC.range, 
+				PREC.range,
 				seq(
 					field("left", $._expression),
 					field("operator", ".."),
@@ -260,18 +260,20 @@ module.exports = grammar({
 						precedence,
 						seq(field("operator", operator), field("operand", $._expression))
 					)
-				),
-				prec.left(
-					PREC.range,
-					seq(field("operator", ".."), field("operand", $._expression))
 				)
 			)
 		},
 
-		postfix_operator: ($) =>
+		postfix_set_constructor: ($) =>
 			prec.right(
 				PREC.range,
 				seq(field("operand", $._expression), field("operator", ".."))
+			),
+
+		prefix_set_constructor: ($) =>
+			prec.left(
+				PREC.range,
+				seq(field("operator", ".."), field("operand", $._expression))
 			),
 
 		_domain: ($) => choice($._base_domain, $.matrix_domain),

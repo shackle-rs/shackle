@@ -40,22 +40,45 @@ impl ExpressionCollector<'_> {
 			eprime::Expression::Infinity(_) => Expression::Infinity,
 			eprime::Expression::StringLiteral(s) => StringLiteral::new(s.value(), self.db).into(),
 			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m),
-			eprime::Expression::Call(c) => self.collect_call(c).into(),
+			eprime::Expression::Call(c) => self
+				.collect_operator_call(c.function().name(), c.arguments(), origin.clone())
+				.into(),
 			eprime::Expression::Identifier(i) => Identifier::new(i.name(), self.db).into(),
 			eprime::Expression::ArrayAccess(aa) => self.collect_array_access(aa).into(),
-			eprime::Expression::InfixOperator(o) => {
-				return self.collect_infix_operator(o.operator(), o.left(), o.right(), origin)
-			}
-			eprime::Expression::PrefixOperator(o) => return self.collect_prefix_operator(o),
-			eprime::Expression::PostfixOperator(o) => return self.collect_postfix_operator(o),
+			eprime::Expression::InfixOperator(o) => self
+				.collect_operator_call(
+					o.operator().name(),
+					vec![o.left(), o.right()].into_iter(),
+					origin.clone(),
+				)
+				.into(),
+			eprime::Expression::PrefixOperator(o) => self
+				.collect_operator_call(o.operator().name(), iter::once(o.operand()), origin.clone())
+				.into(),
+			eprime::Expression::PrefixSetConstructor(o) => self
+				.collect_operator_call(o.operator().name(), iter::once(o.operand()), origin.clone())
+				.into(),
+			eprime::Expression::PostfixSetConstructor(o) => self
+				.collect_operator_call(
+					format!("{}o", o.operator().name()).as_str(),
+					iter::once(o.operand()),
+					origin.clone(),
+				)
+				.into(),
 			eprime::Expression::Quantification(q) => self.collect_quantification(q).into(),
 			eprime::Expression::MatrixComprehension(m) => {
 				self.collect_matrix_comprehension(m).into()
 			}
-			eprime::Expression::AbsoluteOperator(a) => return self.collect_absolute_operator(a),
-			eprime::Expression::SetConstructor(o) => {
-				return self.collect_infix_operator(o.operator(), o.left(), o.right(), origin)
-			}
+			eprime::Expression::AbsoluteOperator(a) => self
+				.collect_operator_call("abs", iter::once(a.operand()), origin.clone())
+				.into(),
+			eprime::Expression::SetConstructor(o) => self
+				.collect_operator_call(
+					o.operator().name(),
+					vec![o.left(), o.right()].into_iter(),
+					origin.clone(),
+				)
+				.into(),
 		};
 		self.alloc_expression(origin, collected)
 	}
@@ -157,8 +180,10 @@ impl ExpressionCollector<'_> {
 				let mut domain_members = Vec::new();
 				for e in i.domain() {
 					match e {
-						eprime::Expression::SetConstructor(s) => {
-							set_constructor_domain_members.push(self.collect_expression(s.into()))
+						eprime::Expression::PrefixSetConstructor(_)
+						| eprime::Expression::PostfixSetConstructor(_)
+						| eprime::Expression::SetConstructor(_) => {
+							set_constructor_domain_members.push(self.collect_expression(e.into()))
 						}
 						e => {
 							domain_members.push(self.collect_expression(e));
@@ -209,13 +234,27 @@ impl ExpressionCollector<'_> {
 		})
 	}
 
-	/// Lower function calls into HIR
-	pub fn collect_call(&mut self, c: eprime::Call) -> Call {
-		let operator = c.function();
+	fn collect_operator_call(
+		&mut self,
+		o: &str,
+		args: impl Iterator<Item = eprime::Expression>,
+		origin: Origin,
+	) -> Call {
+		let arguments = args
+			.into_iter()
+			.map(|a| self.collect_expression(a))
+			.collect::<Box<_>>();
 		let function = self.ident_exp(
-			Origin::new(&c),
-			// Convert Eprime calls to MiniZinc ones
-			match operator.name() {
+			origin.clone(),
+			// Convert Eprime operators to MiniZinc ones
+			match o {
+				"==" => "eq",
+				"%" => "mod",
+				"<lex" => "lex_less",
+				"<=lex" => "lex_lesseq",
+				">lex" => "lex_greater",
+				">=lex" => "lex_greatereq",
+				"!" => "not",
 				"toInt" => "booltoint",
 				"toSet" => "arraytoset",
 				"and" => "forall",
@@ -226,42 +265,9 @@ impl ExpressionCollector<'_> {
 			},
 		);
 		Call {
-			arguments: c.arguments().map(|a| self.collect_expression(a)).collect(),
 			function,
+			arguments,
 		}
-	}
-
-	fn collect_infix_operator(
-		&mut self,
-		operator: eprime::Operator,
-		l: eprime::Expression,
-		r: eprime::Expression,
-		o: Origin,
-	) -> ArenaIndex<Expression> {
-		let arguments: Box<[ArenaIndex<Expression>]> = [l, r]
-			.into_iter()
-			.map(|e| self.collect_expression(e))
-			.collect();
-		let function = self.ident_exp(
-			Origin::new(&operator),
-			// Convert Eprime operators to MiniZinc ones
-			match operator.name() {
-				"==" => "eq",
-				"%" => "mod",
-				"<lex" => "lex_less",
-				"<=lex" => "lex_lesseq",
-				">lex" => "lex_greater",
-				">=lex" => "lex_greatereq",
-				o => o,
-			},
-		);
-		self.alloc_expression(
-			o,
-			Call {
-				function,
-				arguments,
-			},
-		)
 	}
 
 	fn collect_array_access(&mut self, aa: eprime::ArrayAccess) -> ArrayAccess {
@@ -391,51 +397,6 @@ impl ExpressionCollector<'_> {
 				);
 			}
 		}
-	}
-
-	fn collect_prefix_operator(&mut self, o: eprime::PrefixOperator) -> ArenaIndex<Expression> {
-		let arguments = Box::new([self.collect_expression(o.operand())]);
-		let operator = o.operator();
-		let function = self.ident_exp(
-			Origin::new(&operator),
-			if operator.name() == "!" {
-				"not"
-			} else {
-				operator.name()
-			},
-		);
-		self.alloc_expression(
-			Origin::new(&o),
-			Call {
-				arguments,
-				function,
-			},
-		)
-	}
-
-	fn collect_postfix_operator(&mut self, o: eprime::PostfixOperator) -> ArenaIndex<Expression> {
-		let arguments = Box::new([self.collect_expression(o.operand())]);
-		let operator = o.operator();
-		let function = self.ident_exp(Origin::new(&operator), format!("{}o", operator.name()));
-		self.alloc_expression(
-			Origin::new(&o),
-			Call {
-				function,
-				arguments,
-			},
-		)
-	}
-
-	fn collect_absolute_operator(&mut self, o: eprime::AbsoluteOperator) -> ArenaIndex<Expression> {
-		let arguments = Box::new([self.collect_expression(o.operand())]);
-		let function = self.ident_exp(Origin::new(&o), "abs");
-		self.alloc_expression(
-			Origin::new(&o),
-			Call {
-				function,
-				arguments,
-			},
-		)
 	}
 
 	fn collect_quantification(&mut self, q: eprime::Quantification) -> Call {

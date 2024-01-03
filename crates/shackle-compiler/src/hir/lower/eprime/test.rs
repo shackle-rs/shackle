@@ -115,10 +115,10 @@ fn test_lower_call() {
       Item: Assignment { assignee: <Expression::1>, definition: <Expression::5> }
         Expressions:
           <Expression::1>: Identifier("simple")
-          <Expression::2>: Identifier("toVec")
-          <Expression::3>: Identifier("X")
-          <Expression::4>: Identifier("Y")
-          <Expression::5>: Call { function: <Expression::2>, arguments: [<Expression::3>, <Expression::4>] }
+          <Expression::2>: Identifier("X")
+          <Expression::3>: Identifier("Y")
+          <Expression::4>: Identifier("toVec")
+          <Expression::5>: Call { function: <Expression::4>, arguments: [<Expression::2>, <Expression::3>] }
         Types:
         Patterns:
         Annotations:
@@ -582,9 +582,9 @@ fn test_output() {
 		expect![[r#"
     Item: Output { section: None, expression: <Expression::4> }
       Expressions:
-        <Expression::1>: Identifier("show")
-        <Expression::2>: Identifier("x")
-        <Expression::3>: Call { function: <Expression::1>, arguments: [<Expression::2>] }
+        <Expression::1>: Identifier("x")
+        <Expression::2>: Identifier("show")
+        <Expression::3>: Call { function: <Expression::2>, arguments: [<Expression::1>] }
         <Expression::4>: ArrayLiteral { members: [<Expression::3>] }
       Types:
       Patterns:
