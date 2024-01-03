@@ -1,4 +1,4 @@
-use std::{iter, collections::HashMap};
+use std::{collections::HashMap, iter};
 
 use crate::{
 	constants::IdentifierRegistry,
@@ -60,7 +60,7 @@ impl ItemCollector<'_> {
 			eprime::Item::Branching(b) => {
 				self.branching_annotations = Some(b.branching_array());
 				return;
-			},
+			}
 			eprime::Item::Heuristic(_) => return, // Currently not supported
 			eprime::Item::Output(i) => self.collect_output(i),
 		};
@@ -120,17 +120,20 @@ impl ItemCollector<'_> {
 			.model
 			.solves
 			.insert(Item::new(Solve { goal, annotations }, data));
-		self.model.items.insert(
-			self.model.items.len().checked_sub(1).unwrap_or(0),
-			index.into(),
-		);
+		self.model
+			.items
+			.insert(self.model.items.len().saturating_sub(1), index.into());
 		// let it = ItemRef::new(self.db, self.owner, index);
 		// self.source_map.insert(it.into(), Origin::new(&goal));
 		// self.source_map.add_from_item_data(self.db, it, &sm);
 	}
 
 	/// Collect a constant definition, if the constant has an index set coerce it into an array
-	fn collect_const_definition(&mut self, c: eprime::ConstDefinition, idx: Option<&Vec<eprime::Domain>>) {
+	fn collect_const_definition(
+		&mut self,
+		c: eprime::ConstDefinition,
+		idx: Option<&Vec<eprime::Domain>>,
+	) {
 		let mut ctx = ExpressionCollector::new(self.db, &mut self.diagnostics);
 		let assignee = ctx.collect_expression(c.name());
 		let mut definition = ctx.collect_expression(c.definition());
@@ -139,8 +142,12 @@ impl ItemCollector<'_> {
 			if indexes.len() > 6 {
 				ctx.add_array_over_dims_diagnostic(c.clone());
 			}
-			let mut arguments: Vec<ArenaIndex<Expression>> = indexes.iter()
-				.map(|d| ctx.collect_domain_expressions(d.clone(), VarType::Par).into_expression(&mut ctx, origin.clone()))
+			let mut arguments: Vec<ArenaIndex<Expression>> = indexes
+				.iter()
+				.map(|d| {
+					ctx.collect_domain_expressions(d.clone(), VarType::Par)
+						.into_expression(&mut ctx, origin.clone())
+				})
 				.collect();
 			arguments.push(definition);
 			let function = ctx.ident_exp(origin, format!("array{}d", indexes.len()));
@@ -183,7 +190,13 @@ impl ItemCollector<'_> {
 		// As per the specification domain alias function more as a declaration where the aliased
 		// type is the definition as well as the declared type.
 		// This approach is inefficient as domain is collected twice
-		self.collect_declarations(iter::once(d.name()), Some(d.definition()), true, None, VarType::Par);
+		self.collect_declarations(
+			iter::once(d.name()),
+			Some(d.definition()),
+			true,
+			None,
+			VarType::Par,
+		);
 	}
 
 	fn collect_declarations<I: Iterator<Item = eprime::Identifier>>(
@@ -222,8 +235,10 @@ impl ItemCollector<'_> {
 			} else {
 				(
 					// If the definition isn't a domain see if it is an expression
-					definition.as_ref().map(|d| ctx.collect_expression(d.clone())), 
-					declared_type
+					definition
+						.as_ref()
+						.map(|d| ctx.collect_expression(d.clone())),
+					declared_type,
 				)
 			};
 			let (data, sm) = ctx.finish();
@@ -291,11 +306,11 @@ impl ItemCollector<'_> {
 					for name in p.names() {
 						let n = name.name().to_string();
 						parameter_identifiers.push(n.clone());
-						if let eprime::Domain::MatrixDomain(m) = p.domain()  {
+						if let eprime::Domain::MatrixDomain(m) = p.domain() {
 							parameter_index_set_map.insert(n, m.indexes().collect());
 						}
 					}
-				},
+				}
 				eprime::Item::ConstDefinition(c) => {
 					// If the constant definition isn't a parameter assignment give it a declaration
 					// Otherwise give it an assignment
@@ -305,12 +320,18 @@ impl ItemCollector<'_> {
 					};
 					let name_str = &name.name().to_string();
 					if !parameter_identifiers.contains(name_str) {
-						self.collect_declarations(iter::once(name), c.domain(), false, Some(c.definition()), VarType::Par);
+						self.collect_declarations(
+							iter::once(name),
+							c.domain(),
+							false,
+							Some(c.definition()),
+							VarType::Par,
+						);
 					} else {
 						self.collect_const_definition(c, parameter_index_set_map.get(name_str));
 					}
-				},
-				_ => {},
+				}
+				_ => {}
 			}
 		}
 	}

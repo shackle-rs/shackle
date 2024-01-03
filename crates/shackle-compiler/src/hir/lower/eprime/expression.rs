@@ -84,13 +84,13 @@ impl ExpressionCollector<'_> {
 		let origin = Origin::new(&d);
 		let domain_expr = self.collect_domain_expressions(d, var_type);
 		let domain = match domain_expr {
-			CollectedDomain::ArrayDomain(a) => a,
-			CollectedDomain::PrimitiveDomain(p) => Type::Primitive {
+			CollectedDomain::Array(a) => a,
+			CollectedDomain::Primitive(p) => Type::Primitive {
 				inst: var_type,
 				opt: OptType::NonOpt,
 				primitive_type: p,
 			},
-			CollectedDomain::BoundedDomain(b) => Type::Bounded {
+			CollectedDomain::Bounded(b) => Type::Bounded {
 				inst: Some(var_type),
 				opt: None,
 				domain: b,
@@ -107,7 +107,7 @@ impl ExpressionCollector<'_> {
 		var_type: VarType,
 	) -> CollectedDomain {
 		let origin = Origin::new(&t);
-		CollectedDomain::BoundedDomain(match t {
+		CollectedDomain::Bounded(match t {
 			eprime::Domain::Identifier(i) => {
 				self.alloc_expression(origin.clone(), Identifier::new(i.name(), self.db))
 			}
@@ -149,27 +149,27 @@ impl ExpressionCollector<'_> {
 				let element = self.alloc_type(
 					origin,
 					match domain_base {
-						CollectedDomain::PrimitiveDomain(p) => Type::Primitive {
+						CollectedDomain::Primitive(p) => Type::Primitive {
 							inst: var_type,
 							opt: OptType::NonOpt,
 							primitive_type: p,
 						},
-						CollectedDomain::BoundedDomain(b) => Type::Bounded {
+						CollectedDomain::Bounded(b) => Type::Bounded {
 							inst: Some(var_type),
 							opt: None,
 							domain: b,
 						},
-						CollectedDomain::ArrayDomain(a) => a,
+						CollectedDomain::Array(a) => a,
 					},
 				);
-				return CollectedDomain::ArrayDomain(Type::Array {
+				return CollectedDomain::Array(Type::Array {
 					opt: OptType::NonOpt,
 					dimensions,
 					element,
 				});
 			}
 			eprime::Domain::BooleanDomain(_) => {
-				return CollectedDomain::PrimitiveDomain(PrimitiveType::Bool)
+				return CollectedDomain::Primitive(PrimitiveType::Bool)
 			}
 			eprime::Domain::IntegerDomain(i) => {
 				let mut set_constructor_domain_members = Vec::new();
@@ -178,7 +178,7 @@ impl ExpressionCollector<'_> {
 					match e {
 						eprime::Expression::UnarySetConstructor(_)
 						| eprime::Expression::SetConstructor(_) => {
-							set_constructor_domain_members.push(self.collect_expression(e.into()))
+							set_constructor_domain_members.push(self.collect_expression(e))
 						}
 						e => {
 							domain_members.push(self.collect_expression(e));
@@ -199,7 +199,7 @@ impl ExpressionCollector<'_> {
 				} else {
 					set_constructor_domain_members.into_iter().next()
 				};
-				let domain = if domain_members.len() > 0 {
+				let domain = if !domain_members.is_empty() {
 					Some(self.alloc_expression(
 						origin.clone(),
 						SetLiteral {
@@ -223,10 +223,10 @@ impl ExpressionCollector<'_> {
 					}
 					(None, Some(d)) => d,
 					(Some(l), None) => l,
-					(None, None) => return CollectedDomain::PrimitiveDomain(PrimitiveType::Int),
+					(None, None) => return CollectedDomain::Primitive(PrimitiveType::Int),
 				}
 			}
-			eprime::Domain::AnyDomain(_) => return CollectedDomain::ArrayDomain(Type::Any),
+			eprime::Domain::AnyDomain(_) => return CollectedDomain::Array(Type::Any),
 		})
 	}
 
@@ -330,20 +330,18 @@ impl ExpressionCollector<'_> {
 
 		match (dimensions.len(), index_sets.len(), is_comp_template) {
 			// Case of 1d array without index set
-			(1, 0, false) => return self.alloc_expression(origin, ArrayLiteral { members }),
+			(1, 0, false) => self.alloc_expression(origin, ArrayLiteral { members }),
 			// Case of 1d array in matrix comprehension without index set
-			(1, 0, true) => return self.alloc_expression(origin, TupleLiteral { fields: members }),
+			(1, 0, true) => self.alloc_expression(origin, TupleLiteral { fields: members }),
 			// Case of 2d array without index set
-			(2, 0, false) => {
-				return self.alloc_expression(
-					origin,
-					ArrayLiteral2D {
-						members,
-						rows: MaybeIndexSet::NonIndexed(dimensions[0]),
-						columns: MaybeIndexSet::NonIndexed(dimensions[1]),
-					},
-				)
-			}
+			(2, 0, false) => self.alloc_expression(
+				origin,
+				ArrayLiteral2D {
+					members,
+					rows: MaybeIndexSet::NonIndexed(dimensions[0]),
+					columns: MaybeIndexSet::NonIndexed(dimensions[1]),
+				},
+			),
 			// Case of nd array with possible index set
 			(d, i, c) => {
 				let (src, span) = ml.cst_node().source_span(self.db.upcast());
@@ -391,13 +389,13 @@ impl ExpressionCollector<'_> {
 					origin.clone(),
 					format!("array{}d", if c { d - 1 } else { d }),
 				);
-				return self.alloc_expression(
+				self.alloc_expression(
 					origin,
 					Call {
 						function,
 						arguments: index_sets.into_boxed_slice(),
 					},
-				);
+				)
 			}
 		}
 	}
@@ -598,9 +596,9 @@ impl ExpressionCollector<'_> {
 /// Represents a collected domain in the expression collector
 /// Preserves relevant information depending on the type of domain
 pub(super) enum CollectedDomain {
-	ArrayDomain(Type),
-	PrimitiveDomain(PrimitiveType),
-	BoundedDomain(ArenaIndex<Expression>),
+	Array(Type),
+	Primitive(PrimitiveType),
+	Bounded(ArenaIndex<Expression>),
 }
 
 impl CollectedDomain {
@@ -613,8 +611,8 @@ impl CollectedDomain {
 		match self {
 			// This is inline with the specification which restricts domain expressions to be int and bool
 			// Additionally this can't be represented in MiniZinc
-			CollectedDomain::ArrayDomain(_) => unreachable!("Can't use array domain as expression"),
-			CollectedDomain::PrimitiveDomain(p) => {
+			CollectedDomain::Array(_) => unreachable!("Can't use array domain as expression"),
+			CollectedDomain::Primitive(p) => {
 				// Convert into a primitive range between domains min and max
 				let (l, r): (Expression, Expression) = match p {
 					PrimitiveType::Bool => {
@@ -628,7 +626,7 @@ impl CollectedDomain {
 								arguments: Box::new([inf]),
 							}
 							.into(),
-							Expression::Infinity.into(),
+							Expression::Infinity,
 						)
 					}
 					PrimitiveType::Float | PrimitiveType::String | PrimitiveType::Ann => {
@@ -646,7 +644,7 @@ impl CollectedDomain {
 					},
 				)
 			}
-			CollectedDomain::BoundedDomain(b) => b,
+			CollectedDomain::Bounded(b) => b,
 		}
 	}
 }

@@ -262,7 +262,6 @@ impl<'a> DebugPrint<'a> for TypeResult {
 			.body
 			.patterns
 			.iter()
-			.map(|(p, d)| (p, d))
 			.chain(self.signature.iter().flat_map(|ts| {
 				ts.patterns.iter().filter_map(|(p, d)| {
 					if p.item() == self.item {

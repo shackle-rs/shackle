@@ -197,6 +197,7 @@ macro_rules! ast_node {
 		$(,)*
 	) => (
         $(#[$meta])*
+		#[allow(missing_docs)]
 		#[derive(Clone, Eq, PartialEq, Hash)]
 		pub struct $name {
 			syntax: $crate::syntax::cst::CstNode,

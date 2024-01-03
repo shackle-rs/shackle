@@ -243,7 +243,7 @@ fn test_lower_matrix_comprehension() {
       Annotations:
     "#]],
 	);
-  check_lower_item_eprime(
+	check_lower_item_eprime(
 		"letting multi = [ [i, i+1] | i : int(1..2) ]",
 		expect![[r#"
     Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::11>), annotations: [] }
@@ -267,7 +267,7 @@ fn test_lower_matrix_comprehension() {
       Annotations:
     "#]],
 	);
-  check_lower_item_eprime(
+	check_lower_item_eprime(
 		"letting multi = [ [i+j | j : int(1..2)] | i : int(1..2) ]",
 		expect![[r#"
     Item: Declaration { declared_type: <Type::1>, pattern: <Pattern::1>, definition: Some(<Expression::16>), annotations: [] }
