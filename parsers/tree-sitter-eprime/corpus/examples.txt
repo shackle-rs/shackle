@@ -52,7 +52,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
@@ -62,7 +62,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
@@ -72,11 +72,11 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (boolean_domain)))
@@ -84,7 +84,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
@@ -95,11 +95,11 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))))
       (constraint
@@ -108,7 +108,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (identifier))))
           (quantification
@@ -116,7 +116,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
             (generator
               (identifier)
               (integer_domain
-                (infix_operator
+                (set_constructor
                   (integer_literal)
                   (infix_operator
                     (infix_operator
@@ -132,7 +132,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
                   (generator
                     (identifier)
                     (integer_domain
-                      (infix_operator
+                      (set_constructor
                         (identifier)
                         (infix_operator
                           (infix_operator
@@ -152,7 +152,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
                         (generator
                           (identifier)
                           (integer_domain
-                            (infix_operator
+                            (set_constructor
                               (integer_literal)
                               (identifier))))
                         (indexed_access
@@ -167,7 +167,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (identifier))))
           (infix_operator
@@ -177,7 +177,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
                 (generator
                   (identifier)
                   (integer_domain
-                    (infix_operator
+                    (set_constructor
                       (integer_literal)
                       (identifier))))
                 (infix_operator
@@ -191,7 +191,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
                       (generator
                         (identifier)
                         (integer_domain
-                          (infix_operator
+                          (set_constructor
                             (integer_literal)
                             (identifier))))
                       (indexed_access
@@ -204,7 +204,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
                 (generator
                   (identifier)
                   (integer_domain
-                    (infix_operator
+                    (set_constructor
                       (integer_literal)
                       (identifier))))
                 (infix_operator
@@ -223,7 +223,7 @@ gcc(seq, [ i | i : int(1..numclasses)], numberPerClass)
             (generator
               (identifier)
               (integer_domain
-                (infix_operator
+                (set_constructor
                   (integer_literal)
                   (identifier)))))
           (identifier))))
@@ -262,13 +262,13 @@ such that
   (domain_alias
     (identifier)
     (integer_domain
-      (infix_operator
+      (set_constructor
         (integer_literal)
         (identifier))))
   (domain_alias
     (identifier)
     (integer_domain
-      (infix_operator
+      (set_constructor
         (integer_literal)
         (infix_operator
           (identifier)
@@ -375,22 +375,22 @@ such that
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))))
       (decision_decl
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (infix_operator
                 (identifier)
@@ -399,11 +399,11 @@ such that
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (infix_operator
                 (infix_operator
@@ -418,7 +418,7 @@ such that
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (identifier))))
           (infix_operator
@@ -432,7 +432,7 @@ such that
                   (generator
                     (identifier)
                     (integer_domain
-                      (infix_operator
+                      (set_constructor
                         (integer_literal)
                         (identifier))))
                   (infix_operator
@@ -452,7 +452,7 @@ such that
                 (generator
                   (identifier)
                   (integer_domain
-                    (infix_operator
+                    (set_constructor
                       (integer_literal)
                       (identifier))))
                 (infix_operator
@@ -471,7 +471,7 @@ such that
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (identifier))))
           (infix_operator
@@ -483,7 +483,7 @@ such that
                     (generator
                       (identifier)
                       (integer_domain
-                        (infix_operator
+                        (set_constructor
                           (integer_literal)
                           (identifier))))
                     (infix_operator
@@ -499,7 +499,7 @@ such that
                     (generator
                       (identifier)
                       (integer_domain
-                        (infix_operator
+                        (set_constructor
                           (integer_literal)
                           (identifier))))
                     (infix_operator
@@ -559,15 +559,15 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (integer_literal)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (integer_literal)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (integer_literal)))))
       (constraint
@@ -602,7 +602,7 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (integer_literal))))
           (quantification
@@ -610,7 +610,7 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
             (generator
               (identifier)
               (integer_domain
-                (infix_operator
+                (set_constructor
                   (integer_literal)
                   (integer_literal))))
             (quantification
@@ -618,7 +618,7 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
               (generator
                 (identifier)
                 (integer_domain
-                  (infix_operator
+                  (set_constructor
                     (infix_operator
                       (identifier)
                       (integer_literal))
@@ -637,7 +637,7 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (integer_literal))))
           (quantification
@@ -645,7 +645,7 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
             (generator
               (identifier)
               (integer_domain
-                (infix_operator
+                (set_constructor
                   (integer_literal)
                   (integer_literal))))
             (quantification
@@ -653,7 +653,7 @@ forAll row2: int(row1+1..9) . M[row1, col]!=M[row2, col]
               (generator
                 (identifier)
                 (integer_domain
-                  (infix_operator
+                  (set_constructor
                     (infix_operator
                       (identifier)
                       (integer_literal))
@@ -708,11 +708,11 @@ forall i : int(1..m-1).
         (identifier)
         (matrix_domain
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (integer_domain
-            (infix_operator
+            (set_constructor
               (integer_literal)
               (identifier)))
           (boolean_domain)))
@@ -722,7 +722,7 @@ forall i : int(1..m-1).
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (infix_operator
                   (identifier)
@@ -732,7 +732,7 @@ forall i : int(1..m-1).
             (generator
               (identifier)
               (integer_domain
-                (infix_operator
+                (set_constructor
                   (infix_operator
                     (identifier)
                     (integer_literal))
@@ -745,7 +745,7 @@ forall i : int(1..m-1).
                     (generator
                       (identifier)
                       (integer_domain
-                        (infix_operator
+                        (set_constructor
                           (integer_literal)
                           (identifier))))
                     (infix_operator
@@ -763,7 +763,7 @@ forall i : int(1..m-1).
                     (generator
                       (identifier)
                       (integer_domain
-                        (infix_operator
+                        (set_constructor
                           (integer_literal)
                           (identifier))))
                     (infix_operator
@@ -781,7 +781,7 @@ forall i : int(1..m-1).
           (generator
             (identifier)
             (integer_domain
-              (infix_operator
+              (set_constructor
                 (integer_literal)
                 (infix_operator
                   (identifier)

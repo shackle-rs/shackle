@@ -23,6 +23,7 @@ ast_enum!(
 	"quantification" => Quantification,
 	"matrix_comprehension" => MatrixComprehension,
 	"absolute_operator" => AbsoluteOperator,
+	"set_constructor" => SetConstructor,
 	"parenthesised_expression" => "expression" // Turn parenthesised_expression into Expression node
 );
 
@@ -257,6 +258,31 @@ impl AbsoluteOperator {
 	}
 }
 
+ast_node!(
+	/// Infix Operator
+	SetConstructor,
+	operator,
+	left,
+	right
+);
+
+impl SetConstructor {
+	/// Get the operator of this set operator
+	pub fn operator(&self) -> Operator {
+		child_with_field_name(self, "operator")
+	}
+
+	/// Get the left expression of this set operator
+	pub fn left(&self) -> Expression {
+		child_with_field_name(self, "left")
+	}
+
+	/// Get the right expression of this set operator
+	pub fn right(&self) -> Expression {
+		child_with_field_name(self, "right")
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use expect_test::expect;
@@ -268,48 +294,48 @@ mod test {
 		check_ast_eprime(
 			"letting simple = toVec(X,Y)",
 			expect![[r#"
-    EPrimeModel(
-        Model {
-            items: [
-                ConstDefinition(
-                    ConstDefinition {
-                        cst_kind: "const_def",
-                        name: Identifier(
-                            Identifier {
-                                cst_kind: "identifier",
-                                name: "simple",
-                            },
-                        ),
-                        definition: Call(
-                            Call {
-                                cst_kind: "call",
-                                function: Identifier {
-                                    cst_kind: "identifier",
-                                    name: "toVec",
+                EPrimeModel(
+                    Model {
+                        items: [
+                            ConstDefinition(
+                                ConstDefinition {
+                                    cst_kind: "const_def",
+                                    name: Identifier(
+                                        Identifier {
+                                            cst_kind: "identifier",
+                                            name: "simple",
+                                        },
+                                    ),
+                                    definition: Call(
+                                        Call {
+                                            cst_kind: "call",
+                                            function: Identifier {
+                                                cst_kind: "identifier",
+                                                name: "toVec",
+                                            },
+                                            arguments: [
+                                                Identifier(
+                                                    Identifier {
+                                                        cst_kind: "identifier",
+                                                        name: "X",
+                                                    },
+                                                ),
+                                                Identifier(
+                                                    Identifier {
+                                                        cst_kind: "identifier",
+                                                        name: "Y",
+                                                    },
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                    domain: None,
                                 },
-                                arguments: [
-                                    Identifier(
-                                        Identifier {
-                                            cst_kind: "identifier",
-                                            name: "X",
-                                        },
-                                    ),
-                                    Identifier(
-                                        Identifier {
-                                            cst_kind: "identifier",
-                                            name: "Y",
-                                        },
-                                    ),
-                                ],
-                            },
-                        ),
-                        domain: None,
+                            ),
+                        ],
                     },
-                ),
-            ],
-        },
-    )
-"#]],
+                )
+            "#]],
 		);
 	}
 
@@ -693,9 +719,9 @@ mod test {
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
                                                         domain: [
-                                                            InfixOperator(
-                                                                InfixOperator {
-                                                                    cst_kind: "infix_operator",
+                                                            SetConstructor(
+                                                                SetConstructor {
+                                                                    cst_kind: "set_constructor",
                                                                     operator: Operator {
                                                                         cst_kind: "..",
                                                                         name: "..",
@@ -820,9 +846,9 @@ mod test {
                                                         IntegerDomain {
                                                             cst_kind: "integer_domain",
                                                             domain: [
-                                                                InfixOperator(
-                                                                    InfixOperator {
-                                                                        cst_kind: "infix_operator",
+                                                                SetConstructor(
+                                                                    SetConstructor {
+                                                                        cst_kind: "set_constructor",
                                                                         operator: Operator {
                                                                             cst_kind: "..",
                                                                             name: "..",
@@ -857,9 +883,9 @@ mod test {
                                                         IntegerDomain {
                                                             cst_kind: "integer_domain",
                                                             domain: [
-                                                                InfixOperator(
-                                                                    InfixOperator {
-                                                                        cst_kind: "infix_operator",
+                                                                SetConstructor(
+                                                                    SetConstructor {
+                                                                        cst_kind: "set_constructor",
                                                                         operator: Operator {
                                                                             cst_kind: "..",
                                                                             name: "..",

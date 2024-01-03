@@ -148,7 +148,8 @@ module.exports = grammar({
 				$.quantification,
 				$.matrix_comprehension,
 				$.absolute_operator,
-				$.parenthesised_expression
+				$.parenthesised_expression,
+				$.set_constructor,
 			),
 
 		parenthesised_expression: ($) =>
@@ -205,6 +206,16 @@ module.exports = grammar({
 				)
 			),
 
+		set_constructor: ($) => 
+			prec.left(
+				PREC.range, 
+				seq(
+					field("left", $._expression),
+					field("operator", ".."),
+					field("right", $._expression)
+				)
+			),
+
 		infix_operator: ($) => {
 			const table = [
 				[prec.right, PREC.power, "**"],
@@ -218,7 +229,6 @@ module.exports = grammar({
 				[prec.left, PREC.implication, "=>"],
 				[prec.left, PREC.equivalence, "<=>"],
 				[prec.left, PREC.set_in, "in"],
-				[prec.left, PREC.range, ".."],
 			]
 
 			return choice(

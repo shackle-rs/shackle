@@ -200,7 +200,7 @@ letting leveled =
         name: (identifier)
         name: (identifier)
         collection: (integer_domain
-          member: (infix_operator
+          member: (set_constructor
             left: (integer_literal)
             right: (integer_literal))))
       template: (infix_operator
@@ -215,7 +215,7 @@ letting leveled =
       generator: (generator
         name: (identifier)
         collection: (integer_domain
-          member: (infix_operator
+          member: (set_constructor
             left: (integer_literal)
             right: (integer_literal))))
       template: (quantification
@@ -223,7 +223,7 @@ letting leveled =
         generator: (generator
           name: (identifier)
           collection: (integer_domain
-            member: (infix_operator
+            member: (set_constructor
               left: (integer_literal)
               right: (integer_literal))))
         template: (quantification
@@ -231,7 +231,7 @@ letting leveled =
           generator: (generator
             name: (identifier)
             collection: (integer_domain
-              member: (infix_operator
+              member: (set_constructor
                 left: (infix_operator
                   left: (identifier)
                   right: (integer_literal))
@@ -267,7 +267,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
       generator: (generator
         name: (identifier)
         collection: (integer_domain
-          member: (infix_operator
+          member: (set_constructor
             left: (integer_literal)
             right: (integer_literal))))))
   item: (const_def
@@ -279,13 +279,13 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
       generator: (generator
         name: (identifier)
         collection: (integer_domain
-          member: (infix_operator
+          member: (set_constructor
             left: (integer_literal)
             right: (integer_literal))))
       generator: (generator
         name: (identifier)
         collection: (integer_domain
-          member: (infix_operator
+          member: (set_constructor
             left: (integer_literal)
             right: (integer_literal))))
       condition: (infix_operator
@@ -305,7 +305,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
         generator: (generator
           name: (identifier)
           collection: (integer_domain
-            member: (infix_operator
+            member: (set_constructor
               left: (integer_literal)
               right: (identifier))))
         condition: (infix_operator
@@ -316,7 +316,7 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
       generator: (generator
         name: (identifier)
         collection: (integer_domain
-          member: (infix_operator
+          member: (set_constructor
             left: (integer_literal)
             right: (identifier))))
       condition: (infix_operator
@@ -332,11 +332,11 @@ letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n
         name: (identifier)
         collection: (matrix_domain
           index: (integer_domain
-            member: (infix_operator
+            member: (set_constructor
               left: (integer_literal)
               right: (identifier)))
           base: (integer_domain
-            member: (infix_operator
+            member: (set_constructor
               left: (integer_literal)
               right: (identifier)))))
       condition: (call

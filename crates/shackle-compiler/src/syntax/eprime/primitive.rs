@@ -308,9 +308,9 @@ mod test {
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
                                                         domain: [
-                                                            InfixOperator(
-                                                                InfixOperator {
-                                                                    cst_kind: "infix_operator",
+                                                            SetConstructor(
+                                                                SetConstructor {
+                                                                    cst_kind: "set_constructor",
                                                                     operator: Operator {
                                                                         cst_kind: "..",
                                                                         name: "..",
@@ -336,9 +336,9 @@ mod test {
                                                     IntegerDomain {
                                                         cst_kind: "integer_domain",
                                                         domain: [
-                                                            InfixOperator(
-                                                                InfixOperator {
-                                                                    cst_kind: "infix_operator",
+                                                            SetConstructor(
+                                                                SetConstructor {
+                                                                    cst_kind: "set_constructor",
                                                                     operator: Operator {
                                                                         cst_kind: "..",
                                                                         name: "..",
@@ -365,9 +365,9 @@ mod test {
                                                 IntegerDomain {
                                                     cst_kind: "integer_domain",
                                                     domain: [
-                                                        InfixOperator(
-                                                            InfixOperator {
-                                                                cst_kind: "infix_operator",
+                                                        SetConstructor(
+                                                            SetConstructor {
+                                                                cst_kind: "set_constructor",
                                                                 operator: Operator {
                                                                     cst_kind: "..",
                                                                     name: "..",

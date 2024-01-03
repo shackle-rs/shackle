@@ -64,6 +64,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -157,6 +161,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -236,6 +244,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -344,6 +356,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -677,6 +693,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -744,6 +764,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -824,6 +848,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -859,10 +887,6 @@
           },
           {
             "type": "->",
-            "named": false
-          },
-          {
-            "type": "..",
             "named": false
           },
           {
@@ -992,6 +1016,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -1061,6 +1089,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1138,6 +1170,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1236,6 +1272,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1383,6 +1423,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -1452,6 +1496,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1538,6 +1586,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1649,6 +1701,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -1721,6 +1777,10 @@
             "named": true
           },
           {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
             "type": "string_literal",
             "named": true
           }
@@ -1790,6 +1850,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1872,6 +1936,10 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {
@@ -1982,6 +2050,166 @@
           },
           {
             "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "set_constructor",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absolute_operator",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "matrix_comprehension",
+            "named": true
+          },
+          {
+            "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
+            "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "..",
+            "named": false
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "absolute_operator",
+            "named": true
+          },
+          {
+            "type": "boolean_literal",
+            "named": true
+          },
+          {
+            "type": "call",
+            "named": true
+          },
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "indexed_access",
+            "named": true
+          },
+          {
+            "type": "infinity",
+            "named": true
+          },
+          {
+            "type": "infix_operator",
+            "named": true
+          },
+          {
+            "type": "integer_literal",
+            "named": true
+          },
+          {
+            "type": "matrix_comprehension",
+            "named": true
+          },
+          {
+            "type": "matrix_literal",
+            "named": true
+          },
+          {
+            "type": "parenthesised_expression",
+            "named": true
+          },
+          {
+            "type": "postfix_operator",
+            "named": true
+          },
+          {
+            "type": "prefix_operator",
+            "named": true
+          },
+          {
+            "type": "quantification",
+            "named": true
+          },
+          {
+            "type": "set_constructor",
             "named": true
           },
           {

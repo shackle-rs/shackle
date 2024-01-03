@@ -43,7 +43,9 @@ impl ExpressionCollector<'_> {
 			eprime::Expression::Call(c) => self.collect_call(c).into(),
 			eprime::Expression::Identifier(i) => Identifier::new(i.name(), self.db).into(),
 			eprime::Expression::ArrayAccess(aa) => self.collect_array_access(aa).into(),
-			eprime::Expression::InfixOperator(o) => return self.collect_infix_operator(o),
+			eprime::Expression::InfixOperator(o) => {
+				return self.collect_infix_operator(o.operator(), o.left(), o.right(), origin)
+			}
 			eprime::Expression::PrefixOperator(o) => return self.collect_prefix_operator(o),
 			eprime::Expression::PostfixOperator(o) => return self.collect_postfix_operator(o),
 			eprime::Expression::Quantification(q) => self.collect_quantification(q).into(),
@@ -51,6 +53,9 @@ impl ExpressionCollector<'_> {
 				self.collect_matrix_comprehension(m).into()
 			}
 			eprime::Expression::AbsoluteOperator(a) => return self.collect_absolute_operator(a),
+			eprime::Expression::SetConstructor(o) => {
+				return self.collect_infix_operator(o.operator(), o.left(), o.right(), origin)
+			}
 		};
 		self.alloc_expression(origin, collected)
 	}
@@ -148,21 +153,21 @@ impl ExpressionCollector<'_> {
 				return CollectedDomain::PrimitiveDomain(PrimitiveType::Bool)
 			}
 			eprime::Domain::IntegerDomain(i) => {
-				let mut call_domain_members = Vec::new();
-				let mut literal_domain_members = Vec::new();
+				let mut set_constructor_domain_members = Vec::new();
+				let mut domain_members = Vec::new();
 				for e in i.domain() {
 					match e {
-						eprime::Expression::IntegerLiteral(i) => literal_domain_members.push(
-							self.alloc_expression(Origin::new(&i), IntegerLiteral(i.value())),
-						),
+						eprime::Expression::SetConstructor(s) => {
+							set_constructor_domain_members.push(self.collect_expression(s.into()))
+						}
 						e => {
-							call_domain_members.push(self.collect_expression(e));
+							domain_members.push(self.collect_expression(e));
 						}
 					}
 				}
-				let call_domain = if call_domain_members.len() > 1 {
+				let call_domain = if set_constructor_domain_members.len() > 1 {
 					let union_expr = self.ident_exp(origin.clone(), "union");
-					call_domain_members.into_iter().reduce(|acc, e| {
+					set_constructor_domain_members.into_iter().reduce(|acc, e| {
 						self.alloc_expression(
 							origin.clone(),
 							Call {
@@ -172,20 +177,20 @@ impl ExpressionCollector<'_> {
 						)
 					})
 				} else {
-					call_domain_members.into_iter().next()
+					set_constructor_domain_members.into_iter().next()
 				};
-				let literal_domain = if literal_domain_members.len() > 0 {
+				let domain = if domain_members.len() > 0 {
 					Some(self.alloc_expression(
 						origin.clone(),
 						SetLiteral {
-							members: literal_domain_members.into_boxed_slice(),
+							members: domain_members.into_boxed_slice(),
 						},
 					))
 				} else {
 					None
 				};
 
-				match (literal_domain, call_domain) {
+				match (domain, call_domain) {
 					(Some(l), Some(d)) => {
 						let union_expr = self.ident_exp(origin.clone(), "union");
 						self.alloc_expression(
@@ -226,12 +231,17 @@ impl ExpressionCollector<'_> {
 		}
 	}
 
-	fn collect_infix_operator(&mut self, o: eprime::InfixOperator) -> ArenaIndex<Expression> {
-		let arguments: Box<[ArenaIndex<Expression>]> = [o.left(), o.right()]
+	fn collect_infix_operator(
+		&mut self,
+		operator: eprime::Operator,
+		l: eprime::Expression,
+		r: eprime::Expression,
+		o: Origin,
+	) -> ArenaIndex<Expression> {
+		let arguments: Box<[ArenaIndex<Expression>]> = [l, r]
 			.into_iter()
 			.map(|e| self.collect_expression(e))
 			.collect();
-		let operator = o.operator();
 		let function = self.ident_exp(
 			Origin::new(&operator),
 			// Convert Eprime operators to MiniZinc ones
@@ -246,7 +256,7 @@ impl ExpressionCollector<'_> {
 			},
 		);
 		self.alloc_expression(
-			Origin::new(&o),
+			o,
 			Call {
 				function,
 				arguments,
