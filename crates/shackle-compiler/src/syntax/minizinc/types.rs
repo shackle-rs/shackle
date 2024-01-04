@@ -527,6 +527,7 @@ mod test {
                         declared_type: TupleType(
                             TupleType {
                                 cst_kind: "tuple_type",
+                                var_type: Par,
                                 fields: [
                                     TypeBase(
                                         TypeBase {
@@ -577,6 +578,7 @@ mod test {
                         declared_type: TupleType(
                             TupleType {
                                 cst_kind: "tuple_type",
+                                var_type: Par,
                                 fields: [
                                     TypeBase(
                                         TypeBase {
@@ -595,6 +597,7 @@ mod test {
                                     TupleType(
                                         TupleType {
                                             cst_kind: "tuple_type",
+                                            var_type: Par,
                                             fields: [
                                                 TypeBase(
                                                     TypeBase {
@@ -666,6 +669,7 @@ mod test {
                         declared_type: RecordType(
                             RecordType {
                                 cst_kind: "record_type",
+                                var_type: Par,
                                 fields: [
                                     RecordField {
                                         cst_kind: "record_type_field",
@@ -734,6 +738,7 @@ mod test {
                         declared_type: RecordType(
                             RecordType {
                                 cst_kind: "record_type",
+                                var_type: Par,
                                 fields: [
                                     RecordField {
                                         cst_kind: "record_type_field",
@@ -769,6 +774,7 @@ mod test {
                                         field_type: RecordType(
                                             RecordType {
                                                 cst_kind: "record_type",
+                                                var_type: Par,
                                                 fields: [
                                                     RecordField {
                                                         cst_kind: "record_type_field",
