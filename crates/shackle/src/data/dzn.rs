@@ -10,11 +10,9 @@ use shackle_compiler::{
 	diagnostics::{Error, InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError, TypeMismatch},
 	file::SourceFile,
 	syntax::{
-		ast::{
-			Assignment, AstNode, Children, Expression, Identifier, InfixOperator,
-			RecordLiteralMember,
-		},
+		ast::{AstNode, Children},
 		cst::{Cst, CstNode},
+		minizinc::{Assignment, Expression, Identifier, InfixOperator, RecordLiteralMember},
 	},
 };
 use tree_sitter::Parser;

@@ -3,10 +3,10 @@
 
 use tree_sitter::Parser;
 
-use super::{ast::Model, cst::Cst};
+use super::{ast::ConstraintModel, cst::Cst, eprime::EPrimeModel, minizinc::MznModel};
 use crate::{
 	db::{FileReader, Upcast},
-	file::FileRef,
+	file::{FileRef, InputLang},
 	Result,
 };
 
@@ -23,25 +23,34 @@ pub trait SourceParser: FileReader + Upcast<dyn FileReader> {
 	///
 	/// Only gives an `Err` result if getting the file contents failed.
 	/// Otherwise, the error is contained in the CST.
-	fn ast(&self, file: FileRef) -> Result<Model>;
+	fn ast(&self, file: FileRef) -> Result<ConstraintModel>;
 }
 
 fn cst(db: &dyn SourceParser, file: FileRef) -> Result<Cst> {
 	let contents = file.contents(db.upcast())?;
 
-	// TODO: Don't create new parser for every file (hard since parsing requires mutable reference to Parser)
+	let tree_sitter_lang = match file.lang(db.upcast()) {
+		InputLang::MiniZinc => tree_sitter_minizinc::language(),
+		InputLang::EPrime => tree_sitter_eprime::language(),
+		_ => unreachable!("cst should only be called on model files"),
+	};
+
 	let mut parser = Parser::new();
 	parser
-		.set_language(tree_sitter_minizinc::language())
+		.set_language(tree_sitter_lang)
 		.expect("Failed to set Tree Sitter parser language");
 	let tree = parser
 		.parse(contents.as_bytes(), None)
-		.expect("MiniZinc Tree Sitter parser did not return tree object");
+		.expect("Tree Sitter parser did not return tree object");
 
 	Ok(Cst::new(tree, file, contents))
 }
 
-fn ast(db: &dyn SourceParser, file: FileRef) -> Result<Model> {
+fn ast(db: &dyn SourceParser, file: FileRef) -> Result<ConstraintModel> {
 	let cst = db.cst(file)?;
-	Ok(Model::new(cst))
+	match cst.file().lang(db.upcast()) {
+		InputLang::MiniZinc => Ok(ConstraintModel::MznModel(MznModel::new(cst))),
+		InputLang::EPrime => Ok(ConstraintModel::EPrimeModel(EPrimeModel::new(cst))),
+		_ => unreachable!("ast should only be called on ,odel files"),
+	}
 }

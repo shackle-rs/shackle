@@ -1,5 +1,5 @@
 use shackle_compiler::{
-	syntax::ast::{self, AstNode},
+	syntax::{ast::AstNode, minizinc},
 	utils::pretty_print_identifier,
 };
 use tree_sitter_minizinc::Precedence;
@@ -9,40 +9,42 @@ use crate::{
 	ir::Element,
 };
 
-impl Format for ast::Expression {
+impl Format for minizinc::Expression {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> crate::ir::Element {
 		let e = match self {
-			ast::Expression::IntegerLiteral(i) => Element::text(i.cst_text()),
-			ast::Expression::FloatLiteral(f) => Element::text(f.cst_text()),
-			ast::Expression::TupleLiteral(t) => t.format(formatter),
-			ast::Expression::RecordLiteral(r) => r.format(formatter),
-			ast::Expression::SetLiteral(s) => s.format(formatter),
-			ast::Expression::BooleanLiteral(b) => {
+			minizinc::Expression::IntegerLiteral(i) => Element::text(i.cst_text()),
+			minizinc::Expression::FloatLiteral(f) => Element::text(f.cst_text()),
+			minizinc::Expression::TupleLiteral(t) => t.format(formatter),
+			minizinc::Expression::RecordLiteral(r) => r.format(formatter),
+			minizinc::Expression::SetLiteral(s) => s.format(formatter),
+			minizinc::Expression::BooleanLiteral(b) => {
 				Element::text(if b.value() { "true" } else { "false" })
 			}
-			ast::Expression::StringLiteral(s) => Element::text(s.cst_text()),
-			ast::Expression::Identifier(i) => Element::text(pretty_print_identifier(&i.name())),
-			ast::Expression::Absent(a) => Element::text(a.cst_text()),
-			ast::Expression::Infinity(i) => Element::text(i.cst_text()),
-			ast::Expression::Anonymous(a) => Element::text(a.cst_text()),
-			ast::Expression::ArrayLiteral(a) => a.format(formatter),
-			ast::Expression::ArrayLiteral2D(a) => a.format(formatter),
-			ast::Expression::ArrayAccess(a) => a.format(formatter),
-			ast::Expression::ArrayComprehension(c) => c.format(formatter),
-			ast::Expression::SetComprehension(c) => c.format(formatter),
-			ast::Expression::IfThenElse(i) => i.format(formatter),
-			ast::Expression::Call(c) => c.format(formatter),
-			ast::Expression::PrefixOperator(o) => o.format(formatter),
-			ast::Expression::InfixOperator(o) => o.format(formatter),
-			ast::Expression::PostfixOperator(o) => o.format(formatter),
-			ast::Expression::GeneratorCall(c) => c.format(formatter),
-			ast::Expression::StringInterpolation(s) => s.format(formatter),
-			ast::Expression::Case(c) => c.format(formatter),
-			ast::Expression::Let(l) => l.format(formatter),
-			ast::Expression::TupleAccess(t) => t.format(formatter),
-			ast::Expression::RecordAccess(r) => r.format(formatter),
-			ast::Expression::Lambda(l) => l.format(formatter),
-			ast::Expression::AnnotatedExpression(e) => e.format(formatter),
+			minizinc::Expression::StringLiteral(s) => Element::text(s.cst_text()),
+			minizinc::Expression::Identifier(i) => {
+				Element::text(pretty_print_identifier(&i.name()))
+			}
+			minizinc::Expression::Absent(a) => Element::text(a.cst_text()),
+			minizinc::Expression::Infinity(i) => Element::text(i.cst_text()),
+			minizinc::Expression::Anonymous(a) => Element::text(a.cst_text()),
+			minizinc::Expression::ArrayLiteral(a) => a.format(formatter),
+			minizinc::Expression::ArrayLiteral2D(a) => a.format(formatter),
+			minizinc::Expression::ArrayAccess(a) => a.format(formatter),
+			minizinc::Expression::ArrayComprehension(c) => c.format(formatter),
+			minizinc::Expression::SetComprehension(c) => c.format(formatter),
+			minizinc::Expression::IfThenElse(i) => i.format(formatter),
+			minizinc::Expression::Call(c) => c.format(formatter),
+			minizinc::Expression::PrefixOperator(o) => o.format(formatter),
+			minizinc::Expression::InfixOperator(o) => o.format(formatter),
+			minizinc::Expression::PostfixOperator(o) => o.format(formatter),
+			minizinc::Expression::GeneratorCall(c) => c.format(formatter),
+			minizinc::Expression::StringInterpolation(s) => s.format(formatter),
+			minizinc::Expression::Case(c) => c.format(formatter),
+			minizinc::Expression::Let(l) => l.format(formatter),
+			minizinc::Expression::TupleAccess(t) => t.format(formatter),
+			minizinc::Expression::RecordAccess(r) => r.format(formatter),
+			minizinc::Expression::Lambda(l) => l.format(formatter),
+			minizinc::Expression::AnnotatedExpression(e) => e.format(formatter),
 		};
 		let result = formatter.attach_comments(self, vec![e]);
 		if formatter.options().keep_parentheses && self.is_parenthesised() {
@@ -62,18 +64,18 @@ impl Format for ast::Expression {
 	fn has_brackets(&self, formatter: &MiniZincFormatter) -> bool {
 		matches!(
 			self,
-			ast::Expression::ArrayLiteral(_)
-				| ast::Expression::ArrayLiteral2D(_)
-				| ast::Expression::SetLiteral(_)
-				| ast::Expression::TupleLiteral(_)
-				| ast::Expression::RecordLiteral(_)
-				| ast::Expression::ArrayComprehension(_)
-				| ast::Expression::SetComprehension(_)
+			minizinc::Expression::ArrayLiteral(_)
+				| minizinc::Expression::ArrayLiteral2D(_)
+				| minizinc::Expression::SetLiteral(_)
+				| minizinc::Expression::TupleLiteral(_)
+				| minizinc::Expression::RecordLiteral(_)
+				| minizinc::Expression::ArrayComprehension(_)
+				| minizinc::Expression::SetComprehension(_)
 		) || formatter.options().keep_parentheses && self.is_parenthesised()
 	}
 }
 
-impl Format for ast::AnnotatedExpression {
+impl Format for minizinc::AnnotatedExpression {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let prec = Precedence::annotated_expression();
 		let mut needs_parentheses = false;
@@ -97,7 +99,7 @@ impl Format for ast::AnnotatedExpression {
 	}
 }
 
-impl Format for ast::Call {
+impl Format for minizinc::Call {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::call().get() > formatter.precedence(&self.function()).get();
@@ -112,7 +114,7 @@ impl Format for ast::Call {
 	}
 }
 
-impl Format for ast::GeneratorCall {
+impl Format for minizinc::GeneratorCall {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::generator_call().get() > formatter.precedence(&self.function()).get();
@@ -128,7 +130,7 @@ impl Format for ast::GeneratorCall {
 	}
 }
 
-impl Format for ast::PrefixOperator {
+impl Format for minizinc::PrefixOperator {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::prefix_operator(self.operator().name()).get()
@@ -152,13 +154,13 @@ impl Format for ast::PrefixOperator {
 }
 
 enum InfixOperatorPart {
-	Left(ast::Expression),
-	Operator(ast::Operator),
-	Right(ast::Expression),
+	Left(minizinc::Expression),
+	Operator(minizinc::Operator),
+	Right(minizinc::Expression),
 	Comments(Vec<Element>),
 }
 
-impl Format for ast::InfixOperator {
+impl Format for minizinc::InfixOperator {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let prec = Precedence::infix_operator(self.operator().name());
 		let mut todo = vec![
@@ -175,7 +177,7 @@ impl Format for ast::InfixOperator {
 					} else {
 						match (formatter.precedence(&e), &prec) {
 							(Precedence::Left(i), Precedence::Left(j)) if i == *j => {
-								if let Some(op) = e.cast_ref::<ast::InfixOperator>() {
+								if let Some(op) = e.cast_ref::<minizinc::InfixOperator>() {
 									if let Some(comments) = formatter.take_comments(op) {
 										todo.push(InfixOperatorPart::Comments(comments.after));
 										todo.push(InfixOperatorPart::Right(op.right()));
@@ -213,7 +215,7 @@ impl Format for ast::InfixOperator {
 					} else {
 						match (formatter.precedence(&e), &prec) {
 							(Precedence::Right(i), Precedence::Right(j)) if i == *j => {
-								if let Some(op) = e.cast_ref::<ast::InfixOperator>() {
+								if let Some(op) = e.cast_ref::<minizinc::InfixOperator>() {
 									if let Some(comments) = formatter.take_comments(op) {
 										todo.push(InfixOperatorPart::Comments(comments.after));
 										todo.push(InfixOperatorPart::Right(op.right()));
@@ -243,7 +245,7 @@ impl Format for ast::InfixOperator {
 	}
 }
 
-impl Format for ast::PostfixOperator {
+impl Format for minizinc::PostfixOperator {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::postfix_operator(self.operator().name()).get()
@@ -259,7 +261,7 @@ impl Format for ast::PostfixOperator {
 	}
 }
 
-impl Format for ast::IfThenElse {
+impl Format for minizinc::IfThenElse {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		for (i, b) in self.branches().enumerate() {
@@ -290,7 +292,7 @@ impl Format for ast::IfThenElse {
 	}
 }
 
-impl Format for ast::Case {
+impl Format for minizinc::Case {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("case "),
@@ -303,7 +305,7 @@ impl Format for ast::Case {
 	}
 }
 
-impl Format for ast::CaseItem {
+impl Format for minizinc::CaseItem {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::line_break(),
@@ -322,7 +324,7 @@ impl Format for ast::CaseItem {
 	}
 }
 
-impl Format for ast::Let {
+impl Format for minizinc::Let {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let it = self.items().collect::<Vec<_>>();
 		if it.is_empty() {
@@ -331,16 +333,16 @@ impl Format for ast::Let {
 		let items = if it.len() == 1 {
 			let item = it.first().unwrap();
 			let i = match item {
-				ast::LetItem::Constraint(c) => c.format(formatter),
-				ast::LetItem::Declaration(d) => d.format(formatter),
+				minizinc::LetItem::Constraint(c) => c.format(formatter),
+				minizinc::LetItem::Declaration(d) => d.format(formatter),
 			};
 			formatter.attach_comments(item, vec![i])
 		} else {
 			Element::join(
 				self.items().map(|item| {
 					let i = match &item {
-						ast::LetItem::Constraint(c) => c.format(formatter),
-						ast::LetItem::Declaration(d) => d.format(formatter),
+						minizinc::LetItem::Constraint(c) => c.format(formatter),
+						minizinc::LetItem::Declaration(d) => d.format(formatter),
 					};
 					formatter.attach_comments(&item, vec![i])
 				}),
@@ -361,7 +363,7 @@ impl Format for ast::Let {
 	}
 }
 
-impl Format for ast::StringInterpolation {
+impl Format for minizinc::StringInterpolation {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![Element::text("\"")];
 		for p in self.contents() {
@@ -382,7 +384,7 @@ impl Format for ast::StringInterpolation {
 	}
 }
 
-impl Format for ast::Lambda {
+impl Format for minizinc::Lambda {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![Element::text("lambda ")];
 		if let Some(r) = self.return_type() {

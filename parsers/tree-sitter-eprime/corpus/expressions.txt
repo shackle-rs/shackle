@@ -1,0 +1,344 @@
+================
+Boolean Literals
+================
+
+letting T = true
+letting F = false
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (boolean_literal))
+  item: (const_def name: (identifier) definition: (boolean_literal)))
+
+================
+Integer Literals
+================
+
+letting one = 1
+letting ten = 10
+letting all = 1234567890
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (integer_literal))
+  item: (const_def name: (identifier) definition: (integer_literal))
+  item: (const_def name: (identifier) definition: (integer_literal)))
+
+========
+Infinity
+========
+
+letting inf = infinity
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (infinity)))
+
+================
+Indentifier
+================
+
+letting AZ = az
+letting A_0 = A_9
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (identifier))
+  item: (const_def name: (identifier) definition: (identifier)))
+
+================
+Prefix Operators
+================
+
+letting negative_int = -5
+letting negative_ident = -x
+letting negated_bool = !true
+letting negated_ident = !y
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (integer_literal)))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (identifier)))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (boolean_literal)))
+  item: (const_def name: (identifier) definition: (prefix_operator operand: (identifier))))
+
+========
+Absolute
+========
+
+letting absolute = | x |
+
+---
+
+(source_file
+  item: (const_def
+    name: (identifier)
+    definition: (absolute_operator
+      operand: (identifier))))
+
+===============
+Infix Operators
+===============
+
+letting exponent = x ** y
+letting mult = x * y
+letting div = x / y
+letting add = x + y
+letting minus = x - y
+letting same = x = y
+letting different = x != y
+letting smaller = x < y
+letting bigger = x > y
+letting smalleq = x <= y
+letting bigeq = x >= y
+letting smallerlex = x <lex y
+letting biggerlex = x >lex y
+letting smalleqlex = x <=lex y
+letting bigeqlex = x >=lex y
+letting and = x /\ y
+letting or = x \/ y
+letting impl = x -> y
+letting equiv = x <-> y
+letting impl = x => y
+letting equiv = x <=> y
+letting set_in = x in y
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier)))
+  item: (const_def name: (identifier) definition: (infix_operator left: (identifier) right: (identifier))))
+
+===========================
+Matrix Indexing and Slicing
+===========================
+
+letting single = M[i]
+letting multiple = M2[x,y,z]
+letting direct = [1,2,3][2]
+letting slice = Ms[..]
+letting double_slice = Ms[.., 1 ,..]
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (identifier)))
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (identifier) index: (identifier) index: (identifier)))
+  item: (const_def name: (identifier) definition: (indexed_access
+    collection: (matrix_literal member: (integer_literal) member: (integer_literal) member: (integer_literal))
+    index: (integer_literal)))
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier)))
+  item: (const_def name: (identifier) definition: (indexed_access collection: (identifier) index: (integer_literal))))
+
+=====
+Calls
+=====
+
+letting simple = toVec(X)
+letting multiple = atleast(X, C, Vals)
+letting another = alldifferent_except (X, 0)
+
+---
+
+(source_file
+  item: (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier)))
+  item: (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier) argument: (identifier) argument: (identifier)))
+  item: (const_def name: (identifier) definition: (call function: (identifier) argument: (identifier) argument: (integer_literal))))
+
+===============
+Quantifications
+===============
+
+letting simple = forAll i:D.E
+letting expr = exists i,j : int(1..3) . x[i] = i
+letting leveled =   
+  forAll row : int(1..9) .
+    forAll col1 : int(1..9) .
+        forAll col2: int(col1+1..9) . M[row, col1] != M[row, col2]
+
+---
+
+(source_file
+  item: (const_def
+    name: (identifier)
+    definition: (quantification
+      function: (identifier)
+      generator: (generator
+        name: (identifier)
+        collection: (identifier))
+      template: (identifier)))
+  item: (const_def
+    name: (identifier)
+    definition: (quantification
+      function: (identifier)
+      generator: (generator
+        name: (identifier)
+        name: (identifier)
+        collection: (integer_domain
+          member: (set_constructor
+            left: (integer_literal)
+            right: (integer_literal))))
+      template: (infix_operator
+        left: (indexed_access
+          collection: (identifier)
+          index: (identifier))
+        right: (identifier))))
+  item: (const_def
+    name: (identifier)
+    definition: (quantification
+      function: (identifier)
+      generator: (generator
+        name: (identifier)
+        collection: (integer_domain
+          member: (set_constructor
+            left: (integer_literal)
+            right: (integer_literal))))
+      template: (quantification
+        function: (identifier)
+        generator: (generator
+          name: (identifier)
+          collection: (integer_domain
+            member: (set_constructor
+              left: (integer_literal)
+              right: (integer_literal))))
+        template: (quantification
+          function: (identifier)
+          generator: (generator
+            name: (identifier)
+            collection: (integer_domain
+              member: (set_constructor
+                left: (infix_operator
+                  left: (identifier)
+                  right: (integer_literal))
+                right: (integer_literal))))
+          template: (infix_operator
+            left: (indexed_access
+              collection: (identifier)
+              index: (identifier)
+              index: (identifier))            
+            right: (indexed_access
+              collection: (identifier)
+              index: (identifier)
+              index: (identifier))))))))
+
+=====================
+Matrix Comprehensions
+=====================
+
+letting simple = [ num**2 | num : int(1..5) ]
+letting indexed = [ i+j | i: int(1..3), j : int(1..3), i<j ; int(7..) ]
+letting multidim = [ [ M[i,j] | j : int(1..n), j%2=1 ] | i : int(1..n), i%2=1 ]
+letting permutations = [ perm | perm : matrix indexed by [int(1..n)] of int(1..n), allDiff(perm) ]
+
+---
+
+(source_file
+  item: (const_def
+    name: (identifier)
+    definition: (matrix_comprehension
+      template: (infix_operator
+        left: (identifier)
+        right: (integer_literal))
+      generator: (generator
+        name: (identifier)
+        collection: (integer_domain
+          member: (set_constructor
+            left: (integer_literal)
+            right: (integer_literal))))))
+  item: (const_def
+    name: (identifier)
+    definition: (matrix_comprehension
+      template: (infix_operator
+        left: (identifier)
+        right: (identifier))
+      generator: (generator
+        name: (identifier)
+        collection: (integer_domain
+          member: (set_constructor
+            left: (integer_literal)
+            right: (integer_literal))))
+      generator: (generator
+        name: (identifier)
+        collection: (integer_domain
+          member: (set_constructor
+            left: (integer_literal)
+            right: (integer_literal))))
+      condition: (infix_operator
+        left: (identifier)
+        right: (identifier))
+      index: (integer_domain
+        member: (unary_set_constructor
+          operand: (integer_literal)))))
+  item: (const_def
+    name: (identifier)
+    definition: (matrix_comprehension
+      template: (matrix_comprehension
+        template: (indexed_access
+          collection: (identifier)
+          index: (identifier)
+          index: (identifier))
+        generator: (generator
+          name: (identifier)
+          collection: (integer_domain
+            member: (set_constructor
+              left: (integer_literal)
+              right: (identifier))))
+        condition: (infix_operator
+          left: (infix_operator
+            left: (identifier)
+            right: (integer_literal))
+          right: (integer_literal)))
+      generator: (generator
+        name: (identifier)
+        collection: (integer_domain
+          member: (set_constructor
+            left: (integer_literal)
+            right: (identifier))))
+      condition: (infix_operator
+        left: (infix_operator
+          left: (identifier)
+          right: (integer_literal))
+        right: (integer_literal))))
+  item: (const_def
+    name: (identifier)
+    definition: (matrix_comprehension
+      template: (identifier)
+      generator: (generator
+        name: (identifier)
+        collection: (matrix_domain
+          index: (integer_domain
+            member: (set_constructor
+              left: (integer_literal)
+              right: (identifier)))
+          base: (integer_domain
+            member: (set_constructor
+              left: (integer_literal)
+              right: (identifier)))))
+      condition: (call
+        function: (identifier)
+        argument: (identifier)))))

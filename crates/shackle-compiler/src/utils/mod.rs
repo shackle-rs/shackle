@@ -68,7 +68,7 @@ use salsa::InternKey;
 use crate::{
 	db::InternedString,
 	hir::db::Hir,
-	syntax::ast::{parse_float_literal, parse_integer_literal},
+	syntax::minizinc::{parse_float_literal, parse_integer_literal},
 };
 
 /// Trait for pretty printing for debugging with a Salsa database

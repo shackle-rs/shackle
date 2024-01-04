@@ -1,9 +1,121 @@
 //! Helper utilities for dealing with AST nodes.
+use std::{fmt::Debug, marker::PhantomData};
 
-use std::marker::PhantomData;
-
-use super::{AstNode, Children};
 use crate::syntax::cst::CstNode;
+
+/// Base trait for AST nodes
+pub trait AstNode: Debug {
+	/// Create a new node
+	fn new(node: CstNode) -> Self
+	where
+		Self: Sized + From<CstNode>,
+	{
+		Self::from(node)
+	}
+
+	/// Get the underlying CST node
+	fn cst_node(&self) -> &CstNode;
+
+	/// Get the (concrete) text content of this node
+	fn cst_text(&self) -> &str {
+		self.cst_node().text()
+	}
+
+	/// Get the kind of the CST node
+	fn cst_kind(&self) -> &str {
+		self.cst_node().as_ref().kind()
+	}
+
+	/// Whether this node is missing
+	fn is_missing(&self) -> bool {
+		self.cst_node().as_ref().is_missing()
+	}
+
+	/// Convert to T if possible
+	fn cast_ref<T: TryCastFrom<Self>>(&self) -> Option<&T>
+	where
+		Self: Sized,
+	{
+		T::from_ref(self)
+	}
+
+	/// Convert to T if possible
+	fn cast<T: TryCastFrom<Self>>(self) -> Option<T>
+	where
+		Self: Sized,
+	{
+		T::from(self)
+	}
+}
+
+/// Iterator over child nodes with a particular field name
+#[derive(Clone)]
+pub struct Children<'a, T> {
+	pub(crate) field: u16,
+	pub(crate) tree: &'a Cst,
+	pub(crate) cursor: TreeCursor<'a>,
+	pub(crate) done: bool,
+	pub(crate) phantom: PhantomData<T>,
+}
+
+impl<'a, T: From<CstNode>> Children<'a, T> {
+	/// Get the children of a `CstNode`
+	pub fn from_cst(parent: &'a CstNode, field: &str) -> Self {
+		let tree = parent.cst();
+		let id = tree.language().field_id_for_name(field).unwrap();
+		let mut cursor = parent.as_ref().walk();
+		let done = !cursor.goto_first_child();
+		Children {
+			field: id,
+			tree,
+			cursor,
+			done,
+			phantom: PhantomData,
+		}
+	}
+}
+
+impl<'a, T: From<CstNode>> Iterator for Children<'a, T> {
+	type Item = T;
+	fn next(&mut self) -> Option<T> {
+		if self.done {
+			return None;
+		}
+		while self.cursor.field_id() != Some(self.field) {
+			if !self.cursor.goto_next_sibling() {
+				return None;
+			}
+		}
+		let result = self.tree.node(self.cursor.node());
+		self.done = !self.cursor.goto_next_sibling();
+		Some(T::from(result))
+	}
+}
+
+impl<'a, T: Debug + From<CstNode>> std::fmt::Debug for Children<'a, T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut cursor = self.cursor.clone();
+		cursor.goto_parent();
+		let done = !cursor.goto_first_child();
+
+		let iter: Children<'a, T> = Children {
+			field: self.field,
+			tree: self.tree,
+			cursor,
+			done,
+			phantom: PhantomData,
+		};
+		f.debug_list().entries(iter).finish()
+	}
+}
+
+/// Helper trait to aid in unwrapping enum nodes into their underlying type.
+pub trait TryCastFrom<T>: Sized {
+	/// Create from &T
+	fn from_ref(value: &T) -> Option<&Self>;
+	/// Create from T
+	fn from(value: T) -> Option<Self>;
+}
 
 /// Helper to retrieve a child node by its field name
 pub fn child_with_field_name<T: AstNode, U: From<CstNode>>(parent: &T, field: &str) -> U {
@@ -85,6 +197,7 @@ macro_rules! ast_node {
 		$(,)*
 	) => (
         $(#[$meta])*
+		#[allow(missing_docs)]
 		#[derive(Clone, Eq, PartialEq, Hash)]
 		pub struct $name {
 			syntax: $crate::syntax::cst::CstNode,
@@ -259,24 +372,57 @@ macro_rules! ast_enum {
 }
 
 pub(crate) use ast_enum;
+use tree_sitter::TreeCursor;
+
+use super::{cst::Cst, eprime::EPrimeModel, minizinc::MznModel};
+
+/// ConstraintModel represents an AST of a constraint model
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum ConstraintModel {
+	/// MiniZinc model
+	MznModel(MznModel),
+	/// Essence' model
+	EPrimeModel(EPrimeModel),
+}
 
 #[cfg(test)]
 pub mod test {
 	use expect_test::{Expect, ExpectFile};
 	use tree_sitter::Parser;
 
-	use crate::syntax::{ast::Model, cst::Cst};
+	use super::ConstraintModel;
+	use crate::{
+		file::InputLang,
+		syntax::{cst::Cst, eprime::EPrimeModel, minizinc::MznModel},
+	};
 
 	/// Helper to check parsed AST
-	pub fn check_ast(source: &str, expected: Expect) {
+	pub fn check_ast_with_lang(language: InputLang, source: &str, expected: Expect) {
+		let lang = match language {
+			InputLang::MiniZinc => tree_sitter_minizinc::language(),
+			InputLang::EPrime => tree_sitter_eprime::language(),
+			_ => unreachable!("check_ast_with_lang should only be called on model files"),
+		};
 		let mut parser = Parser::new();
-		parser
-			.set_language(tree_sitter_minizinc::language())
-			.unwrap();
+		parser.set_language(lang).unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
-		let model = Model::new(cst);
+		let model = match language {
+			InputLang::MiniZinc => ConstraintModel::MznModel(MznModel::new(cst)),
+			InputLang::EPrime => ConstraintModel::EPrimeModel(EPrimeModel::new(cst)),
+			_ => unreachable!("check_ast_with_lang should only be called on model files"),
+		};
 		expected.assert_debug_eq(&model);
+	}
+
+	/// Helper to check parsed AST in MiniZinc
+	pub fn check_ast(source: &str, expected: Expect) {
+		check_ast_with_lang(InputLang::MiniZinc, source, expected)
+	}
+
+	/// Helper to check parsed AST in EPrime
+	pub fn check_ast_eprime(source: &str, expected: Expect) {
+		check_ast_with_lang(InputLang::EPrime, source, expected)
 	}
 
 	/// Helper to check parsed AST storing the expected result in a file
@@ -287,7 +433,7 @@ pub mod test {
 			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
-		let model = Model::new(cst);
+		let model = ConstraintModel::MznModel(MznModel::new(cst));
 		expected.assert_debug_eq(&model);
 	}
 }

@@ -1,6 +1,10 @@
 //! AST Representation for containers
 
-use super::{helpers::*, AstNode, Children, Expression, Identifier, Pattern};
+use super::{Children, Expression, Identifier, Pattern};
+use crate::syntax::ast::{
+	ast_enum, ast_node, child_with_field_name, children_with_field_name,
+	optional_child_with_field_name, AstNode,
+};
 
 ast_node!(
 	/// Tuple literal
@@ -274,7 +278,7 @@ impl AssignmentGenerator {
 mod test {
 	use expect_test::expect;
 
-	use crate::syntax::ast::helpers::test::*;
+	use crate::syntax::ast::test::*;
 
 	#[test]
 	fn test_tuple_literal() {
@@ -284,6 +288,7 @@ mod test {
 		y = (1, (2, 3));
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -374,7 +379,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -387,6 +393,7 @@ mod test {
 		y = (a: 1, b: (c: 2, d: 3));
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -531,7 +538,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -541,6 +549,7 @@ mod test {
 		check_ast(
 			"x = {1, 2};",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -580,7 +589,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		)
 	}
@@ -595,6 +605,7 @@ mod test {
 		w = [(1, 1): 1, (1, 2): 3];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -849,7 +860,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -867,6 +879,7 @@ mod test {
 		w = [| 1: 1, 2 |];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1116,7 +1129,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1130,6 +1144,7 @@ mod test {
 		z = foo[1, .., 3..];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1282,7 +1297,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1297,6 +1313,7 @@ mod test {
 		a = [j | i in s, j = i + 1];
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1655,7 +1672,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1670,6 +1688,7 @@ mod test {
 		a = {j | i in s, j = i + 1};
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1995,7 +2014,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}

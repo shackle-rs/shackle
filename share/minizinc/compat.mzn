@@ -82,8 +82,12 @@ function string: show2d_indexed(
 			"|]"
 	endif;
 
+function $$E: lb(var $$E: x);
+function $$E: ub(var $$E: x);
 function $$E: lb(var opt $$E: x);
 function $$E: ub(var opt $$E: x);
+function float: lb(var float: x);
+function float: ub(var float: x);
 function float: lb(var opt float: x);
 function float: ub(var opt float: x);
 function $$E: lb_array(array [$U] of var opt $$E: x);

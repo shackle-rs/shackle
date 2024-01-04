@@ -3,12 +3,18 @@
 use std::borrow::Cow;
 
 use super::{
-	helpers::*, Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, AstNode,
-	BooleanLiteral, Children, Constraint, Declaration, FloatLiteral, Generator, Infinity,
-	IntegerLiteral, Parameter, Pattern, RecordLiteral, SetComprehension, SetLiteral, StringLiteral,
-	TupleLiteral, Type,
+	Absent, ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, BooleanLiteral,
+	Children, Constraint, Declaration, FloatLiteral, Generator, Infinity, IntegerLiteral,
+	Parameter, Pattern, RecordLiteral, SetComprehension, SetLiteral, StringLiteral, TupleLiteral,
+	Type,
 };
-use crate::syntax::cst::CstNode;
+use crate::syntax::{
+	ast::{
+		ast_enum, ast_node, child_with_field_name, children_with_field_name, decode_string,
+		optional_child_with_field_name, AstNode,
+	},
+	cst::CstNode,
+};
 
 ast_enum!(
 	/// Expression
@@ -508,63 +514,118 @@ impl Lambda {
 mod test {
 	use expect_test::expect;
 
-	use crate::syntax::ast::helpers::test::*;
+	use crate::syntax::ast::test::*;
 
 	#[test]
 	fn test_annotated_expression() {
 		check_ast(
 			r#"
 		x = foo :: bar :: qux;
+        var 1..n: y;
 		"#,
 			expect!([r#"
-    Model {
-        items: [
-            Assignment(
-                Assignment {
-                    cst_kind: "assignment",
-                    assignee: Identifier(
-                        UnquotedIdentifier(
-                            UnquotedIdentifier {
-                                cst_kind: "identifier",
-                                name: "x",
+    MznModel(
+        Model {
+            items: [
+                Assignment(
+                    Assignment {
+                        cst_kind: "assignment",
+                        assignee: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "x",
+                                },
+                            ),
+                        ),
+                        definition: AnnotatedExpression(
+                            AnnotatedExpression {
+                                cst_kind: "annotated_expression",
+                                annotations: [
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "bar",
+                                            },
+                                        ),
+                                    ),
+                                    Identifier(
+                                        UnquotedIdentifier(
+                                            UnquotedIdentifier {
+                                                cst_kind: "identifier",
+                                                name: "qux",
+                                            },
+                                        ),
+                                    ),
+                                ],
+                                expression: Identifier(
+                                    UnquotedIdentifier(
+                                        UnquotedIdentifier {
+                                            cst_kind: "identifier",
+                                            name: "foo",
+                                        },
+                                    ),
+                                ),
                             },
                         ),
-                    ),
-                    definition: AnnotatedExpression(
-                        AnnotatedExpression {
-                            cst_kind: "annotated_expression",
-                            annotations: [
-                                Identifier(
-                                    UnquotedIdentifier(
-                                        UnquotedIdentifier {
-                                            cst_kind: "identifier",
-                                            name: "bar",
-                                        },
-                                    ),
-                                ),
-                                Identifier(
-                                    UnquotedIdentifier(
-                                        UnquotedIdentifier {
-                                            cst_kind: "identifier",
-                                            name: "qux",
-                                        },
-                                    ),
-                                ),
-                            ],
-                            expression: Identifier(
-                                UnquotedIdentifier(
-                                    UnquotedIdentifier {
-                                        cst_kind: "identifier",
-                                        name: "foo",
-                                    },
-                                ),
+                    },
+                ),
+                Declaration(
+                    Declaration {
+                        cst_kind: "declaration",
+                        pattern: Identifier(
+                            UnquotedIdentifier(
+                                UnquotedIdentifier {
+                                    cst_kind: "identifier",
+                                    name: "y",
+                                },
                             ),
-                        },
-                    ),
-                },
-            ),
-        ],
-    }
+                        ),
+                        declared_type: TypeBase(
+                            TypeBase {
+                                cst_kind: "type_base",
+                                var_type: Some(
+                                    Var,
+                                ),
+                                opt_type: None,
+                                any_type: false,
+                                domain: Bounded(
+                                    InfixOperator(
+                                        InfixOperator {
+                                            cst_kind: "infix_operator",
+                                            left: IntegerLiteral(
+                                                IntegerLiteral {
+                                                    cst_kind: "integer_literal",
+                                                    value: Ok(
+                                                        1,
+                                                    ),
+                                                },
+                                            ),
+                                            operator: Operator {
+                                                cst_kind: "..",
+                                                name: "..",
+                                            },
+                                            right: Identifier(
+                                                UnquotedIdentifier(
+                                                    UnquotedIdentifier {
+                                                        cst_kind: "identifier",
+                                                        name: "n",
+                                                    },
+                                                ),
+                                            ),
+                                        },
+                                    ),
+                                ),
+                            },
+                        ),
+                        definition: None,
+                        annotations: [],
+                    },
+                ),
+            ],
+        },
+    )
 "#]),
 		);
 	}
@@ -578,6 +639,7 @@ mod test {
 		bool: ✔️;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Declaration(
@@ -668,7 +730,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -682,6 +745,7 @@ mod test {
 		z = if a then b endif;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -842,7 +906,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -856,6 +921,7 @@ mod test {
 		z = foo(bar)(qux);
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -981,7 +1047,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -991,6 +1058,7 @@ mod test {
 		check_ast(
 			"x = -a;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1024,7 +1092,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1037,6 +1106,7 @@ mod test {
 		y = a + b * c;
 		"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1133,7 +1203,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1143,6 +1214,7 @@ mod test {
 		check_ast(
 			"x = a..;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1176,7 +1248,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1189,6 +1262,7 @@ mod test {
 			constraint exists (i, j in s, k in t where p) (true);
 			"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Constraint(
@@ -1335,7 +1409,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1345,6 +1420,7 @@ mod test {
 		check_ast(
 			r#"x = "foo\(y)bar";"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1384,7 +1460,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1399,6 +1476,7 @@ mod test {
 			} in true;
 			"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Constraint(
@@ -1464,7 +1542,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1479,6 +1558,7 @@ mod test {
 				endcase;
 			"#,
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1554,7 +1634,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1564,6 +1645,7 @@ mod test {
 		check_ast(
 			"x = foo.1;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1599,7 +1681,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1609,6 +1692,7 @@ mod test {
 		check_ast(
 			"x = foo.bar;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1644,7 +1728,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}
@@ -1655,6 +1740,7 @@ mod test {
 		check_ast(
 			"x = lambda int: (int: x) => x;",
 			expect!([r#"
+MznModel(
     Model {
         items: [
             Assignment(
@@ -1730,7 +1816,8 @@ mod test {
                 },
             ),
         ],
-    }
+    },
+)
 "#]),
 		);
 	}

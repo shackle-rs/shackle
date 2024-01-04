@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{
 	file::{FileRef, SourceFile},
-	syntax::{ast::*, cst::CstNode},
+	syntax::{ast::AstNode, cst::CstNode},
 	utils::{debug_print_strings, DebugPrint},
 };
 

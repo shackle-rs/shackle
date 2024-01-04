@@ -1,5 +1,8 @@
 use shackle_compiler::{
-	syntax::ast::{self, AstNode, RecordField},
+	syntax::{
+		ast::AstNode,
+		minizinc::{self, RecordField},
+	},
 	ty::{OptType, VarType},
 	utils::maybe_grow_stack,
 };
@@ -9,24 +12,24 @@ use crate::{
 	ir::Element,
 };
 
-impl Format for ast::Type {
+impl Format for minizinc::Type {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> crate::ir::Element {
 		maybe_grow_stack(|| {
 			let t = match self {
-				ast::Type::AnyType(a) => Element::text(a.cst_text()),
-				ast::Type::TypeBase(b) => b.format(formatter),
-				ast::Type::ArrayType(a) => a.format(formatter),
-				ast::Type::SetType(s) => s.format(formatter),
-				ast::Type::TupleType(t) => t.format(formatter),
-				ast::Type::RecordType(r) => r.format(formatter),
-				ast::Type::OperationType(o) => o.format(formatter),
+				minizinc::Type::AnyType(a) => Element::text(a.cst_text()),
+				minizinc::Type::TypeBase(b) => b.format(formatter),
+				minizinc::Type::ArrayType(a) => a.format(formatter),
+				minizinc::Type::SetType(s) => s.format(formatter),
+				minizinc::Type::TupleType(t) => t.format(formatter),
+				minizinc::Type::RecordType(r) => r.format(formatter),
+				minizinc::Type::OperationType(o) => o.format(formatter),
 			};
 			formatter.attach_comments(self, vec![t])
 		})
 	}
 }
 
-impl Format for ast::TypeBase {
+impl Format for minizinc::TypeBase {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		if self.any_type() {
@@ -51,19 +54,19 @@ impl Format for ast::TypeBase {
 	}
 }
 
-impl Format for ast::Domain {
+impl Format for minizinc::Domain {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let e = match self {
-			ast::Domain::Bounded(b) => b.format(formatter),
-			ast::Domain::TypeInstEnumIdentifier(t) => Element::text(t.name()),
-			ast::Domain::TypeInstIdentifier(t) => Element::text(t.name()),
-			ast::Domain::Unbounded(u) => Element::text(u.cst_text()),
+			minizinc::Domain::Bounded(b) => b.format(formatter),
+			minizinc::Domain::TypeInstEnumIdentifier(t) => Element::text(t.name()),
+			minizinc::Domain::TypeInstIdentifier(t) => Element::text(t.name()),
+			minizinc::Domain::Unbounded(u) => Element::text(u.cst_text()),
 		};
 		formatter.attach_comments(self, vec![e])
 	}
 }
 
-impl Format for ast::ArrayType {
+impl Format for minizinc::ArrayType {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			formatter.format_list("array [", "] of ", self.dimensions()),
@@ -72,7 +75,7 @@ impl Format for ast::ArrayType {
 	}
 }
 
-impl Format for ast::SetType {
+impl Format for minizinc::SetType {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		if let VarType::Var = self.var_type() {
@@ -87,7 +90,7 @@ impl Format for ast::SetType {
 	}
 }
 
-impl Format for ast::TupleType {
+impl Format for minizinc::TupleType {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		if let VarType::Var = self.var_type() {
@@ -98,7 +101,7 @@ impl Format for ast::TupleType {
 	}
 }
 
-impl Format for ast::RecordType {
+impl Format for minizinc::RecordType {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		if let VarType::Var = self.var_type() {
@@ -114,13 +117,13 @@ impl Format for RecordField {
 		let elements = vec![
 			self.field_type().format(formatter),
 			Element::text(": "),
-			ast::Expression::Identifier(self.name()).format(formatter),
+			minizinc::Expression::Identifier(self.name()).format(formatter),
 		];
 		formatter.attach_comments(self, elements)
 	}
 }
 
-impl Format for ast::OperationType {
+impl Format for minizinc::OperationType {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("op("),
