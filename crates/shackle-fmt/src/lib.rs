@@ -4,7 +4,7 @@
 
 use format::Format;
 pub use ir::FormatOptions;
-use shackle_compiler::syntax::{ast, cst};
+use shackle_compiler::syntax::{cst, minizinc::MznModel};
 use tree_sitter::Parser;
 
 use crate::format::MiniZincFormatter;
@@ -34,11 +34,11 @@ pub fn format(source: &str, options: &MiniZincFormatOptions) -> Option<String> {
 		.unwrap();
 	let tree = parser.parse(source.as_bytes(), None).unwrap();
 	let cst = cst::Cst::from_str(tree, source);
-	format_model(&ast::Model::new(cst), options)
+	format_model(&MznModel::new(cst), options)
 }
 
 /// Format an AST model
-pub fn format_model(model: &ast::Model, options: &MiniZincFormatOptions) -> Option<String> {
+pub fn format_model(model: &MznModel, options: &MiniZincFormatOptions) -> Option<String> {
 	if model.cst().error_nodes().next().is_some() {
 		return None;
 	}
@@ -53,11 +53,11 @@ pub fn format_debug(source: &str, options: &MiniZincFormatOptions) -> Option<Str
 		.unwrap();
 	let tree = parser.parse(source.as_bytes(), None).unwrap();
 	let cst = cst::Cst::from_str(tree, source);
-	format_model_debug(&ast::Model::new(cst), options)
+	format_model_debug(&MznModel::new(cst), options)
 }
 
 /// Get IR for debugging
-pub fn format_model_debug(model: &ast::Model, options: &MiniZincFormatOptions) -> Option<String> {
+pub fn format_model_debug(model: &MznModel, options: &MiniZincFormatOptions) -> Option<String> {
 	if model.cst().error_nodes().next().is_some() {
 		return None;
 	}

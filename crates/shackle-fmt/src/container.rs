@@ -1,4 +1,4 @@
-use shackle_compiler::syntax::ast;
+use shackle_compiler::syntax::minizinc;
 use tree_sitter_minizinc::Precedence;
 
 use crate::{
@@ -6,13 +6,13 @@ use crate::{
 	ir::Element,
 };
 
-impl Format for ast::ArrayLiteral {
+impl Format for minizinc::ArrayLiteral {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		formatter.format_list("[", "]", self.members())
 	}
 }
 
-impl Format for ast::ArrayLiteralMember {
+impl Format for minizinc::ArrayLiteralMember {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		if let Some(idx) = self.indices() {
 			Element::sequence(vec![
@@ -26,7 +26,7 @@ impl Format for ast::ArrayLiteralMember {
 	}
 }
 
-impl Format for ast::ArrayLiteral2D {
+impl Format for minizinc::ArrayLiteral2D {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		let indices = self.column_indices().collect::<Vec<_>>();
@@ -54,7 +54,7 @@ impl Format for ast::ArrayLiteral2D {
 	}
 }
 
-impl Format for ast::ArrayLiteral2DRow {
+impl Format for minizinc::ArrayLiteral2DRow {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = Vec::new();
 		if let Some(idx) = self.index() {
@@ -69,7 +69,7 @@ impl Format for ast::ArrayLiteral2DRow {
 	}
 }
 
-impl Format for ast::ArrayAccess {
+impl Format for minizinc::ArrayAccess {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::indexed_access().get() > formatter.precedence(&self.collection()).get();
@@ -84,18 +84,18 @@ impl Format for ast::ArrayAccess {
 	}
 }
 
-impl Format for ast::ArrayIndex {
+impl Format for minizinc::ArrayIndex {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		match self {
-			ast::ArrayIndex::IndexSlice(x) => {
+			minizinc::ArrayIndex::IndexSlice(x) => {
 				formatter.attach_comments(self, vec![Element::text(x.operator())])
 			}
-			ast::ArrayIndex::Expression(e) => e.format(formatter),
+			minizinc::ArrayIndex::Expression(e) => e.format(formatter),
 		}
 	}
 }
 
-impl Format for ast::ArrayComprehension {
+impl Format for minizinc::ArrayComprehension {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("["),
@@ -125,13 +125,13 @@ impl Format for ast::ArrayComprehension {
 	}
 }
 
-impl Format for ast::SetLiteral {
+impl Format for minizinc::SetLiteral {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		formatter.format_list("{", "}", self.members())
 	}
 }
 
-impl Format for ast::SetComprehension {
+impl Format for minizinc::SetComprehension {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("{"),
@@ -156,17 +156,17 @@ impl Format for ast::SetComprehension {
 	}
 }
 
-impl Format for ast::Generator {
+impl Format for minizinc::Generator {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> crate::ir::Element {
 		let e = match self {
-			ast::Generator::AssignmentGenerator(a) => a.format(formatter),
-			ast::Generator::IteratorGenerator(i) => i.format(formatter),
+			minizinc::Generator::AssignmentGenerator(a) => a.format(formatter),
+			minizinc::Generator::IteratorGenerator(i) => i.format(formatter),
 		};
 		formatter.attach_comments(self, vec![e])
 	}
 }
 
-impl Format for ast::IteratorGenerator {
+impl Format for minizinc::IteratorGenerator {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> crate::ir::Element {
 		let mut elements = vec![
 			Element::join(
@@ -190,7 +190,7 @@ impl Format for ast::IteratorGenerator {
 	}
 }
 
-impl Format for ast::AssignmentGenerator {
+impl Format for minizinc::AssignmentGenerator {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> crate::ir::Element {
 		let mut elements = vec![
 			self.pattern().format(formatter),
@@ -211,7 +211,7 @@ impl Format for ast::AssignmentGenerator {
 	}
 }
 
-impl Format for ast::TupleLiteral {
+impl Format for minizinc::TupleLiteral {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let members = self.members().collect::<Vec<_>>();
 		if members.is_empty() {
@@ -232,7 +232,7 @@ impl Format for ast::TupleLiteral {
 	}
 }
 
-impl Format for ast::TupleAccess {
+impl Format for minizinc::TupleAccess {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::tuple_access().get() > formatter.precedence(&self.tuple()).get();
@@ -243,28 +243,28 @@ impl Format for ast::TupleAccess {
 				self.tuple().format(formatter)
 			},
 			Element::text("."),
-			ast::Expression::IntegerLiteral(self.field()).format(formatter),
+			minizinc::Expression::IntegerLiteral(self.field()).format(formatter),
 		])
 	}
 }
 
-impl Format for ast::RecordLiteral {
+impl Format for minizinc::RecordLiteral {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		formatter.format_list("(", ")", self.members())
 	}
 }
 
-impl Format for ast::RecordLiteralMember {
+impl Format for minizinc::RecordLiteralMember {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
-			ast::Expression::Identifier(self.name()).format(formatter),
+			minizinc::Expression::Identifier(self.name()).format(formatter),
 			Element::text(": "),
 			self.value().format(formatter),
 		])
 	}
 }
 
-impl Format for ast::RecordAccess {
+impl Format for minizinc::RecordAccess {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let needs_parentheses = !formatter.options().keep_parentheses
 			&& Precedence::record_access().get() > formatter.precedence(&self.record()).get();
@@ -275,7 +275,7 @@ impl Format for ast::RecordAccess {
 				self.record().format(formatter)
 			},
 			Element::text("."),
-			ast::Expression::Identifier(self.field()).format(formatter),
+			minizinc::Expression::Identifier(self.field()).format(formatter),
 		])
 	}
 }

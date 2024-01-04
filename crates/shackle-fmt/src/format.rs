@@ -1,5 +1,8 @@
 use rustc_hash::FxHashMap;
-use shackle_compiler::syntax::ast::{self, AstNode};
+use shackle_compiler::syntax::{
+	ast::AstNode,
+	minizinc::{Expression, MznModel},
+};
 use tree_sitter::{Node, Query, QueryCursor};
 use tree_sitter_minizinc::Precedence;
 
@@ -16,7 +19,7 @@ pub trait Format {
 	}
 }
 
-impl Format for ast::Model {
+impl Format for MznModel {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let elements = self
 			.items()
@@ -28,14 +31,14 @@ impl Format for ast::Model {
 
 /// Formatter for MiniZinc
 pub struct MiniZincFormatter<'a> {
-	model: &'a ast::Model,
+	model: &'a MznModel,
 	options: &'a MiniZincFormatOptions,
 	comments: CommentMap,
 }
 
 impl<'a> MiniZincFormatter<'a> {
 	/// Create a new formatter
-	pub fn new(model: &'a ast::Model, options: &'a MiniZincFormatOptions) -> Self {
+	pub fn new(model: &'a MznModel, options: &'a MiniZincFormatOptions) -> Self {
 		Self {
 			model,
 			options,
@@ -172,20 +175,18 @@ impl<'a> MiniZincFormatter<'a> {
 	}
 
 	/// Get precedence for the given expression
-	pub fn precedence(&self, expression: &ast::Expression) -> Precedence {
+	pub fn precedence(&self, expression: &Expression) -> Precedence {
 		match expression {
-			ast::Expression::Call(_) => Precedence::call(),
-			ast::Expression::GeneratorCall(_) => Precedence::generator_call(),
-			ast::Expression::ArrayAccess(_) => Precedence::indexed_access(),
-			ast::Expression::TupleAccess(_) => Precedence::tuple_access(),
-			ast::Expression::RecordAccess(_) => Precedence::record_access(),
-			ast::Expression::AnnotatedExpression(_) => Precedence::annotated_expression(),
-			ast::Expression::InfixOperator(o) => Precedence::infix_operator(o.operator().name()),
-			ast::Expression::PrefixOperator(o) => Precedence::prefix_operator(o.operator().name()),
-			ast::Expression::PostfixOperator(o) => {
-				Precedence::postfix_operator(o.operator().name())
-			}
-			ast::Expression::Lambda(_) | ast::Expression::Let(_) => Precedence::Prec(0),
+			Expression::Call(_) => Precedence::call(),
+			Expression::GeneratorCall(_) => Precedence::generator_call(),
+			Expression::ArrayAccess(_) => Precedence::indexed_access(),
+			Expression::TupleAccess(_) => Precedence::tuple_access(),
+			Expression::RecordAccess(_) => Precedence::record_access(),
+			Expression::AnnotatedExpression(_) => Precedence::annotated_expression(),
+			Expression::InfixOperator(o) => Precedence::infix_operator(o.operator().name()),
+			Expression::PrefixOperator(o) => Precedence::prefix_operator(o.operator().name()),
+			Expression::PostfixOperator(o) => Precedence::postfix_operator(o.operator().name()),
+			Expression::Lambda(_) | Expression::Let(_) => Precedence::Prec(0),
 			_ => Precedence::Prec(i64::MAX),
 		}
 	}
@@ -208,7 +209,7 @@ pub struct CommentMap {
 
 impl CommentMap {
 	/// Create a comment map from the given model
-	pub fn new(model: &ast::Model) -> Self {
+	pub fn new(model: &MznModel) -> Self {
 		let mut map: FxHashMap<usize, Comments> = FxHashMap::default();
 
 		let query = Query::new(

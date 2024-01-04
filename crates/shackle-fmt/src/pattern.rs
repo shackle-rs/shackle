@@ -1,5 +1,8 @@
 use shackle_compiler::{
-	syntax::ast::{self, AstNode, PatternNumericLiteral},
+	syntax::{
+		ast::AstNode,
+		minizinc::{self, PatternNumericLiteral},
+	},
 	utils::pretty_print_identifier,
 };
 
@@ -8,26 +11,29 @@ use crate::{
 	ir::Element,
 };
 
-impl Format for ast::Pattern {
+impl Format for minizinc::Pattern {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let e = match self {
-			ast::Pattern::Absent(a) => Element::text(a.cst_text()),
-			ast::Pattern::Anonymous(a) => Element::text(a.cst_text()),
-			ast::Pattern::BooleanLiteral(b) => {
+			minizinc::Pattern::Absent(a) => Element::text(a.cst_text()),
+			minizinc::Pattern::Anonymous(a) => Element::text(a.cst_text()),
+			minizinc::Pattern::BooleanLiteral(b) => {
 				Element::text(if b.value() { "true" } else { "false" })
 			}
-			ast::Pattern::Call(c) => c.format(formatter),
-			ast::Pattern::Identifier(i) => Element::text(pretty_print_identifier(&i.name())),
-			ast::Pattern::PatternNumericLiteral(n) => n.format(formatter),
-			ast::Pattern::StringLiteral(s) => Element::text(s.cst_text()),
-			ast::Pattern::Tuple(t) => t.format(formatter),
-			ast::Pattern::Record(r) => formatter.format_list("(", ")", r.fields()),
+			minizinc::Pattern::Call(c) => c.format(formatter),
+			minizinc::Pattern::Identifier(i) => Element::text(pretty_print_identifier(&i.name())),
+			minizinc::Pattern::PatternNumericLiteral(n) => n.format(formatter),
+			minizinc::Pattern::StringLiteral(s) => Element::text(s.cst_text()),
+			minizinc::Pattern::Tuple(t) => t.format(formatter),
+			minizinc::Pattern::Record(r) => formatter.format_list("(", ")", r.fields()),
 		};
 		formatter.attach_comments(self, vec![e])
 	}
 
 	fn has_brackets(&self, _formatter: &MiniZincFormatter) -> bool {
-		matches!(self, ast::Pattern::Tuple(_) | ast::Pattern::Record(_))
+		matches!(
+			self,
+			minizinc::Pattern::Tuple(_) | minizinc::Pattern::Record(_)
+		)
 	}
 }
 
@@ -44,16 +50,16 @@ impl Format for PatternNumericLiteral {
 	}
 }
 
-impl Format for ast::PatternCall {
+impl Format for minizinc::PatternCall {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
-			ast::Expression::Identifier(self.identifier()).format(formatter),
+			minizinc::Expression::Identifier(self.identifier()).format(formatter),
 			formatter.format_list("(", ")", self.arguments()),
 		])
 	}
 }
 
-impl Format for ast::PatternTuple {
+impl Format for minizinc::PatternTuple {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let fields = self.fields().collect::<Vec<_>>();
 		if fields.is_empty() {
@@ -74,10 +80,10 @@ impl Format for ast::PatternTuple {
 	}
 }
 
-impl Format for ast::PatternRecordField {
+impl Format for minizinc::PatternRecordField {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
-			ast::Expression::Identifier(self.name()).format(formatter),
+			minizinc::Expression::Identifier(self.name()).format(formatter),
 			Element::text(": "),
 			self.value().format(formatter),
 		])

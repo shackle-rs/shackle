@@ -1,11 +1,11 @@
-use shackle_compiler::syntax::ast::{self, AstNode};
+use shackle_compiler::syntax::{ast::AstNode, minizinc};
 
 use crate::{
 	format::{Format, MiniZincFormatter},
 	ir::Element,
 };
 
-impl Format for ast::Item {
+impl Format for minizinc::Item {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> crate::ir::Element {
 		let mut elements = Vec::new();
 		let node = self.cst_node().as_ref();
@@ -15,17 +15,17 @@ impl Format for ast::Item {
 			}
 		}
 		let element = match self {
-			ast::Item::Annotation(x) => x.format(formatter),
-			ast::Item::Assignment(x) => x.format(formatter),
-			ast::Item::Constraint(x) => x.format(formatter),
-			ast::Item::Declaration(x) => x.format(formatter),
-			ast::Item::Enumeration(x) => x.format(formatter),
-			ast::Item::Function(x) => x.format(formatter),
-			ast::Item::Include(x) => x.format(formatter),
-			ast::Item::Output(x) => x.format(formatter),
-			ast::Item::Predicate(x) => x.format(formatter),
-			ast::Item::Solve(x) => x.format(formatter),
-			ast::Item::TypeAlias(x) => x.format(formatter),
+			minizinc::Item::Annotation(x) => x.format(formatter),
+			minizinc::Item::Assignment(x) => x.format(formatter),
+			minizinc::Item::Constraint(x) => x.format(formatter),
+			minizinc::Item::Declaration(x) => x.format(formatter),
+			minizinc::Item::Enumeration(x) => x.format(formatter),
+			minizinc::Item::Function(x) => x.format(formatter),
+			minizinc::Item::Include(x) => x.format(formatter),
+			minizinc::Item::Output(x) => x.format(formatter),
+			minizinc::Item::Predicate(x) => x.format(formatter),
+			minizinc::Item::Solve(x) => x.format(formatter),
+			minizinc::Item::TypeAlias(x) => x.format(formatter),
 		};
 		elements.push(element);
 		elements.push(Element::text(";"));
@@ -36,11 +36,11 @@ impl Format for ast::Item {
 	}
 }
 
-impl Format for ast::Annotation {
+impl Format for minizinc::Annotation {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![
 			Element::text("annotation "),
-			ast::Expression::Identifier(self.id()).format(formatter),
+			minizinc::Expression::Identifier(self.id()).format(formatter),
 		];
 		if let Some(params) = self.parameters() {
 			elements.push(formatter.format_list("(", ")", params.iter()));
@@ -49,7 +49,7 @@ impl Format for ast::Annotation {
 	}
 }
 
-impl Format for ast::Assignment {
+impl Format for minizinc::Assignment {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			self.assignee().format(formatter),
@@ -69,7 +69,7 @@ impl Format for ast::Assignment {
 	}
 }
 
-impl Format for ast::Constraint {
+impl Format for minizinc::Constraint {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("constraint"),
@@ -89,7 +89,7 @@ impl Format for ast::Constraint {
 	}
 }
 
-impl Format for ast::Declaration {
+impl Format for minizinc::Declaration {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![
 			self.declared_type().format(formatter),
@@ -113,11 +113,11 @@ impl Format for ast::Declaration {
 	}
 }
 
-impl Format for ast::Enumeration {
+impl Format for minizinc::Enumeration {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![
 			Element::text("enum "),
-			ast::Expression::Identifier(self.id()).format(formatter),
+			minizinc::Expression::Identifier(self.id()).format(formatter),
 			formatter.format_annotations(self.annotations()),
 		];
 		let cases = self
@@ -138,45 +138,49 @@ impl Format for ast::Enumeration {
 	}
 }
 
-impl Format for ast::EnumerationCase {
+impl Format for minizinc::EnumerationCase {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let c = match self {
-			ast::EnumerationCase::Anonymous(e) => e.format(formatter),
-			ast::EnumerationCase::Constructor(c) => c.format(formatter),
-			ast::EnumerationCase::Members(m) => m.format(formatter),
+			minizinc::EnumerationCase::Anonymous(e) => e.format(formatter),
+			minizinc::EnumerationCase::Constructor(c) => c.format(formatter),
+			minizinc::EnumerationCase::Members(m) => m.format(formatter),
 		};
 		formatter.attach_comments(self, vec![c])
 	}
 }
 
-impl Format for ast::AnonymousEnumeration {
+impl Format for minizinc::AnonymousEnumeration {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		formatter.format_list("_(", ")", self.parameters())
 	}
 }
 
-impl Format for ast::EnumerationConstructor {
+impl Format for minizinc::EnumerationConstructor {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
-			ast::Expression::Identifier(self.id()).format(formatter),
+			minizinc::Expression::Identifier(self.id()).format(formatter),
 			formatter.format_list("(", ")", self.parameters()),
 		])
 	}
 }
 
-impl Format for ast::EnumerationMembers {
+impl Format for minizinc::EnumerationMembers {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
-		formatter.format_list("{", "}", self.members().map(ast::Expression::Identifier))
+		formatter.format_list(
+			"{",
+			"}",
+			self.members().map(minizinc::Expression::Identifier),
+		)
 	}
 }
 
-impl Format for ast::Function {
+impl Format for minizinc::Function {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![
 			Element::text("function "),
 			self.return_type().format(formatter),
 			Element::text(": "),
-			ast::Expression::Identifier(self.id()).format(formatter),
+			minizinc::Expression::Identifier(self.id()).format(formatter),
 			formatter.format_list("(", ")", self.parameters()),
 			formatter.format_annotations(self.annotations()),
 		];
@@ -196,15 +200,17 @@ impl Format for ast::Function {
 	}
 }
 
-impl Format for ast::Predicate {
+impl Format for minizinc::Predicate {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![
-			Element::text(if self.declared_type() == ast::PredicateType::Predicate {
-				"predicate "
-			} else {
-				"test "
-			}),
-			ast::Expression::Identifier(self.id()).format(formatter),
+			Element::text(
+				if self.declared_type() == minizinc::PredicateType::Predicate {
+					"predicate "
+				} else {
+					"test "
+				},
+			),
+			minizinc::Expression::Identifier(self.id()).format(formatter),
 			formatter.format_list("(", ")", self.parameters()),
 			formatter.format_annotations(self.annotations()),
 		];
@@ -224,7 +230,7 @@ impl Format for ast::Predicate {
 	}
 }
 
-impl Format for ast::Parameter {
+impl Format for minizinc::Parameter {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![self.declared_type().format(formatter)];
 		if let Some(p) = self.pattern() {
@@ -236,7 +242,7 @@ impl Format for ast::Parameter {
 	}
 }
 
-impl Format for ast::Include {
+impl Format for minizinc::Include {
 	fn format(&self, _formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("include "),
@@ -245,7 +251,7 @@ impl Format for ast::Include {
 	}
 }
 
-impl Format for ast::Output {
+impl Format for minizinc::Output {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![Element::text("output")];
 		if let Some(section) = self.section() {
@@ -265,14 +271,14 @@ impl Format for ast::Output {
 	}
 }
 
-impl Format for ast::Solve {
+impl Format for minizinc::Solve {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let mut elements = vec![
 			Element::text("solve"),
 			formatter.format_annotations(self.annotations()),
 		];
 		match self.goal() {
-			ast::Goal::Maximize(obj) => {
+			minizinc::Goal::Maximize(obj) => {
 				elements.push(Element::text(" maximize"));
 				if obj.has_brackets(formatter) {
 					elements.push(Element::text(" "));
@@ -284,7 +290,7 @@ impl Format for ast::Solve {
 					])]));
 				}
 			}
-			ast::Goal::Minimize(obj) => {
+			minizinc::Goal::Minimize(obj) => {
 				elements.push(Element::text(" minimize"));
 				if obj.has_brackets(formatter) {
 					elements.push(Element::text(" "));
@@ -296,17 +302,17 @@ impl Format for ast::Solve {
 					])]));
 				}
 			}
-			ast::Goal::Satisfy => elements.push(Element::text(" satisfy")),
+			minizinc::Goal::Satisfy => elements.push(Element::text(" satisfy")),
 		}
 		Element::sequence(elements)
 	}
 }
 
-impl Format for ast::TypeAlias {
+impl Format for minizinc::TypeAlias {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		Element::sequence(vec![
 			Element::text("type "),
-			ast::Expression::Identifier(self.name()).format(formatter),
+			minizinc::Expression::Identifier(self.name()).format(formatter),
 			Element::text(" = "),
 			self.aliased_type().format(formatter),
 		])

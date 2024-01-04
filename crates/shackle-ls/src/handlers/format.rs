@@ -1,6 +1,10 @@
 use lsp_server::ResponseError;
 use lsp_types::{request::Formatting, DocumentFormattingParams, Position, TextEdit};
-use shackle_compiler::{db::CompilerDatabase, file::ModelRef, syntax::db::SourceParser};
+use shackle_compiler::{
+	db::CompilerDatabase,
+	file::ModelRef,
+	syntax::{ast::ConstraintModel, db::SourceParser},
+};
 use shackle_fmt::{format_model, FormatOptions, MiniZincFormatOptions};
 
 use crate::{db::LanguageServerContext, dispatch::RequestHandler};
@@ -30,7 +34,7 @@ impl RequestHandler<Formatting, (ModelRef, MiniZincFormatOptions)> for FormatHan
 		(model_ref, options): (ModelRef, MiniZincFormatOptions),
 	) -> Result<Option<Vec<TextEdit>>, ResponseError> {
 		match db.ast(*model_ref) {
-			Ok(ast) => {
+			Ok(ConstraintModel::MznModel(ast)) => {
 				let Some(formatted) = format_model(&ast, &options) else {
 					return Ok(None);
 				};
@@ -43,7 +47,7 @@ impl RequestHandler<Formatting, (ModelRef, MiniZincFormatOptions)> for FormatHan
 					new_text: formatted,
 				}]))
 			}
-			Err(_) => Ok(None),
+			_ => Ok(None),
 		}
 	}
 }
