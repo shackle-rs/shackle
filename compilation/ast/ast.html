@@ -193,119 +193,121 @@ function bool: bar() = true;
 var 1..3: x;
 </code></pre>
 <p>Gives the AST</p>
-<pre><code>Model {
-    items: [
-        Predicate(
-            Predicate {
-                cst_kind: &quot;predicate&quot;,
-                declared_type: Test,
-                id: UnquotedIdentifier(
-                    UnquotedIdentifier {
-                        cst_kind: &quot;identifier&quot;,
-                        name: &quot;foo&quot;,
-                    },
-                ),
-                parameters: [],
-                body: Some(
-                    BooleanLiteral(
-                        BooleanLiteral {
-                            cst_kind: &quot;boolean_literal&quot;,
-                            value: true,
-                        },
-                    ),
-                ),
-                annotations: [],
-            },
-        ),
-        Function(
-            Function {
-                cst_kind: &quot;function_item&quot;,
-                return_type: TypeBase(
-                    TypeBase {
-                        cst_kind: &quot;type_base&quot;,
-                        var_type: None,
-                        opt_type: None,
-                        any_type: false,
-                        domain: Unbounded(
-                            UnboundedDomain {
-                                cst_kind: &quot;primitive_type&quot;,
-                                primitive_type: Bool,
-                            },
-                        ),
-                    },
-                ),
-                id: UnquotedIdentifier(
-                    UnquotedIdentifier {
-                        cst_kind: &quot;identifier&quot;,
-                        name: &quot;bar&quot;,
-                    },
-                ),
-                parameters: [],
-                body: Some(
-                    BooleanLiteral(
-                        BooleanLiteral {
-                            cst_kind: &quot;boolean_literal&quot;,
-                            value: true,
-                        },
-                    ),
-                ),
-                annotations: [],
-            },
-        ),
-        Declaration(
-            Declaration {
-                cst_kind: &quot;declaration&quot;,
-                pattern: Identifier(
-                    UnquotedIdentifier(
+<pre><code>MznModel(
+    Model {
+        items: [
+            Predicate(
+                Predicate {
+                    cst_kind: &quot;predicate&quot;,
+                    declared_type: Test,
+                    id: UnquotedIdentifier(
                         UnquotedIdentifier {
                             cst_kind: &quot;identifier&quot;,
-                            name: &quot;x&quot;,
+                            name: &quot;foo&quot;,
                         },
                     ),
-                ),
-                declared_type: TypeBase(
-                    TypeBase {
-                        cst_kind: &quot;type_base&quot;,
-                        var_type: Some(
-                            Var,
+                    parameters: [],
+                    body: Some(
+                        BooleanLiteral(
+                            BooleanLiteral {
+                                cst_kind: &quot;boolean_literal&quot;,
+                                value: true,
+                            },
                         ),
-                        opt_type: None,
-                        any_type: false,
-                        domain: Bounded(
-                            InfixOperator(
-                                InfixOperator {
-                                    cst_kind: &quot;infix_operator&quot;,
-                                    left: IntegerLiteral(
-                                        IntegerLiteral {
-                                            cst_kind: &quot;integer_literal&quot;,
-                                            value: Ok(
-                                                1,
-                                            ),
-                                        },
-                                    ),
-                                    operator: Operator {
-                                        cst_kind: &quot;..&quot;,
-                                        name: &quot;..&quot;,
-                                    },
-                                    right: IntegerLiteral(
-                                        IntegerLiteral {
-                                            cst_kind: &quot;integer_literal&quot;,
-                                            value: Ok(
-                                                3,
-                                            ),
-                                        },
-                                    ),
+                    ),
+                    annotations: [],
+                },
+            ),
+            Function(
+                Function {
+                    cst_kind: &quot;function_item&quot;,
+                    return_type: TypeBase(
+                        TypeBase {
+                            cst_kind: &quot;type_base&quot;,
+                            var_type: None,
+                            opt_type: None,
+                            any_type: false,
+                            domain: Unbounded(
+                                UnboundedDomain {
+                                    cst_kind: &quot;primitive_type&quot;,
+                                    primitive_type: Bool,
                                 },
                             ),
+                        },
+                    ),
+                    id: UnquotedIdentifier(
+                        UnquotedIdentifier {
+                            cst_kind: &quot;identifier&quot;,
+                            name: &quot;bar&quot;,
+                        },
+                    ),
+                    parameters: [],
+                    body: Some(
+                        BooleanLiteral(
+                            BooleanLiteral {
+                                cst_kind: &quot;boolean_literal&quot;,
+                                value: true,
+                            },
                         ),
-                    },
-                ),
-                definition: None,
-                annotations: [],
-            },
-        ),
-    ],
-}
+                    ),
+                    annotations: [],
+                },
+            ),
+            Declaration(
+                Declaration {
+                    cst_kind: &quot;declaration&quot;,
+                    pattern: Identifier(
+                        UnquotedIdentifier(
+                            UnquotedIdentifier {
+                                cst_kind: &quot;identifier&quot;,
+                                name: &quot;x&quot;,
+                            },
+                        ),
+                    ),
+                    declared_type: TypeBase(
+                        TypeBase {
+                            cst_kind: &quot;type_base&quot;,
+                            var_type: Some(
+                                Var,
+                            ),
+                            opt_type: None,
+                            any_type: false,
+                            domain: Bounded(
+                                InfixOperator(
+                                    InfixOperator {
+                                        cst_kind: &quot;infix_operator&quot;,
+                                        left: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: &quot;integer_literal&quot;,
+                                                value: Ok(
+                                                    1,
+                                                ),
+                                            },
+                                        ),
+                                        operator: Operator {
+                                            cst_kind: &quot;..&quot;,
+                                            name: &quot;..&quot;,
+                                        },
+                                        right: IntegerLiteral(
+                                            IntegerLiteral {
+                                                cst_kind: &quot;integer_literal&quot;,
+                                                value: Ok(
+                                                    3,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ),
+                        },
+                    ),
+                    definition: None,
+                    annotations: [],
+                },
+            ),
+        ],
+    },
+)
 </code></pre>
 
                     </main>
