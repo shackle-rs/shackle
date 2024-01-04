@@ -156,7 +156,7 @@ fn test_bool() {
 	);
 	assert!(types.par_opt_bool.known_par(db));
 	assert!(types.par_opt_bool.known_varifiable(db));
-	assert!(types.par_opt_bool.known_enumerable(db));
+	assert!(!types.par_opt_bool.known_enumerable(db));
 	assert_eq!(types.par_opt_bool.pretty_print(db), "opt bool");
 
 	assert_eq!(
@@ -165,7 +165,7 @@ fn test_bool() {
 	);
 	assert!(!types.var_opt_bool.known_par(db));
 	assert!(types.var_opt_bool.known_varifiable(db));
-	assert!(types.var_opt_bool.known_enumerable(db));
+	assert!(!types.var_opt_bool.known_enumerable(db));
 	assert_eq!(types.var_opt_bool.pretty_print(db), "var opt bool");
 }
 
@@ -237,7 +237,7 @@ fn test_int() {
 	);
 	assert!(types.par_opt_int.known_par(db));
 	assert!(types.par_opt_int.known_varifiable(db));
-	assert!(types.par_opt_int.known_enumerable(db));
+	assert!(!types.par_opt_int.known_enumerable(db));
 	assert_eq!(types.par_opt_int.pretty_print(db), "opt int");
 
 	assert_eq!(
@@ -246,7 +246,7 @@ fn test_int() {
 	);
 	assert!(!types.var_opt_int.known_par(db));
 	assert!(types.var_opt_int.known_varifiable(db));
-	assert!(types.var_opt_int.known_enumerable(db));
+	assert!(!types.var_opt_int.known_enumerable(db));
 	assert_eq!(types.var_opt_int.pretty_print(db), "var opt int");
 }
 
@@ -417,7 +417,7 @@ fn test_bottom() {
 	assert_eq!(types.opt_bottom.lookup(db), TyData::Bottom(OptType::Opt));
 	assert!(types.opt_bottom.known_par(db));
 	assert!(types.opt_bottom.known_varifiable(db));
-	assert!(types.opt_bottom.known_enumerable(db));
+	assert!(!types.opt_bottom.known_enumerable(db));
 	assert_eq!(types.opt_bottom.pretty_print(db), "opt ..");
 }
 
@@ -675,7 +675,7 @@ fn test_enum() {
 	));
 	assert!(types.par_opt_enum.known_par(db));
 	assert!(types.par_opt_enum.known_varifiable(db));
-	assert!(types.par_opt_enum.known_enumerable(db));
+	assert!(!types.par_opt_enum.known_enumerable(db));
 	assert_eq!(types.par_opt_enum.pretty_print(db), "opt Foo");
 
 	assert!(matches!(
@@ -684,7 +684,7 @@ fn test_enum() {
 	));
 	assert!(!types.var_opt_enum.known_par(db));
 	assert!(types.var_opt_enum.known_varifiable(db));
-	assert!(types.var_opt_enum.known_enumerable(db));
+	assert!(!types.var_opt_enum.known_enumerable(db));
 	assert_eq!(types.var_opt_enum.pretty_print(db), "var opt Foo");
 }
 

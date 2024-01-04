@@ -1,14 +1,14 @@
 //! Pretty printing of THIR as MiniZinc
 //!
 
-use std::fmt::Write;
+use std::{fmt::Write, sync::Arc};
 
 use super::{
 	db::Thir, AnnotationId, Callable, ConstraintId, DeclarationId, Domain, DomainData,
 	EnumerationId, Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem,
 	Marker, Model, OutputId, Pattern, PatternData, ResolvedIdentifier,
 };
-use crate::utils::maybe_grow_stack;
+use crate::{constants::IdentifierRegistry, thir::DummyValue, utils::maybe_grow_stack};
 
 static MINIZINC_COMPAT: &str = include_str!("../../../../share/minizinc/compat.mzn");
 
@@ -16,6 +16,7 @@ static MINIZINC_COMPAT: &str = include_str!("../../../../share/minizinc/compat.m
 pub struct PrettyPrinter<'a, T: Marker = ()> {
 	db: &'a dyn Thir,
 	model: &'a Model<T>,
+	ids: Arc<IdentifierRegistry>,
 	/// Whether to output a model compatible with old MiniZinc (default `true`)
 	pub old_compat: bool,
 	/// Whether to output `shackle_type("...")` annotations for sanity checking
@@ -25,9 +26,11 @@ pub struct PrettyPrinter<'a, T: Marker = ()> {
 impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	/// Create a new pretty printer
 	pub fn new(db: &'a dyn Thir, model: &'a Model<T>) -> Self {
+		let ids = db.identifier_registry();
 		Self {
 			db,
 			model,
+			ids,
 			old_compat: false,
 			debug_types: false,
 		}
@@ -42,15 +45,18 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 
 	/// Pretty print the model
 	pub fn pretty_print(&self) -> String {
-		let ids = self.db.identifier_registry();
 		let mut buf = String::new();
 		for item in self.model.top_level_items() {
 			if self.old_compat {
 				match item {
-					ItemId::Function(f) if self.model[f].name() == ids.default => {
+					ItemId::Function(f)
+						if self.model[f].name() == self.ids.default
+							|| self.model[f].name() == self.ids.mzn_element_internal
+							|| self.model[f].name() == self.ids.mzn_slice_internal =>
+					{
 						continue;
 					}
-					ItemId::Annotation(a) if self.model[a].name == Some(ids.output) => {
+					ItemId::Annotation(a) if self.model[a].name == Some(self.ids.output) => {
 						continue;
 					}
 					_ => (),
@@ -242,10 +248,10 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 		for ann in function.annotations().iter() {
 			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
 		}
-		if !signature_only {
+		let ids = self.db.identifier_registry();
+		if self.old_compat {
 			if let Some(body) = function.body() {
-				if self.old_compat
-					&& function.name() == self.db.identifier_registry().deopt
+				if function.name() == ids.deopt
 					&& !function.type_inst_vars().is_empty()
 					&& function.parameters().len() == 1
 					&& {
@@ -272,11 +278,8 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 						},
 						_ => unreachable!(),
 					}
-				} else {
-					write!(&mut buf, " = {}", self.pretty_print_expression(body)).unwrap();
 				}
-			} else if self.old_compat && function.name() == self.db.identifier_registry().erase_enum
-			{
+			} else if function.name() == ids.erase_enum {
 				// For compatibility with old minizinc, we can just directly coerce
 				let d = function.parameter(0);
 				let ident = self.model[d]
@@ -286,6 +289,13 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 				write!(&mut buf, " = {}", ident).unwrap();
 			}
 		}
+
+		if !signature_only {
+			if let Some(body) = function.body() {
+				write!(&mut buf, " = {}", self.pretty_print_expression(body)).unwrap();
+			}
+		}
+
 		buf
 	}
 
@@ -430,18 +440,6 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 	fn pretty_print_expression_inner(&self, expression: &Expression<T>) -> String {
 		let mut out = match &**expression {
 			ExpressionData::Absent => "<>".to_owned(),
-			ExpressionData::ArrayAccess(aa) => format!(
-				"({})[{}]",
-				self.pretty_print_expression(&aa.collection),
-				match &**aa.indices {
-					ExpressionData::TupleLiteral(es) => es
-						.iter()
-						.map(|e| self.pretty_print_expression(e))
-						.collect::<Vec<_>>()
-						.join(", "),
-					_ => self.pretty_print_expression(&aa.indices),
-				}
-			),
 			ExpressionData::ArrayComprehension(c) => {
 				let mut buf = String::new();
 				write!(&mut buf, "[").unwrap();
@@ -508,17 +506,59 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 								m.member_index()
 							)
 						}),
-					Callable::Function(f) => (|| {
-						if let Some(tys) = self.model[*f].mangled_param_tys() {
-							if !self.old_compat || self.model[*f].body().is_some() {
-								return self.model[*f]
-									.name()
-									.mangled(self.db, tys.iter().copied())
-									.pretty_print(self.db.upcast());
+					Callable::Function(f) => {
+						let name = self.model[*f].name();
+						if self.old_compat
+							&& (name == self.ids.forall || name == self.ids.exists)
+							&& c.arguments.len() == 1
+						{
+							if let ExpressionData::ArrayLiteral(al) = &*c.arguments[0] {
+								if !al.is_empty() {
+									// Sometimes the old compiler doesn't make these short-circuit (e.g. inside flat_cv_exp), so turn into and/or
+									return al
+										.iter()
+										.map(|e| format!("({})", self.pretty_print_expression(e)))
+										.collect::<Vec<_>>()
+										.join(if name == self.ids.forall {
+											" /\\ "
+										} else {
+											" \\/ "
+										});
+								}
 							}
 						}
-						self.model[*f].name().pretty_print(self.db)
-					})(),
+						if self.old_compat && name == self.ids.mzn_destruct_partial {
+							let dummy = Expression::new(
+								self.db,
+								self.model,
+								c.arguments[0].origin(),
+								DummyValue(c.arguments[0].ty()),
+							);
+							return format!(
+								"((true, {}) default (false, {}))",
+								self.pretty_print_expression(&c.arguments[0]),
+								self.pretty_print_expression(&dummy)
+							);
+						}
+						if self.old_compat && name == self.ids.mzn_slice_internal {
+							return format!(
+								"(let {{ any: mzn_x = {}; any: mzn_i = {}; }} in slice_1d(mzn_x, mzn_i, 1..length(mzn_x)))",
+								self.pretty_print_expression(&c.arguments[0]),
+								self.pretty_print_expression(&c.arguments[1]),
+							);
+						}
+						(|| {
+							if let Some(tys) = self.model[*f].mangled_param_tys() {
+								if !self.old_compat || self.model[*f].body().is_some() {
+									return self.model[*f]
+										.name()
+										.mangled(self.db, tys.iter().copied())
+										.pretty_print(self.db.upcast());
+								}
+							}
+							name.pretty_print(self.db)
+						})()
+					}
 					Callable::Expression(e) => format!("({})", self.pretty_print_expression(e)),
 				};
 				let args = c
@@ -649,7 +689,7 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 			}
 			ExpressionData::RecordAccess(ra) => {
 				format!(
-					"{}.{}",
+					"({}).{}",
 					self.pretty_print_expression(&ra.record),
 					ra.field.pretty_print(self.db.upcast())
 				)
@@ -692,7 +732,11 @@ impl<'a, T: Marker> PrettyPrinter<'a, T> {
 			}
 			ExpressionData::StringLiteral(s) => format!("{:?}", s.value(self.db.upcast())),
 			ExpressionData::TupleAccess(ta) => {
-				format!("{}.{}", self.pretty_print_expression(&ta.tuple), ta.field.0)
+				format!(
+					"({}).{}",
+					self.pretty_print_expression(&ta.tuple),
+					ta.field.0
+				)
 			}
 			ExpressionData::TupleLiteral(fs) => {
 				let fields = fs

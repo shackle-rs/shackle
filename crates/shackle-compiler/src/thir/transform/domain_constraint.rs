@@ -22,9 +22,9 @@ use crate::{
 		traverse::{
 			add_declaration, add_function, fold_function_body, fold_let, Folder, ReplacementMap,
 		},
-		ArrayAccess, ArrayComprehension, ArrayLiteral, Constraint, Declaration, DeclarationId,
-		Domain, DomainData, Expression, FunctionId, Generator, Item, Let, LetItem, LookupCall,
-		Marker, Model, RecordAccess, RecordLiteral, TupleAccess, TupleLiteral,
+		ArrayComprehension, ArrayLiteral, Constraint, Declaration, DeclarationId, Domain,
+		DomainData, Expression, FunctionId, Generator, Item, Let, LetItem, LookupCall, Marker,
+		Model, RecordAccess, RecordLiteral, TupleAccess, TupleLiteral,
 	},
 	Result,
 };
@@ -582,9 +582,9 @@ impl<Dst: Marker, Src: Marker> DomainRewriter<Dst, Src> {
 						db,
 						&self.model,
 						origin,
-						ArrayAccess {
-							collection: Box::new(variable),
-							indices: Box::new(indices_expr),
+						LookupCall {
+							function: self.ids.array_access.into(),
+							arguments: vec![variable, indices_expr],
 						},
 					);
 					let template = self.make_domain_constraint(db, name, element, *dom);
@@ -933,13 +933,13 @@ mod test {
     } in mzn_array_kd(_DECL_5, [let {
       var '..'(1, 3): _DECL_7;
       var '..'(2, 4): _DECL_8;
-    } in (_DECL_7, (a: _DECL_8)) | _DECL_6 in _DECL_5.1]);
+    } in (_DECL_7, (a: _DECL_8)) | _DECL_6 in (_DECL_5).1]);
     array [int, int] of tuple(var int, var int): w = let {
       tuple(set of int, set of int): _DECL_9 = ('..'(1, 2), '..'(2, 3));
     } in mzn_array_kd(_DECL_9, [let {
       var '..'(1, 3): _DECL_12;
       var '..'(2, 4): _DECL_13;
-    } in (_DECL_12, _DECL_13) | _DECL_10 in _DECL_9.1, _DECL_11 in _DECL_9.2]);
+    } in (_DECL_12, _DECL_13) | _DECL_10 in (_DECL_9).1, _DECL_11 in (_DECL_9).2]);
     var int: v = let {
       tuple(var int): m = let {
       var '..'(1, 2): _DECL_14;
@@ -947,12 +947,53 @@ mod test {
       record(var int: n): o = let {
       var '..'(1, 3): _DECL_15;
     } in (n: _DECL_15);
-    } in m.1;
+    } in (m).1;
     array [int] of var opt int: p = let {
       tuple(set of int): _DECL_16 = ('..'(1, 2),);
     } in mzn_array_kd(_DECL_16, [let {
       var opt '..'(1, 2): _DECL_18;
-    } in _DECL_18 | _DECL_17 in _DECL_16.1]);
+    } in _DECL_18 | _DECL_17 in (_DECL_16).1]);
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_rewrite_struct_domains_par() {
+		check(
+			rewrite_domains,
+			r#"
+				tuple(1..3, 2..4): x;
+                record(1..3: a, 2..4: b): y;
+                array [1..2] of tuple(1..3, record(2..4: a)): z;
+                array [1..2, 2..3] of tuple(1..3, 2..4): w;
+				array [1..2] of opt 1..2: p;
+			"#,
+			expect!([r#"
+    set of int: _DECL_1 = '..'(1, 3);
+    set of int: _DECL_2 = '..'(2, 4);
+    tuple(int, int): x;
+    constraint forall([mzn_domain_constraint(mzn_show_tuple_access("x", 1), (x).1, _DECL_1), mzn_domain_constraint(mzn_show_tuple_access("x", 2), (x).2, _DECL_2)]);
+    set of int: _DECL_3 = '..'(1, 3);
+    set of int: _DECL_4 = '..'(2, 4);
+    record(int: a, int: b): y;
+    constraint forall([mzn_domain_constraint(mzn_show_record_access("y", "a"), (y).a, _DECL_3), mzn_domain_constraint(mzn_show_record_access("y", "b"), (y).b, _DECL_4)]);
+    set of int: _DECL_5 = '..'(1, 2);
+    set of int: _DECL_6 = '..'(1, 3);
+    set of int: _DECL_7 = '..'(2, 4);
+    array [int] of tuple(int, record(int: a)): z;
+    constraint forall([mzn_check_index_set("z", index_set(z), _DECL_5), forall([forall([mzn_domain_constraint(mzn_show_tuple_access(mzn_show_array_access("z", _DECL_9), 1), ('[]'(z, _DECL_9)).1, _DECL_6), mzn_domain_constraint(mzn_show_record_access(mzn_show_tuple_access(mzn_show_array_access("z", _DECL_9), 2), "a"), (('[]'(z, _DECL_9)).2).a, _DECL_7)]) | _DECL_8 = index_sets(z), _DECL_9 in (_DECL_8).1])]);
+    set of int: _DECL_10 = '..'(1, 2);
+    set of int: _DECL_11 = '..'(2, 3);
+    set of int: _DECL_12 = '..'(1, 3);
+    set of int: _DECL_13 = '..'(2, 4);
+    array [int, int] of tuple(int, int): w;
+    constraint forall([let {
+      tuple(set of int, set of int): _DECL_14 = index_sets(w);
+    } in forall([mzn_check_index_set("w", 1, 2, (_DECL_14).1, _DECL_10), mzn_check_index_set("w", 2, 2, (_DECL_14).2, _DECL_11)]), forall([forall([mzn_domain_constraint(mzn_show_tuple_access(mzn_show_array_access("w", (_DECL_16, _DECL_17)), 1), ('[]'(w, (_DECL_16, _DECL_17))).1, _DECL_12), mzn_domain_constraint(mzn_show_tuple_access(mzn_show_array_access("w", (_DECL_16, _DECL_17)), 2), ('[]'(w, (_DECL_16, _DECL_17))).2, _DECL_13)]) | _DECL_15 = index_sets(w), _DECL_16 in (_DECL_15).1, _DECL_17 in (_DECL_15).2])]);
+    set of int: _DECL_18 = '..'(1, 2);
+    set of int: _DECL_19 = '..'(1, 2);
+    array [int] of opt int: p;
+    constraint forall([mzn_check_index_set("p", index_set(p), _DECL_18), forall([mzn_domain_constraint(mzn_show_array_access("p", _DECL_21), '[]'(p, _DECL_21), _DECL_19) | _DECL_20 = index_sets(p), _DECL_21 in (_DECL_20).1])]);
 "#]),
 		)
 	}
@@ -975,34 +1016,34 @@ mod test {
     set of int: _DECL_1 = '..'(1, 3);
     set of int: _DECL_2 = '..'(2, 4);
     tuple(var int, var int): x = (1, 2);
-    constraint forall([mzn_domain_constraint(mzn_show_tuple_access("x", 1), x.1, _DECL_1), mzn_domain_constraint(mzn_show_tuple_access("x", 2), x.2, _DECL_2)]);
+    constraint forall([mzn_domain_constraint(mzn_show_tuple_access("x", 1), (x).1, _DECL_1), mzn_domain_constraint(mzn_show_tuple_access("x", 2), (x).2, _DECL_2)]);
     set of int: _DECL_3 = '..'(1, 3);
     set of int: _DECL_4 = '..'(2, 4);
     tuple(int, int): y;
-    constraint forall([mzn_domain_constraint(mzn_show_tuple_access("y", 1), y.1, _DECL_3), mzn_domain_constraint(mzn_show_tuple_access("y", 2), y.2, _DECL_4)]);
+    constraint forall([mzn_domain_constraint(mzn_show_tuple_access("y", 1), (y).1, _DECL_3), mzn_domain_constraint(mzn_show_tuple_access("y", 2), (y).2, _DECL_4)]);
     set of int: _DECL_5 = '..'(1, 2);
     record(int: a): z;
-    constraint mzn_domain_constraint(mzn_show_record_access("z", "a"), z.a, _DECL_5);
+    constraint mzn_domain_constraint(mzn_show_record_access("z", "a"), (z).a, _DECL_5);
     set of int: _DECL_6 = '..'(1, 3);
     function var bool: foo(var int: x) = let {
       constraint mzn_domain_constraint("x", x, _DECL_6);
     } in true;
     set of int: _DECL_7 = '..'(1, 2);
     array [int] of int: a;
-    constraint forall([mzn_domain_constraint(mzn_show_array_access("a", _DECL_9), (a)[_DECL_9], _DECL_7) | _DECL_8 = index_sets(a), _DECL_9 in _DECL_8.1]);
+    constraint forall([mzn_domain_constraint(mzn_show_array_access("a", _DECL_9), '[]'(a, _DECL_9), _DECL_7) | _DECL_8 = index_sets(a), _DECL_9 in (_DECL_8).1]);
     set of int: _DECL_10 = '..'(1, 2);
     array [int] of int: b;
     constraint mzn_check_index_set("b", index_set(b), _DECL_10);
     set of int: _DECL_11 = '..'(1, 2);
     set of int: _DECL_12 = '..'(1, 2);
     array [int] of int: c;
-    constraint forall([mzn_check_index_set("c", index_set(c), _DECL_11), forall([mzn_domain_constraint(mzn_show_array_access("c", _DECL_14), (c)[_DECL_14], _DECL_12) | _DECL_13 = index_sets(c), _DECL_14 in _DECL_13.1])]);
+    constraint forall([mzn_check_index_set("c", index_set(c), _DECL_11), forall([mzn_domain_constraint(mzn_show_array_access("c", _DECL_14), '[]'(c, _DECL_14), _DECL_12) | _DECL_13 = index_sets(c), _DECL_14 in (_DECL_13).1])]);
     set of int: _DECL_15 = '..'(1, 2);
     set of int: _DECL_16 = '..'(1, 2);
     array [int, int] of int: d;
     constraint let {
       tuple(set of int, set of int): _DECL_17 = index_sets(d);
-    } in forall([mzn_check_index_set("d", 1, 2, _DECL_17.1, _DECL_15), mzn_check_index_set("d", 2, 2, _DECL_17.2, _DECL_16)]);
+    } in forall([mzn_check_index_set("d", 1, 2, (_DECL_17).1, _DECL_15), mzn_check_index_set("d", 2, 2, (_DECL_17).2, _DECL_16)]);
 "#]),
 		)
 	}

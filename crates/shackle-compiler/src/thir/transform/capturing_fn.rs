@@ -392,7 +392,7 @@ mod test {
     var int: x;
     var int: y;
     function var int: qux(var int: p, var int: q);
-    function var int: bar(tuple(var int, var int): _DECL_6) = qux(foo(_DECL_6.1), _DECL_6.2);
+    function var int: bar(tuple(var int, var int): _DECL_6) = qux(foo((_DECL_6).1), (_DECL_6).2);
     tuple(var int, var int): _DECL_5 = (x, y);
     function var int: foo(var int: _DECL_7) = _DECL_7;
     var int: z = bar(_DECL_5);

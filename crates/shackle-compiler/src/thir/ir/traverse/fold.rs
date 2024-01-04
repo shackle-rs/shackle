@@ -454,16 +454,6 @@ pub trait Folder<'a, Dst: Marker, Src: Marker = ()> {
 		fold_set_comprehension(self, db, model, c)
 	}
 
-	/// Fold an array access
-	fn fold_array_access(
-		&mut self,
-		db: &'a dyn Thir,
-		model: &'a Model<Src>,
-		aa: &'a ArrayAccess<Src>,
-	) -> ArrayAccess<Dst> {
-		fold_array_access(self, db, model, aa)
-	}
-
 	/// Fold a tuple access
 	fn fold_tuple_access(
 		&mut self,
@@ -887,7 +877,7 @@ pub fn fold_function<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 		folder.fold_declaration_id(db, model, *p)
 	}));
 	function.set_type_inst_vars(f.type_inst_vars().iter().cloned());
-	function.set_specialised(f.is_specialisation());
+	function.set_specialised(f.specialised_from());
 	if let Some(tys) = f.mangled_param_tys() {
 		function.set_mangled_param_tys(tys.to_vec());
 	}
@@ -1151,19 +1141,6 @@ pub fn fold_set_comprehension<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?S
 	}
 }
 
-/// Fold an array access expression
-pub fn fold_array_access<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
-	folder: &mut F,
-	db: &'a dyn Thir,
-	model: &'a Model<T>,
-	aa: &'a ArrayAccess<T>,
-) -> ArrayAccess<U> {
-	ArrayAccess {
-		collection: Box::new(folder.fold_expression(db, model, &aa.collection)),
-		indices: Box::new(folder.fold_expression(db, model, &aa.indices)),
-	}
-}
-
 /// Fold a tuple access expression (does not fold the field integer)
 pub fn fold_tuple_access<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 	folder: &mut F,
@@ -1343,9 +1320,6 @@ pub fn fold_expression<'a, T: Marker, U: Marker, F: Folder<'a, U, T> + ?Sized>(
 			folder.fold_set_comprehension(db, model, c),
 			folder,
 		),
-		ExpressionData::ArrayAccess(aa) => {
-			alloc_expression(db, origin, folder.fold_array_access(db, model, aa), folder)
-		}
 		ExpressionData::TupleAccess(ta) => {
 			alloc_expression(db, origin, folder.fold_tuple_access(db, model, ta), folder)
 		}

@@ -117,11 +117,6 @@ pub trait Visitor<'a, T: Marker = ()> {
 		visit_set_comprehension(self, model, c);
 	}
 
-	/// Visit an array access
-	fn visit_array_access(&mut self, model: &'a Model<T>, aa: &'a ArrayAccess<T>) {
-		visit_array_access(self, model, aa);
-	}
-
 	/// Visit a tuple access
 	fn visit_tuple_access(&mut self, model: &'a Model<T>, ta: &'a TupleAccess<T>) {
 		visit_tuple_access(self, model, ta);
@@ -375,16 +370,6 @@ pub fn visit_set_comprehension<'a, T: Marker, V: Visitor<'a, T> + ?Sized>(
 	visitor.visit_expression(model, &c.template);
 }
 
-/// Visit the children of an array access expression
-pub fn visit_array_access<'a, T: Marker, V: Visitor<'a, T> + ?Sized>(
-	visitor: &mut V,
-	model: &'a Model<T>,
-	aa: &'a ArrayAccess<T>,
-) {
-	visitor.visit_expression(model, &aa.collection);
-	visitor.visit_expression(model, &aa.indices);
-}
-
 /// Visit the children of a tuple access expression
 pub fn visit_tuple_access<'a, T: Marker, V: Visitor<'a, T> + ?Sized>(
 	visitor: &mut V,
@@ -502,7 +487,6 @@ pub fn visit_expression<'a, T: Marker, V: Visitor<'a, T> + ?Sized>(
 		ExpressionData::RecordLiteral(rl) => visitor.visit_record_literal(model, rl),
 		ExpressionData::ArrayComprehension(c) => visitor.visit_array_comprehension(model, c),
 		ExpressionData::SetComprehension(c) => visitor.visit_set_comprehension(model, c),
-		ExpressionData::ArrayAccess(aa) => visitor.visit_array_access(model, aa),
 		ExpressionData::TupleAccess(ta) => visitor.visit_tuple_access(model, ta),
 		ExpressionData::RecordAccess(ra) => visitor.visit_record_access(model, ra),
 		ExpressionData::IfThenElse(ite) => visitor.visit_if_then_else(model, ite),

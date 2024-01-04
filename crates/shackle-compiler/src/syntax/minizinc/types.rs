@@ -78,10 +78,23 @@ impl SetType {
 ast_node!(
 	/// Type of a tuple
 	TupleType,
+	var_type,
 	fields
 );
 
 impl TupleType {
+	/// Get whether this type is var or par
+	pub fn var_type(&self) -> VarType {
+		let node = self.cst_node().as_ref();
+		node.child_by_field_name("var_par")
+			.map(|c| match c.kind() {
+				"var" => VarType::Var,
+				"par" => VarType::Par,
+				_ => unreachable!(),
+			})
+			.unwrap_or(VarType::Par)
+	}
+
 	/// The types of the tuple fields
 	pub fn fields(&self) -> Children<'_, Type> {
 		children_with_field_name(self, "field")
@@ -91,10 +104,23 @@ impl TupleType {
 ast_node!(
 	/// Type of a record
 	RecordType,
+	var_type,
 	fields
 );
 
 impl RecordType {
+	/// Get whether this type is var or par
+	pub fn var_type(&self) -> VarType {
+		let node = self.cst_node().as_ref();
+		node.child_by_field_name("var_par")
+			.map(|c| match c.kind() {
+				"var" => VarType::Var,
+				"par" => VarType::Par,
+				_ => unreachable!(),
+			})
+			.unwrap_or(VarType::Par)
+	}
+
 	/// The types of the tuple fields
 	pub fn fields(&self) -> Children<'_, RecordField> {
 		children_with_field_name(self, "field")

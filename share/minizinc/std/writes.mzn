@@ -9,11 +9,21 @@ include "fzn_writes_reif.mzn";
     \a P is an array of index values in \a I
     \a V is an array of integer values 
 */
-predicate writes(array[$$X] of var int: I, array[$$Y] of var $$X: P,
-                 array[$$Y] of var int: V, array[$$X] of var int: O) =
-    assert(index_set(O) = index_set(I),"writes: index set of I must be same as O") /\
-    assert(index_set(P) = index_set(V),"writes: index set of P must be same as V") /\
-    fzn_writes(erase_enum(I), erase_enum(P), erase_enum(V), erase_enum(O));
+predicate writes(
+	array [$$X] of var int: I,
+	array [$$Y] of var $$X: P,
+	array [$$Y] of var int: V,
+	array [$$X] of var int: O,
+) =
+	assert(
+		index_set(O) = index_set(I),
+		"writes: index set of I must be same as O",
+	) /\
+		assert(
+			index_set(P) = index_set(V),
+			"writes: index set of P must be same as V",
+		) /\
+		fzn_writes(erase_enum(I), erase_enum(P), erase_enum(V), erase_enum(O));
 
 /** @group globals.array
     Returns a new array from an input array \a I with a simultaneous change at positions \a P to values \a V
@@ -22,12 +32,24 @@ predicate writes(array[$$X] of var int: I, array[$$Y] of var $$X: P,
     \a P is an array of index values in \a I
     \a V is an array of integer values 
 */
-function array[$$X] of var int: writes(array[$$X] of var int: I,
-                                       array[$$Y] of var $$X: P,
-                                       array[$$Y] of var int: V) = 
-    assert(index_set(P) = index_set(V),"writes: index set of P must be same as V", 
-    let { array[index_set(I)] of var int: O;
-          constraint fzn_writes(erase_enum(I), erase_enum(P), erase_enum(V), erase_enum(O)); }
-    in O);
+function array [$$X] of var int: writes(
+	array [$$X] of var int: I,
+	array [$$Y] of var $$X: P,
+	array [$$Y] of var int: V,
+) =
+	assert(
+		index_set(P) = index_set(V),
+		"writes: index set of P must be same as V",
+		let {
+			array [index_set(I)] of var int: O;
+			constraint
+				fzn_writes(
+					erase_enum(I),
+					erase_enum(P),
+					erase_enum(V),
+					erase_enum(O),
+				);
+		} in O,
+	);
 
 %-----------------------------------------------------------------------------%

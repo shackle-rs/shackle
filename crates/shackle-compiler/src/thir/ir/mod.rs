@@ -1,7 +1,9 @@
 //! THIR representation
 //!
 
-use std::ops::Index;
+use std::ops::{Deref, Index};
+
+use rustc_hash::FxHashMap;
 
 use crate::{
 	hir::Identifier,
@@ -341,9 +343,22 @@ impl<T: Marker> Model<T> {
 		ItemId::Solve
 	}
 
+	/// Produce a map for looking up function calls
+	pub fn overload_map(&self) -> OverloadMap<'_, T> {
+		let mut overloads: FxHashMap<_, Vec<_>> = FxHashMap::default();
+		for (idx, function) in self.top_level_functions() {
+			overloads.entry(function.name()).or_default().push(idx);
+		}
+		OverloadMap {
+			model: self,
+			overloads,
+		}
+	}
+
 	/// Lookup a function by its signature
 	///
 	/// Prefer using `LookupCall` to create a call expression.
+	/// If looking up many functions, consider producing an [`OverloadMap`].
 	pub fn lookup_function(
 		&self,
 		db: &dyn Thir,
@@ -359,7 +374,7 @@ impl<T: Marker> Model<T> {
 					None
 				}
 			})
-			.partition::<Vec<_>, _>(|(i, _)| self[*i].is_specialisation());
+			.partition::<Vec<_>, _>(|(i, _)| self[*i].specialised_from().is_some());
 
 		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
 
@@ -445,6 +460,67 @@ impl<T: Marker> Index<EnumMemberId<T>> for Model<T> {
 		&self.enumerations[index.enumeration_id()]
 			.definition()
 			.expect("No definition for enum")[index.member_index() as usize]
+	}
+}
+
+/// Map which is built once to perform multiple function lookups.
+pub struct OverloadMap<'a, T: Marker = ()> {
+	model: &'a Model<T>,
+	overloads: FxHashMap<FunctionName, Vec<FunctionId<T>>>,
+}
+
+impl<'a, T: Marker> OverloadMap<'a, T> {
+	/// Filter the overloads in this map
+	pub fn filter(&mut self, mut p: impl FnMut(&FunctionItem<T>) -> bool) {
+		for overloads in self.overloads.values_mut() {
+			overloads.retain(|f| p(&self.model[*f]));
+		}
+	}
+
+	/// Lookup a function
+	pub fn lookup_function(
+		&self,
+		db: &dyn Thir,
+		name: FunctionName,
+		args: &[Ty],
+	) -> Result<FunctionLookup<T>, FunctionLookupError<T>> {
+		let (specialised, overloads) = self
+			.overloads
+			.get(&name)
+			.ok_or_else(|| FunctionLookupError::NoMatchingFunction(Vec::new()))?
+			.iter()
+			.map(|f| (*f, self.model[*f].function_entry(self.model)))
+			.partition::<Vec<_>, _>(|(i, _)| self.model[*i].specialised_from().is_some());
+
+		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db.upcast(), overloads, args)?;
+
+		if fn_entry.overload.is_polymorphic() {
+			let overload =
+				OverloadedFunction::Function(fn_entry.overload.instantiate(db.upcast(), &ty_vars));
+			let concrete = specialised
+				.into_iter()
+				.find(|(_, fe)| fe.overload == overload);
+			if let Some((f, fe)) = concrete {
+				return Ok(FunctionLookup {
+					function: f,
+					fn_entry: fe,
+					ty_vars: TyParamInstantiations::default(),
+				});
+			}
+		}
+
+		Ok(FunctionLookup {
+			function,
+			fn_entry,
+			ty_vars,
+		})
+	}
+}
+
+impl<'a, T: Marker> Deref for OverloadMap<'a, T> {
+	type Target = FxHashMap<FunctionName, Vec<FunctionId<T>>>;
+	fn deref(&self) -> &Self::Target {
+		&self.overloads
 	}
 }
 

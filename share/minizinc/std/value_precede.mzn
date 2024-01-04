@@ -11,7 +11,7 @@ include "fzn_value_precede_set_reif.mzn";
   is equal to \a t, then another element of \a x with a lower index is equal
   to \a s.
 */
-predicate value_precede($$E: s, $$E: t, array[int] of var $$E: x) =
+predicate value_precede($$E: s, $$E: t, array [int] of var $$E: x) =
 	fzn_value_precede_int(erase_enum(s), erase_enum(t), erase_enum(x));
 
 /** @group globals.lexicographic
@@ -21,7 +21,7 @@ predicate value_precede($$E: s, $$E: t, array[int] of var $$E: x) =
   is equal to \a t, then another element of \a x with a lower index is equal
   to \a s.
 */
-predicate value_precede($$E: s, $$E: t, array[int] of var opt $$E: x) =
+predicate value_precede($$E: s, $$E: t, array [int] of var opt $$E: x) =
 	fzn_value_precede_int_opt(erase_enum(s), erase_enum(t), erase_enum(x));
 
 /** @group globals.lexicographic
@@ -31,5 +31,5 @@ predicate value_precede($$E: s, $$E: t, array[int] of var opt $$E: x) =
   contains \a t but not \a s, then another element of \a x with lower index contains
   \a s but not \a t.
 */
-predicate value_precede($$E: s, $$E: t, array[int] of var set of $$E: x) =
+predicate value_precede($$E: s, $$E: t, array [int] of var set of $$E: x) =
 	fzn_value_precede_set(erase_enum(s), erase_enum(t), erase_enum(x));

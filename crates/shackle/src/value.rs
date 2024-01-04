@@ -576,10 +576,10 @@ pub struct EnumRangeInclusive {
 }
 
 impl EnumRangeInclusive {
-	/// Create a new EnumRangeInclusive
+	/// Create a new `EnumRangeInclusive`
 	///
 	/// ## Warning
-	/// This function will panic if the arguments contained are of two different Enum types
+	/// This function will panic if the arguments contained are of two different [`Enum`] types
 	pub fn new(start: EnumValue, end: EnumValue) -> Self {
 		if start.ty != end.ty {
 			panic!("creating EnumRangeInclusive using two different enum types")
@@ -613,12 +613,12 @@ impl EnumRangeInclusive {
 		}
 	}
 
-	/// Returns `true' if the iterator is empty.
+	/// Returns `true` if the iterator is empty.
 	pub fn is_empty(&self) -> bool {
 		self.len() == 0
 	}
 
-	/// Returns the lower bound of the EnumRangeInclusive
+	/// Returns the lower bound of the [`EnumRangeInclusive`]
 	///
 	/// When using an inclusive range for iteration, the values of `start()` and
 	/// [`end()`] are unspecified after the iteration ended. To determine
@@ -636,7 +636,7 @@ impl EnumRangeInclusive {
 			pos: self.start,
 		}
 	}
-	/// Returns the upper bound of the EnumRangeInclusive
+	/// Returns the upper bound of the [`EnumRangeInclusive`]
 	///
 	/// When using an inclusive range for iteration, the values of [`start()`]
 	/// and `end()` are unspecified after the iteration ended. To determine

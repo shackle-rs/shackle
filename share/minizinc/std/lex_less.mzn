@@ -12,14 +12,14 @@ include "fzn_lex_less_set_reif.mzn";
   array \a y. Compares them from first to last element, regardless of indices.
 */
 predicate lex_less(
-	array[int] of var bool: x ::promise_ctx_antitone,
-	array[int] of var bool: y ::promise_ctx_monotone
+	array [int] of var bool: x :: promise_ctx_antitone,
+	array [int] of var bool: y :: promise_ctx_monotone,
 ) =
-	if length(x)=1 /\ length(y)=1
-		then x[min(index_set(x))] < y[min(index_set(y))]
-	elseif length(x)=0 then
-		length(y)>0
-	elseif length(y)=0 then
+	if length(x) = 1 /\ length(y) = 1 then
+		x[min(index_set(x))] < y[min(index_set(y))]
+	elseif length(x) = 0 then
+		length(y) > 0
+	elseif length(y) = 0 then
 		false
 	else
 		fzn_lex_less_bool(array1d(x), array1d(y))
@@ -30,14 +30,14 @@ predicate lex_less(
   array \a y. Compares them from first to last element, regardless of indices.
 */
 predicate lex_less(
-	array[int] of var int: x ::promise_ctx_antitone,
-	array[int] of var int: y ::promise_ctx_monotone,
+	array [int] of var int: x :: promise_ctx_antitone,
+	array [int] of var int: y :: promise_ctx_monotone,
 ) =
-	if length(x)=1 /\ length(y)=1 then
+	if length(x) = 1 /\ length(y) = 1 then
 		x[min(index_set(x))] < y[min(index_set(y))]
-	elseif length(x)=0 then
-		length(y)>0
-	elseif length(y)=0 then
+	elseif length(x) = 0 then
+		length(y) > 0
+	elseif length(y) = 0 then
 		false
 	else
 		fzn_lex_less_int(array1d(x), array1d(y))
@@ -48,14 +48,14 @@ predicate lex_less(
   array \a y. Compares them from first to last element, regardless of indices.
 */
 predicate lex_less(
-	array[int] of var float: x ::promise_ctx_antitone,
-	array[int] of var float: y ::promise_ctx_monotone,
+	array [int] of var float: x :: promise_ctx_antitone,
+	array [int] of var float: y :: promise_ctx_monotone,
 ) =
-	if length(x)=1 /\ length(y)=1 then
+	if length(x) = 1 /\ length(y) = 1 then
 		x[min(index_set(x))] < y[min(index_set(y))]
-	elseif length(x)=0 then
-		length(y)>0
-	elseif length(y)=0 then
+	elseif length(x) = 0 then
+		length(y) > 0
+	elseif length(y) = 0 then
 		false
 	else
 		fzn_lex_less_float(array1d(x), array1d(y))
@@ -66,14 +66,14 @@ predicate lex_less(
   array \a y. Compares them from first to last element, regardless of indices.
 */
 predicate lex_less(
-	array[int] of var set of int: x,
-	array[int] of var set of int: y,
+	array [int] of var set of int: x,
+	array [int] of var set of int: y,
 ) =
-	if length(x)=1 /\ length(y)=1 then
+	if length(x) = 1 /\ length(y) = 1 then
 		x[min(index_set(x))] < y[min(index_set(y))]
-	elseif length(x)=0 then
-		length(y)>0
-	elseif length(y)=0 then
+	elseif length(x) = 0 then
+		length(y) > 0
+	elseif length(y) = 0 then
 		false
 	else
 		fzn_lex_less_set(array1d(x), array1d(y))
@@ -81,19 +81,22 @@ predicate lex_less(
 
 % Alternative names for the above.
 %
-predicate lex_lt(array[int] of var bool: x ::promise_ctx_antitone,
-                 array[int] of var bool: y ::promise_ctx_monotone) =
-	lex_less(x, y);
+predicate lex_lt(
+	array [int] of var bool: x :: promise_ctx_antitone,
+	array [int] of var bool: y :: promise_ctx_monotone,
+) = lex_less(x, y);
 
-predicate lex_lt(array[int] of var int: x ::promise_ctx_antitone,
-                 array[int] of var int: y ::promise_ctx_monotone) =
-	lex_less(x, y);
+predicate lex_lt(
+	array [int] of var int: x :: promise_ctx_antitone,
+	array [int] of var int: y :: promise_ctx_monotone,
+) = lex_less(x, y);
 
-predicate lex_lt(array[int] of var float: x ::promise_ctx_antitone,
-                 array[int] of var float: y ::promise_ctx_monotone) =
-	lex_less(x, y);
+predicate lex_lt(
+	array [int] of var float: x :: promise_ctx_antitone,
+	array [int] of var float: y :: promise_ctx_monotone,
+) = lex_less(x, y);
 
-predicate lex_lt(array[int] of var set of int: x,
-                  array[int] of var set of int: y) =
-	lex_less(x, y);
-
+predicate lex_lt(
+	array [int] of var set of int: x,
+	array [int] of var set of int: y,
+) = lex_less(x, y);

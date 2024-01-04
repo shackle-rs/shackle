@@ -702,14 +702,9 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 				if is_slice {
 					self.collect_slice(aa.collection, aa.indices, origin)
 				} else {
-					alloc_expression(
-						ArrayAccess {
-							collection: Box::new(self.collect_expression(aa.collection)),
-							indices: Box::new(self.collect_expression(aa.indices)),
-						},
-						self,
-						origin,
-					)
+					let c = self.collect_expression(aa.collection);
+					let i = self.collect_expression(aa.indices);
+					self.collect_array_access(c, i, origin)
 				}
 			}
 			hir::Expression::ArrayComprehension(c) => {
@@ -1398,7 +1393,9 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		LoweredAnnotation::Expression(self.collect_expression(ann))
 	}
 
-	/// Rewrite index slicing into slice_Xd() call
+	/// Rewrite index slicing into a call
+	///
+	/// Turns all indices into sets to match the slicing builtin function, and then coerces to the correct output index set.
 	fn collect_slice(
 		&mut self,
 		collection: ArenaIndex<hir::Expression>,
@@ -1570,40 +1567,41 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			}
 		}
 		let collection_ident = alloc_expression(collection_decl, self, collection_entity);
-		let slice_array = alloc_expression(
-			ArrayLiteral(
+		let slice_tuple = alloc_expression(
+			TupleLiteral(
 				slices
 					.iter()
-					.map(|(decl, _, origin)| {
-						alloc_expression(
-							LookupCall {
-								function: self.parent.ids.erase_enum.into(),
-								arguments: vec![alloc_expression(*decl, self, *origin)],
-							},
-							self,
-							*origin,
-						)
-					})
+					.map(|(decl, _, origin)| alloc_expression(*decl, self, *origin))
 					.collect(),
 			),
 			self,
 			indices_entity,
 		);
-		let mut arguments = vec![collection_ident, slice_array];
-		arguments.extend(slices.iter().filter_map(|(decl, is_slice, origin)| {
-			if *is_slice {
-				Some(alloc_expression(*decl, self, *origin))
-			} else {
-				None
-			}
-		}));
+		let arguments = slices
+			.iter()
+			.filter_map(|(decl, is_slice, origin)| {
+				if *is_slice {
+					Some(alloc_expression(*decl, self, *origin))
+				} else {
+					None
+				}
+			})
+			.chain([alloc_expression(
+				LookupCall {
+					function: self.parent.ids.array_access.into(),
+					arguments: vec![collection_ident, slice_tuple],
+				},
+				self,
+				origin,
+			)])
+			.collect::<Vec<_>>();
 		alloc_expression(
 			Let {
 				items: decls.into_iter().map(LetItem::Declaration).collect(),
 				in_expression: Box::new(alloc_expression(
 					LookupCall {
 						function: Identifier::new(
-							format!("slice_{}d", arguments.len() - 2),
+							format!("array{}d", arguments.len() - 1),
 							self.parent.db.upcast(),
 						)
 						.into(),
@@ -1618,7 +1616,181 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 		)
 	}
 
+	fn collect_array_access(
+		&mut self,
+		collection: Expression,
+		indices: Expression,
+		origin: impl Into<Origin>,
+	) -> Expression {
+		maybe_grow_stack(|| {
+			let origin = origin.into();
+			if indices.ty().contains_var(self.parent.db.upcast()) {
+				let elem = collection.ty().elem_ty(self.parent.db.upcast()).unwrap();
+				if elem.is_tuple(self.parent.db.upcast()) || elem.is_record(self.parent.db.upcast())
+				{
+					// Decompose access to array of structured types
+					let c_origin = collection.origin();
+					let c_idx = self.introduce_declaration(false, c_origin, |_| collection);
+					let c_ident = alloc_expression(c_idx, self, c_origin);
+					let i_origin = indices.origin();
+					let i_idx = self.introduce_declaration(false, c_origin, |_| indices);
+					let i_ident = alloc_expression(i_idx, self, i_origin);
+
+					if let Some(fields) = elem.record_fields(self.parent.db.upcast()) {
+						let mut decomposed = Vec::with_capacity(fields.len());
+						for (k, _) in fields {
+							let field = Identifier::from(k);
+							let decl = Declaration::new(
+								false,
+								Domain::unbounded(self.parent.db, c_origin, elem),
+							);
+							let decl_idx =
+								self.parent.model.add_declaration(Item::new(decl, c_origin));
+							let generators = vec![Generator::Iterator {
+								declarations: vec![decl_idx],
+								collection: c_ident.clone(),
+								where_clause: None,
+							}];
+							let comprehension = alloc_expression(
+								ArrayComprehension {
+									generators,
+									indices: None,
+									template: Box::new(alloc_expression(
+										RecordAccess {
+											record: Box::new(alloc_expression(
+												decl_idx, self, c_origin,
+											)),
+											field,
+										},
+										self,
+										origin,
+									)),
+								},
+								self,
+								origin,
+							);
+							let array = alloc_expression(
+								LookupCall {
+									function: self.parent.ids.array_xd.into(),
+									arguments: vec![c_ident.clone(), comprehension],
+								},
+								self,
+								origin,
+							);
+							decomposed.push((
+								field,
+								self.collect_array_access(array, i_ident.clone(), origin),
+							));
+						}
+						return alloc_expression(
+							Let {
+								items: vec![
+									LetItem::Declaration(c_idx),
+									LetItem::Declaration(i_idx),
+								],
+								in_expression: Box::new(alloc_expression(
+									RecordLiteral(decomposed),
+									self,
+									origin,
+								)),
+							},
+							self,
+							origin,
+						);
+					}
+					let fields = elem.field_len(self.parent.db.upcast()).unwrap();
+					let mut decomposed = Vec::with_capacity(fields);
+					for i in 1..=(fields as i64) {
+						let decl = Declaration::new(
+							false,
+							Domain::unbounded(self.parent.db, c_origin, elem),
+						);
+						let decl_idx = self.parent.model.add_declaration(Item::new(decl, c_origin));
+						let generators = vec![Generator::Iterator {
+							declarations: vec![decl_idx],
+							collection: c_ident.clone(),
+							where_clause: None,
+						}];
+						let comprehension = alloc_expression(
+							ArrayComprehension {
+								generators,
+								indices: None,
+								template: Box::new(alloc_expression(
+									TupleAccess {
+										tuple: Box::new(alloc_expression(decl_idx, self, c_origin)),
+										field: IntegerLiteral(i),
+									},
+									self,
+									origin,
+								)),
+							},
+							self,
+							origin,
+						);
+						let array = alloc_expression(
+							LookupCall {
+								function: self.parent.ids.array_xd.into(),
+								arguments: vec![c_ident.clone(), comprehension],
+							},
+							self,
+							origin,
+						);
+						decomposed.push(self.collect_array_access(array, i_ident.clone(), origin));
+					}
+					return alloc_expression(
+						Let {
+							items: vec![LetItem::Declaration(c_idx), LetItem::Declaration(i_idx)],
+							in_expression: Box::new(alloc_expression(
+								TupleLiteral(decomposed),
+								self,
+								origin,
+							)),
+						},
+						self,
+						origin,
+					);
+				}
+			}
+			alloc_expression(
+				LookupCall {
+					function: self.parent.ids.array_access.into(),
+					arguments: vec![collection, indices],
+				},
+				self,
+				origin,
+			)
+		})
+	}
+
 	fn collect_generator(&mut self, generator: &hir::Generator, generators: &mut Vec<Generator>) {
+		let pattern_to_where = |c: &mut Self,
+		                        decl: DeclarationId,
+		                        p: ArenaIndex<hir::Pattern>,
+		                        origin: Origin| {
+			// Turn destructuring into where clause of case matching pattern
+			let pattern = c.collect_pattern(p);
+			alloc_expression(
+				Case {
+					scrutinee: Box::new(alloc_expression(decl, c, origin)),
+					branches: vec![
+						CaseBranch::new(pattern, alloc_expression(BooleanLiteral(true), c, origin)),
+						CaseBranch::new(
+							Pattern::anonymous(
+								match &c.types[p] {
+									PatternTy::Destructuring(ty) => *ty,
+									_ => unreachable!(),
+								},
+								origin,
+							),
+							alloc_expression(BooleanLiteral(false), c, origin),
+						),
+					],
+				},
+				c,
+				origin,
+			)
+		};
+
 		match generator {
 			hir::Generator::Iterator {
 				patterns,
@@ -1643,32 +1815,7 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 							.add_declaration(Item::new(declaration, origin));
 						let asgs = self.collect_destructuring(decl, false, *p);
 						if !asgs.is_empty() && hir::Pattern::is_refutable(*p, self.data) {
-							// Turn destructuring into where clause of case matching pattern
-							let pattern = self.collect_pattern(*p);
-							let case = alloc_expression(
-								Case {
-									scrutinee: Box::new(alloc_expression(decl, self, origin)),
-									branches: vec![
-										CaseBranch::new(
-											pattern,
-											alloc_expression(BooleanLiteral(true), self, origin),
-										),
-										CaseBranch::new(
-											Pattern::anonymous(
-												match &self.types[*p] {
-													PatternTy::Destructuring(ty) => *ty,
-													_ => unreachable!(),
-												},
-												origin,
-											),
-											alloc_expression(BooleanLiteral(false), self, origin),
-										),
-									],
-								},
-								self,
-								origin,
-							);
-							where_clauses.push(case);
+							where_clauses.push(pattern_to_where(self, decl, *p, origin.into()));
 						}
 						assignments.extend(asgs);
 						decl
@@ -1732,22 +1879,40 @@ impl<'a, 'b> ExpressionCollector<'a, 'b> {
 			} => {
 				let def = ExpressionCollector::new(self.parent, self.data, self.item, self.types)
 					.collect_expression(*value);
-				let mut assignment = Declaration::from_expression(self.parent.db, false, def);
-				if let Some(name) = self.data[*pattern].identifier() {
-					assignment.set_name(name);
-				}
+				let assignment = Declaration::from_expression(self.parent.db, false, def);
 				let idx = self.parent.model.add_declaration(Item::new(
 					assignment,
 					EntityRef::new(self.parent.db.upcast(), self.item, *pattern),
 				));
-				self.parent.resolutions.insert(
-					PatternRef::new(self.item, *pattern),
-					LoweredIdentifier::ResolvedIdentifier(idx.into()),
-				);
 				generators.push(Generator::Assignment {
 					assignment: idx,
 					where_clause: where_clause.map(|w| self.collect_expression(w)),
 				});
+				let mut asgs = self.collect_destructuring(idx, false, *pattern);
+				if !asgs.is_empty() {
+					if hir::Pattern::is_refutable(*pattern, self.data) {
+						let w = pattern_to_where(
+							self,
+							idx,
+							*pattern,
+							EntityRef::new(self.parent.db.upcast(), self.item, *pattern).into(),
+						);
+						let last = asgs.pop().unwrap();
+						generators.extend(asgs.iter().map(|asg| Generator::Assignment {
+							assignment: *asg,
+							where_clause: None,
+						}));
+						generators.push(Generator::Assignment {
+							assignment: last,
+							where_clause: Some(w),
+						});
+					} else {
+						generators.extend(asgs.iter().map(|asg| Generator::Assignment {
+							assignment: *asg,
+							where_clause: None,
+						}));
+					}
+				}
 			}
 		}
 	}

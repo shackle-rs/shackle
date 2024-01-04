@@ -1,6 +1,6 @@
 //! Generation of output
-//! - Create ::output_only string declarations for output item sections
-//! - Make make default ::output variables explicit
+//! - Create `::output_only` string declarations for output item sections
+//! - Make make default `::output` variables explicit
 
 use rustc_hash::FxHashMap;
 

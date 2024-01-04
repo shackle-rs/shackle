@@ -342,18 +342,18 @@ impl FunctionEntry {
 						|| fta.return_type != b.overload.return_type())
 					{
 						// Same function with multiple definitions
-						same_fns[i + j + 1] = Some(i);
+						same_fns[i + j + 1] = same_fns[i].or(Some(i));
 					}
 					if !b.overload.return_type().is_subtype_of(db, fta.return_type) {
 						// Functions have incompatible return types
-						incompat_fns[i + j + 1] = Some(i);
+						incompat_fns[i + j + 1] = incompat_fns[i].or(Some(i));
 					}
 				} else if let Ok((_, ftb)) =
 					b.overload.instantiate_ty_params(db, a.overload.params())
 				{
 					if !a.overload.return_type().is_subtype_of(db, ftb.return_type) {
 						// Functions have incompatible return types
-						incompat_fns[i + j + 1] = Some(i);
+						incompat_fns[i + j + 1] = incompat_fns[i].or(Some(i));
 					}
 				}
 			}
@@ -788,18 +788,25 @@ impl PolymorphicFunctionType {
 			// Type-inst vars don't accept functions/arrays currently
 			(TyData::Function(_, _), TyData::TyVar(_, _, _)) => false,
 			(TyData::Array { .. }, TyData::TyVar(_, _, _)) => false,
-			(_, TyData::TyVar(_, _, t)) => {
+			(_, TyData::TyVar(inst, opt, t)) => {
 				if arg.contains_function(db) {
 					// $T doesn't accept functions
 					return false;
 				}
-				if !arg.known_varifiable(db) && t.varifiable
-					|| !arg.known_enumerable(db) && t.enumerable
-					|| !arg.known_indexable(db) && t.indexable
+				let mut arg_ty = arg;
+				if inst.is_some() {
+					arg_ty = arg_ty.make_par(db);
+				}
+				if opt.is_some() {
+					arg_ty = arg_ty.make_occurs(db);
+				}
+				if !arg_ty.known_varifiable(db) && t.varifiable
+					|| !arg_ty.known_enumerable(db) && t.enumerable
+					|| !arg_ty.known_indexable(db) && t.indexable
 				{
 					return false;
 				}
-				add_instantiation(t.ty_var, arg)
+				add_instantiation(t.ty_var, arg_ty)
 			}
 			_ => arg.is_subtype_of(db, param),
 		}

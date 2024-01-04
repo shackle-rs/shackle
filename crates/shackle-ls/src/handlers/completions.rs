@@ -245,18 +245,13 @@ any: y = he
     {
       "Ok": [
         {
-          "label": "y",
-          "kind": 6,
-          "detail": "error"
-        },
-        {
           "label": "A",
           "kind": 20,
           "detail": "Foo"
         },
         {
-          "label": "hello",
-          "kind": 6,
+          "label": "B",
+          "kind": 20,
           "detail": "Foo"
         },
         {
@@ -265,9 +260,14 @@ any: y = he
           "detail": "set of Foo"
         },
         {
-          "label": "B",
-          "kind": 20,
+          "label": "hello",
+          "kind": 6,
           "detail": "Foo"
+        },
+        {
+          "label": "y",
+          "kind": 6,
+          "detail": "error"
         }
       ]
     }"#]),

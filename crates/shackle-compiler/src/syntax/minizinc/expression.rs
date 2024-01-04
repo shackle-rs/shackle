@@ -51,6 +51,17 @@ ast_enum!(
 	"parenthesised_expression" => "expression" // Turn parenthesised_expression into Expression node
 );
 
+impl Expression {
+	/// Whether or not this expression is parenthesised
+	pub fn is_parenthesised(&self) -> bool {
+		self.cst_node()
+			.as_ref()
+			.parent()
+			.map(|p| p.kind() == "parenthesised_expression")
+			.unwrap_or_default()
+	}
+}
+
 ast_node!(
 	/// An annotated expression
 	AnnotatedExpression,

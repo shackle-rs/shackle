@@ -1,6 +1,10 @@
 name: Check Format
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - "dependabot/**"
+  pull_request:
 
 env:
   # Lets us format with unstable rustfmt options
@@ -11,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # Check formatting of Rust files
       - name: Install Rust toolchain
@@ -23,7 +27,7 @@ jobs:
 
       # Check formatting of other files
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
       - name: Install prettier

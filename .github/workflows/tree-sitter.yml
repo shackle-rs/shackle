@@ -1,6 +1,10 @@
 name: Tree Sitter
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - "dependabot/**"
+  pull_request:
 
 jobs:
   build:
@@ -10,9 +14,9 @@ jobs:
         parser: ["datazinc", "eprime", "minizinc"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
       - name: Install Dependencies
@@ -25,7 +29,7 @@ jobs:
         run: git diff --exit-code
       - name: Upload artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tree-sitter-${{matrix.parser}}
           path: |
