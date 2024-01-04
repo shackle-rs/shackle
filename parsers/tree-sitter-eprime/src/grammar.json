@@ -504,7 +504,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "output"
+          "value": "showing"
         },
         {
           "type": "FIELD",

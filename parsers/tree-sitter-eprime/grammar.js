@@ -130,7 +130,7 @@ module.exports = grammar({
 				optional(field("heuristic", choice("static", "sdf", "srf", "conflict")))
 			),
 
-		output: ($) => seq("output", field("expression", $._expression)),
+		output: ($) => seq("showing", field("expression", $._expression)),
 
 		_expression: ($) =>
 			choice(

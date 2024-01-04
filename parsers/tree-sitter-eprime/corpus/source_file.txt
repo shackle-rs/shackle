@@ -147,7 +147,7 @@ $---$
 
 $
 
-----
+---
 
 (source_file
   (line_comment)
@@ -159,7 +159,18 @@ Heuristics
 =========
 
 heuristic conflict
+
 ---
 
 (source_file
   (heuristic))
+
+======
+Output
+======
+
+showing "abc"
+
+---
+(source_file
+  (output (string_literal (string_characters))))

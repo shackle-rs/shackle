@@ -637,7 +637,7 @@ fn test_lower_matrix_literal() {
 #[test]
 fn test_lower_output() {
 	check_lower_item_eprime(
-		"output[show(x)]",
+		"showing [show(x)]",
 		expect![[r#"
     Item: Output { section: None, expression: <Expression::4> }
       Expressions:

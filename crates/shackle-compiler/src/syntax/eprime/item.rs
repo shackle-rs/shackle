@@ -645,7 +645,7 @@ mod test {
 	#[test]
 	fn test_output() {
 		check_ast_eprime(
-			r#"output["foo"]"#,
+			r#"showing ["foo"]"#,
 			expect![[r#"
                 EPrimeModel(
                     Model {
