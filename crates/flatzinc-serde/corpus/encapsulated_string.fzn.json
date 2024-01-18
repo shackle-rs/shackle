@@ -1,0 +1,20 @@
+{
+	"variables": {},
+	"arrays": {},
+	"constraints": [],
+	"output": [],
+	"solve": {
+		"method": "satisfy",
+		"ann": [
+			{
+				"id": "myAnn",
+				"args": [
+					{
+						"string": "my string"
+					}
+				]
+			}
+		]
+	},
+	"verson": "1.0"
+}

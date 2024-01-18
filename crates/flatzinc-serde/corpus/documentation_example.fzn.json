@@ -1,0 +1,30 @@
+{
+	"variables": {
+		"b": { "type": "int", "domain": [[0, 3]] },
+		"c": { "type": "int", "domain": [[0, 6]] },
+		"X_INTRODUCED_0_": {
+			"type": "int",
+			"domain": [[0, 85000]],
+			"defined": true
+		}
+	},
+	"arrays": {
+		"X_INTRODUCED_2_": { "a": [250, 200] },
+		"X_INTRODUCED_6_": { "a": [75, 150] },
+		"X_INTRODUCED_8_": { "a": [100, 150] }
+	},
+	"constraints": [
+		{ "id": "int_lin_le", "args": ["X_INTRODUCED_2_", ["b", "c"], 4000] },
+		{ "id": "int_lin_le", "args": ["X_INTRODUCED_6_", ["b", "c"], 2000] },
+		{ "id": "int_lin_le", "args": ["X_INTRODUCED_8_", ["b", "c"], 500] },
+		{
+			"id": "int_lin_eq",
+			"args": [[400, 450, -1], ["b", "c", "X_INTRODUCED_0_"], 0],
+			"ann": ["ctx_pos"],
+			"defines": "X_INTRODUCED_0_"
+		}
+	],
+	"output": ["b", "c"],
+	"solve": { "method": "maximize", "objective": "X_INTRODUCED_0_" },
+	"verson": "1.0"
+}

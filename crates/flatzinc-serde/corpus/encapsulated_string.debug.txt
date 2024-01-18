@@ -1,0 +1,26 @@
+FlatZinc {
+    arrays: {},
+    constraints: [],
+    output: [],
+    solve: SolveObjective {
+        ann: [
+            Call(
+                Call {
+                    ann: [],
+                    args: [
+                        Literal(
+                            String(
+                                "my string",
+                            ),
+                        ),
+                    ],
+                    id: "myAnn",
+                },
+            ),
+        ],
+        method: Satisfy,
+        objective: None,
+    },
+    variables: {},
+    version: "",
+}

@@ -1,10 +1,36 @@
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Helper function to help skip in serialisation
 fn is_false(b: &bool) -> bool {
 	!(*b)
+}
+
+/// Encapsulated String helper struct
+#[derive(Deserialize, Serialize)]
+#[serde(rename = "stringLiteral")]
+struct StringLiteral {
+	string: String,
+}
+/// Deserialisation function to resolve the encapsulation of string literals in
+/// the FlatZinc serialization format
+fn deserialize_encapsulated_string<'de, D: Deserializer<'de>>(
+	deserializer: D,
+) -> Result<String, D::Error> {
+	let s: StringLiteral = Deserialize::deserialize(deserializer)?;
+	Ok(s.string)
+}
+
+/// Serialization function to be used for the encapsulation of string literals
+/// required by the FlatZinc serialization format
+fn serialize_encapsulate_string<S: Serializer>(s: &str, serializer: S) -> Result<S::Ok, S::Error> {
+	Serialize::serialize(
+		&StringLiteral {
+			string: String::from(s),
+		},
+		serializer,
+	)
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -55,7 +81,11 @@ pub enum Literal {
 	Identifier(Identifier),
 	Bool(bool),
 	Set(SetLiteral),
-	String(StringLiteral),
+	#[serde(
+		serialize_with = "serialize_encapsulate_string",
+		deserialize_with = "deserialize_encapsulated_string"
+	)]
+	String(String),
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -74,12 +104,6 @@ pub enum Method {
 #[serde(rename = "setLiteral")]
 pub struct SetLiteral {
 	pub set: Vec<Vec<f64>>,
-}
-
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(rename = "stringLiteral")]
-pub struct StringLiteral {
-	pub string: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -125,265 +149,36 @@ pub struct FlatZinc {
 
 #[cfg(test)]
 mod tests {
-	use expect_test::expect;
+	use std::{fs::File, io::BufReader, path::Path};
+
+	use expect_test::ExpectFile;
 
 	use crate::FlatZinc;
 
-	#[test]
-	fn documentation_example() {
-		const FROM_DOCS: &str = r#"
-		{
-			"variables": {
-				"b" : { "type" : "int", "domain" : [[0, 3]] },
-				"c" : { "type" : "int", "domain" : [[0, 6]] },
-				"X_INTRODUCED_0_" : { "type" : "int", "domain" : [[0, 85000]], "defined" : true }
-			},
-			"arrays": {
-				"X_INTRODUCED_2_" : { "a": [250, 200] },
-				"X_INTRODUCED_6_" : { "a": [75, 150] },
-				"X_INTRODUCED_8_" : { "a": [100, 150] }
-			},
-			"constraints": [
-				{ "id" : "int_lin_le", "args" : ["X_INTRODUCED_2_", ["b", "c"], 4000]},
-				{ "id" : "int_lin_le", "args" : ["X_INTRODUCED_6_", ["b", "c"], 2000]},
-				{ "id" : "int_lin_le", "args" : ["X_INTRODUCED_8_", ["b", "c"], 500]},
-				{ "id" : "int_lin_eq", "args" : [[400, 450, -1], ["b", "c", "X_INTRODUCED_0_"], 0],
-					"ann" : ["ctx_pos"], "defines" : "X_INTRODUCED_0_"}
-			],
-			"output": ["b", "c"],
-			"solve": { "method" : "maximize", "objective" : "X_INTRODUCED_0_" },
-			"verson": "1.0"
-		}"#;
-		let fzn: FlatZinc = serde_json::from_str(FROM_DOCS).unwrap();
-		expect![[r#"
-    FlatZinc {
-        arrays: {
-            "X_INTRODUCED_2_": Array {
-                contents: [
-                    Int(
-                        250,
-                    ),
-                    Int(
-                        200,
-                    ),
-                ],
-                ann: [],
-                defined: false,
-                introduced: false,
-            },
-            "X_INTRODUCED_6_": Array {
-                contents: [
-                    Int(
-                        75,
-                    ),
-                    Int(
-                        150,
-                    ),
-                ],
-                ann: [],
-                defined: false,
-                introduced: false,
-            },
-            "X_INTRODUCED_8_": Array {
-                contents: [
-                    Int(
-                        100,
-                    ),
-                    Int(
-                        150,
-                    ),
-                ],
-                ann: [],
-                defined: false,
-                introduced: false,
-            },
-        },
-        constraints: [
-            Call {
-                ann: [],
-                args: [
-                    Literal(
-                        Identifier(
-                            "X_INTRODUCED_2_",
-                        ),
-                    ),
-                    Array(
-                        [
-                            Identifier(
-                                "b",
-                            ),
-                            Identifier(
-                                "c",
-                            ),
-                        ],
-                    ),
-                    Literal(
-                        Int(
-                            4000,
-                        ),
-                    ),
-                ],
-                id: "int_lin_le",
-            },
-            Call {
-                ann: [],
-                args: [
-                    Literal(
-                        Identifier(
-                            "X_INTRODUCED_6_",
-                        ),
-                    ),
-                    Array(
-                        [
-                            Identifier(
-                                "b",
-                            ),
-                            Identifier(
-                                "c",
-                            ),
-                        ],
-                    ),
-                    Literal(
-                        Int(
-                            2000,
-                        ),
-                    ),
-                ],
-                id: "int_lin_le",
-            },
-            Call {
-                ann: [],
-                args: [
-                    Literal(
-                        Identifier(
-                            "X_INTRODUCED_8_",
-                        ),
-                    ),
-                    Array(
-                        [
-                            Identifier(
-                                "b",
-                            ),
-                            Identifier(
-                                "c",
-                            ),
-                        ],
-                    ),
-                    Literal(
-                        Int(
-                            500,
-                        ),
-                    ),
-                ],
-                id: "int_lin_le",
-            },
-            Call {
-                ann: [
-                    Atom(
-                        "ctx_pos",
-                    ),
-                ],
-                args: [
-                    Array(
-                        [
-                            Int(
-                                400,
-                            ),
-                            Int(
-                                450,
-                            ),
-                            Int(
-                                -1,
-                            ),
-                        ],
-                    ),
-                    Array(
-                        [
-                            Identifier(
-                                "b",
-                            ),
-                            Identifier(
-                                "c",
-                            ),
-                            Identifier(
-                                "X_INTRODUCED_0_",
-                            ),
-                        ],
-                    ),
-                    Literal(
-                        Int(
-                            0,
-                        ),
-                    ),
-                ],
-                id: "int_lin_eq",
-            },
-        ],
-        output: [
-            "b",
-            "c",
-        ],
-        solve: SolveObjective {
-            ann: [],
-            method: Maximize,
-            objective: Some(
-                Identifier(
-                    "X_INTRODUCED_0_",
-                ),
-            ),
-        },
-        variables: {
-            "X_INTRODUCED_0_": Variable {
-                ann: [],
-                defined: true,
-                domain: Some(
-                    [
-                        [
-                            0,
-                            85000,
-                        ],
-                    ],
-                ),
-                introduced: false,
-                value: None,
-                ty: "int",
-            },
-            "b": Variable {
-                ann: [],
-                defined: false,
-                domain: Some(
-                    [
-                        [
-                            0,
-                            3,
-                        ],
-                    ],
-                ),
-                introduced: false,
-                value: None,
-                ty: "int",
-            },
-            "c": Variable {
-                ann: [],
-                defined: false,
-                domain: Some(
-                    [
-                        [
-                            0,
-                            6,
-                        ],
-                    ],
-                ),
-                introduced: false,
-                value: None,
-                ty: "int",
-            },
-        },
-        version: "",
-    }
-"#]]
-		.assert_debug_eq(&fzn);
+	test_file!(documentation_example);
+	test_file!(encapsulated_string);
+
+	fn test_succesful_serialization(file: &Path, exp: ExpectFile) {
+		let rdr = BufReader::new(File::open(file).unwrap());
+		let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
+		exp.assert_debug_eq(&fzn);
 		let fzn2: FlatZinc = serde_json::from_str(&serde_json::to_string(&fzn).unwrap()).unwrap();
 		assert_eq!(fzn, fzn2)
 	}
+
+	macro_rules! test_file {
+		($file: ident) => {
+			#[test]
+			fn $file() {
+				test_succesful_serialization(
+					std::path::Path::new(&format!("./corpus/{}.fzn.json", stringify!($file))),
+					expect_test::expect_file![&format!(
+						"../corpus/{}.debug.txt",
+						stringify!($file)
+					)],
+				)
+			}
+		};
+	}
+	pub(crate) use test_file;
 }

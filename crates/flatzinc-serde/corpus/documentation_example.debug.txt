@@ -1,0 +1,225 @@
+FlatZinc {
+    arrays: {
+        "X_INTRODUCED_2_": Array {
+            contents: [
+                Int(
+                    250,
+                ),
+                Int(
+                    200,
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        "X_INTRODUCED_6_": Array {
+            contents: [
+                Int(
+                    75,
+                ),
+                Int(
+                    150,
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        "X_INTRODUCED_8_": Array {
+            contents: [
+                Int(
+                    100,
+                ),
+                Int(
+                    150,
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+    },
+    constraints: [
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "X_INTRODUCED_2_",
+                    ),
+                ),
+                Array(
+                    [
+                        Identifier(
+                            "b",
+                        ),
+                        Identifier(
+                            "c",
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        4000,
+                    ),
+                ),
+            ],
+            id: "int_lin_le",
+        },
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "X_INTRODUCED_6_",
+                    ),
+                ),
+                Array(
+                    [
+                        Identifier(
+                            "b",
+                        ),
+                        Identifier(
+                            "c",
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        2000,
+                    ),
+                ),
+            ],
+            id: "int_lin_le",
+        },
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "X_INTRODUCED_8_",
+                    ),
+                ),
+                Array(
+                    [
+                        Identifier(
+                            "b",
+                        ),
+                        Identifier(
+                            "c",
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        500,
+                    ),
+                ),
+            ],
+            id: "int_lin_le",
+        },
+        Call {
+            ann: [
+                Atom(
+                    "ctx_pos",
+                ),
+            ],
+            args: [
+                Array(
+                    [
+                        Int(
+                            400,
+                        ),
+                        Int(
+                            450,
+                        ),
+                        Int(
+                            -1,
+                        ),
+                    ],
+                ),
+                Array(
+                    [
+                        Identifier(
+                            "b",
+                        ),
+                        Identifier(
+                            "c",
+                        ),
+                        Identifier(
+                            "X_INTRODUCED_0_",
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        0,
+                    ),
+                ),
+            ],
+            id: "int_lin_eq",
+        },
+    ],
+    output: [
+        "b",
+        "c",
+    ],
+    solve: SolveObjective {
+        ann: [],
+        method: Maximize,
+        objective: Some(
+            Identifier(
+                "X_INTRODUCED_0_",
+            ),
+        ),
+    },
+    variables: {
+        "X_INTRODUCED_0_": Variable {
+            ann: [],
+            defined: true,
+            domain: Some(
+                [
+                    [
+                        0,
+                        85000,
+                    ],
+                ],
+            ),
+            introduced: false,
+            value: None,
+            ty: "int",
+        },
+        "b": Variable {
+            ann: [],
+            defined: false,
+            domain: Some(
+                [
+                    [
+                        0,
+                        3,
+                    ],
+                ],
+            ),
+            introduced: false,
+            value: None,
+            ty: "int",
+        },
+        "c": Variable {
+            ann: [],
+            defined: false,
+            domain: Some(
+                [
+                    [
+                        0,
+                        6,
+                    ],
+                ],
+            ),
+            introduced: false,
+            value: None,
+            ty: "int",
+        },
+    },
+    version: "",
+}
