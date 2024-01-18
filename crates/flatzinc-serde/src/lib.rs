@@ -2,6 +2,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+mod range_list;
+pub use range_list::RangeList;
+
 /// Helper function to help skip in serialisation
 fn is_false(b: &bool) -> bool {
 	!(*b)
@@ -9,7 +12,7 @@ fn is_false(b: &bool) -> bool {
 
 /// Encapsulated String helper struct
 #[derive(Deserialize, Serialize)]
-#[serde(rename = "stringLiteral")]
+#[serde(rename = "string")]
 struct StringLiteral {
 	string: String,
 }
@@ -69,7 +72,7 @@ pub struct Call {
 	pub id: Identifier,
 }
 
-pub type Domain = Vec<Vec<i64>>;
+pub type Domain = RangeList<i64>;
 
 pub type Identifier = String;
 
@@ -101,9 +104,9 @@ pub enum Method {
 
 // TODO: Specialise for IntSet
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(rename = "setLiteral")]
+#[serde(rename = "set")]
 pub struct SetLiteral {
-	pub set: Vec<Vec<f64>>,
+	pub set: RangeList<f64>,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -157,6 +160,7 @@ mod tests {
 
 	test_file!(documentation_example);
 	test_file!(encapsulated_string);
+	test_file!(set_literals);
 
 	fn test_succesful_serialization(file: &Path, exp: ExpectFile) {
 		let rdr = BufReader::new(File::open(file).unwrap());

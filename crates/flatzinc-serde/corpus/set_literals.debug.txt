@@ -1,0 +1,96 @@
+FlatZinc {
+    arrays: {
+        "X_INTRODUCED_3_": Array {
+            contents: [
+                Set(
+                    SetLiteral {
+                        set: RangeList::from_iter([2.0..=3.0]),
+                    },
+                ),
+                Set(
+                    SetLiteral {
+                        set: RangeList::from_iter([1.0..=1.0, 3.0..=3.0]),
+                    },
+                ),
+                Set(
+                    SetLiteral {
+                        set: RangeList::from_iter([1.0..=2.0]),
+                    },
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+    },
+    constraints: [
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "i",
+                    ),
+                ),
+                Literal(
+                    Identifier(
+                        "X_INTRODUCED_3_",
+                    ),
+                ),
+                Literal(
+                    Identifier(
+                        "X_INTRODUCED_0_",
+                    ),
+                ),
+            ],
+            id: "array_set_element",
+        },
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "i",
+                    ),
+                ),
+                Literal(
+                    Identifier(
+                        "X_INTRODUCED_0_",
+                    ),
+                ),
+            ],
+            id: "set_in",
+        },
+    ],
+    output: [
+        "i",
+    ],
+    solve: SolveObjective {
+        ann: [],
+        method: Satisfy,
+        objective: None,
+    },
+    variables: {
+        "X_INTRODUCED_0_": Variable {
+            ann: [],
+            defined: true,
+            domain: Some(
+                RangeList::from_iter([1..=3]),
+            ),
+            introduced: true,
+            value: None,
+            ty: "set of int",
+        },
+        "i": Variable {
+            ann: [],
+            defined: false,
+            domain: Some(
+                RangeList::from_iter([1..=3]),
+            ),
+            introduced: false,
+            value: None,
+            ty: "int",
+        },
+    },
+    version: "",
+}
