@@ -179,7 +179,9 @@ FlatZinc {
             ann: [],
             defined: true,
             domain: Some(
-                RangeList::from_iter([0..=85000]),
+                Int(
+                    RangeList::from_iter([0..=85000]),
+                ),
             ),
             introduced: false,
             value: None,
@@ -189,7 +191,9 @@ FlatZinc {
             ann: [],
             defined: false,
             domain: Some(
-                RangeList::from_iter([0..=3]),
+                Int(
+                    RangeList::from_iter([0..=3]),
+                ),
             ),
             introduced: false,
             value: None,
@@ -199,7 +203,9 @@ FlatZinc {
             ann: [],
             defined: false,
             domain: Some(
-                RangeList::from_iter([0..=6]),
+                Int(
+                    RangeList::from_iter([0..=6]),
+                ),
             ),
             introduced: false,
             value: None,

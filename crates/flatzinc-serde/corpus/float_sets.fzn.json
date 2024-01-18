@@ -1,0 +1,40 @@
+{
+	"variables": {
+		"x": { "type": "float", "domain": [[1.0, 100.0]] },
+		"a": { "type": "int", "domain": [[1, 100]] },
+		"c": { "type": "bool", "defined": true }
+	},
+	"arrays": {},
+	"constraints": [
+		{
+			"id": "my_float_in",
+			"args": [
+				"x",
+				{
+					"set": [
+						[1.5, 3.2],
+						[5.4, 5.4],
+						[10.3, 10.3]
+					]
+				}
+			]
+		},
+		{
+			"id": "set_in_reif",
+			"args": [
+				"a",
+				{
+					"set": [
+						[1, 12],
+						[14, 14],
+						[19, 19]
+					]
+				},
+				"c"
+			],
+			"defines": "c"
+		}
+	],
+	"output": ["x", "a", "c"],
+	"solve": { "method": "satisfy" }
+}

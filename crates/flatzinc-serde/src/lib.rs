@@ -1,39 +1,19 @@
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
+
+use crate::encapsulate::{
+	deserialize_encapsulated_set, deserialize_encapsulated_string, serialize_encapsulate_set,
+	serialize_encapsulate_string,
+};
 
 mod range_list;
 pub use range_list::RangeList;
+mod encapsulate;
 
 /// Helper function to help skip in serialisation
 fn is_false(b: &bool) -> bool {
 	!(*b)
-}
-
-/// Encapsulated String helper struct
-#[derive(Deserialize, Serialize)]
-#[serde(rename = "string")]
-struct StringLiteral {
-	string: String,
-}
-/// Deserialisation function to resolve the encapsulation of string literals in
-/// the FlatZinc serialization format
-fn deserialize_encapsulated_string<'de, D: Deserializer<'de>>(
-	deserializer: D,
-) -> Result<String, D::Error> {
-	let s: StringLiteral = Deserialize::deserialize(deserializer)?;
-	Ok(s.string)
-}
-
-/// Serialization function to be used for the encapsulation of string literals
-/// required by the FlatZinc serialization format
-fn serialize_encapsulate_string<S: Serializer>(s: &str, serializer: S) -> Result<S::Ok, S::Error> {
-	Serialize::serialize(
-		&StringLiteral {
-			string: String::from(s),
-		},
-		serializer,
-	)
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -72,7 +52,12 @@ pub struct Call {
 	pub id: Identifier,
 }
 
-pub type Domain = RangeList<i64>;
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Domain {
+	Int(RangeList<i64>),
+	Float(RangeList<f64>),
+}
 
 pub type Identifier = String;
 
@@ -83,7 +68,16 @@ pub enum Literal {
 	Float(f64),
 	Identifier(Identifier),
 	Bool(bool),
-	Set(SetLiteral),
+	#[serde(
+		serialize_with = "serialize_encapsulate_set",
+		deserialize_with = "deserialize_encapsulated_set"
+	)]
+	IntSet(RangeList<i64>),
+	#[serde(
+		serialize_with = "serialize_encapsulate_set",
+		deserialize_with = "deserialize_encapsulated_set"
+	)]
+	FloatSet(RangeList<f64>),
 	#[serde(
 		serialize_with = "serialize_encapsulate_string",
 		deserialize_with = "deserialize_encapsulated_string"
@@ -100,13 +94,6 @@ pub enum Method {
 	Minimize,
 	#[serde(rename = "maximize")]
 	Maximize,
-}
-
-// TODO: Specialise for IntSet
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(rename = "set")]
-pub struct SetLiteral {
-	pub set: RangeList<f64>,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -160,6 +147,7 @@ mod tests {
 
 	test_file!(documentation_example);
 	test_file!(encapsulated_string);
+	test_file!(float_sets);
 	test_file!(set_literals);
 
 	fn test_succesful_serialization(file: &Path, exp: ExpectFile) {

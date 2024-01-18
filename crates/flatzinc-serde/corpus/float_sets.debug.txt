@@ -1,0 +1,87 @@
+FlatZinc {
+    arrays: {},
+    constraints: [
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "x",
+                    ),
+                ),
+                Literal(
+                    FloatSet(
+                        RangeList::from_iter([1.5..=3.2, 5.4..=5.4, 10.3..=10.3]),
+                    ),
+                ),
+            ],
+            id: "my_float_in",
+        },
+        Call {
+            ann: [],
+            args: [
+                Literal(
+                    Identifier(
+                        "a",
+                    ),
+                ),
+                Literal(
+                    IntSet(
+                        RangeList::from_iter([1..=12, 14..=14, 19..=19]),
+                    ),
+                ),
+                Literal(
+                    Identifier(
+                        "c",
+                    ),
+                ),
+            ],
+            id: "set_in_reif",
+        },
+    ],
+    output: [
+        "x",
+        "a",
+        "c",
+    ],
+    solve: SolveObjective {
+        ann: [],
+        method: Satisfy,
+        objective: None,
+    },
+    variables: {
+        "a": Variable {
+            ann: [],
+            defined: false,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([1..=100]),
+                ),
+            ),
+            introduced: false,
+            value: None,
+            ty: "int",
+        },
+        "c": Variable {
+            ann: [],
+            defined: true,
+            domain: None,
+            introduced: false,
+            value: None,
+            ty: "bool",
+        },
+        "x": Variable {
+            ann: [],
+            defined: false,
+            domain: Some(
+                Float(
+                    RangeList::from_iter([1.0..=100.0]),
+                ),
+            ),
+            introduced: false,
+            value: None,
+            ty: "float",
+        },
+    },
+    version: "",
+}
