@@ -75,7 +75,7 @@ FlatZinc {
             ),
             introduced: true,
             value: None,
-            ty: "set of int",
+            ty: IntSet,
         },
         "i": Variable {
             ann: [],
@@ -87,7 +87,7 @@ FlatZinc {
             ),
             introduced: false,
             value: None,
-            ty: "int",
+            ty: Int,
         },
     },
     version: "",

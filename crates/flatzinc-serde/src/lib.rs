@@ -97,6 +97,19 @@ pub enum Method {
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename = "type")]
+pub enum Type {
+	#[serde(rename = "bool")]
+	Bool,
+	#[serde(rename = "int")]
+	Int,
+	#[serde(rename = "float")]
+	Float,
+	#[serde(rename = "set of int")]
+	IntSet,
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename = "variable")]
 pub struct Variable {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -110,7 +123,7 @@ pub struct Variable {
 	#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
 	pub value: Option<Literal>,
 	#[serde(rename = "type")]
-	pub ty: String,
+	pub ty: Type,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

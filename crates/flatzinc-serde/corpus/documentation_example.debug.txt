@@ -185,7 +185,7 @@ FlatZinc {
             ),
             introduced: false,
             value: None,
-            ty: "int",
+            ty: Int,
         },
         "b": Variable {
             ann: [],
@@ -197,7 +197,7 @@ FlatZinc {
             ),
             introduced: false,
             value: None,
-            ty: "int",
+            ty: Int,
         },
         "c": Variable {
             ann: [],
@@ -209,7 +209,7 @@ FlatZinc {
             ),
             introduced: false,
             value: None,
-            ty: "int",
+            ty: Int,
         },
     },
     version: "",
