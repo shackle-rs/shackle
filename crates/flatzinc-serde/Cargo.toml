@@ -2,7 +2,10 @@
 name = "flatzinc-serde"
 version = "0.1.0"
 description = "FlatZinc serialization and deserialization"
-authors = ["Jip J. Dekker <jip@dekker.one>"]
+authors = [
+    "Jip J. Dekker <jip@dekker.one>",
+    "Jason Nguyen <admin@cyderize.org>",
+]
 
 homepage = "https://www.minizinc.org/"
 repository = "https://github.com/shackle-rs/shackle/"

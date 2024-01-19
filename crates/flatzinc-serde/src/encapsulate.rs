@@ -8,7 +8,7 @@ use crate::RangeList;
 struct StringLiteral {
 	string: String,
 }
-/// Deserialisation function to resolve the encapsulation of string literals in
+/// Deserialization function to resolve the encapsulation of string literals in
 /// the FlatZinc serialization format
 pub fn deserialize_encapsulated_string<'de, D: Deserializer<'de>>(
 	deserializer: D,
@@ -37,7 +37,7 @@ pub fn serialize_encapsulate_string<S: Serializer>(
 struct SetLiteral<E: PartialOrd> {
 	set: RangeList<E>,
 }
-/// Deserialisation function to resolve the encapsulation of set literals in the
+/// Deserialization function to resolve the encapsulation of set literals in the
 /// FlatZinc serialization format
 pub fn deserialize_encapsulated_set<'de, D: Deserializer<'de>, E: PartialOrd + Deserialize<'de>>(
 	deserializer: D,

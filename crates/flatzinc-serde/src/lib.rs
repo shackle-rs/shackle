@@ -1,6 +1,6 @@
 //! Serialization of the FlatZinc data format
 //!
-//! FlatZinc is the langauge in which data and solver specific constraint models
+//! FlatZinc is the language in which data and solver specific constraint models
 //! are produced by the [MiniZinc](https://www.minizinc.org) compiler. This
 //! crate implements the FlatZinc serialization format as described in the
 //! [Interfacing Solvers to
@@ -53,7 +53,7 @@
 //! be done by creating a [MiniZinc Solver
 //! Configuration](https://www.minizinc.org/doc-2.8.2/en/fzn-spec.html#solver-configuration-files)
 //! (`.mzc`) file, and adding it to a folder on the `MZN_SOLVER_PATH` or a
-//! standardized path, like `~/.minizinc/solvers/`. A basic solver configuation
+//! standardized path, like `~/.minizinc/solvers/`. A basic solver configuration
 //! for a solver that accepts JSON input would look as follows:
 //!
 //! ```json
@@ -69,7 +69,7 @@
 //! }
 //! ```
 //!
-//! Once you have placed your configuation file on the correct path, then you
+//! Once you have placed your configuration file on the correct path, then you
 //! solver will be listed by `minizinc --solvers`. Calling `minizinc --solver
 //! mysolver model.mzn data.dzn`, assuming a valid MiniZinc instance, will
 //! (after compilation) invoke the registered executable with a path of a
@@ -93,7 +93,7 @@ mod range_list;
 pub use range_list::RangeList;
 mod encapsulate;
 
-/// Helper function to help skip in serialisation
+/// Helper function to help skip in serialization
 fn is_false(b: &bool) -> bool {
 	!(*b)
 }
@@ -166,7 +166,7 @@ pub struct Call {
 	pub ann: Vec<Annotation>,
 }
 
-/// The posible values that a (decision) [`Variable`] can take
+/// The possible values that a (decision) [`Variable`] can take
 ///
 /// In the case of a integer or floating point variable, a solution for the FlatZinc instance must
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -288,7 +288,7 @@ pub struct SolveObjective {
 	/// The variable to optimize, or `None` if [`SolveObjective::method`] is [`Method::Satisfy`]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub objective: Option<Literal>,
-	/// A list of annatations from the solve statement in the MiniZinc model
+	/// A list of annotations from the solve statement in the MiniZinc model
 	///
 	/// Note that this includes the search annotations if they are present in the
 	/// model.
@@ -318,7 +318,7 @@ pub struct FlatZinc {
 	pub output: Vec<Identifier>,
 	/// A specification of the goal of solving the FlatZinc instance.
 	pub solve: SolveObjective,
-	/// The version of the FlatZinc serialization specifation used
+	/// The version of the FlatZinc serialization specification used
 	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub version: String,
 }
@@ -349,7 +349,7 @@ mod tests {
 	test_file!(float_sets);
 	test_file!(set_literals);
 
-	fn test_succesful_serialization(file: &Path, exp: ExpectFile) {
+	fn test_successful_serialization(file: &Path, exp: ExpectFile) {
 		let rdr = BufReader::new(File::open(file).unwrap());
 		let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
 		exp.assert_debug_eq(&fzn);
@@ -361,7 +361,7 @@ mod tests {
 		($file: ident) => {
 			#[test]
 			fn $file() {
-				test_succesful_serialization(
+				test_successful_serialization(
 					std::path::Path::new(&format!("./corpus/{}.fzn.json", stringify!($file))),
 					expect_test::expect_file![&format!(
 						"../corpus/{}.debug.txt",
