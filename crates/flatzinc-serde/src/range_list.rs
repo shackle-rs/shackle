@@ -140,6 +140,38 @@ impl<E: PartialOrd> RangeList<E> {
 		}
 		false
 	}
+
+	/// Returns the lower bound of the range list, or `None` if the range list is
+	/// empty.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # use flatzinc_serde::RangeList;
+	/// assert_eq!(RangeList::from_iter([1..=4]).lower_bound(), Some(&1));
+	/// assert_eq!(RangeList::from_iter([1..=4, 6..=7, -5..=-3]).lower_bound(), Some(&-5));
+	///
+	/// assert_eq!(RangeList::<i64>::from_iter([]).lower_bound(), None);
+	/// ```
+	pub fn lower_bound(&self) -> Option<&E> {
+		self.ranges.first().map(|(start, _)| start)
+	}
+
+	/// Returns the upper bound of the range list, or `None` if the range list is
+	/// empty
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # use flatzinc_serde::RangeList;
+	/// assert_eq!(RangeList::from_iter([1..=4]).upper_bound(), Some(&4));
+	/// assert_eq!(RangeList::from_iter([1..=4, 6..=7, -5..=-3]).upper_bound(), Some(&7));
+	///
+	/// assert_eq!(RangeList::<i64>::from_iter([]).upper_bound(), None);
+	/// ```
+	pub fn upper_bound(&self) -> Option<&E> {
+		self.ranges.last().map(|(_, end)| end)
+	}
 }
 
 #[cfg(test)]
