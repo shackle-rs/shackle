@@ -1,8 +1,42 @@
 FlatZinc {
+    variables: {
+        "a": Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([1..=100]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        "c": Variable {
+            ty: Bool,
+            domain: None,
+            value: None,
+            ann: [],
+            defined: true,
+            introduced: false,
+        },
+        "x": Variable {
+            ty: Float,
+            domain: Some(
+                Float(
+                    RangeList::from_iter([1.0..=100.0]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+    },
     arrays: {},
     constraints: [
         Call {
-            ann: [],
+            id: "my_float_in",
             args: [
                 Literal(
                     Identifier(
@@ -15,10 +49,10 @@ FlatZinc {
                     ),
                 ),
             ],
-            id: "my_float_in",
+            ann: [],
         },
         Call {
-            ann: [],
+            id: "set_in_reif",
             args: [
                 Literal(
                     Identifier(
@@ -36,7 +70,7 @@ FlatZinc {
                     ),
                 ),
             ],
-            id: "set_in_reif",
+            ann: [],
         },
     ],
     output: [
@@ -45,43 +79,9 @@ FlatZinc {
         "c",
     ],
     solve: SolveObjective {
-        ann: [],
         method: Satisfy,
         objective: None,
-    },
-    variables: {
-        "a": Variable {
-            ann: [],
-            defined: false,
-            domain: Some(
-                Int(
-                    RangeList::from_iter([1..=100]),
-                ),
-            ),
-            introduced: false,
-            value: None,
-            ty: Int,
-        },
-        "c": Variable {
-            ann: [],
-            defined: true,
-            domain: None,
-            introduced: false,
-            value: None,
-            ty: Bool,
-        },
-        "x": Variable {
-            ann: [],
-            defined: false,
-            domain: Some(
-                Float(
-                    RangeList::from_iter([1.0..=100.0]),
-                ),
-            ),
-            introduced: false,
-            value: None,
-            ty: Float,
-        },
+        ann: [],
     },
     version: "",
 }

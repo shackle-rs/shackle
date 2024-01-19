@@ -1,12 +1,15 @@
 FlatZinc {
+    variables: {},
     arrays: {},
     constraints: [],
     output: [],
     solve: SolveObjective {
+        method: Satisfy,
+        objective: None,
         ann: [
             Call(
                 Call {
-                    ann: [],
+                    id: "myAnn",
                     args: [
                         Literal(
                             String(
@@ -14,13 +17,10 @@ FlatZinc {
                             ),
                         ),
                     ],
-                    id: "myAnn",
+                    ann: [],
                 },
             ),
         ],
-        method: Satisfy,
-        objective: None,
     },
-    variables: {},
     version: "",
 }

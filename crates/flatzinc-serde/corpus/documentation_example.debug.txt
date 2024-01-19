@@ -1,4 +1,42 @@
 FlatZinc {
+    variables: {
+        "X_INTRODUCED_0_": Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([0..=85000]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: true,
+            introduced: false,
+        },
+        "b": Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([0..=3]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        "c": Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([0..=6]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+    },
     arrays: {
         "X_INTRODUCED_2_": Array {
             contents: [
@@ -42,7 +80,7 @@ FlatZinc {
     },
     constraints: [
         Call {
-            ann: [],
+            id: "int_lin_le",
             args: [
                 Literal(
                     Identifier(
@@ -65,10 +103,10 @@ FlatZinc {
                     ),
                 ),
             ],
-            id: "int_lin_le",
+            ann: [],
         },
         Call {
-            ann: [],
+            id: "int_lin_le",
             args: [
                 Literal(
                     Identifier(
@@ -91,10 +129,10 @@ FlatZinc {
                     ),
                 ),
             ],
-            id: "int_lin_le",
+            ann: [],
         },
         Call {
-            ann: [],
+            id: "int_lin_le",
             args: [
                 Literal(
                     Identifier(
@@ -117,14 +155,10 @@ FlatZinc {
                     ),
                 ),
             ],
-            id: "int_lin_le",
+            ann: [],
         },
         Call {
-            ann: [
-                Atom(
-                    "ctx_pos",
-                ),
-            ],
+            id: "int_lin_eq",
             args: [
                 Array(
                     [
@@ -158,7 +192,11 @@ FlatZinc {
                     ),
                 ),
             ],
-            id: "int_lin_eq",
+            ann: [
+                Atom(
+                    "ctx_pos",
+                ),
+            ],
         },
     ],
     output: [
@@ -166,51 +204,13 @@ FlatZinc {
         "c",
     ],
     solve: SolveObjective {
-        ann: [],
         method: Maximize,
         objective: Some(
             Identifier(
                 "X_INTRODUCED_0_",
             ),
         ),
-    },
-    variables: {
-        "X_INTRODUCED_0_": Variable {
-            ann: [],
-            defined: true,
-            domain: Some(
-                Int(
-                    RangeList::from_iter([0..=85000]),
-                ),
-            ),
-            introduced: false,
-            value: None,
-            ty: Int,
-        },
-        "b": Variable {
-            ann: [],
-            defined: false,
-            domain: Some(
-                Int(
-                    RangeList::from_iter([0..=3]),
-                ),
-            ),
-            introduced: false,
-            value: None,
-            ty: Int,
-        },
-        "c": Variable {
-            ann: [],
-            defined: false,
-            domain: Some(
-                Int(
-                    RangeList::from_iter([0..=6]),
-                ),
-            ),
-            introduced: false,
-            value: None,
-            ty: Int,
-        },
+        ann: [],
     },
     version: "",
 }

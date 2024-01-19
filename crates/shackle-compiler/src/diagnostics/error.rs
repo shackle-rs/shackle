@@ -598,9 +598,9 @@ pub enum Error {
 	InternalError(#[from] InternalError),
 }
 
-/// Unable to convert an empty vector into a [`ShackleError`]
+/// Unable to convert an empty vector into a [`crate::Error`]
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
-#[error("Unable to convert empty vector to a ShackleError")]
+#[error("Unable to convert empty vector into a Error")]
 #[diagnostic(code(shackle::empty_error_vec))]
 pub struct EmptyErrorVec;
 

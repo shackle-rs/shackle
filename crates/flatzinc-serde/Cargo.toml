@@ -1,8 +1,14 @@
 [package]
 name = "flatzinc-serde"
 version = "0.1.0"
+description = "FlatZinc serialization and deserialization"
 authors = ["Jip J. Dekker <jip@dekker.one>"]
+
+homepage = "https://www.minizinc.org/"
+repository = "https://github.com/shackle-rs/shackle/"
 license = "MPL-2.0"
+keywords = ["minizinc", "flatzinc", "serde", "optimization", "serialization"]
+exclude = ["/corpus"]
 
 edition = "2021"
 
