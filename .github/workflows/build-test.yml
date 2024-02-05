@@ -25,7 +25,7 @@ jobs:
           rustup toolchain install --profile minimal --no-self-update ${{ env.RUST_CHANNEL }}
           rustup default ${{ env.RUST_CHANNEL }}
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
       - name: Build shackle-cli
         run: cargo install --root dist/ --path crates/shackle-cli
       - name: Build shackle-ls
@@ -51,7 +51,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
       - name: Run cargo test
         run: cargo test
         env:
@@ -73,6 +73,6 @@ jobs:
           rustup toolchain install --profile minimal --component clippy --no-self-update ${{ env.RUST_CHANNEL }}
           rustup default ${{ env.RUST_CHANNEL }}
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
       - name: Run clippy
         run: cargo clippy -- -D warnings
