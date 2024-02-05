@@ -60,7 +60,7 @@ jobs:
           RUSTDOCFLAGS: "-Cpanic=abort"
       - name: Collect covereage data
         run: grcov . --binary-path target/debug/deps/ -s . -t lcov --ignore-not-existing --ignore '../**' --ignore '/*' -o ./lcov.info
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./lcov.info
