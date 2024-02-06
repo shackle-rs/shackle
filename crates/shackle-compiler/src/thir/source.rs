@@ -50,10 +50,9 @@ impl Origin {
 	pub fn source_span(&self, db: &dyn Thir) -> (SourceFile, SourceSpan) {
 		match self {
 			Origin::HirNode(node) => node.source_span(db.upcast()),
-			Origin::Introduced(name) => (
-				SourceFile::introduced(name),
-				SourceSpan::new(0.into(), 0.into()),
-			),
+			Origin::Introduced(name) => {
+				(SourceFile::introduced(name), SourceSpan::new(0.into(), 0))
+			}
 		}
 	}
 
