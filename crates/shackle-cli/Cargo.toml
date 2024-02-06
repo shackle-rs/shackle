@@ -15,5 +15,5 @@ clap = { version = "4.3.0", features = ["cargo", "derive"] }
 env_logger = "0.11.0"
 humantime = "2.1.0"
 log = "0.4.18"
-miette = { version = "5.9.0", features = ["fancy"] }
+miette = { version = "7.0.0", features = ["fancy"] }
 shackle = { path = "../shackle" }
