@@ -249,7 +249,7 @@ to determine the type of the outer expression.</p>
 <p>One exception to bottom-up typing occurs when dealing with calls, as in order to perform overloading resolution, we
 must specially handle the case of a call with an identifier callee. See the following section on function resolution
 for more detail.</p>
-<p>For example, the call <code>foo(1, &quot;a&quot;)</code> would be typed by:</p>
+<p>For example, the call <code>foo(1, "a")</code> would be typed by:</p>
 <ul>
 <li>Getting the types of each argument (in this case <code>int</code> and <code>string</code>)</li>
 <li>Finding all the function items named <code>foo</code></li>
@@ -415,7 +415,7 @@ where the types of top-level identifiers are assumed to be par. This alleviates 
 <p>In this example, if we don't consider <code>p</code> in the output statement to be <code>par</code>, then the if-then-else will cause will
 trigger a type error as it will return the illegal type <code>var string</code>.</p>
 <pre><code class="language-mzn">var bool: p;
-output [if p then &quot;Yes&quot; else &quot;No&quot; endif];
+output [if p then "Yes" else "No" endif];
 </code></pre>
 
                     </main>

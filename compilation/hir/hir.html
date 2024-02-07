@@ -226,8 +226,8 @@ they are used in to obtain the implied type-inst identifier 'declarations'.</p>
 permitted, in order to avoid emitting confusing error messages, or needing to track desugarings and specialise error
 messages for them.</p>
 <p>For example, we could desugar 2D array literals into calls to <code>array2d</code> at this point, however, if the user were to
-use an invalid index set type, as in <code>[|&quot;a&quot;: &quot;b&quot;: | 2: x, 3: y |]</code>, we would immediately rewrite that into
-<code>array2d([2, 3], [&quot;a&quot;, &quot;b&quot;], [x, y])</code>, which would give a type error indicating that no overload of <code>array2d</code> exists
+use an invalid index set type, as in <code>[|"a": "b": | 2: x, 3: y |]</code>, we would immediately rewrite that into
+<code>array2d([2, 3], ["a", "b"], [x, y])</code>, which would give a type error indicating that no overload of <code>array2d</code> exists
 for the given argument types, even though the user has not called <code>array2d</code> at all.</p>
 </blockquote>
 <p>Predicate/test items are rewritten into function items:</p>
@@ -299,11 +299,11 @@ function bool: bar();
 <tr><th>MiniZinc syntax</th><th>Desugaring</th></tr>
 <tr>
 <td>
-<pre><code class="language-mzn">&quot;foo\(value)bar&quot;
+<pre><code class="language-mzn">"foo\(value)bar"
 </code></pre>
 </td>
 <td>
-<pre><code class="language-mzn">concat([&quot;foo&quot;, show(value), &quot;bar&quot;])
+<pre><code class="language-mzn">concat(["foo", show(value), "bar"])
 </code></pre>
 </td>
 </tr>

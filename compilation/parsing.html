@@ -191,39 +191,39 @@ function bool: bar() = true;
 var 1..3: x;
 </code></pre>
 <p>Gives the CST</p>
-<pre><code>kind=&quot;source_file&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;predicate&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
-    kind=&quot;test&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
-    kind=&quot;identifier&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
-    kind=&quot;(&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;)&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;=&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;boolean_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
-      kind=&quot;true&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;;&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;function_item&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
-    kind=&quot;function&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;type_base&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
-      kind=&quot;primitive_type&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
-        kind=&quot;bool&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;:&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;identifier&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
-    kind=&quot;(&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;)&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;=&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;boolean_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;body&quot;)
-      kind=&quot;true&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;;&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-  kind=&quot;declaration&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;item&quot;)
-    kind=&quot;type_base&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;type&quot;)
-      kind=&quot;var&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;var_par&quot;)
-      kind=&quot;infix_operator&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;domain&quot;)
-        kind=&quot;integer_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;left&quot;)
-        kind=&quot;..&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;operator&quot;)
-        kind=&quot;integer_literal&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;right&quot;)
-    kind=&quot;:&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
-    kind=&quot;identifier&quot;, named=true, has_error=false, error=false, missing=false, extra=false, field=Some(&quot;name&quot;)
-  kind=&quot;;&quot;, named=false, has_error=false, error=false, missing=false, extra=false, field=None
+<pre><code>kind="source_file", named=true, has_error=false, error=false, missing=false, extra=false, field=None
+  kind="predicate", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("item")
+    kind="test", named=false, has_error=false, error=false, missing=false, extra=false, field=Some("type")
+    kind="identifier", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("name")
+    kind="(", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=")", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="=", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="boolean_literal", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("body")
+      kind="true", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=";", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind="function_item", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("item")
+    kind="function", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="type_base", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("type")
+      kind="primitive_type", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("domain")
+        kind="bool", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=":", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="identifier", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("name")
+    kind="(", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind=")", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="=", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="boolean_literal", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("body")
+      kind="true", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind=";", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+  kind="declaration", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("item")
+    kind="type_base", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("type")
+      kind="var", named=false, has_error=false, error=false, missing=false, extra=false, field=Some("var_par")
+      kind="infix_operator", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("domain")
+        kind="integer_literal", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("left")
+        kind="..", named=false, has_error=false, error=false, missing=false, extra=false, field=Some("operator")
+        kind="integer_literal", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("right")
+    kind=":", named=false, has_error=false, error=false, missing=false, extra=false, field=None
+    kind="identifier", named=true, has_error=false, error=false, missing=false, extra=false, field=Some("name")
+  kind=";", named=false, has_error=false, error=false, missing=false, extra=false, field=None
 </code></pre>
 
                     </main>

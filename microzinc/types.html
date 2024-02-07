@@ -206,7 +206,7 @@
 <p>Importantly, MicroZinc includes two types of sub-typing. When type \( T_1 \) is a sub-type of type \( T_2 \) then \( T_1 \) can be used anywhere where the type \( T_2 \) is required.</p>
 <ul>
 <li>In MicroZinc, \( \mathsf{par}~T \) is a sub-type of \( \mathsf{var}~T \).</li>
-<li>MicroZinc also has numeric subtyping (i.e., \( \mathsf{par~bool} \) is a subtype of \( \mathsf{par~int} \), which is a sub-type of \( \mathsf{par~float} \), and similarly \( \mathsf{var~bool} \) is a sub-type of \( \mathsf{var~int} \), which is a sub-type of \( \mathsf{var~float} \))</li>
+<li>MicroZinc also has numeric subtyping (i.e., \( \mathsf{par<del>bool} \) is a subtype of \( \mathsf{par</del>int} \), which is a sub-type of \( \mathsf{par<del>float} \), and similarly \( \mathsf{var</del>bool} \) is a sub-type of \( \mathsf{var<del>int} \), which is a sub-type of \( \mathsf{var</del>float} \))</li>
 </ul>
 <p>The \( \mathsf{pred} \) type is a special value given to expressions that enforce constraints, but do not return a value. This It should be noted that the</p>
 <p>The following rules describe the conditions under which a MicroZinc program is correctly typed. In these rules the variable \( \Gamma \) will denote the typing context. This context contains known types for identifiers.</p>
@@ -317,7 +317,7 @@
 \]
 </div>
 <h3 id="comprehensions-and-generators"><a class="header" href="#comprehensions-and-generators">Comprehensions and Generators</a></h3>
-<p>As shown in the following rules, the \( \mathit{genExpr} \) rules will must have either type \( \mathsf{set~of~int} \) or \( \mathsf{array1d~of}~T \). The \( \text{T_Comp} \) rule, to type array comprehensions, will use the \( elem \) function which maps the former type to \( \mathsf{int} \) and the latter to \( T \).</p>
+<p>As shown in the following rules, the \( \mathit{genExpr} \) rules will must have either type \( \mathsf{set<del>of</del>int} \) or \( \mathsf{array1d~of}~T \). The \( \text{T_Comp} \) rule, to type array comprehensions, will use the \( elem \) function which maps the former type to \( \mathsf{int} \) and the latter to \( T \).</p>
 <div>
 \[
 \begin{prooftree}

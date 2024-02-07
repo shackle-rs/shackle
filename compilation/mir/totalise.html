@@ -209,7 +209,7 @@
 <li>Set literals (containing partially defined expressions)
 The type is transformed from <code>set of T</code> into <code>tuple(bool, set of T)</code> as follows.
 <code>{ e1, e2, pde1, ..., pdek, ... }</code> into
-<code>let { any: (b1,tmp1) = pde1; any: (bk,tmpk) = pdek; } in (forall([b1,...,bk]), {e1, e2, tmp1, ..., tmpk ...})</code></li>
+<code>let { any: (b1,tmp1) = pde1;    any: (bk,tmpk) = pdek; } in (forall([b1,...,bk]), {e1, e2, tmp1, ..., tmpk ...})</code></li>
 <li>Array literals (containing partially defined expressions)
 <del>Change type <code>array[...] of T</code> into <code>array[...] of tuple(bool, T)</code> and change
 <code>[ e1, ..., pde1, ... pdek, ... en]</code> into
@@ -225,7 +225,7 @@ Change type <code>array[...] of T</code> into <code>tuple(bool, array [...] of T
 <code>[ pde | i in 0..10, (b,e)=x[i] where b, j in e ]</code> - var generator comprehensions:
 <code>var 0..10: x</code>
 <code>[ pde | i in 0..10, j in i div x..100]</code>
-<code>[ let { any: (b,t) = i div x..100; any: (eb, et) = pde } in if eb /\ b /\ j in t..100 then (true,et) else (b,&lt;&gt;) endif) | i in 0..10, j in ub(i div x..100) ]</code></li>
+<code>[ let { any: (b,t) = i div x..100;    any: (eb, et) = pde } in   if eb /\ b /\ j in t..100 then (true,et) else (b,&lt;&gt;) endif) | i in 0..10, j in ub(i div x..100) ]</code></li>
 </ul>
 </li>
 <li>Set comprehensions

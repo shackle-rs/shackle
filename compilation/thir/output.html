@@ -181,13 +181,13 @@
                         <h1 id="output-item-removal"><a class="header" href="#output-item-removal">Output item removal</a></h1>
 <p>The <a href="../mir/mir.html"><code>MIR</code></a> does not have output items. Instead, we create
 <code>:: output_only</code> string declarations for each output section.</p>
-<pre><code class="language-mzn">output [&quot;foo\n&quot;];
-output :: &quot;section&quot; [&quot;bar\n&quot;];
-output :: &quot;section&quot; [&quot;qux\n&quot;];
+<pre><code class="language-mzn">output ["foo\n"];
+output :: "section" ["bar\n"];
+output :: "section" ["qux\n"];
 </code></pre>
 <p>Becomes:</p>
-<pre><code class="language-mzn">string: mzn_output :: output_only = concat([&quot;foo\n&quot;]);
-string: mzn_output_section :: output_only = concat([&quot;bar\n&quot;] ++ [&quot;qux\n&quot;]);
+<pre><code class="language-mzn">string: mzn_output :: output_only = concat(["foo\n"]);
+string: mzn_output_section :: output_only = concat(["bar\n"] ++ ["qux\n"]);
 </code></pre>
 <p>We also make the <code>:: output</code> variables explicit, so <code>var</code> declarations with no
 RHS definitions get <code>:: output</code> added unless they are already marked as

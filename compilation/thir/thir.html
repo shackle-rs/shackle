@@ -355,13 +355,13 @@ using a comprehension:</p>
 <tr><th>HIR syntax</th><th>Desugaring</th></tr>
 <tr>
 <td>
-<pre><code class="language-mzn">any: x = [(1, &quot;a&quot;), (2, &quot;b&quot;)];
+<pre><code class="language-mzn">any: x = [(1, "a"), (2, "b")];
 any: y = x.1;
 </code></pre>
 </td>
 <td>
 <pre><code class="language-mzn">array [int] of tuple(int, string): x =
-  [(1, &quot;a&quot;), (2, &quot;b&quot;)];
+  [(1, "a"), (2, "b")];
 array [int] of int: y = [v.1 | v in x];
 </code></pre>
 </td>
@@ -369,16 +369,16 @@ array [int] of int: y = [v.1 | v in x];
 <tr>
 <td>
 <pre><code class="language-mzn">any: x = [
-  (a: 1, b: &quot;hello&quot;),
-  (a: 2, b: &quot;world&quot;)
+  (a: 1, b: "hello"),
+  (a: 2, b: "world")
 ];
 any: y = x.a;
 </code></pre>
 </td>
 <td>
 <pre><code class="language-mzn">array [int] of record(int: a, string: b): x = [
-  (a: 1, b: &quot;hello&quot;),
-  (a: 2, b: &quot;world&quot;)
+  (a: 1, b: "hello"),
+  (a: 2, b: "world")
 ];
 array [int] of int: y = [v.a | v in x];
 </code></pre>

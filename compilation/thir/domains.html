@@ -190,7 +190,7 @@ constraints which enforce the domains (or assertions if the declaration is <code
 </code></pre>
 <p>Becomes:</p>
 <pre><code class="language-mzn">int: x;
-constraint assert(x in 1..3, &quot;Value out of range&quot;);
+constraint assert(x in 1..3, "Value out of range");
 </code></pre>
 <p>Structured types and arrays need to check domains for each element:</p>
 <pre><code class="language-mzn">tuple(1..2, 1..3): x;
@@ -198,7 +198,7 @@ array [int] of 1..3: y;
 </code></pre>
 <p>Becomes:</p>
 <pre><code class="language-mzn">tuple(int, int): x;
-constraint assert(x.1 in 1..2 /\ x.2 in 1..3, &quot;Value out of range&quot;);
+constraint assert(x.1 in 1..2 /\ x.2 in 1..3, "Value out of range");
 array [int] of int: y;
 constraint forall (y_i in 1..3) (y_i in y);
 </code></pre>
@@ -236,7 +236,7 @@ into its constituent variables:</p>
 </code></pre>
 <p>Becomes:</p>
 <pre><code class="language-mzn">array [int, int] of int: x;
-constraint assert(index_set_1of2(x) = 1..3, &quot;Index set doesn't match&quot;);
+constraint assert(index_set_1of2(x) = 1..3, "Index set doesn't match");
 </code></pre>
 <p>Since we again need to produce a useful error message, we perform the index set checks using the <code>mzn_check_index_set</code>
 function, which can produce an error message mentioning which dimension has the incorrect index set.</p>
