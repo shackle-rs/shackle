@@ -52,7 +52,7 @@
 //! the next step is to register your solver executable with MiniZinc. This can
 //! be done by creating a [MiniZinc Solver
 //! Configuration](https://www.minizinc.org/doc-2.8.2/en/fzn-spec.html#solver-configuration-files)
-//! (`.mzc`) file, and adding it to a folder on the `MZN_SOLVER_PATH` or a
+//! (`.msc`) file, and adding it to a folder on the `MZN_SOLVER_PATH` or a
 //! standardized path, like `~/.minizinc/solvers/`. A basic solver configuration
 //! for a solver that accepts JSON input would look as follows:
 //!
