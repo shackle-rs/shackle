@@ -1,10 +1,14 @@
 use std::{
 	fmt::Debug,
-	mem::MaybeUninit,
+	mem::{swap, MaybeUninit},
 	num::NonZeroU64,
 	pin::Pin,
 	ptr::NonNull,
 	str::{from_utf8, from_utf8_unchecked},
+	sync::atomic::{
+		self, AtomicU16, AtomicU8,
+		Ordering::{Acquire, Relaxed, Release},
+	},
 };
 
 use bilge::{
@@ -36,8 +40,19 @@ impl Clone for Value {
 	fn clone(&self) -> Self {
 		if matches!(self.ref_ty(), RefType::Boxed) {
 			let mut x = self.get_box();
-			debug_assert!(*x.refs().ref_count > 0);
-			*x.as_mut().muts().ref_count += 1;
+			debug_assert!(x.refs().ref_count.load(Relaxed) > 0);
+			// Using a relaxed ordering is alright here, as knowledge of the
+			// original reference prevents other threads from erroneously deleting
+			// the object.
+			//
+			// As explained in the [Boost documentation][1], Increasing the
+			// reference counter can always be done with memory_order_relaxed: New
+			// references to an object can only be formed from an existing
+			// reference, and passing an existing reference from one thread to
+			// another must already provide any required synchronization.
+			//
+			// [1]: (www.boost.org/doc/libs/1_55_0/doc/html/atomic/usage_examples.html)
+			x.as_mut().muts().ref_count.fetch_add(1, Relaxed);
 		}
 		Self { raw: self.raw }
 	}
@@ -47,11 +62,11 @@ impl Drop for Value {
 	fn drop(&mut self) {
 		if matches!(self.ref_ty(), RefType::Boxed) {
 			let mut x = self.get_box();
-			debug_assert!(*x.refs().ref_count > 0);
-			*x.as_mut().muts().ref_count -= 1;
-			if *x.refs().ref_count == 0 {
-				// TODO: Deinit?
-				if *x.refs().weak_count == 0 {
+			debug_assert!(x.refs().ref_count.load(Relaxed) > 0);
+			if x.as_mut().muts().ref_count.fetch_sub(1, Release) == 1 {
+				atomic::fence(Acquire);
+				self.deinit();
+				if x.refs().weak_count.load(Relaxed) == 0 {
 					unsafe { self.drop_box() }
 				}
 			}
@@ -192,8 +207,8 @@ impl Value {
 		}
 		Self::new_box(boxed_value::Init {
 			ty: ValType::Seq,
-			ref_count: 1,
-			weak_count: 0,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
 			len: iter.len() as u32,
 			values: FromIterPrefix(iter),
 			raw: FillWithDefault,
@@ -208,8 +223,8 @@ impl Value {
 		let v = Self::new_box(boxed_value::Init {
 			ty: ValType::Str,
 			len: s.len() as u32,
-			ref_count: 1,
-			weak_count: 0,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
 			values: InitEmpty,
 			raw: FromIterPrefix(s),
 		});
@@ -250,6 +265,26 @@ impl Value {
 		unsafe { Pin::new_unchecked(&mut (*self.get_ptr())) }
 	}
 
+	fn deinit(&self) {
+		debug_assert_eq!(self.ty(), ValType::Boxed);
+		let b = self.get_box();
+		match b.ty {
+			BoxedType::Seq => {
+				// Replace all values in the sequence with non-reference counted objects
+				for v in b.muts().values {
+					let mut i: Value = 0.into();
+					swap(v, &mut i);
+				}
+			}
+			BoxedType::View => todo!(),
+			BoxedType::BoolVar => todo!(),
+			BoxedType::IntVar => todo!(),
+			BoxedType::FloatVar => todo!(),
+			BoxedType::IntSetVar => todo!(),
+			_ => {}
+		}
+	}
+
 	unsafe fn drop_box(&self) {
 		debug_assert_eq!(self.ref_ty(), RefType::Boxed);
 		let ptr = self.get_ptr();
@@ -266,8 +301,8 @@ pub static EMPTY_STRING: Lazy<Value> = Lazy::new(|| {
 	Value::new_box(boxed_value::Init {
 		ty: ValType::Str,
 		len: 0u32,
-		ref_count: 1,
-		weak_count: 0,
+		ref_count: 1.into(),
+		weak_count: 0.into(),
 		values: InitEmpty,
 		raw: InitEmpty,
 	})
@@ -277,8 +312,8 @@ pub static EMPTY_SEQ: Lazy<Value> = Lazy::new(|| {
 	Value::new_box(boxed_value::Init {
 		ty: ValType::Seq,
 		len: 0u32,
-		ref_count: 1,
-		weak_count: 0,
+		ref_count: 1.into(),
+		weak_count: 0.into(),
 		values: InitEmpty,
 		raw: InitEmpty,
 	})
@@ -502,9 +537,9 @@ struct BoxedValue {
 	#[controls_layout]
 	len: u32,
 	// Number of values referencing this value
-	ref_count: u16,
+	ref_count: AtomicU16,
 	// Number of weak references (e.g., CSE)
-	weak_count: u8,
+	weak_count: AtomicU8,
 
 	#[allow(dead_code)] // accessed through [`.refs()`]
 	#[varlen_array]
