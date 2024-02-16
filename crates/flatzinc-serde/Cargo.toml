@@ -21,3 +21,4 @@ serde = { version = "1.0", features = ["derive"] }
 [dev-dependencies]
 serde_json = "1.0"
 expect-test = "1.4"
+ustr = { version = "1.0", features = ["serde"] }

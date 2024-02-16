@@ -1,0 +1,216 @@
+FlatZinc {
+    variables: {
+        u!("X_INTRODUCED_0_"): Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([0..=85000]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: true,
+            introduced: false,
+        },
+        u!("b"): Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([0..=3]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        u!("c"): Variable {
+            ty: Int,
+            domain: Some(
+                Int(
+                    RangeList::from_iter([0..=6]),
+                ),
+            ),
+            value: None,
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+    },
+    arrays: {
+        u!("X_INTRODUCED_2_"): Array {
+            contents: [
+                Int(
+                    250,
+                ),
+                Int(
+                    200,
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        u!("X_INTRODUCED_6_"): Array {
+            contents: [
+                Int(
+                    75,
+                ),
+                Int(
+                    150,
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+        u!("X_INTRODUCED_8_"): Array {
+            contents: [
+                Int(
+                    100,
+                ),
+                Int(
+                    150,
+                ),
+            ],
+            ann: [],
+            defined: false,
+            introduced: false,
+        },
+    },
+    constraints: [
+        Call {
+            id: u!("int_lin_le"),
+            args: [
+                Literal(
+                    Identifier(
+                        u!("X_INTRODUCED_2_"),
+                    ),
+                ),
+                Array(
+                    [
+                        Identifier(
+                            u!("b"),
+                        ),
+                        Identifier(
+                            u!("c"),
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        4000,
+                    ),
+                ),
+            ],
+            ann: [],
+        },
+        Call {
+            id: u!("int_lin_le"),
+            args: [
+                Literal(
+                    Identifier(
+                        u!("X_INTRODUCED_6_"),
+                    ),
+                ),
+                Array(
+                    [
+                        Identifier(
+                            u!("b"),
+                        ),
+                        Identifier(
+                            u!("c"),
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        2000,
+                    ),
+                ),
+            ],
+            ann: [],
+        },
+        Call {
+            id: u!("int_lin_le"),
+            args: [
+                Literal(
+                    Identifier(
+                        u!("X_INTRODUCED_8_"),
+                    ),
+                ),
+                Array(
+                    [
+                        Identifier(
+                            u!("b"),
+                        ),
+                        Identifier(
+                            u!("c"),
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        500,
+                    ),
+                ),
+            ],
+            ann: [],
+        },
+        Call {
+            id: u!("int_lin_eq"),
+            args: [
+                Array(
+                    [
+                        Int(
+                            400,
+                        ),
+                        Int(
+                            450,
+                        ),
+                        Int(
+                            -1,
+                        ),
+                    ],
+                ),
+                Array(
+                    [
+                        Identifier(
+                            u!("b"),
+                        ),
+                        Identifier(
+                            u!("c"),
+                        ),
+                        Identifier(
+                            u!("X_INTRODUCED_0_"),
+                        ),
+                    ],
+                ),
+                Literal(
+                    Int(
+                        0,
+                    ),
+                ),
+            ],
+            ann: [
+                Atom(
+                    u!("ctx_pos"),
+                ),
+            ],
+        },
+    ],
+    output: [
+        u!("b"),
+        u!("c"),
+    ],
+    solve: SolveObjective {
+        method: Maximize,
+        objective: Some(
+            Identifier(
+                u!("X_INTRODUCED_0_"),
+            ),
+        ),
+        ann: [],
+    },
+    version: "",
+}

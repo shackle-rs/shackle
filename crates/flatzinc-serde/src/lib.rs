@@ -39,7 +39,7 @@
 //!
 //! ```
 //! # use flatzinc_serde::FlatZinc;
-//! let fzn = FlatZinc::default();
+//! let fzn = FlatZinc::<String>::default();
 //! // ... creat solver constraint model ...
 //! let json_str = serde_json::to_string(&fzn).unwrap();
 //! ```
@@ -109,11 +109,11 @@ fn is_false(b: &bool) -> bool {
 /// rewrite annotations in their redefinitions library when required.
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum Annotation {
+pub enum Annotation<Identifier = String> {
 	/// Atom annotation (i.e., a single [`Identifier`])
 	Atom(Identifier),
 	/// Call annotation
-	Call(Call),
+	Call(Call<Identifier>),
 }
 
 /// A definition of a named array literal in FlatZinc
@@ -125,13 +125,13 @@ pub enum Annotation {
 /// `true`, then
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename = "array")]
-pub struct Array {
+pub struct Array<Identifier = String> {
 	/// The values stored within the array literal
 	#[serde(rename = "a")]
-	pub contents: Vec<Literal>,
+	pub contents: Vec<Literal<Identifier>>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	/// List of annotations
-	pub ann: Vec<Annotation>,
+	pub ann: Vec<Annotation<Identifier>>,
 	#[serde(default, skip_serializing_if = "is_false")]
 	/// This field is set to `true` when there is a constraint that has been marked as
 	/// defining this array.
@@ -146,24 +146,24 @@ pub struct Array {
 /// The argument type associated with [`Call`]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum Argument {
+pub enum Argument<Identifier = String> {
 	/// Sequence of [`Literal`]s
-	Array(Vec<Literal>),
+	Array(Vec<Literal<Identifier>>),
 	/// Literal
-	Literal(Literal),
+	Literal(Literal<Identifier>),
 }
 
 /// An object depicting a call, used for constraints and annotations
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename = "call")]
-pub struct Call {
+pub struct Call<Identifier = String> {
 	/// Identifier of the function being called (e.g., a predicate or annotation)
 	pub id: Identifier,
 	/// Arguments of the call
-	pub args: Vec<Argument>,
+	pub args: Vec<Argument<Identifier>>,
 	/// List of annotations
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub ann: Vec<Annotation>,
+	#[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
+	pub ann: Vec<Annotation<Identifier>>,
 }
 
 /// The possible values that a (decision) [`Variable`] can take
@@ -179,12 +179,12 @@ pub enum Domain {
 }
 
 /// A name used to refer to an [`Array`], function, or [`Variable`]
-pub type Identifier = String;
+// pub type Identifier = String;
 
 /// Literal values
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum Literal {
+pub enum Literal<Identifier = String> {
 	/// Integer value
 	Int(i64),
 	/// Floating point value
@@ -251,7 +251,7 @@ pub enum Type {
 /// The definition of a decision variable
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename = "variable")]
-pub struct Variable {
+pub struct Variable<Identifier = String> {
 	/// The type of the decision variable
 	#[serde(rename = "type")]
 	pub ty: Type,
@@ -265,10 +265,10 @@ pub struct Variable {
 	/// The “right hand side” of the variable, i.e., its value or alias to another
 	/// variable
 	#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
-	pub value: Option<Literal>,
+	pub value: Option<Literal<Identifier>>,
 	/// A list of annotations
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub ann: Vec<Annotation>,
+	pub ann: Vec<Annotation<Identifier>>,
 	/// This field is set to `true` when there is a constraint that has been marked as
 	/// defining this variable.
 	#[serde(default, skip_serializing_if = "is_false")]
@@ -281,19 +281,29 @@ pub struct Variable {
 }
 
 /// A specification of objective of a FlatZinc instance
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct SolveObjective {
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct SolveObjective<Identifier = String> {
 	/// The type of goal
 	pub method: Method,
 	/// The variable to optimize, or `None` if [`SolveObjective::method`] is [`Method::Satisfy`]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub objective: Option<Literal>,
+	pub objective: Option<Literal<Identifier>>,
 	/// A list of annotations from the solve statement in the MiniZinc model
 	///
 	/// Note that this includes the search annotations if they are present in the
 	/// model.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub ann: Vec<Annotation>,
+	pub ann: Vec<Annotation<Identifier>>,
+}
+
+impl<Identifier> Default for SolveObjective<Identifier> {
+	fn default() -> Self {
+		Self {
+			method: Default::default(),
+			objective: None,
+			ann: Vec::new(),
+		}
+	}
 }
 
 /// The structure depicting a FlatZinc instance
@@ -302,33 +312,33 @@ pub struct SolveObjective {
 /// result of instantiating the parameter variables of a MiniZinc model and
 /// generating a solver-specific equisatisfiable model.
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct FlatZinc {
+pub struct FlatZinc<Identifier: Ord = String> {
 	/// A mapping from decision variable [`Identifier`] to their definitions
 	#[serde(default)]
-	pub variables: BTreeMap<Identifier, Variable>,
+	pub variables: BTreeMap<Identifier, Variable<Identifier>>,
 	/// A mapping from array [`Identifier`] to their definitions
 	#[serde(default)]
-	pub arrays: BTreeMap<Identifier, Array>,
+	pub arrays: BTreeMap<Identifier, Array<Identifier>>,
 	/// A list of (solver-specific) constraints, in the form of [`Call`] objects,
 	/// that must be satisfied in a solution.
 	#[serde(default)]
-	pub constraints: Vec<Call>,
+	pub constraints: Vec<Call<Identifier>>,
 	/// A list of all identifiers for which the solver must produce output for each solution
 	#[serde(default)]
 	pub output: Vec<Identifier>,
 	/// A specification of the goal of solving the FlatZinc instance.
-	pub solve: SolveObjective,
+	pub solve: SolveObjective<Identifier>,
 	/// The version of the FlatZinc serialization specification used
 	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub version: String,
 }
 
-impl Default for FlatZinc {
+impl<Identifier: Ord> Default for FlatZinc<Identifier> {
 	fn default() -> Self {
 		Self {
 			variables: Default::default(),
-			arrays: Default::default(),
-			constraints: Default::default(),
+			arrays: BTreeMap::new(),
+			constraints: Vec::new(),
 			output: Default::default(),
 			solve: Default::default(),
 			version: "1.0".into(),
@@ -338,9 +348,14 @@ impl Default for FlatZinc {
 
 #[cfg(test)]
 mod tests {
-	use std::{fs::File, io::BufReader, path::Path};
+	use std::{
+		fs::File,
+		io::{BufReader, Read},
+		path::Path,
+	};
 
 	use expect_test::ExpectFile;
+	use ustr::Ustr;
 
 	use crate::FlatZinc;
 
@@ -372,4 +387,26 @@ mod tests {
 		};
 	}
 	pub(crate) use test_file;
+
+	#[test]
+	fn test_ident_no_copy() {
+		let mut rdr = BufReader::new(
+			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+		);
+		let mut content = String::new();
+		rdr.read_to_string(&mut content).unwrap();
+
+		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
+		expect_test::expect_file!["../corpus/documentation_example.debug.txt"].assert_debug_eq(&fzn)
+	}
+
+	#[test]
+	fn test_ident_interned() {
+		let rdr = BufReader::new(
+			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+		);
+		let fzn: FlatZinc<Ustr> = serde_json::from_reader(rdr).unwrap();
+		expect_test::expect_file!["../corpus/documentation_example.debug_ustr.txt"]
+			.assert_debug_eq(&fzn)
+	}
 }
