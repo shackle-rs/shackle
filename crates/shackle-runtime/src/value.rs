@@ -1,7 +1,7 @@
 use std::{
 	collections::HashMap,
-	fmt::{Debug, Display},
-	hash::Hash,
+	fmt::Debug,
+	iter::once,
 	mem::MaybeUninit,
 	num::NonZeroU64,
 	pin::Pin,
@@ -24,9 +24,17 @@ use bilge::{
 use once_cell::sync::Lazy;
 use varlen::{
 	define_varlen,
-	prelude::{ArrayInitializer, FillWithDefault, FromIterPrefix},
+	prelude::{ArrayInitializer, FromIterPrefix},
 	Initializer, Layout, VarLen,
 };
+
+use self::{
+	num::{FloatVal, IntVal},
+	set::SetView,
+};
+
+mod num;
+mod set;
 
 #[bitsize(2)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, TryFromBits)]
@@ -43,7 +51,7 @@ pub struct Value {
 impl Clone for Value {
 	fn clone(&self) -> Self {
 		if matches!(self.ref_ty(), RefType::Boxed) {
-			let mut x = self.get_box();
+			let mut x = self.get_pin();
 			debug_assert!(x.refs().ref_count.load(Relaxed) > 0);
 			// Using a relaxed ordering is alright here, as knowledge of the
 			// original reference prevents other threads from erroneously deleting
@@ -65,13 +73,13 @@ impl Clone for Value {
 impl Drop for Value {
 	fn drop(&mut self) {
 		if matches!(self.ref_ty(), RefType::Boxed) {
-			let mut x = self.get_box();
-			debug_assert!(x.refs().ref_count.load(Relaxed) > 0);
-			if x.as_mut().muts().ref_count.fetch_sub(1, Release) == 1 {
+			let mut slf = self.get_pin();
+			debug_assert!(slf.refs().ref_count.load(Relaxed) > 0);
+			if slf.as_mut().muts().ref_count.fetch_sub(1, Release) == 1 {
 				atomic::fence(Acquire);
-				self.deinit();
-				if x.refs().weak_count.load(Relaxed) == 0 {
-					unsafe { self.drop_box() }
+				unsafe { ValueStorage::deinit(self.get_pin()) };
+				if slf.refs().weak_count.load(Relaxed) == 0 {
+					unsafe { ValueStorage::drop(slf) }
 				}
 			}
 		}
@@ -86,7 +94,7 @@ impl PartialEq for Value {
 		}
 		// Interned or boxed data would have been bitwise identical
 		if !matches!(self.ref_ty(), RefType::Boxed)
-			|| matches!(self.get_box().ty, BoxedType::Int | BoxedType::Float)
+			|| matches!(self.get_pin().ty, ValType::Int | ValType::Float)
 		{
 			// TODO: is this okay for Float??
 			return false;
@@ -145,7 +153,7 @@ impl Value {
 				if !pos {
 					value |= Value::FLOAT_SIGN_BIT;
 				}
-				BoxedValue::Float(FloatVal::Float(f64::from_bits(value)))
+				DataView::Float(f64::from_bits(value).into())
 			}
 			RefType::Int => {
 				let pos = (self.raw.get() & Value::INT_SIGN_BIT) == 0;
@@ -164,9 +172,8 @@ impl Value {
 				let v = &*self.get_ptr();
 				match v.ty {
 					ValType::Int => {
-						debug_assert_eq!(v.refs().raw.len(), 1 + std::mem::size_of::<i64>());
-						let inf = v.refs().raw[0] != 0;
-						let val = i64::from_le_bytes(v.refs().raw[1..].try_into().unwrap());
+						let inf = v.refs().bytes[0] != 0;
+						let val = v.refs().ints[0];
 						DataView::Int(if inf {
 							if val >= 0 {
 								IntVal::InfPos
@@ -178,20 +185,21 @@ impl Value {
 						})
 					}
 					ValType::Float => {
-						let inf = v.refs().raw[0] != 0;
-						let val = f64::from_le_bytes(v.refs().raw[1..].try_into().unwrap());
-						BoxedValue::Float(if inf {
-							if val >= 0.0 {
-								FloatVal::InfPos
-							} else {
-								FloatVal::InfNeg
-							}
-						} else {
-							FloatVal::Float(val)
-						})
+						let val = v.refs().floats[0];
+						DataView::Float(val)
 					}
 					ValType::Seq => DataView::Seq(v.refs().values),
-					BoxedType::Str => BoxedValue::Str(from_utf8_unchecked(v.refs().raw)),
+					ValType::Str => DataView::Str(from_utf8_unchecked(v.refs().bytes)),
+					ValType::IntSet => DataView::IntSet(SetView {
+						has_lb: v.len & 0b01 != 0,
+						has_ub: v.len & 0b10 != 0,
+						ranges: v.refs().ints,
+					}),
+					ValType::FloatSet => DataView::FloatSet(SetView {
+						has_lb: v.len & 0b01 != 0,
+						has_ub: v.len & 0b10 != 0,
+						ranges: v.refs().floats,
+					}),
 					ValType::View => todo!(),
 					ValType::BoolVar => todo!(),
 					ValType::IntVar => todo!(),
@@ -232,31 +240,28 @@ impl Value {
 			IntVal::InfNeg => (true, -1),
 			IntVal::Int(i) => (false, i),
 		};
-		let it = [b as u8].into_iter().chain(i.to_le_bytes());
 		Self::new_box(value_storage::Init {
 			ty: ValType::Int,
 			len: 0,
 			ref_count: 1.into(),
 			weak_count: 0.into(),
 			values: InitEmpty,
-			raw: FromIterPrefix(it),
+			ints: FromIterPrefix([i].into_iter()),
+			floats: InitEmpty,
+			bytes: FromIterPrefix([b as u8].into_iter()),
 		})
 	}
 
 	fn new_boxed_float(i: FloatVal) -> Value {
-		let (b, f) = match i {
-			FloatVal::InfPos => (true, 1.0),
-			FloatVal::InfNeg => (true, -1.0),
-			FloatVal::Float(f) => (false, f),
-		};
-		let it = [b as u8].into_iter().chain(f.to_le_bytes());
 		Self::new_box(value_storage::Init {
 			ty: ValType::Float,
 			len: 0,
 			ref_count: 1.into(),
 			weak_count: 0.into(),
 			values: InitEmpty,
-			raw: FromIterPrefix(it),
+			ints: InitEmpty,
+			floats: FromIterPrefix([i].into_iter()),
+			bytes: InitEmpty,
 		})
 	}
 
@@ -273,7 +278,9 @@ impl Value {
 			weak_count: 0.into(),
 			len: iter.len() as u32,
 			values: FromIterPrefix(iter),
-			raw: FillWithDefault,
+			ints: InitEmpty,
+			floats: InitEmpty,
+			bytes: InitEmpty,
 		})
 	}
 
@@ -288,50 +295,100 @@ impl Value {
 			ref_count: 1.into(),
 			weak_count: 0.into(),
 			values: InitEmpty,
-			raw: FromIterPrefix(s),
+			ints: InitEmpty,
+			floats: InitEmpty,
+			bytes: FromIterPrefix(s),
 		});
-		debug_assert!(from_utf8(v.get_box().refs().raw).is_ok());
+		debug_assert!(from_utf8(v.get_pin().refs().bytes).is_ok());
 		v
 	}
 
-	unsafe fn get_ptr(&self) -> *mut BoxedStorage {
-		debug_assert_eq!(self.ty(), ValType::Boxed);
-		(self.raw.get() >> 2) as *mut BoxedStorage
-	}
-
-	fn get_box(&self) -> Pin<&mut BoxedStorage> {
-		assert_eq!(self.ty(), ValType::Boxed);
-		unsafe { Pin::new_unchecked(&mut (*self.get_ptr())) }
-	}
-
-	fn deinit(&self) {
-		debug_assert_eq!(self.ty(), ValType::Boxed);
-		let b = self.get_box();
-		match b.ty {
-			BoxedType::Seq => {
-				// Replace all values in the sequence with non-reference counted objects
-				for v in b.muts().values {
-					*v = 0.into();
-				}
-			}
-			BoxedType::View => todo!(),
-			BoxedType::BoolVar => todo!(),
-			BoxedType::IntVar => todo!(),
-			BoxedType::FloatVar => todo!(),
-			BoxedType::IntSetVar => todo!(),
-			_ => {}
+	pub fn new_int_set<I: ExactSizeIterator<Item = (i64, i64)>, S: IntoIterator<IntoIter = I>>(
+		lb: Option<i64>,
+		ub: Option<i64>,
+		gap_ranges: S,
+	) -> Value {
+		// Only allow a single empty set
+		assert!(match (lb, ub) {
+			(Some(1), Some(0)) => true,
+			(Some(lb), Some(ub)) => lb <= ub,
+			_ => true,
+		});
+		let it = gap_ranges.into_iter();
+		assert!(it.len() < 2_usize.pow(31));
+		let mut len = (it.len() << 2) as u32;
+		let mut v = Vec::new();
+		if let Some(lb) = lb {
+			v.push(lb);
+			len |= 0b01;
 		}
+		if let Some(ub) = ub {
+			v.push(ub);
+			len |= 0b10;
+		}
+
+		Self::new_box(value_storage::Init {
+			ty: ValType::IntSet,
+			len,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
+			values: InitEmpty,
+			ints: FromIterPrefix(
+				v.into_iter()
+					.chain(it.flat_map(|tup| once(tup.0).chain(once(tup.1)))),
+			),
+			floats: InitEmpty,
+			bytes: InitEmpty,
+		})
 	}
 
-	unsafe fn drop_box(&self) {
+	pub fn new_float_set<I: ExactSizeIterator<Item = (f64, f64)>, S: IntoIterator<IntoIter = I>>(
+		lb: Option<f64>,
+		ub: Option<f64>,
+		gap_ranges: S,
+	) -> Value {
+		// Only allow a single empty set
+		assert!(match (lb, ub) {
+			(Some(lb), Some(ub)) if lb == 1.0 && ub == 0.0 => true,
+			(Some(lb), Some(ub)) => lb <= ub,
+			_ => true,
+		});
+		let it = gap_ranges.into_iter();
+		assert!(it.len() < 2_usize.pow(31));
+		let mut len = (it.len() << 2) as u32;
+		let mut v = Vec::new();
+		if let Some(lb) = lb {
+			v.push(lb);
+			len |= 0b01;
+		}
+		if let Some(ub) = ub {
+			v.push(ub);
+			len |= 0b10;
+		}
+
+		Self::new_box(value_storage::Init {
+			ty: ValType::FloatSet,
+			len,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
+			values: InitEmpty,
+			ints: InitEmpty,
+			floats: FromIterPrefix(
+				v.into_iter()
+					.chain(it.flat_map(|tup| once(tup.0).chain(once(tup.1)))),
+			),
+			bytes: InitEmpty,
+		})
+	}
+
+	unsafe fn get_ptr(&self) -> *mut ValueStorage {
 		debug_assert_eq!(self.ref_ty(), RefType::Boxed);
-		let ptr = self.get_ptr();
-		let b = self.get_box();
-		let layout = BoxedStorage::calculate_layout(&b);
-		let alloc_layout =
-			std::alloc::Layout::from_size_align_unchecked(layout.size(), BoxedStorage::ALIGN);
-		BoxedStorage::vdrop(self.get_box(), layout);
-		std::alloc::dealloc(ptr as *mut u8, alloc_layout);
+		(self.raw.get() >> 2) as *mut ValueStorage
+	}
+
+	fn get_pin(&self) -> Pin<&mut ValueStorage> {
+		assert_eq!(self.ref_ty(), RefType::Boxed);
+		unsafe { Pin::new_unchecked(&mut (*self.get_ptr())) }
 	}
 }
 
@@ -342,7 +399,9 @@ pub static EMPTY_STRING: Lazy<Value> = Lazy::new(|| {
 		ref_count: 1.into(),
 		weak_count: 0.into(),
 		values: InitEmpty,
-		raw: InitEmpty,
+		ints: InitEmpty,
+		floats: InitEmpty,
+		bytes: InitEmpty,
 	})
 });
 
@@ -353,7 +412,9 @@ pub static EMPTY_SEQ: Lazy<Value> = Lazy::new(|| {
 		ref_count: 1.into(),
 		weak_count: 0.into(),
 		values: InitEmpty,
-		raw: InitEmpty,
+		ints: InitEmpty,
+		floats: InitEmpty,
+		bytes: InitEmpty,
 	})
 });
 
@@ -372,84 +433,17 @@ pub static INT_INF_NEG: Lazy<Value> = Lazy::new(|| {
 		.or_insert_with(|| Value::new_boxed_int(IntVal::InfNeg));
 	inf.clone()
 });
-static FLOAT_MAP: Lazy<Mutex<HashMap<FloatValWrap, Value>>> = Lazy::new(|| HashMap::new().into());
-pub static FLOAT_INF_POS: Lazy<Value> = Lazy::new(|| {
-	let mut map = FLOAT_MAP.lock().unwrap();
-	let inf = map
-		.entry(FloatValWrap(FloatVal::InfPos))
-		.or_insert_with(|| Value::new_boxed_float(FloatVal::InfPos));
-	inf.clone()
-});
-pub static FLOAT_INF_NEG: Lazy<Value> = Lazy::new(|| {
-	let mut map = FLOAT_MAP.lock().unwrap();
-	let inf = map
-		.entry(FloatValWrap(FloatVal::InfNeg))
-		.or_insert_with(|| Value::new_boxed_float(FloatVal::InfNeg));
-	inf.clone()
-});
-struct InitEmpty;
 
-unsafe impl<T> ArrayInitializer<T> for InitEmpty {
-	fn initialize(self, dst: &mut [MaybeUninit<T>]) {
-		assert_eq!(dst.len(), 0);
-	}
-}
+static FLOAT_MAP: Lazy<Mutex<HashMap<FloatVal, Value>>> = Lazy::new(|| HashMap::new().into());
+pub static FLOAT_INF_POS: Lazy<Value> = Lazy::new(|| FloatVal::INFINITY.into());
+pub static FLOAT_INF_NEG: Lazy<Value> = Lazy::new(|| FloatVal::NEG_INFINITY.into());
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum IntVal {
-	InfPos,
-	InfNeg,
-	Int(i64),
-}
+pub static INT_SET_EMPTY: Lazy<Value> = Lazy::new(|| Value::new_int_set(1.into(), 0.into(), []));
+pub static INT_SET_INF: Lazy<Value> = Lazy::new(|| Value::new_int_set(None, None, []));
 
-impl Display for IntVal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			IntVal::InfPos => write!(f, "+∞"),
-			IntVal::InfNeg => write!(f, "-∞"),
-			IntVal::Int(i) => write!(f, "{i}"),
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum FloatVal {
-	InfPos,
-	InfNeg,
-	Float(f64),
-}
-
-impl Display for FloatVal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			FloatVal::InfPos => write!(f, "+∞"),
-			FloatVal::InfNeg => write!(f, "-∞"),
-			FloatVal::Float(x) => write!(f, "{x}"),
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy)]
-struct FloatValWrap(FloatVal);
-
-impl Hash for FloatValWrap {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		core::mem::discriminant(&self.0).hash(state);
-		if let FloatVal::Float(f) = self.0 {
-			state.write_u64(f.to_bits());
-		}
-	}
-}
-impl PartialEq for FloatValWrap {
-	fn eq(&self, other: &Self) -> bool {
-		if let (FloatVal::Float(a), FloatVal::Float(b)) = (self.0, other.0) {
-			a.to_bits() == b.to_bits()
-		} else {
-			self.0 == other.0
-		}
-	}
-}
-impl Eq for FloatValWrap {}
+pub static FLOAT_SET_EMPTY: Lazy<Value> =
+	Lazy::new(|| Value::new_float_set(1.0.into(), 0.0.into(), []));
+pub static FLOAT_SET_INF: Lazy<Value> = Lazy::new(|| Value::new_float_set(None, None, []));
 
 impl From<bool> for Value {
 	fn from(value: bool) -> Self {
@@ -539,44 +533,39 @@ impl From<i64> for Value {
 
 impl From<FloatVal> for Value {
 	fn from(value: FloatVal) -> Self {
-		match value {
-			FloatVal::InfPos => FLOAT_INF_POS.clone(),
-			FloatVal::InfNeg => FLOAT_INF_NEG.clone(),
-			FloatVal::Float(f) => {
-				const EXPONENT_MASK: u64 = 0x7FF << 52;
-				let bits = f.to_bits();
-				let mut exponent = (bits & EXPONENT_MASK) >> 52;
-				if exponent != 0 {
-					if !(513..=1534).contains(&exponent) {
-						// Exponent doesn't fit in 10 bits
-						let mut map = FLOAT_MAP.lock().unwrap();
-						let v = map
-							.entry(FloatValWrap(value))
-							.or_insert_with(|| Value::new_boxed_float(value));
-						return v.clone();
-					}
-					exponent -= 512; // Make exponent fit in 10 bits, with bias 511
-				}
-				debug_assert!(exponent <= <u10 as Number>::MAX.value().into());
-				let sign = (bits & (1 << 63)) != 0;
-
-				const FRACTION_MASK: u64 = 0xFFFFFFFFFFFFF;
-				let fraction = bits & FRACTION_MASK; // Remove one bit of precision
-				debug_assert!(fraction <= <u52 as Number>::MAX.value());
-				let mut raw = (fraction << 1) | (exponent << 53) | Self::FLOAT_TAG;
-				if sign {
-					raw |= Self::FLOAT_SIGN_BIT;
-				}
-				Value {
-					raw: NonZeroU64::new(raw).unwrap(),
-				}
+		let f: f64 = value.into();
+		const EXPONENT_MASK: u64 = 0x7FF << 52;
+		let bits = f.to_bits();
+		let mut exponent = (bits & EXPONENT_MASK) >> 52;
+		if exponent != 0 {
+			if !(513..=1534).contains(&exponent) {
+				// Exponent doesn't fit in 10 bits
+				let mut map = FLOAT_MAP.lock().unwrap();
+				let v = map
+					.entry(value)
+					.or_insert_with(|| Value::new_boxed_float(value));
+				return v.clone();
 			}
+			exponent -= 512; // Make exponent fit in 10 bits, with bias 511
+		}
+		debug_assert!(exponent <= <u10 as Number>::MAX.value().into());
+		let sign = (bits & (1 << 63)) != 0;
+
+		const FRACTION_MASK: u64 = 0xFFFFFFFFFFFFF;
+		let fraction = bits & FRACTION_MASK; // Remove one bit of precision
+		debug_assert!(fraction <= <u52 as Number>::MAX.value());
+		let mut raw = (fraction << 1) | (exponent << 53) | Self::FLOAT_TAG;
+		if sign {
+			raw |= Self::FLOAT_SIGN_BIT;
+		}
+		Value {
+			raw: NonZeroU64::new(raw).unwrap(),
 		}
 	}
 }
 impl From<f64> for Value {
 	fn from(value: f64) -> Self {
-		FloatVal::Float(value).into()
+		Value::from(FloatVal::from(value))
 	}
 }
 impl TryInto<FloatVal> for &Value {
@@ -600,10 +589,7 @@ impl TryInto<f64> for &Value {
 
 	fn try_into(self) -> Result<f64, Self::Error> {
 		let fv: FloatVal = self.try_into()?;
-		match fv {
-			FloatVal::Float(f) => Ok(f),
-			_ => Err(()),
-		}
+		Ok(fv.into())
 	}
 }
 impl TryInto<f64> for Value {
@@ -629,20 +615,33 @@ impl<'a> TryInto<&'a str> for &'a Value {
 		}
 	}
 }
+#[derive(Debug, Clone, PartialEq)]
+pub enum DataView<'a> {
+	Int(IntVal),
+	Float(FloatVal),
+	Seq(&'a [Value]),
+	Str(&'a str),
+	IntSet(SetView<'a, i64>),
+	FloatSet(SetView<'a, f64>),
+}
 
 #[bitsize(8)]
 #[derive(Clone, PartialEq, Eq, TryFromBits)]
 enum ValType {
-	/// Types that can be represented as simple sequences of values: Tuples, Sets/Range lists, 1-to-n arrays
+	/// Boxed integers (cannot fit in 62 bits)
+	Int,
+	/// Boxed floats (cannot fit in 63 bits)
+	Float,
+	/// Types that can be represented as simple sequences of values: Tuples, 1-to-n arrays
 	Seq,
 	/// Character strings
 	Str,
 	/// View into an array
 	View,
-	/// Boxed integers (cannot fit in 62 bits)
-	Int,
-	/// Boxed floats (cannot fit in 63 bits)
-	Float,
+	/// Int Set (Range List)
+	IntSet,
+	/// Float Set (Range List)
+	FloatSet,
 	/// Boolean decision variable
 	BoolVar,
 	/// Integer decision variable
@@ -659,6 +658,9 @@ struct ValueStorage {
 	#[controls_layout]
 	ty: ValType,
 	/// Length of the value (if relevant)
+	/// Seq -> number of values
+	/// Str -> number of bytes
+	/// IntSet | FloatSet -> lowest two bit whether value has lb/ub, rest is number of gaps
 	#[controls_layout]
 	len: u32,
 	// Number of values referencing this value
@@ -674,40 +676,93 @@ struct ValueStorage {
 	}],
 	#[allow(dead_code)] // accessed through [`.refs()`]
 	#[varlen_array]
-	raw: [u8; match *ty {
+	ints: [i64; match *ty {
+		ValType::Int => 1,
+		ValType::IntSet => ValueStorage::set_storage_len(*len),
+		_ => 0,
+	}],
+	#[allow(dead_code)] // accessed through [`.refs()`]
+	#[varlen_array]
+	floats: [FloatVal; match *ty {
+		ValType::Float => 1,
+		ValType::FloatSet => ValueStorage::set_storage_len(*len),
+		_ => 0,
+	}],
+	#[allow(dead_code)] // accessed through [`.refs()`]
+	#[varlen_array]
+	bytes: [u8; match *ty {
+		// Fully stored as bytes
 		ValType::Str => *len as usize,
-		BoxedType::Int => 1 + std::mem::size_of::<i64>(),
-		BoxedType::Float => 1 + std::mem::size_of::<f64>(),
+		// Stored infinity tag
+		ValType::Int => 1,
 		_ => 0,
 	}],
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BoxedValue<'a> {
-	Int(IntVal),
-	Float(FloatVal),
-	Seq(&'a [Value]),
-	Str(&'a str),
+impl ValueStorage {
+	const fn set_storage_len(len: u32) -> usize {
+		let has_lb = (len & 0b01 != 0) as usize;
+		let has_ub = (len & 0b10 != 0) as usize;
+		((len >> 2) as usize * 2) + has_lb + has_ub
+	}
+
+	unsafe fn deinit(slf: Pin<&mut ValueStorage>) {
+		match slf.ty {
+			ValType::Seq => {
+				// Replace all values in the sequence with non-reference counted objects
+				for v in slf.muts().values {
+					*v = 0.into();
+				}
+			}
+			ValType::View => todo!(),
+			ValType::IntVar => todo!(),
+			ValType::FloatVar => todo!(),
+			ValType::IntSetVar => todo!(),
+			_ => {}
+		}
+	}
+
+	unsafe fn drop(slf: Pin<&mut ValueStorage>) {
+		let ptr: *mut ValueStorage = Pin::get_unchecked_mut(slf);
+		let slf = Pin::new_unchecked(&mut *ptr);
+		let layout = ValueStorage::calculate_layout(&slf);
+		let alloc_layout =
+			std::alloc::Layout::from_size_align_unchecked(layout.size(), ValueStorage::ALIGN);
+		ValueStorage::vdrop(slf, layout);
+		std::alloc::dealloc(ptr as *mut u8, alloc_layout);
+	}
+}
+
+struct InitEmpty;
+unsafe impl<T> ArrayInitializer<T> for InitEmpty {
+	fn initialize(self, dst: &mut [MaybeUninit<T>]) {
+		assert_eq!(dst.len(), 0);
+	}
 }
 
 #[cfg(test)]
 mod tests {
+	use expect_test::expect;
+
 	use super::*;
 
 	#[test]
 	fn memory_guarantees() {
 		assert_eq!(std::mem::size_of::<Value>(), 8);
-		const BOX_BASE_BYTES: usize = 8;
-		const S: &str = "12";
+		assert_eq!(ValueStorage::ALIGN, 8);
+
+		const BOX_BASE_BYTES: usize = std::mem::size_of::<u64>();
+
+		const S: &str = "123";
 		let val_str = Value::from(S);
 		assert_eq!(
-			val_str.get_box().calculate_layout().size(),
-			BOX_BASE_BYTES + S.len() as usize * std::mem::size_of::<u8>()
+			val_str.get_pin().calculate_layout().size(),
+			BOX_BASE_BYTES + (S.as_bytes().len() * std::mem::size_of::<u8>())
 		);
 		let t: &[Value] = &[1.into(), 2.2.into()];
 		let tup2 = Value::new_tuple(t.iter().cloned());
 		assert_eq!(
-			tup2.get_box().calculate_layout().size(),
+			tup2.get_pin().calculate_layout().size(),
 			BOX_BASE_BYTES + t.len() * std::mem::size_of::<Value>()
 		);
 	}
@@ -754,10 +809,10 @@ mod tests {
 		assert_eq!(twodottwo, 2.2);
 
 		// Positive and Negative Infinity
-		let pos_inf: FloatVal = Value::from(FloatVal::InfPos).try_into().unwrap();
-		assert_eq!(pos_inf, FloatVal::InfPos);
-		let neg_inf: FloatVal = Value::from(FloatVal::InfNeg).try_into().unwrap();
-		assert_eq!(neg_inf, FloatVal::InfNeg);
+		let pos_inf: f64 = Value::from(f64::INFINITY).try_into().unwrap();
+		assert_eq!(pos_inf, f64::INFINITY);
+		let neg_inf: f64 = Value::from(f64::NEG_INFINITY).try_into().unwrap();
+		assert_eq!(neg_inf, f64::NEG_INFINITY);
 		// f64 min and max
 		let minimum: f64 = Value::from(f64::MAX).try_into().unwrap();
 		assert_eq!(minimum, f64::MAX);
@@ -803,5 +858,64 @@ mod tests {
 		let list = (1..=2000).map(Value::from).collect_vec();
 		let vlist = Value::new_tuple(list.clone());
 		assert_eq!(vlist.deref(), DataView::Seq(&list))
+	}
+
+	#[test]
+	fn test_set() {
+		let isv_empty = INT_SET_EMPTY.clone();
+		let DataView::IntSet(sv) = isv_empty.deref() else {
+			unreachable!()
+		};
+		expect!["∅"].assert_eq(&sv.to_string());
+
+		let isv_inf = INT_SET_INF.clone();
+		let DataView::IntSet(sv) = isv_inf.deref() else {
+			unreachable!()
+		};
+		expect!["-∞..+∞"].assert_eq(&sv.to_string());
+
+		let isv_simple = Value::new_int_set((-3).into(), 5.into(), []);
+		let DataView::IntSet(sv) = isv_simple.deref() else {
+			unreachable!()
+		};
+		expect!["-3..5"].assert_eq(&sv.to_string());
+		assert!(itertools::equal(sv.values().unwrap(), -3..=5));
+
+		let isv_open_left = Value::new_int_set(None, 5.into(), []);
+		let DataView::IntSet(sv) = isv_open_left.deref() else {
+			unreachable!()
+		};
+		expect!["..5"].assert_eq(&sv.to_string());
+
+		let isv_open_right = Value::new_int_set(0.into(), None, []);
+		let DataView::IntSet(sv) = isv_open_right.deref() else {
+			unreachable!()
+		};
+		expect!["0.."].assert_eq(&sv.to_string());
+
+		let isv_gaps = Value::new_int_set((-3).into(), 5.into(), [(-3, 0), (0, 3)]);
+		let DataView::IntSet(sv) = isv_gaps.deref() else {
+			unreachable!()
+		};
+		expect!["-3..-3  ∪ 0..0  ∪ 3..5"].assert_eq(&sv.to_string());
+		assert!(itertools::equal(sv.values().unwrap(), [-3, 0, 3, 4, 5]));
+
+		let fsv_empty = FLOAT_SET_EMPTY.clone();
+		let DataView::FloatSet(sv) = fsv_empty.deref() else {
+			unreachable!()
+		};
+		expect!["∅"].assert_eq(&sv.to_string());
+
+		let fsv_inf = FLOAT_SET_INF.clone();
+		let DataView::FloatSet(sv) = fsv_inf.deref() else {
+			unreachable!()
+		};
+		expect!["-∞..+∞"].assert_eq(&sv.to_string());
+
+		let fsv_simple = Value::new_float_set((-2.3).into(), 4.3.into(), []);
+		let DataView::FloatSet(sv) = fsv_simple.deref() else {
+			unreachable!()
+		};
+		expect!["-2.3..4.3"].assert_eq(&sv.to_string());
 	}
 }
