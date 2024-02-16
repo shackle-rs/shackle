@@ -389,6 +389,7 @@ mod tests {
 		assert!(empty.union::<Value>(&empty).is_constant(&INT_SET_EMPTY));
 		assert!(inf.union::<Value>(&inf).is_constant(&INT_SET_INF));
 		assert!(empty.union::<Value>(&inf).is_constant(&INT_SET_INF));
+		assert!(inf.union::<Value>(&empty).is_constant(&INT_SET_INF));
 
 		let binding = Value::from_iter([IntVal::Int(1)..=5.into()]);
 		let DataView::IntSet(x) = binding.deref() else {
@@ -424,6 +425,35 @@ mod tests {
 		};
 		expect!["-5..-1 ∪ 1..9"].assert_eq(&z.to_string());
 
+		let binding = y.union::<Value>(&x);
+		let DataView::IntSet(z) = binding.deref() else {
+			unreachable!()
+		};
+		expect!["-5..-1 ∪ 1..9"].assert_eq(&z.to_string());
+
+		let binding = Value::from_iter([IntVal::Int(1)..=9.into()]);
+		let DataView::IntSet(x) = binding.deref() else {
+			unreachable!()
+		};
+		let binding = Value::from_iter([
+			IntVal::Int(1)..=2.into(),
+			4.into()..=5.into(),
+			7.into()..=8.into(),
+		]);
+		let DataView::IntSet(y) = binding.deref() else {
+			unreachable!()
+		};
+		let binding = y.union::<Value>(&x);
+		let DataView::IntSet(z) = binding.deref() else {
+			unreachable!()
+		};
+		expect!["1..9"].assert_eq(&z.to_string());
+		let binding = x.union::<Value>(&y);
+		let DataView::IntSet(z) = binding.deref() else {
+			unreachable!()
+		};
+		expect!["1..9"].assert_eq(&z.to_string());
+
 		let binding = Value::from_iter([FloatVal::from(1.0)..=(5.0).into()]);
 		let DataView::FloatSet(x) = binding.deref() else {
 			unreachable!()
@@ -450,6 +480,7 @@ mod tests {
 		assert!(empty.intersect::<Value>(&empty).is_constant(&INT_SET_EMPTY));
 		assert!(inf.intersect::<Value>(&inf).is_constant(&INT_SET_INF));
 		assert!(empty.intersect::<Value>(&inf).is_constant(&INT_SET_EMPTY));
+		assert!(inf.intersect::<Value>(&empty).is_constant(&INT_SET_EMPTY));
 
 		let binding = Value::from_iter([IntVal::Int(1)..=5.into()]);
 		let DataView::IntSet(x) = binding.deref() else {
@@ -470,6 +501,11 @@ mod tests {
 			unreachable!()
 		};
 		let binding = x.intersect::<Value>(&y);
+		let DataView::IntSet(z) = binding.deref() else {
+			unreachable!()
+		};
+		expect!["1..2 ∪ 4..5"].assert_eq(&z.to_string());
+		let binding = y.intersect::<Value>(&x);
 		let DataView::IntSet(z) = binding.deref() else {
 			unreachable!()
 		};

@@ -41,6 +41,8 @@ mod num;
 mod seq;
 mod set;
 
+pub use set::SetView;
+
 #[bitsize(2)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, TryFromBits)]
 enum RefType {
@@ -293,53 +295,26 @@ impl Value {
 		})
 	}
 
-	pub fn new_seq_with_dim<V: IntoIterator<Item = Value>, D: IntoIterator<Item = (i64, i64)>>(
-		values: V,
-		dims: D,
-	) -> Value {
-		let values = values.into_iter().collect_vec();
-		if values.is_empty() {
-			return EMPTY_SEQ.clone();
-		}
-		let dims = dims.into_iter().collect_vec();
-		assert!(!dims.is_empty());
-		if dims.len() == 1 {
-			assert_eq!(dims[0].1 as usize, values.len());
-			return values.into_iter().collect();
-		}
-
-		let mut eq_count: i64 = 0;
-		if values.len() >= 4 {
-			let _ = values.iter().skip(1).take_while(|&x| {
-				if x == &values[0] {
-					eq_count += 1;
-					true
-				} else {
-					false
-				}
-			});
-		}
-		let iter = values
-			.into_iter()
-			.skip(if eq_count >= 3 { eq_count as usize } else { 0 });
-
-		let len = iter.len() as u32;
-		let val = Self::new_box(value_storage::Init {
-			ty: ValType::Seq,
-			ref_count: 1.into(),
-			weak_count: 0.into(),
-			len,
-			values: FromIterPrefix(iter),
-			ints: InitEmpty,
-			floats: InitEmpty,
-			bytes: InitEmpty,
-		});
-
-		assert_eq!(
-			dims.iter()
-				.map(|(min, max)| (max - min + 1) as u32)
-				.sum::<u32>(),
-			len
+	/// Create a sequence view with custom index set dimensions
+	///
+	/// # Warning
+	/// This method will panic if it is called on a non-sequence value, or if the
+	/// size of the provided dimensions do not equal the number of elements in the
+	/// sequence.
+	pub fn with_dim<D: IntoIterator<Item = (i64, i64)>>(&self, dims: D) -> Value {
+		assert!(matches!(self.deref(), DataView::Seq(_)));
+		let DataView::Seq(seq) = self.deref() else {
+			panic!("unable to give dimensions to non-sequence value");
+		};
+		let dims = dims.into_iter().flat_map(|(a, b)| [a, b]).collect_vec();
+		assert!(
+			seq.len()
+				== dims
+					.iter()
+					.tuples()
+					.map(|(a, b)| (b - a + 1) as usize)
+					.product::<usize>(),
+			"dimensions given do not match the length of the array"
 		);
 		match seq {
 			SeqView::Slice {
@@ -374,7 +349,7 @@ impl Value {
 				weak_count: 0.into(),
 				len: ViewType::new(InnerViewType::Compact, (dims.len() / 2) as u8, 0).as_len(),
 				values: MoveFrom([self.clone()]),
-				ints: FromIterPrefix(once(repeat).chain(dims.into_iter())),
+				ints: FromIterPrefix(once(repeat).chain(dims)),
 				floats: InitEmpty,
 				bytes: InitEmpty,
 			}),
@@ -469,7 +444,7 @@ impl Value {
 			)
 			.as_len(),
 			values: MoveFrom([self.clone()]),
-			ints: FromIterPrefix(dims.into_iter().chain(slice.into_iter())),
+			ints: FromIterPrefix(dims.into_iter().chain(slice)),
 			floats: InitEmpty,
 			bytes: InitEmpty,
 		})
@@ -501,10 +476,7 @@ impl Value {
 			weak_count: 0.into(),
 			len: ViewType::new(InnerViewType::Transpose, dims.len() as u8, 0).as_len(),
 			values: MoveFrom([self.clone()]),
-			ints: FromIterPrefix(
-				dims.flat_map(|(min, max)| [min, max])
-					.chain(slice.flat_map(|(min, max)| [min, max])),
-			),
+			ints: FromIterPrefix(dims.into_iter()),
 			floats: InitEmpty,
 			bytes: InitEmpty,
 		})
@@ -1101,6 +1073,14 @@ mod tests {
 	}
 
 	#[test]
+	fn test_bool_value() {
+		let f: bool = Value::from(false).try_into().unwrap();
+		assert_eq!(f, false);
+		let t: bool = Value::from(true).try_into().unwrap();
+		assert_eq!(t, true);
+	}
+
+	#[test]
 	fn test_integer_value() {
 		let zero: i64 = Value::from(0i64).try_into().unwrap();
 		assert_eq!(zero, 0i64);
@@ -1194,6 +1174,77 @@ mod tests {
 		let list = (1..=2000).map(Value::from).collect_vec();
 		let vlist: Value = list.iter().cloned().collect();
 		assert_eq!(vlist.deref(), DataView::Seq(SeqView::Direct(&list)));
+
+		// Test reverse
+		let blist = vlist.transpose([-1]);
+		let DataView::Seq(view) = blist.deref() else {
+			unreachable!()
+		};
+		assert!(itertools::equal(view.iter(), list.iter().rev()));
+
+		let list = (1..=100).map(|_| Value::from(1i64)).collect_vec();
+		let vlist: Value = list.iter().cloned().collect();
+		let DataView::Seq(view) = vlist.deref() else {
+			unreachable!()
+		};
+
+		assert!(matches!(
+			view,
+			SeqView::Compressed {
+				dims: _,
+				repeat: 99,
+				storage: _
+			}
+		));
+		assert_eq!(view.len(), list.len());
+		itertools::equal(list.iter(), view.iter());
+
+		let vlist: Value = (1..=9).map(Value::from).collect();
+		// Test dimensions
+		let dim_list = vlist.with_dim([(-1, 1), (5, 7)]);
+		let DataView::Seq(view) = dim_list.deref() else {
+			unreachable!()
+		};
+		for i in -1..=1 {
+			for j in 5..=7 {
+				assert_eq!(view[&[i, j]], ((i + 1) * 3 + j - 4).into());
+			}
+		}
+		// Test slicing
+		for i in 1..=3 {
+			// Slice row
+			let row = dim_list.slice([(i - 2, i - 2), (5, 7)], [(0, 2)]);
+			let DataView::Seq(view) = row.deref() else {
+				unreachable!()
+			};
+			assert_eq!(view.len(), 3);
+			assert_eq!(view.iter().count(), 3);
+			itertools::equal(
+				view.iter().cloned(),
+				(1..=3).map(|j| Value::from((i - 1) * 3 + j)),
+			);
+			// Slice column
+			let row = dim_list.slice([(-1, 1), (i + 4, i + 4)], [(1, 3)]);
+			let DataView::Seq(view) = row.deref() else {
+				unreachable!()
+			};
+			assert_eq!(view.len(), 3);
+			assert_eq!(view.iter().count(), 3);
+			itertools::equal(
+				view.iter().cloned(),
+				(1..=3).map(|j| Value::from((j - 1) * 3 + i)),
+			);
+		}
+		// Test transpose
+		let t = dim_list.with_dim([(1, 3), (1, 3)]).transpose([2, 1]);
+		let DataView::Seq(view) = t.deref() else {
+			unreachable!()
+		};
+		for i in 1..=3 {
+			for j in 1..=3 {
+				assert_eq!(view[&[i, j]], ((j - 1) * 3 + i).into());
+			}
+		}
 	}
 
 	#[test]
