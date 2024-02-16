@@ -37,6 +37,7 @@ use shackle_compiler::{
 	thir::{self, db::Thir, pretty_print::PrettyPrinter, Declaration},
 	ty::{Ty, TyData},
 };
+use shackle_runtime::Interpreter;
 use value::EnumInner;
 pub use value::{Enum, Value};
 
@@ -115,6 +116,7 @@ impl Model {
 			output_types: output,
 			enable_stats: false,
 			time_limit: None,
+			_interpreter: Interpreter {},
 		})
 	}
 }
@@ -155,6 +157,7 @@ pub struct Program {
 	// run() options
 	enable_stats: bool,
 	time_limit: Option<Duration>,
+	_interpreter: Interpreter,
 }
 
 /// Status of running and solving a [`Program`]
