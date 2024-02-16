@@ -193,12 +193,12 @@ impl Value {
 					ValType::IntSet => DataView::IntSet(SetView {
 						has_lb: v.len & 0b01 != 0,
 						has_ub: v.len & 0b10 != 0,
-						ranges: v.refs().ints,
+						intervals: v.refs().ints,
 					}),
 					ValType::FloatSet => DataView::FloatSet(SetView {
 						has_lb: v.len & 0b01 != 0,
 						has_ub: v.len & 0b10 != 0,
-						ranges: v.refs().floats,
+						intervals: v.refs().floats,
 					}),
 					ValType::View => todo!(),
 					ValType::BoolVar => todo!(),
@@ -435,7 +435,9 @@ pub static INT_INF_NEG: Lazy<Value> = Lazy::new(|| {
 });
 
 static FLOAT_MAP: Lazy<Mutex<HashMap<FloatVal, Value>>> = Lazy::new(|| HashMap::new().into());
+#[allow(dead_code)] // TODO!
 pub static FLOAT_INF_POS: Lazy<Value> = Lazy::new(|| FloatVal::INFINITY.into());
+#[allow(dead_code)] // TODO!
 pub static FLOAT_INF_NEG: Lazy<Value> = Lazy::new(|| FloatVal::NEG_INFINITY.into());
 
 pub static INT_SET_EMPTY: Lazy<Value> = Lazy::new(|| Value::new_int_set(1.into(), 0.into(), []));
@@ -757,13 +759,13 @@ mod tests {
 		let val_str = Value::from(S);
 		assert_eq!(
 			val_str.get_pin().calculate_layout().size(),
-			BOX_BASE_BYTES + (S.as_bytes().len() * std::mem::size_of::<u8>())
+			BOX_BASE_BYTES + std::mem::size_of_val(S.as_bytes())
 		);
 		let t: &[Value] = &[1.into(), 2.2.into()];
 		let tup2 = Value::new_tuple(t.iter().cloned());
 		assert_eq!(
 			tup2.get_pin().calculate_layout().size(),
-			BOX_BASE_BYTES + t.len() * std::mem::size_of::<Value>()
+			BOX_BASE_BYTES + std::mem::size_of_val(t)
 		);
 	}
 
