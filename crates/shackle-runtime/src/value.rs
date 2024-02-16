@@ -1,9 +1,9 @@
 use std::{
-	collections::HashMap,
+	collections::{HashMap, VecDeque},
 	fmt::Debug,
-	iter::once,
 	mem::MaybeUninit,
 	num::NonZeroU64,
+	ops::RangeInclusive,
 	pin::Pin,
 	ptr::NonNull,
 	str::{from_utf8, from_utf8_unchecked},
@@ -30,7 +30,7 @@ use varlen::{
 
 use self::{
 	num::{FloatVal, IntVal},
-	set::SetView,
+	set::{FloatSetView, IntSetView},
 };
 
 mod num;
@@ -190,14 +190,12 @@ impl Value {
 					}
 					ValType::Seq => DataView::Seq(v.refs().values),
 					ValType::Str => DataView::Str(from_utf8_unchecked(v.refs().bytes)),
-					ValType::IntSet => DataView::IntSet(SetView {
+					ValType::IntSet => DataView::IntSet(IntSetView {
 						has_lb: v.len & 0b01 != 0,
 						has_ub: v.len & 0b10 != 0,
 						intervals: v.refs().ints,
 					}),
-					ValType::FloatSet => DataView::FloatSet(SetView {
-						has_lb: v.len & 0b01 != 0,
-						has_ub: v.len & 0b10 != 0,
+					ValType::FloatSet => DataView::FloatSet(FloatSetView {
 						intervals: v.refs().floats,
 					}),
 					ValType::View => todo!(),
@@ -303,84 +301,6 @@ impl Value {
 		v
 	}
 
-	pub fn new_int_set<I: ExactSizeIterator<Item = (i64, i64)>, S: IntoIterator<IntoIter = I>>(
-		lb: Option<i64>,
-		ub: Option<i64>,
-		gap_ranges: S,
-	) -> Value {
-		// Only allow a single empty set
-		assert!(match (lb, ub) {
-			(Some(1), Some(0)) => true,
-			(Some(lb), Some(ub)) => lb <= ub,
-			_ => true,
-		});
-		let it = gap_ranges.into_iter();
-		assert!(it.len() < 2_usize.pow(31));
-		let mut len = (it.len() << 2) as u32;
-		let mut v = Vec::new();
-		if let Some(lb) = lb {
-			v.push(lb);
-			len |= 0b01;
-		}
-		if let Some(ub) = ub {
-			v.push(ub);
-			len |= 0b10;
-		}
-
-		Self::new_box(value_storage::Init {
-			ty: ValType::IntSet,
-			len,
-			ref_count: 1.into(),
-			weak_count: 0.into(),
-			values: InitEmpty,
-			ints: FromIterPrefix(
-				v.into_iter()
-					.chain(it.flat_map(|tup| once(tup.0).chain(once(tup.1)))),
-			),
-			floats: InitEmpty,
-			bytes: InitEmpty,
-		})
-	}
-
-	pub fn new_float_set<I: ExactSizeIterator<Item = (f64, f64)>, S: IntoIterator<IntoIter = I>>(
-		lb: Option<f64>,
-		ub: Option<f64>,
-		gap_ranges: S,
-	) -> Value {
-		// Only allow a single empty set
-		assert!(match (lb, ub) {
-			(Some(lb), Some(ub)) if lb == 1.0 && ub == 0.0 => true,
-			(Some(lb), Some(ub)) => lb <= ub,
-			_ => true,
-		});
-		let it = gap_ranges.into_iter();
-		assert!(it.len() < 2_usize.pow(31));
-		let mut len = (it.len() << 2) as u32;
-		let mut v = Vec::new();
-		if let Some(lb) = lb {
-			v.push(lb);
-			len |= 0b01;
-		}
-		if let Some(ub) = ub {
-			v.push(ub);
-			len |= 0b10;
-		}
-
-		Self::new_box(value_storage::Init {
-			ty: ValType::FloatSet,
-			len,
-			ref_count: 1.into(),
-			weak_count: 0.into(),
-			values: InitEmpty,
-			ints: InitEmpty,
-			floats: FromIterPrefix(
-				v.into_iter()
-					.chain(it.flat_map(|tup| once(tup.0).chain(once(tup.1)))),
-			),
-			bytes: InitEmpty,
-		})
-	}
-
 	unsafe fn get_ptr(&self) -> *mut ValueStorage {
 		debug_assert_eq!(self.ref_ty(), RefType::Boxed);
 		(self.raw.get() >> 2) as *mut ValueStorage
@@ -440,12 +360,55 @@ pub static FLOAT_INF_POS: Lazy<Value> = Lazy::new(|| FloatVal::INFINITY.into());
 #[allow(dead_code)] // TODO!
 pub static FLOAT_INF_NEG: Lazy<Value> = Lazy::new(|| FloatVal::NEG_INFINITY.into());
 
-pub static INT_SET_EMPTY: Lazy<Value> = Lazy::new(|| Value::new_int_set(1.into(), 0.into(), []));
-pub static INT_SET_INF: Lazy<Value> = Lazy::new(|| Value::new_int_set(None, None, []));
+pub static INT_SET_EMPTY: Lazy<Value> = Lazy::new(|| {
+	Value::new_box(value_storage::Init {
+		ty: ValType::IntSet,
+		len: 0b11,
+		ref_count: 1.into(),
+		weak_count: 0.into(),
+		values: InitEmpty,
+		ints: FromIterPrefix([1i64, 0].into_iter()),
+		floats: InitEmpty,
+		bytes: InitEmpty,
+	})
+});
+pub static INT_SET_INF: Lazy<Value> = Lazy::new(|| {
+	Value::new_box(value_storage::Init {
+		ty: ValType::IntSet,
+		len: 0b00,
+		ref_count: 1.into(),
+		weak_count: 0.into(),
+		values: InitEmpty,
+		ints: InitEmpty,
+		floats: InitEmpty,
+		bytes: InitEmpty,
+	})
+});
 
-pub static FLOAT_SET_EMPTY: Lazy<Value> =
-	Lazy::new(|| Value::new_float_set(1.0.into(), 0.0.into(), []));
-pub static FLOAT_SET_INF: Lazy<Value> = Lazy::new(|| Value::new_float_set(None, None, []));
+pub static FLOAT_SET_EMPTY: Lazy<Value> = Lazy::new(|| {
+	Value::new_box(value_storage::Init {
+		ty: ValType::FloatSet,
+		len: 0,
+		ref_count: 1.into(),
+		weak_count: 0.into(),
+		values: InitEmpty,
+		ints: InitEmpty,
+		floats: InitEmpty,
+		bytes: InitEmpty,
+	})
+});
+pub static FLOAT_SET_INF: Lazy<Value> = Lazy::new(|| {
+	Value::new_box(value_storage::Init {
+		ty: ValType::FloatSet,
+		len: 1,
+		ref_count: 1.into(),
+		weak_count: 0.into(),
+		values: InitEmpty,
+		ints: InitEmpty,
+		floats: FromIterPrefix([FloatVal::NEG_INFINITY, FloatVal::INFINITY].into_iter()),
+		bytes: InitEmpty,
+	})
+});
 
 impl From<bool> for Value {
 	fn from(value: bool) -> Self {
@@ -617,14 +580,114 @@ impl<'a> TryInto<&'a str> for &'a Value {
 		}
 	}
 }
+
+impl FromIterator<Value> for Value {
+	fn from_iter<T: IntoIterator<Item = Value>>(iter: T) -> Self {
+		Value::new_tuple(Vec::from_iter(iter))
+	}
+}
+impl FromIterator<RangeInclusive<IntVal>> for Value {
+	fn from_iter<T: IntoIterator<Item = RangeInclusive<IntVal>>>(iter: T) -> Self {
+		let mut values: VecDeque<_> = iter
+			.into_iter()
+			.filter(|r| r.start() <= r.end())
+			.coalesce(|r1, r2| match (r1.end(), r2.start()) {
+				(IntVal::Int(i), IntVal::Int(j)) if i + 1 >= *j => Ok(*r1.start()..=*r2.end()),
+				(a, b) if a >= b => Ok(*r1.start()..=*r2.end()),
+				_ => Err((r1, r2)),
+			})
+			.flat_map(|r| [*r.start(), *r.end()].into_iter())
+			.collect();
+
+		// Only create a single empty / infinity set
+		if values.is_empty() {
+			return INT_SET_EMPTY.clone();
+		} else if matches!(
+			&values.as_slices(),
+			(&[IntVal::InfNeg, IntVal::InfPos], &[])
+		) {
+			return INT_SET_INF.clone();
+		}
+
+		// Number of counted intervals (for storage lb/ub are counted using flags)
+		let len = values.len() / 2 - 1;
+		assert!(len < 2_usize.pow(31));
+		let mut len = (len << 2) as u32;
+		if matches!(values.front().unwrap(), IntVal::Int(_)) {
+			len |= 0b01;
+		} else {
+			values.pop_front();
+		}
+		if matches!(values.back().unwrap(), IntVal::Int(_)) {
+			len |= 0b10;
+		} else {
+			values.pop_back();
+		}
+
+		debug_assert_eq!(ValueStorage::int_set_len(len), values.len());
+
+		Self::new_box(value_storage::Init {
+			ty: ValType::IntSet,
+			len,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
+			values: InitEmpty,
+			ints: FromIterPrefix(values.into_iter().map(|i| {
+				let IntVal::Int(i) = i else { unreachable!() };
+				i
+			})),
+			floats: InitEmpty,
+			bytes: InitEmpty,
+		})
+	}
+}
+
+impl FromIterator<RangeInclusive<FloatVal>> for Value {
+	fn from_iter<T: IntoIterator<Item = RangeInclusive<FloatVal>>>(iter: T) -> Self {
+		let values: Vec<FloatVal> = iter
+			.into_iter()
+			.filter(|r| r.start() <= r.end())
+			.coalesce(|r1, r2| {
+				if r1.end() >= r2.start() {
+					Ok(*r1.start()..=*r2.end())
+				} else {
+					Err((r1, r2))
+				}
+			})
+			.flat_map(|r| [*r.start(), *r.end()].into_iter())
+			.collect();
+
+		// Use only single empty and (full) infinity set
+		if values.is_empty() {
+			return FLOAT_SET_EMPTY.clone();
+		} else if values.len() == 2
+			&& values[0] == FloatVal::NEG_INFINITY
+			&& values[1] == FloatVal::INFINITY
+		{
+			return FLOAT_SET_INF.clone();
+		}
+
+		Self::new_box(value_storage::Init {
+			ty: ValType::FloatSet,
+			len: (values.len() / 2) as u32,
+			ref_count: 1.into(),
+			weak_count: 0.into(),
+			values: InitEmpty,
+			ints: InitEmpty,
+			floats: FromIterPrefix(values.into_iter()),
+			bytes: InitEmpty,
+		})
+	}
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataView<'a> {
 	Int(IntVal),
 	Float(FloatVal),
 	Seq(&'a [Value]),
 	Str(&'a str),
-	IntSet(SetView<'a, i64>),
-	FloatSet(SetView<'a, f64>),
+	IntSet(IntSetView<'a>),
+	FloatSet(FloatSetView<'a>),
 }
 
 #[bitsize(8)]
@@ -662,7 +725,8 @@ struct ValueStorage {
 	/// Length of the value (if relevant)
 	/// Seq -> number of values
 	/// Str -> number of bytes
-	/// IntSet | FloatSet -> lowest two bit whether value has lb/ub, rest is number of gaps
+	/// IntSet -> lowest two bit whether value has lb/ub, rest is number of gaps
+	/// FloatSet -> Number of intervals
 	#[controls_layout]
 	len: u32,
 	// Number of values referencing this value
@@ -680,14 +744,14 @@ struct ValueStorage {
 	#[varlen_array]
 	ints: [i64; match *ty {
 		ValType::Int => 1,
-		ValType::IntSet => ValueStorage::set_storage_len(*len),
+		ValType::IntSet => ValueStorage::int_set_len(*len),
 		_ => 0,
 	}],
 	#[allow(dead_code)] // accessed through [`.refs()`]
 	#[varlen_array]
 	floats: [FloatVal; match *ty {
 		ValType::Float => 1,
-		ValType::FloatSet => ValueStorage::set_storage_len(*len),
+		ValType::FloatSet => *len as usize * 2,
 		_ => 0,
 	}],
 	#[allow(dead_code)] // accessed through [`.refs()`]
@@ -702,7 +766,7 @@ struct ValueStorage {
 }
 
 impl ValueStorage {
-	const fn set_storage_len(len: u32) -> usize {
+	const fn int_set_len(len: u32) -> usize {
 		let has_lb = (len & 0b01 != 0) as usize;
 		let has_ub = (len & 0b10 != 0) as usize;
 		((len >> 2) as usize * 2) + has_lb + has_ub
@@ -716,7 +780,7 @@ impl ValueStorage {
 					*v = 0.into();
 				}
 			}
-			ValType::View => todo!(),
+			ValType::View => slf.muts().values[0] = 0.into(),
 			ValType::IntVar => todo!(),
 			ValType::FloatVar => todo!(),
 			ValType::IntSetVar => todo!(),
@@ -745,6 +809,7 @@ unsafe impl<T> ArrayInitializer<T> for InitEmpty {
 #[cfg(test)]
 mod tests {
 	use expect_test::expect;
+	use itertools::Itertools;
 
 	use super::*;
 
@@ -859,7 +924,7 @@ mod tests {
 
 		let list = (1..=2000).map(Value::from).collect_vec();
 		let vlist = Value::new_tuple(list.clone());
-		assert_eq!(vlist.deref(), DataView::Seq(&list))
+		assert_eq!(vlist.deref(), DataView::Seq(&list));
 	}
 
 	#[test]
@@ -874,33 +939,40 @@ mod tests {
 		let DataView::IntSet(sv) = isv_inf.deref() else {
 			unreachable!()
 		};
-		expect!["-∞..+∞"].assert_eq(&sv.to_string());
+		expect!["int"].assert_eq(&sv.to_string());
 
-		let isv_simple = Value::new_int_set((-3).into(), 5.into(), []);
+		let isv_simple = Value::from_iter([IntVal::Int(-3)..=5.into()]);
 		let DataView::IntSet(sv) = isv_simple.deref() else {
 			unreachable!()
 		};
 		expect!["-3..5"].assert_eq(&sv.to_string());
-		assert!(itertools::equal(sv.values().unwrap(), -3..=5));
+		assert!(itertools::equal(sv.values(), (-3..=5).map_into()));
 
-		let isv_open_left = Value::new_int_set(None, 5.into(), []);
+		let isv_open_left = Value::from_iter([IntVal::InfNeg..=5.into()]);
 		let DataView::IntSet(sv) = isv_open_left.deref() else {
 			unreachable!()
 		};
 		expect!["..5"].assert_eq(&sv.to_string());
 
-		let isv_open_right = Value::new_int_set(0.into(), None, []);
+		let isv_open_right = Value::from_iter([0.into()..=IntVal::InfPos]);
 		let DataView::IntSet(sv) = isv_open_right.deref() else {
 			unreachable!()
 		};
 		expect!["0.."].assert_eq(&sv.to_string());
 
-		let isv_gaps = Value::new_int_set((-3).into(), 5.into(), [(-3, 0), (0, 3)]);
+		let isv_gaps = Value::from_iter([
+			IntVal::Int(-3)..=(-3).into(),
+			0.into()..=0.into(),
+			3.into()..=5.into(),
+		]);
 		let DataView::IntSet(sv) = isv_gaps.deref() else {
 			unreachable!()
 		};
-		expect!["-3..-3  ∪ 0..0  ∪ 3..5"].assert_eq(&sv.to_string());
-		assert!(itertools::equal(sv.values().unwrap(), [-3, 0, 3, 4, 5]));
+		expect!["-3..-3 ∪ 0..0 ∪ 3..5"].assert_eq(&sv.to_string());
+		assert!(itertools::equal(
+			sv.values(),
+			[-3i64, 0, 3, 4, 5].into_iter().map_into()
+		));
 
 		let fsv_empty = FLOAT_SET_EMPTY.clone();
 		let DataView::FloatSet(sv) = fsv_empty.deref() else {
@@ -912,9 +984,9 @@ mod tests {
 		let DataView::FloatSet(sv) = fsv_inf.deref() else {
 			unreachable!()
 		};
-		expect!["-∞..+∞"].assert_eq(&sv.to_string());
+		expect!["float"].assert_eq(&sv.to_string());
 
-		let fsv_simple = Value::new_float_set((-2.3).into(), 4.3.into(), []);
+		let fsv_simple = Value::from_iter([FloatVal::from(-2.3)..=4.3.into()]);
 		let DataView::FloatSet(sv) = fsv_simple.deref() else {
 			unreachable!()
 		};

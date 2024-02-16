@@ -1,4 +1,5 @@
 use std::{
+	cmp::{Eq, Ordering},
 	fmt::Display,
 	hash::Hash,
 	ops::{Add, Div, Mul, Rem, Sub},
@@ -6,11 +7,16 @@ use std::{
 
 use crate::error::ArithmeticError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntVal {
 	InfPos,
 	InfNeg,
 	Int(i64),
+}
+impl IntVal {
+	pub fn is_finite(&self) -> bool {
+		matches!(self, IntVal::Int(_))
+	}
 }
 impl From<i64> for IntVal {
 	fn from(value: i64) -> Self {
@@ -23,6 +29,24 @@ impl Display for IntVal {
 			IntVal::InfPos => write!(f, "+∞"),
 			IntVal::InfNeg => write!(f, "-∞"),
 			IntVal::Int(i) => write!(f, "{i}"),
+		}
+	}
+}
+impl PartialOrd for IntVal {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+impl Ord for IntVal {
+	fn cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(IntVal::InfPos, IntVal::InfPos) => Ordering::Equal,
+			(IntVal::InfNeg, IntVal::InfNeg) => Ordering::Equal,
+			(IntVal::InfPos, _) => Ordering::Greater,
+			(IntVal::InfNeg, _) => Ordering::Less,
+			(_, IntVal::InfPos) => Ordering::Less,
+			(_, IntVal::InfNeg) => Ordering::Greater,
+			(IntVal::Int(l), IntVal::Int(r)) => l.cmp(r),
 		}
 	}
 }
@@ -139,6 +163,13 @@ impl IntVal {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FloatVal(f64);
 
+impl FloatVal {
+	pub const INFINITY: FloatVal = FloatVal(f64::INFINITY);
+	pub const NEG_INFINITY: FloatVal = FloatVal(f64::NEG_INFINITY);
+	pub fn is_finite(&self) -> bool {
+		self.0.is_finite()
+	}
+}
 impl From<f64> for FloatVal {
 	fn from(value: f64) -> Self {
 		assert!(!value.is_nan(), "NaN is not a valid FloatVal");
@@ -159,7 +190,7 @@ impl Display for FloatVal {
 				write!(f, "+∞")
 			}
 		} else {
-			write!(f, "{}", self.0)
+			write!(f, "{:?}", self.0)
 		}
 	}
 }
