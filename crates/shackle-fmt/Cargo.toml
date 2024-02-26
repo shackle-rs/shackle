@@ -9,7 +9,7 @@ version = "0.1.0"
 log = "0.4.18"
 rustc-hash = "1.1.0"
 shackle-compiler = {path = "../shackle-compiler"}
-tree-sitter = "0.20.10"
+tree-sitter = "0.21.0"
 tree-sitter-minizinc = {path = "../../parsers/tree-sitter-minizinc"}
 
 [dev-dependencies]
