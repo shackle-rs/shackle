@@ -37,7 +37,7 @@ fn cst(db: &dyn SourceParser, file: FileRef) -> Result<Cst> {
 
 	let mut parser = Parser::new();
 	parser
-		.set_language(tree_sitter_lang)
+		.set_language(&tree_sitter_lang)
 		.expect("Failed to set Tree Sitter parser language");
 	let tree = parser
 		.parse(contents.as_bytes(), None)

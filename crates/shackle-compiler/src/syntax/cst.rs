@@ -331,7 +331,7 @@ mod test {
 	fn check_cst_file(source: &str, expected: ExpectFile) {
 		let mut parser = Parser::new();
 		parser
-			.set_language(tree_sitter_minizinc::language())
+			.set_language(&tree_sitter_minizinc::language())
 			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
@@ -357,7 +357,7 @@ mod test {
 		"#;
 		let mut parser = Parser::new();
 		parser
-			.set_language(tree_sitter_minizinc::language())
+			.set_language(&tree_sitter_minizinc::language())
 			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);

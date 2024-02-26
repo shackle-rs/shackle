@@ -213,7 +213,7 @@ impl CommentMap {
 		let mut map: FxHashMap<usize, Comments> = FxHashMap::default();
 
 		let query = Query::new(
-			tree_sitter_minizinc::language(),
+			&tree_sitter_minizinc::language(),
 			tree_sitter_minizinc::COMMENTS_QUERY,
 		)
 		.expect("Failed to create query");

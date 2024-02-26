@@ -10,7 +10,7 @@ pub fn check_format_file(path: &Path, options: &MiniZincFormatOptions) -> String
 		.unwrap_or_else(|err| panic!("Failed to read {} ({})", path.to_string_lossy(), err));
 	let mut parser = Parser::new();
 	parser
-		.set_language(tree_sitter_minizinc::language())
+		.set_language(&tree_sitter_minizinc::language())
 		.unwrap();
 	let tree = parser.parse(source.as_bytes(), None).unwrap();
 	let model = MznModel::new(Cst::from_str(tree, &source));

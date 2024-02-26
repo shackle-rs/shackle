@@ -31,7 +31,7 @@ use crate::{
 pub(crate) fn parse_dzn(src: &SourceFile) -> Result<Vec<Assignment>, Error> {
 	let mut parser = Parser::new();
 	parser
-		.set_language(tree_sitter_datazinc::language())
+		.set_language(&tree_sitter_datazinc::language())
 		.expect("Failed to set Tree Sitter parser language");
 	let tree = parser
 		.parse(src.contents().as_bytes(), None)
