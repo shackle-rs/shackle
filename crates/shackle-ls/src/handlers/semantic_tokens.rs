@@ -33,7 +33,7 @@ impl RequestHandler<SemanticTokensFullRequest, ModelRef> for SemanticTokensHandl
 	) -> Result<Option<SemanticTokensResult>, ResponseError> {
 		if let Ok(cst) = db.cst(*model_ref) {
 			let query = tree_sitter::Query::new(
-				tree_sitter_minizinc::language(),
+				&tree_sitter_minizinc::language(),
 				tree_sitter_minizinc::IDENTIFIERS_QUERY,
 			)
 			.expect("Failed to create query");

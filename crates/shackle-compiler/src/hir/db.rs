@@ -490,7 +490,7 @@ fn items_with_case(db: &dyn Hir, model: ModelRef) -> Arc<Vec<ItemRef>> {
 	let source_map = db.lookup_source_map(model);
 	let cst = db.cst(*model).unwrap();
 	let query = tree_sitter::Query::new(
-		tree_sitter_minizinc::language(),
+		&tree_sitter_minizinc::language(),
 		tree_sitter_minizinc::CASE_EXPRESSION_QUERY,
 	)
 	.expect("Failed to create query");

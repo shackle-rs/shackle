@@ -1,5 +1,5 @@
 //! Helper utilities for dealing with AST nodes.
-use std::{fmt::Debug, marker::PhantomData};
+use std::{fmt::Debug, marker::PhantomData, num::NonZeroU16};
 
 use crate::syntax::cst::CstNode;
 
@@ -51,7 +51,7 @@ pub trait AstNode: Debug {
 /// Iterator over child nodes with a particular field name
 #[derive(Clone)]
 pub struct Children<'a, T> {
-	pub(crate) field: u16,
+	pub(crate) field: NonZeroU16,
 	pub(crate) tree: &'a Cst,
 	pub(crate) cursor: TreeCursor<'a>,
 	pub(crate) done: bool,
@@ -404,7 +404,7 @@ pub mod test {
 			_ => unreachable!("check_ast_with_lang should only be called on model files"),
 		};
 		let mut parser = Parser::new();
-		parser.set_language(lang).unwrap();
+		parser.set_language(&lang).unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);
 		let model = match language {
@@ -429,7 +429,7 @@ pub mod test {
 	pub fn check_ast_file(source: &str, expected: ExpectFile) {
 		let mut parser = Parser::new();
 		parser
-			.set_language(tree_sitter_minizinc::language())
+			.set_language(&tree_sitter_minizinc::language())
 			.unwrap();
 		let tree = parser.parse(source.as_bytes(), None).unwrap();
 		let cst = Cst::from_str(tree, source);

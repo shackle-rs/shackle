@@ -73,7 +73,7 @@ impl RequestHandler<References, ReferencesHandlerData> for ReferencesHandler {
 			for m in models.iter().copied() {
 				let cst = db.cst(*m).ok()?;
 				let query = tree_sitter::Query::new(
-					tree_sitter_minizinc::language(),
+					&tree_sitter_minizinc::language(),
 					tree_sitter_minizinc::IDENTIFIERS_QUERY,
 				)
 				.expect("Failed to create query");
