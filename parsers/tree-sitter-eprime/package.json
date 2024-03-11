@@ -22,7 +22,7 @@
 	},
 	"homepage": "https://github.com/shackle-rs/shackle#readme",
 	"dependencies": {
-		"nan": "^2.16.0"
+		"nan": "^2.19.0"
 	},
 	"devDependencies": {
 		"tree-sitter-cli": "^0.21.0"
