@@ -18,8 +18,7 @@
 		"editors/code",
 		"parsers/tree-sitter-datazinc",
 		"parsers/tree-sitter-eprime",
-		"parsers/tree-sitter-minizinc",
-		"editors/code"
+		"parsers/tree-sitter-minizinc"
 	],
 	"devDependencies": {
 		"prettier": "^3.2.5"
