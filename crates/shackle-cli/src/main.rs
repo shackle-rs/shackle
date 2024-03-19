@@ -83,7 +83,6 @@ enum SubCommand {
 	/// Compile a model to the intermediate form accepted by the interpreter and
 	/// output the model to a file
 	Compile(Box<Compile>),
-	///
 	Solve(Box<Solve>),
 	Check(Box<Check>),
 }

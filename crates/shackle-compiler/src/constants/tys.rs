@@ -28,6 +28,7 @@ macro_rules! type_registry {
 	};
 }
 
+#[allow(unused_imports)] // TODO
 pub(crate) use type_registry;
 
 type_registry!(

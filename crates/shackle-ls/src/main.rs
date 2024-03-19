@@ -72,6 +72,7 @@ fn main_loop(
 	params: serde_json::Value,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
 	let params: InitializeParams = serde_json::from_value(params).unwrap();
+	#[allow(deprecated)] // TODO
 	let mut db = LanguageServerDatabase::new(&connection, params.root_uri);
 	for msg in &connection.receiver {
 		match msg {

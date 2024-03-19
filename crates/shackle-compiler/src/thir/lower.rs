@@ -27,7 +27,7 @@ use crate::{
 		ids::{EntityRef, ExpressionRef, ItemRef, LocalItemRef, NodeRef, PatternRef},
 		PatternTy, TypeResult,
 	},
-	ty::{OptType, Ty, TyData, VarType},
+	ty::{Ty, TyData},
 	utils::{arena::ArenaIndex, impl_enum_from, maybe_grow_stack},
 };
 
