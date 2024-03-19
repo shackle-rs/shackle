@@ -8,7 +8,6 @@ use crate::{
 		ast::AstNode,
 		eprime::{self, MatrixComprehension},
 	},
-	utils::arena::ArenaIndex,
 	Error,
 };
 

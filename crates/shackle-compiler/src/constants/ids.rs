@@ -65,6 +65,7 @@ macro_rules! id_registry {
 	};
 }
 
+#[allow(unused_imports)] // TODO
 pub(crate) use id_registry;
 
 id_registry!(

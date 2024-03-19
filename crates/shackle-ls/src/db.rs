@@ -19,6 +19,7 @@ pub trait LanguageServerContext: Deref<Target = CompilerDatabase> {
 	) -> Result<ModelRef, ResponseError>;
 
 	/// Get the workspace URI
+	#[allow(dead_code)] // TODO
 	fn get_workspace_uri(&self) -> Option<&Url>;
 }
 

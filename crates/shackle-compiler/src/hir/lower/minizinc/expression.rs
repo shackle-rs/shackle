@@ -6,7 +6,7 @@ use crate::{
 	diagnostics::{InvalidArrayLiteral, InvalidNumericLiteral, SyntaxError},
 	hir::{db::Hir, source::Origin, *},
 	syntax::{ast::AstNode, minizinc},
-	utils::{arena::ArenaIndex, maybe_grow_stack},
+	utils::maybe_grow_stack,
 	Error,
 };
 
