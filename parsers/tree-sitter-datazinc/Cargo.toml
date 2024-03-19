@@ -4,17 +4,12 @@ description = "datazinc grammar for the tree-sitter parsing library"
 version = "0.0.1"
 keywords = ["incremental", "parsing", "datazinc"]
 categories = ["parsing", "text-editors"]
-repository = "https://github.com/tree-sitter/tree-sitter-datazinc"
+repository = "https://github.com/shackle-rs/shackle"
 edition = "2021"
 license = "MIT"
 
 build = "bindings/rust/build.rs"
-include = [
-  "bindings/rust/*",
-  "grammar.js",
-  "queries/*",
-  "src/*",
-]
+include = ["bindings/rust/*", "grammar.js", "queries/*", "src/*"]
 
 [lib]
 path = "bindings/rust/lib.rs"
