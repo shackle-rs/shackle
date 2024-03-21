@@ -1,4 +1,8 @@
-use std::{fmt::Debug, iter::Map, ops::RangeInclusive};
+use std::{
+	fmt::{Debug, Display},
+	iter::Map,
+	ops::RangeInclusive,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +21,20 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct RangeList<E: PartialOrd> {
 	ranges: Vec<(E, E)>,
+}
+
+impl<E: PartialOrd + Display> Display for RangeList<E> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut first = true;
+		for r in &self.ranges {
+			if !first {
+				write!(f, " union ")?;
+			}
+			write!(f, "{}..{}", r.0, r.1)?;
+			first = false;
+		}
+		Ok(())
+	}
 }
 
 impl<E: PartialOrd + Debug> Debug for RangeList<E> {
