@@ -1,3 +1,13 @@
 [workspace]
-members = ["crates/*", "parsers/*"]
+members = [
+  "crates/flatzinc-serde",
+  "crates/shackle",
+  "crates/shackle-cli",
+  "crates/shackle-compiler",
+  "crates/shackle-fmt",
+  "crates/shackle-ls",
+  "parsers/tree-sitter-datazinc",
+  "parsers/tree-sitter-eprime",
+  "parsers/tree-sitter-minizinc",
+]
 resolver = "2"
