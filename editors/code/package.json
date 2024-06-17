@@ -95,7 +95,7 @@
 		"@types/vscode": "^1.90.0",
 		"@typescript-eslint/eslint-plugin": "^7.13.0",
 		"@typescript-eslint/parser": "^7.13.0",
-		"eslint": "^9.2.0",
+		"eslint": "^9.5.0",
 		"mocha": "^10.4.0",
 		"typescript": "^5.4.5"
 	},
