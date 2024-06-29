@@ -142,7 +142,7 @@ impl<Idenfier: Display> Display for AnnotationArgument<Idenfier> {
 				let mut first = true;
 				for v in arr {
 					if !first {
-						write!(f, ", ")?
+						write!(f, ", ")?;
 					}
 					write!(f, "{v}")?;
 					first = false;
@@ -170,7 +170,7 @@ impl<Identifier: Display> Display for AnnotationCall<Identifier> {
 		let mut first = true;
 		for arg in &self.args {
 			if !first {
-				write!(f, ", ")?
+				write!(f, ", ")?;
 			}
 			write!(f, "{arg}")?;
 			first = false;
@@ -216,7 +216,7 @@ impl<Identifier: Display> Display for Argument<Identifier> {
 				let mut first = true;
 				for v in arr {
 					if !first {
-						write!(f, ", ")?
+						write!(f, ", ")?;
 					}
 					write!(f, "{v}")?;
 					first = false;
@@ -302,17 +302,17 @@ impl<Identifier: Display> Display for Constraint<Identifier> {
 		let mut first = true;
 		for arg in &self.args {
 			if !first {
-				write!(f, ", ")?
+				write!(f, ", ")?;
 			}
 			write!(f, "{arg}")?;
 			first = false;
 		}
 		write!(f, ")")?;
 		if let Some(defines) = &self.defines {
-			write!(f, " ::defines_var({defines})")?
+			write!(f, " ::defines_var({defines})")?;
 		}
 		for a in &self.ann {
-			write!(f, " {a}")?
+			write!(f, " {a}")?;
 		}
 		Ok(())
 	}
@@ -388,9 +388,9 @@ impl<Identifier: Ord + Display> Display for FlatZinc<Identifier> {
 		for (ident, var) in &self.variables {
 			write!(f, "var ")?;
 			if let Some(dom) = &var.domain {
-				write!(f, "{dom}")?
+				write!(f, "{dom}")?;
 			} else {
-				write!(f, "{}", var.ty)?
+				write!(f, "{}", var.ty)?;
 			}
 			write!(f, ": {ident}")?;
 			if output_map.contains_key(&ident) {
@@ -403,12 +403,12 @@ impl<Identifier: Ord + Display> Display for FlatZinc<Identifier> {
 				write!(f, " ::var_is_introduced")?;
 			}
 			for ann in &var.ann {
-				write!(f, " {ann}")?
+				write!(f, " {ann}")?;
 			}
 			if let Some(val) = &var.value {
-				write!(f, " = {val}")?
+				write!(f, " = {val}")?;
 			}
-			writeln!(f, ";")?
+			writeln!(f, ";")?;
 		}
 		for (ident, arr) in &self.arrays {
 			let (ty, is_var) = arr.determine_type(self);
@@ -428,7 +428,7 @@ impl<Identifier: Ord + Display> Display for FlatZinc<Identifier> {
 				write!(f, " ::var_is_introduced")?;
 			}
 			for ann in &arr.ann {
-				write!(f, " {ann}")?
+				write!(f, " {ann}")?;
 			}
 			write!(f, " = [")?;
 			let mut first = true;
@@ -439,7 +439,7 @@ impl<Identifier: Ord + Display> Display for FlatZinc<Identifier> {
 				write!(f, "{v}")?;
 				first = false;
 			}
-			writeln!(f, "];")?
+			writeln!(f, "];")?;
 		}
 		for c in &self.constraints {
 			writeln!(f, "constraint {c};")?;
@@ -558,7 +558,7 @@ impl<Identifier: Display> Display for SolveObjective<Identifier> {
 		}
 		write!(f, "{}", self.method)?;
 		if let Some(obj) = &self.objective {
-			write!(f, " {obj}")?
+			write!(f, " {obj}")?;
 		}
 		Ok(())
 	}
@@ -653,7 +653,7 @@ mod tests {
 		let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
 		exp.assert_debug_eq(&fzn);
 		let fzn2: FlatZinc = serde_json::from_str(&serde_json::to_string(&fzn).unwrap()).unwrap();
-		assert_eq!(fzn, fzn2)
+		assert_eq!(fzn, fzn2);
 	}
 
 	macro_rules! test_file {
@@ -681,7 +681,8 @@ mod tests {
 		let _ = rdr.read_to_string(&mut content).unwrap();
 
 		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
-		expect_test::expect_file!["../corpus/documentation_example.debug.txt"].assert_debug_eq(&fzn)
+		expect_test::expect_file!["../corpus/documentation_example.debug.txt"]
+			.assert_debug_eq(&fzn);
 	}
 
 	#[test]
@@ -691,7 +692,7 @@ mod tests {
 		);
 		let fzn: FlatZinc<Ustr> = serde_json::from_reader(rdr).unwrap();
 		expect_test::expect_file!["../corpus/documentation_example.debug_ustr.txt"]
-			.assert_debug_eq(&fzn)
+			.assert_debug_eq(&fzn);
 	}
 
 	#[test]

@@ -335,7 +335,7 @@ impl<E: PartialOrd + Debug> Debug for RangeList<E> {
 		let mut first = true;
 		for r in self {
 			if !first {
-				write!(f, ", ")?
+				write!(f, ", ")?;
 			}
 			write!(f, "{:?}", r)?;
 			first = false;
@@ -424,7 +424,7 @@ where
 			});
 
 			if cur.1 >= next.0 || dist <= 1 {
-				cur.1 = next.1
+				cur.1 = next.1;
 			} else {
 				ranges.push(cur);
 				cur = next;

@@ -416,7 +416,7 @@ fn collect_range_list<I: IntoIterator<Item = RangeInclusive<IntVal>>>(
 	let mut cur = it.next().unwrap();
 	for next in it {
 		if *cur.end() >= (next.start() - 1) {
-			cur = *cur.start()..=*next.end()
+			cur = *cur.start()..=*next.end();
 		} else {
 			ranges.push(cur);
 			cur = next;
@@ -982,7 +982,7 @@ mod tests {
 		exp.assert_debug_eq(&inst);
 		let output = quick_xml::se::to_string(&inst).unwrap();
 		let inst2: T = quick_xml::de::from_str(&output).unwrap();
-		assert_eq!(inst, inst2)
+		assert_eq!(inst, inst2);
 	}
 
 	macro_rules! test_file {

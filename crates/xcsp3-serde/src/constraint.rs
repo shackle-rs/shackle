@@ -898,7 +898,7 @@ impl<Identifier: Display> Serialize for Channel<Identifier> {
 			value: &self.value,
 		};
 		if !self.inverse_list.is_empty() {
-			c.list.push(p(&self.inverse_list))
+			c.list.push(p(&self.inverse_list));
 		}
 		c.serialize(serializer)
 	}
