@@ -1,6 +1,6 @@
 [package]
 name = "flatzinc-serde"
-version = "0.3.0"
+version = "0.4.0"
 description = "FlatZinc serialization and deserialization"
 authors = [
 	"Jip J. Dekker <jip@dekker.one>",
@@ -17,7 +17,7 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-rangelist = { path = "../rangelist", version = "0.1" }
+rangelist = { path = "../rangelist", version = "0.2" }
 
 [dev-dependencies]
 serde_json = "1.0"
