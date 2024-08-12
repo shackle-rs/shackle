@@ -1,0 +1,39 @@
+[workspace]
+changelog_update = false # disable automatic changelog update
+
+### DISABLE PACKAGES NOT READY FOR RELEASE ###
+[[package]]
+name = "shackle"
+release = false
+
+[[package]]
+name = "shackle-cli"
+release = false
+
+[[package]]
+name = "shackle-compiler"
+release = false
+
+[[package]]
+name = "shackle-fmt"
+release = false
+
+[[package]]
+name = "shackle-ls"
+release = false
+
+[[package]]
+name = "shackle-runtime"
+release = false
+
+[[package]]
+name = "tree-sitter-datazinc"
+release = false
+
+[[package]]
+name = "tree-sitter-eprime"
+release = false
+
+[[package]]
+name = "tree-sitter-minizinc"
+release = false
