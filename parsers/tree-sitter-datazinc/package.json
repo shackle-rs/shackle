@@ -35,7 +35,7 @@
 	"homepage": "https://github.com/shackle-rs/shackle#readme",
 	"dependencies": {
 		"node-addon-api": "^8.1.0",
-		"node-gyp-build": "^4.8.1"
+		"node-gyp-build": "^4.8.2"
 	},
 	"peerDependencies": {
 		"tree-sitter": "^0.21.0"
