@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain and clippy
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@v1
         with:
           channel: ${{ env.RUST_CHANNEL }}
           components: clippy
