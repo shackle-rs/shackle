@@ -1,6 +1,6 @@
 [package]
 name = "xcsp3-serde"
-version = "0.1.1"
+version = "0.1.2"
 description = "XCSP3 serialization and deserialization"
 authors = ["Jip J. Dekker <jip@dekker.one>"]
 
