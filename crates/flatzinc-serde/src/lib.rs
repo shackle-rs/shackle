@@ -134,7 +134,7 @@ pub enum AnnotationArgument<Identifier = String> {
 	Literal(AnnotationLiteral<Identifier>),
 }
 
-impl<Idenfier: Display> Display for AnnotationArgument<Idenfier> {
+impl<Identifier: Display> Display for AnnotationArgument<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			AnnotationArgument::Array(arr) => {
@@ -189,7 +189,7 @@ pub enum AnnotationLiteral<Identifier = String> {
 	Annotation(Annotation<Identifier>),
 }
 
-impl<Idenfier: Display> Display for AnnotationLiteral<Idenfier> {
+impl<Identifier: Display> Display for AnnotationLiteral<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			AnnotationLiteral::BaseLiteral(lit) => write!(f, "{lit}"),
