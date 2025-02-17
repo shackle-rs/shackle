@@ -18,7 +18,7 @@ shackle-compiler = { path = "../shackle-compiler" }
 shackle-fmt = { path = "../shackle-fmt" }
 streaming-iterator = "0.1.9"
 threadpool = "1.8.1"
-tree-sitter = "0.24.2"
+tree-sitter = "0.25.1"
 tree-sitter-minizinc = { path = "../../parsers/tree-sitter-minizinc" }
 
 [dev-dependencies]
