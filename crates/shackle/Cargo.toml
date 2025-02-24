@@ -7,14 +7,14 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-itertools = "0.13.0"
+itertools = "0.14.0"
 log = "0.4.18"
 rustc-hash = "2.0.0"
 serde = "1.0.188"
 serde_json = "1.0.96"
 shackle-compiler = { path = "../shackle-compiler" }
 tempfile = "3.5.0"
-tree-sitter = "0.24.2"
+tree-sitter = "0.25.2"
 tree-sitter-datazinc = { path = "../../parsers/tree-sitter-datazinc" }
 
 [dev-dependencies]
