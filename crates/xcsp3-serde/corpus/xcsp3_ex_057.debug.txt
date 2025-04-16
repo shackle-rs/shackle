@@ -3,240 +3,250 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Count(
-            Count {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
+        Constraint(
+            Count(
+                Count {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "v1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "v2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "v3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "v4",
+                            ),
+                        ),
+                    ],
+                    values: [
+                        Var(
+                            Ident(
+                                "v",
+                            ),
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Ne,
+                        operand: Var(
+                            Ident(
+                                "k1",
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "v1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "v2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "v3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "v4",
-                        ),
-                    ),
-                ],
-                values: [
-                    Var(
-                        Ident(
-                            "v",
-                        ),
-                    ),
-                ],
-                condition: Condition {
-                    operator: Ne,
-                    operand: Var(
-                        Ident(
-                            "k1",
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
-        Count(
-            Count {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
-                },
-                list: [
-                    Var(
-                        Ident(
-                            "w1",
+        Constraint(
+            Count(
+                Count {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "w2",
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "w1",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "w3",
+                        Var(
+                            Ident(
+                                "w2",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "w4",
+                        Var(
+                            Ident(
+                                "w3",
+                            ),
                         ),
-                    ),
-                ],
-                values: [
-                    Const(
-                        1,
-                    ),
-                    Const(
-                        5,
-                    ),
-                    Const(
-                        8,
-                    ),
-                ],
-                condition: Condition {
-                    operator: Eq,
-                    operand: Var(
-                        Ident(
-                            "k2",
+                        Var(
+                            Ident(
+                                "w4",
+                            ),
                         ),
-                    ),
-                },
-            },
-        ),
-        Count(
-            Count {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c3",
-                    ),
-                    note: None,
-                },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x5",
-                        ),
-                    ),
-                ],
-                values: [
-                    Const(
-                        1,
-                    ),
-                ],
-                condition: Condition {
-                    operator: Ge,
-                    operand: Var(
-                        Ident(
-                            "k3",
-                        ),
-                    ),
-                },
-            },
-        ),
-        Count(
-            Count {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c4",
-                    ),
-                    note: None,
-                },
-                list: [
-                    Var(
-                        Ident(
-                            "y1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y4",
-                        ),
-                    ),
-                ],
-                values: [
-                    Const(
-                        0,
-                    ),
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
+                    ],
+                    values: [
                         Const(
-                            2,
+                            1,
                         ),
-                    ),
+                        Const(
+                            5,
+                        ),
+                        Const(
+                            8,
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Eq,
+                        operand: Var(
+                            Ident(
+                                "k2",
+                            ),
+                        ),
+                    },
                 },
-            },
+            ),
         ),
-        Count(
-            Count {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c5",
-                    ),
-                    note: None,
+        Constraint(
+            Count(
+                Count {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c3",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x5",
+                            ),
+                        ),
+                    ],
+                    values: [
+                        Const(
+                            1,
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Ge,
+                        operand: Var(
+                            Ident(
+                                "k3",
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "z1",
+            ),
+        ),
+        Constraint(
+            Count(
+                Count {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c4",
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "z3",
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "y1",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "z3",
+                        Var(
+                            Ident(
+                                "y2",
+                            ),
                         ),
-                    ),
-                ],
-                values: [
-                    Var(
-                        Ident(
-                            "z",
+                        Var(
+                            Ident(
+                                "y3",
+                            ),
                         ),
-                    ),
-                ],
-                condition: Condition {
-                    operator: Eq,
-                    operand: Var(
-                        Ident(
-                            "k5",
+                        Var(
+                            Ident(
+                                "y4",
+                            ),
                         ),
-                    ),
+                    ],
+                    values: [
+                        Const(
+                            0,
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                2,
+                            ),
+                        ),
+                    },
                 },
-            },
+            ),
+        ),
+        Constraint(
+            Count(
+                Count {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c5",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "z1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z3",
+                            ),
+                        ),
+                    ],
+                    values: [
+                        Var(
+                            Ident(
+                                "z",
+                            ),
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Eq,
+                        operand: Var(
+                            Ident(
+                                "k5",
+                            ),
+                        ),
+                    },
+                },
+            ),
         ),
     ],
     objectives: Objectives {

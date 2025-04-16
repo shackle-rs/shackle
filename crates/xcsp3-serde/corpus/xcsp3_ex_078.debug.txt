@@ -3,39 +3,41 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Circuit(
-            Circuit {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Circuit(
+                Circuit {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [
+                            Var(
+                                Ident(
+                                    "x0",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x1",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x2",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x3",
+                                ),
+                            ),
+                        ],
+                        start_index: 0,
+                    },
+                    size: None,
                 },
-                list: OffsetList {
-                    list: [
-                        Var(
-                            Ident(
-                                "x0",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x1",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x2",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x3",
-                            ),
-                        ),
-                    ],
-                    start_index: 0,
-                },
-                size: None,
-            },
+            ),
         ),
     ],
     objectives: Objectives {

@@ -3,40 +3,42 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Precedence(
-            Precedence {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Precedence(
+                Precedence {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "s1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s4",
+                            ),
+                        ),
+                    ],
+                    values: [
+                        4,
+                        0,
+                    ],
+                    covered: false,
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "s1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s4",
-                        ),
-                    ),
-                ],
-                values: [
-                    4,
-                    0,
-                ],
-                covered: false,
-            },
+            ),
         ),
     ],
     objectives: Objectives {

@@ -3,57 +3,61 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Instantiation(
-            Instantiation {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Instantiation(
+                Instantiation {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    ty: None,
+                    cost: None,
+                    list: [
+                        Ident(
+                            "x",
+                        ),
+                        Ident(
+                            "y",
+                        ),
+                        Ident(
+                            "z",
+                        ),
+                    ],
+                    values: [
+                        12,
+                        4,
+                        30,
+                    ],
                 },
-                ty: None,
-                cost: None,
-                list: [
-                    Ident(
-                        "x",
-                    ),
-                    Ident(
-                        "y",
-                    ),
-                    Ident(
-                        "z",
-                    ),
-                ],
-                values: [
-                    12,
-                    4,
-                    30,
-                ],
-            },
+            ),
         ),
-        Instantiation(
-            Instantiation {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Instantiation(
+                Instantiation {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    ty: None,
+                    cost: None,
+                    list: [
+                        ArrayAccess(
+                            "w",
+                            [
+                                Full,
+                            ],
+                        ),
+                    ],
+                    values: [
+                        1,
+                        0,
+                        2,
+                        1,
+                        3,
+                        1,
+                    ],
                 },
-                ty: None,
-                cost: None,
-                list: [
-                    ArrayAccess(
-                        "w",
-                        [
-                            Full,
-                        ],
-                    ),
-                ],
-                values: [
-                    1,
-                    0,
-                    2,
-                    1,
-                    3,
-                    1,
-                ],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

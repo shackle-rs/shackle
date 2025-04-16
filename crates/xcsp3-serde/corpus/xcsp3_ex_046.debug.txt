@@ -3,41 +3,43 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        AllEqual(
-            AllEqual {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            AllEqual(
+                AllEqual {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x5",
+                            ),
+                        ),
+                    ],
+                    except: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x5",
-                        ),
-                    ),
-                ],
-                except: [],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

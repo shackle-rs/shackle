@@ -18,40 +18,42 @@ Instance {
     ],
     arrays: [],
     constraints: [
-        Intension(
-            Intension {
-                info: MetaInfo {
-                    identifier: None,
-                    note: Some(
-                        "this constraint links x and y",
+        Constraint(
+            Intension(
+                Intension {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: Some(
+                            "this constraint links x and y",
+                        ),
+                    },
+                    function: Equal(
+                        [
+                            Var(
+                                Ident(
+                                    "y",
+                                ),
+                            ),
+                            Int(
+                                Mul(
+                                    [
+                                        Var(
+                                            Ident(
+                                                "x",
+                                            ),
+                                        ),
+                                        Var(
+                                            Ident(
+                                                "x",
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
                     ),
                 },
-                function: Equal(
-                    [
-                        Var(
-                            Ident(
-                                "y",
-                            ),
-                        ),
-                        Int(
-                            Mul(
-                                [
-                                    Var(
-                                        Ident(
-                                            "x",
-                                        ),
-                                    ),
-                                    Var(
-                                        Ident(
-                                            "x",
-                                        ),
-                                    ),
-                                ],
-                            ),
-                        ),
-                    ],
-                ),
-            },
+            ),
         ),
     ],
     objectives: Objectives {

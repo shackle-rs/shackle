@@ -3,70 +3,72 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Channel(
-            Channel {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
+        Constraint(
+            Channel(
+                Channel {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x0",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                    ],
+                    inverse_list: [
+                        Var(
+                            Ident(
+                                "y0",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y4",
+                            ),
+                        ),
+                    ],
+                    value: None,
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x0",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                ],
-                inverse_list: [
-                    Var(
-                        Ident(
-                            "y0",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y4",
-                        ),
-                    ),
-                ],
-                value: None,
-            },
+            ),
         ),
     ],
     objectives: Objectives {

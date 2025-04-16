@@ -21,53 +21,55 @@ Instance {
         },
     ],
     constraints: [
-        Intension(
-            Intension {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Intension(
+                Intension {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    function: Equal(
+                        [
+                            Int(
+                                Add(
+                                    [
+                                        Var(
+                                            ArrayAccess(
+                                                "x",
+                                                [
+                                                    Single(
+                                                        0,
+                                                    ),
+                                                ],
+                                            ),
+                                        ),
+                                        Var(
+                                            ArrayAccess(
+                                                "x",
+                                                [
+                                                    Single(
+                                                        1,
+                                                    ),
+                                                ],
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
+                    ),
                 },
-                function: Equal(
-                    [
-                        Int(
-                            Add(
-                                [
-                                    Var(
-                                        ArrayAccess(
-                                            "x",
-                                            [
-                                                Single(
-                                                    0,
-                                                ),
-                                            ],
-                                        ),
-                                    ),
-                                    Var(
-                                        ArrayAccess(
-                                            "x",
-                                            [
-                                                Single(
-                                                    1,
-                                                ),
-                                            ],
-                                        ),
-                                    ),
-                                ],
-                            ),
-                        ),
-                        Var(
-                            ArrayAccess(
-                                "x",
-                                [
-                                    Single(
-                                        2,
-                                    ),
-                                ],
-                            ),
-                        ),
-                    ],
-                ),
-            },
+            ),
         ),
     ],
     objectives: Objectives {

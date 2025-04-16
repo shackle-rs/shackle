@@ -3,39 +3,41 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
-                },
-                list: [
-                    Var(
-                        ArrayAccess(
-                            "w",
-                            [
-                                Full,
-                            ],
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            ArrayAccess(
+                                "w",
+                                [
+                                    Full,
+                                ],
+                            ),
                         ),
-                    ),
-                ],
-                coeffs: [
-                    1,
-                    1,
-                    1,
-                    1,
-                    2,
-                    2,
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            10,
+                    ],
+                    coeffs: [
+                        1,
+                        1,
+                        1,
+                        1,
+                        2,
+                        2,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                10,
+                            ),
                         ),
-                    ),
+                    },
                 },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

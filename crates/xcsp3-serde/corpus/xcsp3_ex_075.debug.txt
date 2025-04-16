@@ -3,71 +3,73 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        BinPacking(
-            BinPacking {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
-                },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
+        Constraint(
+            BinPacking(
+                BinPacking {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x5",
-                        ),
-                    ),
-                ],
-                sizes: [
-                    Const(
-                        25,
-                    ),
-                    Const(
-                        53,
-                    ),
-                    Const(
-                        38,
-                    ),
-                    Const(
-                        41,
-                    ),
-                    Const(
-                        32,
-                    ),
-                ],
-                condition: Some(
-                    Condition {
-                        operator: Le,
-                        operand: Int(
-                            Const(
-                                100,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
                             ),
                         ),
-                    },
-                ),
-                limits: [],
-                loads: [],
-            },
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x5",
+                            ),
+                        ),
+                    ],
+                    sizes: [
+                        Const(
+                            25,
+                        ),
+                        Const(
+                            53,
+                        ),
+                        Const(
+                            38,
+                        ),
+                        Const(
+                            41,
+                        ),
+                        Const(
+                            32,
+                        ),
+                    ],
+                    condition: Some(
+                        Condition {
+                            operator: Le,
+                            operand: Int(
+                                Const(
+                                    100,
+                                ),
+                            ),
+                        },
+                    ),
+                    limits: [],
+                    loads: [],
+                },
+            ),
         ),
     ],
     objectives: Objectives {

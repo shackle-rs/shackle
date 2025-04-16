@@ -3,135 +3,141 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        NValues(
-            NValues {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
+        Constraint(
+            NValues(
+                NValues {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                    ],
+                    except: [],
+                    condition: Condition {
+                        operator: Eq,
+                        operand: Int(
+                            Const(
+                                3,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                ],
-                except: [],
-                condition: Condition {
-                    operator: Eq,
-                    operand: Int(
-                        Const(
-                            3,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
-        NValues(
-            NValues {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
+        Constraint(
+            NValues(
+                NValues {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "y1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y5",
+                            ),
+                        ),
+                    ],
+                    except: [],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Var(
+                            Ident(
+                                "w",
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "y1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y5",
-                        ),
-                    ),
-                ],
-                except: [],
-                condition: Condition {
-                    operator: Le,
-                    operand: Var(
-                        Ident(
-                            "w",
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
-        NValues(
-            NValues {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c3",
-                    ),
-                    note: None,
+        Constraint(
+            NValues(
+                NValues {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c3",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "z1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z4",
+                            ),
+                        ),
+                    ],
+                    except: [
+                        0,
+                    ],
+                    condition: Condition {
+                        operator: Eq,
+                        operand: Int(
+                            Const(
+                                2,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "z1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z4",
-                        ),
-                    ),
-                ],
-                except: [
-                    0,
-                ],
-                condition: Condition {
-                    operator: Eq,
-                    operand: Int(
-                        Const(
-                            2,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

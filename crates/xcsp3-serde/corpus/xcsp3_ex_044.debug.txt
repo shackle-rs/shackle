@@ -3,66 +3,70 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        AllDifferent(
-            AllDifferent {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
+        Constraint(
+            AllDifferent(
+                AllDifferent {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x5",
+                            ),
+                        ),
+                    ],
+                    except: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x5",
-                        ),
-                    ),
-                ],
-                except: [],
-            },
+            ),
         ),
-        AllDifferent(
-            AllDifferent {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
-                },
-                list: [
-                    Var(
-                        ArrayAccess(
-                            "y",
-                            [
-                                Full,
-                            ],
+        Constraint(
+            AllDifferent(
+                AllDifferent {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
                         ),
-                    ),
-                ],
-                except: [
-                    0,
-                ],
-            },
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            ArrayAccess(
+                                "y",
+                                [
+                                    Full,
+                                ],
+                            ),
+                        ),
+                    ],
+                    except: [
+                        0,
+                    ],
+                },
+            ),
         ),
     ],
     objectives: Objectives {

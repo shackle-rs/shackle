@@ -3,38 +3,40 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        AllEqual(
-            AllEqual {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c",
-                    ),
-                    note: None,
+        Constraint(
+            AllEqual(
+                AllEqual {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "s1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s4",
+                            ),
+                        ),
+                    ],
+                    except: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "s1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s4",
-                        ),
-                    ),
-                ],
-                except: [],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

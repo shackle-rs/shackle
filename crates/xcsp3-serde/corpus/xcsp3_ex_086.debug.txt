@@ -3,31 +3,33 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Instantiation(
-            Instantiation {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Instantiation(
+                Instantiation {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    ty: None,
+                    cost: None,
+                    list: [
+                        ArrayAccess(
+                            "w",
+                            [
+                                Full,
+                            ],
+                        ),
+                    ],
+                    values: [
+                        0,
+                        0,
+                        0,
+                        1,
+                        1,
+                        1,
+                    ],
                 },
-                ty: None,
-                cost: None,
-                list: [
-                    ArrayAccess(
-                        "w",
-                        [
-                            Full,
-                        ],
-                    ),
-                ],
-                values: [
-                    0,
-                    0,
-                    0,
-                    1,
-                    1,
-                    1,
-                ],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

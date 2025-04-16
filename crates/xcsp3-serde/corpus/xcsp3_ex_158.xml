@@ -1,15 +1,12 @@
-<constraints>
-  <block class="clues">
-    <intension> ... </intension> 
-    <intension> ... </intension>
-    ...
-  </block>
-  <block class="symmetry-breaking">
-    <lex> ... </lex> 
-    <lex> ... </lex>
-    ...
-  </block>
-  <block class="redundant-constraints"> ... </block>
-  <block note="Management of first week"> ... </block>
-  <block note="Management of second week"> ... </block>
-</constraints>
+<instance format="XCSP3" type="CSP">
+  <constraints>
+    <block class="clues">
+      <intension> eq(card(s1),2) </intension>
+      <intension> eq(card(s2),3) </intension>
+    </block>
+    <block class="symmetry-breaking"></block>
+    <block class="redundant-constraints nogoods"></block>
+    <block note="Management of first week"></block>
+    <block note="Management of second week"></block>
+  </constraints>
+</instance>

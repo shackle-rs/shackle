@@ -34,61 +34,63 @@ Instance {
     ],
     arrays: [],
     constraints: [
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "c1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c5",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c10",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c20",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c50",
+                            ),
+                        ),
+                    ],
+                    coeffs: [
+                        1,
+                        2,
+                        5,
+                        10,
+                        20,
+                        50,
+                    ],
+                    condition: Condition {
+                        operator: Eq,
+                        operand: Int(
+                            Const(
+                                83,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "c1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c5",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c10",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c20",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c50",
-                        ),
-                    ),
-                ],
-                coeffs: [
-                    1,
-                    2,
-                    5,
-                    10,
-                    20,
-                    50,
-                ],
-                condition: Condition {
-                    operator: Eq,
-                    operand: Int(
-                        Const(
-                            83,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

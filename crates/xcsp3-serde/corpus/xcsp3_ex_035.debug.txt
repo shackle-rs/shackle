@@ -3,30 +3,56 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Intension(
-            Intension {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
+        Constraint(
+            Intension(
+                Intension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    function: Equal(
+                        [
+                            Int(
+                                Add(
+                                    [
+                                        Var(
+                                            Ident(
+                                                "x",
+                                            ),
+                                        ),
+                                        Var(
+                                            Ident(
+                                                "y",
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "z",
+                                ),
+                            ),
+                        ],
                     ),
-                    note: None,
                 },
-                function: Equal(
-                    [
-                        Int(
-                            Add(
-                                [
-                                    Var(
-                                        Ident(
-                                            "x",
-                                        ),
-                                    ),
-                                    Var(
-                                        Ident(
-                                            "y",
-                                        ),
-                                    ),
-                                ],
+            ),
+        ),
+        Constraint(
+            Intension(
+                Intension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    function: GreaterThanEq(
+                        Var(
+                            Ident(
+                                "w",
                             ),
                         ),
                         Var(
@@ -34,31 +60,9 @@ Instance {
                                 "z",
                             ),
                         ),
-                    ],
-                ),
-            },
-        ),
-        Intension(
-            Intension {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
                     ),
-                    note: None,
                 },
-                function: GreaterThanEq(
-                    Var(
-                        Ident(
-                            "w",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z",
-                        ),
-                    ),
-                ),
-            },
+            ),
         ),
     ],
     objectives: Objectives {

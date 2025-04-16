@@ -3,62 +3,64 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Cardinality(
-            Cardinality {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c3",
-                    ),
-                    note: None,
+        Constraint(
+            Cardinality(
+                Cardinality {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c3",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "w1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "w2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "w3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "w4",
+                            ),
+                        ),
+                    ],
+                    values: [
+                        Var(
+                            Ident(
+                                "v1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "v2",
+                            ),
+                        ),
+                    ],
+                    closed: false,
+                    occurs: [
+                        Var(
+                            Ident(
+                                "n1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "n2",
+                            ),
+                        ),
+                    ],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "w1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "w2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "w3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "w4",
-                        ),
-                    ),
-                ],
-                values: [
-                    Var(
-                        Ident(
-                            "v1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "v2",
-                        ),
-                    ),
-                ],
-                closed: false,
-                occurs: [
-                    Var(
-                        Ident(
-                            "n1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "n2",
-                        ),
-                    ),
-                ],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

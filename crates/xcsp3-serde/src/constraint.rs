@@ -22,9 +22,143 @@ use serde::{
 
 use crate::{
 	as_str, deserialize_int_vals,
-	expression::{identifier, int, sequence, tuple, whitespace_seperated, BoolExp, Exp, IntExp},
+	expression::{
+		identifier, int, sequence, tuple, whitespace_seperated, BoolExp, Exp, ExpList, IntExp,
+	},
 	from_str, serialize_list, Instantiation, IntVal, MetaInfo,
 };
+
+macro_rules! constraints_enum {
+	($(#[$attr:meta])* $vis:vis $name:ident, $basic:meta, $meta:meta, $args:meta) => {
+		$(#[$attr])*
+		$vis enum $name<Identifier = String> {
+			#[cfg($basic)]
+			/// [`AllDifferent`] constraint
+			AllDifferent(AllDifferent<Identifier>),
+			#[cfg($basic)]
+			/// [`AllEqual`] constraint
+			AllEqual(AllEqual<Identifier>),
+			#[cfg($basic)]
+			/// [`BinPacking`] constraint
+			BinPacking(BinPacking<Identifier>),
+			#[cfg($basic)]
+			/// [`Cardinality`] constraint
+			Cardinality(Cardinality<Identifier>),
+			#[cfg($basic)]
+			/// [`Channel`] constraint
+			Channel(Channel<Identifier>),
+			#[cfg($basic)]
+			/// [`Circuit`] constraint
+			Circuit(Circuit<Identifier>),
+			#[cfg($basic)]
+			/// [`Count`] constraint
+			Count(Count<Identifier>),
+			#[cfg($basic)]
+			/// [`Cumulative`] constraint
+			Cumulative(Cumulative<Identifier>),
+			#[cfg($basic)]
+			/// [`Element`] constraint
+			Element(Element<Identifier>),
+			#[cfg($basic)]
+			/// [`Extension`] constraint
+			Extension(Extension<Identifier>),
+			#[cfg($basic)]
+			/// [`Instantiation`] constraint
+			Instantiation(Instantiation<Identifier>),
+			#[cfg($basic)]
+			/// [`Intension`] constraint
+			Intension(Intension<Identifier>),
+			#[cfg($basic)]
+			/// [`Knapsack`] constraint
+			Knapsack(Knapsack<Identifier>),
+			#[cfg($basic)]
+			/// [`Maximum`] constraint
+			Maximum(Maximum<Identifier>),
+			#[cfg($basic)]
+			/// [`Mdd`] constraint
+			Mdd(Mdd<Identifier>),
+			#[cfg($basic)]
+			/// [`Minimum`] constraint
+			Minimum(Minimum<Identifier>),
+			#[cfg($basic)]
+			/// [`NValues`] constraint
+			NValues(NValues<Identifier>),
+			#[cfg($basic)]
+			/// [`NoOverlap`] constraint
+			NoOverlap(NoOverlap<Identifier>),
+			#[cfg($basic)]
+			/// [`Ordered`] constraint
+			Ordered(Ordered<Identifier>),
+			#[cfg($basic)]
+			/// [`Precedence`] constraint
+			Precedence(Precedence<Identifier>),
+			#[cfg($basic)]
+			/// [`Regular`] constraint
+			Regular(Regular<Identifier>),
+			#[cfg($basic)]
+			/// [`Sum`] constraint
+			Sum(Sum<Identifier>),
+			#[cfg($meta)]
+			/// Constraint [`Group`], that can serve as a template
+			Group(Group<Identifier>),
+			#[cfg($meta)]
+			/// Constraint [`Group`], that can serve as a template
+			Block(Block<Identifier>),
+			#[cfg(not($basic))]
+			/// Simple [`Constraint`] type
+			Constraint(Constraint<Identifier>),
+			#[cfg($args)]
+			/// Constraint [`Group`], that can serve as a template
+			Args(ExpList<Identifier>),
+		}
+	};
+}
+
+constraints_enum!(
+	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+	#[serde(
+				rename_all = "camelCase",
+				bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+	)]
+	/// Enumerated type to represent basic (instantiated) constraints
+	pub Constraint,
+	/* expand_basic = true */ all(),
+	/* meta = false */ any(),
+	/* template_args = false */ any()
+);
+constraints_enum!(
+	#[derive(Clone, Debug, PartialEq, Hash)]
+	/// Enumerated type that contains meta-constraints, such as [`Group`] and
+	/// [`Block`], in addition to standard [`Constraint`].
+	pub MetaConstraint,
+	/* expand_basic = false */ any(),
+	/* meta = true */ all(),
+	/* template_args = false */ any()
+);
+constraints_enum!(
+	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+	#[serde(
+		rename_all = "camelCase",
+		bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+	)]
+	/// Internal constraint enum used to capture [`MetaConstraint`].
+	CaptureConstraint,
+	/* expand_basic = true */ all(),
+	/* meta = true */ all(),
+	/* template_args = false */ any()
+);
+constraints_enum!(
+	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+	#[serde(
+		rename_all = "camelCase",
+		bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+	)]
+	/// Internal constraint enum used to capture basic constraints and <args> elements
+	TemplateCapture,
+	/* expand_basic = true */ all(),
+	/* meta = true */ any(),
+	/* template_args = false */ all()
+);
 
 /// Constraint forcing a set of expressions to take distinct values
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
@@ -82,10 +216,7 @@ pub struct AllEqual<Identifier = String> {
 /// different bins in such a way that the total size of the items in each bin
 /// respects a numerical condition.
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(
-	deserialize = "Identifier: std::str::FromStr",
-	serialize = "Identifier: std::fmt::Display"
-))]
+#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
 pub struct BinPacking<Identifier = String> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
@@ -124,10 +255,29 @@ pub struct BinPacking<Identifier = String> {
 	pub loads: Vec<IntExp<Identifier>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Hash, Serialize)]
+#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
+/// A set of constraints that is linked together semantically
+pub struct Block<Identifier = String> {
+	#[serde(
+		default,
+		rename = "@class",
+		skip_serializing_if = "Vec::is_empty",
+		serialize_with = "serialize_list"
+	)]
+	/// Optional class designation for the contained constraints
+	pub class: Vec<Identifier>,
+	#[serde(default, rename = "$value")]
+	/// List of constraints
+	pub constraints: Vec<MetaConstraint<Identifier>>,
+	#[serde(flatten)]
+	/// Optional metadata for the constraint
+	pub info: MetaInfo<Identifier>,
+}
+
 /// Constraint enforcing the amount of times certain values are taken by a set
 /// of expressions.
 #[derive(Clone, Debug, PartialEq, Hash)]
-
 pub struct Cardinality<Identifier = String> {
 	/// Optional metadata for the constraint
 	pub info: MetaInfo<Identifier>,
@@ -196,59 +346,6 @@ pub struct Condition<Identifier> {
 	pub operator: Operator,
 	/// Right-side operand of the condition
 	pub operand: Exp<Identifier>,
-}
-
-/// Enumerated type to represent the different possible constraints
-#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(
-	rename_all = "camelCase",
-	bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
-)]
-pub enum Constraint<Identifier = String> {
-	/// [`AllDifferent`] constraint
-	AllDifferent(AllDifferent<Identifier>),
-	/// [`AllEqual`] constraint
-	AllEqual(AllEqual<Identifier>),
-	/// [`BinPacking`] constraint
-	BinPacking(BinPacking<Identifier>),
-	/// [`Cardinality`] constraint
-	Cardinality(Cardinality<Identifier>),
-	/// [`Channel`] constraint
-	Channel(Channel<Identifier>),
-	/// [`Circuit`] constraint
-	Circuit(Circuit<Identifier>),
-	/// [`Count`] constraint
-	Count(Count<Identifier>),
-	/// [`Cumulative`] constraint
-	Cumulative(Cumulative<Identifier>),
-	/// [`Element`] constraint
-	Element(Element<Identifier>),
-	/// [`Extension`] constraint
-	Extension(Extension<Identifier>),
-	/// [`Instantiation`] constraint
-	Instantiation(Instantiation<Identifier>),
-	/// [`Intension`] constraint
-	Intension(Intension<Identifier>),
-	/// [`Knapsack`] constraint
-	Knapsack(Knapsack<Identifier>),
-	/// [`Maximum`] constraint
-	Maximum(Maximum<Identifier>),
-	/// [`Mdd`] constraint
-	Mdd(Mdd<Identifier>),
-	/// [`Minimum`] constraint
-	Minimum(Minimum<Identifier>),
-	/// [`NValues`] constraint
-	NValues(NValues<Identifier>),
-	/// [`NoOverlap`] constraint
-	NoOverlap(NoOverlap<Identifier>),
-	/// [`Ordered`] constraint
-	Ordered(Ordered<Identifier>),
-	/// [`Precedence`] constraint
-	Precedence(Precedence<Identifier>),
-	/// [`Regular`] constraint
-	Regular(Regular<Identifier>),
-	/// [`Sum`] constraint
-	Sum(Sum<Identifier>),
 }
 
 /// Constraint that enforced that the number of times expressions in
@@ -363,6 +460,17 @@ pub struct Extension<Identifier = String> {
 	pub conflicts: Vec<Vec<IntVal>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Hash)]
+/// Groups of constraints that are instantiated using the given arguments.
+pub struct Group<Identifier = String> {
+	/// Optional metadata for the constraint
+	pub info: MetaInfo<Identifier>,
+	/// List of constraints
+	pub constraints: Vec<Constraint<Identifier>>,
+	/// List of arguments to instantiate the constraints
+	pub args: Vec<Vec<Exp<Identifier>>>,
+}
+
 /// Constraint that enforces that the Boolean Expression [`Self::function`] must
 /// be satisfied.
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
@@ -450,6 +558,16 @@ pub struct Mdd<Identifier = String> {
 	)]
 	pub transitions: Vec<Transition<Identifier>>,
 }
+
+// #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+// #[serde(
+// 	bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"),
+// 	rename_all = "camelCase"
+// )]
+// #[serde(tag = "type")]
+// pub enum MetaConstraint<Identifier = String> {
+// 	Group(Group<Identifier>),
+// }
 
 /// Constraint that enforces that the minimum value taken by the expression in
 /// [`Self::list`] abides by the given [`Self::condition`].
@@ -752,6 +870,49 @@ fn serialize_int_tuples<S: Serializer>(
 	)
 }
 
+// Note: flatten of MetaInfo does not seem to work for Block
+// (https://github.com/tafia/quick-xml/issues/326)
+impl<'de, Identifier: FromStr> Deserialize<'de> for Block<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		/// Deserialize a <block> element
+		#[derive(Deserialize)]
+		#[serde(bound(deserialize = "Identifier: FromStr"))]
+		/// A set of constraints that is linked together semantically
+		struct Block<Identifier> {
+			/// Name assigned to the element
+			#[serde(default, rename = "@id", deserialize_with = "crate::deserialize_ident")]
+			pub identifier: Option<Identifier>,
+			/// Comment from the user about the element
+			#[serde(default, rename = "@note")]
+			pub note: Option<String>,
+			#[serde(default, rename = "@class")]
+			/// Optional class designation for the contained constraints
+			pub class: Vec<String>,
+			#[serde(default, rename = "$value")]
+			/// List of constraints
+			pub constraints: Vec<MetaConstraint<Identifier>>,
+		}
+		let c = Block::deserialize(deserializer)?;
+		let class: Result<_, _> = c
+			.class
+			.into_iter()
+			.map(|v| {
+				FromStr::from_str(&v)
+					.map_err(|_| de::Error::custom("unable to create identifier from string"))
+			})
+			.collect();
+
+		Ok(Self {
+			info: MetaInfo {
+				identifier: c.identifier,
+				note: c.note,
+			},
+			class: class?,
+			constraints: c.constraints,
+		})
+	}
+}
+
 impl<'de, Identifier: FromStr> Deserialize<'de> for Cardinality<Identifier> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Helper struct to deserialize the <values> element of the cardinality constraint
@@ -993,6 +1154,299 @@ impl<Identifier: Display> Serialize for Condition<Identifier> {
 	}
 }
 
+impl<Identifier> TryFrom<TemplateCapture<Identifier>> for Constraint<Identifier> {
+	type Error = ();
+
+	fn try_from(value: TemplateCapture<Identifier>) -> Result<Self, Self::Error> {
+		match value {
+			TemplateCapture::AllDifferent(all_different) => {
+				Ok(Constraint::AllDifferent(all_different))
+			}
+			TemplateCapture::AllEqual(all_equal) => Ok(Constraint::AllEqual(all_equal)),
+			TemplateCapture::BinPacking(bin_packing) => Ok(Constraint::BinPacking(bin_packing)),
+			TemplateCapture::Cardinality(cardinality) => Ok(Constraint::Cardinality(cardinality)),
+			TemplateCapture::Channel(channel) => Ok(Constraint::Channel(channel)),
+			TemplateCapture::Circuit(circuit) => Ok(Constraint::Circuit(circuit)),
+			TemplateCapture::Count(count) => Ok(Constraint::Count(count)),
+			TemplateCapture::Cumulative(cumulative) => Ok(Constraint::Cumulative(cumulative)),
+			TemplateCapture::Element(element) => Ok(Constraint::Element(element)),
+			TemplateCapture::Extension(extension) => Ok(Constraint::Extension(extension)),
+			TemplateCapture::Instantiation(instantiation) => {
+				Ok(Constraint::Instantiation(instantiation))
+			}
+			TemplateCapture::Intension(intension) => Ok(Constraint::Intension(intension)),
+			TemplateCapture::Knapsack(knapsack) => Ok(Constraint::Knapsack(knapsack)),
+			TemplateCapture::Maximum(maximum) => Ok(Constraint::Maximum(maximum)),
+			TemplateCapture::Mdd(mdd) => Ok(Constraint::Mdd(mdd)),
+			TemplateCapture::Minimum(minimum) => Ok(Constraint::Minimum(minimum)),
+			TemplateCapture::NValues(nvalues) => Ok(Constraint::NValues(nvalues)),
+			TemplateCapture::NoOverlap(no_overlap) => Ok(Constraint::NoOverlap(no_overlap)),
+			TemplateCapture::Ordered(ordered) => Ok(Constraint::Ordered(ordered)),
+			TemplateCapture::Precedence(precedence) => Ok(Constraint::Precedence(precedence)),
+			TemplateCapture::Regular(regular) => Ok(Constraint::Regular(regular)),
+			TemplateCapture::Sum(sum) => Ok(Constraint::Sum(sum)),
+			TemplateCapture::Args(_) => Err(()),
+		}
+	}
+}
+
+// Note: flatten of MetaInfo does not seem to work here
+impl<'de, Identifier: FromStr> Deserialize<'de> for Group<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(bound(deserialize = "Identifier: FromStr"))]
+		struct Group<Identifier = String> {
+			/// Name assigned to the element
+			#[serde(
+				rename = "@id",
+				default,
+				skip_serializing_if = "Option::is_none",
+				deserialize_with = "crate::deserialize_ident",
+				serialize_with = "serialize_ident"
+			)]
+			pub identifier: Option<Identifier>,
+			/// Comment from the user about the element
+			#[serde(rename = "@note", default, skip_serializing_if = "Option::is_none")]
+			pub note: Option<String>,
+
+			/// List of constraints
+			#[serde(default, rename = "$value")]
+			constraints: Vec<TemplateCapture<Identifier>>,
+		}
+		let grp: Group<Identifier> = Deserialize::deserialize(deserializer)?;
+		let mut args = Vec::new();
+		let constraints = grp
+			.constraints
+			.into_iter()
+			.filter_map(|c| match c {
+				TemplateCapture::Args(x) => {
+					args.push(x.elements);
+					None
+				}
+				_ => Some(c.try_into().unwrap()),
+			})
+			.collect();
+		Ok(Self {
+			info: MetaInfo {
+				identifier: grp.identifier,
+				note: grp.note,
+			},
+			constraints,
+			args,
+		})
+	}
+}
+
+// Note: flatten of MetaInfo does not seem to work here
+// (https://github.com/tafia/quick-xml/issues/761)
+impl<Identifier: Display> Serialize for Group<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(bound(serialize = "Identifier: Display"))]
+		/// Helper structure used to parse a list of expressions.
+		struct ExpList<'a, Identifier> {
+			#[serde(rename = "$text", serialize_with = "serialize_list")]
+			pub(crate) elements: &'a Vec<Exp<Identifier>>,
+		}
+		#[derive(Serialize)]
+		#[serde(bound(serialize = "Identifier: Display"), rename_all = "camelCase")]
+		enum ExpListE<'a, Identifier> {
+			Args(ExpList<'a, Identifier>),
+		}
+		#[derive(Serialize)]
+		#[serde(bound(serialize = "Identifier: Display"))]
+		/// Helper struct to serialize the instantiation element
+		struct Group<'a, Identifier = String> {
+			/// Optional metadata for the constraint
+			#[serde(flatten)]
+			info: &'a MetaInfo<Identifier>,
+			/// List of constraints
+			#[serde(rename = "$value")]
+			constraints: &'a Vec<Constraint<Identifier>>,
+			/// Arguments to instantiate the constraints
+			#[serde(rename = "$value")]
+			args: Vec<ExpListE<'a, Identifier>>,
+		}
+		Group {
+			info: &self.info,
+			constraints: &self.constraints,
+			args: self
+				.args
+				.iter()
+				.map(|v| ExpListE::Args(ExpList { elements: v }))
+				.collect(),
+		}
+		.serialize(serializer)
+	}
+}
+
+impl<'de, Identifier: FromStr> Deserialize<'de> for MetaConstraint<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let con: CaptureConstraint<Identifier> = Deserialize::deserialize(deserializer)?;
+		Ok(con.into())
+	}
+}
+
+impl<Identifier> From<CaptureConstraint<Identifier>> for MetaConstraint<Identifier> {
+	fn from(value: CaptureConstraint<Identifier>) -> Self {
+		match value {
+			CaptureConstraint::AllDifferent(all_different) => {
+				MetaConstraint::Constraint(Constraint::AllDifferent(all_different))
+			}
+			CaptureConstraint::AllEqual(all_equal) => {
+				MetaConstraint::Constraint(Constraint::AllEqual(all_equal))
+			}
+			CaptureConstraint::BinPacking(bin_packing) => {
+				MetaConstraint::Constraint(Constraint::BinPacking(bin_packing))
+			}
+			CaptureConstraint::Cardinality(cardinality) => {
+				MetaConstraint::Constraint(Constraint::Cardinality(cardinality))
+			}
+			CaptureConstraint::Channel(channel) => {
+				MetaConstraint::Constraint(Constraint::Channel(channel))
+			}
+			CaptureConstraint::Circuit(circuit) => {
+				MetaConstraint::Constraint(Constraint::Circuit(circuit))
+			}
+			CaptureConstraint::Count(count) => MetaConstraint::Constraint(Constraint::Count(count)),
+			CaptureConstraint::Cumulative(cumulative) => {
+				MetaConstraint::Constraint(Constraint::Cumulative(cumulative))
+			}
+			CaptureConstraint::Element(element) => {
+				MetaConstraint::Constraint(Constraint::Element(element))
+			}
+			CaptureConstraint::Extension(extension) => {
+				MetaConstraint::Constraint(Constraint::Extension(extension))
+			}
+			CaptureConstraint::Instantiation(instantiation) => {
+				MetaConstraint::Constraint(Constraint::Instantiation(instantiation))
+			}
+			CaptureConstraint::Intension(intension) => {
+				MetaConstraint::Constraint(Constraint::Intension(intension))
+			}
+			CaptureConstraint::Knapsack(knapsack) => {
+				MetaConstraint::Constraint(Constraint::Knapsack(knapsack))
+			}
+			CaptureConstraint::Maximum(maximum) => {
+				MetaConstraint::Constraint(Constraint::Maximum(maximum))
+			}
+			CaptureConstraint::Mdd(mdd) => MetaConstraint::Constraint(Constraint::Mdd(mdd)),
+			CaptureConstraint::Minimum(minimum) => {
+				MetaConstraint::Constraint(Constraint::Minimum(minimum))
+			}
+			CaptureConstraint::NValues(nvalues) => {
+				MetaConstraint::Constraint(Constraint::NValues(nvalues))
+			}
+			CaptureConstraint::NoOverlap(no_overlap) => {
+				MetaConstraint::Constraint(Constraint::NoOverlap(no_overlap))
+			}
+			CaptureConstraint::Ordered(ordered) => {
+				MetaConstraint::Constraint(Constraint::Ordered(ordered))
+			}
+			CaptureConstraint::Precedence(precedence) => {
+				MetaConstraint::Constraint(Constraint::Precedence(precedence))
+			}
+			CaptureConstraint::Regular(regular) => {
+				MetaConstraint::Constraint(Constraint::Regular(regular))
+			}
+			CaptureConstraint::Sum(sum) => MetaConstraint::Constraint(Constraint::Sum(sum)),
+			CaptureConstraint::Group(group) => MetaConstraint::Group(group),
+			CaptureConstraint::Block(block) => MetaConstraint::Block(block),
+		}
+	}
+}
+
+impl<Identifier: Display> Serialize for MetaConstraint<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(bound(serialize = "Identifier: Display"), rename_all = "camelCase")]
+		enum OutputConstraint<'a, Identifier> {
+			/// [`AllDifferent`] constraint
+			AllDifferent(&'a AllDifferent<Identifier>),
+			/// [`AllEqual`] constraint
+			AllEqual(&'a AllEqual<Identifier>),
+			/// [`BinPacking`] constraint
+			BinPacking(&'a BinPacking<Identifier>),
+			/// [`Cardinality`] constraint
+			Cardinality(&'a Cardinality<Identifier>),
+			/// [`Channel`] constraint
+			Channel(&'a Channel<Identifier>),
+			/// [`Circuit`] constraint
+			Circuit(&'a Circuit<Identifier>),
+			/// [`Count`] constraint
+			Count(&'a Count<Identifier>),
+			/// [`Cumulative`] constraint
+			Cumulative(&'a Cumulative<Identifier>),
+			/// [`Element`] constraint
+			Element(&'a Element<Identifier>),
+			/// [`Extension`] constraint
+			Extension(&'a Extension<Identifier>),
+			/// [`Instantiation`] constraint
+			Instantiation(&'a Instantiation<Identifier>),
+			/// [`Intension`] constraint
+			Intension(&'a Intension<Identifier>),
+			/// [`Knapsack`] constraint
+			Knapsack(&'a Knapsack<Identifier>),
+			/// [`Maximum`] constraint
+			Maximum(&'a Maximum<Identifier>),
+			/// [`Mdd`] constraint
+			Mdd(&'a Mdd<Identifier>),
+			/// [`Minimum`] constraint
+			Minimum(&'a Minimum<Identifier>),
+			/// [`NValues`] constraint
+			NValues(&'a NValues<Identifier>),
+			/// [`NoOverlap`] constraint
+			NoOverlap(&'a NoOverlap<Identifier>),
+			/// [`Ordered`] constraint
+			Ordered(&'a Ordered<Identifier>),
+			/// [`Precedence`] constraint
+			Precedence(&'a Precedence<Identifier>),
+			/// [`Regular`] constraint
+			Regular(&'a Regular<Identifier>),
+			/// [`Sum`] constraint
+			Sum(&'a Sum<Identifier>),
+			/// Constraint [`Group`], that can serve as a template
+			Group(&'a Group<Identifier>),
+			/// Constraint [`Group`], that can serve as a template
+			Block(&'a Block<Identifier>),
+		}
+
+		let c = match self {
+			MetaConstraint::Group(group) => OutputConstraint::Group(group),
+			MetaConstraint::Block(block) => OutputConstraint::Block(block),
+			MetaConstraint::Constraint(con) => match con {
+				Constraint::AllDifferent(all_different) => {
+					OutputConstraint::AllDifferent(all_different)
+				}
+				Constraint::AllEqual(all_equal) => OutputConstraint::AllEqual(all_equal),
+				Constraint::BinPacking(bin_packing) => OutputConstraint::BinPacking(bin_packing),
+				Constraint::Cardinality(cardinality) => OutputConstraint::Cardinality(cardinality),
+				Constraint::Channel(channel) => OutputConstraint::Channel(channel),
+				Constraint::Circuit(circuit) => OutputConstraint::Circuit(circuit),
+				Constraint::Count(count) => OutputConstraint::Count(count),
+				Constraint::Cumulative(cumulative) => OutputConstraint::Cumulative(cumulative),
+				Constraint::Element(element) => OutputConstraint::Element(element),
+				Constraint::Extension(extension) => OutputConstraint::Extension(extension),
+				Constraint::Instantiation(instantiation) => {
+					OutputConstraint::Instantiation(instantiation)
+				}
+				Constraint::Intension(intension) => OutputConstraint::Intension(intension),
+				Constraint::Knapsack(knapsack) => OutputConstraint::Knapsack(knapsack),
+				Constraint::Maximum(maximum) => OutputConstraint::Maximum(maximum),
+				Constraint::Mdd(mdd) => OutputConstraint::Mdd(mdd),
+				Constraint::Minimum(minimum) => OutputConstraint::Minimum(minimum),
+				Constraint::NValues(nvalues) => OutputConstraint::NValues(nvalues),
+				Constraint::NoOverlap(no_overlap) => OutputConstraint::NoOverlap(no_overlap),
+				Constraint::Ordered(ordered) => OutputConstraint::Ordered(ordered),
+				Constraint::Precedence(precedence) => OutputConstraint::Precedence(precedence),
+				Constraint::Regular(regular) => OutputConstraint::Regular(regular),
+				Constraint::Sum(sum) => OutputConstraint::Sum(sum),
+			},
+		};
+		Serialize::serialize(&c, serializer)
+	}
+}
+
 impl<Identifier> Default for OffsetList<Identifier> {
 	fn default() -> Self {
 		Self {
@@ -1147,6 +1601,37 @@ impl<Identifier: Display> Serialize for Precedence<Identifier> {
 			},
 		};
 		x.serialize(serializer)
+	}
+}
+
+impl<Identifier> From<Constraint<Identifier>> for TemplateCapture<Identifier> {
+	fn from(value: Constraint<Identifier>) -> Self {
+		match value {
+			Constraint::AllDifferent(all_different) => TemplateCapture::AllDifferent(all_different),
+			Constraint::AllEqual(all_equal) => TemplateCapture::AllEqual(all_equal),
+			Constraint::BinPacking(bin_packing) => TemplateCapture::BinPacking(bin_packing),
+			Constraint::Cardinality(cardinality) => TemplateCapture::Cardinality(cardinality),
+			Constraint::Channel(channel) => TemplateCapture::Channel(channel),
+			Constraint::Circuit(circuit) => TemplateCapture::Circuit(circuit),
+			Constraint::Count(count) => TemplateCapture::Count(count),
+			Constraint::Cumulative(cumulative) => TemplateCapture::Cumulative(cumulative),
+			Constraint::Element(element) => TemplateCapture::Element(element),
+			Constraint::Extension(extension) => TemplateCapture::Extension(extension),
+			Constraint::Instantiation(instantiation) => {
+				TemplateCapture::Instantiation(instantiation)
+			}
+			Constraint::Intension(intension) => TemplateCapture::Intension(intension),
+			Constraint::Knapsack(knapsack) => TemplateCapture::Knapsack(knapsack),
+			Constraint::Maximum(maximum) => TemplateCapture::Maximum(maximum),
+			Constraint::Mdd(mdd) => TemplateCapture::Mdd(mdd),
+			Constraint::Minimum(minimum) => TemplateCapture::Minimum(minimum),
+			Constraint::NValues(nvalues) => TemplateCapture::NValues(nvalues),
+			Constraint::NoOverlap(no_overlap) => TemplateCapture::NoOverlap(no_overlap),
+			Constraint::Ordered(ordered) => TemplateCapture::Ordered(ordered),
+			Constraint::Precedence(precedence) => TemplateCapture::Precedence(precedence),
+			Constraint::Regular(regular) => TemplateCapture::Regular(regular),
+			Constraint::Sum(sum) => TemplateCapture::Sum(sum),
+		}
 	}
 }
 

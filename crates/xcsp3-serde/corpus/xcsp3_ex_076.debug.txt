@@ -3,94 +3,96 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        BinPacking(
-            BinPacking {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
+        Constraint(
+            BinPacking(
+                BinPacking {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "y1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y5",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y6",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y7",
+                            ),
+                        ),
+                    ],
+                    sizes: [
+                        Const(
+                            12,
+                        ),
+                        Const(
+                            7,
+                        ),
+                        Const(
+                            21,
+                        ),
+                        Const(
+                            36,
+                        ),
+                        Const(
+                            19,
+                        ),
+                        Const(
+                            22,
+                        ),
+                        Const(
+                            30,
+                        ),
+                    ],
+                    condition: None,
+                    limits: [],
+                    loads: [
+                        Var(
+                            Ident(
+                                "l1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "l2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "l3",
+                            ),
+                        ),
+                    ],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "y1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y5",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y6",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y7",
-                        ),
-                    ),
-                ],
-                sizes: [
-                    Const(
-                        12,
-                    ),
-                    Const(
-                        7,
-                    ),
-                    Const(
-                        21,
-                    ),
-                    Const(
-                        36,
-                    ),
-                    Const(
-                        19,
-                    ),
-                    Const(
-                        22,
-                    ),
-                    Const(
-                        30,
-                    ),
-                ],
-                condition: None,
-                limits: [],
-                loads: [
-                    Var(
-                        Ident(
-                            "l1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "l2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "l3",
-                        ),
-                    ),
-                ],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

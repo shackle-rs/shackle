@@ -3,102 +3,106 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Extension(
-            Extension {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                    ],
+                    supports: [
+                        [
+                            0,
+                            1,
+                            0,
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                        ],
+                        [
+                            1,
+                            1,
+                            0,
+                        ],
+                        [
+                            1,
+                            1,
+                            1,
+                        ],
+                    ],
+                    conflicts: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                ],
-                supports: [
-                    [
-                        0,
-                        1,
-                        0,
-                    ],
-                    [
-                        1,
-                        0,
-                        0,
-                    ],
-                    [
-                        1,
-                        1,
-                        0,
-                    ],
-                    [
-                        1,
-                        1,
-                        1,
-                    ],
-                ],
-                conflicts: [],
-            },
+            ),
         ),
-        Extension(
-            Extension {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "y1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y4",
+                            ),
+                        ),
+                    ],
+                    supports: [],
+                    conflicts: [
+                        [
+                            1,
+                            2,
+                            3,
+                            4,
+                        ],
+                        [
+                            3,
+                            1,
+                            3,
+                            4,
+                        ],
+                    ],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "y1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y4",
-                        ),
-                    ),
-                ],
-                supports: [],
-                conflicts: [
-                    [
-                        1,
-                        2,
-                        3,
-                        4,
-                    ],
-                    [
-                        3,
-                        1,
-                        3,
-                        4,
-                    ],
-                ],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

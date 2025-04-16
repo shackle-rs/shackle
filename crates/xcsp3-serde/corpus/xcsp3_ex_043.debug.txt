@@ -3,72 +3,74 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Mdd(
-            Mdd {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Mdd(
+                Mdd {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                    ],
+                    transitions: [
+                        Transition {
+                            from: "r",
+                            val: 0,
+                            to: "n1",
+                        },
+                        Transition {
+                            from: "r",
+                            val: 1,
+                            to: "n2",
+                        },
+                        Transition {
+                            from: "r",
+                            val: 2,
+                            to: "n3",
+                        },
+                        Transition {
+                            from: "n1",
+                            val: 2,
+                            to: "n4",
+                        },
+                        Transition {
+                            from: "n2",
+                            val: 2,
+                            to: "n4",
+                        },
+                        Transition {
+                            from: "n3",
+                            val: 0,
+                            to: "n5",
+                        },
+                        Transition {
+                            from: "n4",
+                            val: 0,
+                            to: "t",
+                        },
+                        Transition {
+                            from: "n5",
+                            val: 0,
+                            to: "t",
+                        },
+                    ],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                ],
-                transitions: [
-                    Transition {
-                        from: "r",
-                        val: 0,
-                        to: "n1",
-                    },
-                    Transition {
-                        from: "r",
-                        val: 1,
-                        to: "n2",
-                    },
-                    Transition {
-                        from: "r",
-                        val: 2,
-                        to: "n3",
-                    },
-                    Transition {
-                        from: "n1",
-                        val: 2,
-                        to: "n4",
-                    },
-                    Transition {
-                        from: "n2",
-                        val: 2,
-                        to: "n4",
-                    },
-                    Transition {
-                        from: "n3",
-                        val: 0,
-                        to: "n5",
-                    },
-                    Transition {
-                        from: "n4",
-                        val: 0,
-                        to: "t",
-                    },
-                    Transition {
-                        from: "n5",
-                        val: 0,
-                        to: "t",
-                    },
-                ],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

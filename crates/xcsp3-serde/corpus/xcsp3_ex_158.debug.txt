@@ -1,0 +1,129 @@
+Instance {
+    ty: Csp,
+    variables: [],
+    arrays: [],
+    constraints: [
+        Block(
+            Block {
+                class: [
+                    "clues",
+                ],
+                constraints: [
+                    Constraint(
+                        Intension(
+                            Intension {
+                                info: MetaInfo {
+                                    identifier: None,
+                                    note: None,
+                                },
+                                function: Equal(
+                                    [
+                                        Int(
+                                            Card(
+                                                Var(
+                                                    Ident(
+                                                        "s1",
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                        Int(
+                                            Const(
+                                                2,
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            },
+                        ),
+                    ),
+                    Constraint(
+                        Intension(
+                            Intension {
+                                info: MetaInfo {
+                                    identifier: None,
+                                    note: None,
+                                },
+                                function: Equal(
+                                    [
+                                        Int(
+                                            Card(
+                                                Var(
+                                                    Ident(
+                                                        "s2",
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                        Int(
+                                            Const(
+                                                3,
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            },
+                        ),
+                    ),
+                ],
+                info: MetaInfo {
+                    identifier: None,
+                    note: None,
+                },
+            },
+        ),
+        Block(
+            Block {
+                class: [
+                    "symmetry-breaking",
+                ],
+                constraints: [],
+                info: MetaInfo {
+                    identifier: None,
+                    note: None,
+                },
+            },
+        ),
+        Block(
+            Block {
+                class: [
+                    "redundant-constraints",
+                    "nogoods",
+                ],
+                constraints: [],
+                info: MetaInfo {
+                    identifier: None,
+                    note: None,
+                },
+            },
+        ),
+        Block(
+            Block {
+                class: [],
+                constraints: [],
+                info: MetaInfo {
+                    identifier: None,
+                    note: Some(
+                        "Management of first week",
+                    ),
+                },
+            },
+        ),
+        Block(
+            Block {
+                class: [],
+                constraints: [],
+                info: MetaInfo {
+                    identifier: None,
+                    note: Some(
+                        "Management of second week",
+                    ),
+                },
+            },
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

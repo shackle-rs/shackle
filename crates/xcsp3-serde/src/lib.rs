@@ -64,17 +64,19 @@ use std::{
 };
 
 use nom::{
+	branch::alt,
+	bytes::streaming::tag,
 	character::complete::{char, digit1},
-	combinator::{all_consuming, map_res, opt, recognize},
+	combinator::{all_consuming, map, map_res, opt, recognize},
 	multi::many0,
-	sequence::delimited,
+	sequence::{delimited, preceded},
 	IResult, Parser,
 };
 pub use rangelist::RangeList;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
-	constraint::Constraint,
+	constraint::MetaConstraint,
 	expression::{identifier, int, range, sequence, whitespace_seperated, IntExp},
 };
 
@@ -218,7 +220,7 @@ pub struct Instance<Identifier = String> {
 	/// Definitions of the arrays of decision variables
 	pub arrays: Vec<Array<Identifier>>,
 	/// Constraints that must be satisfied for a solution to be valid
-	pub constraints: Vec<Constraint<Identifier>>,
+	pub constraints: Vec<MetaConstraint<Identifier>>,
 	/// The objectives to be optimized
 	pub objectives: Objectives<Identifier>,
 }
@@ -368,6 +370,16 @@ pub enum ObjType {
 	Lex,
 }
 
+/// Representation of a placeholder to be replaced in a meta-constraint.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Placeholder {
+	/// Placeholder replaced by the argument at the given position.
+	Position(u32),
+	/// Placeholder replaced by all arguments larger than the largest given
+	/// position.
+	Remainder,
+}
+
 /// Definition of a variable
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
@@ -398,6 +410,8 @@ pub enum VarRef<Identifier> {
 	Ident(Identifier),
 	/// Reference to an array element or slice
 	ArrayAccess(Identifier, Vec<Indexing>),
+	/// Placeholders to be replaced by other references
+	Placeholder(Placeholder),
 }
 
 /// Serialize the value by converting it to a string
@@ -744,7 +758,7 @@ impl<'de, Identifier: Deserialize<'de> + FromStr> Deserialize<'de> for Instance<
 		struct Constraints<Identifier: FromStr = String> {
 			/// Deserialized content of <constraints> element
 			#[serde(rename = "$value")]
-			content: Vec<Constraint<Identifier>>,
+			content: Vec<MetaConstraint<Identifier>>,
 		}
 		/// Deserialized <instance> element
 		#[derive(Deserialize)]
@@ -800,7 +814,7 @@ impl<Identifier: Serialize + Display> Serialize for Instance<Identifier> {
 		struct Constraints<'a, Identifier: Display> {
 			/// Constraints to be serialized
 			#[serde(rename = "$value")]
-			content: &'a Vec<Constraint<Identifier>>,
+			content: &'a Vec<MetaConstraint<Identifier>>,
 		}
 		impl<Identifier: Display> Constraints<'_, Identifier> {
 			/// Check whether there are any constraints to serialize
@@ -899,11 +913,35 @@ impl<Identifier> Default for Objectives<Identifier> {
 	}
 }
 
+impl Display for Placeholder {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Placeholder::Position(i) => write!(f, "%{}", i),
+			Placeholder::Remainder => write!(f, "%..."),
+		}
+	}
+}
+
 impl<Identifier: FromStr> VarRef<Identifier> {
 	/// Parse a variable reference.
 	pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+		// First try to see whether the variable is a placeholder
+		let placeholder: IResult<&str, Placeholder> = preceded(
+			char('%'),
+			alt((
+				map(digit1, |p: &str| Placeholder::Position(p.parse().unwrap())),
+				map(tag("..."), |_| Placeholder::Remainder),
+			)),
+		)
+		.parse(input);
+		if let Ok((input, placeholder)) = placeholder {
+			return Ok((input, Self::Placeholder(placeholder)));
+		}
+		// Parse a normal identifier
 		let (input, ident) = identifier(input)?;
+		// Optionally add an array access tail
 		let (input, v) = many0(delimited(char('['), opt(range), char(']'))).parse(input)?;
+		// Create VarRef object
 		Ok((
 			input,
 			if v.is_empty() {
@@ -973,6 +1011,7 @@ impl<Identifier: Display> Display for VarRef<Identifier> {
 						.join("")
 				)
 			}
+			VarRef::Placeholder(placeholder) => placeholder.fmt(f),
 		}
 	}
 }
@@ -1020,7 +1059,7 @@ mod tests {
 
 	test_file!(xcsp3_ex_001);
 	test_file!(xcsp3_ex_002);
-	// test_file!(xcsp3_ex_003);
+	test_file!(xcsp3_ex_003);
 	test_file!(xcsp3_ex_004);
 	test_file!(xcsp3_ex_005);
 	test_file!(xcsp3_ex_006);
@@ -1169,13 +1208,13 @@ mod tests {
 	// test_file!(xcsp3_ex_149);
 	// test_file!(xcsp3_ex_150);
 	// test_file!(xcsp3_ex_151);
-	// test_file!(xcsp3_ex_152);
-	// test_file!(xcsp3_ex_153);
-	// test_file!(xcsp3_ex_154);
-	// test_file!(xcsp3_ex_155);
+	test_file!(xcsp3_ex_152);
+	test_file!(xcsp3_ex_153);
+	test_file!(xcsp3_ex_154);
+	test_file!(xcsp3_ex_155);
 	// test_file!(xcsp3_ex_156);
-	// test_file!(xcsp3_ex_157);
-	// test_file!(xcsp3_ex_158);
+	test_file!(xcsp3_ex_157);
+	test_file!(xcsp3_ex_158);
 	// test_file!(xcsp3_ex_159);
 	// test_file!(xcsp3_ex_160);
 	// test_file!(xcsp3_ex_161);

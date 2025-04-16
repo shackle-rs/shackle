@@ -1,0 +1,283 @@
+Instance {
+    ty: Cop,
+    variables: [
+        Variable {
+            identifier: "b",
+            note: Some(
+                "number of banana cakes",
+            ),
+            domain: RangeList::from(0..=99),
+        },
+        Variable {
+            identifier: "c",
+            note: Some(
+                "number of chocolate cakes",
+            ),
+            domain: RangeList::from(0..=99),
+        },
+    ],
+    arrays: [],
+    constraints: [
+        Group(
+            Group {
+                info: MetaInfo {
+                    identifier: None,
+                    note: None,
+                },
+                constraints: [
+                    Intension(
+                        Intension {
+                            info: MetaInfo {
+                                identifier: None,
+                                note: None,
+                            },
+                            function: LessThanEq(
+                                Add(
+                                    [
+                                        Mul(
+                                            [
+                                                Var(
+                                                    Placeholder(
+                                                        Position(
+                                                            0,
+                                                        ),
+                                                    ),
+                                                ),
+                                                Var(
+                                                    Placeholder(
+                                                        Position(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                ),
+                                            ],
+                                        ),
+                                        Mul(
+                                            [
+                                                Var(
+                                                    Placeholder(
+                                                        Position(
+                                                            2,
+                                                        ),
+                                                    ),
+                                                ),
+                                                Var(
+                                                    Placeholder(
+                                                        Position(
+                                                            3,
+                                                        ),
+                                                    ),
+                                                ),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                                Var(
+                                    Placeholder(
+                                        Position(
+                                            4,
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        },
+                    ),
+                ],
+                args: [
+                    [
+                        Int(
+                            Const(
+                                250,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                200,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                4000,
+                            ),
+                        ),
+                    ],
+                    [
+                        Int(
+                            Const(
+                                75,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                150,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                2000,
+                            ),
+                        ),
+                    ],
+                    [
+                        Int(
+                            Const(
+                                100,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                150,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                500,
+                            ),
+                        ),
+                    ],
+                ],
+            },
+        ),
+        Group(
+            Group {
+                info: MetaInfo {
+                    identifier: None,
+                    note: None,
+                },
+                constraints: [
+                    Intension(
+                        Intension {
+                            info: MetaInfo {
+                                identifier: None,
+                                note: None,
+                            },
+                            function: LessThanEq(
+                                Mul(
+                                    [
+                                        Var(
+                                            Placeholder(
+                                                Position(
+                                                    0,
+                                                ),
+                                            ),
+                                        ),
+                                        Var(
+                                            Placeholder(
+                                                Position(
+                                                    1,
+                                                ),
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                                Var(
+                                    Placeholder(
+                                        Position(
+                                            2,
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        },
+                    ),
+                ],
+                args: [
+                    [
+                        Int(
+                            Const(
+                                2,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                6,
+                            ),
+                        ),
+                    ],
+                    [
+                        Int(
+                            Const(
+                                75,
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                500,
+                            ),
+                        ),
+                    ],
+                ],
+            },
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [
+            Maximize(
+                ObjExp {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    ty: Sum,
+                    list: [
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                    ],
+                    coeffs: [
+                        400,
+                        450,
+                    ],
+                },
+            ),
+        ],
+    },
+}

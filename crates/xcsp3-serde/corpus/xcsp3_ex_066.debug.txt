@@ -3,55 +3,57 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Element(
-            Element {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [
+                            Var(
+                                Ident(
+                                    "x1",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x2",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x3",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x4",
+                                ),
+                            ),
+                        ],
+                        start_index: 1,
+                    },
+                    index: Some(
+                        Var(
+                            Ident(
+                                "i",
+                            ),
+                        ),
                     ),
-                    note: None,
+                    value: Some(
+                        Var(
+                            Ident(
+                                "v",
+                            ),
+                        ),
+                    ),
+                    condition: None,
                 },
-                list: OffsetList {
-                    list: [
-                        Var(
-                            Ident(
-                                "x1",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x2",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x3",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x4",
-                            ),
-                        ),
-                    ],
-                    start_index: 1,
-                },
-                index: Some(
-                    Var(
-                        Ident(
-                            "i",
-                        ),
-                    ),
-                ),
-                value: Some(
-                    Var(
-                        Ident(
-                            "v",
-                        ),
-                    ),
-                ),
-                condition: None,
-            },
+            ),
         ),
     ],
     objectives: Objectives {

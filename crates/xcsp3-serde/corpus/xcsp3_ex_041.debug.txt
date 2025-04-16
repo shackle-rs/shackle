@@ -3,89 +3,91 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Regular(
-            Regular {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Regular(
+                Regular {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x5",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x6",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "x7",
+                            ),
+                        ),
+                    ],
+                    transitions: [
+                        Transition {
+                            from: "a",
+                            val: 0,
+                            to: "a",
+                        },
+                        Transition {
+                            from: "a",
+                            val: 1,
+                            to: "b",
+                        },
+                        Transition {
+                            from: "b",
+                            val: 1,
+                            to: "c",
+                        },
+                        Transition {
+                            from: "c",
+                            val: 0,
+                            to: "d",
+                        },
+                        Transition {
+                            from: "d",
+                            val: 0,
+                            to: "d",
+                        },
+                        Transition {
+                            from: "d",
+                            val: 1,
+                            to: "e",
+                        },
+                        Transition {
+                            from: "e",
+                            val: 0,
+                            to: "e",
+                        },
+                    ],
+                    start: "a",
+                    finish: "e",
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x5",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x6",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "x7",
-                        ),
-                    ),
-                ],
-                transitions: [
-                    Transition {
-                        from: "a",
-                        val: 0,
-                        to: "a",
-                    },
-                    Transition {
-                        from: "a",
-                        val: 1,
-                        to: "b",
-                    },
-                    Transition {
-                        from: "b",
-                        val: 1,
-                        to: "c",
-                    },
-                    Transition {
-                        from: "c",
-                        val: 0,
-                        to: "d",
-                    },
-                    Transition {
-                        from: "d",
-                        val: 0,
-                        to: "d",
-                    },
-                    Transition {
-                        from: "d",
-                        val: 1,
-                        to: "e",
-                    },
-                    Transition {
-                        from: "e",
-                        val: 0,
-                        to: "e",
-                    },
-                ],
-                start: "a",
-                finish: "e",
-            },
+            ),
         ),
     ],
     objectives: Objectives {

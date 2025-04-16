@@ -19,98 +19,104 @@ Instance {
     ],
     arrays: [],
     constraints: [
-        Extension(
-            Extension {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "y",
+                            ),
+                        ),
+                    ],
+                    supports: [
+                        [
+                            0,
+                            0,
+                        ],
+                        [
+                            1,
+                            1,
+                        ],
+                    ],
+                    conflicts: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "y",
-                        ),
-                    ),
-                ],
-                supports: [
-                    [
-                        0,
-                        0,
-                    ],
-                    [
-                        1,
-                        1,
-                    ],
-                ],
-                conflicts: [],
-            },
+            ),
         ),
-        Extension(
-            Extension {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z",
+                            ),
+                        ),
+                    ],
+                    supports: [
+                        [
+                            0,
+                            0,
+                        ],
+                        [
+                            1,
+                            1,
+                        ],
+                    ],
+                    conflicts: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "x",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z",
-                        ),
-                    ),
-                ],
-                supports: [
-                    [
-                        0,
-                        0,
-                    ],
-                    [
-                        1,
-                        1,
-                    ],
-                ],
-                conflicts: [],
-            },
+            ),
         ),
-        Extension(
-            Extension {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "y",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z",
+                            ),
+                        ),
+                    ],
+                    supports: [
+                        [
+                            0,
+                            1,
+                        ],
+                        [
+                            1,
+                            0,
+                        ],
+                    ],
+                    conflicts: [],
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "y",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z",
-                        ),
-                    ),
-                ],
-                supports: [
-                    [
-                        0,
-                        1,
-                    ],
-                    [
-                        1,
-                        0,
-                    ],
-                ],
-                conflicts: [],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

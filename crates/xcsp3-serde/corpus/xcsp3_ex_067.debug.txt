@@ -3,51 +3,53 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Element(
-            Element {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
-                },
-                list: OffsetList {
-                    list: [
-                        Const(
-                            10,
-                        ),
-                        Const(
-                            4,
-                        ),
-                        Const(
-                            7,
-                        ),
-                        Const(
-                            2,
-                        ),
-                        Const(
-                            3,
-                        ),
-                    ],
-                    start_index: 0,
-                },
-                index: Some(
-                    Var(
-                        Ident(
-                            "i",
-                        ),
-                    ),
-                ),
-                value: None,
-                condition: Some(
-                    Condition {
-                        operator: Eq,
-                        operand: Var(
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [
+                            Const(
+                                10,
+                            ),
+                            Const(
+                                4,
+                            ),
+                            Const(
+                                7,
+                            ),
+                            Const(
+                                2,
+                            ),
+                            Const(
+                                3,
+                            ),
+                        ],
+                        start_index: 0,
+                    },
+                    index: Some(
+                        Var(
                             Ident(
-                                "v",
+                                "i",
                             ),
                         ),
-                    },
-                ),
-            },
+                    ),
+                    value: None,
+                    condition: Some(
+                        Condition {
+                            operator: Eq,
+                            operand: Var(
+                                Ident(
+                                    "v",
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
         ),
     ],
     objectives: Objectives {

@@ -3,55 +3,57 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Channel(
-            Channel {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
+        Constraint(
+            Channel(
+                Channel {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "z0",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z4",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z5",
+                            ),
+                        ),
+                    ],
+                    inverse_list: [],
+                    value: Some(
+                        Var(
+                            Ident(
+                                "v",
+                            ),
+                        ),
                     ),
-                    note: None,
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "z0",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z4",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "z5",
-                        ),
-                    ),
-                ],
-                inverse_list: [],
-                value: Some(
-                    Var(
-                        Ident(
-                            "v",
-                        ),
-                    ),
-                ),
-            },
+            ),
         ),
     ],
     objectives: Objectives {

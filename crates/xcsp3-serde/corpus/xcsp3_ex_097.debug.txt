@@ -3,50 +3,52 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Count(
-            Count {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            Count(
+                Count {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "s1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "s4",
+                            ),
+                        ),
+                    ],
+                    values: [
+                        Var(
+                            Ident(
+                                "t",
+                            ),
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Eq,
+                        operand: Int(
+                            Const(
+                                2,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "s1",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s2",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s3",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "s4",
-                        ),
-                    ),
-                ],
-                values: [
-                    Var(
-                        Ident(
-                            "t",
-                        ),
-                    ),
-                ],
-                condition: Condition {
-                    operator: Eq,
-                    operand: Int(
-                        Const(
-                            2,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

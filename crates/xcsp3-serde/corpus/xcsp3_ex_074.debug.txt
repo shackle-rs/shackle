@@ -3,82 +3,84 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Cumulative(
-            Cumulative {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
-                },
-                origins: [
-                    Var(
-                        Ident(
-                            "s0",
+        Constraint(
+            Cumulative(
+                Cumulative {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    origins: [
+                        Var(
+                            Ident(
+                                "s0",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "s1",
+                        Var(
+                            Ident(
+                                "s1",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "s2",
+                        Var(
+                            Ident(
+                                "s2",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "s3",
+                        Var(
+                            Ident(
+                                "s3",
+                            ),
                         ),
-                    ),
-                    Var(
-                        Ident(
-                            "s4",
+                        Var(
+                            Ident(
+                                "s4",
+                            ),
                         ),
-                    ),
-                ],
-                lengths: [
-                    Const(
-                        3,
-                    ),
-                    Const(
-                        2,
-                    ),
-                    Const(
-                        5,
-                    ),
-                    Const(
-                        4,
-                    ),
-                    Const(
-                        2,
-                    ),
-                ],
-                heights: [
-                    Const(
-                        1,
-                    ),
-                    Const(
-                        2,
-                    ),
-                    Const(
-                        1,
-                    ),
-                    Const(
-                        1,
-                    ),
-                    Const(
-                        3,
-                    ),
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
+                    ],
+                    lengths: [
+                        Const(
+                            3,
+                        ),
+                        Const(
+                            2,
+                        ),
+                        Const(
+                            5,
+                        ),
                         Const(
                             4,
                         ),
-                    ),
+                        Const(
+                            2,
+                        ),
+                    ],
+                    heights: [
+                        Const(
+                            1,
+                        ),
+                        Const(
+                            2,
+                        ),
+                        Const(
+                            1,
+                        ),
+                        Const(
+                            1,
+                        ),
+                        Const(
+                            3,
+                        ),
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                4,
+                            ),
+                        ),
+                    },
                 },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

@@ -18,163 +18,173 @@ Instance {
     ],
     arrays: [],
     constraints: [
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: Some(
-                        "using the 4000 grams of flour",
-                    ),
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: Some(
+                            "using the 4000 grams of flour",
+                        ),
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                    ],
+                    coeffs: [
+                        250,
+                        200,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                4000,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "b",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c",
-                        ),
-                    ),
-                ],
-                coeffs: [
-                    250,
-                    200,
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            4000,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: Some(
-                        "using the 6 bananas",
-                    ),
-                },
-                list: [
-                    Var(
-                        Ident(
-                            "b",
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: Some(
+                            "using the 6 bananas",
                         ),
-                    ),
-                ],
-                coeffs: [
-                    2,
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            6,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "b",
+                            ),
                         ),
-                    ),
+                    ],
+                    coeffs: [
+                        2,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                6,
+                            ),
+                        ),
+                    },
                 },
-            },
+            ),
         ),
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: Some(
-                        "using the 2000 grams of sugar",
-                    ),
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: Some(
+                            "using the 2000 grams of sugar",
+                        ),
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                    ],
+                    coeffs: [
+                        75,
+                        150,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                2000,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "b",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c",
-                        ),
-                    ),
-                ],
-                coeffs: [
-                    75,
-                    150,
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            2000,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: Some(
-                        "using the 500 grams of butter",
-                    ),
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: Some(
+                            "using the 500 grams of butter",
+                        ),
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "b",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "c",
+                            ),
+                        ),
+                    ],
+                    coeffs: [
+                        100,
+                        150,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                500,
+                            ),
+                        ),
+                    },
                 },
-                list: [
-                    Var(
-                        Ident(
-                            "b",
-                        ),
-                    ),
-                    Var(
-                        Ident(
-                            "c",
-                        ),
-                    ),
-                ],
-                coeffs: [
-                    100,
-                    150,
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            500,
-                        ),
-                    ),
-                },
-            },
+            ),
         ),
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: Some(
-                        "using the 500 grams of cocoa",
-                    ),
-                },
-                list: [
-                    Var(
-                        Ident(
-                            "c",
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: Some(
+                            "using the 500 grams of cocoa",
                         ),
-                    ),
-                ],
-                coeffs: [
-                    75,
-                ],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            500,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "c",
+                            ),
                         ),
-                    ),
+                    ],
+                    coeffs: [
+                        75,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                500,
+                            ),
+                        ),
+                    },
                 },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

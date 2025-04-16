@@ -33,7 +33,7 @@ pub const RESERVED: &[&str] = &[
 ];
 
 /// Expression resulting in a Boolean value or decision variable
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BoolExp<Identifier> {
 	/// Boolean constant
 	///
@@ -83,7 +83,7 @@ pub enum BoolExp<Identifier> {
 }
 
 /// Expression of any type
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exp<Identifier> {
 	/// A Boolean expression
 	Bool(Box<BoolExp<Identifier>>),
@@ -95,8 +95,16 @@ pub enum Exp<Identifier> {
 	Var(VarRef<Identifier>),
 }
 
+#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
+/// Helper structure used to parse a list of expressions.
+pub(crate) struct ExpList<Identifier> {
+	#[serde(rename = "$text", deserialize_with = "Exp::parse_vec")]
+	pub(crate) elements: Vec<Exp<Identifier>>,
+}
+
 /// Expression resulting in an integer value or decision variable
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum IntExp<Identifier> {
 	/// Constant integer value
 	Const(IntVal),
@@ -121,9 +129,9 @@ pub enum IntExp<Identifier> {
 	/// Power (i.e., x^y)
 	Pow(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
 	/// Minimum (i.e., min{x1, ..., xn})
-	Min(Vec<Exp<Identifier>>),
+	Min(Vec<IntExp<Identifier>>),
 	/// Maximum (i.e., max{x1, ..., xn})
-	Max(Vec<Exp<Identifier>>),
+	Max(Vec<IntExp<Identifier>>),
 	/// Distance (i.e., |x - y|)
 	Dist(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
 	/// Alternative (i.e., value of x, if b is true, value of y, otherwise)
@@ -139,7 +147,7 @@ pub enum IntExp<Identifier> {
 }
 
 /// Expression resulting in an set of integers value or decision variable
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SetExp<Identifier> {
 	/// Set literal specifying each of its values (i.e., {x1, ..., xn})
 	Set(Vec<IntExp<Identifier>>),
@@ -549,6 +557,12 @@ impl<Identifier: Display> Display for Exp<Identifier> {
 	}
 }
 
+impl<Identifier: Display> Serialize for Exp<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&self.to_string())
+	}
+}
+
 impl<Identifier: FromStr> IntExp<Identifier> {
 	/// Parser combinator for a call integer expression with a integer argument
 	/// from string
@@ -630,7 +644,7 @@ impl<Identifier: FromStr> IntExp<Identifier> {
 	/// Parser combinator for a call integer expression with variadic number of
 	/// integer arguments from string
 	fn call_argn(input: &str) -> IResult<&str, Self> {
-		let (input, tag) = alt((tag("add"), tag("mul"))).parse(input)?;
+		let (input, tag) = alt((tag("add"), tag("max"), tag("min"), tag("mul"))).parse(input)?;
 		let (input, _) = char('(')(input)?;
 		let (input, es) = separated_list1(char(','), Self::parse).parse(input)?;
 		let (input, _) = char(')')(input)?;
@@ -638,24 +652,9 @@ impl<Identifier: FromStr> IntExp<Identifier> {
 			input,
 			match tag {
 				"add" => IntExp::Add,
-				"mul" => IntExp::Mul,
-				_ => unreachable!(),
-			}(es),
-		))
-	}
-
-	/// Parser combinator for a call integer expression with variadic number of
-	/// expression arguments from string
-	fn call_argn_exp(input: &str) -> IResult<&str, Self> {
-		let (input, tag) = alt((tag("min"), tag("max"))).parse(input)?;
-		let (input, _) = char('(')(input)?;
-		let (input, es) = separated_list1(char(','), Exp::parse).parse(input)?;
-		let (input, _) = char(')')(input)?;
-		Ok((
-			input,
-			match tag {
-				"min" => IntExp::Min,
 				"max" => IntExp::Max,
+				"min" => IntExp::Min,
+				"mul" => IntExp::Mul,
 				_ => unreachable!(),
 			}(es),
 		))
@@ -670,7 +669,6 @@ impl<Identifier: FromStr> IntExp<Identifier> {
 			IntExp::call_arg2,
 			IntExp::call_arg3,
 			IntExp::call_argn,
-			IntExp::call_argn_exp,
 			map(VarRef::parse, IntExp::Var),
 			map(BoolExp::parse, IntExp::Bool),
 		))

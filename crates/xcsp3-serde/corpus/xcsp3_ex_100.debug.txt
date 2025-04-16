@@ -3,94 +3,98 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Element(
-            Element {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [
+                            Var(
+                                Ident(
+                                    "s1",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "s2",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "s3",
+                                ),
+                            ),
+                        ],
+                        start_index: 0,
+                    },
+                    index: Some(
+                        Var(
+                            Ident(
+                                "i",
+                            ),
+                        ),
                     ),
-                    note: None,
+                    value: Some(
+                        Var(
+                            Ident(
+                                "t",
+                            ),
+                        ),
+                    ),
+                    condition: None,
                 },
-                list: OffsetList {
-                    list: [
-                        Var(
-                            Ident(
-                                "s1",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "s2",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "s3",
-                            ),
-                        ),
-                    ],
-                    start_index: 0,
-                },
-                index: Some(
-                    Var(
-                        Ident(
-                            "i",
-                        ),
-                    ),
-                ),
-                value: Some(
-                    Var(
-                        Ident(
-                            "t",
-                        ),
-                    ),
-                ),
-                condition: None,
-            },
+            ),
         ),
-        Element(
-            Element {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [
+                            Var(
+                                Ident(
+                                    "t1",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "t2",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "t3",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "t4",
+                                ),
+                            ),
+                        ],
+                        start_index: 0,
+                    },
+                    index: None,
+                    value: Some(
+                        Var(
+                            Ident(
+                                "t5",
+                            ),
+                        ),
                     ),
-                    note: None,
+                    condition: None,
                 },
-                list: OffsetList {
-                    list: [
-                        Var(
-                            Ident(
-                                "t1",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "t2",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "t3",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "t4",
-                            ),
-                        ),
-                    ],
-                    start_index: 0,
-                },
-                index: None,
-                value: Some(
-                    Var(
-                        Ident(
-                            "t5",
-                        ),
-                    ),
-                ),
-                condition: None,
-            },
+            ),
         ),
     ],
     objectives: Objectives {

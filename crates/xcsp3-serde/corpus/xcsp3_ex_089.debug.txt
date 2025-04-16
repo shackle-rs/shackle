@@ -3,64 +3,68 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Intension(
-            Intension {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
-                },
-                function: Equal(
-                    [
-                        Int(
-                            Card(
-                                Var(
-                                    Ident(
-                                        "s",
+        Constraint(
+            Intension(
+                Intension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
+                        ),
+                        note: None,
+                    },
+                    function: Equal(
+                        [
+                            Int(
+                                Card(
+                                    Var(
+                                        Ident(
+                                            "s",
+                                        ),
                                     ),
                                 ),
                             ),
-                        ),
-                        Int(
-                            Const(
-                                2,
-                            ),
-                        ),
-                    ],
-                ),
-            },
-        ),
-        Intension(
-            Intension {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
-                },
-                function: SubSet(
-                    Union(
-                        [
-                            Var(
-                                Ident(
-                                    "t1",
-                                ),
-                            ),
-                            Var(
-                                Ident(
-                                    "t2",
+                            Int(
+                                Const(
+                                    2,
                                 ),
                             ),
                         ],
                     ),
-                    Var(
-                        Ident(
-                            "t3",
+                },
+            ),
+        ),
+        Constraint(
+            Intension(
+                Intension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    function: SubSet(
+                        Union(
+                            [
+                                Var(
+                                    Ident(
+                                        "t1",
+                                    ),
+                                ),
+                                Var(
+                                    Ident(
+                                        "t2",
+                                    ),
+                                ),
+                            ],
+                        ),
+                        Var(
+                            Ident(
+                                "t3",
+                            ),
                         ),
                     ),
-                ),
-            },
+                },
+            ),
         ),
     ],
     objectives: Objectives {

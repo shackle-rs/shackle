@@ -3,52 +3,54 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        AllEqual(
-            AllEqual {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
+        Constraint(
+            AllEqual(
+                AllEqual {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Add(
+                            [
+                                Var(
+                                    Ident(
+                                        "x1",
+                                    ),
+                                ),
+                                Const(
+                                    1,
+                                ),
+                            ],
+                        ),
+                        Add(
+                            [
+                                Var(
+                                    Ident(
+                                        "x2",
+                                    ),
+                                ),
+                                Const(
+                                    2,
+                                ),
+                            ],
+                        ),
+                        Add(
+                            [
+                                Var(
+                                    Ident(
+                                        "x3",
+                                    ),
+                                ),
+                                Const(
+                                    3,
+                                ),
+                            ],
+                        ),
+                    ],
+                    except: [],
                 },
-                list: [
-                    Add(
-                        [
-                            Var(
-                                Ident(
-                                    "x1",
-                                ),
-                            ),
-                            Const(
-                                1,
-                            ),
-                        ],
-                    ),
-                    Add(
-                        [
-                            Var(
-                                Ident(
-                                    "x2",
-                                ),
-                            ),
-                            Const(
-                                2,
-                            ),
-                        ],
-                    ),
-                    Add(
-                        [
-                            Var(
-                                Ident(
-                                    "x3",
-                                ),
-                            ),
-                            Const(
-                                3,
-                            ),
-                        ],
-                    ),
-                ],
-                except: [],
-            },
+            ),
         ),
     ],
     objectives: Objectives {

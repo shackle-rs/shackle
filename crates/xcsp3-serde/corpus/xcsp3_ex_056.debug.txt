@@ -3,68 +3,70 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Sum(
-            Sum {
-                info: MetaInfo {
-                    identifier: None,
-                    note: None,
-                },
-                list: [
-                    Bool(
-                        Equal(
-                            [
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Bool(
+                            Equal(
+                                [
+                                    Var(
+                                        Ident(
+                                            "x1",
+                                        ),
+                                    ),
+                                    Bool(
+                                        Const(
+                                            true,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        Bool(
+                            GreaterThan(
                                 Var(
                                     Ident(
-                                        "x1",
+                                        "x2",
                                     ),
                                 ),
-                                Bool(
-                                    Const(
-                                        true,
-                                    ),
-                                ),
-                            ],
-                        ),
-                    ),
-                    Bool(
-                        GreaterThan(
-                            Var(
-                                Ident(
-                                    "x2",
+                                Const(
+                                    2,
                                 ),
                             ),
+                        ),
+                        Bool(
+                            Equal(
+                                [
+                                    Var(
+                                        Ident(
+                                            "x3",
+                                        ),
+                                    ),
+                                    Bool(
+                                        Const(
+                                            true,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                    ],
+                    coeffs: [],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
                             Const(
                                 2,
                             ),
                         ),
-                    ),
-                    Bool(
-                        Equal(
-                            [
-                                Var(
-                                    Ident(
-                                        "x3",
-                                    ),
-                                ),
-                                Bool(
-                                    Const(
-                                        true,
-                                    ),
-                                ),
-                            ],
-                        ),
-                    ),
-                ],
-                coeffs: [],
-                condition: Condition {
-                    operator: Le,
-                    operand: Int(
-                        Const(
-                            2,
-                        ),
-                    ),
+                    },
                 },
-            },
+            ),
         ),
     ],
     objectives: Objectives {

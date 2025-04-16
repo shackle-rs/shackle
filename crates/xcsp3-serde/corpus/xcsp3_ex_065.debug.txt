@@ -3,90 +3,94 @@ Instance {
     variables: [],
     arrays: [],
     constraints: [
-        Element(
-            Element {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c1",
-                    ),
-                    note: None,
-                },
-                list: OffsetList {
-                    list: [
-                        Var(
-                            Ident(
-                                "x1",
-                            ),
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c1",
                         ),
-                        Var(
-                            Ident(
-                                "x2",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x3",
-                            ),
-                        ),
-                        Var(
-                            Ident(
-                                "x4",
-                            ),
-                        ),
-                    ],
-                    start_index: 1,
-                },
-                index: Some(
-                    Var(
-                        Ident(
-                            "i",
-                        ),
-                    ),
-                ),
-                value: None,
-                condition: Some(
-                    Condition {
-                        operator: Eq,
-                        operand: Var(
-                            Ident(
-                                "v",
-                            ),
-                        ),
+                        note: None,
                     },
-                ),
-            },
-        ),
-        Element(
-            Element {
-                info: MetaInfo {
-                    identifier: Some(
-                        "c2",
-                    ),
-                    note: None,
-                },
-                list: OffsetList {
-                    list: [
+                    list: OffsetList {
+                        list: [
+                            Var(
+                                Ident(
+                                    "x1",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x2",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x3",
+                                ),
+                            ),
+                            Var(
+                                Ident(
+                                    "x4",
+                                ),
+                            ),
+                        ],
+                        start_index: 1,
+                    },
+                    index: Some(
                         Var(
-                            ArrayAccess(
-                                "y",
-                                [
-                                    Full,
-                                ],
+                            Ident(
+                                "i",
                             ),
                         ),
-                    ],
-                    start_index: 0,
+                    ),
+                    value: None,
+                    condition: Some(
+                        Condition {
+                            operator: Eq,
+                            operand: Var(
+                                Ident(
+                                    "v",
+                                ),
+                            ),
+                        },
+                    ),
                 },
-                index: None,
-                value: Some(
-                    Var(
-                        Ident(
-                            "z",
+            ),
+        ),
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c2",
+                        ),
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Full,
+                                    ],
+                                ),
+                            ),
+                        ],
+                        start_index: 0,
+                    },
+                    index: None,
+                    value: Some(
+                        Var(
+                            Ident(
+                                "z",
+                            ),
                         ),
                     ),
-                ),
-                condition: None,
-            },
+                    condition: None,
+                },
+            ),
         ),
     ],
     objectives: Objectives {
