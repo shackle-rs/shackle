@@ -5,7 +5,7 @@
 //! necessary information to represent the constraint in the XCSP3 format. The
 //! enumerated type [`Constraint`] is used to represent any of constraint.
 
-use std::{borrow::Cow, fmt::Display, marker::PhantomData, str::FromStr};
+use std::{borrow::Cow, collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData};
 
 use nom::{
 	branch::alt,
@@ -22,94 +22,96 @@ use serde::{
 
 use crate::{
 	as_str, deserialize_int_vals,
+	error::UnrollError,
 	expression::{
 		identifier, int, sequence, tuple, whitespace_seperated, BoolExp, Exp, ExpList, IntExp,
 	},
-	from_str, serialize_list, Instantiation, IntVal, MetaInfo,
+	from_string, serialize_list, Instantiation, IntVal, IntoVar, MetaInfo, Placeholder, SimpleRef,
+	VarRef,
 };
 
 macro_rules! constraints_enum {
 	($(#[$attr:meta])* $vis:vis $name:ident, $basic:meta, $meta:meta, $args:meta) => {
 		$(#[$attr])*
-		$vis enum $name<Identifier = String> {
+		$vis enum $name<Identifier = String, Var = VarRef<Identifier>> {
 			#[cfg($basic)]
 			/// [`AllDifferent`] constraint
-			AllDifferent(AllDifferent<Identifier>),
+			AllDifferent(AllDifferent<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`AllEqual`] constraint
-			AllEqual(AllEqual<Identifier>),
+			AllEqual(AllEqual<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`BinPacking`] constraint
-			BinPacking(BinPacking<Identifier>),
+			BinPacking(BinPacking<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Cardinality`] constraint
-			Cardinality(Cardinality<Identifier>),
+			Cardinality(Cardinality<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Channel`] constraint
-			Channel(Channel<Identifier>),
+			Channel(Channel<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Circuit`] constraint
-			Circuit(Circuit<Identifier>),
+			Circuit(Circuit<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Count`] constraint
-			Count(Count<Identifier>),
+			Count(Count<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Cumulative`] constraint
-			Cumulative(Cumulative<Identifier>),
+			Cumulative(Cumulative<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Element`] constraint
-			Element(Element<Identifier>),
+			Element(Element<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Extension`] constraint
-			Extension(Extension<Identifier>),
+			Extension(Extension<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Instantiation`] constraint
-			Instantiation(Instantiation<Identifier>),
+			Instantiation(Instantiation<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Intension`] constraint
-			Intension(Intension<Identifier>),
+			Intension(Intension<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Knapsack`] constraint
-			Knapsack(Knapsack<Identifier>),
+			Knapsack(Knapsack<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Maximum`] constraint
-			Maximum(Maximum<Identifier>),
+			Maximum(Maximum<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Mdd`] constraint
-			Mdd(Mdd<Identifier>),
+			Mdd(Mdd<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Minimum`] constraint
-			Minimum(Minimum<Identifier>),
+			Minimum(Minimum<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`NValues`] constraint
-			NValues(NValues<Identifier>),
+			NValues(NValues<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`NoOverlap`] constraint
-			NoOverlap(NoOverlap<Identifier>),
+			NoOverlap(NoOverlap<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Ordered`] constraint
-			Ordered(Ordered<Identifier>),
+			Ordered(Ordered<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Precedence`] constraint
-			Precedence(Precedence<Identifier>),
+			Precedence(Precedence<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Regular`] constraint
-			Regular(Regular<Identifier>),
+			Regular(Regular<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Sum`] constraint
-			Sum(Sum<Identifier>),
+			Sum(Sum<Identifier, Var>),
 			#[cfg($meta)]
 			/// Constraint [`Group`], that can serve as a template
-			Group(Group<Identifier>),
+			Group(Group<Identifier, Var>),
 			#[cfg($meta)]
 			/// Constraint [`Group`], that can serve as a template
-			Block(Block<Identifier>),
+			Block(Block<Identifier, Var>),
 			#[cfg(not($basic))]
 			/// Simple [`Constraint`] type
-			Constraint(Constraint<Identifier>),
+			Constraint(Constraint<Identifier, Var>),
 			#[cfg($args)]
 			/// Constraint [`Group`], that can serve as a template
-			Args(ExpList<Identifier>),
+			Args(ExpList<Var>),
 		}
 	};
 }
@@ -118,7 +120,7 @@ constraints_enum!(
 	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
 	#[serde(
 				rename_all = "camelCase",
-				bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+				bound(deserialize = "Identifier: From<String>, Var: IntoVar", serialize = "Identifier: Display, Var: Display")
 	)]
 	/// Enumerated type to represent basic (instantiated) constraints
 	pub Constraint,
@@ -139,7 +141,10 @@ constraints_enum!(
 	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
 	#[serde(
 		rename_all = "camelCase",
-		bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+		bound(
+			deserialize = "Identifier: From<String>, Var: IntoVar",
+			serialize = "Identifier: Display, Var: Display"
+		)
 	)]
 	/// Internal constraint enum used to capture [`MetaConstraint`].
 	CaptureConstraint,
@@ -151,7 +156,10 @@ constraints_enum!(
 	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
 	#[serde(
 		rename_all = "camelCase",
-		bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+		bound(
+			deserialize = "Identifier: From<String>, Var: IntoVar",
+			serialize = "Identifier: Display, Var: Display"
+		)
 	)]
 	/// Internal constraint enum used to capture basic constraints and <args> elements
 	TemplateCapture,
@@ -162,8 +170,11 @@ constraints_enum!(
 
 /// Constraint forcing a set of expressions to take distinct values
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct AllDifferent<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct AllDifferent<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -173,7 +184,7 @@ pub struct AllDifferent<Identifier = String> {
 		serialize_with = "serialize_list"
 	)]
 	/// List of expressions that must take distinct values
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of values that are excluded from the constraint and can be taken by
 	/// multiple expressions
 	#[serde(
@@ -187,8 +198,11 @@ pub struct AllDifferent<Identifier = String> {
 
 /// Constraint forcing a set of expressions to take the same value
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct AllEqual<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct AllEqual<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -198,7 +212,7 @@ pub struct AllEqual<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of values that are excluded from the constraint and can be taken by
 	/// expressions not matching other expressions
 	#[serde(
@@ -216,8 +230,11 @@ pub struct AllEqual<Identifier = String> {
 /// different bins in such a way that the total size of the items in each bin
 /// respects a numerical condition.
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct BinPacking<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct BinPacking<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -226,16 +243,16 @@ pub struct BinPacking<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of expressions representing the size of each item
 	#[serde(
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub sizes: Vec<IntExp<Identifier>>,
+	pub sizes: Vec<IntExp<Var>>,
 	/// Condition that must be respected by the total size of the items in each bin
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub condition: Option<Condition<Identifier>>,
+	pub condition: Option<Condition<Var>>,
 	#[serde(
 		default,
 		skip_serializing_if = "Vec::is_empty",
@@ -244,7 +261,7 @@ pub struct BinPacking<Identifier = String> {
 	)]
 	/// List of expressions representing the limit for the total size of the items
 	/// in each bin
-	pub limits: Vec<IntExp<Identifier>>,
+	pub limits: Vec<IntExp<Var>>,
 	/// List of expressions representing the load of each bin
 	#[serde(
 		default,
@@ -252,13 +269,16 @@ pub struct BinPacking<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub loads: Vec<IntExp<Identifier>>,
+	pub loads: Vec<IntExp<Var>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Hash, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
 /// A set of constraints that is linked together semantically
-pub struct Block<Identifier = String> {
+pub struct Block<Identifier = String, Var = VarRef<Identifier>> {
 	#[serde(
 		default,
 		rename = "@class",
@@ -269,7 +289,7 @@ pub struct Block<Identifier = String> {
 	pub class: Vec<Identifier>,
 	#[serde(default, rename = "$value")]
 	/// List of constraints
-	pub constraints: Vec<MetaConstraint<Identifier>>,
+	pub constraints: Vec<MetaConstraint<Identifier, Var>>,
 	#[serde(flatten)]
 	/// Optional metadata for the constraint
 	pub info: MetaInfo<Identifier>,
@@ -278,18 +298,18 @@ pub struct Block<Identifier = String> {
 /// Constraint enforcing the amount of times certain values are taken by a set
 /// of expressions.
 #[derive(Clone, Debug, PartialEq, Hash)]
-pub struct Cardinality<Identifier = String> {
+pub struct Cardinality<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	pub info: MetaInfo<Identifier>,
 	/// List of expressions of which the values are observed
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of values that are observed
-	pub values: Vec<IntExp<Identifier>>,
+	pub values: Vec<IntExp<Var>>,
 	/// Whether the expressions are allowed to take values not in the list of
 	/// observed values
 	pub closed: bool,
 	/// List of expressions representing the number of times each value is taken
-	pub occurs: Vec<Exp<Identifier>>,
+	pub occurs: Vec<Exp<Var>>,
 }
 
 /// Constraint that enforces that if the ith expression takes the value j, then
@@ -303,16 +323,16 @@ pub struct Cardinality<Identifier = String> {
 /// expression in [`Self::list`] takes the value 1 iff the expression in
 /// [`Self::value`] takes the value i.
 #[derive(Clone, Debug, PartialEq, Hash)]
-pub struct Channel<Identifier = String> {
+pub struct Channel<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	pub info: MetaInfo<Identifier>,
 	/// List of expressions that is being channelled
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Inverse list of expressions that is being channelled
-	pub inverse_list: Vec<IntExp<Identifier>>,
+	pub inverse_list: Vec<IntExp<Var>>,
 	/// Expression representing the index of the only expression in [`Self::list`]
 	/// that is allowed to take the value 1.
-	pub value: Option<IntExp<Identifier>>,
+	pub value: Option<IntExp<Var>>,
 }
 
 /// Constraint that ensures that the values of the expressions in [`Self::list`]
@@ -325,35 +345,38 @@ pub struct Channel<Identifier = String> {
 /// given, then the circuit must have the length of [`Self::size`]. Otherwise,
 /// the circuit must be at least 2 in length.
 #[derive(Clone, Debug, PartialEq, Hash, Serialize)]
-#[serde(bound(serialize = "Identifier: Display"))]
-pub struct Circuit<Identifier = String> {
+#[serde(bound(serialize = "Identifier: Display, Var: Display"))]
+pub struct Circuit<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
 	/// List of expressions that must form a circuit
-	pub list: OffsetList<Identifier>,
+	pub list: OffsetList<Var>,
 	/// Size of the circuit
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub size: Option<IntExp<Identifier>>,
+	pub size: Option<IntExp<Var>>,
 }
 
 /// Condition to be enforced
 ///
 /// This type is used as part of a larger constraint type
 #[derive(Clone, Debug, PartialEq, Hash)]
-pub struct Condition<Identifier> {
+pub struct Condition<Var> {
 	/// Operator of the condition
 	pub operator: Operator,
 	/// Right-side operand of the condition
-	pub operand: Exp<Identifier>,
+	pub operand: Exp<Var>,
 }
 
 /// Constraint that enforced that the number of times expressions in
 /// [`Self::list`] take a value from [`Self::values`] abides by the given
 /// [`Self::condition`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Count<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Count<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -362,22 +385,25 @@ pub struct Count<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of values that are counted
 	#[serde(
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub values: Vec<IntExp<Identifier>>,
+	pub values: Vec<IntExp<Var>>,
 	/// Condition to be enforced on the count
-	pub condition: Condition<Identifier>,
+	pub condition: Condition<Var>,
 }
 
 /// Constraint that enforces that at each point in time, the cumulated height of
 /// tasks that overlap that point, respects the given [`Self::condition`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Cumulative<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Cumulative<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -386,43 +412,46 @@ pub struct Cumulative<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub origins: Vec<IntExp<Identifier>>,
+	pub origins: Vec<IntExp<Var>>,
 	/// List of durations of the tasks
 	#[serde(
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub lengths: Vec<IntExp<Identifier>>,
+	pub lengths: Vec<IntExp<Var>>,
 	/// List of heights of the tasks
 	#[serde(
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub heights: Vec<IntExp<Identifier>>,
+	pub heights: Vec<IntExp<Var>>,
 	/// Condition to be enforced on the cumulated height at each time point
-	pub condition: Condition<Identifier>,
+	pub condition: Condition<Var>,
 }
 
 /// Constraint that enforces that the value of the expression at
 /// [`Self::index`] abides by the given [`Self::condition`], or alternatively is
 /// equal the expression [`Self::value`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Element<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Element<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
 	/// Indexed list of values
-	pub list: OffsetList<Identifier>,
+	pub list: OffsetList<Var>,
 	/// Index of the value to be constrained
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub index: Option<IntExp<Identifier>>,
+	pub index: Option<IntExp<Var>>,
 	/// Value to be assigned to the indexed expression
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub value: Option<IntExp<Identifier>>,
+	pub value: Option<IntExp<Var>>,
 	/// Condition to be enforced on the indexed expression
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub condition: Option<Condition<Identifier>>,
+	pub condition: Option<Condition<Var>>,
 }
 
 // TODO: Support for "smart" extension
@@ -430,8 +459,11 @@ pub struct Element<Identifier = String> {
 /// the values of one of the rows in [`Self::supports`], or alternatively do not
 /// match any of the rows in [`Self::conflicts`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Extension<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Extension<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -441,7 +473,7 @@ pub struct Extension<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Combinations of values that the expressions are allowed to take
 	#[serde(
 		default,
@@ -462,26 +494,29 @@ pub struct Extension<Identifier = String> {
 
 #[derive(Clone, Debug, PartialEq, Hash)]
 /// Groups of constraints that are instantiated using the given arguments.
-pub struct Group<Identifier = String> {
+pub struct Group<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	pub info: MetaInfo<Identifier>,
 	/// List of constraints
-	pub constraints: Vec<Constraint<Identifier>>,
+	pub constraints: Vec<Constraint<Identifier, Var>>,
 	/// List of arguments to instantiate the constraints
-	pub args: Vec<Vec<Exp<Identifier>>>,
+	pub args: Vec<Vec<Exp<Var>>>,
 }
 
 /// Constraint that enforces that the Boolean Expression [`Self::function`] must
 /// be satisfied.
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Intension<Identifier> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Intension<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
 	/// Boolean expression to be satisfied
 	#[serde(alias = "$text")]
-	pub function: BoolExp<Identifier>,
+	pub function: BoolExp<Var>,
 }
 
 /// Constraint where the expressions in [`Self::list`] depict the amount of an
@@ -489,8 +524,11 @@ pub struct Intension<Identifier> {
 /// abides by the first [`Self::condition`] and the sum of the [`Self::profits`]
 /// abides by the second [`Self::condition`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Knapsack<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Knapsack<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -499,7 +537,7 @@ pub struct Knapsack<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of weights of the items
 	#[serde(
 		deserialize_with = "deserialize_int_vals",
@@ -514,14 +552,17 @@ pub struct Knapsack<Identifier = String> {
 	pub profits: Vec<IntVal>,
 	/// The first `Condition` element is related to weights whereas the second
 	/// [`Condition`] element is related to profits.
-	pub condition: [Condition<Identifier>; 2],
+	pub condition: [Condition<Var>; 2],
 }
 
 /// Constraint that enforces that the maximum value taken by the expression in
 /// [`Self::list`] abides by the given [`Self::condition`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Maximum<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Maximum<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -531,17 +572,20 @@ pub struct Maximum<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Condition to be enforced on the maximum value
-	pub condition: Condition<Identifier>,
+	pub condition: Condition<Var>,
 }
 
 /// Constraint that enforces that the values of the [`Self::list`] follow a
 /// valid path according to the [`Self::transitions`] that form an Multi-valued
 /// Decision Diagram (MDD).
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Mdd<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Mdd<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -550,7 +594,7 @@ pub struct Mdd<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of transitions that form the Multi-valued Decision Diagram (MDD)
 	#[serde(
 		deserialize_with = "Transition::parse_vec",
@@ -559,21 +603,14 @@ pub struct Mdd<Identifier = String> {
 	pub transitions: Vec<Transition<Identifier>>,
 }
 
-// #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-// #[serde(
-// 	bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"),
-// 	rename_all = "camelCase"
-// )]
-// #[serde(tag = "type")]
-// pub enum MetaConstraint<Identifier = String> {
-// 	Group(Group<Identifier>),
-// }
-
 /// Constraint that enforces that the minimum value taken by the expression in
 /// [`Self::list`] abides by the given [`Self::condition`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Minimum<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Minimum<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -583,16 +620,19 @@ pub struct Minimum<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Condition to be enforced on the minimum value
-	pub condition: Condition<Identifier>,
+	pub condition: Condition<Var>,
 }
 
 /// Cosntraint that enforces a [`Self::condition`] on the number of different
 /// values taken by the expressions in [`Self::list`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct NValues<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct NValues<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -601,7 +641,7 @@ pub struct NValues<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Values that are not counted
 	#[serde(
 		default,
@@ -611,7 +651,7 @@ pub struct NValues<Identifier = String> {
 	)]
 	pub except: Vec<IntVal>,
 	/// Condition to be enforced on the number of different values
-	pub condition: Condition<Identifier>,
+	pub condition: Condition<Var>,
 }
 
 // TODO: k-dimensional no-overlap constraint
@@ -622,8 +662,11 @@ pub struct NValues<Identifier = String> {
 /// zero-length tasks cannot be packed anywhere (cannot overlap with other
 /// tasks).
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct NoOverlap<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct NoOverlap<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -639,27 +682,27 @@ pub struct NoOverlap<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub origins: Vec<IntExp<Identifier>>,
+	pub origins: Vec<IntExp<Var>>,
 	/// List of lengths of the tasks
 	#[serde(
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub lengths: Vec<IntExp<Identifier>>,
+	pub lengths: Vec<IntExp<Var>>,
 }
 
 /// List of expressions where the index is considered to start at
 /// [`Self::start_index`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct OffsetList<Identifier> {
+#[serde(bound(deserialize = " Var: IntoVar", serialize = "Var: Display"))]
+pub struct OffsetList<Var> {
 	/// List of expressions
 	#[serde(
 		alias = "$text",
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Index of the first element in the list
 	#[serde(rename = "@startIndex", default, skip_serializing_if = "is_default")]
 	pub start_index: IntVal,
@@ -691,8 +734,11 @@ pub enum Operator {
 /// The [`Self::lengths`] field indicates the minimum distances between any two
 /// successive variables of [`Self::list`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Ordered<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Ordered<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -702,7 +748,7 @@ pub struct Ordered<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Minimum distances between any two successive variables
 	#[serde(
 		default,
@@ -710,7 +756,7 @@ pub struct Ordered<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub lengths: Vec<IntExp<Identifier>>,
+	pub lengths: Vec<IntExp<Var>>,
 	/// The operator used to order the expressions
 	///
 	/// The operator must be either [`Operator::Lt`], [`Operator::Le`],
@@ -722,11 +768,11 @@ pub struct Ordered<Identifier = String> {
 /// expressions in [`Self::list`] occur in the same order as the values in
 /// [`Self::values`].
 #[derive(Clone, Debug, PartialEq, Hash)]
-pub struct Precedence<Identifier = String> {
+pub struct Precedence<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	pub info: MetaInfo<Identifier>,
 	/// List of expressions considered
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Ordered values considered
 	pub values: Vec<IntVal>,
 	/// Whether the expressions must take one of the values in [`Self::values`]
@@ -737,8 +783,11 @@ pub struct Precedence<Identifier = String> {
 /// [`Self::list`] follow a valid sequence of [`Self::transitions`], starting
 /// from tje [`Self::start`] state and ending at the [`Self::finish`] state.
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Regular<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Regular<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -747,7 +796,7 @@ pub struct Regular<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of transitions between states
 	#[serde(
 		deserialize_with = "Transition::parse_vec",
@@ -755,12 +804,12 @@ pub struct Regular<Identifier = String> {
 	)]
 	pub transitions: Vec<Transition<Identifier>>,
 	/// Starting state
-	#[serde(deserialize_with = "from_str", serialize_with = "as_str")]
+	#[serde(deserialize_with = "from_string", serialize_with = "as_str")]
 	pub start: Identifier,
 	/// Final state
 	#[serde(
 		rename = "final",
-		deserialize_with = "from_str",
+		deserialize_with = "from_string",
 		serialize_with = "as_str"
 	)]
 	pub finish: Identifier,
@@ -770,8 +819,11 @@ pub struct Regular<Identifier = String> {
 /// [`Self::list`], optionally multiplied by [`Self::coeffs`], abides by the
 /// [`Self::condition`].
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Sum<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Sum<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -780,7 +832,7 @@ pub struct Sum<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// Coefficient for each expression
 	#[serde(
 		default,
@@ -790,7 +842,7 @@ pub struct Sum<Identifier = String> {
 	)]
 	pub coeffs: Vec<IntVal>,
 	/// Condition to be enforced
-	pub condition: Condition<Identifier>,
+	pub condition: Condition<Var>,
 }
 
 /// Transition between two state for the regular and MDD constraints.
@@ -872,13 +924,13 @@ fn serialize_int_tuples<S: Serializer>(
 
 // Note: flatten of MetaInfo does not seem to work for Block
 // (https://github.com/tafia/quick-xml/issues/326)
-impl<'de, Identifier: FromStr> Deserialize<'de> for Block<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Block<Identifier, Var> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Deserialize a <block> element
 		#[derive(Deserialize)]
-		#[serde(bound(deserialize = "Identifier: FromStr"))]
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
 		/// A set of constraints that is linked together semantically
-		struct Block<Identifier> {
+		struct Block<Identifier, Var> {
 			/// Name assigned to the element
 			#[serde(default, rename = "@id", deserialize_with = "crate::deserialize_ident")]
 			pub identifier: Option<Identifier>,
@@ -890,57 +942,52 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Block<Identifier> {
 			pub class: Vec<String>,
 			#[serde(default, rename = "$value")]
 			/// List of constraints
-			pub constraints: Vec<MetaConstraint<Identifier>>,
+			pub constraints: Vec<MetaConstraint<Identifier, Var>>,
 		}
 		let c = Block::deserialize(deserializer)?;
-		let class: Result<_, _> = c
-			.class
-			.into_iter()
-			.map(|v| {
-				FromStr::from_str(&v)
-					.map_err(|_| de::Error::custom("unable to create identifier from string"))
-			})
-			.collect();
+		let class: Vec<_> = c.class.into_iter().map(Into::into).collect();
 
 		Ok(Self {
 			info: MetaInfo {
 				identifier: c.identifier,
 				note: c.note,
 			},
-			class: class?,
+			class,
 			constraints: c.constraints,
 		})
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for Cardinality<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de>
+	for Cardinality<Identifier, Var>
+{
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Helper struct to deserialize the <values> element of the cardinality constraint
 		#[derive(Deserialize)]
-		#[serde(bound(deserialize = "Identifier: FromStr"))]
-		struct Values<Identifier> {
+		#[serde(bound(deserialize = "Var: IntoVar"))]
+		struct Values<Var> {
 			/// closed attribute
 			#[serde(default, rename = "@closed")]
 			closed: Option<bool>,
 			/// content of the <values> element
 			#[serde(rename = "$text", deserialize_with = "IntExp::parse_vec")]
-			list: Vec<IntExp<Identifier>>,
+			list: Vec<IntExp<Var>>,
 		}
 		/// Helper struct to deserialize the <cardinality> element of the cardinality constraint
 		#[derive(Deserialize)]
-		#[serde(bound(deserialize = "Identifier: FromStr"))]
-		struct Cardinality<Identifier = String> {
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		struct Cardinality<Identifier, Var> {
 			/// Metadata for the constraint
 			#[serde(flatten)]
 			info: MetaInfo<Identifier>,
 			/// <list> element
 			#[serde(deserialize_with = "IntExp::parse_vec")]
-			list: Vec<IntExp<Identifier>>,
+			list: Vec<IntExp<Var>>,
 			/// <values> element
-			values: Values<Identifier>,
+			values: Values<Var>,
 			/// <occurs> element
 			#[serde(deserialize_with = "Exp::parse_vec")]
-			occurs: Vec<Exp<Identifier>>,
+			occurs: Vec<Exp<Var>>,
 		}
 		let x = Cardinality::deserialize(deserializer)?;
 		Ok(Self {
@@ -953,34 +1000,34 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Cardinality<Identifier> {
 	}
 }
 
-impl<Identifier: Display> Serialize for Cardinality<Identifier> {
+impl<Identifier: Display, Var: Display> Serialize for Cardinality<Identifier, Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		/// Serialize a <values> element
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"))]
-		struct Values<'a, Identifier> {
+		#[serde(bound(serialize = "Var: Display"))]
+		struct Values<'a, Var> {
 			/// closed attribute
 			#[serde(rename = "@closed", skip_serializing_if = "is_false")]
 			closed: bool,
 			/// content of the <values> element
 			#[serde(rename = "$text", serialize_with = "serialize_list")]
-			list: &'a Vec<IntExp<Identifier>>,
+			list: &'a Vec<IntExp<Var>>,
 		}
 		/// Serialize a <cardinality> element
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"))]
-		struct Cardinality<'a, Identifier = String> {
+		#[serde(bound(serialize = "Identifier: Display, Var: Display"))]
+		struct Cardinality<'a, Identifier, Var> {
 			/// meta information
 			#[serde(flatten)]
 			info: &'a MetaInfo<Identifier>,
 			/// <list> element
 			#[serde(serialize_with = "serialize_list")]
-			list: &'a Vec<IntExp<Identifier>>,
+			list: &'a Vec<IntExp<Var>>,
 			/// <values> element
-			values: Values<'a, Identifier>,
+			values: Values<'a, Var>,
 			/// <occurs> element
 			#[serde(serialize_with = "serialize_list")]
-			occurs: &'a Vec<Exp<Identifier>>,
+			occurs: &'a Vec<Exp<Var>>,
 		}
 		let x = Cardinality {
 			info: &self.info,
@@ -995,12 +1042,12 @@ impl<Identifier: Display> Serialize for Cardinality<Identifier> {
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for Channel<Identifier> {
-	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Channel<Identifier>, D::Error> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Channel<Identifier, Var> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Deserialize a <channel> element
 		#[derive(Deserialize)]
-		#[serde(bound(deserialize = "I: FromStr"))]
-		struct Channel<'a, I: FromStr> {
+		#[serde(bound(deserialize = "I: From<String>, V: IntoVar"))]
+		struct Channel<'a, I, V> {
 			/// meta information
 			#[serde(flatten)]
 			info: MetaInfo<I>,
@@ -1008,7 +1055,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Channel<Identifier> {
 			list: Vec<Cow<'a, str>>,
 			/// <value> element
 			#[serde(default)]
-			value: Option<IntExp<I>>,
+			value: Option<IntExp<V>>,
 		}
 		let c = Channel::deserialize(deserializer)?;
 		if c.list.is_empty() {
@@ -1043,12 +1090,12 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Channel<Identifier> {
 	}
 }
 
-impl<Identifier: Display> Serialize for Channel<Identifier> {
+impl<Identifier: Display, Var: Display> Serialize for Channel<Identifier, Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		/// Serialize a <channel> element
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "I: Display"))]
-		struct Channel<'a, I: Display> {
+		#[serde(bound(serialize = "I: Display, V: Display"))]
+		struct Channel<'a, I, V> {
 			/// meta information
 			#[serde(flatten)]
 			info: &'a MetaInfo<I>,
@@ -1056,10 +1103,10 @@ impl<Identifier: Display> Serialize for Channel<Identifier> {
 			list: Vec<String>,
 			/// <value> element
 			#[serde(skip_serializing_if = "Option::is_none")]
-			value: &'a Option<IntExp<I>>,
+			value: &'a Option<IntExp<V>>,
 		}
 
-		let p = |i: &Vec<IntExp<Identifier>>| -> String {
+		let p = |i: &Vec<IntExp<Var>>| -> String {
 			i.iter()
 				.map(|e| format!("{}", e))
 				.collect::<Vec<_>>()
@@ -1078,24 +1125,24 @@ impl<Identifier: Display> Serialize for Channel<Identifier> {
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for Circuit<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Circuit<Identifier, Var> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Deserializes a <circuit> element
 		#[derive(Deserialize)]
-		#[serde(bound = "Identifier: FromStr")]
-		struct Circuit<Identifier> {
+		#[serde(bound = "Identifier: From<String>, Var: IntoVar")]
+		struct Circuit<Identifier, Var> {
 			/// meta information
 			#[serde(flatten)]
 			info: MetaInfo<Identifier>,
 			/// textual content of the element
 			#[serde(default, deserialize_with = "IntExp::parse_vec", alias = "$text")]
-			simple: Vec<IntExp<Identifier>>,
+			simple: Vec<IntExp<Var>>,
 			/// <list> element
 			#[serde(default)]
-			list: OffsetList<Identifier>,
+			list: OffsetList<Var>,
 			/// <size> element
 			#[serde(default)]
-			size: Option<IntExp<Identifier>>,
+			size: Option<IntExp<Var>>,
 		}
 		let mut x = Circuit::deserialize(deserializer)?;
 		if !x.simple.is_empty() {
@@ -1112,13 +1159,11 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Circuit<Identifier> {
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for Condition<Identifier> {
-	fn deserialize<D: Deserializer<'de>>(
-		deserializer: D,
-	) -> Result<Condition<Identifier>, D::Error> {
+impl<'de, Var: IntoVar> Deserialize<'de> for Condition<Var> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Condition<Var>, D::Error> {
 		/// Visitor for parsing a condition.
 		struct V<X>(PhantomData<X>);
-		impl<X: FromStr> Visitor<'_> for V<X> {
+		impl<X: IntoVar> Visitor<'_> for V<X> {
 			type Value = Condition<X>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -1138,26 +1183,504 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Condition<Identifier> {
 				Ok(Condition { operator, operand })
 			}
 		}
-		deserializer.deserialize_str(V(PhantomData::<Identifier>))
+		deserializer.deserialize_str(V(PhantomData::<Var>))
 	}
 }
 
-impl<Identifier: Display> Display for Condition<Identifier> {
+impl<Identifier: Clone + Hash + Eq + ToString> Condition<VarRef<Identifier>> {
+	fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Condition<SimpleRef<Identifier>>, UnrollError> {
+		Ok(Condition {
+			operator: self.operator.clone(),
+			operand: self.operand.unroll_single(arrays, args, remainder)?,
+		})
+	}
+}
+
+impl<Var: Display> Display for Condition<Var> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "({},{})", self.operator, self.operand)
 	}
 }
 
-impl<Identifier: Display> Serialize for Condition<Identifier> {
+impl<Var: Display> Serialize for Condition<Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&self.to_string())
 	}
 }
 
-impl<Identifier> TryFrom<TemplateCapture<Identifier>> for Constraint<Identifier> {
+impl<Identifier, I> Constraint<Identifier, VarRef<I>> {
+	fn max_placeholder(&self) -> Option<usize> {
+		match self {
+			Constraint::AllDifferent(AllDifferent { list, .. })
+			| Constraint::AllEqual(AllEqual { list, .. })
+			| Constraint::Extension(Extension { list, .. })
+			| Constraint::Mdd(Mdd { list, .. })
+			| Constraint::Regular(Regular { list, .. })
+			| Constraint::Precedence(Precedence { list, .. }) => {
+				list.iter().filter_map(|exp| exp.max_placeholder()).max()
+			}
+			Constraint::BinPacking(BinPacking {
+				list,
+				sizes,
+				condition,
+				limits,
+				loads,
+				..
+			}) => list
+				.iter()
+				.chain(sizes)
+				.chain(limits)
+				.chain(loads)
+				.filter_map(|exp| exp.max_placeholder())
+				.chain(condition.as_ref().and_then(|c| c.operand.max_placeholder()))
+				.max(),
+			Constraint::Cardinality(Cardinality {
+				list,
+				values,
+				occurs,
+				..
+			}) => list
+				.iter()
+				.chain(values)
+				.filter_map(|exp| exp.max_placeholder())
+				.chain(occurs.iter().filter_map(|exp| exp.max_placeholder()))
+				.max(),
+			Constraint::Channel(Channel {
+				list,
+				inverse_list,
+				value,
+				..
+			}) => list
+				.iter()
+				.chain(inverse_list)
+				.chain(value)
+				.filter_map(|exp| exp.max_placeholder())
+				.max(),
+			Constraint::Circuit(Circuit {
+				list: OffsetList { list, .. },
+				size,
+				..
+			}) => list
+				.iter()
+				.chain(size)
+				.filter_map(|exp| exp.max_placeholder())
+				.max(),
+			Constraint::Count(Count {
+				list,
+				values,
+				condition,
+				..
+			}) => list
+				.iter()
+				.chain(values)
+				.filter_map(|exp| exp.max_placeholder())
+				.chain(condition.operand.max_placeholder())
+				.max(),
+			Constraint::Cumulative(Cumulative {
+				origins,
+				lengths,
+				heights,
+				condition,
+				..
+			}) => origins
+				.iter()
+				.chain(lengths)
+				.chain(heights)
+				.filter_map(|exp| exp.max_placeholder())
+				.chain(condition.operand.max_placeholder())
+				.max(),
+			Constraint::Element(Element {
+				list: OffsetList { list, .. },
+				index,
+				value,
+				condition,
+				..
+			}) => list
+				.iter()
+				.chain(index)
+				.chain(value)
+				.filter_map(|exp| exp.max_placeholder())
+				.chain(condition.as_ref().and_then(|c| c.operand.max_placeholder()))
+				.max(),
+			Constraint::Instantiation(Instantiation { list, .. }) => list
+				.iter()
+				.filter_map(|v| {
+					if let &VarRef::Placeholder(Placeholder::Position(i)) = v {
+						Some(i)
+					} else {
+						None
+					}
+				})
+				.max(),
+			Constraint::Intension(Intension { function, .. }) => function.max_placeholder(),
+			Constraint::Knapsack(Knapsack {
+				list, condition, ..
+			}) => list
+				.iter()
+				.filter_map(|e| e.max_placeholder())
+				.chain(condition.iter().filter_map(|c| c.operand.max_placeholder()))
+				.max(),
+			Constraint::Maximum(Maximum {
+				list, condition, ..
+			})
+			| Constraint::Minimum(Minimum {
+				list, condition, ..
+			})
+			| Constraint::Sum(Sum {
+				list, condition, ..
+			})
+			| Constraint::NValues(NValues {
+				list, condition, ..
+			}) => list
+				.iter()
+				.filter_map(|e| e.max_placeholder())
+				.chain(condition.operand.max_placeholder())
+				.max(),
+			Constraint::NoOverlap(NoOverlap {
+				origins, lengths, ..
+			}) => origins
+				.iter()
+				.chain(lengths)
+				.flat_map(|e| e.max_placeholder())
+				.max(),
+			Constraint::Ordered(Ordered { list, lengths, .. }) => list
+				.iter()
+				.chain(lengths)
+				.filter_map(|e| e.max_placeholder())
+				.max(),
+		}
+	}
+}
+
+impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Identifier>> {
+	pub(crate) fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Constraint<Identifier, SimpleRef<Identifier>>, UnrollError> {
+		let instantiate_exps = |list: &[Exp<_>]| {
+			let mut nlist = Vec::new();
+			for e in list {
+				nlist.extend(e.unroll(arrays, args, remainder)?);
+			}
+			Ok(nlist)
+		};
+		let instantiate_ints = |list: &[IntExp<_>]| {
+			let mut nlist = Vec::new();
+			for e in list {
+				nlist.extend(e.unroll(arrays, args, remainder)?);
+			}
+			Ok(nlist)
+		};
+		let instantiate_vars = |list: &[VarRef<_>]| {
+			let mut nlist = Vec::new();
+			for e in list {
+				nlist.extend(
+					e.unroll(arrays, args, remainder)?
+						.into_iter()
+						.map(|v| v.into_var())
+						.collect::<Result<Vec<_>, _>>()?,
+				);
+			}
+			Ok(nlist)
+		};
+
+		match self {
+			Constraint::AllDifferent(AllDifferent { info, list, except }) => {
+				Ok(Constraint::AllDifferent(AllDifferent {
+					info: info.clone(),
+					list: instantiate_ints(list)?,
+					except: except.clone(),
+				}))
+			}
+			Constraint::AllEqual(AllEqual { info, list, except }) => {
+				Ok(Constraint::AllEqual(AllEqual {
+					info: info.clone(),
+					list: instantiate_ints(list)?,
+					except: except.clone(),
+				}))
+			}
+			Constraint::BinPacking(BinPacking {
+				info,
+				list,
+				sizes,
+				condition,
+				limits,
+				loads,
+			}) => {
+				let condition = if let Some(condition) = condition {
+					Some(condition.unroll(arrays, args, remainder)?)
+				} else {
+					None
+				};
+				Ok(Constraint::BinPacking(BinPacking {
+					info: info.clone(),
+					list: instantiate_ints(list)?,
+					sizes: instantiate_ints(sizes)?,
+					condition,
+					limits: instantiate_ints(limits)?,
+					loads: instantiate_ints(loads)?,
+				}))
+			}
+			Constraint::Cardinality(Cardinality {
+				info,
+				list,
+				values,
+				closed,
+				occurs,
+			}) => Ok(Constraint::Cardinality(Cardinality {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				values: instantiate_ints(values)?,
+				closed: *closed,
+				occurs: instantiate_exps(occurs)?,
+			})),
+			Constraint::Channel(Channel {
+				info,
+				list,
+				inverse_list,
+				value,
+			}) => {
+				let value = if let Some(value) = value {
+					Some(value.unroll_single(arrays, args, remainder)?)
+				} else {
+					None
+				};
+				Ok(Constraint::Channel(Channel {
+					info: info.clone(),
+					list: instantiate_ints(list)?,
+					inverse_list: instantiate_ints(inverse_list)?,
+					value,
+				}))
+			}
+			Constraint::Circuit(Circuit {
+				info,
+				list: OffsetList { list, start_index },
+				size,
+			}) => Ok(Constraint::Circuit(Circuit {
+				info: info.clone(),
+				list: OffsetList {
+					list: instantiate_ints(list)?,
+					start_index: *start_index,
+				},
+				size: if let Some(size) = size {
+					Some(size.unroll_single(arrays, args, remainder)?)
+				} else {
+					None
+				},
+			})),
+			Constraint::Count(Count {
+				info,
+				list,
+				values,
+				condition,
+			}) => Ok(Constraint::Count(Count {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				values: instantiate_ints(values)?,
+				condition: condition.unroll(arrays, args, remainder)?,
+			})),
+			Constraint::Cumulative(Cumulative {
+				info,
+				origins,
+				lengths,
+				heights,
+				condition,
+			}) => Ok(Constraint::Cumulative(Cumulative {
+				info: info.clone(),
+				origins: instantiate_ints(origins)?,
+				lengths: instantiate_ints(lengths)?,
+				heights: instantiate_ints(heights)?,
+				condition: condition.unroll(arrays, args, remainder)?,
+			})),
+			Constraint::Element(Element {
+				info,
+				list: OffsetList { list, start_index },
+				index,
+				value,
+				condition,
+			}) => {
+				let index = if let Some(index) = index {
+					Some(index.unroll_single(arrays, args, remainder)?)
+				} else {
+					None
+				};
+				let value = if let Some(value) = value {
+					Some(value.unroll_single(arrays, args, remainder)?)
+				} else {
+					None
+				};
+				let condition = if let Some(condition) = condition {
+					Some(condition.unroll(arrays, args, remainder)?)
+				} else {
+					None
+				};
+				Ok(Constraint::Element(Element {
+					info: info.clone(),
+					list: OffsetList {
+						list: instantiate_ints(list)?,
+						start_index: *start_index,
+					},
+					index,
+					value,
+					condition,
+				}))
+			}
+			Constraint::Extension(Extension {
+				info,
+				list,
+				supports,
+				conflicts,
+			}) => Ok(Constraint::Extension(Extension {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				supports: supports.clone(),
+				conflicts: conflicts.clone(),
+			})),
+			Constraint::Instantiation(Instantiation {
+				info,
+				ty,
+				cost,
+				list,
+				values,
+			}) => Ok(Constraint::Instantiation(Instantiation {
+				info: info.clone(),
+				ty: ty.clone(),
+				cost: *cost,
+				list: instantiate_vars(list)?,
+				values: values.clone(),
+			})),
+			Constraint::Intension(Intension { info, function }) => {
+				Ok(Constraint::Intension(Intension {
+					info: info.clone(),
+					function: function.unroll_single(arrays, args, remainder)?,
+				}))
+			}
+			Constraint::Knapsack(Knapsack {
+				info,
+				list,
+				weights,
+				profits,
+				condition: [c1, c2],
+			}) => Ok(Constraint::Knapsack(Knapsack {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				weights: weights.clone(),
+				profits: profits.clone(),
+				condition: [
+					c1.unroll(arrays, args, remainder)?,
+					c2.unroll(arrays, args, remainder)?,
+				],
+			})),
+			Constraint::Maximum(Maximum {
+				info,
+				list,
+				condition,
+			}) => Ok(Constraint::Maximum(Maximum {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				condition: condition.unroll(arrays, args, remainder)?,
+			})),
+			Constraint::Mdd(Mdd {
+				info,
+				list,
+				transitions,
+			}) => Ok(Constraint::Mdd(Mdd {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				transitions: transitions.clone(),
+			})),
+			Constraint::Minimum(Minimum {
+				info,
+				list,
+				condition,
+			}) => Ok(Constraint::Minimum(Minimum {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				condition: condition.unroll(arrays, args, remainder)?,
+			})),
+			Constraint::NValues(NValues {
+				info,
+				list,
+				except,
+				condition,
+			}) => Ok(Constraint::NValues(NValues {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				except: except.clone(),
+				condition: condition.unroll(arrays, args, remainder)?,
+			})),
+			Constraint::NoOverlap(NoOverlap {
+				info,
+				zero_ignored,
+				origins,
+				lengths,
+			}) => Ok(Constraint::NoOverlap(NoOverlap {
+				info: info.clone(),
+				zero_ignored: *zero_ignored,
+				origins: instantiate_ints(origins)?,
+				lengths: instantiate_ints(lengths)?,
+			})),
+			Constraint::Ordered(Ordered {
+				info,
+				list,
+				lengths,
+				operator,
+			}) => Ok(Constraint::Ordered(Ordered {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				lengths: instantiate_ints(lengths)?,
+				operator: operator.clone(),
+			})),
+			Constraint::Precedence(Precedence {
+				info,
+				list,
+				values,
+				covered,
+			}) => Ok(Constraint::Precedence(Precedence {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				values: values.clone(),
+				covered: *covered,
+			})),
+			Constraint::Regular(Regular {
+				info,
+				list,
+				transitions,
+				start,
+				finish,
+			}) => Ok(Constraint::Regular(Regular {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				transitions: transitions.clone(),
+				start: start.clone(),
+				finish: finish.clone(),
+			})),
+			Constraint::Sum(Sum {
+				info,
+				list,
+				coeffs,
+				condition,
+			}) => Ok(Constraint::Sum(Sum {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				coeffs: coeffs.clone(),
+				condition: condition.unroll(arrays, args, remainder)?,
+			})),
+		}
+	}
+}
+
+impl<Identifier, Var> TryFrom<TemplateCapture<Identifier, Var>> for Constraint<Identifier, Var> {
 	type Error = ();
 
-	fn try_from(value: TemplateCapture<Identifier>) -> Result<Self, Self::Error> {
+	fn try_from(value: TemplateCapture<Identifier, Var>) -> Result<Self, Self::Error> {
 		match value {
 			TemplateCapture::AllDifferent(all_different) => {
 				Ok(Constraint::AllDifferent(all_different))
@@ -1190,12 +1713,56 @@ impl<Identifier> TryFrom<TemplateCapture<Identifier>> for Constraint<Identifier>
 	}
 }
 
+impl<Identifier, I> Group<Identifier, VarRef<I>> {
+	/// Returns the placeholder with the highest number, or None if there are no
+	/// placeholders.
+	fn max_placeholder(&self) -> Option<usize> {
+		self.constraints
+			.iter()
+			.filter_map(|c| c.max_placeholder())
+			.max()
+	}
+}
+
+impl<Identifier: Clone + Hash + Eq + ToString> Group<Identifier, VarRef<Identifier>> {
+	/// Create the instantiated versions of the group of constriants
+	pub fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+	) -> Result<Vec<Constraint<Identifier, SimpleRef<Identifier>>>, UnrollError> {
+		if self.args.is_empty() {
+			return self
+				.constraints
+				.iter()
+				.map(|c| c.unroll(arrays, &[], &[]))
+				.collect();
+		}
+		let rem_start = self.max_placeholder().map(|x| x + 1).unwrap_or(0);
+
+		let mut flat = Vec::with_capacity(self.constraints.len() * self.args.len());
+		for args in &self.args {
+			let mut expanded = Vec::new();
+			for arg in args {
+				expanded.extend(arg.unroll(arrays, &[], &[])?);
+			}
+			for constraint in &self.constraints {
+				flat.push(constraint.unroll(
+					arrays,
+					&expanded[..rem_start],
+					&expanded[rem_start..],
+				)?);
+			}
+		}
+		Ok(flat)
+	}
+}
+
 // Note: flatten of MetaInfo does not seem to work here
-impl<'de, Identifier: FromStr> Deserialize<'de> for Group<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Group<Identifier, Var> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		#[derive(Deserialize)]
-		#[serde(bound(deserialize = "Identifier: FromStr"))]
-		struct Group<Identifier = String> {
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		struct Group<Identifier, Var> {
 			/// Name assigned to the element
 			#[serde(
 				rename = "@id",
@@ -1211,9 +1778,9 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Group<Identifier> {
 
 			/// List of constraints
 			#[serde(default, rename = "$value")]
-			constraints: Vec<TemplateCapture<Identifier>>,
+			constraints: Vec<TemplateCapture<Identifier, Var>>,
 		}
-		let grp: Group<Identifier> = Deserialize::deserialize(deserializer)?;
+		let grp: Group<Identifier, Var> = Deserialize::deserialize(deserializer)?;
 		let mut args = Vec::new();
 		let constraints = grp
 			.constraints
@@ -1239,33 +1806,33 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Group<Identifier> {
 
 // Note: flatten of MetaInfo does not seem to work here
 // (https://github.com/tafia/quick-xml/issues/761)
-impl<Identifier: Display> Serialize for Group<Identifier> {
+impl<Identifier: Display, Var: Display> Serialize for Group<Identifier, Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"))]
+		#[serde(bound(serialize = "Var: Display"))]
 		/// Helper structure used to parse a list of expressions.
-		struct ExpList<'a, Identifier> {
+		struct ExpList<'a, Var> {
 			#[serde(rename = "$text", serialize_with = "serialize_list")]
-			pub(crate) elements: &'a Vec<Exp<Identifier>>,
+			pub(crate) elements: &'a Vec<Exp<Var>>,
 		}
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"), rename_all = "camelCase")]
-		enum ExpListE<'a, Identifier> {
-			Args(ExpList<'a, Identifier>),
+		#[serde(bound(serialize = "Var: Display"), rename_all = "camelCase")]
+		enum ExpListE<'a, Var> {
+			Args(ExpList<'a, Var>),
 		}
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"))]
+		#[serde(bound(serialize = "Identifier: Display, Var: Display"))]
 		/// Helper struct to serialize the instantiation element
-		struct Group<'a, Identifier = String> {
+		struct Group<'a, Identifier, Var> {
 			/// Optional metadata for the constraint
 			#[serde(flatten)]
 			info: &'a MetaInfo<Identifier>,
 			/// List of constraints
 			#[serde(rename = "$value")]
-			constraints: &'a Vec<Constraint<Identifier>>,
+			constraints: &'a Vec<Constraint<Identifier, Var>>,
 			/// Arguments to instantiate the constraints
 			#[serde(rename = "$value")]
-			args: Vec<ExpListE<'a, Identifier>>,
+			args: Vec<ExpListE<'a, Var>>,
 		}
 		Group {
 			info: &self.info,
@@ -1280,15 +1847,17 @@ impl<Identifier: Display> Serialize for Group<Identifier> {
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for MetaConstraint<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de>
+	for MetaConstraint<Identifier, Var>
+{
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		let con: CaptureConstraint<Identifier> = Deserialize::deserialize(deserializer)?;
+		let con: CaptureConstraint<Identifier, Var> = Deserialize::deserialize(deserializer)?;
 		Ok(con.into())
 	}
 }
 
-impl<Identifier> From<CaptureConstraint<Identifier>> for MetaConstraint<Identifier> {
-	fn from(value: CaptureConstraint<Identifier>) -> Self {
+impl<Identifier, Var> From<CaptureConstraint<Identifier, Var>> for MetaConstraint<Identifier, Var> {
+	fn from(value: CaptureConstraint<Identifier, Var>) -> Self {
 		match value {
 			CaptureConstraint::AllDifferent(all_different) => {
 				MetaConstraint::Constraint(Constraint::AllDifferent(all_different))
@@ -1356,59 +1925,62 @@ impl<Identifier> From<CaptureConstraint<Identifier>> for MetaConstraint<Identifi
 	}
 }
 
-impl<Identifier: Display> Serialize for MetaConstraint<Identifier> {
+impl<Identifier: Display, Var: Display> Serialize for MetaConstraint<Identifier, Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"), rename_all = "camelCase")]
-		enum OutputConstraint<'a, Identifier> {
+		#[serde(
+			bound(serialize = "Identifier: Display, Var: Display"),
+			rename_all = "camelCase"
+		)]
+		enum OutputConstraint<'a, Identifier, Var> {
 			/// [`AllDifferent`] constraint
-			AllDifferent(&'a AllDifferent<Identifier>),
+			AllDifferent(&'a AllDifferent<Identifier, Var>),
 			/// [`AllEqual`] constraint
-			AllEqual(&'a AllEqual<Identifier>),
+			AllEqual(&'a AllEqual<Identifier, Var>),
 			/// [`BinPacking`] constraint
-			BinPacking(&'a BinPacking<Identifier>),
+			BinPacking(&'a BinPacking<Identifier, Var>),
 			/// [`Cardinality`] constraint
-			Cardinality(&'a Cardinality<Identifier>),
+			Cardinality(&'a Cardinality<Identifier, Var>),
 			/// [`Channel`] constraint
-			Channel(&'a Channel<Identifier>),
+			Channel(&'a Channel<Identifier, Var>),
 			/// [`Circuit`] constraint
-			Circuit(&'a Circuit<Identifier>),
+			Circuit(&'a Circuit<Identifier, Var>),
 			/// [`Count`] constraint
-			Count(&'a Count<Identifier>),
+			Count(&'a Count<Identifier, Var>),
 			/// [`Cumulative`] constraint
-			Cumulative(&'a Cumulative<Identifier>),
+			Cumulative(&'a Cumulative<Identifier, Var>),
 			/// [`Element`] constraint
-			Element(&'a Element<Identifier>),
+			Element(&'a Element<Identifier, Var>),
 			/// [`Extension`] constraint
-			Extension(&'a Extension<Identifier>),
+			Extension(&'a Extension<Identifier, Var>),
 			/// [`Instantiation`] constraint
-			Instantiation(&'a Instantiation<Identifier>),
+			Instantiation(&'a Instantiation<Identifier, Var>),
 			/// [`Intension`] constraint
-			Intension(&'a Intension<Identifier>),
+			Intension(&'a Intension<Identifier, Var>),
 			/// [`Knapsack`] constraint
-			Knapsack(&'a Knapsack<Identifier>),
+			Knapsack(&'a Knapsack<Identifier, Var>),
 			/// [`Maximum`] constraint
-			Maximum(&'a Maximum<Identifier>),
+			Maximum(&'a Maximum<Identifier, Var>),
 			/// [`Mdd`] constraint
-			Mdd(&'a Mdd<Identifier>),
+			Mdd(&'a Mdd<Identifier, Var>),
 			/// [`Minimum`] constraint
-			Minimum(&'a Minimum<Identifier>),
+			Minimum(&'a Minimum<Identifier, Var>),
 			/// [`NValues`] constraint
-			NValues(&'a NValues<Identifier>),
+			NValues(&'a NValues<Identifier, Var>),
 			/// [`NoOverlap`] constraint
-			NoOverlap(&'a NoOverlap<Identifier>),
+			NoOverlap(&'a NoOverlap<Identifier, Var>),
 			/// [`Ordered`] constraint
-			Ordered(&'a Ordered<Identifier>),
+			Ordered(&'a Ordered<Identifier, Var>),
 			/// [`Precedence`] constraint
-			Precedence(&'a Precedence<Identifier>),
+			Precedence(&'a Precedence<Identifier, Var>),
 			/// [`Regular`] constraint
-			Regular(&'a Regular<Identifier>),
+			Regular(&'a Regular<Identifier, Var>),
 			/// [`Sum`] constraint
-			Sum(&'a Sum<Identifier>),
+			Sum(&'a Sum<Identifier, Var>),
 			/// Constraint [`Group`], that can serve as a template
-			Group(&'a Group<Identifier>),
+			Group(&'a Group<Identifier, Var>),
 			/// Constraint [`Group`], that can serve as a template
-			Block(&'a Block<Identifier>),
+			Block(&'a Block<Identifier, Var>),
 		}
 
 		let c = match self {
@@ -1447,7 +2019,7 @@ impl<Identifier: Display> Serialize for MetaConstraint<Identifier> {
 	}
 }
 
-impl<Identifier> Default for OffsetList<Identifier> {
+impl<Var> Default for OffsetList<Var> {
 	fn default() -> Self {
 		Self {
 			list: Vec::new(),
@@ -1520,7 +2092,7 @@ impl Display for Operator {
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for Precedence<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Precedence<Identifier, Var> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Deserialize the <values> element
 		#[derive(Default, Deserialize)]
@@ -1534,8 +2106,11 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Precedence<Identifier> {
 		}
 		/// Deserialize the <precedence> element
 		#[derive(Deserialize)]
-		#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-		struct Precedence<Identifier = String> {
+		#[serde(bound(
+			deserialize = "Identifier: From<String>, Var: IntoVar",
+			serialize = "Identifier: Display"
+		))]
+		struct Precedence<Identifier, Var> {
 			/// Meta information
 			#[serde(flatten)]
 			info: MetaInfo<Identifier>,
@@ -1545,7 +2120,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Precedence<Identifier> {
 				deserialize_with = "IntExp::parse_vec",
 				serialize_with = "serialize_list"
 			)]
-			list: Vec<IntExp<Identifier>>,
+			list: Vec<IntExp<Var>>,
 			/// <values> element
 			#[serde(default)]
 			values: Values,
@@ -1560,7 +2135,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Precedence<Identifier> {
 	}
 }
 
-impl<Identifier: Display> Serialize for Precedence<Identifier> {
+impl<Identifier: Display, Var: Display> Serialize for Precedence<Identifier, Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		/// Serialize the <values> element
 		#[derive(Serialize)]
@@ -1580,14 +2155,14 @@ impl<Identifier: Display> Serialize for Precedence<Identifier> {
 		}
 		/// Serialize the <precedence> element
 		#[derive(Serialize)]
-		#[serde(bound(serialize = "Identifier: Display"))]
-		struct Precedence<'a, Identifier = String> {
+		#[serde(bound(serialize = "Identifier: Display, Var: Display"))]
+		struct Precedence<'a, Identifier, Var> {
 			/// Optional meta information
 			#[serde(flatten)]
 			info: &'a MetaInfo<Identifier>,
 			/// <list> element or string content
 			#[serde(alias = "$text", serialize_with = "serialize_list")]
-			list: &'a Vec<IntExp<Identifier>>,
+			list: &'a Vec<IntExp<Var>>,
 			/// <values> element
 			#[serde(skip_serializing_if = "Values::skip")]
 			values: Values<'a>,
@@ -1635,12 +2210,12 @@ impl<Identifier> From<Constraint<Identifier>> for TemplateCapture<Identifier> {
 	}
 }
 
-impl<Identifier: FromStr> Transition<Identifier> {
+impl<Identifier: From<String>> Transition<Identifier> {
 	/// Parse a list of transitions.
 	fn parse_vec<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<Self>, D::Error> {
 		/// Visitor for parsing a list of transitions.
 		struct V<X>(PhantomData<X>);
-		impl<X: FromStr> Visitor<'_> for V<X> {
+		impl<X: From<String>> Visitor<'_> for V<X> {
 			type Value = Vec<Transition<X>>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -1674,6 +2249,12 @@ impl<Identifier: FromStr> Transition<Identifier> {
 
 impl<Identifier: Display> Display for Transition<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "({},{},{})", self.from, self.val, self.to)
+		write!(
+			f,
+			"({},{},{})",
+			self.from.to_string(),
+			self.val,
+			self.to.to_string()
+		)
 	}
 }

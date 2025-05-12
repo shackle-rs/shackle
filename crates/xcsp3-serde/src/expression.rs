@@ -9,7 +9,9 @@
 //! variable it will result in. An enumerated type [`Exp`] is used to represent
 //! expressions in positions that could take multiple or any type.
 
-use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive, str::FromStr};
+use std::{
+	collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData, ops::RangeInclusive,
+};
 
 use nom::{
 	branch::alt,
@@ -22,7 +24,7 @@ use nom::{
 };
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{IntVal, VarRef};
+use crate::{error::UnrollError, IntVal, IntoVar, Placeholder, SimpleRef, VarRef};
 
 /// List of reserved identifiers used by builtin expressions
 pub const RESERVED: &[&str] = &[
@@ -34,153 +36,143 @@ pub const RESERVED: &[&str] = &[
 
 /// Expression resulting in a Boolean value or decision variable
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BoolExp<Identifier> {
+pub enum BoolExp<Var = VarRef> {
 	/// Boolean constant
 	///
 	/// When serialized Boolean values `false` and `true` are represented by
 	/// integer values 0 and 1.
 	Const(bool),
 	/// Reference to a variable or array access
-	Var(VarRef<Identifier>),
+	Var(Var),
 	/// Logical not (i.e., ¬x)
-	Not(Box<BoolExp<Identifier>>),
+	Not(Box<BoolExp<Var>>),
 	/// Logical and (i.e., x1 ∧ ...∧ xn)
-	And(Vec<BoolExp<Identifier>>),
+	And(Vec<BoolExp<Var>>),
 	/// Logical or (i.e., x1 ∨ ... ∨ xn)
-	Or(Vec<BoolExp<Identifier>>),
+	Or(Vec<BoolExp<Var>>),
 	/// Logical xor (i.e., x1 ⊕ ... ⊕ xn)
-	Xor(Vec<BoolExp<Identifier>>),
+	Xor(Vec<BoolExp<Var>>),
 	/// Logical equivalence (i.e., x1 ⇔ ... ⇔ xn)
-	Equiv(Vec<BoolExp<Identifier>>),
+	Equiv(Vec<BoolExp<Var>>),
 	/// Logical implication (i.e., x ⇒ y)
-	Implies(Box<BoolExp<Identifier>>, Box<BoolExp<Identifier>>),
+	Implies(Box<BoolExp<Var>>, Box<BoolExp<Var>>),
 	/// Less than (i.e., x < y)
-	LessThan(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	LessThan(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Less than or equal (i.e., x ≤ y)
-	LessThanEq(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	LessThanEq(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	///Greater than (i.e., x > y)
-	GreaterThan(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	GreaterThan(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	///Greater than or equal (i.e., x ≥ y)
-	GreaterThanEq(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	GreaterThanEq(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Different From (i.e., x ≠ y)
-	NotEqual(Box<Exp<Identifier>>, Box<Exp<Identifier>>),
+	NotEqual(Box<Exp<Var>>, Box<Exp<Var>>),
 	/// Equal to (i.e., x1 = ... = xr)
-	Equal(Vec<Exp<Identifier>>),
+	Equal(Vec<Exp<Var>>),
 	/// Membership (i.e., x ∈ s)
-	Member(Box<IntExp<Identifier>>, Box<SetExp<Identifier>>),
+	Member(Box<IntExp<Var>>, Box<SetExp<Var>>),
 	/// Disjoint sets (i.e., s ∩ t = ∅)
-	Disjoint(Box<SetExp<Identifier>>, Box<SetExp<Identifier>>),
+	Disjoint(Box<SetExp<Var>>, Box<SetExp<Var>>),
 	/// Strict subset (i.e., s ⊂ t)
-	SubSet(Box<SetExp<Identifier>>, Box<SetExp<Identifier>>),
+	SubSet(Box<SetExp<Var>>, Box<SetExp<Var>>),
 	/// Subset or equal to (i.e., s ⊆ t)
-	SubSetEq(Box<SetExp<Identifier>>, Box<SetExp<Identifier>>),
+	SubSetEq(Box<SetExp<Var>>, Box<SetExp<Var>>),
 	/// Strict superset (i.e., s ⊃ t)
-	SuperSet(Box<SetExp<Identifier>>, Box<SetExp<Identifier>>),
+	SuperSet(Box<SetExp<Var>>, Box<SetExp<Var>>),
 	/// Superset or equal to (i.e., s ⊇ t)
-	SuperSetEq(Box<SetExp<Identifier>>, Box<SetExp<Identifier>>),
+	SuperSetEq(Box<SetExp<Var>>, Box<SetExp<Var>>),
 	/// Convexity (i.e., s = {i : min s ≤ i ≤ max s})
-	Convex(Box<SetExp<Identifier>>),
+	Convex(Box<SetExp<Var>>),
 }
 
 /// Expression of any type
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Exp<Identifier> {
+pub enum Exp<Var = VarRef> {
 	/// A Boolean expression
-	Bool(Box<BoolExp<Identifier>>),
+	Bool(Box<BoolExp<Var>>),
 	/// An integer expression
-	Int(Box<IntExp<Identifier>>),
+	Int(Box<IntExp<Var>>),
 	/// An set of integers expression
-	Set(Box<SetExp<Identifier>>),
+	Set(Box<SetExp<Var>>),
 	/// Reference to a variable or array access
-	Var(VarRef<Identifier>),
+	Var(Var),
 }
 
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
+#[serde(bound(deserialize = "Var: IntoVar", serialize = "Var: Display"))]
 /// Helper structure used to parse a list of expressions.
-pub(crate) struct ExpList<Identifier> {
+pub(crate) struct ExpList<Var> {
 	#[serde(rename = "$text", deserialize_with = "Exp::parse_vec")]
-	pub(crate) elements: Vec<Exp<Identifier>>,
+	pub(crate) elements: Vec<Exp<Var>>,
 }
 
 /// Expression resulting in an integer value or decision variable
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum IntExp<Identifier> {
+pub enum IntExp<Var = VarRef> {
 	/// Constant integer value
 	Const(IntVal),
 	/// Reference to a variable or array access
-	Var(VarRef<Identifier>),
+	Var(Var),
 	/// Oposite (i.e., -x)
-	Neg(Box<IntExp<Identifier>>),
+	Neg(Box<IntExp<Var>>),
 	/// Absolute value (i.e., |x|)
-	Abs(Box<IntExp<Identifier>>),
+	Abs(Box<IntExp<Var>>),
 	/// Addition (i.e., x1 + ... + xn)
-	Add(Vec<IntExp<Identifier>>),
+	Add(Vec<IntExp<Var>>),
 	/// Subtraction (i.e., x - y)
-	Sub(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	Sub(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Multiplication (i.e., x1 ∗ ... ∗ xn)
-	Mul(Vec<IntExp<Identifier>>),
+	Mul(Vec<IntExp<Var>>),
 	/// Division (i.e., x / y)
-	Div(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	Div(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Remainder (i.e., x % y)
-	Mod(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	Mod(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Square (i.e., x^2)
-	Sqr(Box<IntExp<Identifier>>),
+	Sqr(Box<IntExp<Var>>),
 	/// Power (i.e., x^y)
-	Pow(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	Pow(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Minimum (i.e., min{x1, ..., xn})
-	Min(Vec<IntExp<Identifier>>),
+	Min(Vec<IntExp<Var>>),
 	/// Maximum (i.e., max{x1, ..., xn})
-	Max(Vec<IntExp<Identifier>>),
+	Max(Vec<IntExp<Var>>),
 	/// Distance (i.e., |x - y|)
-	Dist(Box<IntExp<Identifier>>, Box<IntExp<Identifier>>),
+	Dist(Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Alternative (i.e., value of x, if b is true, value of y, otherwise)
-	If(
-		BoolExp<Identifier>,
-		Box<IntExp<Identifier>>,
-		Box<IntExp<Identifier>>,
-	),
+	If(BoolExp<Var>, Box<IntExp<Var>>, Box<IntExp<Var>>),
 	/// Boolean expression used as an integer expression
-	Bool(BoolExp<Identifier>),
+	Bool(BoolExp<Var>),
 	/// Cardinality (i.e., |s|)
-	Card(Box<SetExp<Identifier>>),
+	Card(Box<SetExp<Var>>),
 }
 
 /// Expression resulting in an set of integers value or decision variable
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum SetExp<Identifier> {
+pub enum SetExp<Var = VarRef> {
 	/// Set literal specifying each of its values (i.e., {x1, ..., xn})
-	Set(Vec<IntExp<Identifier>>),
+	Set(Vec<IntExp<Var>>),
 	/// Set literal specifying an inclusive range using a lower and upper bound
 	/// (i.e., { i : x ≤ i ≤ y})
-	Range((IntExp<Identifier>, IntExp<Identifier>)),
+	Range((IntExp<Var>, IntExp<Var>)),
 	/// Reference to a variable or array access
-	Var(VarRef<Identifier>),
+	Var(Var),
 	/// Convex hull (i.e., {i : min s ≤ i ≤ max s})
-	Hull(Box<SetExp<Identifier>>),
+	Hull(Box<SetExp<Var>>),
 	/// Difference (i.e., s \ t)
-	Diff(Box<SetExp<Identifier>>, Box<SetExp<Identifier>>),
+	Diff(Box<SetExp<Var>>, Box<SetExp<Var>>),
 	/// Union (i.e., s1 ∪ ... ∪ sn)
-	Union(Vec<SetExp<Identifier>>),
+	Union(Vec<SetExp<Var>>),
 	/// Intersection (i.e., s1 ∩ ... ∩ sn)
-	Inter(Vec<SetExp<Identifier>>),
+	Inter(Vec<SetExp<Var>>),
 	/// Symmetric difference (i.e., s1 ∆ ... ∆ sn)
-	SDiff(Vec<SetExp<Identifier>>),
+	SDiff(Vec<SetExp<Var>>),
 }
 
 /// Parser combinator that parses an identifier from a string
-pub(crate) fn identifier<Identifier: FromStr>(input: &str) -> IResult<&str, Identifier> {
+pub(crate) fn identifier<Identifier: From<String>>(input: &str) -> IResult<&str, Identifier> {
 	let (input, v) = verify(alphanumeric1, |s: &str| {
 		s.chars().next().unwrap().is_ascii_alphabetic() && !RESERVED.contains(&s)
 	})
 	.parse(input)?;
-	Ok((
-		input,
-		match v.parse() {
-			Ok(t) => t,
-			Err(_) => panic!("unable to create identifier"),
-		},
-	))
+	Ok((input, v.to_owned().into()))
 }
 
 /// Parser combinator that parses an integer from a string
@@ -224,7 +216,145 @@ pub(crate) fn whitespace_seperated<'a, O>(
 	separated_list1(multispace1, p)
 }
 
-impl<Identifier: FromStr> BoolExp<Identifier> {
+impl<Identifier> BoolExp<VarRef<Identifier>> {
+	/// Returns the placeholder with the highest number, or None if there are no
+	/// placeholders.
+	pub(crate) fn max_placeholder(&self) -> Option<usize> {
+		match self {
+			BoolExp::Const(_) => None,
+			&BoolExp::Var(VarRef::Placeholder(Placeholder::Position(i))) => Some(i),
+			BoolExp::Var(_) => None,
+			BoolExp::Not(e) => e.max_placeholder(),
+			BoolExp::And(exps) | BoolExp::Equiv(exps) | BoolExp::Or(exps) | BoolExp::Xor(exps) => {
+				exps.iter().flat_map(|e| e.max_placeholder()).max()
+			}
+			BoolExp::Equal(exps) => exps.iter().flat_map(|e| e.max_placeholder()).max(),
+			BoolExp::Implies(e1, e2) => {
+				[e1, e2].into_iter().flat_map(|e| e.max_placeholder()).max()
+			}
+			BoolExp::GreaterThan(e1, e2)
+			| BoolExp::GreaterThanEq(e1, e2)
+			| BoolExp::LessThan(e1, e2)
+			| BoolExp::LessThanEq(e1, e2) => [e1, e2].into_iter().flat_map(|e| e.max_placeholder()).max(),
+			BoolExp::NotEqual(e1, e2) => {
+				[e1, e2].into_iter().flat_map(|e| e.max_placeholder()).max()
+			}
+			BoolExp::Member(e1, e2) => [e1.max_placeholder(), e2.max_placeholder()]
+				.into_iter()
+				.flatten()
+				.max(),
+			BoolExp::Disjoint(e1, e2)
+			| BoolExp::SubSet(e1, e2)
+			| BoolExp::SubSetEq(e1, e2)
+			| BoolExp::SuperSet(e1, e2)
+			| BoolExp::SuperSetEq(e1, e2) => [e1, e2].into_iter().flat_map(|e| e.max_placeholder()).max(),
+			BoolExp::Convex(e) => e.max_placeholder(),
+		}
+	}
+}
+
+impl<Identifier: Clone + Hash + Eq + ToString> BoolExp<VarRef<Identifier>> {
+	pub(crate) fn unroll_single(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<BoolExp<SimpleRef<Identifier>>, UnrollError> {
+		match self {
+			BoolExp::Var(v) => v.unroll_single(arrays, args, remainder)?.try_into(),
+			&BoolExp::Const(b) => Ok(BoolExp::Const(b)),
+			BoolExp::Not(b) => b
+				.unroll_single(arrays, args, remainder)
+				.map(|i| BoolExp::Not(i.into())),
+			BoolExp::And(exps) | BoolExp::Equiv(exps) | BoolExp::Or(exps) | BoolExp::Xor(exps) => {
+				let mut res = Vec::new();
+				for exp in exps {
+					res.extend(exp.unroll(arrays, args, remainder)?);
+				}
+				Ok(match self {
+					BoolExp::And(_) => BoolExp::And,
+					BoolExp::Equiv(_) => BoolExp::Equiv,
+					BoolExp::Or(_) => BoolExp::Or,
+					BoolExp::Xor(_) => BoolExp::Xor,
+					_ => unreachable!(),
+				}(res))
+			}
+			BoolExp::Implies(b1, b2) => {
+				let b1 = b1.unroll_single(arrays, args, remainder)?;
+				let b2 = b2.unroll_single(arrays, args, remainder)?;
+				Ok(BoolExp::Implies(b1.into(), b2.into()))
+			}
+			BoolExp::LessThan(i1, i2)
+			| BoolExp::LessThanEq(i1, i2)
+			| BoolExp::GreaterThan(i1, i2)
+			| BoolExp::GreaterThanEq(i1, i2) => {
+				let i1 = i1.unroll_single(arrays, args, remainder)?;
+				let i2 = i2.unroll_single(arrays, args, remainder)?;
+				Ok(match self {
+					BoolExp::LessThan(_, _) => BoolExp::LessThan,
+					BoolExp::LessThanEq(_, _) => BoolExp::LessThanEq,
+					BoolExp::GreaterThan(_, _) => BoolExp::GreaterThan,
+					BoolExp::GreaterThanEq(_, _) => BoolExp::GreaterThanEq,
+					_ => unreachable!(),
+				}(i1.into(), i2.into()))
+			}
+			BoolExp::NotEqual(e1, e2) => {
+				let e1 = e1.unroll_single(arrays, args, remainder)?;
+				let e2 = e2.unroll_single(arrays, args, remainder)?;
+				Ok(BoolExp::NotEqual(e1.into(), e2.into()))
+			}
+			BoolExp::Equal(exps) => {
+				let mut res = Vec::new();
+				for exp in exps {
+					res.extend(exp.unroll(arrays, args, remainder)?);
+				}
+				Ok(BoolExp::Equal(res))
+			}
+			BoolExp::Member(i, s) => {
+				let i = i.unroll_single(arrays, args, remainder)?;
+				let s = s.unroll_single(arrays, args, remainder)?;
+				Ok(BoolExp::Member(i.into(), s.into()))
+			}
+			BoolExp::Disjoint(s1, s2)
+			| BoolExp::SubSet(s1, s2)
+			| BoolExp::SubSetEq(s1, s2)
+			| BoolExp::SuperSet(s1, s2)
+			| BoolExp::SuperSetEq(s1, s2) => {
+				let s1 = s1.unroll_single(arrays, args, remainder)?;
+				let s2 = s2.unroll_single(arrays, args, remainder)?;
+				Ok(match self {
+					BoolExp::Disjoint(_, _) => BoolExp::Disjoint,
+					BoolExp::SubSet(_, _) => BoolExp::SubSet,
+					BoolExp::SubSetEq(_, _) => BoolExp::SubSetEq,
+					BoolExp::SuperSet(_, _) => BoolExp::SuperSet,
+					BoolExp::SuperSetEq(_, _) => BoolExp::SuperSetEq,
+					_ => unreachable!(),
+				}(s1.into(), s2.into()))
+			}
+			BoolExp::Convex(set) => set
+				.unroll_single(arrays, args, remainder)
+				.map(|s| BoolExp::Convex(s.into())),
+		}
+	}
+
+	pub(crate) fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Vec<BoolExp<SimpleRef<Identifier>>>, UnrollError> {
+		if let BoolExp::Var(v) = self {
+			v.unroll(arrays, args, remainder)?
+				.into_iter()
+				.map(|e| e.try_into())
+				.collect()
+		} else {
+			Ok(vec![self.unroll_single(arrays, args, remainder)?])
+		}
+	}
+}
+
+impl<Var: IntoVar> BoolExp<Var> {
 	/// Parser combinator for a call Boolean expression with a Boolean argument
 	/// from a string.
 	fn call_arg1(input: &str) -> IResult<&str, Self> {
@@ -411,18 +541,18 @@ impl<Identifier: FromStr> BoolExp<Identifier> {
 			Self::call_arg2_exp,
 			Self::call_argn,
 			Self::call_argn_exp,
-			map(VarRef::parse, BoolExp::Var),
+			map(VarRef::parse, |v| BoolExp::Var(Var::into_var(v))),
 		))
 		.parse(input)
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for BoolExp<Identifier> {
-	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<BoolExp<Identifier>, D::Error> {
+impl<'de, Var: IntoVar> Deserialize<'de> for BoolExp<Var> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Visitor for deserializing a `BoolExp`.
-		struct V<Ident>(PhantomData<Ident>);
-		impl<Ident: FromStr> Visitor<'_> for V<Ident> {
-			type Value = BoolExp<Ident>;
+		struct V<Var>(PhantomData<Var>);
+		impl<Var: IntoVar> Visitor<'_> for V<Var> {
+			type Value = BoolExp<Var>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
 				formatter.write_str("a Boolean expression")
@@ -435,7 +565,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for BoolExp<Identifier> {
 				Ok(v)
 			}
 		}
-		deserializer.deserialize_str(V(PhantomData::<Identifier>))
+		deserializer.deserialize_str(V(PhantomData::<Var>))
 	}
 }
 
@@ -443,7 +573,7 @@ impl<Identifier: Display> Display for BoolExp<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			BoolExp::Const(b) => write!(f, "{}", if *b { 1 } else { 0 }),
-			BoolExp::Var(id) => write!(f, "{}", id),
+			BoolExp::Var(id) => write!(f, "{}", id.to_string()),
 			BoolExp::Not(e) => write!(f, "not({})", e),
 			BoolExp::And(es) => write!(
 				f,
@@ -508,11 +638,124 @@ impl<Identifier: Display> Serialize for BoolExp<Identifier> {
 	}
 }
 
-impl<Identifier: FromStr> Exp<Identifier> {
+impl<Var> TryFrom<Exp<Var>> for BoolExp<Var> {
+	type Error = UnrollError;
+
+	fn try_from(exp: Exp<Var>) -> Result<Self, UnrollError> {
+		match exp {
+			Exp::Bool(b) => Ok(*b),
+			Exp::Int(_) => Err(UnrollError::InvalidType {
+				placeholder_ty: "int",
+				arg_ty: "bool",
+			}),
+			Exp::Set(_) => Err(UnrollError::InvalidType {
+				placeholder_ty: "set",
+				arg_ty: "bool",
+			}),
+			Exp::Var(var) => Ok(BoolExp::Var(var)),
+		}
+	}
+}
+
+impl<Var> Exp<Var> {
+	pub(crate) fn into_var(self) -> Result<Var, UnrollError> {
+		match self {
+			Exp::Var(v) => Ok(v),
+			Exp::Bool(b) => {
+				if let BoolExp::Var(v) = *b {
+					Ok(v)
+				} else {
+					Err(UnrollError::InvalidType {
+						placeholder_ty: "var_ref",
+						arg_ty: "bool",
+					})
+				}
+			}
+			Exp::Int(i) => {
+				if let IntExp::Var(v) = *i {
+					Ok(v)
+				} else {
+					Err(UnrollError::InvalidType {
+						placeholder_ty: "var_ref",
+						arg_ty: "int",
+					})
+				}
+			}
+			Exp::Set(s) => {
+				if let SetExp::Var(v) = *s {
+					Ok(v)
+				} else {
+					Err(UnrollError::InvalidType {
+						placeholder_ty: "var_ref",
+						arg_ty: "set",
+					})
+				}
+			}
+		}
+	}
+}
+
+impl<Identifier> Exp<VarRef<Identifier>> {
+	/// Returns the placeholder with the highest number, or None if there are no
+	/// placeholders.
+	pub(crate) fn max_placeholder(&self) -> Option<usize> {
+		match self {
+			&Exp::Var(VarRef::Placeholder(Placeholder::Position(i))) => Some(i),
+			Exp::Var(_) => None,
+			Exp::Set(s) => s.max_placeholder(),
+			Exp::Bool(b) => b.max_placeholder(),
+			Exp::Int(i) => i.max_placeholder(),
+		}
+	}
+}
+
+impl<Identifier: Clone + Hash + Eq + ToString> Exp<VarRef<Identifier>> {
+	pub(crate) fn unroll_single(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Exp<SimpleRef<Identifier>>, UnrollError> {
+		match self {
+			Exp::Var(v) => v.unroll_single(arrays, args, remainder),
+			Exp::Set(s) => s.unroll_single(arrays, args, remainder).map(Into::into),
+			Exp::Bool(b) => b.unroll_single(arrays, args, remainder).map(Into::into),
+			Exp::Int(i) => i.unroll_single(arrays, args, remainder).map(Into::into),
+		}
+	}
+
+	pub(crate) fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Vec<Exp<SimpleRef<Identifier>>>, UnrollError> {
+		match self {
+			Exp::Var(v) => v.unroll(arrays, args, remainder),
+			Exp::Set(s) => Ok(s
+				.unroll(arrays, args, remainder)?
+				.into_iter()
+				.map(Into::into)
+				.collect()),
+			Exp::Bool(b) => Ok(b
+				.unroll(arrays, args, remainder)?
+				.into_iter()
+				.map(Into::into)
+				.collect()),
+			Exp::Int(i) => Ok(i
+				.unroll(arrays, args, remainder)?
+				.into_iter()
+				.map(Into::into)
+				.collect()),
+		}
+	}
+}
+
+impl<Var: IntoVar> Exp<Var> {
 	/// Parser combinator for an expression of any type from a string
 	pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
 		alt((
-			map(VarRef::parse, |x| Exp::Var(x)),
+			map(VarRef::parse, |x| Exp::Var(Var::into_var(x))),
 			map(SetExp::parse, |x| Exp::Set(Box::new(x))),
 			map(BoolExp::parse, |x| Exp::Bool(Box::new(x))),
 			map(IntExp::parse, |x| Exp::Int(Box::new(x))),
@@ -526,7 +769,7 @@ impl<Identifier: FromStr> Exp<Identifier> {
 	) -> Result<Vec<Self>, D::Error> {
 		/// Visitor for parsing a list of expressions
 		struct V<X>(PhantomData<X>);
-		impl<X: FromStr> Visitor<'_> for V<X> {
+		impl<X: IntoVar> Visitor<'_> for V<X> {
 			type Value = Vec<Exp<X>>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -541,7 +784,7 @@ impl<Identifier: FromStr> Exp<Identifier> {
 				Ok(v)
 			}
 		}
-		let visitor = V::<Identifier>(PhantomData);
+		let visitor = V::<Var>(PhantomData);
 		deserializer.deserialize_str(visitor)
 	}
 }
@@ -552,8 +795,26 @@ impl<Identifier: Display> Display for Exp<Identifier> {
 			Exp::Bool(e) => write!(f, "{}", e),
 			Exp::Int(e) => write!(f, "{}", e),
 			Exp::Set(e) => write!(f, "{}", e),
-			Exp::Var(e) => write!(f, "{}", e),
+			Exp::Var(e) => write!(f, "{}", e.to_string()),
 		}
+	}
+}
+
+impl<Identifier> From<BoolExp<Identifier>> for Exp<Identifier> {
+	fn from(i: BoolExp<Identifier>) -> Exp<Identifier> {
+		Exp::Bool(i.into())
+	}
+}
+
+impl<Identifier> From<IntExp<Identifier>> for Exp<Identifier> {
+	fn from(i: IntExp<Identifier>) -> Exp<Identifier> {
+		Exp::Int(i.into())
+	}
+}
+
+impl<Identifier> From<SetExp<Identifier>> for Exp<Identifier> {
+	fn from(i: SetExp<Identifier>) -> Exp<Identifier> {
+		Exp::Set(i.into())
 	}
 }
 
@@ -563,7 +824,116 @@ impl<Identifier: Display> Serialize for Exp<Identifier> {
 	}
 }
 
-impl<Identifier: FromStr> IntExp<Identifier> {
+impl<Identifier> IntExp<VarRef<Identifier>> {
+	/// Returns the placeholder with the highest number, or None if there are no
+	/// placeholders.
+	pub(crate) fn max_placeholder(&self) -> Option<usize> {
+		match self {
+			IntExp::Const(_) => None,
+			&IntExp::Var(VarRef::Placeholder(Placeholder::Position(i))) => Some(i),
+			IntExp::Var(_) => None,
+			IntExp::Abs(e) | IntExp::Neg(e) | IntExp::Sqr(e) => e.max_placeholder(),
+			IntExp::Add(exps) | IntExp::Max(exps) | IntExp::Min(exps) | IntExp::Mul(exps) => {
+				exps.iter().filter_map(|e| e.max_placeholder()).max()
+			}
+			IntExp::Dist(e1, e2)
+			| IntExp::Div(e1, e2)
+			| IntExp::Mod(e1, e2)
+			| IntExp::Pow(e1, e2)
+			| IntExp::Sub(e1, e2) => [e1, e2].iter().filter_map(|e| e.max_placeholder()).max(),
+			IntExp::If(e1, e2, e3) => [
+				e1.max_placeholder(),
+				e2.max_placeholder(),
+				e3.max_placeholder(),
+			]
+			.into_iter()
+			.flatten()
+			.max(),
+			IntExp::Bool(e) => e.max_placeholder(),
+			IntExp::Card(e) => e.max_placeholder(),
+		}
+	}
+}
+
+impl<Identifier: Clone + Hash + Eq + ToString> IntExp<VarRef<Identifier>> {
+	pub(crate) fn unroll_single(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<IntExp<SimpleRef<Identifier>>, UnrollError> {
+		match self {
+			IntExp::Var(v) => v.unroll_single(arrays, args, remainder)?.try_into(),
+			&IntExp::Const(c) => Ok(IntExp::Const(c)),
+			IntExp::Abs(i) | IntExp::Neg(i) | IntExp::Sqr(i) => {
+				let i = i.unroll_single(arrays, args, remainder)?;
+				Ok(match self {
+					IntExp::Abs(_) => IntExp::Abs,
+					IntExp::Neg(_) => IntExp::Neg,
+					IntExp::Sqr(_) => IntExp::Sqr,
+					_ => unreachable!(),
+				}(i.into()))
+			}
+			IntExp::Add(exps) | IntExp::Mul(exps) | IntExp::Min(exps) | IntExp::Max(exps) => {
+				let mut res = Vec::new();
+				for e in exps {
+					res.extend(e.unroll(arrays, args, remainder)?);
+				}
+				Ok(match self {
+					IntExp::Add(_) => IntExp::Add,
+					IntExp::Mul(_) => IntExp::Mul,
+					IntExp::Min(_) => IntExp::Min,
+					IntExp::Max(_) => IntExp::Max,
+					_ => unreachable!(),
+				}(res))
+			}
+			IntExp::Dist(i1, i2)
+			| IntExp::Div(i1, i2)
+			| IntExp::Mod(i1, i2)
+			| IntExp::Pow(i1, i2)
+			| IntExp::Sub(i1, i2) => {
+				let i1 = i1.unroll_single(arrays, args, remainder)?;
+				let i2 = i2.unroll_single(arrays, args, remainder)?;
+				Ok(match self {
+					IntExp::Dist(_, _) => IntExp::Dist,
+					IntExp::Div(_, _) => IntExp::Div,
+					IntExp::Mod(_, _) => IntExp::Mod,
+					IntExp::Pow(_, _) => IntExp::Pow,
+					IntExp::Sub(_, _) => IntExp::Sub,
+					_ => unreachable!(),
+				}(i1.into(), i2.into()))
+			}
+			IntExp::If(b, i1, i2) => {
+				let b = b.unroll_single(arrays, args, remainder)?;
+				let i1 = i1.unroll_single(arrays, args, remainder)?;
+				let i2 = i2.unroll_single(arrays, args, remainder)?;
+				Ok(IntExp::If(b, i1.into(), i2.into()))
+			}
+			IntExp::Bool(b) => Ok(IntExp::Bool(b.unroll_single(arrays, args, remainder)?)),
+			IntExp::Card(s) => Ok(IntExp::Card(
+				s.unroll_single(arrays, args, remainder)?.into(),
+			)),
+		}
+	}
+
+	pub(crate) fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Vec<IntExp<SimpleRef<Identifier>>>, UnrollError> {
+		if let IntExp::Var(v) = self {
+			v.unroll(arrays, args, remainder)?
+				.into_iter()
+				.map(|e| e.try_into())
+				.collect()
+		} else {
+			Ok(vec![self.unroll_single(arrays, args, remainder)?])
+		}
+	}
+}
+
+impl<Var: IntoVar> IntExp<Var> {
 	/// Parser combinator for a call integer expression with a integer argument
 	/// from string
 	fn call_arg1(input: &str) -> IResult<&str, Self> {
@@ -669,7 +1039,7 @@ impl<Identifier: FromStr> IntExp<Identifier> {
 			IntExp::call_arg2,
 			IntExp::call_arg3,
 			IntExp::call_argn,
-			map(VarRef::parse, IntExp::Var),
+			map(VarRef::parse, |v| IntExp::Var(Var::into_var(v))),
 			map(BoolExp::parse, IntExp::Bool),
 		))
 		.parse(input)
@@ -681,7 +1051,7 @@ impl<Identifier: FromStr> IntExp<Identifier> {
 	) -> Result<Vec<Self>, D::Error> {
 		/// Visitor for a list of integer expressions
 		struct V<X>(PhantomData<X>);
-		impl<X: FromStr> Visitor<'_> for V<X> {
+		impl<X: IntoVar> Visitor<'_> for V<X> {
 			type Value = Vec<IntExp<X>>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -696,16 +1066,16 @@ impl<Identifier: FromStr> IntExp<Identifier> {
 				Ok(v)
 			}
 		}
-		let visitor = V::<Identifier>(PhantomData);
+		let visitor = V::<Var>(PhantomData);
 		deserializer.deserialize_str(visitor)
 	}
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for IntExp<Identifier> {
-	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<IntExp<Identifier>, D::Error> {
+impl<'de, Var: IntoVar> Deserialize<'de> for IntExp<Var> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<IntExp<Var>, D::Error> {
 		/// Visitor for `IntExp`
 		struct V<Ident>(PhantomData<Ident>);
-		impl<Ident: FromStr> Visitor<'_> for V<Ident> {
+		impl<Ident: IntoVar> Visitor<'_> for V<Ident> {
 			type Value = IntExp<Ident>;
 
 			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -719,7 +1089,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for IntExp<Identifier> {
 				Ok(v)
 			}
 		}
-		deserializer.deserialize_str(V(PhantomData::<Identifier>))
+		deserializer.deserialize_str(V(PhantomData::<Var>))
 	}
 }
 
@@ -727,7 +1097,7 @@ impl<Identifier: Display> Display for IntExp<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			IntExp::Const(i) => write!(f, "{}", i),
-			IntExp::Var(id) => write!(f, "{}", id),
+			IntExp::Var(id) => write!(f, "{}", id.to_string()),
 			IntExp::Neg(e) => write!(f, "neg({})", e),
 			IntExp::Abs(e) => write!(f, "abs({})", e),
 			IntExp::Add(es) => write!(
@@ -781,7 +1151,102 @@ impl<Identifier: Display> Serialize for IntExp<Identifier> {
 	}
 }
 
-impl<Identifier: FromStr> SetExp<Identifier> {
+impl<Var> TryFrom<Exp<Var>> for IntExp<Var> {
+	type Error = UnrollError;
+
+	fn try_from(exp: Exp<Var>) -> Result<Self, UnrollError> {
+		match exp {
+			Exp::Int(i) => Ok(*i),
+			Exp::Bool(b) => Ok(IntExp::Bool(*b)),
+			Exp::Set(_) => Err(UnrollError::InvalidType {
+				placeholder_ty: "set",
+				arg_ty: "int",
+			}),
+			Exp::Var(var) => Ok(IntExp::Var(var)),
+		}
+	}
+}
+
+impl<Identifier> SetExp<VarRef<Identifier>> {
+	/// Returns the placeholder with the highest number, or None if there are no
+	/// placeholders.
+	pub(crate) fn max_placeholder(&self) -> Option<usize> {
+		match self {
+			&SetExp::Var(VarRef::Placeholder(Placeholder::Position(i))) => Some(i),
+			SetExp::Var(_) => None,
+			SetExp::Set(exps) => exps.iter().filter_map(|e| e.max_placeholder()).max(),
+			SetExp::Range((e1, e2)) => [e1, e2].iter().filter_map(|e| e.max_placeholder()).max(),
+			SetExp::Hull(e) => e.max_placeholder(),
+			SetExp::Diff(e1, e2) => [e1, e2].iter().filter_map(|e| e.max_placeholder()).max(),
+			SetExp::Inter(exps) | SetExp::SDiff(exps) | SetExp::Union(exps) => {
+				exps.iter().filter_map(|e| e.max_placeholder()).max()
+			}
+		}
+	}
+}
+
+impl<Identifier: Clone + Hash + Eq + ToString> SetExp<VarRef<Identifier>> {
+	pub(crate) fn unroll_single(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<SetExp<SimpleRef<Identifier>>, UnrollError> {
+		match self {
+			SetExp::Var(v) => v.unroll_single(arrays, args, remainder)?.try_into(),
+			SetExp::Range((i1, i2)) => {
+				let i1 = i1.unroll_single(arrays, args, remainder)?;
+				let i2 = i2.unroll_single(arrays, args, remainder)?;
+				Ok(SetExp::Range((i1, i2)))
+			}
+			SetExp::Hull(s) => Ok(SetExp::Hull(
+				s.unroll_single(arrays, args, remainder)?.into(),
+			)),
+			SetExp::Diff(s1, s2) => {
+				let s1 = s1.unroll_single(arrays, args, remainder)?;
+				let s2 = s2.unroll_single(arrays, args, remainder)?;
+				Ok(SetExp::Diff(s1.into(), s2.into()))
+			}
+			SetExp::Inter(set_exps) | SetExp::SDiff(set_exps) | SetExp::Union(set_exps) => {
+				let mut result = Vec::new();
+				for exp in set_exps {
+					result.push(exp.unroll_single(arrays, args, remainder)?);
+				}
+				Ok(match self {
+					SetExp::Union(_) => SetExp::Union,
+					SetExp::Inter(_) => SetExp::Inter,
+					SetExp::SDiff(_) => SetExp::SDiff,
+					_ => unreachable!(),
+				}(result))
+			}
+			SetExp::Set(int_exps) => {
+				let mut result = Vec::new();
+				for exp in int_exps {
+					result.push(exp.unroll_single(arrays, args, remainder)?);
+				}
+				Ok(SetExp::Set(result))
+			}
+		}
+	}
+
+	pub(crate) fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Vec<SetExp<SimpleRef<Identifier>>>, UnrollError> {
+		if let SetExp::Var(v) = self {
+			v.unroll(arrays, args, remainder)?
+				.into_iter()
+				.map(|e| e.try_into())
+				.collect()
+		} else {
+			Ok(vec![self.unroll_single(arrays, args, remainder)?])
+		}
+	}
+}
+
+impl<Var: IntoVar> SetExp<Var> {
 	/// Parser combinator to parse a call set expression with 1 argument from a
 	/// string.
 	fn call_arg1(input: &str) -> IResult<&str, Self> {
@@ -852,7 +1317,7 @@ impl<Identifier: FromStr> SetExp<Identifier> {
 				),
 				SetExp::Set,
 			),
-			map(VarRef::parse, SetExp::Var),
+			map(VarRef::parse, |v| SetExp::Var(Var::into_var(v))),
 		))
 		.parse(input)
 	}
@@ -861,7 +1326,7 @@ impl<Identifier: FromStr> SetExp<Identifier> {
 impl<Identifier: Display> Display for SetExp<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			SetExp::Var(id) => write!(f, "{}", id),
+			SetExp::Var(id) => write!(f, "{}", id.to_string()),
 			SetExp::Set(es) => write!(
 				f,
 				"{{{}}}",
@@ -897,6 +1362,25 @@ impl<Identifier: Display> Display for SetExp<Identifier> {
 					.collect::<Vec<_>>()
 					.join(",")
 			),
+		}
+	}
+}
+
+impl<Var> TryFrom<Exp<Var>> for SetExp<Var> {
+	type Error = UnrollError;
+
+	fn try_from(exp: Exp<Var>) -> Result<Self, UnrollError> {
+		match exp {
+			Exp::Set(set) => Ok(*set),
+			Exp::Int(_) => Err(UnrollError::InvalidType {
+				placeholder_ty: "int",
+				arg_ty: "set",
+			}),
+			Exp::Bool(_) => Err(UnrollError::InvalidType {
+				placeholder_ty: "bool",
+				arg_ty: "set",
+			}),
+			Exp::Var(var) => Ok(SetExp::Var(var)),
 		}
 	}
 }

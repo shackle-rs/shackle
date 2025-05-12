@@ -53,16 +53,19 @@
 //! will focus on expanding the range of supported XCSP3 features.
 
 pub mod constraint;
+pub mod error;
 pub mod expression;
 
 use std::{
 	borrow::Cow,
+	collections::{HashMap, VecDeque},
 	fmt::{self, Display},
+	hash::Hash,
 	marker::PhantomData,
 	ops::RangeInclusive,
-	str::FromStr,
 };
 
+use itertools::Itertools;
 use nom::{
 	branch::alt,
 	bytes::streaming::tag,
@@ -76,13 +79,14 @@ pub use rangelist::RangeList;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
-	constraint::MetaConstraint,
-	expression::{identifier, int, range, sequence, whitespace_seperated, IntExp},
+	constraint::{Constraint, MetaConstraint},
+	error::UnrollError,
+	expression::{identifier, int, range, sequence, whitespace_seperated, Exp, IntExp},
 };
 
 /// Definition of a k-dimensional arrays of variables
 #[derive(Clone, Debug, PartialEq, Hash)]
-pub struct Array<Identifier = String> {
+pub struct Array<Identifier = String, Var = VarRef<Identifier>> {
 	/// Name used to refer to the array
 	pub identifier: Identifier,
 	/// Comment by the user
@@ -96,7 +100,7 @@ pub struct Array<Identifier = String> {
 	/// member of the tuple indicates the list of variables to which the domain
 	/// definition applies. The special identifier `others` is used to declare a
 	/// default domain for all other variables contained in the array.
-	pub domains: Vec<(Vec<VarRef<Identifier>>, RangeList<IntVal>)>,
+	pub domains: Vec<(Vec<Var>, RangeList<IntVal>)>,
 }
 
 /// The way in which combinations of objectives are to be evaluated
@@ -203,26 +207,26 @@ pub enum FrameworkType {
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub enum Indexing {
 	/// Accessing a single index of a dimension in an array
-	Single(IntVal),
+	Single(usize),
 	/// Accessing a slice of a dimension in an array
-	Range(IntVal, IntVal),
+	Range(usize, usize),
 	/// Accessing the full range of an array
 	Full,
 }
 
 /// XCSP3 problem instance
 #[derive(Clone, PartialEq, Debug, Hash)]
-pub struct Instance<Identifier = String> {
+pub struct Instance<Identifier = String, Var = VarRef<Identifier>> {
 	/// The type of the framework used to express the instance.
 	pub ty: FrameworkType,
 	/// Definitions of the single decision variables
 	pub variables: Vec<Variable<Identifier>>,
 	/// Definitions of the arrays of decision variables
-	pub arrays: Vec<Array<Identifier>>,
+	pub arrays: Vec<Array<Identifier, Var>>,
 	/// Constraints that must be satisfied for a solution to be valid
-	pub constraints: Vec<MetaConstraint<Identifier>>,
+	pub constraints: Vec<MetaConstraint<Identifier, Var>>,
 	/// The objectives to be optimized
-	pub objectives: Objectives<Identifier>,
+	pub objectives: Objectives<Identifier, Var>,
 }
 
 /// An assignment from a list of variables to a list of values
@@ -230,8 +234,8 @@ pub struct Instance<Identifier = String> {
 /// This structure is used both to represent an elementary constraint in an
 /// instance, and to represent the solution to an instance.
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize)]
-#[serde(bound(deserialize = "Identifier: FromStr"))]
-pub struct Instantiation<Identifier = String> {
+#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+pub struct Instantiation<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the constraint
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -255,7 +259,7 @@ pub struct Instantiation<Identifier = String> {
 		serialize_with = "serialize_list"
 	)]
 	/// List of variables that are assigned values
-	pub list: Vec<VarRef<Identifier>>,
+	pub list: Vec<Var>,
 	/// List of values assigned to the variables
 	#[serde(
 		deserialize_with = "deserialize_int_vals",
@@ -275,13 +279,22 @@ pub enum InstantiationType {
 	Optimum,
 }
 
+/// Trait used to construct variable references during deserialization
+pub trait IntoVar {
+	/// Constructs a variable reference from a string-based representation
+	fn into_var(var: VarRef) -> Self;
+}
+
 /// Type used to represent integer values
 pub type IntVal = i64;
 
 /// Type used to capture optional metadata that can be attached to most XCSP3
 /// elements
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
+#[serde(bound(
+	deserialize = "Identifier: From<String>",
+	serialize = "Identifier: Display"
+))]
 pub struct MetaInfo<Identifier> {
 	/// Name assigned to the element
 	#[serde(
@@ -301,35 +314,44 @@ pub struct MetaInfo<Identifier> {
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(
 	rename_all = "camelCase",
-	bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display")
+	bound(
+		deserialize = "Identifier: From<String>, Var: IntoVar",
+		serialize = "Identifier: Display, Var: Display"
+	)
 )]
-pub enum Objective<Identifier = String> {
+pub enum Objective<Identifier = String, Var = VarRef<Identifier>> {
 	/// An objective function where the goal is to find the smallest possible
 	/// value.
 	#[serde(rename = "minimize")]
-	Minimize(ObjExp<Identifier>),
+	Minimize(ObjExp<Identifier, Var>),
 	/// An objective function where the goal is to find the largest possible
 	/// value.
 	#[serde(rename = "maximize")]
-	Maximize(ObjExp<Identifier>),
+	Maximize(ObjExp<Identifier, Var>),
 }
 
 /// Collection of objective functions
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct Objectives<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Objectives<Identifier = String, Var = VarRef<Identifier>> {
 	/// Combinator to aggregate multiple objectives
 	#[serde(default, rename = "@combination")]
 	pub combination: CombinationType,
 	/// List of objectives functions
 	#[serde(rename = "$value")]
-	pub objectives: Vec<Objective<Identifier>>,
+	pub objectives: Vec<Objective<Identifier, Var>>,
 }
 
 /// Expression used to represent an objective function
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
-pub struct ObjExp<Identifier = String> {
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct ObjExp<Identifier = String, Var = VarRef<Identifier>> {
 	/// Optional metadata for the objective
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
@@ -342,7 +364,7 @@ pub struct ObjExp<Identifier = String> {
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
-	pub list: Vec<IntExp<Identifier>>,
+	pub list: Vec<IntExp<Var>>,
 	/// List of coefficients to apply to the expressions
 	#[serde(
 		default,
@@ -374,20 +396,32 @@ pub enum ObjType {
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Placeholder {
 	/// Placeholder replaced by the argument at the given position.
-	Position(u32),
+	Position(usize),
 	/// Placeholder replaced by all arguments larger than the largest given
 	/// position.
 	Remainder,
 }
 
+/// Reference to a variable or array element
+#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+pub enum SimpleRef<Identifier> {
+	/// Reference to a variable
+	Ident(Identifier),
+	/// Reference to an array element
+	ArrayAccess(Identifier, Vec<usize>),
+}
+
 /// Definition of a variable
 #[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
-#[serde(bound(deserialize = "Identifier: FromStr", serialize = "Identifier: Display"))]
+#[serde(bound(
+	deserialize = "Identifier: From<String>",
+	serialize = "Identifier: Display"
+))]
 pub struct Variable<Identifier = String> {
 	/// Name of the variable
 	#[serde(
 		rename = "@id",
-		deserialize_with = "from_str",
+		deserialize_with = "from_string",
 		serialize_with = "as_str"
 	)]
 	pub identifier: Identifier,
@@ -403,9 +437,10 @@ pub struct Variable<Identifier = String> {
 	pub domain: RangeList<IntVal>,
 }
 
-/// Reference to a variable, array element, or array slice
+/// Reference to a variable, array element, array slice, or placeholder in a
+/// group.
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
-pub enum VarRef<Identifier> {
+pub enum VarRef<Identifier = String> {
 	/// Reference to a variable
 	Ident(Identifier),
 	/// Reference to an array element or slice
@@ -441,23 +476,20 @@ fn collect_range_list<I: IntoIterator<Item = RangeInclusive<IntVal>>>(
 }
 
 /// Deserialize a string as an identifier
-fn deserialize_ident<'de, D: Deserializer<'de>, Identifier: FromStr>(
+fn deserialize_ident<'de, D: Deserializer<'de>, Identifier: From<String>>(
 	deserializer: D,
 ) -> Result<Option<Identifier>, D::Error> {
 	/// Visitor to deserialize a string as an identifier
 	struct V<X>(PhantomData<X>);
-	impl<X: FromStr> Visitor<'_> for V<X> {
+	impl<X: From<String>> Visitor<'_> for V<X> {
 		type Value = Option<X>;
 
 		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
 			formatter.write_str("an identfier")
 		}
 
-		fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-			let v = v.trim();
-			Ok(Some(FromStr::from_str(v).map_err(|_| {
-				E::custom("unable to create identifier from string")
-			})?))
+		fn visit_str<E: serde::de::Error>(self, s: &str) -> Result<Self::Value, E> {
+			Ok(Some(s.trim().to_owned().into()))
 		}
 	}
 	let visitor = V::<Identifier>(PhantomData);
@@ -541,11 +573,25 @@ fn deserialize_size<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<us
 }
 
 /// Deserialize a string and call the `FromStr` implementation
-fn from_str<'de, D: Deserializer<'de>, I: FromStr>(deserializer: D) -> Result<I, D::Error> {
+fn from_string<'de, D: Deserializer<'de>, I: From<String>>(deserializer: D) -> Result<I, D::Error> {
 	let s: Cow<'_, str> = Deserialize::deserialize(deserializer)?;
-	match s.trim().parse() {
-		Ok(t) => Ok(t),
-		Err(_) => Err(serde::de::Error::custom("unable to parse from string")),
+	Ok(s.trim().to_owned().into())
+}
+
+/// Parser combinator that parses an integer from a string
+fn idx_int(input: &str) -> IResult<&str, usize> {
+	let (input, i): (_, usize) = map_res(recognize(digit1), str::parse).parse(input)?;
+	Ok((input, i))
+}
+
+/// Parser combinator that parses a range of integers from a string
+fn idx_range(input: &str) -> IResult<&str, RangeInclusive<usize>> {
+	let (input, lb) = idx_int(input)?;
+	if let (input, Some(_)) = opt(tag("..")).parse(input)? {
+		let (input, ub) = idx_int(input)?;
+		Ok((input, lb..=ub))
+	} else {
+		Ok((input, lb..=lb))
 	}
 }
 
@@ -600,36 +646,67 @@ fn serialize_size<S: Serializer>(exps: &[usize], serializer: S) -> Result<S::Ok,
 	)
 }
 
-impl<'de, Identifier: FromStr> Deserialize<'de> for Array<Identifier> {
+impl<Identifier: Clone + Hash + Eq + ToString> Array<Identifier, VarRef<Identifier>> {
+	/// Expand the domain definitions of the array domain defintiions into
+	/// [`SimpleRef`].
+	pub fn unroll(&self) -> Result<Array<Identifier, SimpleRef<Identifier>>, UnrollError> {
+		let size_wrap: HashMap<_, _> = Some((self.identifier.clone(), &self.size[..]))
+			.into_iter()
+			.collect();
+		let mut domains = Vec::with_capacity(self.domains.len());
+		for (v, d) in &self.domains {
+			let mut res: Vec<SimpleRef<_>> = Vec::new();
+			for x in v {
+				res.extend(
+					x.unroll(&size_wrap, &[], &[])?
+						.into_iter()
+						.map(|x| match x {
+							Exp::Var(v) => v,
+							_ => unreachable!(),
+						}),
+				);
+			}
+			domains.push((res, d.clone()));
+		}
+		Ok(Array {
+			identifier: self.identifier.clone(),
+			note: self.note.clone(),
+			size: self.size.clone(),
+			domains,
+		})
+	}
+}
+
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Array<Identifier, Var> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Helper struct to deserialize the content of the <domain> element
 		#[derive(Deserialize)]
-		#[serde(bound = "Identifier: FromStr")]
-		struct DomainStruct<Identifier: FromStr> {
+		#[serde(bound = "Var: IntoVar")]
+		struct DomainStruct<Var> {
 			/// for attribute
 			#[serde(rename = "@for", deserialize_with = "VarRef::parse_vec")]
-			vars: Vec<VarRef<Identifier>>,
+			vars: Vec<Var>,
 			/// content of element
 			#[serde(rename = "$text", deserialize_with = "deserialize_range_list")]
 			domain: RangeList<IntVal>,
 		}
 		/// Helper enum to deserialize the content of the <array> element
 		#[derive(Deserialize)]
-		#[serde(bound = "Identifier: FromStr")]
-		enum Domain<'a, Identifier: FromStr> {
+		#[serde(bound = " Var: IntoVar")]
+		enum Domain<'a, Var> {
 			/// multiple <domain> elements
 			#[serde(rename = "domain")]
-			Domain(Vec<DomainStruct<Identifier>>),
+			Domain(Vec<DomainStruct<Var>>),
 			/// single string content
 			#[serde(rename = "$text")]
 			Direct(Cow<'a, str>),
 		}
 		/// Helper struct to deserialize an <array> element
 		#[derive(Deserialize)]
-		#[serde(bound = "Identifier: FromStr")]
-		struct Array<'a, Identifier: FromStr> {
+		#[serde(bound = "Identifier: From<String>, Var: IntoVar")]
+		struct Array<'a, Identifier, Var> {
 			/// id attribute
-			#[serde(rename = "@id", deserialize_with = "from_str")]
+			#[serde(rename = "@id", deserialize_with = "from_string")]
 			identifier: Identifier,
 			/// optional note attribute
 			#[serde(rename = "@note", default, skip_serializing_if = "Option::is_none")]
@@ -639,7 +716,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Array<Identifier> {
 			size: Vec<usize>,
 			/// content of the element
 			#[serde(rename = "$value")]
-			domain: Domain<'a, Identifier>,
+			domain: Domain<'a, Var>,
 		}
 		let x = Array::deserialize(deserializer)?;
 		let domains = match x.domain {
@@ -652,11 +729,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Array<Identifier> {
 						serde::de::Error::custom(format!("unable to parse ranges from `{s}'"))
 					})?;
 				vec![(
-					vec![VarRef::Ident(
-						Identifier::from_str("others").unwrap_or_else(|_| {
-							panic!("unable to create identifier from `\"others\"`")
-						}),
-					)],
+					vec![Var::into_var(VarRef::Ident("others".to_owned()))],
 					collect_range_list(s.1),
 				)]
 			}
@@ -722,6 +795,35 @@ impl<Identifier: Display> Serialize for Array<Identifier> {
 	}
 }
 
+impl<Identifier: Clone + Eq + Hash + ToString> Instance<Identifier, VarRef<Identifier>> {
+	/// Create a flat list of constraints, instantiating all [`Group`]s,
+	/// extracting constraints from [`Block`]s, and expanding all slicing
+	/// operations.
+	pub fn unroll_constraints(
+		&self,
+	) -> Result<Vec<Constraint<Identifier, SimpleRef<Identifier>>>, UnrollError> {
+		let arrays: HashMap<Identifier, &[usize]> = self
+			.arrays
+			.iter()
+			.map(|arr| (arr.identifier.clone(), &arr.size[..]))
+			.collect();
+
+		let mut flat = Vec::new();
+		let mut metas = VecDeque::new();
+		metas.push_back(&self.constraints);
+		while let Some(cons) = metas.pop_front() {
+			for con in cons {
+				match con {
+					MetaConstraint::Group(group) => flat.extend(group.unroll(&arrays)?),
+					MetaConstraint::Block(block) => metas.push_back(&block.constraints),
+					MetaConstraint::Constraint(c) => flat.push(c.unroll(&arrays, &[], &[])?),
+				}
+			}
+		}
+		Ok(flat)
+	}
+}
+
 impl<Identifier> Default for Instance<Identifier> {
 	fn default() -> Self {
 		Self {
@@ -734,47 +836,51 @@ impl<Identifier> Default for Instance<Identifier> {
 	}
 }
 
-impl<'de, Identifier: Deserialize<'de> + FromStr> Deserialize<'de> for Instance<Identifier> {
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Instance<Identifier, Var> {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		/// Deserialized content of <variables> element
 		#[derive(Deserialize)]
-		enum V<Identifier: FromStr> {
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		enum V<Identifier, Var> {
 			/// Deserialized <var> element
 			#[serde(rename = "var")]
 			Variable(Variable<Identifier>),
 			/// Deserialized <array> element
 			#[serde(rename = "array")]
-			Array(Array<Identifier>),
+			Array(Array<Identifier, Var>),
 		}
 		/// Deserialized <variables> element
 		#[derive(Deserialize)]
-		struct Variables<Identifier: FromStr = String> {
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		struct Variables<Identifier, Var> {
 			/// Deserialized content of <variables> element
 			#[serde(rename = "$value")]
-			vars: Vec<V<Identifier>>,
+			vars: Vec<V<Identifier, Var>>,
 		}
 		/// Deserialized <constraints> element
 		#[derive(Deserialize)]
-		struct Constraints<Identifier: FromStr = String> {
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		struct Constraints<Identifier, Var> {
 			/// Deserialized content of <constraints> element
 			#[serde(rename = "$value")]
-			content: Vec<MetaConstraint<Identifier>>,
+			content: Vec<MetaConstraint<Identifier, Var>>,
 		}
 		/// Deserialized <instance> element
 		#[derive(Deserialize)]
-		struct Instance<Identifier: FromStr = String> {
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		struct Instance<Identifier, Var> {
 			/// Deserialized type attribute
 			#[serde(rename = "@type")]
 			ty: FrameworkType,
 			/// Deserialized <variables> element
-			variables: Option<Variables<Identifier>>,
+			variables: Option<Variables<Identifier, Var>>,
 			/// Deserialized <constraints> element
-			constraints: Option<Constraints<Identifier>>,
+			constraints: Option<Constraints<Identifier, Var>>,
 			/// Deserialized <objectives> element
 			#[serde(default = "Objectives::default")]
-			objectives: Objectives<Identifier>,
+			objectives: Objectives<Identifier, Var>,
 		}
-		let inst: Instance<Identifier> = Deserialize::deserialize(deserializer)?;
+		let inst: Instance<Identifier, Var> = Deserialize::deserialize(deserializer)?;
 		let mut variables = Vec::new();
 		let mut arrays = Vec::new();
 		for v in inst.variables.map(|v| v.vars).into_iter().flatten() {
@@ -856,12 +962,15 @@ impl<Identifier: Serialize + Display> Serialize for Instance<Identifier> {
 
 // Note: flatten of MetaInfo does not seem to work here
 // (https://github.com/tafia/quick-xml/issues/761)
-impl<Identifier: Display> Serialize for Instantiation<Identifier> {
+impl<Identifier: Display, Var: Display> Serialize for Instantiation<Identifier, Var> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		/// Helper struct to serialize the instantiation element
 		#[derive(Serialize)]
-		#[serde(rename = "instantiation", bound(serialize = "Identifier: Display"))]
-		struct Instantiation<'a, Identifier = String> {
+		#[serde(
+			rename = "instantiation",
+			bound(serialize = "Identifier: Display, Var: Display")
+		)]
+		struct Instantiation<'a, Identifier, Var> {
 			/// Value serialized as the id attribute
 			#[serde(
 				rename = "@id",
@@ -880,7 +989,7 @@ impl<Identifier: Display> Serialize for Instantiation<Identifier> {
 			cost: &'a Option<IntVal>,
 			/// Variable references serialized as <list>
 			#[serde(serialize_with = "serialize_list")]
-			list: &'a Vec<VarRef<Identifier>>,
+			list: &'a Vec<Var>,
 			/// Values serialized as <values>
 			#[serde(serialize_with = "serialize_list")]
 			values: &'a Vec<IntVal>,
@@ -904,7 +1013,38 @@ impl<Identifier> Objectives<Identifier> {
 	}
 }
 
-impl<Identifier> Default for Objectives<Identifier> {
+impl<Identifier: Clone + Hash + Eq + ToString> ObjExp<Identifier, VarRef<Identifier>> {
+	/// Expand the domain definitions of the array domain defintiions into
+	/// [`SimpleRef`].
+	pub fn unroll(
+		&self,
+		instance: &Instance<Identifier, VarRef<Identifier>>,
+	) -> Result<ObjExp<Identifier, SimpleRef<Identifier>>, UnrollError> {
+		let arrays: HashMap<Identifier, &[usize]> = instance
+			.arrays
+			.iter()
+			.map(|arr| (arr.identifier.clone(), &arr.size[..]))
+			.collect();
+
+		let list = self
+			.list
+			.iter()
+			.map(|v| v.unroll(&arrays, &[], &[]))
+			.collect::<Result<Vec<_>, _>>()?
+			.into_iter()
+			.flatten()
+			.collect();
+
+		Ok(ObjExp {
+			info: self.info.clone(),
+			ty: self.ty.clone(),
+			list,
+			coeffs: self.coeffs.clone(),
+		})
+	}
+}
+
+impl<Identifier, Var> Default for Objectives<Identifier, Var> {
 	fn default() -> Self {
 		Self {
 			combination: CombinationType::default(),
@@ -922,7 +1062,97 @@ impl Display for Placeholder {
 	}
 }
 
-impl<Identifier: FromStr> VarRef<Identifier> {
+impl<Identifier: Clone + Hash + Eq + ToString> VarRef<Identifier> {
+	pub(crate) fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Vec<Exp<SimpleRef<Identifier>>>, UnrollError> {
+		match self {
+			&VarRef::Placeholder(Placeholder::Position(i)) if args.len() < i => {
+				Ok(vec![args[i].clone()])
+			}
+			&VarRef::Placeholder(Placeholder::Position(i)) => Err(UnrollError::ArgMissing {
+				placeholder: i,
+				args_len: args.len(),
+			}),
+			VarRef::Placeholder(Placeholder::Remainder) => Ok(remainder.to_vec()),
+			VarRef::Ident(ident) => Ok(vec![Exp::Var(SimpleRef::Ident(ident.clone()))]),
+			VarRef::ArrayAccess(ident, indexings) => {
+				let Some(size) = arrays.get(ident) else {
+					return Err(UnrollError::UnknownIdentifier(ident.to_string()));
+				};
+				if indexings.len() != size.len() {
+					return Err(UnrollError::UnexpectedIndexes {
+						expected_len: size.len(),
+						args_len: indexings.len(),
+					});
+				}
+				Ok(indexings
+					.iter()
+					.enumerate()
+					.map(|(i, idx)| match idx {
+						&Indexing::Single(i) => i..=i,
+						&Indexing::Range(start, end) => start..=end,
+						Indexing::Full => 0..=(size[i] - 1),
+					})
+					.multi_cartesian_product()
+					.map(|idxs| Exp::Var(SimpleRef::ArrayAccess(ident.clone(), idxs)))
+					.collect())
+			}
+		}
+	}
+
+	pub(crate) fn unroll_single(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Exp<SimpleRef<Identifier>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Exp<SimpleRef<Identifier>>, UnrollError> {
+		let res = self.unroll(arrays, args, remainder)?;
+		match &res[..] {
+			[exp] => Ok(exp.clone()),
+			_ => Err(UnrollError::UnexpectedLength {
+				expected_len: 1,
+				args_len: res.len(),
+			}),
+		}
+	}
+}
+
+impl VarRef {
+	/// Parse a list of variable references.
+	fn parse_vec<'de, D: Deserializer<'de>, R: IntoVar>(
+		deserializer: D,
+	) -> Result<Vec<R>, D::Error> {
+		/// Visitor for parsing a list of variable references.
+		struct V<X>(PhantomData<X>);
+		impl<X: From<String>> Visitor<'_> for V<X> {
+			type Value = Vec<VarRef<X>>;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				formatter.write_str("a list of variable references")
+			}
+
+			fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+				let v = v.trim();
+				let (_, v) = all_consuming(whitespace_seperated(VarRef::parse))
+					.parse(v)
+					.map_err(|_| E::custom(format!("invalid variable references `{v}'")))?;
+				Ok(v)
+			}
+		}
+		let visitor = V::<String>(PhantomData);
+		Ok(deserializer
+			.deserialize_str(visitor)?
+			.into_iter()
+			.map(R::into_var)
+			.collect())
+	}
+}
+
+impl<Identifier: From<String>> VarRef<Identifier> {
 	/// Parse a variable reference.
 	pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
 		// First try to see whether the variable is a placeholder
@@ -940,7 +1170,7 @@ impl<Identifier: FromStr> VarRef<Identifier> {
 		// Parse a normal identifier
 		let (input, ident) = identifier(input)?;
 		// Optionally add an array access tail
-		let (input, v) = many0(delimited(char('['), opt(range), char(']'))).parse(input)?;
+		let (input, v) = many0(delimited(char('['), opt(idx_range), char(']'))).parse(input)?;
 		// Create VarRef object
 		Ok((
 			input,
@@ -963,29 +1193,6 @@ impl<Identifier: FromStr> VarRef<Identifier> {
 				VarRef::ArrayAccess(ident, v)
 			},
 		))
-	}
-
-	/// Parse a list of variable references.
-	fn parse_vec<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<Self>, D::Error> {
-		/// Visitor for parsing a list of variable references.
-		struct V<X>(PhantomData<X>);
-		impl<X: FromStr> Visitor<'_> for V<X> {
-			type Value = Vec<VarRef<X>>;
-
-			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-				formatter.write_str("a list of variable references")
-			}
-
-			fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-				let v = v.trim();
-				let (_, v) = all_consuming(whitespace_seperated(VarRef::parse))
-					.parse(v)
-					.map_err(|_| E::custom(format!("invalid variable references `{v}'")))?;
-				Ok(v)
-			}
-		}
-		let visitor = V::<Identifier>(PhantomData);
-		deserializer.deserialize_str(visitor)
 	}
 }
 
@@ -1012,6 +1219,16 @@ impl<Identifier: Display> Display for VarRef<Identifier> {
 				)
 			}
 			VarRef::Placeholder(placeholder) => placeholder.fmt(f),
+		}
+	}
+}
+
+impl<I: From<String>> IntoVar for VarRef<I> {
+	fn into_var(var: VarRef) -> Self {
+		match var {
+			VarRef::Ident(s) => VarRef::Ident(I::from(s)),
+			VarRef::ArrayAccess(s, idxs) => VarRef::ArrayAccess(I::from(s), idxs),
+			VarRef::Placeholder(p) => VarRef::Placeholder(p),
 		}
 	}
 }
