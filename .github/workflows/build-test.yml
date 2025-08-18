@@ -17,7 +17,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -37,7 +37,7 @@ jobs:
   test-coverage:
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -59,7 +59,7 @@ jobs:
       matrix:
         os: [macos-latest] # TODO: Add windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -71,7 +71,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust toolchain and clippy
         uses: moonrepo/setup-rust@v1
         with:
