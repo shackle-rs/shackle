@@ -91,12 +91,12 @@
 	},
 	"devDependencies": {
 		"@types/mocha": "^10.0.9",
-		"@types/node": "^24.2.1",
-		"@types/vscode": "^1.102.0",
-		"@typescript-eslint/eslint-plugin": "^8.39.1",
+		"@types/node": "^24.5.2",
+		"@types/vscode": "^1.104.0",
+		"@typescript-eslint/eslint-plugin": "^8.44.1",
 		"@typescript-eslint/parser": "^8.24.0",
-		"eslint": "^9.33.0",
-		"mocha": "^11.7.1",
+		"eslint": "^9.36.0",
+		"mocha": "^11.7.2",
 		"typescript": "^5.9.2"
 	},
 	"dependencies": {
