@@ -18,7 +18,7 @@ rangelist = { path = "../rangelist", version = "0.4.0" }
 nom = "8.0.0"
 
 [dev-dependencies]
-quick-xml = { version = "0.38.1", features = ["serialize", "overlapped-lists"] }
+quick-xml = { version = "0.39.0", features = ["serialize", "overlapped-lists"] }
 expect-test = "1.4"
 
 [lints]
