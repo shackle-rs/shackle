@@ -28,12 +28,12 @@
 		"*.wasm"
 	],
 	"dependencies": {
-		"node-addon-api": "^8.5.0",
+		"node-addon-api": "^8.6.0",
 		"node-gyp-build": "^4.8.2"
 	},
 	"devDependencies": {
 		"prebuildify": "^6.0.1",
-		"tree-sitter-cli": "^0.26.5",
+		"tree-sitter-cli": "^0.26.6",
 		"tree-sitter-minizinc": "file:../tree-sitter-minizinc"
 	},
 	"peerDependencies": {
