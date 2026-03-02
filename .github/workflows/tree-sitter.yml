@@ -29,7 +29,7 @@ jobs:
         run: git diff --exit-code
       - name: Upload artifact
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: tree-sitter-${{matrix.parser}}
           path: |
