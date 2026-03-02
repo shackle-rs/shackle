@@ -198,78 +198,74 @@ FlatZinc {
                         Array(
                             [
                                 Annotation(
-                                    Call(
-                                        AnnotationCall {
-                                            id: "int_search",
-                                            args: [
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "X_INTRODUCED_5_",
-                                                        ),
+                                    AnnotationCall {
+                                        id: "int_search",
+                                        args: [
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "X_INTRODUCED_5_",
                                                     ),
                                                 ),
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "input_order",
-                                                        ),
+                                            ),
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "input_order",
                                                     ),
                                                 ),
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "indomain_min",
-                                                        ),
+                                            ),
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "indomain_min",
                                                     ),
                                                 ),
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "complete",
-                                                        ),
+                                            ),
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "complete",
                                                     ),
                                                 ),
-                                            ],
-                                        },
-                                    ),
+                                            ),
+                                        ],
+                                    },
                                 ),
                                 Annotation(
-                                    Call(
-                                        AnnotationCall {
-                                            id: "bool_search",
-                                            args: [
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "X_INTRODUCED_4_",
-                                                        ),
+                                    AnnotationCall {
+                                        id: "bool_search",
+                                        args: [
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "X_INTRODUCED_4_",
                                                     ),
                                                 ),
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "input_order",
-                                                        ),
+                                            ),
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "input_order",
                                                     ),
                                                 ),
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "indomain_min",
-                                                        ),
+                                            ),
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "indomain_min",
                                                     ),
                                                 ),
-                                                Literal(
-                                                    BaseLiteral(
-                                                        Identifier(
-                                                            "complete",
-                                                        ),
+                                            ),
+                                            Literal(
+                                                BaseLiteral(
+                                                    Identifier(
+                                                        "complete",
                                                     ),
                                                 ),
-                                            ],
-                                        },
-                                    ),
+                                            ),
+                                        ],
+                                    },
                                 ),
                             ],
                         ),

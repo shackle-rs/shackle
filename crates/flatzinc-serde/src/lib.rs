@@ -184,10 +184,10 @@ impl<Identifier: Display> Display for AnnotationCall<Identifier> {
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum AnnotationLiteral<Identifier = String> {
-	/// Basic FlatZinc literal
+	/// Basic FlatZinc literal (including annotation identifiers).
 	BaseLiteral(Literal<Identifier>),
-	/// An annotation object
-	Annotation(Annotation<Identifier>),
+	/// An annotation call object.
+	Annotation(AnnotationCall<Identifier>),
 }
 
 impl<Idenfier: Display> Display for AnnotationLiteral<Idenfier> {
