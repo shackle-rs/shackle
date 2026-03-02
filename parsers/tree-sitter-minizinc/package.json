@@ -28,7 +28,7 @@
 		"*.wasm"
 	],
 	"dependencies": {
-		"node-addon-api": "^8.5.0",
+		"node-addon-api": "^8.6.0",
 		"node-gyp-build": "^4.8.2"
 	},
 	"devDependencies": {
