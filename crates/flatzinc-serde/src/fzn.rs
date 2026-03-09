@@ -3,8 +3,8 @@
 use winnow::{
 	ascii::{digit1, hex_digit1, oct_digit1},
 	combinator::{alt, opt, trace},
-	stream::Stream,
-	token::one_of,
+	stream::AsChar,
+	token::{one_of, take_while},
 	Parser, Result,
 };
 
@@ -18,12 +18,28 @@ use crate::Literal;
 ///                        | <float-literal>
 ///                        | <set-literal>
 /// ```
-fn literal<'s>(input: &mut &'s str) -> Result<Literal> {
+pub fn literal(input: &mut &str) -> Result<Literal> {
 	// This can be optimized if it turns out to be a bottleneck. At the moment, to parse a literal,
 	// it will first attempt to parse a float and, if that fails, parse an integer. We can be more
 	// clever about that by peeking at the next character to determine what is being parsed.
 
-	alt((float.map(Literal::Float), int.map(Literal::Int))).parse_next(input)
+	alt((
+		boolean.map(Literal::Bool),
+		float.map(Literal::Float),
+		int.map(Literal::Int),
+		identifier.map(Literal::Identifier),
+	))
+	.parse_next(input)
+}
+
+/// Parses a boolean literal.
+///
+/// ```bnf
+/// <bool-literal> ::= "false"
+///                  | "true"
+/// ```
+fn boolean(input: &mut &str) -> Result<bool> {
+	alt(("true".map(|_| true), "false".map(|_| false))).parse_next(input)
 }
 
 /// Parses a float literal from the input.
@@ -85,24 +101,39 @@ fn int(input: &mut &str) -> Result<i64> {
 	.parse_next(input)
 }
 
+/// Parses an identifier.
+///
+/// ```bnf
+/// <var-par-identifier> ::= [A-Za-z_][A-Za-z0-9_]*
+/// ```
+fn identifier(input: &mut &str) -> Result<String> {
+	trace(
+		"identifier",
+		(
+			one_of(|c: char| c.is_alpha() || c == '_'),
+			take_while(0.., |c: char| c.is_alphanum() || c == '_'),
+		),
+	)
+	.take()
+	.map(Into::into)
+	.parse_next(input)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fmt::Debug;
 
-	use winnow::{combinator::eof, error::ParserError, Parser};
+	use winnow::{error::ParserError, Parser};
 
 	use super::*;
 
-	fn check_parser<'s, O, E>(
-		mut parser: impl Parser<&'s str, O, E>,
-		expected: O,
-		mut input: &'s str,
-	) where
+	fn check_parser<'s, O, E>(mut parser: impl Parser<&'s str, O, E>, expected: O, input: &'s str)
+	where
 		O: Debug + PartialEq,
 		E: ParserError<&'s str> + Debug + PartialEq,
 		E::Inner: ParserError<&'s str> + PartialEq + Debug,
 	{
-		let parsed = parser.parse(&mut input);
+		let parsed = parser.parse(input);
 		assert_eq!(Ok(expected), parsed);
 	}
 
@@ -130,5 +161,30 @@ mod tests {
 		check_parser(literal, Literal::Float(5.2e-1), "5.2E-1");
 		check_parser(literal, Literal::Float(5.54e12), "5.54E12");
 		check_parser(literal, Literal::Float(-11e3), "-11E+3");
+	}
+
+	#[test]
+	fn identifier_literal() {
+		check_parser(
+			literal,
+			Literal::Identifier("some_name".to_owned()),
+			"some_name",
+		);
+		check_parser(
+			literal,
+			Literal::Identifier("_some_name".to_owned()),
+			"_some_name",
+		);
+		check_parser(
+			literal,
+			Literal::Identifier("_SomeName283".to_owned()),
+			"_SomeName283",
+		);
+	}
+
+	#[test]
+	fn boolean_literal() {
+		check_parser(literal, Literal::Bool(true), "true");
+		check_parser(literal, Literal::Bool(false), "false");
 	}
 }
