@@ -196,6 +196,10 @@
         "named": true
       },
       {
+        "type": "list_type",
+        "named": true
+      },
+      {
         "type": "operation_type",
         "named": true
       },
@@ -2663,6 +2667,22 @@
     }
   },
   {
+    "type": "list_type",
+    "named": true,
+    "fields": {
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "operation_type",
     "named": true,
     "fields": {
@@ -4421,6 +4441,10 @@
     "type": "line_comment",
     "named": true,
     "extra": true
+  },
+  {
+    "type": "list",
+    "named": false
   },
   {
     "type": "maximize",

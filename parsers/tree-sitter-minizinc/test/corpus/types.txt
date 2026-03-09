@@ -6,6 +6,7 @@ array[int] of int: single_index;
 array[int, int] of int: two_indices;
 array[X] of int: named_index;
 array[1..10] of int: expr_index;
+list of int: no_index_list;
 
 ---
 
@@ -13,7 +14,8 @@ array[1..10] of int: expr_index;
   (declaration (array_type (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
   (declaration (array_type (type_base (primitive_type)) (type_base (primitive_type)) (type_base (primitive_type))) (identifier))
   (declaration (array_type (type_base (identifier)) (type_base (primitive_type))) (identifier))
-  (declaration (array_type (type_base (infix_operator (integer_literal) (integer_literal))) (type_base (primitive_type))) (identifier)))
+  (declaration (array_type (type_base (infix_operator (integer_literal) (integer_literal))) (type_base (primitive_type))) (identifier))
+  (declaration (list_type (type_base (primitive_type))) (identifier)))
 
 ==========
 Identifier

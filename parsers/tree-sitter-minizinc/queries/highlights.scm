@@ -7,11 +7,12 @@
 ; Types
 (primitive_type) @type.builtin
 [
- "array"
- "of"
- "par"
- "set"
- "var"
+  "array"
+  "list"
+  "of"
+  "par"
+  "set"
+  "var"
 ] @type.builtin
 
 ; Identifiers

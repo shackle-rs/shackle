@@ -2508,6 +2508,10 @@
         {
           "type": "SYMBOL",
           "name": "any_type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "list_type"
         }
       ]
     },
@@ -3007,6 +3011,27 @@
     "any_type": {
       "type": "STRING",
       "value": "any"
+    },
+    "list_type": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "list"
+        },
+        {
+          "type": "STRING",
+          "value": "of"
+        },
+        {
+          "type": "FIELD",
+          "name": "type",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_type"
+          }
+        }
+      ]
     },
     "_literal": {
       "type": "CHOICE",

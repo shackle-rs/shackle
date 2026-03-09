@@ -509,7 +509,8 @@ module.exports = grammar({
 				$.record_type,
 				$.operation_type,
 				$.type_base,
-				$.any_type
+				$.any_type,
+				$.list_type
 			),
 		array_type: ($) =>
 			seq(
@@ -566,6 +567,7 @@ module.exports = grammar({
 		type_inst_id: ($) => /\$[A-Za-z][A-Za-z0-9_]*/,
 		type_inst_enum_id: ($) => /\$\$[A-Za-z][A-Za-z0-9_]*/,
 		any_type: ($) => "any",
+		list_type: ($) => seq("list", "of", field("type", $._type)),
 
 		_literal: ($) =>
 			choice(
