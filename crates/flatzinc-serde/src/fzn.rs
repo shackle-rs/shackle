@@ -1,8 +1,10 @@
 //! Parse the original `.fzn` file format.
 
+use rangelist::RangeList;
 use winnow::{
-	ascii::{digit1, hex_digit1, oct_digit1},
-	combinator::{alt, opt, trace},
+	ascii::{digit1, hex_digit1, multispace0, oct_digit1},
+	combinator::{alt, delimited, opt, separated, separated_pair, trace},
+	error::ContextError,
 	stream::AsChar,
 	token::{one_of, take_while},
 	Parser, Result,
@@ -24,6 +26,8 @@ pub fn literal(input: &mut &str) -> Result<Literal> {
 	// clever about that by peeking at the next character to determine what is being parsed.
 
 	alt((
+		set(int).map(Literal::IntSet),
+		set(float).map(Literal::FloatSet),
 		boolean.map(Literal::Bool),
 		float.map(Literal::Float),
 		int.map(Literal::Int),
@@ -119,10 +123,50 @@ fn identifier(input: &mut &str) -> Result<String> {
 	.parse_next(input)
 }
 
+/// Parses a set literal.
+///
+/// Works with either interval sets or sparse sets.
+///
+/// The grammar is modified from the documentation. Here we abstract the element type.
+/// ```bnf
+/// <set-literal> ::= "{" [ <elem> "," ... ] "}"
+///                 | <elem> ".." <elem>
+/// ```
+fn set<'s, T>(
+	elem_parser: impl Parser<&'s str, T, ContextError> + Copy,
+) -> impl Parser<&'s str, RangeList<T>, ContextError>
+where
+	T: PartialOrd + Copy + 'static,
+{
+	move |input: &mut &'s str| -> Result<RangeList<T>> {
+		let sparse_set = delimited(
+			token('{'),
+			separated(0.., token(elem_parser), token(',')),
+			token('}'),
+		)
+		.map(|elems: Vec<T>| RangeList::from_iter(elems.into_iter().map(|elem| elem..=elem)));
+
+		let interval_set = separated_pair(token(elem_parser), token(".."), token(elem_parser))
+			.map(|(start, end)| RangeList::from_iter([start..=end]));
+
+		alt((sparse_set, interval_set)).parse_next(input)
+	}
+}
+
+/// Parses a token from the input.
+///
+/// Wraps the given parser with optional preceding and succeeding whitespace.
+fn token<'s, T>(
+	parser: impl Parser<&'s str, T, ContextError>,
+) -> impl Parser<&'s str, T, ContextError> {
+	delimited(multispace0, parser, multispace0)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fmt::Debug;
 
+	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
 
 	use super::*;
@@ -186,5 +230,25 @@ mod tests {
 	fn boolean_literal() {
 		check_parser(literal, Literal::Bool(true), "true");
 		check_parser(literal, Literal::Bool(false), "false");
+	}
+
+	#[test]
+	fn int_set_literal() {
+		check_parser(literal, Literal::IntSet(RangeList::from(1..=5)), "1..5");
+		check_parser(
+			literal,
+			Literal::IntSet(RangeList::from_iter([1..=1, 4..=4, 6..=6])),
+			"{1, 4, 6}",
+		);
+	}
+
+	#[test]
+	fn float_set_literal() {
+		check_parser(literal, Literal::IntSet(RangeList::from(1..=5)), "1..5");
+		check_parser(
+			literal,
+			Literal::FloatSet(RangeList::from_iter([1.3..=1.3, 4e3..=4e3, -4.8..=-4.8])),
+			"{1.3, 4e3, -4.8}",
+		);
 	}
 }
