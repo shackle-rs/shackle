@@ -80,6 +80,8 @@
 #![warn(unused_crate_dependencies, unused_extern_crates)]
 #![warn(variant_size_differences)]
 
+pub mod fzn;
+
 use std::{collections::BTreeMap, fmt::Display};
 
 pub use rangelist::RangeList;
