@@ -25,8 +25,9 @@ use crate::{
 /// # Example
 /// ```
 /// use std::collections::BTreeMap;
-/// use flatzinc_serde::FlatZinc;
 /// use flatzinc_serde::Domain;
+/// use flatzinc_serde::FlatZinc;
+/// use flatzinc_serde::Method;
 /// use flatzinc_serde::RangeList;
 /// use flatzinc_serde::SolveObjective;
 /// use flatzinc_serde::Type;
@@ -41,12 +42,12 @@ use crate::{
 /// solve satisfy;
 /// "#;
 ///
-/// let flatzinc = flatzinc_serde::fzn::parse(source.as_bytes())
+/// let parsed = flatzinc_serde::fzn::parse(source.as_bytes())
 ///     .expect("valid fzn");
 ///
-/// let expected =  FlatZinc {
+/// let expected: FlatZinc<String> =  FlatZinc {
 ///     variables: BTreeMap::from([
-///        ("x", Variable {
+///        ("x".to_owned(), Variable {
 ///            ty: Type::Int,
 ///            domain: Some(Domain::Int(RangeList::from(1..=5))),
 ///            value: None,
@@ -54,7 +55,7 @@ use crate::{
 ///            defined: false,
 ///            introduced: false,
 ///        }),
-///        ("y", Variable {
+///        ("y".to_owned(), Variable {
 ///            ty: Type::Int,
 ///            domain: Some(Domain::Int(RangeList::from(1..=5))),
 ///            value: None,
@@ -68,10 +69,14 @@ use crate::{
 ///    ],
 ///    output: vec![],
 ///    solve: SolveObjective {
-///        method:
+///        method: Method::Satisfy,
+///        objective: None,
+///        ann: vec![],
 ///    },
 ///    version: "FZN".to_owned(),
 /// };
+///
+/// assert_eq!(expected, parsed);
 /// ```
 pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParseError> {
 	let mut buffer = Vec::new();
