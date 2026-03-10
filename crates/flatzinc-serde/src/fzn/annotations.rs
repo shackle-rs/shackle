@@ -1,3 +1,5 @@
+//! Parser for an FZN annotation.
+
 use winnow::{
 	combinator::{alt, delimited, opt, preceded, separated},
 	Parser, Result,

@@ -35,6 +35,9 @@ use crate::{
 /// # use flatzinc_serde::Type;
 /// # use flatzinc_serde::Variable;
 ///
+/// // The FlatZinc model.
+/// //
+/// // Typically this would be a file, but for this example we will use an inline string.
 /// let source = r#"
 /// var 1..5: x;
 /// var 1..5: y;
@@ -44,6 +47,7 @@ use crate::{
 /// solve satisfy;
 /// "#;
 ///
+/// // Parse the model to the in-memory representation.
 /// let parsed = flatzinc_serde::fzn::parse(source.as_bytes())
 ///     .expect("valid fzn");
 ///

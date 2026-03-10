@@ -1,3 +1,5 @@
+//! The error produced by the fzn parser.
+
 use std::fmt::Display;
 
 /// Errors that can occur when parsing `.fzn` models.

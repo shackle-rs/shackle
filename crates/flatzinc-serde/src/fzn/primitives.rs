@@ -1,3 +1,5 @@
+//! Parsers for tokens used throughout the FlatZinc grammar.
+
 use rangelist::RangeList;
 use winnow::{
 	ascii::{digit1, hex_digit1, multispace0, oct_digit1},
