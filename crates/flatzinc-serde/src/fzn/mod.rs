@@ -281,7 +281,7 @@ fn solve_objective(input: &mut &str) -> Result<SolveObjective> {
 
 #[cfg(test)]
 mod tests {
-	use std::fmt::Debug;
+	use std::{fmt::Debug, fs::File, io::BufReader, path::PathBuf};
 
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
@@ -622,5 +622,35 @@ mod tests {
 	{
 		let parsed = parser.parse(input);
 		assert_eq!(Ok(expected), parsed);
+	}
+
+	#[test]
+	fn run_integration_tests() {
+		let flatzinc_file_prefix =
+			PathBuf::from(format!("{}/corpus/fzn/", env!("CARGO_MANIFEST_DIR")));
+
+		let dir_iterator = flatzinc_file_prefix
+			.read_dir()
+			.expect("failed to iterate corpus");
+
+		for file in dir_iterator {
+			let file = file.expect("failed to read path from corpus iterator");
+
+			let fzn_file = File::open(file.path()).expect("failed to open FZN file");
+			let fzn_reader = BufReader::new(fzn_file);
+			let actual = match parse(fzn_reader) {
+				Ok(fzn) => fzn,
+				Err(error) => panic!(
+					"failed to parse file '{}': {}",
+					file.path().file_name().unwrap().display(),
+					error
+				),
+			};
+
+			let expected_path = file.path().with_extension("expected");
+			let expected = expect_test::expect_file![expected_path];
+
+			expected.assert_eq(&actual.to_string());
+		}
 	}
 }
