@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, io::BufRead};
 use rangelist::RangeList;
 use winnow::{
 	ascii::{digit1, hex_digit1, multispace0, oct_digit1},
-	combinator::{alt, delimited, opt, preceded, separated, separated_pair, trace},
+	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair, trace},
 	error::ContextError,
 	stream::AsChar,
 	token::{one_of, take_while},
@@ -368,17 +368,18 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 		token(domain),
 		token(":"),
 		token(identifier),
+		repeat(0.., annotation),
 		opt(preceded(token("="), token(literal))),
 		token(";"),
 	)
-		.map(|(_, (ty, domain), _, name, value, _)| {
+		.map(|(_, (ty, domain), _, name, ann, value, _)| {
 			(
 				name,
 				Variable {
 					ty,
 					domain,
 					value,
-					ann: vec![],
+					ann,
 					defined: false,
 					introduced: false,
 				},
@@ -732,6 +733,25 @@ mod tests {
 				},
 			),
 			"var int: x = 5;",
+		);
+	}
+
+	#[test]
+	fn variable_with_annotation() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: None,
+					value: Some(Literal::Int(5)),
+					ann: vec![Annotation::Atom("mip".to_owned())],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var int: x :: mip = 5;",
 		);
 	}
 
