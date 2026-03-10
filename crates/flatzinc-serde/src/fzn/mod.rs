@@ -25,17 +25,17 @@ use crate::{
 ///
 /// # Example
 /// ```
-/// use std::collections::BTreeMap;
-/// use flatzinc_serde::Argument;
-/// use flatzinc_serde::Constraint;
-/// use flatzinc_serde::Domain;
-/// use flatzinc_serde::FlatZinc;
-/// use flatzinc_serde::Literal;
-/// use flatzinc_serde::Method;
-/// use flatzinc_serde::RangeList;
-/// use flatzinc_serde::SolveObjective;
-/// use flatzinc_serde::Type;
-/// use flatzinc_serde::Variable;
+/// # use std::collections::BTreeMap;
+/// # use flatzinc_serde::Argument;
+/// # use flatzinc_serde::Constraint;
+/// # use flatzinc_serde::Domain;
+/// # use flatzinc_serde::FlatZinc;
+/// # use flatzinc_serde::Literal;
+/// # use flatzinc_serde::Method;
+/// # use flatzinc_serde::RangeList;
+/// # use flatzinc_serde::SolveObjective;
+/// # use flatzinc_serde::Type;
+/// # use flatzinc_serde::Variable;
 ///
 /// let source = r#"
 /// var 1..5: x;
