@@ -368,15 +368,16 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 		token(domain),
 		token(":"),
 		token(identifier),
+		opt(preceded(token("="), token(literal))),
 		token(";"),
 	)
-		.map(|(_, (ty, domain), _, name, _)| {
+		.map(|(_, (ty, domain), _, name, value, _)| {
 			(
 				name,
 				Variable {
 					ty,
 					domain,
-					value: None,
+					value,
 					ann: vec![],
 					defined: false,
 					introduced: false,
@@ -712,6 +713,25 @@ mod tests {
 				},
 			),
 			"var set of {1, 3}: x;",
+		);
+	}
+
+	#[test]
+	fn variable_with_assignment() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: None,
+					value: Some(Literal::Int(5)),
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var int: x = 5;",
 		);
 	}
 
