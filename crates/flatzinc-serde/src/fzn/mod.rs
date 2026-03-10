@@ -17,8 +17,8 @@ use winnow::{
 pub use error::*;
 
 use crate::{
-	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, FlatZinc, Literal, Type,
-	Variable,
+	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Domain, FlatZinc, Literal,
+	Type, Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -354,17 +354,17 @@ fn token<'s, T>(
 fn variable(input: &mut &str) -> Result<(String, Variable)> {
 	(
 		token("var"),
-		token("int"),
+		token(domain),
 		token(":"),
-		identifier,
+		token(identifier),
 		token(";"),
 	)
-		.map(|(_, _, _, name, _)| {
+		.map(|(_, (ty, domain), _, name, _)| {
 			(
 				name,
 				Variable {
-					ty: Type::Int,
-					domain: None,
+					ty,
+					domain,
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -375,6 +375,14 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 		.parse_next(input)
 }
 
+fn domain(input: &mut &str) -> Result<(Type, Option<Domain>)> {
+	alt((
+		"int".map(|_| (Type::Int, None)),
+		set(int).map(|values| (Type::Int, Some(Domain::Int(values)))),
+	))
+	.parse_next(input)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fmt::Debug;
@@ -382,7 +390,7 @@ mod tests {
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
 
-	use crate::{Annotation, AnnotationArgument, Type};
+	use crate::{Annotation, AnnotationArgument, Domain, Type};
 
 	use super::*;
 
@@ -558,6 +566,40 @@ mod tests {
 				},
 			),
 			"var int: x;",
+		);
+	}
+
+	#[test]
+	fn variable_with_bounded_int_domain() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: Some(Domain::Int(RangeList::from(1..=5))),
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var 1..5: x;",
+		);
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: Some(Domain::Int(RangeList::from_iter([1..=1, 4..=4, 6..=6]))),
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var {1, 4, 6}: x;",
 		);
 	}
 
