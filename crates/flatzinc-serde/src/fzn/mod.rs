@@ -458,7 +458,16 @@ fn constraint(input: &mut &str) -> Result<Constraint> {
 ///          | <array-literal>
 /// ```
 fn argument(input: &mut &str) -> Result<Argument> {
-	literal.map(Argument::Literal).parse_next(input)
+	alt((
+		literal.map(Argument::Literal),
+		delimited(
+			token("["),
+			separated(0.., token(literal), token(",")),
+			token("]"),
+		)
+		.map(Argument::Array),
+	))
+	.parse_next(input)
 }
 
 #[cfg(test)]
@@ -816,6 +825,40 @@ mod tests {
 				ann: vec![],
 			},
 			"constraint int_lt(x, y);",
+		);
+	}
+
+	#[test]
+	fn basic_constraint_with_identifier_arguments_and_annotation() {
+		check_parser(
+			constraint,
+			Constraint {
+				id: "int_lt".into(),
+				args: vec![
+					Argument::Literal(Literal::Identifier("x".to_owned())),
+					Argument::Literal(Literal::Identifier("y".to_owned())),
+				],
+				defines: None,
+				ann: vec![Annotation::Atom("domain_consistent".to_owned())],
+			},
+			"constraint int_lt(x, y) :: domain_consistent;",
+		);
+	}
+
+	#[test]
+	fn basic_constraint_with_array_argument() {
+		check_parser(
+			constraint,
+			Constraint {
+				id: "all_different".into(),
+				args: vec![Argument::Array(vec![
+					Literal::Identifier("x".to_owned()),
+					Literal::Identifier("y".to_owned()),
+				])],
+				defines: None,
+				ann: vec![],
+			},
+			"constraint all_different([x, y]);",
 		);
 	}
 
