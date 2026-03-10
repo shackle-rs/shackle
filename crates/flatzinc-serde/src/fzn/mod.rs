@@ -404,6 +404,8 @@ fn domain(input: &mut &str) -> Result<(Type, Option<Domain>)> {
 		"int".map(|_| (Type::Int, None)),
 		"float".map(|_| (Type::Float, None)),
 		"bool".map(|_| (Type::Bool, None)),
+		preceded((token("set"), token("of")), set(int))
+			.map(|values| (Type::IntSet, Some(Domain::Int(values)))),
 		set(int).map(|values| (Type::Int, Some(Domain::Int(values)))),
 		interval_set(float).map(|values| (Type::Float, Some(Domain::Float(values)))),
 	))
@@ -676,6 +678,40 @@ mod tests {
 				},
 			),
 			"var 1.0..5.5: x;",
+		);
+	}
+
+	#[test]
+	fn variable_with_int_set_domain() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::IntSet,
+					domain: Some(Domain::Int(RangeList::from(1..=5))),
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var set of 1..5: x;",
+		);
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::IntSet,
+					domain: Some(Domain::Int(RangeList::from_iter([1..=1, 3..=3]))),
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var set of {1, 3}: x;",
 		);
 	}
 
