@@ -17,8 +17,8 @@ use winnow::{
 pub use error::*;
 
 use crate::{
-	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Domain, FlatZinc, Literal,
-	Type, Variable,
+	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Constraint,
+	Domain, FlatZinc, Literal, Type, Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -84,7 +84,7 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 
 	let mut variables = BTreeMap::default();
 	let arrays = BTreeMap::default();
-	let constraints = vec![];
+	let mut constraints = vec![];
 	let output = vec![];
 	let solve = None;
 
@@ -100,6 +100,9 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 		match model_item.parse(statement_str)? {
 			ModelItem::Variable((name, variable)) => {
 				let _ = variables.insert(name, variable);
+			}
+			ModelItem::Constraint(constraint) => {
+				constraints.push(constraint);
 			}
 		}
 	}
@@ -118,11 +121,17 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 enum ModelItem {
 	/// A variable model item.
 	Variable((String, Variable)),
+	/// A constraint model item.
+	Constraint(Constraint),
 }
 
 /// Parse a model item.
 fn model_item(input: &mut &str) -> Result<ModelItem> {
-	alt((variable.map(ModelItem::Variable),)).parse_next(input)
+	alt((
+		variable.map(ModelItem::Variable),
+		constraint.map(ModelItem::Constraint),
+	))
+	.parse_next(input)
 }
 
 /// Parse an annotation.
@@ -416,6 +425,42 @@ fn domain(input: &mut &str) -> Result<(Type, Option<Domain>)> {
 	.parse_next(input)
 }
 
+/// Parse a constraint item.
+///
+/// ```bnf
+/// <constraint-item> ::= "constraint" <identifier> "(" [ <expr> "," ... ] ")" <annotations> ";"
+/// ```
+fn constraint(input: &mut &str) -> Result<Constraint> {
+	(
+		token("constraint"),
+		token(identifier),
+		delimited(
+			token("("),
+			separated(0.., token(argument), token(",")),
+			token(")"),
+		),
+		repeat(0.., annotation),
+		token(";"),
+	)
+		.map(|(_, id, args, ann, _)| Constraint {
+			id,
+			args,
+			ann,
+			defines: None,
+		})
+		.parse_next(input)
+}
+
+/// Parses a constraint argument.
+///
+/// ```bnf
+/// <expr> ::= <basic-expr>
+///          | <array-literal>
+/// ```
+fn argument(input: &mut &str) -> Result<Argument> {
+	literal.map(Argument::Literal).parse_next(input)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fmt::Debug;
@@ -423,7 +468,7 @@ mod tests {
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
 
-	use crate::{Annotation, AnnotationArgument, Domain, Type};
+	use crate::{Annotation, AnnotationArgument, Argument, Domain, Type};
 
 	use super::*;
 
@@ -754,6 +799,23 @@ mod tests {
 				},
 			),
 			"var int: x :: mip = 5;",
+		);
+	}
+
+	#[test]
+	fn basic_constraint_with_identifier_arguments() {
+		check_parser(
+			constraint,
+			Constraint {
+				id: "int_lt".into(),
+				args: vec![
+					Argument::Literal(Literal::Identifier("x".to_owned())),
+					Argument::Literal(Literal::Identifier("y".to_owned())),
+				],
+				defines: None,
+				ann: vec![],
+			},
+			"constraint int_lt(x, y);",
 		);
 	}
 
