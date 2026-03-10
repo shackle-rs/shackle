@@ -17,7 +17,8 @@ use winnow::{
 pub use error::*;
 
 use crate::{
-	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, FlatZinc, Literal, Variable,
+	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, FlatZinc, Literal, Type,
+	Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -111,12 +112,15 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	})
 }
 
+/// Any item in a flatzinc model.
 enum ModelItem {
-	Variable(Variable),
+	/// A variable model item.
+	Variable((String, Variable)),
 }
 
+/// Parse a model item.
 fn model_item(input: &mut &str) -> Result<ModelItem> {
-	todo!()
+	alt((variable.map(ModelItem::Variable),)).parse_next(input)
 }
 
 /// Parse an annotation.
@@ -346,6 +350,31 @@ fn token<'s, T>(
 	delimited(multispace0, parser, multispace0)
 }
 
+/// Parse a variable model item.
+fn variable(input: &mut &str) -> Result<(String, Variable)> {
+	(
+		token("var"),
+		token("int"),
+		token(":"),
+		identifier,
+		token(";"),
+	)
+		.map(|(_, _, _, name, _)| {
+			(
+				name,
+				Variable {
+					ty: Type::Int,
+					domain: None,
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			)
+		})
+		.parse_next(input)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fmt::Debug;
@@ -353,7 +382,7 @@ mod tests {
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
 
-	use crate::{Annotation, AnnotationArgument};
+	use crate::{Annotation, AnnotationArgument, Type};
 
 	use super::*;
 
@@ -510,6 +539,25 @@ mod tests {
 				])],
 			}),
 			":: some_annotation([other_annotation(5), 3.4])",
+		);
+	}
+
+	#[test]
+	fn simple_variable_item() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: None,
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var int: x;",
 		);
 	}
 
