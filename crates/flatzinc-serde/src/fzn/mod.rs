@@ -378,6 +378,8 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 fn domain(input: &mut &str) -> Result<(Type, Option<Domain>)> {
 	alt((
 		"int".map(|_| (Type::Int, None)),
+		"float".map(|_| (Type::Float, None)),
+		"bool".map(|_| (Type::Bool, None)),
 		set(int).map(|values| (Type::Int, Some(Domain::Int(values)))),
 	))
 	.parse_next(input)
@@ -551,7 +553,7 @@ mod tests {
 	}
 
 	#[test]
-	fn simple_variable_item() {
+	fn variable_with_named_domain() {
 		check_parser(
 			variable,
 			(
@@ -566,6 +568,36 @@ mod tests {
 				},
 			),
 			"var int: x;",
+		);
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Float,
+					domain: None,
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var float: x;",
+		);
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Bool,
+					domain: None,
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var bool: x;",
 		);
 	}
 
