@@ -82,7 +82,7 @@ use crate::{
 pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParseError> {
 	let mut buffer = Vec::new();
 
-	let variables = BTreeMap::default();
+	let mut variables = BTreeMap::default();
 	let arrays = BTreeMap::default();
 	let constraints = vec![];
 	let output = vec![];
@@ -98,7 +98,9 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 		}
 
 		match model_item.parse(statement_str)? {
-			ModelItem::Variable(variable) => todo!(),
+			ModelItem::Variable((name, variable)) => {
+				let _ = variables.insert(name, variable);
+			}
 		}
 	}
 
