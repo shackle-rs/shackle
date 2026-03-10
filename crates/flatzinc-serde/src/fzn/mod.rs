@@ -334,10 +334,21 @@ where
 		)
 		.map(|elems: Vec<T>| RangeList::from_iter(elems.into_iter().map(|elem| elem..=elem)));
 
-		let interval_set = separated_pair(token(elem_parser), token(".."), token(elem_parser))
-			.map(|(start, end)| RangeList::from_iter([start..=end]));
+		alt((sparse_set, interval_set(elem_parser))).parse_next(input)
+	}
+}
 
-		alt((sparse_set, interval_set)).parse_next(input)
+/// Higher-order parser for `<token> .. <token>`.
+fn interval_set<'s, T>(
+	elem_parser: impl Parser<&'s str, T, ContextError> + Copy,
+) -> impl Parser<&'s str, RangeList<T>, ContextError>
+where
+	T: PartialOrd + Copy + 'static,
+{
+	move |input: &mut &'s str| {
+		separated_pair(token(elem_parser), token(".."), token(elem_parser))
+			.map(|(start, end)| RangeList::from_iter([start..=end]))
+			.parse_next(input)
 	}
 }
 
@@ -375,12 +386,26 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 		.parse_next(input)
 }
 
+/// Parses the domain in a variable declaration.
+///
+/// Has no direct analogue in the grammar. However, it is essentially the `<basic-var-type>`
+/// without the "var" token preceding it:
+///
+/// ```bnf
+/// <basic-var-type> ::= "var" <basic-par-type>
+///                    | "var" <int-literal> ".." <int-literal>
+///                    | "var" "{" <int-literal> "," ... "}"
+///                    | "var" <float-literal> ".." <float-literal>
+///                    | "var" "set" "of" <int-literal> ".." <int-literal>
+///                    | "var" "set" "of" "{" [ <int-literal> "," ... ] "}"
+/// ```
 fn domain(input: &mut &str) -> Result<(Type, Option<Domain>)> {
 	alt((
 		"int".map(|_| (Type::Int, None)),
 		"float".map(|_| (Type::Float, None)),
 		"bool".map(|_| (Type::Bool, None)),
 		set(int).map(|values| (Type::Int, Some(Domain::Int(values)))),
+		interval_set(float).map(|values| (Type::Float, Some(Domain::Float(values)))),
 	))
 	.parse_next(input)
 }
@@ -632,6 +657,25 @@ mod tests {
 				},
 			),
 			"var {1, 4, 6}: x;",
+		);
+	}
+
+	#[test]
+	fn variable_with_bounded_float_domain() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Float,
+					domain: Some(Domain::Float(RangeList::from(1.0..=5.5))),
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+			),
+			"var 1.0..5.5: x;",
 		);
 	}
 
