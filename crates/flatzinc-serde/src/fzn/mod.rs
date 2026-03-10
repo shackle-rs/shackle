@@ -1,5 +1,9 @@
 //! Parse the original `.fzn` file format.
 
+mod error;
+
+use std::{collections::BTreeMap, io::BufRead};
+
 use rangelist::RangeList;
 use winnow::{
 	ascii::{digit1, hex_digit1, multispace0, oct_digit1},
@@ -10,7 +14,105 @@ use winnow::{
 	Parser, Result,
 };
 
-use crate::{Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Literal};
+pub use error::*;
+
+use crate::{
+	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, FlatZinc, Literal, Variable,
+};
+
+/// Parse the `.fzn` source to a [`FlatZinc`] instance.
+///
+/// # Example
+/// ```
+/// use std::collections::BTreeMap;
+/// use flatzinc_serde::FlatZinc;
+/// use flatzinc_serde::Domain;
+/// use flatzinc_serde::RangeList;
+/// use flatzinc_serde::SolveObjective;
+/// use flatzinc_serde::Type;
+/// use flatzinc_serde::Variable;
+///
+/// let source = r#"
+/// var 1..5: x;
+/// var 1..5: y;
+///
+/// constraint int_le(x, y);
+///
+/// solve satisfy;
+/// "#;
+///
+/// let flatzinc = flatzinc_serde::fzn::parse(source.as_bytes())
+///     .expect("valid fzn");
+///
+/// let expected =  FlatZinc {
+///     variables: BTreeMap::from([
+///        ("x", Variable {
+///            ty: Type::Int,
+///            domain: Some(Domain::Int(RangeList::from(1..=5))),
+///            value: None,
+///            ann: vec![],
+///            defined: false,
+///            introduced: false,
+///        }),
+///        ("y", Variable {
+///            ty: Type::Int,
+///            domain: Some(Domain::Int(RangeList::from(1..=5))),
+///            value: None,
+///            ann: vec![],
+///            defined: false,
+///            introduced: false,
+///        }),
+///    ]),
+///    arrays: BTreeMap::default(),
+///    constraints: vec![
+///    ],
+///    output: vec![],
+///    solve: SolveObjective {
+///        method:
+///    },
+///    version: "FZN".to_owned(),
+/// };
+/// ```
+pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParseError> {
+	let mut buffer = Vec::new();
+
+	let variables = BTreeMap::default();
+	let arrays = BTreeMap::default();
+	let constraints = vec![];
+	let output = vec![];
+	let solve = None;
+
+	loop {
+		buffer.clear();
+		let _ = source.read_until(b';', &mut buffer)?;
+
+		let statement_str = std::str::from_utf8(&buffer)?.trim();
+		if statement_str.is_empty() {
+			break;
+		}
+
+		match model_item.parse(statement_str)? {
+			ModelItem::Variable(variable) => todo!(),
+		}
+	}
+
+	Ok(FlatZinc {
+		variables,
+		arrays,
+		constraints,
+		output,
+		solve: solve.ok_or(FznParseError::MissingSolveItem)?,
+		version: "FZN".to_owned(),
+	})
+}
+
+enum ModelItem {
+	Variable(Variable),
+}
+
+fn model_item(input: &mut &str) -> Result<ModelItem> {
+	todo!()
+}
 
 /// Parse an annotation.
 ///
@@ -18,7 +120,7 @@ use crate::{Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, L
 /// <annotation> ::= <identifier>
 ///                | <identifier> "(" <ann-expr> "," ... ")"
 /// ```
-pub fn annotation(input: &mut &str) -> Result<Annotation> {
+fn annotation(input: &mut &str) -> Result<Annotation> {
 	preceded(
 		token("::"),
 		(
@@ -97,7 +199,7 @@ fn annotation_call(input: &mut &str) -> Result<AnnotationCall> {
 ///                        | <float-literal>
 ///                        | <set-literal>
 /// ```
-pub fn literal(input: &mut &str) -> Result<Literal> {
+fn literal(input: &mut &str) -> Result<Literal> {
 	// This can be optimized if it turns out to be a bottleneck. At the moment, to parse a literal,
 	// it will first attempt to parse a float and, if that fails, parse an integer. We can be more
 	// clever about that by peeking at the next character to determine what is being parsed.

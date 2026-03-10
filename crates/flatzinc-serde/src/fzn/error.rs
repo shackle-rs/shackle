@@ -1,0 +1,45 @@
+use std::fmt::Display;
+
+/// Errors that can occur when parsing `.fzn` models.
+#[derive(Debug)]
+pub enum FznParseError {
+	/// Error reading from the source.
+	Io(std::io::Error),
+	/// Error converting to utf8.
+	Utf8Error(std::str::Utf8Error),
+	/// Missing solve item in the model.
+	MissingSolveItem,
+	/// An error in the syntax of the `fzn`.
+	SyntaxError(String),
+}
+
+impl std::error::Error for FznParseError {}
+
+impl From<std::io::Error> for FznParseError {
+	fn from(value: std::io::Error) -> Self {
+		FznParseError::Io(value)
+	}
+}
+
+impl From<std::str::Utf8Error> for FznParseError {
+	fn from(value: std::str::Utf8Error) -> Self {
+		FznParseError::Utf8Error(value)
+	}
+}
+
+impl From<winnow::error::ParseError<&str, winnow::error::ContextError>> for FznParseError {
+	fn from(value: winnow::error::ParseError<&str, winnow::error::ContextError>) -> Self {
+		FznParseError::SyntaxError(value.to_string())
+	}
+}
+
+impl Display for FznParseError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			FznParseError::Io(error) => write!(f, "error reading from source: {error}"),
+			FznParseError::Utf8Error(error) => write!(f, "invalid utf8: {error}"),
+			FznParseError::MissingSolveItem => write!(f, "missing solve item"),
+			FznParseError::SyntaxError(error) => write!(f, "syntax error: {error}"),
+		}
+	}
+}
