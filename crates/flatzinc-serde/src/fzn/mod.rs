@@ -18,7 +18,7 @@ pub use error::*;
 
 use crate::{
 	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Constraint,
-	Domain, FlatZinc, Literal, Type, Variable,
+	Domain, FlatZinc, Literal, Method, SolveObjective, Type, Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -26,8 +26,11 @@ use crate::{
 /// # Example
 /// ```
 /// use std::collections::BTreeMap;
+/// use flatzinc_serde::Argument;
+/// use flatzinc_serde::Constraint;
 /// use flatzinc_serde::Domain;
 /// use flatzinc_serde::FlatZinc;
+/// use flatzinc_serde::Literal;
 /// use flatzinc_serde::Method;
 /// use flatzinc_serde::RangeList;
 /// use flatzinc_serde::SolveObjective;
@@ -66,8 +69,15 @@ use crate::{
 ///        }),
 ///    ]),
 ///    arrays: BTreeMap::default(),
-///    constraints: vec![
-///    ],
+///    constraints: vec![Constraint {
+///        id: "int_le".to_owned(),
+///        args: vec![
+///            Argument::Literal(Literal::Identifier("x".to_owned())),
+///            Argument::Literal(Literal::Identifier("y".to_owned())),
+///        ],
+///        ann: vec![],
+///        defines: None,
+///    }],
 ///    output: vec![],
 ///    solve: SolveObjective {
 ///        method: Method::Satisfy,
@@ -86,7 +96,7 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	let arrays = BTreeMap::default();
 	let mut constraints = vec![];
 	let output = vec![];
-	let solve = None;
+	let mut solve = None;
 
 	loop {
 		buffer.clear();
@@ -103,6 +113,11 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 			}
 			ModelItem::Constraint(constraint) => {
 				constraints.push(constraint);
+			}
+			ModelItem::SolveObjective(solve_objective) => {
+				// TODO: For now we assume there is only one per model. For completeness we should
+				// really throw an error if `solve` already has a value.
+				solve = Some(solve_objective);
 			}
 		}
 	}
@@ -123,6 +138,8 @@ enum ModelItem {
 	Variable((String, Variable)),
 	/// A constraint model item.
 	Constraint(Constraint),
+	/// A solve item.
+	SolveObjective(SolveObjective),
 }
 
 /// Parse a model item.
@@ -130,6 +147,7 @@ fn model_item(input: &mut &str) -> Result<ModelItem> {
 	alt((
 		variable.map(ModelItem::Variable),
 		constraint.map(ModelItem::Constraint),
+		solve_objective.map(ModelItem::SolveObjective),
 	))
 	.parse_next(input)
 }
@@ -470,6 +488,33 @@ fn argument(input: &mut &str) -> Result<Argument> {
 	.parse_next(input)
 }
 
+/// Parse a solve item.
+///
+/// ```bnf
+/// <solve-item> ::= "solve" <annotations> "satisfy" ";"
+///                | "solve" <annotations> "minimize" <basic-expr> ";"
+///                | "solve" <annotations> "maximize" <basic-expr> ";"
+/// ```
+fn solve_objective(input: &mut &str) -> Result<SolveObjective> {
+	(
+		token("solve"),
+		repeat(0.., annotation),
+		alt((
+			token("satisfy").map(|_| Method::Satisfy),
+			token("minimize").map(|_| Method::Minimize),
+			token("maximize").map(|_| Method::Maximize),
+		)),
+		opt(identifier.map(Literal::Identifier)),
+		token(";"),
+	)
+		.map(|(_, ann, method, objective, _)| SolveObjective {
+			method,
+			objective,
+			ann,
+		})
+		.parse_next(input)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fmt::Debug;
@@ -477,7 +522,7 @@ mod tests {
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
 
-	use crate::{Annotation, AnnotationArgument, Argument, Domain, Type};
+	use crate::{Annotation, AnnotationArgument, Argument, Domain, Method, Type};
 
 	use super::*;
 
@@ -859,6 +904,99 @@ mod tests {
 				ann: vec![],
 			},
 			"constraint all_different([x, y]);",
+		);
+	}
+
+	#[test]
+	fn solve_satisfy() {
+		check_parser(
+			solve_objective,
+			SolveObjective {
+				method: Method::Satisfy,
+				objective: None,
+				ann: vec![],
+			},
+			"solve satisfy;",
+		);
+	}
+
+	#[test]
+	fn solve_optimize() {
+		check_parser(
+			solve_objective,
+			SolveObjective {
+				method: Method::Minimize,
+				objective: Some(Literal::Identifier("w".to_owned())),
+				ann: vec![],
+			},
+			"solve minimize w;",
+		);
+
+		check_parser(
+			solve_objective,
+			SolveObjective {
+				method: Method::Maximize,
+				objective: Some(Literal::Identifier("w".to_owned())),
+				ann: vec![],
+			},
+			"solve maximize w;",
+		);
+	}
+
+	#[test]
+	fn solve_with_annotations() {
+		check_parser(
+			solve_objective,
+			SolveObjective {
+				method: Method::Satisfy,
+				objective: None,
+				ann: vec![Annotation::Call(AnnotationCall {
+					id: "int_search".to_owned(),
+					args: vec![
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("xs".to_owned()),
+						)),
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("input_order".to_owned()),
+						)),
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("indomain_min".to_owned()),
+						)),
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("complete".to_owned()),
+						)),
+					],
+				})],
+			},
+			"solve :: int_search(xs, input_order, indomain_min, complete) satisfy;",
+		);
+
+		check_parser(
+			solve_objective,
+			SolveObjective {
+				method: Method::Maximize,
+				objective: Some(Literal::Identifier("x".to_owned())),
+				ann: vec![Annotation::Call(AnnotationCall {
+					id: "int_search".to_owned(),
+					args: vec![
+						AnnotationArgument::Array(vec![
+							AnnotationLiteral::BaseLiteral(Literal::Identifier("x".to_owned())),
+							AnnotationLiteral::BaseLiteral(Literal::Identifier("y".to_owned())),
+							AnnotationLiteral::BaseLiteral(Literal::Identifier("z".to_owned())),
+						]),
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("first_fail".to_owned()),
+						)),
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("indomain_split".to_owned()),
+						)),
+						AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(
+							Literal::Identifier("complete".to_owned()),
+						)),
+					],
+				})],
+			},
+			"solve :: int_search([x, y, z], first_fail, indomain_split, complete) maximize x;",
 		);
 	}
 
