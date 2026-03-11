@@ -636,6 +636,12 @@ mod tests {
 		for file in dir_iterator {
 			let file = file.expect("failed to read path from corpus iterator");
 
+			let fzn_file_path = file.path();
+			if fzn_file_path.extension().is_none_or(|ext| ext != "fzn") {
+				// Only read fzn files.
+				continue;
+			}
+
 			let fzn_file = File::open(file.path()).expect("failed to open FZN file");
 			let fzn_reader = BufReader::new(fzn_file);
 			let actual = match parse(fzn_reader) {
