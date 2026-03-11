@@ -173,6 +173,20 @@ pub(super) fn token<'s, T>(
 	delimited(multispace0, parser, multispace0)
 }
 
+/// Parses a list of elements seperated by a comma, and delimited by `open_token` and
+/// `close_token`.
+pub(super) fn delimited_list<'s, T>(
+	open_token: &'static str,
+	element_parser: impl Parser<&'s str, T, ContextError>,
+	close_token: &'static str,
+) -> impl Parser<&'s str, Vec<T>, ContextError> {
+	delimited(
+		token(open_token),
+		separated(0.., token(element_parser), token(",")),
+		token(close_token),
+	)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

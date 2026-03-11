@@ -7,7 +7,7 @@ mod primitives;
 use std::{collections::BTreeMap, io::BufRead};
 
 use winnow::{
-	combinator::{alt, delimited, opt, preceded, repeat, separated},
+	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair},
 	Parser, Result,
 };
 
@@ -110,6 +110,9 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 		}
 
 		match model_item.parse(statement_str)? {
+			ModelItem::Predicate => {
+				// Ignored.
+			}
 			ModelItem::Variable((name, variable)) => {
 				let _ = variables.insert(name, variable);
 			}
@@ -136,6 +139,10 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 
 /// Any item in a flatzinc model.
 enum ModelItem {
+	/// A predicate item.
+	///
+	/// Since we ignore them, no data is attached.
+	Predicate,
 	/// A variable model item.
 	Variable((String, Variable)),
 	/// A constraint model item.
@@ -147,6 +154,7 @@ enum ModelItem {
 /// Parse a model item.
 fn model_item(input: &mut &str) -> Result<ModelItem> {
 	alt((
+		predicate_item.map(|_| ModelItem::Predicate),
 		variable.map(ModelItem::Variable),
 		constraint.map(ModelItem::Constraint),
 		solve_objective.map(ModelItem::SolveObjective),
@@ -158,7 +166,7 @@ fn model_item(input: &mut &str) -> Result<ModelItem> {
 fn variable(input: &mut &str) -> Result<(String, Variable)> {
 	(
 		token("var"),
-		token(domain),
+		token(basic_variable_type),
 		token(":"),
 		token(identifier),
 		repeat(0.., annotation),
@@ -194,11 +202,9 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 ///                    | "var" "set" "of" <int-literal> ".." <int-literal>
 ///                    | "var" "set" "of" "{" [ <int-literal> "," ... ] "}"
 /// ```
-fn domain(input: &mut &str) -> Result<(Type, Option<Domain>)> {
+fn basic_variable_type(input: &mut &str) -> Result<(Type, Option<Domain>)> {
 	alt((
-		"int".map(|_| (Type::Int, None)),
-		"float".map(|_| (Type::Float, None)),
-		"bool".map(|_| (Type::Bool, None)),
+		basic_parameter_type.map(|ty| (ty, None)),
 		preceded((token("set"), token("of")), set(int))
 			.map(|values| (Type::IntSet, Some(Domain::Int(values)))),
 		set(int).map(|values| (Type::Int, Some(Domain::Int(values)))),
@@ -277,6 +283,103 @@ fn solve_objective(input: &mut &str) -> Result<SolveObjective> {
 			ann,
 		})
 		.parse_next(input)
+}
+
+/// Parses a predicate item.
+///
+/// ```bnf
+/// <predicate-item> ::= "predicate" <identifier> "(" [ <pred-param-type> : <identifier> "," ... ] ")" ";"
+/// ```
+fn predicate_item(input: &mut &str) -> Result<()> {
+	(
+		token("predicate"),
+		token(identifier),
+		delimited_list("(", predicate_parameter, ")"),
+		token(";"),
+	)
+		.map(|_| ())
+		.parse_next(input)
+}
+
+/// Parse a predicate parameter.
+///
+/// Has no named equivalent in the FlatZinc grammar.
+///
+/// ```bnf
+/// <pred-param-type> ":" <identifier>
+/// ```
+fn predicate_parameter(input: &mut &str) -> Result<()> {
+	separated_pair(
+		token(predicate_parameter_type),
+		token(":"),
+		token(identifier),
+	)
+	.map(|_| ())
+	.parse_next(input)
+}
+
+/// Parse a predicate parameter type.
+///
+/// ```bnf
+/// <pred-param-type> ::= <basic-pred-param-type>
+///                     | "array" "[" <pred-index-set> "]" "of" <basic-pred-param-type>
+///
+/// <basic-pred-param-type> ::= <basic-par-type>
+///                           | <basic-var-type>
+///                           | <int-literal> ".." <int-literal>
+///                           | <float-literal> ".." <float-literal>
+///                           | "{" <int-literal> "," ... "}"
+///                           | "set" "of" <int-literal> .. <int-literal>
+///                           | "set" "of" "{" [  <int-literal> "," ... ] "}"
+/// ```
+fn predicate_parameter_type(input: &mut &str) -> Result<()> {
+	fn basic_predicate_parameter_type(input: &mut &str) -> Result<()> {
+		alt((
+			basic_parameter_type.map(|_| ()),
+			preceded(token("var"), basic_variable_type).map(|_| ()),
+			set(int).map(|_| ()),
+			interval_set(float).map(|_| ()),
+			preceded((token("set"), token("of"), token("int")), set(int)).map(|_| ()),
+		))
+		.parse_next(input)
+	}
+
+	alt((
+		basic_predicate_parameter_type,
+		(
+			token("array"),
+			delimited(
+				token("["),
+				alt((
+					token("int").map(|_| ()),
+					token(interval_set(int)).map(|_| ()),
+				)),
+				token("]"),
+			),
+			token("of"),
+			basic_predicate_parameter_type,
+		)
+			.map(|_| ()),
+	))
+	.parse_next(input)
+}
+
+/// Parse a basic parameter type.
+///
+/// ```bnf
+/// <basic-par-type> ::= "bool"
+///                    | "int"
+///                    | "float"
+///                    | "set of int"
+/// ```
+fn basic_parameter_type(input: &mut &str) -> Result<Type> {
+	alt((
+		"bool".map(|_| Type::Bool),
+		"int".map(|_| Type::Int),
+		"float".map(|_| Type::Float),
+		(token("set"), token("of"), token("int")).map(|_| Type::IntSet),
+	))
+	.parse_next(input)
 }
 
 #[cfg(test)]
@@ -608,6 +711,15 @@ mod tests {
 				})],
 			},
 			"solve :: int_search([x, y, z], first_fail, indomain_split, complete) maximize x;",
+		);
+	}
+
+	#[test]
+	fn predicate_items_are_parsed_but_ignored() {
+		check_parser(
+			predicate_item,
+			(),
+			"predicate array_int_minimum(var int: m,array [int] of var int: x);",
 		);
 	}
 
