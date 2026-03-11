@@ -96,9 +96,8 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	let mut buffer = Vec::new();
 
 	let mut variables = BTreeMap::default();
-	let arrays = BTreeMap::default();
+	let mut arrays = BTreeMap::default();
 	let mut constraints = vec![];
-	let output = vec![];
 	let mut solve = None;
 
 	loop {
@@ -117,6 +116,9 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 			ModelItem::Variable((name, variable)) => {
 				let _ = variables.insert(name, variable);
 			}
+			ModelItem::VariableArray((name, array)) => {
+				let _ = arrays.insert(name, array);
+			}
 			ModelItem::Constraint(constraint) => {
 				constraints.push(constraint);
 			}
@@ -127,6 +129,8 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 			}
 		}
 	}
+
+	let output = vec![];
 
 	Ok(FlatZinc {
 		variables,
@@ -146,6 +150,8 @@ enum ModelItem {
 	Predicate,
 	/// A variable model item.
 	Variable((String, Variable)),
+	/// A variable model item.
+	VariableArray((String, Array)),
 	/// A constraint model item.
 	Constraint(Constraint),
 	/// A solve item.
@@ -157,6 +163,7 @@ fn model_item(input: &mut &str) -> Result<ModelItem> {
 	alt((
 		predicate_item.map(|_| ModelItem::Predicate),
 		variable.map(ModelItem::Variable),
+		variable_array.map(ModelItem::VariableArray),
 		constraint.map(ModelItem::Constraint),
 		solve_objective.map(ModelItem::SolveObjective),
 	))
@@ -175,6 +182,9 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 		token(";"),
 	)
 		.map(|(_, (ty, domain), _, name, ann, value, _)| {
+			let defined = is_defined(&ann);
+			let introduced = is_introduced(&ann);
+
 			(
 				name,
 				Variable {
@@ -182,8 +192,8 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 					domain,
 					value,
 					ann,
-					defined: false,
-					introduced: false,
+					defined,
+					introduced,
 				},
 			)
 		})
@@ -412,6 +422,19 @@ fn variable_array(input: &mut &str) -> Result<(String, Array)> {
 		.parse_next(input)
 }
 
+/// Determine whether the given list of annotations implies the variable is defined by some
+/// constraint.
+///
+/// Boils down to testing whether the `is_defined_var` annotation is present.
+#[allow(
+	clippy::ptr_arg,
+	reason = "used in places where the compiler cannot infer the type of `ann`"
+)]
+fn is_defined(ann: &Vec<Annotation>) -> bool {
+	ann.iter()
+		.any(|annotation| matches!(annotation, Annotation::Atom(name) if name == "is_defined_var"))
+}
+
 /// Determine whether the given list of annotations implies the object is introduced by the
 /// MiniZinc compiler.
 #[allow(
@@ -484,6 +507,58 @@ mod tests {
 				},
 			),
 			"var bool: x;",
+		);
+	}
+
+	#[test]
+	fn variable_introduced_and_or_defined() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: None,
+					value: None,
+					ann: vec![Annotation::Atom("var_is_introduced".to_owned())],
+					defined: false,
+					introduced: true,
+				},
+			),
+			"var int: x :: var_is_introduced;",
+		);
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int,
+					domain: None,
+					value: None,
+					ann: vec![Annotation::Atom("is_defined_var".to_owned())],
+					defined: true,
+					introduced: false,
+				},
+			),
+			"var int: x :: is_defined_var;",
+		);
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Bool,
+					domain: None,
+					value: None,
+					ann: vec![
+						Annotation::Atom("is_defined_var".to_owned()),
+						Annotation::Atom("var_is_introduced".to_owned()),
+					],
+					defined: true,
+					introduced: true,
+				},
+			),
+			"var bool: x :: is_defined_var :: var_is_introduced;",
 		);
 	}
 
