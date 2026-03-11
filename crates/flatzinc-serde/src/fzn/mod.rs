@@ -16,7 +16,8 @@ pub use error::*;
 use primitives::*;
 
 use crate::{
-	Argument, Constraint, Domain, FlatZinc, Literal, Method, SolveObjective, Type, Variable,
+	Annotation, Argument, Array, Constraint, Domain, FlatZinc, Literal, Method, SolveObjective,
+	Type, Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -382,6 +383,47 @@ fn basic_parameter_type(input: &mut &str) -> Result<Type> {
 	.parse_next(input)
 }
 
+/// Parse a variable array.
+fn variable_array(input: &mut &str) -> Result<(String, Array)> {
+	(
+		token("array"),
+		delimited(token("["), interval_set(int), token("]")),
+		token("of"),
+		preceded(token("var"), basic_variable_type),
+		token(":"),
+		token(identifier),
+		repeat(0.., annotation),
+		preceded(token("="), delimited_list("[", literal, "]")),
+		token(";"),
+	)
+		.map(|(_, _, _, _, _, id, ann, contents, _)| {
+			let introduced = is_introduced(&ann);
+
+			(
+				id,
+				Array {
+					contents,
+					ann,
+					defined: false,
+					introduced,
+				},
+			)
+		})
+		.parse_next(input)
+}
+
+/// Determine whether the given list of annotations implies the object is introduced by the
+/// MiniZinc compiler.
+#[allow(
+	clippy::ptr_arg,
+	reason = "used in places where the compiler cannot infer the type of `ann`"
+)]
+fn is_introduced(ann: &Vec<Annotation>) -> bool {
+	ann.iter().any(
+		|annotation| matches!(annotation, Annotation::Atom(name) if name == "var_is_introduced"),
+	)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::{fmt::Debug, fs::File, io::BufReader, path::PathBuf};
@@ -390,7 +432,7 @@ mod tests {
 	use winnow::{error::ParserError, Parser};
 
 	use crate::{
-		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Domain,
+		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Array, Domain,
 		Method, Type,
 	};
 
@@ -711,6 +753,27 @@ mod tests {
 				})],
 			},
 			"solve :: int_search([x, y, z], first_fail, indomain_split, complete) maximize x;",
+		);
+	}
+
+	#[test]
+	fn introduced_array_of_variables() {
+		check_parser(
+			variable_array,
+			(
+				"X_INTRODUCED_1_".to_owned(),
+				Array {
+					contents: vec![
+						Literal::Identifier("x".to_owned()),
+						Literal::Identifier("y".to_owned()),
+						Literal::Identifier("z".to_owned()),
+					],
+					ann: vec![Annotation::Atom("var_is_introduced".to_owned())],
+					defined: false,
+					introduced: true,
+				},
+			),
+			"array [1..3] of var int: X_INTRODUCED_1_ ::var_is_introduced  = [x,y,z];",
 		);
 	}
 
