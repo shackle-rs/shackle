@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, io::BufRead};
 
 use winnow::{
 	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair},
-	Parser, Result,
+	Parser, Result, Stateful,
 };
 
 use annotations::*;
@@ -100,6 +100,9 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	let mut constraints = vec![];
 	let mut solve = None;
 
+	let mut parameters = BTreeMap::default();
+	let mut parameter_arrays = BTreeMap::default();
+
 	loop {
 		buffer.clear();
 		let _ = source.read_until(b';', &mut buffer)?;
@@ -112,6 +115,12 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 		match model_item.parse(statement_str)? {
 			ModelItem::Predicate => {
 				// Ignored.
+			}
+			ModelItem::Parameter((name, literal)) => {
+				let _ = parameters.insert(name, literal);
+			}
+			ModelItem::ParameterArray((name, literals)) => {
+				let _ = parameter_arrays.insert(name, literals);
 			}
 			ModelItem::Variable((name, variable)) => {
 				let _ = variables.insert(name, variable);
@@ -142,12 +151,23 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	})
 }
 
+struct ParseState<'s> {
+	parameters: &'s mut BTreeMap<String, Literal>,
+	parameter_arrays: &'s mut BTreeMap<String, Vec<Literal>>,
+}
+
+type Stream<'source, 'state> = Stateful<&'source str, ParseState<'state>>;
+
 /// Any item in a flatzinc model.
 enum ModelItem {
 	/// A predicate item.
 	///
 	/// Since we ignore them, no data is attached.
 	Predicate,
+	/// A parameter item.
+	Parameter((String, Literal)),
+	/// A parameter array item.
+	ParameterArray((String, Vec<Literal>)),
 	/// A variable model item.
 	Variable((String, Variable)),
 	/// A variable model item.
@@ -420,6 +440,35 @@ fn variable_array(input: &mut &str) -> Result<(String, Array)> {
 			)
 		})
 		.parse_next(input)
+}
+
+fn parameter_item(input: &mut &str) -> Result<(String, Literal)> {
+	delimited(
+		(token("var"), basic_parameter_type, token(":")),
+		separated_pair(token(identifier), token("="), token(literal)),
+		token(";"),
+	)
+	.parse_next(input)
+}
+
+fn parameter_array_item(input: &mut &str) -> Result<(String, Vec<Literal>)> {
+	delimited(
+		(
+			token("array"),
+			delimited(token("["), interval_set(int), token("]")),
+			token("of"),
+			token("var"),
+			basic_parameter_type,
+			token(":"),
+		),
+		separated_pair(
+			token(identifier),
+			token("="),
+			delimited_list("[", literal, "]"),
+		),
+		token(";"),
+	)
+	.parse_next(input)
 }
 
 /// Determine whether the given list of annotations implies the variable is defined by some
@@ -858,6 +907,37 @@ mod tests {
 			predicate_item,
 			(),
 			"predicate array_int_minimum(var int: m,array [int] of var int: x);",
+		);
+	}
+
+	#[test]
+	fn some_parameter_items() {
+		check_parser(
+			parameter_item,
+			("some_param".to_owned(), Literal::Int(5)),
+			"var int: some_param = 5;",
+		);
+		check_parser(
+			parameter_item,
+			("some_param".to_owned(), Literal::Bool(true)),
+			"var bool: some_param = true;",
+		);
+		check_parser(
+			parameter_item,
+			("some_param".to_owned(), Literal::Float(35.3)),
+			"var float: some_param = 35.3;",
+		);
+	}
+
+	#[test]
+	fn some_parameter_array_items() {
+		check_parser(
+			parameter_array_item,
+			(
+				"some_param".to_owned(),
+				vec![Literal::Int(5), Literal::Int(3), Literal::Int(10)],
+			),
+			"array [1..3] of var int: some_param = [5, 3, 10];",
 		);
 	}
 
