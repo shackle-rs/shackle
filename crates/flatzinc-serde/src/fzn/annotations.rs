@@ -91,10 +91,8 @@ fn annotation_call(input: &mut Stream<'_, '_>) -> Result<AnnotationCall> {
 mod tests {
 	use rangelist::RangeList;
 
+	use super::{super::tests::check_parser, *};
 	use crate::Literal;
-
-	use super::super::tests::check_parser;
-	use super::*;
 
 	#[test]
 	fn atom_annotation() {

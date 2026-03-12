@@ -201,11 +201,8 @@ mod tests {
 
 	use winnow::Stateful;
 
+	use super::{super::tests::check_parser, *};
 	use crate::fzn::ParseState;
-
-	use super::*;
-
-	use super::super::tests::check_parser;
 
 	#[test]
 	fn int_literal() {

@@ -9,14 +9,13 @@ use std::{
 	io::BufRead,
 };
 
+use annotations::*;
+pub use error::*;
+use primitives::*;
 use winnow::{
 	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair},
 	Parser, Result, Stateful,
 };
-
-use annotations::*;
-pub use error::*;
-use primitives::*;
 
 use crate::{
 	Annotation, Argument, Array, Constraint, Domain, FlatZinc, Literal, Method, SolveObjective,
@@ -521,12 +520,11 @@ mod tests {
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
 
+	use super::*;
 	use crate::{
 		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Array, Domain,
 		Method, Type,
 	};
-
-	use super::*;
 
 	#[test]
 	fn variable_with_named_domain() {
