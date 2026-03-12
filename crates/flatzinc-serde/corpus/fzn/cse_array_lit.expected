@@ -1,4 +1,5 @@
 var 1..10: x ::output_var;
 var 1..10: y ::output_var;
+array[1..2] of int: X_INTRODUCED_0_ = [1, -1];
 constraint int_lin_le(X_INTRODUCED_0_, [x, y], -1);
 solve satisfy;

@@ -25,7 +25,7 @@ pub(super) fn literal(input: &mut Stream<'_, '_>) -> Result<Literal> {
 	// it will first attempt to parse a float and, if that fails, parse an integer. We can be more
 	// clever about that by peeking at the next character to determine what is being parsed.
 
-	alt((
+	let parsed_literal = alt((
 		set(int).map(Literal::IntSet),
 		set(float).map(Literal::FloatSet),
 		boolean.map(Literal::Bool),
@@ -33,7 +33,15 @@ pub(super) fn literal(input: &mut Stream<'_, '_>) -> Result<Literal> {
 		int.map(Literal::Int),
 		identifier.map(Literal::Identifier),
 	))
-	.parse_next(input)
+	.parse_next(input)?;
+
+	if let Literal::Identifier(name) = &parsed_literal {
+		if let Some(literal) = input.state.parameters.get(name).cloned() {
+			return Ok(literal);
+		}
+	}
+
+	Ok(parsed_literal)
 }
 
 /// Parses a boolean literal.
@@ -189,6 +197,12 @@ pub(super) fn delimited_list<'source, 'state, T>(
 
 #[cfg(test)]
 mod tests {
+	use std::collections::HashMap;
+
+	use winnow::Stateful;
+
+	use crate::fzn::ParseState;
+
 	use super::*;
 
 	use super::super::tests::check_parser;
@@ -262,5 +276,20 @@ mod tests {
 			Literal::FloatSet(RangeList::from_iter([1.3..=1.3, 4e3..=4e3, -4.8..=-4.8])),
 			"{1.3, 4e3, -4.8}",
 		);
+	}
+
+	#[test]
+	fn identifiers_of_parameters_are_resolved() {
+		let mut parameters = HashMap::from_iter([("some_param".to_owned(), Literal::Int(5))]);
+
+		let stream = Stateful {
+			input: "some_param",
+			state: ParseState {
+				parameters: &mut parameters,
+			},
+		};
+
+		let parsed = literal.parse(stream);
+		assert_eq!(Ok(Literal::Int(5)), parsed);
 	}
 }

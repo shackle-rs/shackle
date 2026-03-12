@@ -4,7 +4,10 @@ mod annotations;
 mod error;
 mod primitives;
 
-use std::{collections::BTreeMap, io::BufRead};
+use std::{
+	collections::{BTreeMap, HashMap},
+	io::BufRead,
+};
 
 use winnow::{
 	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair},
@@ -100,8 +103,7 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	let mut constraints = vec![];
 	let mut solve = None;
 
-	let mut parameters = BTreeMap::default();
-	let mut parameter_arrays = BTreeMap::default();
+	let mut parameters = HashMap::default();
 
 	loop {
 		buffer.clear();
@@ -116,7 +118,6 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 			input: statement_str,
 			state: ParseState {
 				parameters: &mut parameters,
-				parameter_arrays: &mut parameter_arrays,
 			},
 		};
 
@@ -128,7 +129,15 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 				let _ = parameters.insert(name, literal);
 			}
 			ModelItem::ParameterArray((name, literals)) => {
-				let _ = parameter_arrays.insert(name, literals);
+				let _ = arrays.insert(
+					name,
+					Array {
+						contents: literals,
+						ann: vec![],
+						defined: false,
+						introduced: false,
+					},
+				);
 			}
 			ModelItem::Variable((name, variable)) => {
 				let _ = variables.insert(name, variable);
@@ -161,8 +170,7 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 
 #[derive(Debug, PartialEq)]
 struct ParseState<'s> {
-	parameters: &'s mut BTreeMap<String, Literal>,
-	parameter_arrays: &'s mut BTreeMap<String, Vec<Literal>>,
+	parameters: &'s mut HashMap<String, Literal>,
 }
 
 type Stream<'source, 'state> = Stateful<&'source str, ParseState<'state>>;
@@ -967,14 +975,12 @@ mod tests {
 		for<'a> <E as ParserError<Stream<'s, 'a>>>::Inner:
 			ParserError<Stream<'s, 'a>> + PartialEq + Debug,
 	{
-		let mut parameters = BTreeMap::default();
-		let mut parameter_arrays = BTreeMap::default();
+		let mut parameters = HashMap::default();
 
 		let stream = Stateful {
 			input,
 			state: ParseState {
 				parameters: &mut parameters,
-				parameter_arrays: &mut parameter_arrays,
 			},
 		};
 
