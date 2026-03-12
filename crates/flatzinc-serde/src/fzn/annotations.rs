@@ -6,7 +6,7 @@ use winnow::{
 };
 
 use crate::{
-	fzn::{identifier, literal, token},
+	fzn::{identifier, literal, token, Stream},
 	Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral,
 };
 
@@ -16,7 +16,7 @@ use crate::{
 /// <annotation> ::= <identifier>
 ///                | <identifier> "(" <ann-expr> "," ... ")"
 /// ```
-pub(super) fn annotation(input: &mut &str) -> Result<Annotation> {
+pub(super) fn annotation(input: &mut Stream<'_, '_>) -> Result<Annotation> {
 	preceded(
 		token("::"),
 		(
@@ -41,7 +41,7 @@ pub(super) fn annotation(input: &mut &str) -> Result<Annotation> {
 /// <ann-expr> := <basic-ann-expr>
 ///             | "[" [ <basic-ann-expr> "," ... ] "]"
 /// ```
-fn annotation_argument(input: &mut &str) -> Result<AnnotationArgument> {
+fn annotation_argument(input: &mut Stream<'_, '_>) -> Result<AnnotationArgument> {
 	alt((
 		annotation_literal.map(AnnotationArgument::Literal),
 		delimited(
@@ -62,7 +62,7 @@ fn annotation_argument(input: &mut &str) -> Result<AnnotationArgument> {
 ///                   | <string-literal>
 ///                   | <annotation>
 /// ```
-fn annotation_literal(input: &mut &str) -> Result<AnnotationLiteral> {
+fn annotation_literal(input: &mut Stream<'_, '_>) -> Result<AnnotationLiteral> {
 	alt((
 		annotation_call.map(AnnotationLiteral::Annotation),
 		literal.map(AnnotationLiteral::BaseLiteral),
@@ -74,7 +74,7 @@ fn annotation_literal(input: &mut &str) -> Result<AnnotationLiteral> {
 ///
 /// This does not have an analogue in the FZN grammar. It is only used to parse annotation
 /// arguments that are nested annotation calls.
-fn annotation_call(input: &mut &str) -> Result<AnnotationCall> {
+fn annotation_call(input: &mut Stream<'_, '_>) -> Result<AnnotationCall> {
 	(
 		identifier,
 		delimited(

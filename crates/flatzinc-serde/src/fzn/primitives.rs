@@ -10,7 +10,7 @@ use winnow::{
 	Parser, Result,
 };
 
-use crate::Literal;
+use crate::{fzn::Stream, Literal};
 
 /// Parses a basic literal expression.
 ///
@@ -20,7 +20,7 @@ use crate::Literal;
 ///                        | <float-literal>
 ///                        | <set-literal>
 /// ```
-pub(super) fn literal(input: &mut &str) -> Result<Literal> {
+pub(super) fn literal(input: &mut Stream<'_, '_>) -> Result<Literal> {
 	// This can be optimized if it turns out to be a bottleneck. At the moment, to parse a literal,
 	// it will first attempt to parse a float and, if that fails, parse an integer. We can be more
 	// clever about that by peeking at the next character to determine what is being parsed.
@@ -42,7 +42,7 @@ pub(super) fn literal(input: &mut &str) -> Result<Literal> {
 /// <bool-literal> ::= "false"
 ///                  | "true"
 /// ```
-pub(super) fn boolean(input: &mut &str) -> Result<bool> {
+pub(super) fn boolean(input: &mut Stream<'_, '_>) -> Result<bool> {
 	alt(("true".map(|_| true), "false".map(|_| false))).parse_next(input)
 }
 
@@ -53,8 +53,8 @@ pub(super) fn boolean(input: &mut &str) -> Result<bool> {
 ///                   | [-]?[0-9]+.[0-9]+[Ee][-+]?[0-9]+
 ///                   | [-]?[0-9]+[Ee][-+]?[0-9]+
 /// ```
-pub(super) fn float(input: &mut &str) -> Result<f64> {
-	trace("float", move |input: &mut &str| {
+pub(super) fn float(input: &mut Stream<'_, '_>) -> Result<f64> {
+	trace("float", move |input: &mut Stream<'_, '_>| {
 		(
 			opt('-'),
 			digit1,
@@ -85,8 +85,8 @@ pub(super) fn float(input: &mut &str) -> Result<f64> {
 ///                 | [-]?0x[0-9A-Fa-f]+
 ///                 | [-]?0o[0-7]+
 /// ```
-pub(super) fn int(input: &mut &str) -> Result<i64> {
-	trace("int", move |input: &mut &str| {
+pub(super) fn int(input: &mut Stream<'_, '_>) -> Result<i64> {
+	trace("int", move |input: &mut Stream<'_, '_>| {
 		let is_negative = opt('-').parse_next(input)?.is_some();
 
 		let unsigned_integer = alt((
@@ -110,7 +110,7 @@ pub(super) fn int(input: &mut &str) -> Result<i64> {
 /// ```bnf
 /// <var-par-identifier> ::= [A-Za-z_][A-Za-z0-9_]*
 /// ```
-pub(super) fn identifier(input: &mut &str) -> Result<String> {
+pub(super) fn identifier(input: &mut Stream<'_, '_>) -> Result<String> {
 	trace(
 		"identifier",
 		(
@@ -132,13 +132,13 @@ pub(super) fn identifier(input: &mut &str) -> Result<String> {
 /// <set-literal> ::= "{" [ <elem> "," ... ] "}"
 ///                 | <elem> ".." <elem>
 /// ```
-pub(super) fn set<'s, T>(
-	elem_parser: impl Parser<&'s str, T, ContextError> + Copy,
-) -> impl Parser<&'s str, RangeList<T>, ContextError>
+pub(super) fn set<'source, 'state, T>(
+	elem_parser: impl Parser<Stream<'source, 'state>, T, ContextError> + Copy,
+) -> impl Parser<Stream<'source, 'state>, RangeList<T>, ContextError>
 where
 	T: PartialOrd + Copy + 'static,
 {
-	move |input: &mut &'s str| -> Result<RangeList<T>> {
+	move |input: &mut Stream<'source, 'state>| -> Result<RangeList<T>> {
 		let sparse_set = delimited(
 			token('{'),
 			separated(0.., token(elem_parser), token(',')),
@@ -151,13 +151,13 @@ where
 }
 
 /// Higher-order parser for `<token> .. <token>`.
-pub(super) fn interval_set<'s, T>(
-	elem_parser: impl Parser<&'s str, T, ContextError> + Copy,
-) -> impl Parser<&'s str, RangeList<T>, ContextError>
+pub(super) fn interval_set<'source, 'state, T>(
+	elem_parser: impl Parser<Stream<'source, 'state>, T, ContextError> + Copy,
+) -> impl Parser<Stream<'source, 'state>, RangeList<T>, ContextError>
 where
 	T: PartialOrd + Copy + 'static,
 {
-	move |input: &mut &'s str| {
+	move |input: &mut Stream<'source, 'state>| {
 		separated_pair(token(elem_parser), token(".."), token(elem_parser))
 			.map(|(start, end)| RangeList::from_iter([start..=end]))
 			.parse_next(input)
@@ -167,19 +167,19 @@ where
 /// Parses a token from the input.
 ///
 /// Wraps the given parser with optional preceding and succeeding whitespace.
-pub(super) fn token<'s, T>(
-	parser: impl Parser<&'s str, T, ContextError>,
-) -> impl Parser<&'s str, T, ContextError> {
+pub(super) fn token<'source, 'state, T>(
+	parser: impl Parser<Stream<'source, 'state>, T, ContextError>,
+) -> impl Parser<Stream<'source, 'state>, T, ContextError> {
 	delimited(multispace0, parser, multispace0)
 }
 
 /// Parses a list of elements seperated by a comma, and delimited by `open_token` and
 /// `close_token`.
-pub(super) fn delimited_list<'s, T>(
+pub(super) fn delimited_list<'source, 'state, T>(
 	open_token: &'static str,
-	element_parser: impl Parser<&'s str, T, ContextError>,
+	element_parser: impl Parser<Stream<'source, 'state>, T, ContextError>,
 	close_token: &'static str,
-) -> impl Parser<&'s str, Vec<T>, ContextError> {
+) -> impl Parser<Stream<'source, 'state>, Vec<T>, ContextError> {
 	delimited(
 		token(open_token),
 		separated(0.., token(element_parser), token(",")),

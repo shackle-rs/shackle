@@ -112,7 +112,15 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 			break;
 		}
 
-		match model_item.parse(statement_str)? {
+		let stream = Stateful {
+			input: statement_str,
+			state: ParseState {
+				parameters: &mut parameters,
+				parameter_arrays: &mut parameter_arrays,
+			},
+		};
+
+		match model_item.parse(stream)? {
 			ModelItem::Predicate => {
 				// Ignored.
 			}
@@ -151,6 +159,7 @@ pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParse
 	})
 }
 
+#[derive(Debug, PartialEq)]
 struct ParseState<'s> {
 	parameters: &'s mut BTreeMap<String, Literal>,
 	parameter_arrays: &'s mut BTreeMap<String, Vec<Literal>>,
@@ -179,9 +188,11 @@ enum ModelItem {
 }
 
 /// Parse a model item.
-fn model_item(input: &mut &str) -> Result<ModelItem> {
+fn model_item(input: &mut Stream<'_, '_>) -> Result<ModelItem> {
 	alt((
 		predicate_item.map(|_| ModelItem::Predicate),
+		parameter_item.map(ModelItem::Parameter),
+		parameter_array_item.map(ModelItem::ParameterArray),
 		variable.map(ModelItem::Variable),
 		variable_array.map(ModelItem::VariableArray),
 		constraint.map(ModelItem::Constraint),
@@ -191,7 +202,7 @@ fn model_item(input: &mut &str) -> Result<ModelItem> {
 }
 
 /// Parse a variable model item.
-fn variable(input: &mut &str) -> Result<(String, Variable)> {
+fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
 	(
 		token("var"),
 		token(basic_variable_type),
@@ -233,7 +244,7 @@ fn variable(input: &mut &str) -> Result<(String, Variable)> {
 ///                    | "var" "set" "of" <int-literal> ".." <int-literal>
 ///                    | "var" "set" "of" "{" [ <int-literal> "," ... ] "}"
 /// ```
-fn basic_variable_type(input: &mut &str) -> Result<(Type, Option<Domain>)> {
+fn basic_variable_type(input: &mut Stream<'_, '_>) -> Result<(Type, Option<Domain>)> {
 	alt((
 		basic_parameter_type.map(|ty| (ty, None)),
 		preceded((token("set"), token("of")), set(int))
@@ -249,7 +260,7 @@ fn basic_variable_type(input: &mut &str) -> Result<(Type, Option<Domain>)> {
 /// ```bnf
 /// <constraint-item> ::= "constraint" <identifier> "(" [ <expr> "," ... ] ")" <annotations> ";"
 /// ```
-fn constraint(input: &mut &str) -> Result<Constraint> {
+fn constraint(input: &mut Stream<'_, '_>) -> Result<Constraint> {
 	(
 		token("constraint"),
 		token(identifier),
@@ -276,7 +287,7 @@ fn constraint(input: &mut &str) -> Result<Constraint> {
 /// <expr> ::= <basic-expr>
 ///          | <array-literal>
 /// ```
-fn argument(input: &mut &str) -> Result<Argument> {
+fn argument(input: &mut Stream<'_, '_>) -> Result<Argument> {
 	alt((
 		literal.map(Argument::Literal),
 		delimited(
@@ -296,7 +307,7 @@ fn argument(input: &mut &str) -> Result<Argument> {
 ///                | "solve" <annotations> "minimize" <basic-expr> ";"
 ///                | "solve" <annotations> "maximize" <basic-expr> ";"
 /// ```
-fn solve_objective(input: &mut &str) -> Result<SolveObjective> {
+fn solve_objective(input: &mut Stream<'_, '_>) -> Result<SolveObjective> {
 	(
 		token("solve"),
 		repeat(0.., annotation),
@@ -321,7 +332,7 @@ fn solve_objective(input: &mut &str) -> Result<SolveObjective> {
 /// ```bnf
 /// <predicate-item> ::= "predicate" <identifier> "(" [ <pred-param-type> : <identifier> "," ... ] ")" ";"
 /// ```
-fn predicate_item(input: &mut &str) -> Result<()> {
+fn predicate_item(input: &mut Stream<'_, '_>) -> Result<()> {
 	(
 		token("predicate"),
 		token(identifier),
@@ -339,7 +350,7 @@ fn predicate_item(input: &mut &str) -> Result<()> {
 /// ```bnf
 /// <pred-param-type> ":" <identifier>
 /// ```
-fn predicate_parameter(input: &mut &str) -> Result<()> {
+fn predicate_parameter(input: &mut Stream<'_, '_>) -> Result<()> {
 	separated_pair(
 		token(predicate_parameter_type),
 		token(":"),
@@ -363,8 +374,8 @@ fn predicate_parameter(input: &mut &str) -> Result<()> {
 ///                           | "set" "of" <int-literal> .. <int-literal>
 ///                           | "set" "of" "{" [  <int-literal> "," ... ] "}"
 /// ```
-fn predicate_parameter_type(input: &mut &str) -> Result<()> {
-	fn basic_predicate_parameter_type(input: &mut &str) -> Result<()> {
+fn predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
+	fn basic_predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
 		alt((
 			basic_parameter_type.map(|_| ()),
 			preceded(token("var"), basic_variable_type).map(|_| ()),
@@ -403,7 +414,7 @@ fn predicate_parameter_type(input: &mut &str) -> Result<()> {
 ///                    | "float"
 ///                    | "set of int"
 /// ```
-fn basic_parameter_type(input: &mut &str) -> Result<Type> {
+fn basic_parameter_type(input: &mut Stream<'_, '_>) -> Result<Type> {
 	alt((
 		"bool".map(|_| Type::Bool),
 		"int".map(|_| Type::Int),
@@ -414,7 +425,7 @@ fn basic_parameter_type(input: &mut &str) -> Result<Type> {
 }
 
 /// Parse a variable array.
-fn variable_array(input: &mut &str) -> Result<(String, Array)> {
+fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array)> {
 	(
 		token("array"),
 		delimited(token("["), interval_set(int), token("]")),
@@ -442,22 +453,21 @@ fn variable_array(input: &mut &str) -> Result<(String, Array)> {
 		.parse_next(input)
 }
 
-fn parameter_item(input: &mut &str) -> Result<(String, Literal)> {
+fn parameter_item(input: &mut Stream<'_, '_>) -> Result<(String, Literal)> {
 	delimited(
-		(token("var"), basic_parameter_type, token(":")),
+		(basic_parameter_type, token(":")),
 		separated_pair(token(identifier), token("="), token(literal)),
 		token(";"),
 	)
 	.parse_next(input)
 }
 
-fn parameter_array_item(input: &mut &str) -> Result<(String, Vec<Literal>)> {
+fn parameter_array_item(input: &mut Stream<'_, '_>) -> Result<(String, Vec<Literal>)> {
 	delimited(
 		(
 			token("array"),
 			delimited(token("["), interval_set(int), token("]")),
 			token("of"),
-			token("var"),
 			basic_parameter_type,
 			token(":"),
 		),
@@ -915,17 +925,17 @@ mod tests {
 		check_parser(
 			parameter_item,
 			("some_param".to_owned(), Literal::Int(5)),
-			"var int: some_param = 5;",
+			"int: some_param = 5;",
 		);
 		check_parser(
 			parameter_item,
 			("some_param".to_owned(), Literal::Bool(true)),
-			"var bool: some_param = true;",
+			"bool: some_param = true;",
 		);
 		check_parser(
 			parameter_item,
 			("some_param".to_owned(), Literal::Float(35.3)),
-			"var float: some_param = 35.3;",
+			"float: some_param = 35.3;",
 		);
 	}
 
@@ -937,20 +947,38 @@ mod tests {
 				"some_param".to_owned(),
 				vec![Literal::Int(5), Literal::Int(3), Literal::Int(10)],
 			),
-			"array [1..3] of var int: some_param = [5, 3, 10];",
+			"array [1..3] of int: some_param = [5, 3, 10];",
+		);
+		check_parser(
+			parameter_array_item,
+			(
+				"X_INTRODUCED_4_".to_owned(),
+				vec![Literal::Int(-1), Literal::Int(1)],
+			),
+			"array [1..2] of int: X_INTRODUCED_4_ = [-1,1];",
 		);
 	}
 
-	pub(super) fn check_parser<'s, O, E>(
-		mut parser: impl Parser<&'s str, O, E>,
-		expected: O,
-		input: &'s str,
-	) where
+	pub(super) fn check_parser<'s, P, O, E>(mut parser: P, expected: O, input: &'s str)
+	where
+		P: for<'a> Parser<Stream<'s, 'a>, O, E>,
 		O: Debug + PartialEq,
-		E: ParserError<&'s str> + Debug + PartialEq,
-		E::Inner: ParserError<&'s str> + PartialEq + Debug,
+		E: for<'a> ParserError<Stream<'s, 'a>> + Debug + PartialEq,
+		for<'a> <E as ParserError<Stream<'s, 'a>>>::Inner:
+			ParserError<Stream<'s, 'a>> + PartialEq + Debug,
 	{
-		let parsed = parser.parse(input);
+		let mut parameters = BTreeMap::default();
+		let mut parameter_arrays = BTreeMap::default();
+
+		let stream = Stateful {
+			input,
+			state: ParseState {
+				parameters: &mut parameters,
+				parameter_arrays: &mut parameter_arrays,
+			},
+		};
+
+		let parsed = parser.parse(stream);
 		assert_eq!(Ok(expected), parsed);
 	}
 

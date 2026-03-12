@@ -2,6 +2,10 @@
 
 use std::fmt::Display;
 
+use winnow::error::{ContextError, ParseError};
+
+use crate::fzn::Stream;
+
 /// Errors that can occur when parsing `.fzn` models.
 #[derive(Debug)]
 pub enum FznParseError {
@@ -29,8 +33,8 @@ impl From<std::str::Utf8Error> for FznParseError {
 	}
 }
 
-impl From<winnow::error::ParseError<&str, winnow::error::ContextError>> for FznParseError {
-	fn from(value: winnow::error::ParseError<&str, winnow::error::ContextError>) -> Self {
+impl From<ParseError<Stream<'_, '_>, ContextError>> for FznParseError {
+	fn from(value: ParseError<Stream<'_, '_>, ContextError>) -> Self {
 		FznParseError::SyntaxError(value.to_string())
 	}
 }
