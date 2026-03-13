@@ -1,0 +1,3 @@
+var 0.1..3.0: x ::output_var;
+constraint my_float_set_in(x, 2.0..2.0 union 2.5..3.0);
+solve minimize x;

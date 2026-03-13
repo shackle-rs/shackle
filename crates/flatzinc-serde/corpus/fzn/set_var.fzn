@@ -1,0 +1,4 @@
+var set of -3..3: x:: output_var;
+var 0..7: X_INTRODUCED_1_ ::var_is_introduced ;
+constraint set_card(x,X_INTRODUCED_1_):: ctx_pos;
+solve  maximize X_INTRODUCED_1_;

@@ -27,7 +27,7 @@
 //! ```
 //! # use flatzinc_serde::FlatZinc;
 //! # use std::{fs::File, io::BufReader, path::Path};
-//! # let path = Path::new("./corpus/documentation_example.fzn.json");
+//! # let path = Path::new("./corpus/json/documentation_example.fzn.json");
 //! // let path = Path::new("/lorem/ipsum/model.fzn.json");
 //! let rdr = BufReader::new(File::open(path).unwrap());
 //! let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
