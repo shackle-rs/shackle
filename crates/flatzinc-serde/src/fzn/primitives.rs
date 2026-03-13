@@ -137,8 +137,10 @@ pub(super) fn identifier(input: &mut Stream<'_, '_>) -> Result<String> {
 ///
 /// The grammar is modified from the documentation. Here we abstract the element type.
 /// ```bnf
-/// <set-literal> ::= "{" [ <elem> "," ... ] "}"
-///                 | <elem> ".." <elem>
+/// <set-literal> ::= <set-term> [ "union" <set-term> ] ...
+///
+/// <set-term> ::= "{" [ <elem> "," ... ] "}"
+///              | <elem> ".." <elem>
 /// ```
 pub(super) fn set<'source, 'state, T>(
 	elem_parser: impl Parser<Stream<'source, 'state>, T, ContextError> + Copy,
@@ -154,7 +156,11 @@ where
 		)
 		.map(|elems: Vec<T>| RangeList::from_iter(elems.into_iter().map(|elem| elem..=elem)));
 
-		alt((sparse_set, interval_set(elem_parser))).parse_next(input)
+		let set_term = alt((sparse_set, interval_set(elem_parser)));
+		let mut set_union = separated(1.., token(set_term), token("union"))
+			.map(|ranges: Vec<RangeList<T>>| RangeList::from_iter(ranges.into_iter().flatten()));
+
+		set_union.parse_next(input)
 	}
 }
 
@@ -263,6 +269,16 @@ mod tests {
 			Literal::IntSet(RangeList::from_iter([1..=1, 4..=4, 6..=6])),
 			"{1, 4, 6}",
 		);
+		check_parser(
+			literal,
+			Literal::IntSet(RangeList::from_iter([1..=2, 4..=6])),
+			"1..2 union 4..6",
+		);
+		check_parser(
+			literal,
+			Literal::IntSet(RangeList::from_iter([1..=1, 4..=5])),
+			"{1} union 4..5",
+		);
 	}
 
 	#[test]
@@ -272,6 +288,16 @@ mod tests {
 			literal,
 			Literal::FloatSet(RangeList::from_iter([1.3..=1.3, 4e3..=4e3, -4.8..=-4.8])),
 			"{1.3, 4e3, -4.8}",
+		);
+		check_parser(
+			literal,
+			Literal::FloatSet(RangeList::from_iter([2.0..=2.0, 2.5..=3.0])),
+			"2.0..2.0 union 2.5..3.0",
+		);
+		check_parser(
+			literal,
+			Literal::FloatSet(RangeList::from_iter([1.0..=1.0, 2.5..=3.0])),
+			"{1.0} union 2.5..3.0",
 		);
 	}
 

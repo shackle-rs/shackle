@@ -378,17 +378,20 @@ fn predicate_parameter(input: &mut Stream<'_, '_>) -> Result<()> {
 ///                           | <int-literal> ".." <int-literal>
 ///                           | <float-literal> ".." <float-literal>
 ///                           | "{" <int-literal> "," ... "}"
-///                           | "set" "of" <int-literal> .. <int-literal>
-///                           | "set" "of" "{" [  <int-literal> "," ... ] "}"
+///                           | "set" "of" "float"
+///                           | "set" "of" <set-float-literal>
+///                           | "set" "of" <set-int-literal>
 /// ```
 fn predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
 	fn basic_predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
 		alt((
 			basic_parameter_type.map(|_| ()),
+			(token("set"), token("of"), token("float")).map(|_| ()),
 			preceded(token("var"), basic_variable_type).map(|_| ()),
 			set(int).map(|_| ()),
 			interval_set(float).map(|_| ()),
 			preceded((token("set"), token("of"), token("int")), set(int)).map(|_| ()),
+			preceded((token("set"), token("of"), token("float")), set(float)).map(|_| ()),
 		))
 		.parse_next(input)
 	}
@@ -923,6 +926,11 @@ mod tests {
 			predicate_item,
 			(),
 			"predicate array_int_minimum(var int: m,array [int] of var int: x);",
+		);
+		check_parser(
+			predicate_item,
+			(),
+			"predicate my_float_set_in(var float: x,set of float: y);",
 		);
 	}
 
