@@ -688,9 +688,9 @@ mod tests {
 			#[test]
 			fn $file() {
 				test_successful_serialization(
-					std::path::Path::new(&format!("./corpus/{}.fzn.json", stringify!($file))),
+					std::path::Path::new(&format!("./corpus/json/{}.fzn.json", stringify!($file))),
 					expect_test::expect_file![&format!(
-						"../corpus/{}.debug.txt",
+						"../corpus/json/{}.debug.txt",
 						stringify!($file)
 					)],
 				)
@@ -702,22 +702,23 @@ mod tests {
 	#[test]
 	fn test_ident_no_copy() {
 		let mut rdr = BufReader::new(
-			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
 		);
 		let mut content = String::new();
 		let _ = rdr.read_to_string(&mut content).unwrap();
 
 		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
-		expect_test::expect_file!["../corpus/documentation_example.debug.txt"].assert_debug_eq(&fzn)
+		expect_test::expect_file!["../corpus/json/documentation_example.debug.txt"]
+			.assert_debug_eq(&fzn)
 	}
 
 	#[test]
 	fn test_ident_interned() {
 		let rdr = BufReader::new(
-			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
 		);
 		let fzn: FlatZinc<Ustr> = serde_json::from_reader(rdr).unwrap();
-		expect_test::expect_file!["../corpus/documentation_example.debug_ustr.txt"]
+		expect_test::expect_file!["../corpus/json/documentation_example.debug_ustr.txt"]
 			.assert_debug_eq(&fzn)
 	}
 
@@ -727,7 +728,7 @@ mod tests {
 			FlatZinc<String, HashMap<String, Variable<String>>, HashMap<String, Array<String>>>;
 
 		let mut rdr = BufReader::new(
-			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
 		);
 		let mut content = String::new();
 		let _ = rdr.read_to_string(&mut content).unwrap();
@@ -747,7 +748,7 @@ mod tests {
 			FlatZinc<String, Vec<(String, Variable<String>)>, Vec<(String, Array<String>)>>;
 
 		let mut rdr = BufReader::new(
-			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
 		);
 		let mut content = String::new();
 		let _ = rdr.read_to_string(&mut content).unwrap();
@@ -774,13 +775,13 @@ mod tests {
 	#[test]
 	fn test_print_flatzinc() {
 		let mut rdr = BufReader::new(
-			File::open(Path::new("./corpus/documentation_example.fzn.json")).unwrap(),
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
 		);
 		let mut content = String::new();
 		let _ = rdr.read_to_string(&mut content).unwrap();
 
 		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
-		expect_test::expect_file!["../corpus/documentation_example.fzn"]
+		expect_test::expect_file!["../corpus/fzn/documentation_example.fzn"]
 			.assert_eq(&fzn.to_string());
 
 		let ann: Annotation<&str> = Annotation::Call(AnnotationCall {
