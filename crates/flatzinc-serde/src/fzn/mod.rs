@@ -10,7 +10,7 @@ use std::{
 };
 
 use annotations::*;
-pub use error::*;
+pub use error::FznParseError;
 use primitives::*;
 use winnow::{
 	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair},
@@ -24,74 +24,9 @@ use crate::{
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
 ///
-/// # Example
-/// ```
-/// # use std::collections::BTreeMap;
-/// # use flatzinc_serde::Argument;
-/// # use flatzinc_serde::Constraint;
-/// # use flatzinc_serde::FlatZinc;
-/// # use flatzinc_serde::Literal;
-/// # use flatzinc_serde::Method;
-/// # use flatzinc_serde::RangeList;
-/// # use flatzinc_serde::SolveObjective;
-/// # use flatzinc_serde::Type;
-/// # use flatzinc_serde::Variable;
-///
-/// // The FlatZinc model.
-/// //
-/// // Typically this would be a file, but for this example we will use an inline string.
-/// let source = r#"
-/// var 1..5: x;
-/// var 1..5: y;
-///
-/// constraint int_le(x, y);
-///
-/// solve satisfy;
-/// "#;
-///
-/// // Parse the model to the in-memory representation.
-/// let parsed = flatzinc_serde::fzn::parse(source.as_bytes())
-///     .expect("valid fzn");
-///
-/// let expected: FlatZinc<String> =  FlatZinc {
-///     variables: BTreeMap::from([
-///        ("x".to_owned(), Variable {
-///            ty: Type::Int(Some(RangeList::from(1..=5))),
-///            value: None,
-///            ann: vec![],
-///            defined: false,
-///            introduced: false,
-///        }),
-///        ("y".to_owned(), Variable {
-///            ty: Type::Int(Some(RangeList::from(1..=5))),
-///            value: None,
-///            ann: vec![],
-///            defined: false,
-///            introduced: false,
-///        }),
-///    ]),
-///    arrays: BTreeMap::default(),
-///    constraints: vec![Constraint {
-///        id: "int_le".to_owned(),
-///        args: vec![
-///            Argument::Literal(Literal::Identifier("x".to_owned())),
-///            Argument::Literal(Literal::Identifier("y".to_owned())),
-///        ],
-///        ann: vec![],
-///        defines: None,
-///    }],
-///    output: vec![],
-///    solve: SolveObjective {
-///        method: Method::Satisfy,
-///        objective: None,
-///        ann: vec![],
-///    },
-///    version: "FZN".to_owned(),
-/// };
-///
-/// assert_eq!(expected, parsed);
-/// ```
-pub fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError> {
+/// This is used by [`crate::FlatZinc::from_fzn`], which is the public entry
+/// point for `.fzn` parsing.
+pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError> {
 	let mut buffer = Vec::new();
 
 	let mut variables = BTreeMap::default();

@@ -5,10 +5,9 @@
 //! crate implements the FlatZinc serialization format as described in the
 //! [Interfacing Solvers to
 //! FlatZinc](https://www.minizinc.org/doc-latest/en/fzn-spec.html#specification-of-flatzinc-json)
-//! section of the MiniZinc reference manual. Although the
-//! [serde](https://serde.rs) specification in this crate could be used with a
-//! range of data formats, MiniZinc currently only outputs this formulation
-//! using the JSON data format. We suggest using
+//! section of the MiniZinc reference manual. It supports both the JSON-based
+//! FlatZinc representation, via [serde](https://serde.rs), and the older
+//! textual `.fzn` format. For the JSON format, we suggest using
 //! [`serde_json`](https://crates.io/crates/serde_json) with the specification
 //! in this crate to parse the FlatZinc JSON files produced by the MiniZinc
 //! compiler.
@@ -22,13 +21,17 @@
 //!
 //! # Getting Started
 //!
-//! Install `flatzinc-serde` and `serde_json` for your package:
+//! For the default JSON-based workflow, install `flatzinc-serde` and
+//! `serde_json` for your package:
 //!
 //! ```bash
 //! cargo add flatzinc-serde serde_json
 //! ```
 //!
-//! Once these dependencies have been installed to your crate, you could
+//! If you disable the default `serde` feature and only use the older textual
+//! `.fzn` support, `serde_json` is not required.
+//!
+//! Once these dependencies have been installed to your crate, you can
 //! deserialize a FlatZinc JSON file as follows:
 //!
 //! ```
@@ -43,8 +46,23 @@
 //! # }
 //! ```
 //!
-//! If, however, you want to serialize a FlatZinc format you could follow the
-//! following fragment:
+//! The older textual `.fzn` format is also supported when the `fzn` feature is
+//! enabled:
+//!
+//! ```
+//! # #[cfg(feature = "fzn")] {
+//! # use flatzinc_serde::FlatZinc;
+//! # use std::{fs::File, io::BufReader, path::Path};
+//! # let path = Path::new("./corpus/json/documentation_example.fzn.json");
+//! // let path = Path::new("/lorem/ipsum/model.fzn.json");
+//! let rdr = BufReader::new(File::open(path).unwrap());
+//! let fzn = FlatZinc::from_fzn(&source[..]).unwrap();
+//! // ... process FlatZinc ...
+//! # }
+//! ```
+//!
+//! To serialize a FlatZinc JSON value, you can use the usual `serde_json`
+//! APIs:
 //!
 //! ```
 //! # #[cfg(feature = "serde")] {
@@ -56,6 +74,15 @@
 //! ```
 //! Note that `serde_json::to_writer`, using a buffered file writer, would be
 //! preferred when writing larger FlatZinc files.
+//!
+//! To serialize a FlatZinc value to the older textual `.fzn` format, use its
+//! [`Display`] implementation:
+//!
+//! ```
+//! # use flatzinc_serde::FlatZinc;
+//! let fzn = FlatZinc::<String>::default();
+//! let fzn_text = fzn.to_string();
+//! ```
 //!
 //! # Register your solver with MiniZinc
 //!
@@ -91,7 +118,7 @@
 #![warn(variant_size_differences)]
 
 #[cfg(feature = "fzn")]
-pub mod fzn;
+mod fzn;
 #[cfg(feature = "serde")]
 mod serde;
 
@@ -100,6 +127,9 @@ use std::{collections::BTreeMap, fmt::Display};
 #[cfg(feature = "serde")]
 use ::serde::{Deserialize, Serialize};
 pub use rangelist::RangeList;
+
+#[cfg(feature = "fzn")]
+pub use crate::fzn::FznParseError;
 
 /// Additional information provided in a standardized format for declarations,
 /// constraints, or solve objectives
@@ -410,6 +440,14 @@ where
 			solve: Default::default(),
 			version: "1.0".into(),
 		}
+	}
+}
+
+#[cfg(feature = "fzn")]
+impl FlatZinc {
+	/// Parse a `.fzn` source into a [`FlatZinc`] instance.
+	pub fn from_fzn(source: impl std::io::BufRead) -> Result<Self, FznParseError> {
+		fzn::parse(source)
 	}
 }
 
