@@ -18,8 +18,8 @@ use winnow::{
 };
 
 use crate::{
-	Annotation, Argument, Array, Constraint, Domain, FlatZinc, Literal, Method, SolveObjective,
-	Type, Variable,
+	Annotation, Argument, Array, Constraint, FlatZinc, Literal, Method, SolveObjective, Type,
+	Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -29,7 +29,6 @@ use crate::{
 /// # use std::collections::BTreeMap;
 /// # use flatzinc_serde::Argument;
 /// # use flatzinc_serde::Constraint;
-/// # use flatzinc_serde::Domain;
 /// # use flatzinc_serde::FlatZinc;
 /// # use flatzinc_serde::Literal;
 /// # use flatzinc_serde::Method;
@@ -57,16 +56,14 @@ use crate::{
 /// let expected: FlatZinc<String> =  FlatZinc {
 ///     variables: BTreeMap::from([
 ///        ("x".to_owned(), Variable {
-///            ty: Type::Int,
-///            domain: Some(Domain::Int(RangeList::from(1..=5))),
+///            ty: Type::Int(Some(RangeList::from(1..=5))),
 ///            value: None,
 ///            ann: vec![],
 ///            defined: false,
 ///            introduced: false,
 ///        }),
 ///        ("y".to_owned(), Variable {
-///            ty: Type::Int,
-///            domain: Some(Domain::Int(RangeList::from(1..=5))),
+///            ty: Type::Int(Some(RangeList::from(1..=5))),
 ///            value: None,
 ///            ann: vec![],
 ///            defined: false,
@@ -94,7 +91,7 @@ use crate::{
 ///
 /// assert_eq!(expected, parsed);
 /// ```
-pub fn parse(mut source: impl BufRead) -> std::result::Result<FlatZinc, FznParseError> {
+pub fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError> {
 	let mut buffer = Vec::new();
 
 	let mut variables = BTreeMap::default();
@@ -219,7 +216,7 @@ fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
 		opt(preceded(token("="), token(literal))),
 		token(";"),
 	)
-		.map(|(_, (ty, domain), _, name, ann, value, _)| {
+		.map(|(_, ty, _, name, ann, value, _)| {
 			let defined = is_defined(&ann);
 			let introduced = is_introduced(&ann);
 
@@ -227,7 +224,6 @@ fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
 				name,
 				Variable {
 					ty,
-					domain,
 					value,
 					ann,
 					defined,
@@ -251,13 +247,12 @@ fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
 ///                    | "var" "set" "of" <int-literal> ".." <int-literal>
 ///                    | "var" "set" "of" "{" [ <int-literal> "," ... ] "}"
 /// ```
-fn basic_variable_type(input: &mut Stream<'_, '_>) -> Result<(Type, Option<Domain>)> {
+fn basic_variable_type(input: &mut Stream<'_, '_>) -> Result<Type> {
 	alt((
-		basic_parameter_type.map(|ty| (ty, None)),
-		preceded((token("set"), token("of")), set(int))
-			.map(|values| (Type::IntSet, Some(Domain::Int(values)))),
-		set(int).map(|values| (Type::Int, Some(Domain::Int(values)))),
-		interval_set(float).map(|values| (Type::Float, Some(Domain::Float(values)))),
+		basic_parameter_type,
+		preceded((token("set"), token("of")), set(int)).map(|values| Type::IntSet(Some(values))),
+		set(int).map(|values| Type::Int(Some(values))),
+		interval_set(float).map(|values| Type::Float(Some(values))),
 	))
 	.parse_next(input)
 }
@@ -427,9 +422,9 @@ fn predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
 fn basic_parameter_type(input: &mut Stream<'_, '_>) -> Result<Type> {
 	alt((
 		"bool".map(|_| Type::Bool),
-		"int".map(|_| Type::Int),
-		"float".map(|_| Type::Float),
-		(token("set"), token("of"), token("int")).map(|_| Type::IntSet),
+		"int".map(|_| Type::Int(None)),
+		"float".map(|_| Type::Float(None)),
+		(token("set"), token("of"), token("int")).map(|_| Type::IntSet(None)),
 	))
 	.parse_next(input)
 }
@@ -525,8 +520,8 @@ mod tests {
 
 	use super::*;
 	use crate::{
-		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Array, Domain,
-		Method, Type,
+		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Argument, Array, Method,
+		Type,
 	};
 
 	#[test]
@@ -536,8 +531,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: None,
+					ty: Type::Int(None),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -551,8 +545,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Float,
-					domain: None,
+					ty: Type::Float(None),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -567,7 +560,6 @@ mod tests {
 				"x".to_owned(),
 				Variable {
 					ty: Type::Bool,
-					domain: None,
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -585,8 +577,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: None,
+					ty: Type::Int(None),
 					value: None,
 					ann: vec![Annotation::Atom("var_is_introduced".to_owned())],
 					defined: false,
@@ -600,8 +591,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: None,
+					ty: Type::Int(None),
 					value: None,
 					ann: vec![Annotation::Atom("is_defined_var".to_owned())],
 					defined: true,
@@ -616,7 +606,6 @@ mod tests {
 				"x".to_owned(),
 				Variable {
 					ty: Type::Bool,
-					domain: None,
 					value: None,
 					ann: vec![
 						Annotation::Atom("is_defined_var".to_owned()),
@@ -637,8 +626,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: Some(Domain::Int(RangeList::from(1..=5))),
+					ty: Type::Int(Some(RangeList::from(1..=5))),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -652,8 +640,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: Some(Domain::Int(RangeList::from_iter([1..=1, 4..=4, 6..=6]))),
+					ty: Type::Int(Some(RangeList::from_iter([1..=1, 4..=4, 6..=6]))),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -671,8 +658,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Float,
-					domain: Some(Domain::Float(RangeList::from(1.0..=5.5))),
+					ty: Type::Float(Some(RangeList::from(1.0..=5.5))),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -690,8 +676,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::IntSet,
-					domain: Some(Domain::Int(RangeList::from(1..=5))),
+					ty: Type::IntSet(Some(RangeList::from(1..=5))),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -705,8 +690,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::IntSet,
-					domain: Some(Domain::Int(RangeList::from_iter([1..=1, 3..=3]))),
+					ty: Type::IntSet(Some(RangeList::from_iter([1..=1, 3..=3]))),
 					value: None,
 					ann: vec![],
 					defined: false,
@@ -724,8 +708,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: None,
+					ty: Type::Int(None),
 					value: Some(Literal::Int(5)),
 					ann: vec![],
 					defined: false,
@@ -743,8 +726,7 @@ mod tests {
 			(
 				"x".to_owned(),
 				Variable {
-					ty: Type::Int,
-					domain: None,
+					ty: Type::Int(None),
 					value: Some(Literal::Int(5)),
 					ann: vec![Annotation::Atom("mip".to_owned())],
 					defined: false,

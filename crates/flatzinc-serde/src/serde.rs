@@ -1,5 +1,5 @@
-//! Helper structures to encapsulate certain types in the FlatZinc JSON
-//! serialization
+//! Helper structures and functions to parse and output using `serde` certain
+//! types in the FlatZinc JSON serialization
 
 use std::{fmt, marker::PhantomData};
 
@@ -9,13 +9,49 @@ use serde::{
 	Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::RangeList;
+use crate::{RangeList, Type};
+
+/// Base variable type used for the `"type"` field in FlatZinc JSON.
+///
+/// This mirrors the JSON encoding, where the type name and optional domain are
+/// serialized as separate fields.
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename = "type")]
+pub(crate) enum BaseType {
+	/// Boolean decision variable type encoded as `"bool"`.
+	#[serde(rename = "bool")]
+	Bool,
+	/// Integer decision variable type encoded as `"int"`.
+	#[serde(rename = "int")]
+	Int,
+	/// Floating-point decision variable type encoded as `"float"`.
+	#[serde(rename = "float")]
+	Float,
+	/// Integer set decision variable type encoded as `"set of int"`.
+	#[serde(rename = "set of int")]
+	IntSet,
+}
+
+/// Domain payload used for the optional `"domain"` field in FlatZinc JSON.
+///
+/// This is kept separate from [`BaseType`] so [`crate::Variable`] can preserve
+/// the historical JSON shape while internally storing domains inside [`Type`].
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub(crate) enum VariableDomain {
+	/// Integer domain payload serialized as a JSON array of inclusive bounds.
+	#[serde(deserialize_with = "deserialize_set", serialize_with = "serialize_set")]
+	Int(RangeList<i64>),
+	/// Floating-point domain payload serialized as a JSON array of inclusive bounds.
+	#[serde(deserialize_with = "deserialize_set", serialize_with = "serialize_set")]
+	Float(RangeList<f64>),
+}
 
 /// Encapsulated String helper struct
 #[derive(Deserialize, Serialize)]
 #[serde(rename = "string")]
 struct StringLiteral {
-	/// content of the string literal
+	/// Content of the string literal.
 	string: String,
 }
 /// Deserialization function to resolve the encapsulation of string literals in
@@ -45,7 +81,7 @@ pub(crate) fn serialize_encapsulate_string<S: Serializer>(
 #[derive(Deserialize, Serialize)]
 #[serde(rename = "set")]
 struct SetLiteral<E: PartialOrd> {
-	/// RangeList used to represent the content of the set
+	/// Range list used to represent the content of the set.
 	set: Vec<(E, E)>,
 }
 /// Deserialization function to resolve the encapsulation of set literals in the

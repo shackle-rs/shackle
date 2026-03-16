@@ -1,9 +1,8 @@
 FlatZinc {
     variables: {
         "X_INTRODUCED_0_": Variable {
-            ty: IntSet,
-            domain: Some(
-                Int(
+            ty: IntSet(
+                Some(
                     RangeList::from(1..=3),
                 ),
             ),
@@ -13,9 +12,8 @@ FlatZinc {
             introduced: true,
         },
         "i": Variable {
-            ty: Int,
-            domain: Some(
-                Int(
+            ty: Int(
+                Some(
                     RangeList::from(1..=3),
                 ),
             ),

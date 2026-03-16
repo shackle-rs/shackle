@@ -81,18 +81,18 @@
 #![warn(variant_size_differences)]
 
 pub mod fzn;
+mod serde;
 
 use std::{collections::BTreeMap, fmt::Display};
 
+use ::serde::{de::Error as SerdeError, Deserialize, Deserializer, Serialize, Serializer};
 pub use rangelist::RangeList;
-use serde::{Deserialize, Serialize};
 
-use crate::encapsulate::{
+use crate::serde::{
 	deserialize_encapsulated_set, deserialize_encapsulated_string, deserialize_key_value_object,
-	deserialize_set, serialize_encapsulate_set, serialize_encapsulate_string,
-	serialize_key_value_object, serialize_set,
+	serialize_encapsulate_set, serialize_encapsulate_string, serialize_key_value_object, BaseType,
+	VariableDomain,
 };
-mod encapsulate;
 
 /// Helper function to help skip in serialization
 fn is_false(b: &bool) -> bool {
@@ -264,12 +264,7 @@ impl<Identifier: Ord> Array<Identifier> {
 		let ty = match self.contents.first().unwrap() {
 			Literal::Int(_) => "int",
 			Literal::Float(_) => "float",
-			Literal::Identifier(ident) => match fzn.variables[ident].ty {
-				Type::Bool => "bool",
-				Type::Int => "int",
-				Type::Float => "float",
-				Type::IntSet => "set of int",
-			},
+			Literal::Identifier(ident) => fzn.variables[ident].ty.base_name(),
 			Literal::Bool(_) => "bool",
 			Literal::IntSet(_) => "set of int",
 			Literal::FloatSet(_) => "set of float",
@@ -318,29 +313,6 @@ impl<Identifier: Display> Display for Constraint<Identifier> {
 			write!(f, " {a}")?
 		}
 		Ok(())
-	}
-}
-
-/// The possible values that a (decision) [`Variable`] can take
-///
-/// In the case of a integer or floating point variable, a solution for the FlatZinc instance must
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum Domain {
-	/// Integer (or set of integer) decision variable domain
-	#[serde(deserialize_with = "deserialize_set", serialize_with = "serialize_set")]
-	Int(RangeList<i64>),
-	/// Floating point decision variable domain
-	#[serde(deserialize_with = "deserialize_set", serialize_with = "serialize_set")]
-	Float(RangeList<f64>),
-}
-
-impl Display for Domain {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Domain::Int(is) => write!(f, "{is}"),
-			Domain::Float(fs) => write!(f, "{fs}"),
-		}
 	}
 }
 
@@ -413,12 +385,7 @@ impl<Identifier: Ord + Display> Display for FlatZinc<Identifier> {
 			self.output.iter().map(|ident| (ident, ())).collect();
 
 		for (ident, var) in &self.variables {
-			write!(f, "var ")?;
-			if let Some(dom) = &var.domain {
-				write!(f, "{dom}")?
-			} else {
-				write!(f, "{}", var.ty)?
-			}
+			write!(f, "var {}", var.ty)?;
 			write!(f, ": {ident}")?;
 			if output_map.contains_key(&ident) {
 				write!(f, " ::output_var")?;
@@ -592,64 +559,157 @@ impl<Identifier: Display> Display for SolveObjective<Identifier> {
 }
 
 /// Used to signal the type of (decision) [`Variable`]
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(rename = "type")]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Type {
 	/// Boolean decision variable
-	#[serde(rename = "bool")]
 	Bool,
 	/// Integer decision variable
-	#[serde(rename = "int")]
-	Int,
+	Int(Option<RangeList<i64>>),
 	/// Floating point decision variable
-	#[serde(rename = "float")]
-	Float,
+	Float(Option<RangeList<f64>>),
 	/// Integer set decision variable
-	#[serde(rename = "set of int")]
-	IntSet,
+	IntSet(Option<RangeList<i64>>),
 }
 
 impl Display for Type {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Type::Bool => write!(f, "bool"),
-			Type::Int => write!(f, "int"),
-			Type::Float => write!(f, "float"),
-			Type::IntSet => write!(f, "set of int"),
+			Type::Int(Some(domain)) => write!(f, "{domain}"),
+			Type::Int(None) => write!(f, "int"),
+			Type::Float(Some(domain)) => write!(f, "{domain}"),
+			Type::Float(None) => write!(f, "float"),
+			Type::IntSet(Some(domain)) => write!(f, "set of {domain}"),
+			Type::IntSet(None) => write!(f, "set of int"),
+		}
+	}
+}
+
+impl Type {
+	fn base_name(&self) -> &'static str {
+		match self {
+			Type::Bool => "bool",
+			Type::Int(_) => "int",
+			Type::Float(_) => "float",
+			Type::IntSet(_) => "set of int",
 		}
 	}
 }
 
 /// The definition of a decision variable
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(rename = "variable")]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Variable<Identifier = String> {
-	/// The type of the decision variable
-	#[serde(rename = "type")]
-	pub ty: Type,
-	/// The set of potential values from which the decision variable must take its
-	/// value in a solution
+	/// The type of the decision variable, and set of potential values  from which
+	/// the decision variable must take its value in a solution, i.e. its domain.
 	///
 	/// If domain has the value `None`, then all values of the decision variable's
 	/// `Type` are allowed in a solution.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub domain: Option<Domain>,
+	pub ty: Type,
 	/// The “right hand side” of the variable, i.e., its value or alias to another
 	/// variable
-	#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
 	pub value: Option<Literal<Identifier>>,
 	/// A list of annotations
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub ann: Vec<Annotation<Identifier>>,
 	/// This field is set to `true` when there is a constraint that has been marked as
 	/// defining this variable.
-	#[serde(default, skip_serializing_if = "is_false")]
 	pub defined: bool,
 	/// This field is set to `true` when the variable has been introduced by the
 	/// MiniZinc compiler, rather than being explicitly defined at the top-level
 	/// of the MiniZinc model.
-	#[serde(default, skip_serializing_if = "is_false")]
 	pub introduced: bool,
+}
+
+impl<Identifier: Serialize> Serialize for Variable<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(rename = "variable")]
+		struct VariableRepr<'a, Identifier> {
+			#[serde(rename = "type")]
+			ty: BaseType,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			domain: Option<VariableDomain>,
+			#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
+			value: Option<&'a Literal<Identifier>>,
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: &'a Vec<Annotation<Identifier>>,
+			#[serde(default, skip_serializing_if = "is_false")]
+			defined: bool,
+			#[serde(default, skip_serializing_if = "is_false")]
+			introduced: bool,
+		}
+
+		let (ty, domain) = match &self.ty {
+			Type::Bool => (BaseType::Bool, None),
+			Type::Int(domain) => (BaseType::Int, domain.clone().map(VariableDomain::Int)),
+			Type::Float(domain) => (BaseType::Float, domain.clone().map(VariableDomain::Float)),
+			Type::IntSet(domain) => (BaseType::IntSet, domain.clone().map(VariableDomain::Int)),
+		};
+
+		VariableRepr {
+			ty,
+			domain,
+			value: self.value.as_ref(),
+			ann: &self.ann,
+			defined: self.defined,
+			introduced: self.introduced,
+		}
+		.serialize(serializer)
+	}
+}
+
+impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for Variable<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(rename = "variable")]
+		#[serde(bound(deserialize = "Identifier: Deserialize<'de>"))]
+		struct VariableRepr<Identifier> {
+			#[serde(rename = "type")]
+			ty: BaseType,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			domain: Option<VariableDomain>,
+			#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
+			value: Option<Literal<Identifier>>,
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: Vec<Annotation<Identifier>>,
+			#[serde(default, skip_serializing_if = "is_false")]
+			defined: bool,
+			#[serde(default, skip_serializing_if = "is_false")]
+			introduced: bool,
+		}
+
+		let repr = VariableRepr::deserialize(deserializer)?;
+		let ty = match (repr.ty, repr.domain) {
+			(BaseType::Bool, None) => Type::Bool,
+			(BaseType::Bool, Some(_)) => {
+				return Err(SerdeError::custom("bool variables cannot have a domain"));
+			}
+			(BaseType::Int, None) => Type::Int(None),
+			(BaseType::Int, Some(VariableDomain::Int(domain))) => Type::Int(Some(domain)),
+			(BaseType::Int, Some(VariableDomain::Float(_))) => {
+				return Err(SerdeError::custom("int variables require an int domain"));
+			}
+			(BaseType::Float, None) => Type::Float(None),
+			(BaseType::Float, Some(VariableDomain::Float(domain))) => Type::Float(Some(domain)),
+			(BaseType::Float, Some(VariableDomain::Int(_))) => {
+				return Err(SerdeError::custom("float variables require a float domain"));
+			}
+			(BaseType::IntSet, None) => Type::IntSet(None),
+			(BaseType::IntSet, Some(VariableDomain::Int(domain))) => Type::IntSet(Some(domain)),
+			(BaseType::IntSet, Some(VariableDomain::Float(_))) => {
+				return Err(SerdeError::custom(
+					"set of int variables require an int domain",
+				));
+			}
+		};
+
+		Ok(Variable {
+			ty,
+			value: repr.value,
+			ann: repr.ann,
+			defined: repr.defined,
+			introduced: repr.introduced,
+		})
+	}
 }
 
 #[cfg(test)]
@@ -665,7 +725,7 @@ mod tests {
 	use ustr::Ustr;
 
 	use crate::{
-		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Array, Domain, FlatZinc,
+		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Array, FlatZinc,
 		Literal, Method, RangeList, SolveObjective, Type, Variable,
 	};
 
@@ -797,17 +857,16 @@ mod tests {
 		});
 		assert_eq!(ann.to_string(), "::bool_search(input_order, indomain_min)");
 
-		let dom = Domain::Float(RangeList::from(1.0..=4.0));
-		assert_eq!(dom.to_string(), "1.0..4.0");
-
 		let ty = Type::Bool;
 		assert_eq!(ty.to_string(), "bool");
-		let ty = Type::Int;
+		let ty = Type::Int(None);
 		assert_eq!(ty.to_string(), "int");
-		let ty = Type::Float;
+		let ty = Type::Float(None);
 		assert_eq!(ty.to_string(), "float");
-		let ty = Type::IntSet;
+		let ty = Type::IntSet(None);
 		assert_eq!(ty.to_string(), "set of int");
+		let ty = Type::Float(Some(RangeList::from(1.0..=4.0)));
+		assert_eq!(ty.to_string(), "1.0..4.0");
 
 		let lit = Literal::<&str>::Int(1);
 		assert_eq!(lit.to_string(), "1");
@@ -828,8 +887,7 @@ mod tests {
 			variables: BTreeMap::from([(
 				"x",
 				Variable {
-					ty: Type::IntSet,
-					domain: None,
+					ty: Type::IntSet(None),
 					ann: vec![Annotation::Atom("special")],
 					defined: false,
 					introduced: true,

@@ -1,9 +1,8 @@
 FlatZinc {
     variables: {
         "a": Variable {
-            ty: Int,
-            domain: Some(
-                Int(
+            ty: Int(
+                Some(
                     RangeList::from(1..=100),
                 ),
             ),
@@ -14,16 +13,14 @@ FlatZinc {
         },
         "c": Variable {
             ty: Bool,
-            domain: None,
             value: None,
             ann: [],
             defined: true,
             introduced: false,
         },
         "x": Variable {
-            ty: Float,
-            domain: Some(
-                Float(
+            ty: Float(
+                Some(
                     RangeList::from(1.0..=100.0),
                 ),
             ),
