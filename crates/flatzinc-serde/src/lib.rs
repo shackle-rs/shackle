@@ -53,8 +53,8 @@
 //! # #[cfg(feature = "fzn")] {
 //! # use flatzinc_serde::FlatZinc;
 //! # use std::{fs::File, io::BufReader, path::Path};
-//! # let path = Path::new("./corpus/json/documentation_example.fzn.json");
-//! // let path = Path::new("/lorem/ipsum/model.fzn.json");
+//! # let path = Path::new("./corpus/fzn/documentation_example.fzn");
+//! // let path = Path::new("/lorem/ipsum/model.fzn");
 //! let rdr = BufReader::new(File::open(path).unwrap());
 //! let fzn = FlatZinc::from_fzn(rdr).unwrap();
 //! // ... process FlatZinc ...
