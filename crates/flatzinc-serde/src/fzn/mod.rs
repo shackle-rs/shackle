@@ -18,8 +18,8 @@ use winnow::{
 };
 
 use crate::{
-	Annotation, Argument, Array, Constraint, FlatZinc, Literal, Method, SolveObjective, Type,
-	Variable,
+	Annotation, AnnotationArgument, AnnotationLiteral, Argument, Array, Constraint, FlatZinc,
+	Literal, Method, SolveObjective, Type, Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
@@ -214,11 +214,15 @@ fn constraint(input: &mut Stream<'_, '_>) -> Result<Constraint> {
 		repeat(0.., annotation),
 		token(";"),
 	)
-		.map(|(_, id, args, ann, _)| Constraint {
-			id,
-			args,
-			ann,
-			defines: None,
+		.map(|(_, id, args, mut ann, _)| {
+			let defines = normalize_constraint_annotations(&mut ann);
+
+			Constraint {
+				id,
+				args,
+				ann,
+				defines,
+			}
 		})
 		.parse_next(input)
 }
@@ -461,6 +465,34 @@ fn normalize_variable_annotations(ann: &mut Vec<Annotation>) -> AnnotationFlags 
 	});
 
 	flags
+}
+
+/// Normalize semantic constraint annotations and retain only free-form
+/// annotations in `ann`.
+fn normalize_constraint_annotations(ann: &mut Vec<Annotation>) -> Option<String> {
+	let mut defines = None;
+
+	ann.retain(|annotation| {
+		let Annotation::Call(call) = annotation else {
+			return true;
+		};
+
+		if call.id != "defines_var" {
+			return true;
+		}
+
+		let [AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(Literal::Identifier(
+			identifier,
+		)))] = &call.args[..]
+		else {
+			return true;
+		};
+
+		defines = Some(identifier.clone());
+		false
+	});
+
+	defines
 }
 
 #[cfg(test)]
@@ -735,6 +767,45 @@ mod tests {
 				ann: vec![Annotation::Atom("domain_consistent".to_owned())],
 			},
 			"constraint int_lt(x, y) :: domain_consistent;",
+		);
+	}
+
+	#[test]
+	fn constraint_defines_var_annotation_is_promoted() {
+		check_parser(
+			constraint,
+			Constraint {
+				id: "bool2int".into(),
+				args: vec![
+					Argument::Literal(Literal::Identifier("b".to_owned())),
+					Argument::Literal(Literal::Identifier("x".to_owned())),
+				],
+				defines: Some("x".to_owned()),
+				ann: vec![],
+			},
+			"constraint bool2int(b, x) :: defines_var(x);",
+		);
+	}
+
+	#[test]
+	fn constraint_keeps_non_semantic_annotations_after_promotion() {
+		check_parser(
+			constraint,
+			Constraint {
+				id: "int_lin_eq".into(),
+				args: vec![
+					Argument::Array(vec![Literal::Int(400), Literal::Int(450), Literal::Int(-1)]),
+					Argument::Array(vec![
+						Literal::Identifier("b".to_owned()),
+						Literal::Identifier("c".to_owned()),
+						Literal::Identifier("obj".to_owned()),
+					]),
+					Argument::Literal(Literal::Int(0)),
+				],
+				defines: Some("obj".to_owned()),
+				ann: vec![Annotation::Atom("ctx_pos".to_owned())],
+			},
+			"constraint int_lin_eq([400, 450, -1], [b, c, obj], 0) :: defines_var(obj) :: ctx_pos;",
 		);
 	}
 
