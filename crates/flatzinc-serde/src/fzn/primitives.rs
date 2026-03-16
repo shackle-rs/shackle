@@ -2,11 +2,11 @@
 
 use rangelist::RangeList;
 use winnow::{
-	ascii::{digit1, hex_digit1, multispace0, oct_digit1},
+	ascii::{digit1, hex_digit1, multispace1, oct_digit1},
 	combinator::{alt, delimited, opt, separated, separated_pair, trace},
 	error::ContextError,
 	stream::AsChar,
-	token::{one_of, take_while},
+	token::{one_of, take_till, take_until, take_while},
 	Parser, Result,
 };
 
@@ -180,11 +180,40 @@ where
 
 /// Parses a token from the input.
 ///
-/// Wraps the given parser with optional preceding and succeeding whitespace.
+/// Wraps the given parser with optional preceding and succeeding whitespace or
+/// comments.
 pub(super) fn token<'source, 'state, T>(
 	parser: impl Parser<Stream<'source, 'state>, T, ContextError>,
 ) -> impl Parser<Stream<'source, 'state>, T, ContextError> {
-	delimited(multispace0, parser, multispace0)
+	delimited(ignored, parser, ignored)
+}
+
+/// Parse insignificant whitespace and comments.
+fn ignored(input: &mut Stream<'_, '_>) -> Result<()> {
+	while alt((
+		multispace1.void(),
+		line_comment.void(),
+		block_comment.void(),
+	))
+	.parse_next(input)
+	.is_ok()
+	{}
+
+	Ok(())
+}
+
+/// Parse a `%` line comment.
+fn line_comment(input: &mut Stream<'_, '_>) -> Result<()> {
+	('%', take_till(0.., |c| c == '\n'), opt('\n'))
+		.void()
+		.parse_next(input)
+}
+
+/// Parse a `/* ... */` block comment.
+fn block_comment(input: &mut Stream<'_, '_>) -> Result<()> {
+	delimited("/*", take_until(0.., "*/"), "*/")
+		.void()
+		.parse_next(input)
 }
 
 /// Parses a list of elements seperated by a comma, and delimited by `open_token` and

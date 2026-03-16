@@ -1,0 +1,3 @@
+var 0..10: x ::output_var;
+constraint int_eq(x, x) ::domain_consistent;
+solve satisfy;

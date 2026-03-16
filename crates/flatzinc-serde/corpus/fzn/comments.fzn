@@ -1,0 +1,7 @@
+% Leading line comment before the model.
+var /* comment between tokens */ 0..10: x :: /* annotation comment */ output_var; % trailing comment
+/* Block comment between statements with semicolons ; ; ; */
+constraint /* comment before predicate */ int_eq(
+  x, /* comment between arguments ; */ x
+) :: /* comment before annotation */ domain_consistent;
+solve /* comment before method */ satisfy; % final line comment

@@ -38,22 +38,31 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 	let mut parameters = HashMap::default();
 
 	loop {
-		buffer.clear();
-		let _ = source.read_until(b';', &mut buffer)?;
-
-		let statement_str = std::str::from_utf8(&buffer)?.trim();
-		if statement_str.is_empty() {
+		read_statement(&mut source, &mut buffer)?;
+		if buffer.is_empty() {
 			break;
 		}
 
-		let stream = Stateful {
+		let statement_str = std::str::from_utf8(&buffer)?.trim();
+		if statement_str.is_empty() {
+			continue;
+		}
+
+		let mut stream = Stateful {
 			input: statement_str,
 			state: ParseState {
 				parameters: &mut parameters,
 			},
 		};
 
-		match model_item.parse(stream)? {
+		let Some(item) = token(opt(model_item))
+			.parse_next(&mut stream)
+			.map_err(|error| FznParseError::SyntaxError(error.to_string()))?
+		else {
+			continue;
+		};
+
+		match item {
 			ModelItem::Predicate => {
 				// Ignored.
 			}
@@ -103,6 +112,73 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 		solve: solve.ok_or(FznParseError::MissingSolveItem)?,
 		version: "1.0".to_owned(),
 	})
+}
+
+/// Read a single FlatZinc statement, stopping at a `;` that is outside of
+/// comments.
+fn read_statement(source: &mut impl BufRead, buffer: &mut Vec<u8>) -> Result<(), FznParseError> {
+	buffer.clear();
+
+	enum CommentState {
+		Normal,
+		Line,
+		Block,
+		BlockStar,
+	}
+	let mut state = CommentState::Normal;
+	let mut index = 0;
+
+	loop {
+		let read = source.read_until(b';', buffer)?;
+		if read == 0 {
+			return Ok(());
+		}
+
+		while index < buffer.len() {
+			let byte = buffer[index];
+
+			match state {
+				CommentState::Normal => match byte {
+					b'%' => {
+						state = CommentState::Line;
+						index += 1;
+					}
+					b'/' if index + 1 < buffer.len() && buffer[index + 1] == b'*' => {
+						state = CommentState::Block;
+						index += 2;
+					}
+					b';' => return Ok(()),
+					_ => index += 1,
+				},
+				CommentState::Line => {
+					if byte == b'\n' {
+						state = CommentState::Normal;
+					}
+					index += 1;
+				}
+				CommentState::Block => {
+					if byte == b'*' {
+						state = CommentState::BlockStar;
+					}
+					index += 1;
+				}
+				CommentState::BlockStar => {
+					state = if byte == b'/' {
+						CommentState::Normal
+					} else if byte == b'*' {
+						CommentState::BlockStar
+					} else {
+						CommentState::Block
+					};
+					index += 1;
+				}
+			}
+		}
+
+		if buffer.last() != Some(&b';') {
+			return Ok(());
+		}
+	}
 }
 
 #[derive(Debug, PartialEq)]
@@ -925,6 +1001,29 @@ mod tests {
 		let error = parse(Cursor::new("solve satisfy;\nsolve minimize x;"))
 			.expect_err("expected parse to reject multiple solve items");
 		assert!(matches!(error, FznParseError::MultipleSolveItems));
+	}
+
+	#[test]
+	fn parse_allows_percent_line_comments() {
+		let fzn = parse(Cursor::new(
+			"% model header\nvar int: x; % trailing declaration comment\n% before solve\nsolve satisfy;",
+		))
+		.expect("failed to parse model with line comments");
+
+		assert!(fzn.variables.contains_key("x"));
+		assert_eq!(fzn.solve.method, Method::Satisfy);
+	}
+
+	#[test]
+	fn parse_allows_block_comments() {
+		let fzn = parse(Cursor::new(
+			"/* leading block comment with ; inside */\nvar int: x;\nconstraint int_eq(x, x) /* inline block ; comment */;\nsolve satisfy;",
+		))
+		.expect("failed to parse model with block comments");
+
+		assert!(fzn.variables.contains_key("x"));
+		assert_eq!(fzn.constraints.len(), 1);
+		assert_eq!(fzn.solve.method, Method::Satisfy);
 	}
 
 	#[test]
