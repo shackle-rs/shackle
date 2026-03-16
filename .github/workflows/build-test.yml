@@ -80,4 +80,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run clippy
-        run: cargo clippy --tests -- -D warnings
+        run: cargo clippy --tests --all-features -- -D warnings
