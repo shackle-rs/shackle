@@ -9,7 +9,12 @@ use serde::{
 	Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::{RangeList, Type};
+use crate::{Annotation, Literal, RangeList, Type, Variable};
+
+/// Helper function used by serde field attributes to omit `false` flags.
+pub(crate) fn is_false(b: &bool) -> bool {
+	!(*b)
+}
 
 /// Base variable type used for the `"type"` field in FlatZinc JSON.
 ///
@@ -226,4 +231,326 @@ where
 		ser_map.serialize_entry(key, value)?;
 	}
 	ser_map.end()
+}
+
+impl<Identifier: Serialize> Serialize for Variable<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(rename = "variable")]
+		struct VariableRepr<'a, Identifier> {
+			/// Base type stored in the JSON `"type"` field.
+			#[serde(rename = "type")]
+			ty: BaseType,
+			/// Optional domain stored in the JSON `"domain"` field.
+			#[serde(skip_serializing_if = "Option::is_none")]
+			domain: Option<VariableDomain>,
+			/// Optional right-hand side stored in the JSON `"rhs"` field.
+			#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
+			value: Option<&'a Literal<Identifier>>,
+			/// Variable annotations stored in the JSON `"ann"` field.
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: &'a Vec<Annotation<Identifier>>,
+			/// Whether the variable is solver-defined.
+			#[serde(default, skip_serializing_if = "is_false")]
+			defined: bool,
+			/// Whether the variable was introduced during MiniZinc lowering.
+			#[serde(default, skip_serializing_if = "is_false")]
+			introduced: bool,
+		}
+
+		let (ty, domain) = match &self.ty {
+			Type::Bool => (BaseType::Bool, None),
+			Type::Int(domain) => (BaseType::Int, domain.clone().map(VariableDomain::Int)),
+			Type::Float(domain) => (BaseType::Float, domain.clone().map(VariableDomain::Float)),
+			Type::IntSet(domain) => (BaseType::IntSet, domain.clone().map(VariableDomain::Int)),
+		};
+
+		VariableRepr {
+			ty,
+			domain,
+			value: self.value.as_ref(),
+			ann: &self.ann,
+			defined: self.defined,
+			introduced: self.introduced,
+		}
+		.serialize(serializer)
+	}
+}
+
+impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for Variable<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(rename = "variable")]
+		#[serde(bound(deserialize = "Identifier: Deserialize<'de>"))]
+		struct VariableRepr<Identifier> {
+			/// Base type stored in the JSON `"type"` field.
+			#[serde(rename = "type")]
+			ty: BaseType,
+			/// Optional domain stored in the JSON `"domain"` field.
+			#[serde(skip_serializing_if = "Option::is_none")]
+			domain: Option<VariableDomain>,
+			/// Optional right-hand side stored in the JSON `"rhs"` field.
+			#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
+			value: Option<Literal<Identifier>>,
+			/// Variable annotations stored in the JSON `"ann"` field.
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: Vec<Annotation<Identifier>>,
+			/// Whether the variable is solver-defined.
+			#[serde(default, skip_serializing_if = "is_false")]
+			defined: bool,
+			/// Whether the variable was introduced during MiniZinc lowering.
+			#[serde(default, skip_serializing_if = "is_false")]
+			introduced: bool,
+		}
+
+		let repr = VariableRepr::deserialize(deserializer)?;
+		let ty = match (repr.ty, repr.domain) {
+			(BaseType::Bool, None) => Type::Bool,
+			(BaseType::Bool, Some(_)) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"bool variables cannot have a domain",
+				));
+			}
+			(BaseType::Int, None) => Type::Int(None),
+			(BaseType::Int, Some(VariableDomain::Int(domain))) => Type::Int(Some(domain)),
+			(BaseType::Int, Some(VariableDomain::Float(_))) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"int variables require an int domain",
+				));
+			}
+			(BaseType::Float, None) => Type::Float(None),
+			(BaseType::Float, Some(VariableDomain::Float(domain))) => Type::Float(Some(domain)),
+			(BaseType::Float, Some(VariableDomain::Int(_))) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"float variables require a float domain",
+				));
+			}
+			(BaseType::IntSet, None) => Type::IntSet(None),
+			(BaseType::IntSet, Some(VariableDomain::Int(domain))) => Type::IntSet(Some(domain)),
+			(BaseType::IntSet, Some(VariableDomain::Float(_))) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"set of int variables require an int domain",
+				));
+			}
+		};
+
+		Ok(Variable {
+			ty,
+			value: repr.value,
+			ann: repr.ann,
+			defined: repr.defined,
+			introduced: repr.introduced,
+		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::{
+		collections::{BTreeMap, HashMap},
+		fs::File,
+		io::{BufReader, Read},
+		path::Path,
+	};
+
+	use expect_test::ExpectFile;
+	use rangelist::RangeList;
+	use ustr::Ustr;
+
+	use crate::{
+		Annotation, AnnotationArgument, AnnotationCall, AnnotationLiteral, Array, FlatZinc,
+		Literal, Method, SolveObjective, Type, Variable,
+	};
+
+	macro_rules! test_file {
+		($file: ident) => {
+			#[test]
+			fn $file() {
+				test_successful_serialization(
+					std::path::Path::new(&format!("./corpus/json/{}.fzn.json", stringify!($file))),
+					expect_test::expect_file![&format!(
+						"../corpus/json/{}.debug.txt",
+						stringify!($file)
+					)],
+				)
+			}
+		};
+	}
+
+	test_file!(documentation_example);
+	test_file!(encapsulated_string);
+	test_file!(float_sets);
+	test_file!(set_literals);
+	test_file!(unit_test_example);
+
+	fn test_successful_serialization(file: &Path, exp: ExpectFile) {
+		let rdr = BufReader::new(File::open(file).unwrap());
+		let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
+		exp.assert_debug_eq(&fzn);
+		let fzn2: FlatZinc = serde_json::from_str(&serde_json::to_string(&fzn).unwrap()).unwrap();
+		assert_eq!(fzn, fzn2)
+	}
+
+	#[test]
+	fn test_ident_no_copy() {
+		let mut rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let mut content = String::new();
+		let _ = rdr.read_to_string(&mut content).unwrap();
+
+		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
+		expect_test::expect_file!["../corpus/json/documentation_example.debug.txt"]
+			.assert_debug_eq(&fzn)
+	}
+
+	#[test]
+	fn test_ident_interned() {
+		let rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let fzn: FlatZinc<Ustr> = serde_json::from_reader(rdr).unwrap();
+		expect_test::expect_file!["../corpus/json/documentation_example.debug_ustr.txt"]
+			.assert_debug_eq(&fzn)
+	}
+
+	#[test]
+	fn test_hashmap_backed_maps_deserialize() {
+		type HashMapFlatZinc =
+			FlatZinc<String, HashMap<String, Variable<String>>, HashMap<String, Array<String>>>;
+
+		let mut rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let mut content = String::new();
+		let _ = rdr.read_to_string(&mut content).unwrap();
+
+		let fzn: HashMapFlatZinc = serde_json::from_str(&content).unwrap();
+
+		let fzn2: HashMapFlatZinc = {
+			let json = serde_json::to_string(&fzn).unwrap();
+			serde_json::from_str(&json).unwrap()
+		};
+		assert_eq!(fzn, fzn2);
+	}
+
+	#[test]
+	fn test_vec_backed_maps_deserialize_from_object_shape() {
+		type VecFlatZinc =
+			FlatZinc<String, Vec<(String, Variable<String>)>, Vec<(String, Array<String>)>>;
+
+		let mut rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let mut content = String::new();
+		let _ = rdr.read_to_string(&mut content).unwrap();
+
+		let fzn: VecFlatZinc = serde_json::from_str(&content).unwrap();
+		assert!(!fzn.variables.is_empty());
+		assert!(!fzn.arrays.is_empty());
+	}
+
+	#[test]
+	fn test_default_with_custom_map_types() {
+		let fzn = FlatZinc::<
+			String,
+			HashMap<String, Variable<String>>,
+			Vec<(String, Array<String>)>,
+		>::default();
+		assert!(fzn.variables.is_empty());
+		assert!(fzn.arrays.is_empty());
+		assert!(fzn.constraints.is_empty());
+		assert!(fzn.output.is_empty());
+		assert_eq!(fzn.version, "1.0");
+	}
+
+	#[test]
+	fn test_print_flatzinc() {
+		let mut rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let mut content = String::new();
+		let _ = rdr.read_to_string(&mut content).unwrap();
+
+		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
+		expect_test::expect_file!["../corpus/fzn/documentation_example.fzn"]
+			.assert_eq(&fzn.to_string());
+
+		let ann: Annotation<&str> = Annotation::Call(AnnotationCall {
+			id: "bool_search",
+			args: vec![
+				AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(Literal::Identifier(
+					"input_order",
+				))),
+				AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(Literal::Identifier(
+					"indomain_min",
+				))),
+			],
+		});
+		assert_eq!(ann.to_string(), "::bool_search(input_order, indomain_min)");
+
+		let ty = Type::Bool;
+		assert_eq!(ty.to_string(), "bool");
+		let ty = Type::Int(None);
+		assert_eq!(ty.to_string(), "int");
+		let ty = Type::Float(None);
+		assert_eq!(ty.to_string(), "float");
+		let ty = Type::IntSet(None);
+		assert_eq!(ty.to_string(), "set of int");
+		let ty = Type::Float(Some(RangeList::from(1.0..=4.0)));
+		assert_eq!(ty.to_string(), "1.0..4.0");
+
+		let lit = Literal::<&str>::Int(1);
+		assert_eq!(lit.to_string(), "1");
+		let lit = Literal::<&str>::Float(1.0);
+		assert_eq!(lit.to_string(), "1.0");
+		let lit = Literal::<&str>::Identifier("x");
+		assert_eq!(lit.to_string(), "x");
+		let lit = Literal::<&str>::Bool(true);
+		assert_eq!(lit.to_string(), "true");
+		let lit = Literal::<&str>::IntSet(RangeList::from(2..=3));
+		assert_eq!(lit.to_string(), "2..3");
+		let lit = Literal::<&str>::FloatSet(RangeList::from(2.0..=3.0));
+		assert_eq!(lit.to_string(), "2.0..3.0");
+		let lit = Literal::<&str>::String(String::from("hello"));
+		assert_eq!(lit.to_string(), "\"hello\"");
+
+		let fzn = FlatZinc {
+			variables: BTreeMap::from([(
+				"x",
+				Variable {
+					ty: Type::IntSet(None),
+					ann: vec![Annotation::Atom("special")],
+					defined: false,
+					introduced: true,
+					value: Some(Literal::IntSet(RangeList::from(1..=4))),
+				},
+			)]),
+			arrays: BTreeMap::from([(
+				"y",
+				Array {
+					ann: vec![Annotation::Atom("special")],
+					contents: vec![Literal::Int(1), Literal::Int(2), Literal::Int(3)],
+					introduced: true,
+					defined: true,
+				},
+			)]),
+			output: vec!["y"],
+			..Default::default()
+		};
+		assert_eq!(
+			fzn.to_string(),
+			"var set of int: x ::var_is_introduced ::special = 1..4;\narray[1..3] of int: y ::output_array([1..3]) ::is_defined_var ::var_is_introduced ::special = [1, 2, 3];\nsolve satisfy;\n"
+		);
+
+		let sat = SolveObjective {
+			method: Method::Minimize,
+			ann: vec![ann],
+			objective: Some(Literal::Identifier("x")),
+		};
+		assert_eq!(
+			sat.to_string(),
+			"solve ::bool_search(input_order, indomain_min) minimize x"
+		);
+	}
 }
