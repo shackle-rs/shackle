@@ -32,6 +32,7 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 	let mut variables = BTreeMap::default();
 	let mut arrays = BTreeMap::default();
 	let mut constraints = vec![];
+	let mut output = vec![];
 	let mut solve = None;
 
 	let mut parameters = HashMap::default();
@@ -70,10 +71,16 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 					},
 				);
 			}
-			ModelItem::Variable((name, variable)) => {
+			ModelItem::Variable((name, variable, is_output)) => {
+				if is_output {
+					output.push(name.clone());
+				}
 				let _ = variables.insert(name, variable);
 			}
-			ModelItem::VariableArray((name, array)) => {
+			ModelItem::VariableArray((name, array, is_output)) => {
+				if is_output {
+					output.push(name.clone());
+				}
 				let _ = arrays.insert(name, array);
 			}
 			ModelItem::Constraint(constraint) => {
@@ -87,15 +94,13 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 		}
 	}
 
-	let output = vec![];
-
 	Ok(FlatZinc {
 		variables,
 		arrays,
 		constraints,
 		output,
 		solve: solve.ok_or(FznParseError::MissingSolveItem)?,
-		version: "FZN".to_owned(),
+		version: "1.0".to_owned(),
 	})
 }
 
@@ -117,9 +122,9 @@ enum ModelItem {
 	/// A parameter array item.
 	ParameterArray((String, Vec<Literal>)),
 	/// A variable model item.
-	Variable((String, Variable)),
+	Variable((String, Variable, bool)),
 	/// A variable model item.
-	VariableArray((String, Array)),
+	VariableArray((String, Array, bool)),
 	/// A constraint model item.
 	Constraint(Constraint),
 	/// A solve item.
@@ -141,7 +146,7 @@ fn model_item(input: &mut Stream<'_, '_>) -> Result<ModelItem> {
 }
 
 /// Parse a variable model item.
-fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
+fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable, bool)> {
 	(
 		token("var"),
 		token(basic_variable_type),
@@ -151,9 +156,8 @@ fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
 		opt(preceded(token("="), token(literal))),
 		token(";"),
 	)
-		.map(|(_, ty, _, name, ann, value, _)| {
-			let defined = is_defined(&ann);
-			let introduced = is_introduced(&ann);
+		.map(|(_, ty, _, name, mut ann, value, _)| {
+			let flags = normalize_variable_annotations(&mut ann);
 
 			(
 				name,
@@ -161,9 +165,10 @@ fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable)> {
 					ty,
 					value,
 					ann,
-					defined,
-					introduced,
+					defined: flags.defined,
+					introduced: flags.introduced,
 				},
+				flags.output,
 			)
 		})
 		.parse_next(input)
@@ -365,7 +370,7 @@ fn basic_parameter_type(input: &mut Stream<'_, '_>) -> Result<Type> {
 }
 
 /// Parse a variable array.
-fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array)> {
+fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array, bool)> {
 	(
 		token("array"),
 		delimited(token("["), interval_set(int), token("]")),
@@ -377,17 +382,18 @@ fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array)> {
 		preceded(token("="), delimited_list("[", literal, "]")),
 		token(";"),
 	)
-		.map(|(_, _, _, _, _, id, ann, contents, _)| {
-			let introduced = is_introduced(&ann);
+		.map(|(_, _, _, _, _, id, mut ann, contents, _)| {
+			let flags = normalize_variable_annotations(&mut ann);
 
 			(
 				id,
 				Array {
 					contents,
 					ann,
-					defined: false,
-					introduced,
+					defined: flags.defined,
+					introduced: flags.introduced,
 				},
+				flags.output,
 			)
 		})
 		.parse_next(input)
@@ -421,34 +427,50 @@ fn parameter_array_item(input: &mut Stream<'_, '_>) -> Result<(String, Vec<Liter
 	.parse_next(input)
 }
 
-/// Determine whether the given list of annotations implies the variable is defined by some
-/// constraint.
-///
-/// Boils down to testing whether the `is_defined_var` annotation is present.
-#[allow(
-	clippy::ptr_arg,
-	reason = "used in places where the compiler cannot infer the type of `ann`"
-)]
-fn is_defined(ann: &Vec<Annotation>) -> bool {
-	ann.iter()
-		.any(|annotation| matches!(annotation, Annotation::Atom(name) if name == "is_defined_var"))
+/// Semantic flags projected out of special FlatZinc annotations.
+#[derive(Default)]
+struct AnnotationFlags {
+	defined: bool,
+	introduced: bool,
+	output: bool,
 }
 
-/// Determine whether the given list of annotations implies the object is introduced by the
-/// MiniZinc compiler.
-#[allow(
-	clippy::ptr_arg,
-	reason = "used in places where the compiler cannot infer the type of `ann`"
-)]
-fn is_introduced(ann: &Vec<Annotation>) -> bool {
-	ann.iter().any(
-		|annotation| matches!(annotation, Annotation::Atom(name) if name == "var_is_introduced"),
-	)
+/// Normalize semantic annotations into typed flags and retain only free-form
+/// annotations in `ann`.
+fn normalize_variable_annotations(ann: &mut Vec<Annotation>) -> AnnotationFlags {
+	let mut flags = AnnotationFlags::default();
+
+	ann.retain(|annotation| match annotation {
+		Annotation::Atom(name) if name == "is_defined_var" => {
+			flags.defined = true;
+			false
+		}
+		Annotation::Atom(name) if name == "var_is_introduced" => {
+			flags.introduced = true;
+			false
+		}
+		Annotation::Atom(name) if name == "output_var" => {
+			flags.output = true;
+			false
+		}
+		Annotation::Call(call) if call.id == "output_array" => {
+			flags.output = true;
+			false
+		}
+		_ => true,
+	});
+
+	flags
 }
 
 #[cfg(test)]
 mod tests {
-	use std::{fmt::Debug, fs::File, io::BufReader, path::PathBuf};
+	use std::{
+		fmt::Debug,
+		fs::File,
+		io::{BufReader, Cursor},
+		path::PathBuf,
+	};
 
 	use rangelist::RangeList;
 	use winnow::{error::ParserError, Parser};
@@ -472,6 +494,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var int: x;",
 		);
@@ -486,6 +509,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var float: x;",
 		);
@@ -500,6 +524,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var bool: x;",
 		);
@@ -514,10 +539,11 @@ mod tests {
 				Variable {
 					ty: Type::Int(None),
 					value: None,
-					ann: vec![Annotation::Atom("var_is_introduced".to_owned())],
+					ann: vec![],
 					defined: false,
 					introduced: true,
 				},
+				false,
 			),
 			"var int: x :: var_is_introduced;",
 		);
@@ -528,10 +554,11 @@ mod tests {
 				Variable {
 					ty: Type::Int(None),
 					value: None,
-					ann: vec![Annotation::Atom("is_defined_var".to_owned())],
+					ann: vec![],
 					defined: true,
 					introduced: false,
 				},
+				false,
 			),
 			"var int: x :: is_defined_var;",
 		);
@@ -542,13 +569,11 @@ mod tests {
 				Variable {
 					ty: Type::Bool,
 					value: None,
-					ann: vec![
-						Annotation::Atom("is_defined_var".to_owned()),
-						Annotation::Atom("var_is_introduced".to_owned()),
-					],
+					ann: vec![],
 					defined: true,
 					introduced: true,
 				},
+				false,
 			),
 			"var bool: x :: is_defined_var :: var_is_introduced;",
 		);
@@ -567,6 +592,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var 1..5: x;",
 		);
@@ -581,6 +607,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var {1, 4, 6}: x;",
 		);
@@ -599,6 +626,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var 1.0..5.5: x;",
 		);
@@ -617,6 +645,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var set of 1..5: x;",
 		);
@@ -631,6 +660,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var set of {1, 3}: x;",
 		);
@@ -649,6 +679,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var int: x = 5;",
 		);
@@ -667,6 +698,7 @@ mod tests {
 					defined: false,
 					introduced: false,
 				},
+				false,
 			),
 			"var int: x :: mip = 5;",
 		);
@@ -828,13 +860,64 @@ mod tests {
 						Literal::Identifier("y".to_owned()),
 						Literal::Identifier("z".to_owned()),
 					],
-					ann: vec![Annotation::Atom("var_is_introduced".to_owned())],
+					ann: vec![],
 					defined: false,
 					introduced: true,
 				},
+				false,
 			),
 			"array [1..3] of var int: X_INTRODUCED_1_ ::var_is_introduced  = [x,y,z];",
 		);
+	}
+
+	#[test]
+	fn output_variable_annotation_is_promoted() {
+		check_parser(
+			variable,
+			(
+				"x".to_owned(),
+				Variable {
+					ty: Type::Int(None),
+					value: None,
+					ann: vec![],
+					defined: false,
+					introduced: true,
+				},
+				true,
+			),
+			"var int: x :: output_var :: var_is_introduced;",
+		);
+
+		let fzn = parse(Cursor::new("var int: x :: output_var;\nsolve satisfy;"))
+			.expect("failed to parse output variable model");
+		assert_eq!(fzn.output, vec!["x".to_owned()]);
+	}
+
+	#[test]
+	fn output_array_annotation_is_promoted() {
+		check_parser(
+			variable_array,
+			(
+				"xs".to_owned(),
+				Array {
+					contents: vec![
+						Literal::Identifier("x".to_owned()),
+						Literal::Identifier("y".to_owned()),
+					],
+					ann: vec![],
+					defined: false,
+					introduced: true,
+				},
+				true,
+			),
+			"array [1..2] of var int: xs :: output_array([1..2]) :: var_is_introduced = [x, y];",
+		);
+
+		let fzn = parse(Cursor::new(
+			"array [1..2] of var int: xs :: output_array([1..2]) = [x, y];\nsolve satisfy;",
+		))
+		.expect("failed to parse output array model");
+		assert_eq!(fzn.output, vec!["xs".to_owned()]);
 	}
 
 	#[test]

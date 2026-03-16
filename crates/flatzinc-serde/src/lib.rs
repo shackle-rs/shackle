@@ -56,7 +56,7 @@
 //! # let path = Path::new("./corpus/json/documentation_example.fzn.json");
 //! // let path = Path::new("/lorem/ipsum/model.fzn.json");
 //! let rdr = BufReader::new(File::open(path).unwrap());
-//! let fzn = FlatZinc::from_fzn(&source[..]).unwrap();
+//! let fzn = FlatZinc::from_fzn(rdr).unwrap();
 //! // ... process FlatZinc ...
 //! # }
 //! ```

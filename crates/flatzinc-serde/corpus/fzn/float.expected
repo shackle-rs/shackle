@@ -1,7 +1,7 @@
-var bool: X_INTRODUCED_2_ ::is_defined_var ::var_is_introduced ::var_is_introduced ::is_defined_var;
-var bool: X_INTRODUCED_3_ ::is_defined_var ::var_is_introduced ::var_is_introduced ::is_defined_var;
-var bool: X_INTRODUCED_4_ ::is_defined_var ::var_is_introduced ::var_is_introduced ::is_defined_var;
-var bool: X_INTRODUCED_6_ ::is_defined_var ::var_is_introduced ::var_is_introduced ::is_defined_var;
+var bool: X_INTRODUCED_2_ ::is_defined_var ::var_is_introduced;
+var bool: X_INTRODUCED_3_ ::is_defined_var ::var_is_introduced;
+var bool: X_INTRODUCED_4_ ::is_defined_var ::var_is_introduced;
+var bool: X_INTRODUCED_6_ ::is_defined_var ::var_is_introduced;
 var float: x ::output_var;
 constraint float_le(1.0, x);
 constraint bool_clause([X_INTRODUCED_4_, X_INTRODUCED_6_], []);
