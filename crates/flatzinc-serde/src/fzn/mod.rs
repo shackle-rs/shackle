@@ -51,24 +51,24 @@ where
 			break;
 		}
 
-		let statement_str = std::str::from_utf8(&buffer)?.trim();
-		if statement_str.is_empty() {
-			continue;
-		}
-
 		let mut stream = Stateful {
-			input: statement_str,
+			input: std::str::from_utf8(&buffer)?,
 			state: ParseState::<Identifier> {
 				parameters: &mut parameters,
 			},
 		};
 
-		let Some(item) = token(opt(model_item))
+		// Check whether the statement only contains whitespace and comments
+		token(())
 			.parse_next(&mut stream)
-			.map_err(|error| FznParseError::SyntaxError(error.to_string()))?
-		else {
+			.map_err(|error| FznParseError::SyntaxError(error.to_string()))?;
+		if stream.input.is_empty() {
 			continue;
-		};
+		}
+
+		let item = token(model_item)
+			.parse_next(&mut stream)
+			.map_err(|error| FznParseError::SyntaxError(error.to_string()))?;
 
 		match item {
 			ModelItem::Predicate => {
@@ -577,13 +577,16 @@ where
 #[cfg(test)]
 mod tests {
 	use std::{
+		collections::HashMap,
 		fmt::Debug,
 		fs::File,
 		io::{BufReader, Cursor},
 		path::PathBuf,
+		str::FromStr,
 	};
 
 	use rangelist::RangeList;
+	use ustr::Ustr;
 	use winnow::{error::ParserError, Parser};
 
 	use super::*;
@@ -1026,6 +1029,55 @@ mod tests {
 		assert!(fzn.variables.contains_key("x"));
 		assert_eq!(fzn.constraints.len(), 1);
 		assert_eq!(fzn.solve.method, Method::Satisfy);
+	}
+
+	#[test]
+	fn parse_supports_custom_identifier_types() {
+		let fzn = FlatZinc::<Ustr>::from_fzn(Cursor::new(
+			"var int: x :: output_var;\nconstraint int_eq(x, x);\nsolve satisfy;",
+		))
+		.expect("failed to parse model with Ustr identifiers");
+
+		assert!(fzn.variables.contains_key(&Ustr::from("x")));
+		assert_eq!(fzn.output, vec![Ustr::from("x")]);
+		assert_eq!(fzn.constraints[0].id, Ustr::from("int_eq"));
+	}
+
+	#[test]
+	fn parse_supports_custom_map_types() {
+		type HashMapFzn =
+			FlatZinc<String, HashMap<String, Variable<String>>, HashMap<String, Array<String>>>;
+
+		let fzn = HashMapFzn::from_fzn(Cursor::new(
+			"var int: x;\narray [1..2] of var int: xs = [x, x];\nsolve satisfy;",
+		))
+		.expect("failed to parse model into HashMap-backed maps");
+
+		assert!(fzn.variables.contains_key("x"));
+		assert!(fzn.arrays.contains_key("xs"));
+	}
+
+	#[test]
+	fn parse_reports_identifier_parse_errors() {
+		#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+		struct XIdentifier(String);
+
+		impl FromStr for XIdentifier {
+			type Err = &'static str;
+
+			fn from_str(s: &str) -> Result<Self, Self::Err> {
+				if s.starts_with('x') {
+					Ok(Self(s.to_owned()))
+				} else {
+					Err("identifier must start with x")
+				}
+			}
+		}
+
+		let error = FlatZinc::<XIdentifier>::from_fzn(Cursor::new("var int: y;\nsolve satisfy;"))
+			.expect_err("expected parse to reject unsupported identifiers");
+
+		assert!(matches!(error, FznParseError::SyntaxError(_)));
 	}
 
 	#[test]
