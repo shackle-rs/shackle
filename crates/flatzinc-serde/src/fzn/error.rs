@@ -15,6 +15,8 @@ pub enum FznParseError {
 	Utf8Error(std::str::Utf8Error),
 	/// Missing solve item in the model.
 	MissingSolveItem,
+	/// Multiple solve items were encountered in the model.
+	MultipleSolveItems,
 	/// An error in the syntax of the `fzn`.
 	SyntaxError(String),
 }
@@ -45,6 +47,7 @@ impl Display for FznParseError {
 			FznParseError::Io(error) => write!(f, "error reading from source: {error}"),
 			FznParseError::Utf8Error(error) => write!(f, "invalid utf8: {error}"),
 			FznParseError::MissingSolveItem => write!(f, "missing solve item"),
+			FznParseError::MultipleSolveItems => write!(f, "multiple solve items"),
 			FznParseError::SyntaxError(error) => write!(f, "syntax error: {error}"),
 		}
 	}

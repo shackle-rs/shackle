@@ -87,8 +87,9 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 				constraints.push(constraint);
 			}
 			ModelItem::SolveObjective(solve_objective) => {
-				// TODO: For now we assume there is only one per model. For completeness we should
-				// really throw an error if `solve` already has a value.
+				if solve.is_some() {
+					return Err(FznParseError::MultipleSolveItems);
+				}
 				solve = Some(solve_objective);
 			}
 		}
@@ -917,6 +918,13 @@ mod tests {
 			},
 			"solve :: int_search([x, y, z], first_fail, indomain_split, complete) maximize x;",
 		);
+	}
+
+	#[test]
+	fn parse_rejects_multiple_solve_items() {
+		let error = parse(Cursor::new("solve satisfy;\nsolve minimize x;"))
+			.expect_err("expected parse to reject multiple solve items");
+		assert!(matches!(error, FznParseError::MultipleSolveItems));
 	}
 
 	#[test]
