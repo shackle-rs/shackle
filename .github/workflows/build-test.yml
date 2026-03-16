@@ -67,7 +67,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run cargo test
-        run: cargo test
+        run: cargo test --all-features
   clippy:
     runs-on: ubuntu-latest
     steps:
