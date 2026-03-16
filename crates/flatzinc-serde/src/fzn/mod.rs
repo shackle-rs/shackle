@@ -5,36 +5,44 @@ mod error;
 mod primitives;
 
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::HashMap,
+	fmt::{Debug, Display},
 	io::BufRead,
+	str::FromStr,
 };
 
 use annotations::*;
 pub use error::FznParseError;
 use primitives::*;
 use winnow::{
-	combinator::{alt, delimited, opt, preceded, repeat, separated, separated_pair},
+	combinator::{alt, delimited, opt, preceded, separated, separated_pair},
 	Parser, Result, Stateful,
 };
 
 use crate::{
-	Annotation, AnnotationArgument, AnnotationLiteral, Argument, Array, Constraint, FlatZinc,
-	Literal, Method, SolveObjective, Type, Variable,
+	Argument, Array, Constraint, FlatZinc, Literal, Method, SolveObjective, Type, Variable,
 };
 
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
 ///
 /// This is used by [`crate::FlatZinc::from_fzn`], which is the public entry
 /// point for `.fzn` parsing.
-pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError> {
-	let mut buffer = Vec::new();
-
-	let mut variables = BTreeMap::default();
-	let mut arrays = BTreeMap::default();
-	let mut constraints = vec![];
-	let mut output = vec![];
+pub(crate) fn parse<Identifier, VarMap, ArrayMap>(
+	mut source: impl BufRead,
+) -> Result<FlatZinc<Identifier, VarMap, ArrayMap>, FznParseError>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+	VarMap: FromIterator<(Identifier, Variable<Identifier>)>,
+	ArrayMap: FromIterator<(Identifier, Array<Identifier>)>,
+{
+	let mut variables = Vec::new();
+	let mut arrays = Vec::new();
+	let mut constraints = Vec::new();
+	let mut output = Vec::new();
 	let mut solve = None;
 
+	let mut buffer = Vec::new();
 	let mut parameters = HashMap::default();
 
 	loop {
@@ -50,7 +58,7 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 
 		let mut stream = Stateful {
 			input: statement_str,
-			state: ParseState {
+			state: ParseState::<Identifier> {
 				parameters: &mut parameters,
 			},
 		};
@@ -70,7 +78,7 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 				let _ = parameters.insert(name, literal);
 			}
 			ModelItem::ParameterArray((name, literals)) => {
-				let _ = arrays.insert(
+				arrays.push((
 					name,
 					Array {
 						contents: literals,
@@ -78,19 +86,19 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 						defined: false,
 						introduced: false,
 					},
-				);
+				));
 			}
 			ModelItem::Variable((name, variable, is_output)) => {
 				if is_output {
 					output.push(name.clone());
 				}
-				let _ = variables.insert(name, variable);
+				variables.push((name, variable));
 			}
 			ModelItem::VariableArray((name, array, is_output)) => {
 				if is_output {
 					output.push(name.clone());
 				}
-				let _ = arrays.insert(name, array);
+				arrays.push((name, array));
 			}
 			ModelItem::Constraint(constraint) => {
 				constraints.push(constraint);
@@ -105,8 +113,8 @@ pub(crate) fn parse(mut source: impl BufRead) -> Result<FlatZinc, FznParseError>
 	}
 
 	Ok(FlatZinc {
-		variables,
-		arrays,
+		variables: variables.into_iter().collect(),
+		arrays: arrays.into_iter().collect(),
 		constraints,
 		output,
 		solve: solve.ok_or(FznParseError::MissingSolveItem)?,
@@ -182,34 +190,38 @@ fn read_statement(source: &mut impl BufRead, buffer: &mut Vec<u8>) -> Result<(),
 }
 
 #[derive(Debug, PartialEq)]
-struct ParseState<'s> {
-	parameters: &'s mut HashMap<String, Literal>,
+struct ParseState<'s, Identifier> {
+	parameters: &'s mut HashMap<String, Literal<Identifier>>,
 }
 
-type Stream<'source, 'state> = Stateful<&'source str, ParseState<'state>>;
+type Stream<'source, 'state, Identifier> = Stateful<&'source str, ParseState<'state, Identifier>>;
 
 /// Any item in a flatzinc model.
-enum ModelItem {
+enum ModelItem<Identifier> {
 	/// A predicate item.
 	///
 	/// Since we ignore them, no data is attached.
 	Predicate,
 	/// A parameter item.
-	Parameter((String, Literal)),
+	Parameter((String, Literal<Identifier>)),
 	/// A parameter array item.
-	ParameterArray((String, Vec<Literal>)),
+	ParameterArray((Identifier, Vec<Literal<Identifier>>)),
 	/// A variable model item.
-	Variable((String, Variable, bool)),
+	Variable((Identifier, Variable<Identifier>, bool)),
 	/// A variable model item.
-	VariableArray((String, Array, bool)),
+	VariableArray((Identifier, Array<Identifier>, bool)),
 	/// A constraint model item.
-	Constraint(Constraint),
+	Constraint(Constraint<Identifier>),
 	/// A solve item.
-	SolveObjective(SolveObjective),
+	SolveObjective(SolveObjective<Identifier>),
 }
 
 /// Parse a model item.
-fn model_item(input: &mut Stream<'_, '_>) -> Result<ModelItem> {
+fn model_item<Identifier>(input: &mut Stream<'_, '_, Identifier>) -> Result<ModelItem<Identifier>>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	alt((
 		predicate_item.map(|_| ModelItem::Predicate),
 		parameter_item.map(ModelItem::Parameter),
@@ -223,19 +235,23 @@ fn model_item(input: &mut Stream<'_, '_>) -> Result<ModelItem> {
 }
 
 /// Parse a variable model item.
-fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable, bool)> {
+fn variable<Identifier>(
+	input: &mut Stream<'_, '_, Identifier>,
+) -> Result<(Identifier, Variable<Identifier>, bool)>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	(
 		token("var"),
 		token(basic_variable_type),
 		token(":"),
 		token(identifier),
-		repeat(0.., annotation),
+		variable_annotations,
 		opt(preceded(token("="), token(literal))),
 		token(";"),
 	)
-		.map(|(_, ty, _, name, mut ann, value, _)| {
-			let flags = normalize_variable_annotations(&mut ann);
-
+		.map(|(_, ty, _, name, (flags, ann), value, _)| {
 			(
 				name,
 				Variable {
@@ -264,7 +280,10 @@ fn variable(input: &mut Stream<'_, '_>) -> Result<(String, Variable, bool)> {
 ///                    | "var" "set" "of" <int-literal> ".." <int-literal>
 ///                    | "var" "set" "of" "{" [ <int-literal> "," ... ] "}"
 /// ```
-fn basic_variable_type(input: &mut Stream<'_, '_>) -> Result<Type> {
+fn basic_variable_type<I>(input: &mut Stream<'_, '_, I>) -> Result<Type>
+where
+	I: Debug,
+{
 	alt((
 		basic_parameter_type,
 		preceded((token("set"), token("of")), set(int)).map(|values| Type::IntSet(Some(values))),
@@ -279,7 +298,11 @@ fn basic_variable_type(input: &mut Stream<'_, '_>) -> Result<Type> {
 /// ```bnf
 /// <constraint-item> ::= "constraint" <identifier> "(" [ <expr> "," ... ] ")" <annotations> ";"
 /// ```
-fn constraint(input: &mut Stream<'_, '_>) -> Result<Constraint> {
+fn constraint<Identifier>(input: &mut Stream<'_, '_, Identifier>) -> Result<Constraint<Identifier>>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	(
 		token("constraint"),
 		token(identifier),
@@ -288,18 +311,14 @@ fn constraint(input: &mut Stream<'_, '_>) -> Result<Constraint> {
 			separated(0.., token(argument), token(",")),
 			token(")"),
 		),
-		repeat(0.., annotation),
+		constraint_annotations,
 		token(";"),
 	)
-		.map(|(_, id, args, mut ann, _)| {
-			let defines = normalize_constraint_annotations(&mut ann);
-
-			Constraint {
-				id,
-				args,
-				ann,
-				defines,
-			}
+		.map(|(_, id, args, (defines, ann), _)| Constraint {
+			id,
+			args,
+			ann,
+			defines,
 		})
 		.parse_next(input)
 }
@@ -310,7 +329,11 @@ fn constraint(input: &mut Stream<'_, '_>) -> Result<Constraint> {
 /// <expr> ::= <basic-expr>
 ///          | <array-literal>
 /// ```
-fn argument(input: &mut Stream<'_, '_>) -> Result<Argument> {
+fn argument<Identifier>(input: &mut Stream<'_, '_, Identifier>) -> Result<Argument<Identifier>>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	alt((
 		literal.map(Argument::Literal),
 		delimited(
@@ -330,10 +353,16 @@ fn argument(input: &mut Stream<'_, '_>) -> Result<Argument> {
 ///                | "solve" <annotations> "minimize" <basic-expr> ";"
 ///                | "solve" <annotations> "maximize" <basic-expr> ";"
 /// ```
-fn solve_objective(input: &mut Stream<'_, '_>) -> Result<SolveObjective> {
+fn solve_objective<Identifier>(
+	input: &mut Stream<'_, '_, Identifier>,
+) -> Result<SolveObjective<Identifier>>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	(
 		token("solve"),
-		repeat(0.., annotation),
+		general_annotations,
 		alt((
 			token("satisfy").map(|_| Method::Satisfy),
 			token("minimize").map(|_| Method::Minimize),
@@ -355,11 +384,15 @@ fn solve_objective(input: &mut Stream<'_, '_>) -> Result<SolveObjective> {
 /// ```bnf
 /// <predicate-item> ::= "predicate" <identifier> "(" [ <pred-param-type> : <identifier> "," ... ] ")" ";"
 /// ```
-fn predicate_item(input: &mut Stream<'_, '_>) -> Result<()> {
+fn predicate_item<Identifier>(input: &mut Stream<'_, '_, Identifier>) -> Result<()>
+where
+	Identifier: Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	(
 		token("predicate"),
-		token(identifier),
-		delimited_list("(", predicate_parameter, ")"),
+		token(identifier::<Identifier>),
+		delimited_list("(", predicate_parameter::<Identifier>, ")"),
 		token(";"),
 	)
 		.map(|_| ())
@@ -373,11 +406,15 @@ fn predicate_item(input: &mut Stream<'_, '_>) -> Result<()> {
 /// ```bnf
 /// <pred-param-type> ":" <identifier>
 /// ```
-fn predicate_parameter(input: &mut Stream<'_, '_>) -> Result<()> {
+fn predicate_parameter<Identifier>(input: &mut Stream<'_, '_, Identifier>) -> Result<()>
+where
+	Identifier: Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	separated_pair(
 		token(predicate_parameter_type),
 		token(":"),
-		token(identifier),
+		token(identifier::<Identifier>),
 	)
 	.map(|_| ())
 	.parse_next(input)
@@ -398,8 +435,14 @@ fn predicate_parameter(input: &mut Stream<'_, '_>) -> Result<()> {
 ///                           | "set" "of" <set-float-literal>
 ///                           | "set" "of" <set-int-literal>
 /// ```
-fn predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
-	fn basic_predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
+fn predicate_parameter_type<I>(input: &mut Stream<'_, '_, I>) -> Result<()>
+where
+	I: Debug,
+{
+	fn basic_predicate_parameter_type<I>(input: &mut Stream<'_, '_, I>) -> Result<()>
+	where
+		I: Debug,
+	{
 		alt((
 			basic_parameter_type.map(|_| ()),
 			(token("set"), token("of"), token("float")).map(|_| ()),
@@ -440,7 +483,10 @@ fn predicate_parameter_type(input: &mut Stream<'_, '_>) -> Result<()> {
 ///                    | "float"
 ///                    | "set of int"
 /// ```
-fn basic_parameter_type(input: &mut Stream<'_, '_>) -> Result<Type> {
+fn basic_parameter_type<I>(input: &mut Stream<'_, '_, I>) -> Result<Type>
+where
+	I: Debug,
+{
 	alt((
 		"bool".map(|_| Type::Bool),
 		"int".map(|_| Type::Int(None)),
@@ -451,7 +497,13 @@ fn basic_parameter_type(input: &mut Stream<'_, '_>) -> Result<Type> {
 }
 
 /// Parse a variable array.
-fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array, bool)> {
+fn variable_array<Identifier>(
+	input: &mut Stream<'_, '_, Identifier>,
+) -> Result<(Identifier, Array<Identifier>, bool)>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	(
 		token("array"),
 		delimited(token("["), interval_set(int), token("]")),
@@ -459,13 +511,11 @@ fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array, bool)> {
 		preceded(token("var"), basic_variable_type),
 		token(":"),
 		token(identifier),
-		repeat(0.., annotation),
+		variable_annotations,
 		preceded(token("="), delimited_list("[", literal, "]")),
 		token(";"),
 	)
-		.map(|(_, _, _, _, _, id, mut ann, contents, _)| {
-			let flags = normalize_variable_annotations(&mut ann);
-
+		.map(|(_, _, _, _, _, id, (flags, ann), contents, _)| {
 			(
 				id,
 				Array {
@@ -480,16 +530,32 @@ fn variable_array(input: &mut Stream<'_, '_>) -> Result<(String, Array, bool)> {
 		.parse_next(input)
 }
 
-fn parameter_item(input: &mut Stream<'_, '_>) -> Result<(String, Literal)> {
+fn parameter_item<Identifier>(
+	input: &mut Stream<'_, '_, Identifier>,
+) -> Result<(String, Literal<Identifier>)>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	delimited(
 		(basic_parameter_type, token(":")),
-		separated_pair(token(identifier), token("="), token(literal)),
+		separated_pair(
+			token(identifier_raw.map(str::to_owned)),
+			token("="),
+			token(literal::<Identifier>),
+		),
 		token(";"),
 	)
 	.parse_next(input)
 }
 
-fn parameter_array_item(input: &mut Stream<'_, '_>) -> Result<(String, Vec<Literal>)> {
+fn parameter_array_item<Identifier>(
+	input: &mut Stream<'_, '_, Identifier>,
+) -> Result<(Identifier, Vec<Literal<Identifier>>)>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+{
 	delimited(
 		(
 			token("array"),
@@ -506,70 +572,6 @@ fn parameter_array_item(input: &mut Stream<'_, '_>) -> Result<(String, Vec<Liter
 		token(";"),
 	)
 	.parse_next(input)
-}
-
-/// Semantic flags projected out of special FlatZinc annotations.
-#[derive(Default)]
-struct AnnotationFlags {
-	defined: bool,
-	introduced: bool,
-	output: bool,
-}
-
-/// Normalize semantic annotations into typed flags and retain only free-form
-/// annotations in `ann`.
-fn normalize_variable_annotations(ann: &mut Vec<Annotation>) -> AnnotationFlags {
-	let mut flags = AnnotationFlags::default();
-
-	ann.retain(|annotation| match annotation {
-		Annotation::Atom(name) if name == "is_defined_var" => {
-			flags.defined = true;
-			false
-		}
-		Annotation::Atom(name) if name == "var_is_introduced" => {
-			flags.introduced = true;
-			false
-		}
-		Annotation::Atom(name) if name == "output_var" => {
-			flags.output = true;
-			false
-		}
-		Annotation::Call(call) if call.id == "output_array" => {
-			flags.output = true;
-			false
-		}
-		_ => true,
-	});
-
-	flags
-}
-
-/// Normalize semantic constraint annotations and retain only free-form
-/// annotations in `ann`.
-fn normalize_constraint_annotations(ann: &mut Vec<Annotation>) -> Option<String> {
-	let mut defines = None;
-
-	ann.retain(|annotation| {
-		let Annotation::Call(call) = annotation else {
-			return true;
-		};
-
-		if call.id != "defines_var" {
-			return true;
-		}
-
-		let [AnnotationArgument::Literal(AnnotationLiteral::BaseLiteral(Literal::Identifier(
-			identifier,
-		)))] = &call.args[..]
-		else {
-			return true;
-		};
-
-		defines = Some(identifier.clone());
-		false
-	});
-
-	defines
 }
 
 #[cfg(test)]
@@ -998,14 +1000,14 @@ mod tests {
 
 	#[test]
 	fn parse_rejects_multiple_solve_items() {
-		let error = parse(Cursor::new("solve satisfy;\nsolve minimize x;"))
+		let error = FlatZinc::<String>::from_fzn(Cursor::new("solve satisfy;\nsolve minimize x;"))
 			.expect_err("expected parse to reject multiple solve items");
 		assert!(matches!(error, FznParseError::MultipleSolveItems));
 	}
 
 	#[test]
 	fn parse_allows_percent_line_comments() {
-		let fzn = parse(Cursor::new(
+		let fzn = FlatZinc::<String>::from_fzn(Cursor::new(
 			"% model header\nvar int: x; % trailing declaration comment\n% before solve\nsolve satisfy;",
 		))
 		.expect("failed to parse model with line comments");
@@ -1016,7 +1018,7 @@ mod tests {
 
 	#[test]
 	fn parse_allows_block_comments() {
-		let fzn = parse(Cursor::new(
+		let fzn = FlatZinc::<String>::from_fzn(Cursor::new(
 			"/* leading block comment with ; inside */\nvar int: x;\nconstraint int_eq(x, x) /* inline block ; comment */;\nsolve satisfy;",
 		))
 		.expect("failed to parse model with block comments");
@@ -1066,8 +1068,9 @@ mod tests {
 			"var int: x :: output_var :: var_is_introduced;",
 		);
 
-		let fzn = parse(Cursor::new("var int: x :: output_var;\nsolve satisfy;"))
-			.expect("failed to parse output variable model");
+		let fzn =
+			FlatZinc::<String>::from_fzn(Cursor::new("var int: x :: output_var;\nsolve satisfy;"))
+				.expect("failed to parse output variable model");
 		assert_eq!(fzn.output, vec!["x".to_owned()]);
 	}
 
@@ -1091,7 +1094,7 @@ mod tests {
 			"array [1..2] of var int: xs :: output_array([1..2]) :: var_is_introduced = [x, y];",
 		);
 
-		let fzn = parse(Cursor::new(
+		let fzn = FlatZinc::<String>::from_fzn(Cursor::new(
 			"array [1..2] of var int: xs :: output_array([1..2]) = [x, y];\nsolve satisfy;",
 		))
 		.expect("failed to parse output array model");
@@ -1101,12 +1104,12 @@ mod tests {
 	#[test]
 	fn predicate_items_are_parsed_but_ignored() {
 		check_parser(
-			predicate_item,
+			predicate_item::<String>,
 			(),
 			"predicate array_int_minimum(var int: m,array [int] of var int: x);",
 		);
 		check_parser(
-			predicate_item,
+			predicate_item::<String>,
 			(),
 			"predicate my_float_set_in(var float: x,set of float: y);",
 		);
@@ -1153,11 +1156,11 @@ mod tests {
 
 	pub(super) fn check_parser<'s, P, O, E>(mut parser: P, expected: O, input: &'s str)
 	where
-		P: for<'a> Parser<Stream<'s, 'a>, O, E>,
+		P: for<'a> Parser<Stream<'s, 'a, String>, O, E>,
 		O: Debug + PartialEq,
-		E: for<'a> ParserError<Stream<'s, 'a>> + Debug + PartialEq,
-		for<'a> <E as ParserError<Stream<'s, 'a>>>::Inner:
-			ParserError<Stream<'s, 'a>> + PartialEq + Debug,
+		E: for<'a> ParserError<Stream<'s, 'a, String>> + Debug + PartialEq,
+		for<'a> <E as ParserError<Stream<'s, 'a, String>>>::Inner:
+			ParserError<Stream<'s, 'a, String>> + PartialEq + Debug,
 	{
 		let mut parameters = HashMap::default();
 
@@ -1192,7 +1195,7 @@ mod tests {
 
 			let fzn_file = File::open(file.path()).expect("failed to open FZN file");
 			let fzn_reader = BufReader::new(fzn_file);
-			let actual = match parse(fzn_reader) {
+			let actual = match FlatZinc::<String>::from_fzn(fzn_reader) {
 				Ok(fzn) => fzn,
 				Err(error) => panic!(
 					"failed to parse file '{}': {}",

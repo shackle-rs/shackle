@@ -19,6 +19,13 @@ pub enum FznParseError {
 	MultipleSolveItems,
 	/// An error in the syntax of the `fzn`.
 	SyntaxError(String),
+	/// An error in the syntax of the `fzn`.
+	IdentifierError {
+		/// The string attempted to parse as an identifier.
+		ident: String,
+		/// The error that occurred.
+		err: String,
+	},
 }
 
 impl std::error::Error for FznParseError {}
@@ -35,8 +42,8 @@ impl From<std::str::Utf8Error> for FznParseError {
 	}
 }
 
-impl From<ParseError<Stream<'_, '_>, ContextError>> for FznParseError {
-	fn from(value: ParseError<Stream<'_, '_>, ContextError>) -> Self {
+impl<I> From<ParseError<Stream<'_, '_, I>, ContextError>> for FznParseError {
+	fn from(value: ParseError<Stream<'_, '_, I>, ContextError>) -> Self {
 		FznParseError::SyntaxError(value.to_string())
 	}
 }
@@ -49,6 +56,9 @@ impl Display for FznParseError {
 			FznParseError::MissingSolveItem => write!(f, "missing solve item"),
 			FznParseError::MultipleSolveItems => write!(f, "multiple solve items"),
 			FznParseError::SyntaxError(error) => write!(f, "syntax error: {error}"),
+			FznParseError::IdentifierError { ident, err } => {
+				write!(f, "error parsing identifier `{ident}`: {err}")
+			}
 		}
 	}
 }

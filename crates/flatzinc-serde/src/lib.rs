@@ -123,6 +123,8 @@ mod fzn;
 mod serde;
 
 use std::{collections::BTreeMap, fmt::Display};
+#[cfg(feature = "fzn")]
+use std::{fmt::Debug, str::FromStr};
 
 #[cfg(feature = "serde")]
 use ::serde::{Deserialize, Serialize};
@@ -444,7 +446,13 @@ where
 }
 
 #[cfg(feature = "fzn")]
-impl FlatZinc {
+impl<Identifier, VarMap, ArrayMap> FlatZinc<Identifier, VarMap, ArrayMap>
+where
+	Identifier: Clone + Debug + FromStr,
+	<Identifier as FromStr>::Err: Display,
+	VarMap: FromIterator<(Identifier, Variable<Identifier>)>,
+	ArrayMap: FromIterator<(Identifier, Array<Identifier>)>,
+{
 	/// Parse a `.fzn` source into a [`FlatZinc`] instance.
 	pub fn from_fzn(source: impl std::io::BufRead) -> Result<Self, FznParseError> {
 		fzn::parse(source)
