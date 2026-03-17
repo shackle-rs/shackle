@@ -23,6 +23,14 @@ use crate::{
 	Argument, Array, Constraint, FlatZinc, Literal, Method, SolveObjective, Type, Variable,
 };
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum ParsePhase {
+	Predicates,
+	Declarations,
+	Constraints,
+	Solve,
+}
+
 /// Parse the `.fzn` source to a [`FlatZinc`] instance.
 ///
 /// This is used by [`crate::FlatZinc::from_fzn`], which is the public entry
@@ -44,6 +52,7 @@ where
 
 	let mut buffer = Vec::new();
 	let mut parameters = HashMap::default();
+	let mut phase = ParsePhase::Predicates;
 
 	loop {
 		read_statement(&mut source, &mut buffer)?;
@@ -66,18 +75,60 @@ where
 			continue;
 		}
 
-		let item = token(model_item)
+		if stream.input.starts_with("predicate") {
+			if phase > ParsePhase::Predicates {
+				return Err(FznParseError::SyntaxError(
+					"predicate items must appear before declarations, constraints, and solve"
+						.into(),
+				));
+			}
+			token(predicate_item)
+				.parse_next(&mut stream)
+				.map_err(|error| FznParseError::SyntaxError(error.to_string()))?;
+			continue;
+		}
+
+		if stream.input.starts_with("constraint") {
+			if phase > ParsePhase::Constraints {
+				return Err(FznParseError::SyntaxError(
+					"constraint items must appear before the solve item".into(),
+				));
+			}
+			phase = ParsePhase::Constraints;
+			let constraint = token(constraint)
+				.parse_next(&mut stream)
+				.map_err(|error| FznParseError::SyntaxError(error.to_string()))?;
+			constraints.push(constraint);
+			continue;
+		}
+
+		if stream.input.starts_with("solve") {
+			if phase > ParsePhase::Solve || solve.is_some() {
+				return Err(FznParseError::MultipleSolveItems);
+			}
+			phase = ParsePhase::Solve;
+			let solve_objective = token(solve_objective)
+				.parse_next(&mut stream)
+				.map_err(|error| FznParseError::SyntaxError(error.to_string()))?;
+			solve = Some(solve_objective);
+			continue;
+		}
+
+		if phase > ParsePhase::Declarations {
+			return Err(FznParseError::SyntaxError(
+				"declarations must appear before constraints and the solve item".into(),
+			));
+		}
+		phase = ParsePhase::Declarations;
+
+		let declaration = token(declaration)
 			.parse_next(&mut stream)
 			.map_err(|error| FznParseError::SyntaxError(error.to_string()))?;
-
-		match item {
-			ModelItem::Predicate => {
-				// Ignored.
-			}
-			ModelItem::Parameter((name, literal)) => {
+		match declaration {
+			Declaration::Parameter((name, literal)) => {
 				let _ = parameters.insert(name, literal);
 			}
-			ModelItem::ParameterArray((name, literals)) => {
+			Declaration::ParameterArray((name, literals)) => {
 				arrays.push((
 					name,
 					Array {
@@ -88,26 +139,17 @@ where
 					},
 				));
 			}
-			ModelItem::Variable((name, variable, is_output)) => {
+			Declaration::Variable((name, variable, is_output)) => {
 				if is_output {
 					output.push(name.clone());
 				}
 				variables.push((name, variable));
 			}
-			ModelItem::VariableArray((name, array, is_output)) => {
+			Declaration::VariableArray((name, array, is_output)) => {
 				if is_output {
 					output.push(name.clone());
 				}
 				arrays.push((name, array));
-			}
-			ModelItem::Constraint(constraint) => {
-				constraints.push(constraint);
-			}
-			ModelItem::SolveObjective(solve_objective) => {
-				if solve.is_some() {
-					return Err(FznParseError::MultipleSolveItems);
-				}
-				solve = Some(solve_objective);
 			}
 		}
 	}
@@ -196,12 +238,8 @@ struct ParseState<'s, Identifier> {
 
 type Stream<'source, 'state, Identifier> = Stateful<&'source str, ParseState<'state, Identifier>>;
 
-/// Any item in a flatzinc model.
-enum ModelItem<Identifier> {
-	/// A predicate item.
-	///
-	/// Since we ignore them, no data is attached.
-	Predicate,
+/// A declaration item in a FlatZinc model.
+enum Declaration<Identifier> {
 	/// A parameter item.
 	Parameter((String, Literal<Identifier>)),
 	/// A parameter array item.
@@ -210,26 +248,21 @@ enum ModelItem<Identifier> {
 	Variable((Identifier, Variable<Identifier>, bool)),
 	/// A variable model item.
 	VariableArray((Identifier, Array<Identifier>, bool)),
-	/// A constraint model item.
-	Constraint(Constraint<Identifier>),
-	/// A solve item.
-	SolveObjective(SolveObjective<Identifier>),
 }
 
-/// Parse a model item.
-fn model_item<Identifier>(input: &mut Stream<'_, '_, Identifier>) -> Result<ModelItem<Identifier>>
+/// Parse a declaration item.
+fn declaration<Identifier>(
+	input: &mut Stream<'_, '_, Identifier>,
+) -> Result<Declaration<Identifier>>
 where
 	Identifier: Clone + Debug + FromStr,
 	<Identifier as FromStr>::Err: Display,
 {
 	alt((
-		predicate_item.map(|_| ModelItem::Predicate),
-		parameter_item.map(ModelItem::Parameter),
-		parameter_array_item.map(ModelItem::ParameterArray),
-		variable.map(ModelItem::Variable),
-		variable_array.map(ModelItem::VariableArray),
-		constraint.map(ModelItem::Constraint),
-		solve_objective.map(ModelItem::SolveObjective),
+		parameter_item.map(Declaration::Parameter),
+		parameter_array_item.map(Declaration::ParameterArray),
+		variable.map(Declaration::Variable),
+		variable_array.map(Declaration::VariableArray),
 	))
 	.parse_next(input)
 }
@@ -1006,6 +1039,32 @@ mod tests {
 		let error = FlatZinc::<String>::from_fzn(Cursor::new("solve satisfy;\nsolve minimize x;"))
 			.expect_err("expected parse to reject multiple solve items");
 		assert!(matches!(error, FznParseError::MultipleSolveItems));
+	}
+
+	#[test]
+	fn parse_rejects_predicates_after_declarations() {
+		let error = FlatZinc::<String>::from_fzn(Cursor::new(
+			"var int: x;\npredicate p(var int: y);\nsolve satisfy;",
+		))
+		.expect_err("expected parse to reject predicates after declarations");
+		assert!(matches!(error, FznParseError::SyntaxError(_)));
+	}
+
+	#[test]
+	fn parse_rejects_declarations_after_constraints() {
+		let error = FlatZinc::<String>::from_fzn(Cursor::new(
+			"constraint int_eq(x, x);\nvar int: x;\nsolve satisfy;",
+		))
+		.expect_err("expected parse to reject declarations after constraints");
+		assert!(matches!(error, FznParseError::SyntaxError(_)));
+	}
+
+	#[test]
+	fn parse_rejects_constraints_after_solve() {
+		let error =
+			FlatZinc::<String>::from_fzn(Cursor::new("solve satisfy;\nconstraint int_eq(x, x);"))
+				.expect_err("expected parse to reject constraints after solve");
+		assert!(matches!(error, FznParseError::SyntaxError(_)));
 	}
 
 	#[test]
