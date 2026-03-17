@@ -128,24 +128,13 @@ where
 			Declaration::Parameter((name, literal)) => {
 				let _ = parameters.insert(name, literal);
 			}
-			Declaration::ParameterArray((name, literals)) => {
-				arrays.push((
-					name,
-					Array {
-						contents: literals,
-						ann: vec![],
-						defined: false,
-						introduced: false,
-					},
-				));
-			}
 			Declaration::Variable((name, variable, is_output)) => {
 				if is_output {
 					output.push(name.clone());
 				}
 				variables.push((name, variable));
 			}
-			Declaration::VariableArray((name, array, is_output)) => {
+			Declaration::Array((name, array, is_output)) => {
 				if is_output {
 					output.push(name.clone());
 				}
@@ -239,15 +228,14 @@ struct ParseState<'s, Identifier> {
 type Stream<'source, 'state, Identifier> = Stateful<&'source str, ParseState<'state, Identifier>>;
 
 /// A declaration item in a FlatZinc model.
+#[derive(Debug, PartialEq)]
 enum Declaration<Identifier> {
-	/// A parameter item.
+	/// A parameter declaration.
 	Parameter((String, Literal<Identifier>)),
-	/// A parameter array item.
-	ParameterArray((Identifier, Vec<Literal<Identifier>>)),
-	/// A variable model item.
+	/// A variable declaration.
 	Variable((Identifier, Variable<Identifier>, bool)),
-	/// A variable model item.
-	VariableArray((Identifier, Array<Identifier>, bool)),
+	/// An array declaration.
+	Array((Identifier, Array<Identifier>, bool)),
 }
 
 /// Parse a declaration item.
@@ -259,10 +247,9 @@ where
 	<Identifier as FromStr>::Err: Display,
 {
 	alt((
-		parameter_item.map(Declaration::Parameter),
-		parameter_array_item.map(Declaration::ParameterArray),
+		array_item.map(Declaration::Array),
 		variable.map(Declaration::Variable),
-		variable_array.map(Declaration::VariableArray),
+		parameter_item.map(Declaration::Parameter),
 	))
 	.parse_next(input)
 }
@@ -529,38 +516,36 @@ where
 	.parse_next(input)
 }
 
-/// Parse a variable array.
-fn variable_array<Identifier>(
+/// Parse an array declaration.
+fn array_item<Identifier>(
 	input: &mut Stream<'_, '_, Identifier>,
 ) -> Result<(Identifier, Array<Identifier>, bool)>
 where
 	Identifier: Clone + Debug + FromStr,
 	<Identifier as FromStr>::Err: Display,
 {
-	(
-		token("array"),
-		delimited(token("["), interval_set(int), token("]")),
-		token("of"),
-		preceded(token("var"), basic_variable_type),
-		token(":"),
-		token(identifier),
-		variable_annotations,
-		preceded(token("="), delimited_list("[", literal, "]")),
-		token(";"),
-	)
-		.map(|(_, _, _, _, _, id, (flags, ann), contents, _)| {
-			(
-				id,
-				Array {
-					contents,
-					ann,
-					defined: flags.defined,
-					introduced: flags.introduced,
-				},
-				flags.output,
-			)
-		})
-		.parse_next(input)
+	let _ = token("array").parse_next(input)?;
+	let _ = delimited(token("["), interval_set(int), token("]")).parse_next(input)?;
+	let _ = token("of").parse_next(input)?;
+	let _ = opt(token("var")).parse_next(input)?;
+	let _ = basic_variable_type.parse_next(input)?;
+
+	let _ = token(":").parse_next(input)?;
+	let id = token(identifier).parse_next(input)?;
+	let (flags, ann) = variable_annotations.parse_next(input)?;
+	let contents = preceded(token("="), delimited_list("[", literal, "]")).parse_next(input)?;
+	let _ = token(";").parse_next(input)?;
+
+	Ok((
+		id,
+		Array {
+			contents,
+			ann,
+			defined: flags.defined,
+			introduced: flags.introduced,
+		},
+		flags.output,
+	))
 }
 
 fn parameter_item<Identifier>(
@@ -576,31 +561,6 @@ where
 			token(identifier_raw.map(str::to_owned)),
 			token("="),
 			token(literal::<Identifier>),
-		),
-		token(";"),
-	)
-	.parse_next(input)
-}
-
-fn parameter_array_item<Identifier>(
-	input: &mut Stream<'_, '_, Identifier>,
-) -> Result<(Identifier, Vec<Literal<Identifier>>)>
-where
-	Identifier: Clone + Debug + FromStr,
-	<Identifier as FromStr>::Err: Display,
-{
-	delimited(
-		(
-			token("array"),
-			delimited(token("["), interval_set(int), token("]")),
-			token("of"),
-			basic_parameter_type,
-			token(":"),
-		),
-		separated_pair(
-			token(identifier),
-			token("="),
-			delimited_list("[", literal, "]"),
 		),
 		token(";"),
 	)
@@ -1142,7 +1102,7 @@ mod tests {
 	#[test]
 	fn introduced_array_of_variables() {
 		check_parser(
-			variable_array,
+			array_item,
 			(
 				"X_INTRODUCED_1_".to_owned(),
 				Array {
@@ -1188,7 +1148,7 @@ mod tests {
 	#[test]
 	fn output_array_annotation_is_promoted() {
 		check_parser(
-			variable_array,
+			array_item,
 			(
 				"xs".to_owned(),
 				Array {
@@ -1248,18 +1208,30 @@ mod tests {
 	#[test]
 	fn some_parameter_array_items() {
 		check_parser(
-			parameter_array_item,
+			array_item,
 			(
 				"some_param".to_owned(),
-				vec![Literal::Int(5), Literal::Int(3), Literal::Int(10)],
+				Array {
+					contents: vec![Literal::Int(5), Literal::Int(3), Literal::Int(10)],
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+				false,
 			),
 			"array [1..3] of int: some_param = [5, 3, 10];",
 		);
 		check_parser(
-			parameter_array_item,
+			array_item,
 			(
 				"X_INTRODUCED_4_".to_owned(),
-				vec![Literal::Int(-1), Literal::Int(1)],
+				Array {
+					contents: vec![Literal::Int(-1), Literal::Int(1)],
+					ann: vec![],
+					defined: false,
+					introduced: false,
+				},
+				false,
 			),
 			"array [1..2] of int: X_INTRODUCED_4_ = [-1,1];",
 		);
