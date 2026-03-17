@@ -583,20 +583,15 @@ impl<Identifier: Display> Display for Literal<Identifier> {
 }
 
 /// Goal of solving a FlatZinc instance.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Method<Identifier = String> {
+	#[default]
 	/// Find any solution.
 	Satisfy,
 	/// Find the solution with the lowest value for the given objective.
 	Minimize(Literal<Identifier>),
 	/// Find the solution with the highest value for the given objective.
 	Maximize(Literal<Identifier>),
-}
-
-impl<Identifier> Default for Method<Identifier> {
-	fn default() -> Self {
-		Self::Satisfy
-	}
 }
 
 impl<Identifier: Display> Display for Method<Identifier> {
