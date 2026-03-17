@@ -11,11 +11,6 @@ use serde::{
 
 use crate::{Annotation, Literal, Method, RangeList, SolveObjective, Type, Variable};
 
-/// Helper function used by serde field attributes to omit `false` flags.
-pub(crate) fn is_false(b: &bool) -> bool {
-	!(*b)
-}
-
 /// Base variable type used for the `"type"` field in FlatZinc JSON.
 ///
 /// This mirrors the JSON encoding, where the type name and optional domain are
@@ -37,6 +32,22 @@ pub(crate) enum BaseType {
 	IntSet,
 }
 
+/// Encapsulated set helper struct
+#[derive(Deserialize, Serialize)]
+#[serde(rename = "set")]
+struct SetLiteral<E: PartialOrd> {
+	/// Range list used to represent the content of the set.
+	set: Vec<(E, E)>,
+}
+
+/// Encapsulated String helper struct
+#[derive(Deserialize, Serialize)]
+#[serde(rename = "string")]
+struct StringLiteral {
+	/// Content of the string literal.
+	string: String,
+}
+
 /// Domain payload used for the optional `"domain"` field in FlatZinc JSON.
 ///
 /// This is kept separate from [`BaseType`] so [`crate::Variable`] can preserve
@@ -52,43 +63,6 @@ pub(crate) enum VariableDomain {
 	Float(RangeList<f64>),
 }
 
-/// Encapsulated String helper struct
-#[derive(Deserialize, Serialize)]
-#[serde(rename = "string")]
-struct StringLiteral {
-	/// Content of the string literal.
-	string: String,
-}
-/// Deserialization function to resolve the encapsulation of string literals in
-/// the FlatZinc serialization format
-pub(crate) fn deserialize_encapsulated_string<'de, D: Deserializer<'de>>(
-	deserializer: D,
-) -> Result<String, D::Error> {
-	let s: StringLiteral = Deserialize::deserialize(deserializer)?;
-	Ok(s.string)
-}
-
-/// Serialization function to be used for the encapsulation of string literals
-/// required by the FlatZinc serialization format
-pub(crate) fn serialize_encapsulate_string<S: Serializer>(
-	s: &str,
-	serializer: S,
-) -> Result<S::Ok, S::Error> {
-	Serialize::serialize(
-		&StringLiteral {
-			string: String::from(s),
-		},
-		serializer,
-	)
-}
-
-/// Encapsulated set helper struct
-#[derive(Deserialize, Serialize)]
-#[serde(rename = "set")]
-struct SetLiteral<E: PartialOrd> {
-	/// Range list used to represent the content of the set.
-	set: Vec<(E, E)>,
-}
 /// Deserialization function to resolve the encapsulation of set literals in the
 /// FlatZinc serialization format
 pub(crate) fn deserialize_encapsulated_set<
@@ -102,41 +76,13 @@ pub(crate) fn deserialize_encapsulated_set<
 	let range = s.set.into_iter().map(|(a, b)| a..=b).collect();
 	Ok(range)
 }
-
-/// Serialization function to be used for the encapsulation of set literals
-/// required by the FlatZinc serialization format
-pub(crate) fn serialize_encapsulate_set<E: PartialOrd + Serialize + Copy, S: Serializer>(
-	r: &RangeList<E>,
-	serializer: S,
-) -> Result<S::Ok, S::Error> {
-	Serialize::serialize(
-		&SetLiteral {
-			set: r.iter().map(|r| (*r.start(), *r.end())).collect(),
-		},
-		serializer,
-	)
-}
-
-pub(crate) fn deserialize_set<
-	'de,
-	D: Deserializer<'de>,
-	E: Copy + Deserialize<'de> + PartialOrd + 'static,
->(
+/// Deserialization function to resolve the encapsulation of string literals in
+/// the FlatZinc serialization format
+pub(crate) fn deserialize_encapsulated_string<'de, D: Deserializer<'de>>(
 	deserializer: D,
-) -> Result<RangeList<E>, D::Error> {
-	let s: Vec<(E, E)> = Deserialize::deserialize(deserializer)?;
-	let range = s.into_iter().map(|(a, b)| a..=b).collect();
-	Ok(range)
-}
-
-/// Serialization function to be used for the encapsulation of set literals
-/// required by the FlatZinc serialization format
-pub(crate) fn serialize_set<E: PartialOrd + Serialize + Copy, S: Serializer>(
-	r: &RangeList<E>,
-	serializer: S,
-) -> Result<S::Ok, S::Error> {
-	let x: Vec<(E, E)> = r.iter().map(|r| (*r.start(), *r.end())).collect();
-	Serialize::serialize(&x, serializer)
+) -> Result<String, D::Error> {
+	let s: StringLiteral = Deserialize::deserialize(deserializer)?;
+	Ok(s.string)
 }
 
 /// Deserialization function for object-like fields that can collect `(K, V)`
@@ -214,6 +160,51 @@ where
 	deserializer.deserialize_map(KeyValueObjectVisitor(PhantomData))
 }
 
+pub(crate) fn deserialize_set<
+	'de,
+	D: Deserializer<'de>,
+	E: Copy + Deserialize<'de> + PartialOrd + 'static,
+>(
+	deserializer: D,
+) -> Result<RangeList<E>, D::Error> {
+	let s: Vec<(E, E)> = Deserialize::deserialize(deserializer)?;
+	let range = s.into_iter().map(|(a, b)| a..=b).collect();
+	Ok(range)
+}
+
+/// Helper function used by serde field attributes to omit `false` flags.
+pub(crate) fn is_false(b: &bool) -> bool {
+	!(*b)
+}
+
+/// Serialization function to be used for the encapsulation of set literals
+/// required by the FlatZinc serialization format
+pub(crate) fn serialize_encapsulate_set<E: PartialOrd + Serialize + Copy, S: Serializer>(
+	r: &RangeList<E>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	Serialize::serialize(
+		&SetLiteral {
+			set: r.iter().map(|r| (*r.start(), *r.end())).collect(),
+		},
+		serializer,
+	)
+}
+
+/// Serialization function to be used for the encapsulation of string literals
+/// required by the FlatZinc serialization format
+pub(crate) fn serialize_encapsulate_string<S: Serializer>(
+	s: &str,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	Serialize::serialize(
+		&StringLiteral {
+			string: String::from(s),
+		},
+		serializer,
+	)
+}
+
 /// Serialization function for map-like containers represented as iterables of
 /// key-value pairs.
 pub(crate) fn serialize_key_value_object<'a, S, M, K, V>(
@@ -233,45 +224,87 @@ where
 	ser_map.end()
 }
 
-impl<Identifier: Serialize> Serialize for Variable<Identifier> {
-	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		#[derive(Serialize)]
-		#[serde(rename = "variable")]
-		struct VariableRepr<'a, Identifier> {
-			/// Base type stored in the JSON `"type"` field.
-			#[serde(rename = "type")]
-			ty: BaseType,
-			/// Optional domain stored in the JSON `"domain"` field.
-			#[serde(skip_serializing_if = "Option::is_none")]
-			domain: Option<VariableDomain>,
-			/// Optional right-hand side stored in the JSON `"rhs"` field.
-			#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
-			value: Option<&'a Literal<Identifier>>,
-			/// Variable annotations stored in the JSON `"ann"` field.
+/// Serialization function to be used for the encapsulation of set literals
+/// required by the FlatZinc serialization format
+pub(crate) fn serialize_set<E: PartialOrd + Serialize + Copy, S: Serializer>(
+	r: &RangeList<E>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	let x: Vec<(E, E)> = r.iter().map(|r| (*r.start(), *r.end())).collect();
+	Serialize::serialize(&x, serializer)
+}
+
+impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for SolveObjective<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(rename = "solve")]
+		#[serde(bound(deserialize = "Identifier: Deserialize<'de>"))]
+		struct SolveObjectiveRepr<Identifier> {
+			#[serde(rename = "method")]
+			method: String,
+			#[serde(default)]
+			objective: Option<Literal<Identifier>>,
 			#[serde(default, skip_serializing_if = "Vec::is_empty")]
-			ann: &'a Vec<Annotation<Identifier>>,
-			/// Whether the variable is solver-defined.
-			#[serde(default, skip_serializing_if = "is_false")]
-			defined: bool,
-			/// Whether the variable was introduced during MiniZinc lowering.
-			#[serde(default, skip_serializing_if = "is_false")]
-			introduced: bool,
+			ann: Vec<Annotation<Identifier>>,
 		}
 
-		let (ty, domain) = match &self.ty {
-			Type::Bool => (BaseType::Bool, None),
-			Type::Int(domain) => (BaseType::Int, domain.clone().map(VariableDomain::Int)),
-			Type::Float(domain) => (BaseType::Float, domain.clone().map(VariableDomain::Float)),
-			Type::IntSet(domain) => (BaseType::IntSet, domain.clone().map(VariableDomain::Int)),
+		let repr = SolveObjectiveRepr::deserialize(deserializer)?;
+		let method = match (repr.method.as_str(), repr.objective) {
+			("satisfy", None) => Method::Satisfy,
+			("satisfy", Some(_)) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"satisfy solve items cannot have an objective",
+				));
+			}
+			("minimize", Some(objective)) => Method::Minimize(objective),
+			("minimize", None) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"minimize solve items require an objective",
+				));
+			}
+			("maximize", Some(objective)) => Method::Maximize(objective),
+			("maximize", None) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"maximize solve items require an objective",
+				));
+			}
+			(method, _) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(format!(
+					"unknown solve method '{method}'",
+				)));
+			}
 		};
 
-		VariableRepr {
-			ty,
-			domain,
-			value: self.value.as_ref(),
+		Ok(SolveObjective {
+			method,
+			ann: repr.ann,
+		})
+	}
+}
+
+impl<Identifier: Serialize> Serialize for SolveObjective<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(rename = "solve")]
+		struct SolveObjectiveRepr<'a, Identifier> {
+			#[serde(rename = "method")]
+			method: &'static str,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			objective: Option<&'a Literal<Identifier>>,
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: &'a Vec<Annotation<Identifier>>,
+		}
+
+		let (method, objective) = match &self.method {
+			Method::Satisfy => ("satisfy", None),
+			Method::Minimize(objective) => ("minimize", Some(objective)),
+			Method::Maximize(objective) => ("maximize", Some(objective)),
+		};
+
+		SolveObjectiveRepr {
+			method,
+			objective,
 			ann: &self.ann,
-			defined: self.defined,
-			introduced: self.introduced,
 		}
 		.serialize(serializer)
 	}
@@ -344,84 +377,67 @@ impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for Variable<Identifier
 	}
 }
 
-impl<Identifier: Serialize> Serialize for SolveObjective<Identifier> {
+impl<Identifier: Serialize> Serialize for Variable<Identifier> {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		#[derive(Serialize)]
-		#[serde(rename = "solve")]
-		struct SolveObjectiveRepr<'a, Identifier> {
-			#[serde(rename = "method")]
-			method: &'static str,
+		#[serde(rename = "variable")]
+		struct VariableRepr<'a, Identifier> {
+			/// Base type stored in the JSON `"type"` field.
+			#[serde(rename = "type")]
+			ty: BaseType,
+			/// Optional domain stored in the JSON `"domain"` field.
 			#[serde(skip_serializing_if = "Option::is_none")]
-			objective: Option<&'a Literal<Identifier>>,
+			domain: Option<VariableDomain>,
+			/// Optional right-hand side stored in the JSON `"rhs"` field.
+			#[serde(rename = "rhs", skip_serializing_if = "Option::is_none")]
+			value: Option<&'a Literal<Identifier>>,
+			/// Variable annotations stored in the JSON `"ann"` field.
 			#[serde(default, skip_serializing_if = "Vec::is_empty")]
 			ann: &'a Vec<Annotation<Identifier>>,
+			/// Whether the variable is solver-defined.
+			#[serde(default, skip_serializing_if = "is_false")]
+			defined: bool,
+			/// Whether the variable was introduced during MiniZinc lowering.
+			#[serde(default, skip_serializing_if = "is_false")]
+			introduced: bool,
 		}
 
-		let (method, objective) = match &self.method {
-			Method::Satisfy => ("satisfy", None),
-			Method::Minimize(objective) => ("minimize", Some(objective)),
-			Method::Maximize(objective) => ("maximize", Some(objective)),
+		let (ty, domain) = match &self.ty {
+			Type::Bool => (BaseType::Bool, None),
+			Type::Int(domain) => (BaseType::Int, domain.clone().map(VariableDomain::Int)),
+			Type::Float(domain) => (BaseType::Float, domain.clone().map(VariableDomain::Float)),
+			Type::IntSet(domain) => (BaseType::IntSet, domain.clone().map(VariableDomain::Int)),
 		};
 
-		SolveObjectiveRepr {
-			method,
-			objective,
+		VariableRepr {
+			ty,
+			domain,
+			value: self.value.as_ref(),
 			ann: &self.ann,
+			defined: self.defined,
+			introduced: self.introduced,
 		}
 		.serialize(serializer)
 	}
 }
 
-impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for SolveObjective<Identifier> {
-	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		#[derive(Deserialize)]
-		#[serde(rename = "solve")]
-		#[serde(bound(deserialize = "Identifier: Deserialize<'de>"))]
-		struct SolveObjectiveRepr<Identifier> {
-			#[serde(rename = "method")]
-			method: String,
-			#[serde(default)]
-			objective: Option<Literal<Identifier>>,
-			#[serde(default, skip_serializing_if = "Vec::is_empty")]
-			ann: Vec<Annotation<Identifier>>,
-		}
-
-		let repr = SolveObjectiveRepr::deserialize(deserializer)?;
-		let method = match (repr.method.as_str(), repr.objective) {
-			("satisfy", None) => Method::Satisfy,
-			("satisfy", Some(_)) => {
-				return Err(<D::Error as ::serde::de::Error>::custom(
-					"satisfy solve items cannot have an objective",
-				));
-			}
-			("minimize", Some(objective)) => Method::Minimize(objective),
-			("minimize", None) => {
-				return Err(<D::Error as ::serde::de::Error>::custom(
-					"minimize solve items require an objective",
-				));
-			}
-			("maximize", Some(objective)) => Method::Maximize(objective),
-			("maximize", None) => {
-				return Err(<D::Error as ::serde::de::Error>::custom(
-					"maximize solve items require an objective",
-				));
-			}
-			(method, _) => {
-				return Err(<D::Error as ::serde::de::Error>::custom(format!(
-					"unknown solve method '{method}'",
-				)));
-			}
-		};
-
-		Ok(SolveObjective {
-			method,
-			ann: repr.ann,
-		})
-	}
-}
-
 #[cfg(test)]
 mod tests {
+	macro_rules! test_file {
+		($file: ident) => {
+			#[test]
+			fn $file() {
+				test_successful_serialization(
+					std::path::Path::new(&format!("./corpus/json/{}.fzn.json", stringify!($file))),
+					expect_test::expect_file![&format!(
+						"../corpus/json/{}.debug.txt",
+						stringify!($file)
+					)],
+				)
+			}
+		};
+	}
+
 	use std::{
 		collections::{BTreeMap, HashMap},
 		fs::File,
@@ -438,56 +454,18 @@ mod tests {
 		Literal, Method, SolveObjective, Type, Variable,
 	};
 
-	macro_rules! test_file {
-		($file: ident) => {
-			#[test]
-			fn $file() {
-				test_successful_serialization(
-					std::path::Path::new(&format!("./corpus/json/{}.fzn.json", stringify!($file))),
-					expect_test::expect_file![&format!(
-						"../corpus/json/{}.debug.txt",
-						stringify!($file)
-					)],
-				)
-			}
-		};
-	}
-
-	test_file!(documentation_example);
-	test_file!(encapsulated_string);
-	test_file!(float_sets);
-	test_file!(set_literals);
-	test_file!(unit_test_example);
-
-	fn test_successful_serialization(file: &Path, exp: ExpectFile) {
-		let rdr = BufReader::new(File::open(file).unwrap());
-		let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
-		exp.assert_debug_eq(&fzn);
-		let fzn2: FlatZinc = serde_json::from_str(&serde_json::to_string(&fzn).unwrap()).unwrap();
-		assert_eq!(fzn, fzn2)
-	}
-
 	#[test]
-	fn test_ident_no_copy() {
-		let mut rdr = BufReader::new(
-			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
-		);
-		let mut content = String::new();
-		let _ = rdr.read_to_string(&mut content).unwrap();
-
-		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
-		expect_test::expect_file!["../corpus/json/documentation_example.debug.txt"]
-			.assert_debug_eq(&fzn)
-	}
-
-	#[test]
-	fn test_ident_interned() {
-		let rdr = BufReader::new(
-			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
-		);
-		let fzn: FlatZinc<Ustr> = serde_json::from_reader(rdr).unwrap();
-		expect_test::expect_file!["../corpus/json/documentation_example.debug_ustr.txt"]
-			.assert_debug_eq(&fzn)
+	fn test_default_with_custom_map_types() {
+		let fzn = FlatZinc::<
+			String,
+			HashMap<String, Variable<String>>,
+			Vec<(String, Array<String>)>,
+		>::default();
+		assert!(fzn.variables.is_empty());
+		assert!(fzn.arrays.is_empty());
+		assert!(fzn.constraints.is_empty());
+		assert!(fzn.output.is_empty());
+		assert_eq!(fzn.version, "1.0");
 	}
 
 	#[test]
@@ -511,33 +489,26 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vec_backed_maps_deserialize_from_object_shape() {
-		type VecFlatZinc =
-			FlatZinc<String, Vec<(String, Variable<String>)>, Vec<(String, Array<String>)>>;
+	fn test_ident_interned() {
+		let rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let fzn: FlatZinc<Ustr> = serde_json::from_reader(rdr).unwrap();
+		expect_test::expect_file!["../corpus/json/documentation_example.debug_ustr.txt"]
+			.assert_debug_eq(&fzn)
+	}
 
+	#[test]
+	fn test_ident_no_copy() {
 		let mut rdr = BufReader::new(
 			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
 		);
 		let mut content = String::new();
 		let _ = rdr.read_to_string(&mut content).unwrap();
 
-		let fzn: VecFlatZinc = serde_json::from_str(&content).unwrap();
-		assert!(!fzn.variables.is_empty());
-		assert!(!fzn.arrays.is_empty());
-	}
-
-	#[test]
-	fn test_default_with_custom_map_types() {
-		let fzn = FlatZinc::<
-			String,
-			HashMap<String, Variable<String>>,
-			Vec<(String, Array<String>)>,
-		>::default();
-		assert!(fzn.variables.is_empty());
-		assert!(fzn.arrays.is_empty());
-		assert!(fzn.constraints.is_empty());
-		assert!(fzn.output.is_empty());
-		assert_eq!(fzn.version, "1.0");
+		let fzn: FlatZinc<&str> = serde_json::from_str(&content).unwrap();
+		expect_test::expect_file!["../corpus/json/documentation_example.debug.txt"]
+			.assert_debug_eq(&fzn)
 	}
 
 	#[test]
@@ -628,4 +599,34 @@ mod tests {
 			"solve ::bool_search(input_order, indomain_min) minimize x"
 		);
 	}
+
+	fn test_successful_serialization(file: &Path, exp: ExpectFile) {
+		let rdr = BufReader::new(File::open(file).unwrap());
+		let fzn: FlatZinc = serde_json::from_reader(rdr).unwrap();
+		exp.assert_debug_eq(&fzn);
+		let fzn2: FlatZinc = serde_json::from_str(&serde_json::to_string(&fzn).unwrap()).unwrap();
+		assert_eq!(fzn, fzn2)
+	}
+
+	#[test]
+	fn test_vec_backed_maps_deserialize_from_object_shape() {
+		type VecFlatZinc =
+			FlatZinc<String, Vec<(String, Variable<String>)>, Vec<(String, Array<String>)>>;
+
+		let mut rdr = BufReader::new(
+			File::open(Path::new("./corpus/json/documentation_example.fzn.json")).unwrap(),
+		);
+		let mut content = String::new();
+		let _ = rdr.read_to_string(&mut content).unwrap();
+
+		let fzn: VecFlatZinc = serde_json::from_str(&content).unwrap();
+		assert!(!fzn.variables.is_empty());
+		assert!(!fzn.arrays.is_empty());
+	}
+
+	test_file!(documentation_example);
+	test_file!(encapsulated_string);
+	test_file!(float_sets);
+	test_file!(set_literals);
+	test_file!(unit_test_example);
 }

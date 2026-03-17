@@ -28,26 +28,6 @@ pub enum FznParseError {
 	},
 }
 
-impl std::error::Error for FznParseError {}
-
-impl From<std::io::Error> for FznParseError {
-	fn from(value: std::io::Error) -> Self {
-		FznParseError::Io(value)
-	}
-}
-
-impl From<std::str::Utf8Error> for FznParseError {
-	fn from(value: std::str::Utf8Error) -> Self {
-		FznParseError::Utf8Error(value)
-	}
-}
-
-impl<I> From<ParseError<Stream<'_, '_, I>, ContextError>> for FznParseError {
-	fn from(value: ParseError<Stream<'_, '_, I>, ContextError>) -> Self {
-		FznParseError::SyntaxError(value.to_string())
-	}
-}
-
 impl Display for FznParseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -62,3 +42,23 @@ impl Display for FznParseError {
 		}
 	}
 }
+
+impl<I> From<ParseError<Stream<'_, '_, I>, ContextError>> for FznParseError {
+	fn from(value: ParseError<Stream<'_, '_, I>, ContextError>) -> Self {
+		FznParseError::SyntaxError(value.to_string())
+	}
+}
+
+impl From<std::io::Error> for FznParseError {
+	fn from(value: std::io::Error) -> Self {
+		FznParseError::Io(value)
+	}
+}
+
+impl From<std::str::Utf8Error> for FznParseError {
+	fn from(value: std::str::Utf8Error) -> Self {
+		FznParseError::Utf8Error(value)
+	}
+}
+
+impl std::error::Error for FznParseError {}

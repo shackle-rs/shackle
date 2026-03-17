@@ -152,16 +152,6 @@ pub enum Annotation<Identifier = String> {
 	Call(AnnotationCall<Identifier>),
 }
 
-impl<Identifier: Display> Display for Annotation<Identifier> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "::")?;
-		match self {
-			Annotation::Atom(a) => write!(f, "{a}"),
-			Annotation::Call(c) => write!(f, "{c}"),
-		}
-	}
-}
-
 /// The argument type associated with [`AnnotationCall`]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
@@ -171,26 +161,6 @@ pub enum AnnotationArgument<Identifier = String> {
 	Array(Vec<AnnotationLiteral<Identifier>>),
 	/// Singular argument
 	Literal(AnnotationLiteral<Identifier>),
-}
-
-impl<Idenfier: Display> Display for AnnotationArgument<Idenfier> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			AnnotationArgument::Array(arr) => {
-				write!(f, "[")?;
-				let mut first = true;
-				for v in arr {
-					if !first {
-						write!(f, ", ")?
-					}
-					write!(f, "{v}")?;
-					first = false;
-				}
-				write!(f, "]")
-			}
-			AnnotationArgument::Literal(lit) => write!(f, "{lit}"),
-		}
-	}
 }
 
 /// An object depicting an annotation in the form of a call
@@ -204,21 +174,6 @@ pub struct AnnotationCall<Identifier = String> {
 	pub args: Vec<AnnotationArgument<Identifier>>,
 }
 
-impl<Identifier: Display> Display for AnnotationCall<Identifier> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}(", self.id)?;
-		let mut first = true;
-		for arg in &self.args {
-			if !first {
-				write!(f, ", ")?
-			}
-			write!(f, "{arg}")?;
-			first = false;
-		}
-		write!(f, ")")
-	}
-}
-
 ///Literal values as arguments to [`AnnotationCall`]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
@@ -230,15 +185,6 @@ pub enum AnnotationLiteral<Identifier = String> {
 	Annotation(AnnotationCall<Identifier>),
 }
 
-impl<Idenfier: Display> Display for AnnotationLiteral<Idenfier> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			AnnotationLiteral::BaseLiteral(lit) => write!(f, "{lit}"),
-			AnnotationLiteral::Annotation(ann) => write!(f, "{ann}"),
-		}
-	}
-}
-
 /// The argument type associated with [`Constraint`]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
@@ -248,26 +194,6 @@ pub enum Argument<Identifier = String> {
 	Array(Vec<Literal<Identifier>>),
 	/// Literal
 	Literal(Literal<Identifier>),
-}
-
-impl<Identifier: Display> Display for Argument<Identifier> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Argument::Array(arr) => {
-				write!(f, "[")?;
-				let mut first = true;
-				for v in arr {
-					if !first {
-						write!(f, ", ")?
-					}
-					write!(f, "{v}")?;
-					first = false;
-				}
-				write!(f, "]")
-			}
-			Argument::Literal(lit) => write!(f, "{lit}"),
-		}
-	}
 }
 
 /// A definition of a named array literal in FlatZinc
@@ -307,26 +233,6 @@ pub struct Array<Identifier = String> {
 	pub introduced: bool,
 }
 
-impl<Identifier: Ord> Array<Identifier> {
-	/// Heuristic to determine the type of the array
-	fn determine_type(&self, fzn: &FlatZinc<Identifier>) -> (&str, bool) {
-		let ty = match self.contents.first().unwrap() {
-			Literal::Int(_) => "int",
-			Literal::Float(_) => "float",
-			Literal::Identifier(ident) => fzn.variables[ident].ty.base_name(),
-			Literal::Bool(_) => "bool",
-			Literal::IntSet(_) => "set of int",
-			Literal::FloatSet(_) => "set of float",
-			Literal::String(_) => "string",
-		};
-		let is_var = self.contents.iter().any(|lit| match lit {
-			Literal::Identifier(ident) => fzn.variables[ident].value.is_none(),
-			_ => false,
-		});
-		(ty, is_var)
-	}
-}
-
 /// An object depicting a constraint
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(rename = "constraint"))]
@@ -348,28 +254,6 @@ pub struct Constraint<Identifier = String> {
 		serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")
 	)]
 	pub ann: Vec<Annotation<Identifier>>,
-}
-
-impl<Identifier: Display> Display for Constraint<Identifier> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}(", self.id)?;
-		let mut first = true;
-		for arg in &self.args {
-			if !first {
-				write!(f, ", ")?
-			}
-			write!(f, "{arg}")?;
-			first = false;
-		}
-		write!(f, ")")?;
-		if let Some(defines) = &self.defines {
-			write!(f, " ::defines_var({defines})")?
-		}
-		for a in &self.ann {
-			write!(f, " {a}")?
-		}
-		Ok(())
-	}
 }
 
 /// The structure depicting a FlatZinc instance
@@ -428,20 +312,225 @@ pub struct FlatZinc<
 	pub version: String,
 }
 
-impl<Identifier, VarMap, ArrayMap> Default for FlatZinc<Identifier, VarMap, ArrayMap>
-where
-	VarMap: Default,
-	ArrayMap: Default,
-{
-	fn default() -> Self {
-		Self {
-			variables: Default::default(),
-			arrays: Default::default(),
-			constraints: Vec::new(),
-			output: Default::default(),
-			solve: Default::default(),
-			version: "1.0".into(),
+// /// A name used to refer to an [`Array`], function, or [`Variable`]
+// pub type Identifier = String;
+
+/// Literal values
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
+#[derive(Clone, PartialEq, Debug)]
+pub enum Literal<Identifier = String> {
+	/// Integer value
+	Int(i64),
+	/// Floating point value
+	Float(f64),
+	/// Identifier, i.e., reference to an [`Array`] or [`Variable`]
+	Identifier(Identifier),
+	/// Boolean value
+	Bool(bool),
+	#[cfg_attr(
+		feature = "serde",
+		serde(
+			serialize_with = "serde::serialize_encapsulate_set",
+			deserialize_with = "serde::deserialize_encapsulated_set"
+		)
+	)]
+	/// Set of integers, represented as a list of integer ranges
+	IntSet(RangeList<i64>),
+	#[cfg_attr(
+		feature = "serde",
+		serde(
+			serialize_with = "serde::serialize_encapsulate_set",
+			deserialize_with = "serde::deserialize_encapsulated_set"
+		)
+	)]
+	/// Set of floating point values, represented as a list of floating point
+	/// ranges
+	FloatSet(RangeList<f64>),
+	#[cfg_attr(
+		feature = "serde",
+		serde(
+			serialize_with = "serde::serialize_encapsulate_string",
+			deserialize_with = "serde::deserialize_encapsulated_string"
+		)
+	)]
+	/// String value
+	String(String),
+}
+
+/// Goal of solving a FlatZinc instance.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum Method<Identifier = String> {
+	#[default]
+	/// Find any solution.
+	Satisfy,
+	/// Find the solution with the lowest value for the given objective.
+	Minimize(Literal<Identifier>),
+	/// Find the solution with the highest value for the given objective.
+	Maximize(Literal<Identifier>),
+}
+
+/// A specification of objective of a FlatZinc instance
+#[derive(Clone, PartialEq, Debug)]
+pub struct SolveObjective<Identifier = String> {
+	/// The method expected to be used for solving the instance.
+	pub method: Method<Identifier>,
+	/// A list of annotations from the solve statement in the MiniZinc model
+	///
+	/// Note that this includes the search annotations if they are present in the
+	/// model.
+	pub ann: Vec<Annotation<Identifier>>,
+}
+
+/// Used to signal the type of (decision) [`Variable`]
+#[derive(Clone, PartialEq, Debug)]
+pub enum Type {
+	/// Boolean decision variable
+	Bool,
+	/// Integer decision variable
+	Int(Option<RangeList<i64>>),
+	/// Floating point decision variable
+	Float(Option<RangeList<f64>>),
+	/// Integer set decision variable
+	IntSet(Option<RangeList<i64>>),
+}
+
+/// The definition of a decision variable
+#[derive(Clone, PartialEq, Debug)]
+pub struct Variable<Identifier = String> {
+	/// The type of the decision variable, and set of potential values  from which
+	/// the decision variable must take its value in a solution, i.e. its domain.
+	///
+	/// If domain has the value `None`, then all values of the decision variable's
+	/// `Type` are allowed in a solution.
+	pub ty: Type,
+	/// The “right hand side” of the variable, i.e., its value or alias to another
+	/// variable
+	pub value: Option<Literal<Identifier>>,
+	/// A list of annotations
+	pub ann: Vec<Annotation<Identifier>>,
+	/// This field is set to `true` when there is a constraint that has been marked as
+	/// defining this variable.
+	pub defined: bool,
+	/// This field is set to `true` when the variable has been introduced by the
+	/// MiniZinc compiler, rather than being explicitly defined at the top-level
+	/// of the MiniZinc model.
+	pub introduced: bool,
+}
+
+impl<Identifier: Display> Display for Annotation<Identifier> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "::")?;
+		match self {
+			Annotation::Atom(a) => write!(f, "{a}"),
+			Annotation::Call(c) => write!(f, "{c}"),
 		}
+	}
+}
+
+impl<Idenfier: Display> Display for AnnotationArgument<Idenfier> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			AnnotationArgument::Array(arr) => {
+				write!(f, "[")?;
+				let mut first = true;
+				for v in arr {
+					if !first {
+						write!(f, ", ")?
+					}
+					write!(f, "{v}")?;
+					first = false;
+				}
+				write!(f, "]")
+			}
+			AnnotationArgument::Literal(lit) => write!(f, "{lit}"),
+		}
+	}
+}
+
+impl<Identifier: Display> Display for AnnotationCall<Identifier> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}(", self.id)?;
+		let mut first = true;
+		for arg in &self.args {
+			if !first {
+				write!(f, ", ")?
+			}
+			write!(f, "{arg}")?;
+			first = false;
+		}
+		write!(f, ")")
+	}
+}
+
+impl<Idenfier: Display> Display for AnnotationLiteral<Idenfier> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			AnnotationLiteral::BaseLiteral(lit) => write!(f, "{lit}"),
+			AnnotationLiteral::Annotation(ann) => write!(f, "{ann}"),
+		}
+	}
+}
+
+impl<Identifier: Display> Display for Argument<Identifier> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Argument::Array(arr) => {
+				write!(f, "[")?;
+				let mut first = true;
+				for v in arr {
+					if !first {
+						write!(f, ", ")?
+					}
+					write!(f, "{v}")?;
+					first = false;
+				}
+				write!(f, "]")
+			}
+			Argument::Literal(lit) => write!(f, "{lit}"),
+		}
+	}
+}
+
+impl<Identifier: Ord> Array<Identifier> {
+	/// Heuristic to determine the type of the array
+	fn determine_type(&self, fzn: &FlatZinc<Identifier>) -> (&str, bool) {
+		let ty = match self.contents.first().unwrap() {
+			Literal::Int(_) => "int",
+			Literal::Float(_) => "float",
+			Literal::Identifier(ident) => fzn.variables[ident].ty.base_name(),
+			Literal::Bool(_) => "bool",
+			Literal::IntSet(_) => "set of int",
+			Literal::FloatSet(_) => "set of float",
+			Literal::String(_) => "string",
+		};
+		let is_var = self.contents.iter().any(|lit| match lit {
+			Literal::Identifier(ident) => fzn.variables[ident].value.is_none(),
+			_ => false,
+		});
+		(ty, is_var)
+	}
+}
+
+impl<Identifier: Display> Display for Constraint<Identifier> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}(", self.id)?;
+		let mut first = true;
+		for arg in &self.args {
+			if !first {
+				write!(f, ", ")?
+			}
+			write!(f, "{arg}")?;
+			first = false;
+		}
+		write!(f, ")")?;
+		if let Some(defines) = &self.defines {
+			write!(f, " ::defines_var({defines})")?
+		}
+		for a in &self.ann {
+			write!(f, " {a}")?
+		}
+		Ok(())
 	}
 }
 
@@ -456,6 +545,23 @@ where
 	/// Parse a `.fzn` source into a [`FlatZinc`] instance.
 	pub fn from_fzn(source: impl std::io::BufRead) -> Result<Self, FznParseError> {
 		fzn::parse(source)
+	}
+}
+
+impl<Identifier, VarMap, ArrayMap> Default for FlatZinc<Identifier, VarMap, ArrayMap>
+where
+	VarMap: Default,
+	ArrayMap: Default,
+{
+	fn default() -> Self {
+		Self {
+			variables: Default::default(),
+			arrays: Default::default(),
+			constraints: Vec::new(),
+			output: Default::default(),
+			solve: Default::default(),
+			version: "1.0".into(),
+		}
 	}
 }
 
@@ -522,52 +628,6 @@ impl<Identifier: Ord + Display> Display for FlatZinc<Identifier> {
 	}
 }
 
-// /// A name used to refer to an [`Array`], function, or [`Variable`]
-// pub type Identifier = String;
-
-/// Literal values
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", serde(untagged))]
-#[derive(Clone, PartialEq, Debug)]
-pub enum Literal<Identifier = String> {
-	/// Integer value
-	Int(i64),
-	/// Floating point value
-	Float(f64),
-	/// Identifier, i.e., reference to an [`Array`] or [`Variable`]
-	Identifier(Identifier),
-	/// Boolean value
-	Bool(bool),
-	#[cfg_attr(
-		feature = "serde",
-		serde(
-			serialize_with = "serde::serialize_encapsulate_set",
-			deserialize_with = "serde::deserialize_encapsulated_set"
-		)
-	)]
-	/// Set of integers, represented as a list of integer ranges
-	IntSet(RangeList<i64>),
-	#[cfg_attr(
-		feature = "serde",
-		serde(
-			serialize_with = "serde::serialize_encapsulate_set",
-			deserialize_with = "serde::deserialize_encapsulated_set"
-		)
-	)]
-	/// Set of floating point values, represented as a list of floating point
-	/// ranges
-	FloatSet(RangeList<f64>),
-	#[cfg_attr(
-		feature = "serde",
-		serde(
-			serialize_with = "serde::serialize_encapsulate_string",
-			deserialize_with = "serde::deserialize_encapsulated_string"
-		)
-	)]
-	/// String value
-	String(String),
-}
-
 impl<Identifier: Display> Display for Literal<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -582,18 +642,6 @@ impl<Identifier: Display> Display for Literal<Identifier> {
 	}
 }
 
-/// Goal of solving a FlatZinc instance.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum Method<Identifier = String> {
-	#[default]
-	/// Find any solution.
-	Satisfy,
-	/// Find the solution with the lowest value for the given objective.
-	Minimize(Literal<Identifier>),
-	/// Find the solution with the highest value for the given objective.
-	Maximize(Literal<Identifier>),
-}
-
 impl<Identifier: Display> Display for Method<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -602,18 +650,6 @@ impl<Identifier: Display> Display for Method<Identifier> {
 			Method::Maximize(objective) => write!(f, "maximize {objective}"),
 		}
 	}
-}
-
-/// A specification of objective of a FlatZinc instance
-#[derive(Clone, PartialEq, Debug)]
-pub struct SolveObjective<Identifier = String> {
-	/// The method expected to be used for solving the instance.
-	pub method: Method<Identifier>,
-	/// A list of annotations from the solve statement in the MiniZinc model
-	///
-	/// Note that this includes the search annotations if they are present in the
-	/// model.
-	pub ann: Vec<Annotation<Identifier>>,
 }
 
 impl<Identifier> Default for SolveObjective<Identifier> {
@@ -635,17 +671,15 @@ impl<Identifier: Display> Display for SolveObjective<Identifier> {
 	}
 }
 
-/// Used to signal the type of (decision) [`Variable`]
-#[derive(Clone, PartialEq, Debug)]
-pub enum Type {
-	/// Boolean decision variable
-	Bool,
-	/// Integer decision variable
-	Int(Option<RangeList<i64>>),
-	/// Floating point decision variable
-	Float(Option<RangeList<f64>>),
-	/// Integer set decision variable
-	IntSet(Option<RangeList<i64>>),
+impl Type {
+	fn base_name(&self) -> &'static str {
+		match self {
+			Type::Bool => "bool",
+			Type::Int(_) => "int",
+			Type::Float(_) => "float",
+			Type::IntSet(_) => "set of int",
+		}
+	}
 }
 
 impl Display for Type {
@@ -660,38 +694,4 @@ impl Display for Type {
 			Type::IntSet(None) => write!(f, "set of int"),
 		}
 	}
-}
-
-impl Type {
-	fn base_name(&self) -> &'static str {
-		match self {
-			Type::Bool => "bool",
-			Type::Int(_) => "int",
-			Type::Float(_) => "float",
-			Type::IntSet(_) => "set of int",
-		}
-	}
-}
-
-/// The definition of a decision variable
-#[derive(Clone, PartialEq, Debug)]
-pub struct Variable<Identifier = String> {
-	/// The type of the decision variable, and set of potential values  from which
-	/// the decision variable must take its value in a solution, i.e. its domain.
-	///
-	/// If domain has the value `None`, then all values of the decision variable's
-	/// `Type` are allowed in a solution.
-	pub ty: Type,
-	/// The “right hand side” of the variable, i.e., its value or alias to another
-	/// variable
-	pub value: Option<Literal<Identifier>>,
-	/// A list of annotations
-	pub ann: Vec<Annotation<Identifier>>,
-	/// This field is set to `true` when there is a constraint that has been marked as
-	/// defining this variable.
-	pub defined: bool,
-	/// This field is set to `true` when the variable has been introduced by the
-	/// MiniZinc compiler, rather than being explicitly defined at the top-level
-	/// of the MiniZinc model.
-	pub introduced: bool,
 }
