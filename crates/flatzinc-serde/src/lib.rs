@@ -582,50 +582,42 @@ impl<Identifier: Display> Display for Literal<Identifier> {
 	}
 }
 
-/// Goal of solving a FlatZinc instance
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", serde(rename = "method"))]
-#[derive(Default, Clone, PartialEq, Debug)]
-pub enum Method {
-	/// Find any solution
-	#[cfg_attr(feature = "serde", serde(rename = "satisfy"))]
-	#[default]
+/// Goal of solving a FlatZinc instance.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Method<Identifier = String> {
+	/// Find any solution.
 	Satisfy,
-	/// Find the solution with the lowest objective value
-	#[cfg_attr(feature = "serde", serde(rename = "minimize"))]
-	Minimize,
-	/// Find the solution with the highest objective value
-	#[cfg_attr(feature = "serde", serde(rename = "maximize"))]
-	Maximize,
+	/// Find the solution with the lowest value for the given objective.
+	Minimize(Literal<Identifier>),
+	/// Find the solution with the highest value for the given objective.
+	Maximize(Literal<Identifier>),
 }
 
-impl Display for Method {
+impl<Identifier> Default for Method<Identifier> {
+	fn default() -> Self {
+		Self::Satisfy
+	}
+}
+
+impl<Identifier: Display> Display for Method<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Method::Satisfy => write!(f, "satisfy"),
-			Method::Minimize => write!(f, "minimize"),
-			Method::Maximize => write!(f, "maximize"),
+			Method::Minimize(objective) => write!(f, "minimize {objective}"),
+			Method::Maximize(objective) => write!(f, "maximize {objective}"),
 		}
 	}
 }
 
 /// A specification of objective of a FlatZinc instance
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[derive(Clone, PartialEq, Debug)]
 pub struct SolveObjective<Identifier = String> {
-	/// The type of goal
-	pub method: Method,
-	/// The variable to optimize, or `None` if [`SolveObjective::method`] is [`Method::Satisfy`]
-	#[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-	pub objective: Option<Literal<Identifier>>,
+	/// The method expected to be used for solving the instance.
+	pub method: Method<Identifier>,
 	/// A list of annotations from the solve statement in the MiniZinc model
 	///
 	/// Note that this includes the search annotations if they are present in the
 	/// model.
-	#[cfg_attr(
-		feature = "serde",
-		serde(default, skip_serializing_if = "Vec::is_empty")
-	)]
 	pub ann: Vec<Annotation<Identifier>>,
 }
 
@@ -633,7 +625,6 @@ impl<Identifier> Default for SolveObjective<Identifier> {
 	fn default() -> Self {
 		Self {
 			method: Default::default(),
-			objective: None,
 			ann: Vec::new(),
 		}
 	}
@@ -645,11 +636,7 @@ impl<Identifier: Display> Display for SolveObjective<Identifier> {
 		for a in &self.ann {
 			write!(f, "{a} ")?;
 		}
-		write!(f, "{}", self.method)?;
-		if let Some(obj) = &self.objective {
-			write!(f, " {obj}")?
-		}
-		Ok(())
+		write!(f, "{}", self.method)
 	}
 }
 

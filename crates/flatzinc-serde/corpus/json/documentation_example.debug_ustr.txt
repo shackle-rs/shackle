@@ -207,8 +207,7 @@ FlatZinc {
         u!("c"),
     ],
     solve: SolveObjective {
-        method: Maximize,
-        objective: Some(
+        method: Maximize(
             Identifier(
                 u!("X_INTRODUCED_0_"),
             ),

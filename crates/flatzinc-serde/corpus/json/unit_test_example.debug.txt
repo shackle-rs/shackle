@@ -185,7 +185,6 @@ FlatZinc {
     ],
     solve: SolveObjective {
         method: Satisfy,
-        objective: None,
         ann: [
             Call(
                 AnnotationCall {

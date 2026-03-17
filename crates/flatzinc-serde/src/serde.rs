@@ -9,7 +9,7 @@ use serde::{
 	Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::{Annotation, Literal, RangeList, Type, Variable};
+use crate::{Annotation, Literal, Method, RangeList, SolveObjective, Type, Variable};
 
 /// Helper function used by serde field attributes to omit `false` flags.
 pub(crate) fn is_false(b: &bool) -> bool {
@@ -344,6 +344,82 @@ impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for Variable<Identifier
 	}
 }
 
+impl<Identifier: Serialize> Serialize for SolveObjective<Identifier> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(rename = "solve")]
+		struct SolveObjectiveRepr<'a, Identifier> {
+			#[serde(rename = "method")]
+			method: &'static str,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			objective: Option<&'a Literal<Identifier>>,
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: &'a Vec<Annotation<Identifier>>,
+		}
+
+		let (method, objective) = match &self.method {
+			Method::Satisfy => ("satisfy", None),
+			Method::Minimize(objective) => ("minimize", Some(objective)),
+			Method::Maximize(objective) => ("maximize", Some(objective)),
+		};
+
+		SolveObjectiveRepr {
+			method,
+			objective,
+			ann: &self.ann,
+		}
+		.serialize(serializer)
+	}
+}
+
+impl<'de, Identifier: Deserialize<'de>> Deserialize<'de> for SolveObjective<Identifier> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(rename = "solve")]
+		#[serde(bound(deserialize = "Identifier: Deserialize<'de>"))]
+		struct SolveObjectiveRepr<Identifier> {
+			#[serde(rename = "method")]
+			method: String,
+			#[serde(default)]
+			objective: Option<Literal<Identifier>>,
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			ann: Vec<Annotation<Identifier>>,
+		}
+
+		let repr = SolveObjectiveRepr::deserialize(deserializer)?;
+		let method = match (repr.method.as_str(), repr.objective) {
+			("satisfy", None) => Method::Satisfy,
+			("satisfy", Some(_)) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"satisfy solve items cannot have an objective",
+				));
+			}
+			("minimize", Some(objective)) => Method::Minimize(objective),
+			("minimize", None) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"minimize solve items require an objective",
+				));
+			}
+			("maximize", Some(objective)) => Method::Maximize(objective),
+			("maximize", None) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(
+					"maximize solve items require an objective",
+				));
+			}
+			(method, _) => {
+				return Err(<D::Error as ::serde::de::Error>::custom(format!(
+					"unknown solve method '{method}'",
+				)));
+			}
+		};
+
+		Ok(SolveObjective {
+			method,
+			ann: repr.ann,
+		})
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::{
@@ -544,9 +620,8 @@ mod tests {
 		);
 
 		let sat = SolveObjective {
-			method: Method::Minimize,
+			method: Method::Minimize(Literal::Identifier("x")),
 			ann: vec![ann],
-			objective: Some(Literal::Identifier("x")),
 		};
 		assert_eq!(
 			sat.to_string(),

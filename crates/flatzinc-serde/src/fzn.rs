@@ -385,17 +385,20 @@ where
 		general_annotations,
 		alt((
 			token("satisfy").map(|_| Method::Satisfy),
-			token("minimize").map(|_| Method::Minimize),
-			token("maximize").map(|_| Method::Maximize),
+			preceded(
+				token("minimize"),
+				token(identifier.map(Literal::Identifier)),
+			)
+			.map(Method::Minimize),
+			preceded(
+				token("maximize"),
+				token(identifier.map(Literal::Identifier)),
+			)
+			.map(Method::Maximize),
 		)),
-		opt(identifier.map(Literal::Identifier)),
 		token(";"),
 	)
-		.map(|(_, ann, method, objective, _)| SolveObjective {
-			method,
-			objective,
-			ann,
-		})
+		.map(|(_, ann, method, _)| SolveObjective { method, ann })
 		.parse_next(input)
 }
 
@@ -907,7 +910,6 @@ mod tests {
 			solve_objective,
 			SolveObjective {
 				method: Method::Satisfy,
-				objective: None,
 				ann: vec![],
 			},
 			"solve satisfy;",
@@ -919,8 +921,7 @@ mod tests {
 		check_parser(
 			solve_objective,
 			SolveObjective {
-				method: Method::Minimize,
-				objective: Some(Literal::Identifier("w".to_owned())),
+				method: Method::Minimize(Literal::Identifier("w".to_owned())),
 				ann: vec![],
 			},
 			"solve minimize w;",
@@ -929,8 +930,7 @@ mod tests {
 		check_parser(
 			solve_objective,
 			SolveObjective {
-				method: Method::Maximize,
-				objective: Some(Literal::Identifier("w".to_owned())),
+				method: Method::Maximize(Literal::Identifier("w".to_owned())),
 				ann: vec![],
 			},
 			"solve maximize w;",
@@ -943,7 +943,6 @@ mod tests {
 			solve_objective,
 			SolveObjective {
 				method: Method::Satisfy,
-				objective: None,
 				ann: vec![Annotation::Call(AnnotationCall {
 					id: "int_search".to_owned(),
 					args: vec![
@@ -968,8 +967,7 @@ mod tests {
 		check_parser(
 			solve_objective,
 			SolveObjective {
-				method: Method::Maximize,
-				objective: Some(Literal::Identifier("x".to_owned())),
+				method: Method::Maximize(Literal::Identifier("x".to_owned())),
 				ann: vec![Annotation::Call(AnnotationCall {
 					id: "int_search".to_owned(),
 					args: vec![
