@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## unreleased
 
+### Added
+
+- Add support for parsing `.fzn` files when enabling the `fzn` feature.
+  Users can access this functionality via the `FlatZinc::from_fzn` method.
+
 ### Changed
 
-- `FlatZinc` now has two additional (and optional) generic type parameters. These allow the user to specify the type in which the mapping from identifier to variable and from identifier to array is stored.
+- `FlatZinc` now has two additional (and optional) generic type parameters.
+  These allow the user to specify the type in which the mapping from identifier to variable and from identifier to array is stored.
+- [**breaking**] The `Annotation` variant of `AnnotationLiteral` now directly includes a value of type `AnnotationCall<Identifier>`, to avoid the ambiguity of identifier-annotations already being able to be represented using `BaseLiteral`.
+- [**breaking**] The `domain` field of `Variable` has now moved to a variant argument on `Type`, accessible through the `ty` attribute.
+- [**breaking**] The `objective` field of the `SolveMethod` struct has now moved to a variant argument on `Method`, accessible through the `method` attribute.
 
 ## [0.4.4] - 2025-11-06
 
@@ -39,7 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The `RangeList` type has been moved to a separate crate called `rangelist`. The `RangeList` type is now re-exported from the `flatzinc-serde` crate.
+- The `RangeList` type has been moved to a separate crate called `rangelist`.
+  The `RangeList` type is now re-exported from the `flatzinc-serde` crate.
 
 ### Fixed
 
