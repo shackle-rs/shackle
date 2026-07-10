@@ -1,6 +1,9 @@
+import * as fs from "fs"
+import * as path from "path"
 import { ExtensionContext, workspace, commands } from "vscode"
 
 import {
+	Executable,
 	LanguageClient,
 	LanguageClientOptions,
 	ServerOptions,
@@ -15,13 +18,43 @@ import { handleMirViewCommand } from "./view-mir"
 
 let client: LanguageClient
 
-export function activate(context: ExtensionContext) {
-	const command = workspace
-		.getConfiguration("shackleLanguageServer")
-		.get<string>("executable")
+function bundledExecutable(context: ExtensionContext): string | undefined {
+	const executableName =
+		process.platform === "win32" ? "shackle-ls.exe" : "shackle-ls"
+	const executable = path.join(context.extensionPath, "bin", executableName)
+	return fs.existsSync(executable) ? executable : undefined
+}
 
-	const run = {
-		command: command ?? "shackle-ls",
+function bundledMiniZincStdlib(context: ExtensionContext): string | undefined {
+	const stdlib = path.join(
+		context.extensionPath,
+		"vendor",
+		"minizinc",
+		"share",
+		"minizinc"
+	)
+	return fs.existsSync(stdlib) ? stdlib : undefined
+}
+
+export function activate(context: ExtensionContext) {
+	const configuration = workspace.getConfiguration("shackleLanguageServer")
+	const configuredCommand = configuration.get<string>("executable")
+	const configuredEnvironment =
+		configuration.get<Record<string, string>>("environment") ?? {}
+	const bundledStdlib = bundledMiniZincStdlib(context)
+
+	const run: Executable = {
+		command:
+			configuredCommand && configuredCommand.trim().length > 0
+				? configuredCommand
+				: (bundledExecutable(context) ?? "shackle-ls"),
+		options: {
+			env: {
+				...process.env,
+				...(bundledStdlib ? { MZN_STDLIB_DIR: bundledStdlib } : {}),
+				...configuredEnvironment,
+			},
+		},
 	}
 	const serverOptions: ServerOptions = {
 		run,

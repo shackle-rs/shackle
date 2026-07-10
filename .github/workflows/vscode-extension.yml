@@ -6,27 +6,69 @@ on:
       - "dependabot/**"
   pull_request:
 
+env:
+  RUST_CHANNEL: "stable"
+  MINIZINC_REF: "develop"
+
 jobs:
   vscode-extension:
-    runs-on: ubuntu-latest
+    name: VS Code Extension (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: windows-latest
+            target: win32-x64
+          - os: macos-15-intel
+            target: darwin-x64
+          - os: macos-latest
+            target: darwin-arm64
 
     steps:
       - uses: actions/checkout@v6
+      - name: Checkout MiniZinc repo
+        uses: actions/checkout@v6
+        with:
+          repository: MiniZinc/libminizinc
+          path: minizinc
+          ref: ${{ env.MINIZINC_REF }}
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
+          cache: npm
+      - name: Install Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          cache-target: release
+          channel: ${{ env.RUST_CHANNEL }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --workspace vscode-shackle --include-workspace-root
       - name: Run linter
         run: npm run vscode:lint
         continue-on-error: true
-      - name: Build VS Code extension
+      - name: Bundle VS Code extension with esbuild
         run: npm run vscode:build
-        continue-on-error: true
+      - name: Build shackle-ls
+        run: cargo install --root editors/code --path crates/shackle-ls
+      - name: Bundle VS Code extension assets
+        shell: bash
+        run: |
+          mkdir -p "editors/code/share" "editors/code/vendor/minizinc/share"
+          cp "LICENSE" "editors/code/LICENSE"
+          cp -R "share/minizinc" "editors/code/share/minizinc"
+          cp -R "minizinc/share/minizinc" "editors/code/vendor/minizinc/share/minizinc"
+      - name: Package VS Code extension
+        run: npm run package:vsix -w vscode-shackle -- --target ${{ matrix.target }}
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: tree-sitter
+          name: vscode-extension-${{ matrix.target }}
           path: |
-            editors/code
+            editors/code/*.vsix

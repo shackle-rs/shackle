@@ -1,3 +1,7 @@
 node_modules
 out
 package-lock.json
+bin
+share
+vendor
+*.vsix

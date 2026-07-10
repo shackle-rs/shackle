@@ -1,14 +1,20 @@
 {
 	"name": "vscode-shackle",
-	"description": "A VS Code extension for MiniZinc",
+	"displayName": "MiniZinc Language Server",
+	"description": "Language support for the MiniZinc constraint modelling language",
 	"version": "0.1.0",
+	"icon": "minizinc_icon.png",
 	"license": "MPL-2.0",
 	"publisher": "shackle-rs",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/shackle-rs/shackle"
 	},
-	"categories": [],
+	"categories": [
+		"Programming Languages",
+		"Linters",
+		"Formatters"
+	],
 	"keywords": [
 		"multi-root ready"
 	],
@@ -20,7 +26,7 @@
 		"onCommand:shackleLanguageServer.viewHir",
 		"onCommand:shackleLanguageServer.viewScope"
 	],
-	"main": "./out/main",
+	"main": "./out/main.js",
 	"contributes": {
 		"configuration": {
 			"type": "object",
@@ -29,8 +35,17 @@
 				"shackleLanguageServer.executable": {
 					"scope": "window",
 					"type": "string",
-					"default": "shackle-ls",
-					"description": "Path to the shackle-ls executable."
+					"default": "",
+					"description": "Path to the shackle-ls executable. Leave empty to use the binary bundled with this extension, falling back to shackle-ls on PATH when no bundled binary is available."
+				},
+				"shackleLanguageServer.environment": {
+					"scope": "window",
+					"type": "object",
+					"default": {},
+					"additionalProperties": {
+						"type": "string"
+					},
+					"description": "Environment variables to set when launching the shackle-ls executable. Values override inherited environment variables and the bundled MiniZinc standard library default."
 				}
 			}
 		},
@@ -89,16 +104,21 @@
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -b",
-		"watch": "tsc -b -w",
-		"lint": "eslint ./src --ext .ts,.tsx"
+		"check": "tsc -b --noEmit",
+		"bundle": "node esbuild.js",
+		"compile": "npm run check && npm run bundle -- --production",
+		"watch": "node esbuild.js --watch",
+		"lint": "eslint ./src --ext .ts,.tsx",
+		"package:vsix": "vsce package --no-dependencies"
 	},
 	"devDependencies": {
 		"@types/mocha": "^10.0.10",
 		"@types/node": "^26.1.0",
-		"@types/vscode": "^1.125.0",
+		"@types/vscode": "1.74.0",
 		"@typescript-eslint/eslint-plugin": "^8.63.0",
 		"@typescript-eslint/parser": "^8.63.0",
+		"@vscode/vsce": "^3.9.2",
+		"esbuild": "^0.28.1",
 		"eslint": "^10.6.0",
 		"mocha": "^11.7.6",
 		"typescript": "^6.0.3"
