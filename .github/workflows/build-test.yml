@@ -27,13 +27,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build shackle-cli
         run: cargo install --root dist/ --path crates/shackle-cli
-      - name: Build shackle-ls
-        run: cargo install --root dist/ --path crates/shackle-ls
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: shackle-exe-${{ matrix.os }}
           path: dist/
+
   test-coverage:
     runs-on: "ubuntu-latest"
     steps:
@@ -48,7 +47,7 @@ jobs:
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: MiniZinc/libminizinc
           path: minizinc
@@ -57,10 +56,10 @@ jobs:
         run: cargo llvm-cov --all-features --workspace --codecov --output-path codecov.json
         env:
           MZN_STDLIB_DIR: ${{ github.workspace }}/minizinc/share/minizinc
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: codecov.json
+          files: codecov.json
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -75,7 +74,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: MiniZinc/libminizinc
           path: minizinc
@@ -97,7 +96,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: MiniZinc/libminizinc
           path: minizinc
