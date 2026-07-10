@@ -71,6 +71,7 @@ fn test_lower_integer_domain() {
                         "..",
                     ),
                     <Expression::5>: Call {
+                        kind: Operator,
                         function: <Expression::4>,
                         arguments: [
                             <Expression::2>,
@@ -86,6 +87,7 @@ fn test_lower_integer_domain() {
                         "union",
                     ),
                     <Expression::8>: Call {
+                        kind: Synthetic,
                         function: <Expression::7>,
                         arguments: [
                             <Expression::6>,
@@ -207,6 +209,7 @@ fn test_domain_expressions() {
                         "intersect",
                     ),
                     <Expression::6>: Call {
+                        kind: Operator,
                         function: <Expression::5>,
                         arguments: [
                             <Expression::2>,
@@ -233,6 +236,7 @@ fn test_domain_expressions() {
                         "intersect",
                     ),
                     <Expression::12>: Call {
+                        kind: Operator,
                         function: <Expression::11>,
                         arguments: [
                             <Expression::8>,
@@ -301,6 +305,7 @@ fn test_lower_matrix_domain() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -376,6 +381,7 @@ fn test_lower_call() {
                         "toVec",
                     ),
                     <Expression::4>: Call {
+                        kind: SourceCall,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -437,6 +443,7 @@ fn test_lower_indexed_access() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -505,6 +512,7 @@ fn test_lower_infix_operator() {
                         "/\\",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -563,6 +571,7 @@ fn test_lower_prefix_operator() {
                         "not",
                     ),
                     <Expression::3>: Call {
+                        kind: Operator,
                         function: <Expression::2>,
                         arguments: [
                             <Expression::1>,
@@ -621,6 +630,7 @@ fn test_lower_quantification() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -647,6 +657,7 @@ fn test_lower_quantification() {
                         "sum",
                     ),
                     <Expression::8>: Call {
+                        kind: GeneratorCall,
                         function: <Expression::7>,
                         arguments: [
                             <Expression::6>,
@@ -710,6 +721,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -729,6 +741,7 @@ fn test_lower_matrix_comprehension() {
                         "**",
                     ),
                     <Expression::9>: Call {
+                        kind: Operator,
                         function: <Expression::8>,
                         arguments: [
                             <Expression::6>,
@@ -802,6 +815,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -824,6 +838,7 @@ fn test_lower_matrix_comprehension() {
                         "+",
                     ),
                     <Expression::10>: Call {
+                        kind: Operator,
                         function: <Expression::9>,
                         arguments: [
                             <Expression::7>,
@@ -903,6 +918,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -922,6 +938,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::9>: Call {
+                        kind: Operator,
                         function: <Expression::8>,
                         arguments: [
                             <Expression::6>,
@@ -941,6 +958,7 @@ fn test_lower_matrix_comprehension() {
                         "+",
                     ),
                     <Expression::14>: Call {
+                        kind: Operator,
                         function: <Expression::13>,
                         arguments: [
                             <Expression::11>,
@@ -1034,6 +1052,7 @@ fn test_lower_matrix_comprehension() {
                         "<",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -1050,6 +1069,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::8>: Call {
+                        kind: Operator,
                         function: <Expression::7>,
                         arguments: [
                             <Expression::5>,
@@ -1066,6 +1086,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::12>: Call {
+                        kind: Operator,
                         function: <Expression::11>,
                         arguments: [
                             <Expression::9>,
@@ -1088,6 +1109,7 @@ fn test_lower_matrix_comprehension() {
                         "+",
                     ),
                     <Expression::18>: Call {
+                        kind: Operator,
                         function: <Expression::17>,
                         arguments: [
                             <Expression::15>,
@@ -1175,6 +1197,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -1210,6 +1233,7 @@ fn test_lower_matrix_comprehension() {
                         "..",
                     ),
                     <Expression::11>: Call {
+                        kind: Operator,
                         function: <Expression::10>,
                         arguments: [
                             <Expression::8>,
@@ -1220,6 +1244,7 @@ fn test_lower_matrix_comprehension() {
                         "array1d",
                     ),
                     <Expression::13>: Call {
+                        kind: Synthetic,
                         function: <Expression::12>,
                         arguments: [
                             <Expression::11>,
@@ -1281,6 +1306,7 @@ fn test_lower_absolute() {
                         "abs",
                     ),
                     <Expression::3>: Call {
+                        kind: Operator,
                         function: <Expression::2>,
                         arguments: [
                             <Expression::1>,
@@ -1428,6 +1454,7 @@ fn test_lower_param_declaration() {
                         "<",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -1474,6 +1501,7 @@ fn test_lower_domain_alias() {
                         "-",
                     ),
                     <Expression::3>: Call {
+                        kind: Synthetic,
                         function: <Expression::2>,
                         arguments: [
                             <Expression::1>,
@@ -1484,6 +1512,7 @@ fn test_lower_domain_alias() {
                         "..",
                     ),
                     <Expression::6>: Call {
+                        kind: Synthetic,
                         function: <Expression::5>,
                         arguments: [
                             <Expression::3>,
@@ -1551,6 +1580,7 @@ fn test_lower_domain_alias() {
                         "..",
                     ),
                     <Expression::5>: Call {
+                        kind: Operator,
                         function: <Expression::4>,
                         arguments: [
                             <Expression::2>,
@@ -1566,6 +1596,7 @@ fn test_lower_domain_alias() {
                         "union",
                     ),
                     <Expression::8>: Call {
+                        kind: Synthetic,
                         function: <Expression::7>,
                         arguments: [
                             <Expression::6>,
@@ -1585,6 +1616,7 @@ fn test_lower_domain_alias() {
                         "..",
                     ),
                     <Expression::13>: Call {
+                        kind: Operator,
                         function: <Expression::12>,
                         arguments: [
                             <Expression::10>,
@@ -1600,6 +1632,7 @@ fn test_lower_domain_alias() {
                         "union",
                     ),
                     <Expression::16>: Call {
+                        kind: Synthetic,
                         function: <Expression::15>,
                         arguments: [
                             <Expression::14>,
@@ -1796,6 +1829,7 @@ fn test_lower_branching() {
                         "int_search",
                     ),
                     <Expression::6>: Call {
+                        kind: Synthetic,
                         function: <Expression::5>,
                         arguments: [
                             <Expression::2>,
@@ -2031,6 +2065,7 @@ fn test_lower_matrix_literal() {
                         "..",
                     ),
                     <Expression::12>: Call {
+                        kind: Synthetic,
                         function: <Expression::11>,
                         arguments: [
                             <Expression::9>,
@@ -2047,6 +2082,7 @@ fn test_lower_matrix_literal() {
                         "..",
                     ),
                     <Expression::16>: Call {
+                        kind: Synthetic,
                         function: <Expression::15>,
                         arguments: [
                             <Expression::13>,
@@ -2063,6 +2099,7 @@ fn test_lower_matrix_literal() {
                         "..",
                     ),
                     <Expression::20>: Call {
+                        kind: Synthetic,
                         function: <Expression::19>,
                         arguments: [
                             <Expression::17>,
@@ -2085,6 +2122,7 @@ fn test_lower_matrix_literal() {
                         "array3d",
                     ),
                     <Expression::23>: Call {
+                        kind: Synthetic,
                         function: <Expression::22>,
                         arguments: [
                             <Expression::12>,
@@ -2139,6 +2177,7 @@ fn test_lower_output() {
                         "show",
                     ),
                     <Expression::3>: Call {
+                        kind: SourceCall,
                         function: <Expression::2>,
                         arguments: [
                             <Expression::1>,

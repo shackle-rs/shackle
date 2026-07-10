@@ -1931,6 +1931,7 @@ mod tests {
                         "+",
                     ),
                     <Expression::5>: Call {
+                        kind: Operator,
                         function: <Expression::4>,
                         arguments: [
                             <Expression::2>,
@@ -2057,6 +2058,7 @@ mod tests {
                         "test_fn",
                     ),
                     <Expression::3>: Call {
+                        kind: SourceCall,
                         function: <Expression::2>,
                         arguments: [
                             <Expression::1>,

@@ -98,6 +98,7 @@ var {1, 2, 3}: x = foo(<>);
                         "foo",
                     ),
                     <Expression::7>: Call {
+                        kind: SourceCall,
                         function: <Expression::6>,
                         arguments: [
                             <Expression::5>,

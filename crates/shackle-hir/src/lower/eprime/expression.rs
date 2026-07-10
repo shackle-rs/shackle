@@ -55,35 +55,48 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 			eprime::Expression::MatrixLiteral(m) => return self.collect_matrix_literal(m, false),
 			eprime::Expression::Call(c) => {
 				let f = c.function().name(self.text);
-				self.collect_operator_call(f, c.arguments(), c).into()
+				self.collect_call(f, c.arguments(), c, CallKind::SourceCall)
+					.into()
 			}
 			eprime::Expression::Identifier(i) => Identifier::new(self.db, i.name(self.text)).into(),
 			eprime::Expression::ArrayAccess(aa) => self.collect_array_access(aa).into(),
 			eprime::Expression::InfixOperator(o) => self
-				.collect_operator_call(
+				.collect_call(
 					o.operator().name(),
 					vec![o.left(), o.right()].into_iter(),
 					o,
+					CallKind::Operator,
 				)
 				.into(),
 			eprime::Expression::PrefixOperator(o) => self
-				.collect_operator_call(o.operator().name(), iter::once(o.operand()), o)
+				.collect_call(
+					o.operator().name(),
+					iter::once(o.operand()),
+					o,
+					CallKind::Operator,
+				)
 				.into(),
 			eprime::Expression::UnarySetConstructor(o) => self
-				.collect_operator_call(o.operator().name(), iter::once(o.operand()), o)
+				.collect_call(
+					o.operator().name(),
+					iter::once(o.operand()),
+					o,
+					CallKind::Operator,
+				)
 				.into(),
 			eprime::Expression::Quantification(q) => self.collect_quantification(q).into(),
 			eprime::Expression::MatrixComprehension(m) => {
 				return self.collect_matrix_comprehension(m);
 			}
 			eprime::Expression::AbsoluteOperator(a) => self
-				.collect_operator_call("abs", iter::once(a.operand()), a)
+				.collect_call("abs", iter::once(a.operand()), a, CallKind::Operator)
 				.into(),
 			eprime::Expression::SetConstructor(o) => self
-				.collect_operator_call(
+				.collect_call(
 					o.operator().name(),
 					vec![o.left(), o.right()].into_iter(),
 					o,
+					CallKind::Operator,
 				)
 				.into(),
 		};
@@ -134,6 +147,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				self.alloc_expression(
 					d,
 					Call {
+						kind: CallKind::Operator,
 						function,
 						arguments: Box::new([left, right]),
 					},
@@ -201,6 +215,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						self.alloc_expression(
 							i,
 							Call {
+								kind: CallKind::Synthetic,
 								function: union_expr,
 								arguments: Box::new([acc, e]),
 							},
@@ -226,6 +241,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						self.alloc_expression(
 							i,
 							Call {
+								kind: CallKind::Synthetic,
 								function: union_expr,
 								arguments: Box::new([l, d]),
 							},
@@ -240,11 +256,12 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		})
 	}
 
-	fn collect_operator_call<'tree>(
+	fn collect_call<'tree>(
 		&mut self,
 		o: &str,
 		args: impl Iterator<Item = eprime::Expression<'tree>>,
 		ast: &impl AstNode<'tree>,
+		kind: CallKind,
 	) -> Call<'db> {
 		let arguments = args
 			.into_iter()
@@ -271,6 +288,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 			},
 		);
 		Call {
+			kind,
 			function,
 			arguments,
 		}
@@ -377,6 +395,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 							self.alloc_expression(
 								ml,
 								Call {
+									kind: CallKind::Synthetic,
 									function,
 									arguments: Box::new([one, n]),
 								},
@@ -394,6 +413,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				self.alloc_expression(
 					ml,
 					Call {
+						kind: CallKind::Synthetic,
 						function,
 						arguments: index_sets.into_boxed_slice(),
 					},
@@ -415,6 +435,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		};
 		let function = self.ident_exp(q, ident);
 		Call {
+			kind: CallKind::GeneratorCall,
 			arguments,
 			function,
 		}
@@ -469,6 +490,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				self.alloc_expression(
 					m,
 					Call {
+						kind: CallKind::Synthetic,
 						function,
 						arguments: Box::new([index_set, matrix_comprehension]),
 					},
@@ -623,6 +645,7 @@ impl<'db, 'a> CollectedDomain<'db> {
 						let inf = ctx.alloc_expression(ast, Expression::Infinity);
 						(
 							Call {
+								kind: CallKind::Synthetic,
 								function: ctx.ident_exp(ast, "-"),
 								arguments: Box::new([inf]),
 							}
@@ -640,6 +663,7 @@ impl<'db, 'a> CollectedDomain<'db> {
 				ctx.alloc_expression(
 					ast,
 					Call {
+						kind: CallKind::Synthetic,
 						function,
 						arguments: Box::new([l, r]),
 					},

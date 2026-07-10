@@ -656,6 +656,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 
 	fn collect_call(&mut self, c: &minizinc::Call) -> Call<'db> {
 		Call {
+			kind: CallKind::SourceCall,
 			arguments: c.arguments().map(|a| self.collect_expression(&a)).collect(),
 			function: self.collect_expression(&c.function()),
 		}
@@ -679,6 +680,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		self.alloc_expression(
 			o,
 			Call {
+				kind: CallKind::Operator,
 				function,
 				arguments,
 			},
@@ -699,6 +701,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		self.alloc_expression(
 			o,
 			Call {
+				kind: CallKind::Operator,
 				function,
 				arguments,
 			},
@@ -712,6 +715,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		self.alloc_expression(
 			o,
 			Call {
+				kind: CallKind::Operator,
 				function,
 				arguments,
 			},
@@ -730,6 +734,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		self.alloc_expression(
 			c,
 			Call {
+				kind: CallKind::GeneratorCall,
 				arguments,
 				function,
 			},
@@ -750,6 +755,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 					self.alloc_expression(
 						e,
 						Call {
+							kind: CallKind::Synthetic,
 							function,
 							arguments,
 						},
@@ -767,6 +773,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		self.alloc_expression(
 			s,
 			Call {
+				kind: CallKind::Synthetic,
 				function,
 				arguments,
 			},

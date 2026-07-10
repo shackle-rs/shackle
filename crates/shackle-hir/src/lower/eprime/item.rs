@@ -90,6 +90,7 @@ impl<'db: 'a, 'tree, 'a> ItemCollector<'db, 'tree, 'a> {
 				Box::new([ctx.alloc_expression(
 					b,
 					Call {
+						kind: CallKind::Synthetic,
 						function,
 						arguments,
 					},
@@ -153,6 +154,7 @@ impl<'db: 'a, 'tree, 'a> ItemCollector<'db, 'tree, 'a> {
 			definition = ctx.alloc_expression(
 				c,
 				Call {
+					kind: CallKind::Synthetic,
 					function,
 					arguments: arguments.into_boxed_slice(),
 				},

@@ -318,10 +318,25 @@ pub struct Branch<'db> {
 /// Function call
 #[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
 pub struct Call<'db> {
+	/// The source construct from which this call was lowered
+	pub kind: CallKind,
 	/// Function being called
 	pub function: ExpressionId<'db>,
 	/// Call arguments
 	pub arguments: Box<[ExpressionId<'db>]>,
+}
+
+/// The source construct from which a function call was lowered.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+pub enum CallKind {
+	/// An explicit function call, such as `foo(x)`.
+	SourceCall,
+	/// A prefix, infix, or postfix operator.
+	Operator,
+	/// A call using generator or quantification syntax.
+	GeneratorCall,
+	/// A call introduced by another lowering transformation.
+	Synthetic,
 }
 
 /// Case expression

@@ -42,6 +42,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		references_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
 		hover_provider: Some(HoverProviderCapability::Simple(true)),
+		inlay_hint_provider: Some(OneOf::Left(true)),
 		rename_provider: Some(OneOf::Left(true)),
 		completion_provider: Some(CompletionOptions {
 			trigger_characters: Some(vec![".".to_owned()]),
@@ -101,6 +102,7 @@ fn main_loop(
 					.on::<ReferencesHandler, _, _>()
 					.on::<RenameHandler, _, _>()
 					.on::<HoverHandler, _, _>()
+					.on::<InlayHintHandler, _, _>()
 					.on::<CompletionsHandler, _, _>()
 					.on::<SemanticTokensHandler, _, _>()
 					.on::<FormatHandler, _, _>()

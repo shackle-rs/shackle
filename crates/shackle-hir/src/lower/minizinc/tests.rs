@@ -63,6 +63,7 @@ fn test_lower_constraint() {
                         "=",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -765,6 +766,7 @@ fn test_lower_function() {
                         "+",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
@@ -1231,6 +1233,7 @@ fn test_lower_solve() {
                         "int_search",
                     ),
                     <Expression::6>: Call {
+                        kind: SourceCall,
                         function: <Expression::5>,
                         arguments: [
                             <Expression::2>,
@@ -1327,6 +1330,7 @@ fn test_lower_solve() {
                         "int_search",
                     ),
                     <Expression::6>: Call {
+                        kind: SourceCall,
                         function: <Expression::5>,
                         arguments: [
                             <Expression::2>,
@@ -1432,6 +1436,7 @@ fn test_lower_solve() {
                         "int_search",
                     ),
                     <Expression::6>: Call {
+                        kind: SourceCall,
                         function: <Expression::5>,
                         arguments: [
                             <Expression::2>,
@@ -1534,6 +1539,7 @@ fn test_lower_type_alias() {
                         "..",
                     ),
                     <Expression::4>: Call {
+                        kind: Operator,
                         function: <Expression::3>,
                         arguments: [
                             <Expression::1>,
