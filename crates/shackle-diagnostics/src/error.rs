@@ -510,6 +510,13 @@ pub enum Error {
 	#[error("Failed to locate the standard library.")]
 	#[diagnostic(code(shackle::stdlib_not_found))]
 	StandardLibraryNotFound,
+	/// Failed to find the MiniZinc standard library
+	#[error("Failed to locate the MiniZinc standard library.")]
+	#[diagnostic(
+		code(shackle::minizinc_stdlib_not_found),
+		help("Set MZN_STDLIB_DIR to upstream MiniZinc's share/minizinc directory.")
+	)]
+	MiniZincStandardLibraryNotFound,
 	/// Include error
 	#[error(transparent)]
 	#[diagnostic(transparent)]

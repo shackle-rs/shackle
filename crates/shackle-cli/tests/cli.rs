@@ -172,6 +172,35 @@ fn compile_writes_shackle_model() {
 }
 
 #[test]
+fn compile_reports_missing_or_invalid_minizinc_stdlib() {
+	let dir = tempdir().unwrap();
+	let model = dir.path().join("model.mzn");
+	write(&model, "var int: x;\nsolve satisfy;\n");
+
+	let output = shackle()
+		.env_remove("MZN_STDLIB_DIR")
+		.args(["compile", model.to_str().unwrap()])
+		.output()
+		.unwrap();
+
+	let output = assert_failure(output);
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("Failed to locate the MiniZinc standard library"));
+	assert!(stderr.contains("MZN_STDLIB_DIR"));
+
+	let output = shackle()
+		.env("MZN_STDLIB_DIR", dir.path().join("not-minizinc"))
+		.args(["compile", model.to_str().unwrap()])
+		.output()
+		.unwrap();
+
+	let output = assert_failure(output);
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("Failed to locate the MiniZinc standard library"));
+	assert!(stderr.contains("MZN_STDLIB_DIR"));
+}
+
+#[test]
 fn compile_rejects_unsupported_file_types() {
 	let dir = tempdir().unwrap();
 	let model = dir.path().join("model.mzn");

@@ -438,6 +438,12 @@ pub fn auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 	if settings.ignore_stdlib(db) {
 		return vec![];
 	}
+	if !share_directory(db).as_ref().is_some_and(|share_dir| {
+		share_dir.join("std/stdlib.mzn").is_file()
+			&& share_dir.join("std/solver_redefinitions.mzn").is_file()
+	}) {
+		Errors::add(db, ShackleError::MiniZincStandardLibraryNotFound);
+	}
 
 	let Some(share_dir) = shackle_share_directory(db) else {
 		// share/minizinc directory does not exist
