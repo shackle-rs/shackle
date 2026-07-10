@@ -134,17 +134,15 @@ pub fn find_leaf<'db>(
 ) -> Option<EntityRef<'db>> {
 	let item = find_item(db, file, byte_offset)?;
 	let leaf_nodes = sorted_leaf_nodes(db, item);
-	let leaf_idx = match leaf_nodes.binary_search_by_key(&byte_offset, |(_, offset, _)| *offset) {
-		Ok(i) => i,
-		Err(0) => return None,
-		Err(i) => i - 1,
-	};
-	let (e, offset, len) = leaf_nodes[leaf_idx];
-
-	if byte_offset >= offset + len {
-		return None;
-	}
-
+	let leaf_end = leaf_nodes.partition_point(|(_, offset, _)| *offset <= byte_offset);
+	let offset = leaf_nodes.get(leaf_end.checked_sub(1)?)?.1;
+	let leaf_start = leaf_nodes.partition_point(|(_, o, _)| *o < offset);
+	// Prefer the shortest containing origin, then an expression if the origins are identical.
+	let (e, _, _) = leaf_nodes[leaf_start..leaf_end]
+		.iter()
+		.copied()
+		.filter(|(_, offset, len)| byte_offset < offset + len)
+		.min_by_key(|(entity, _, len)| (*len, !matches!(*entity, EntityId::Expression(_))))?;
 	Some(EntityRef::new(db, item, e))
 }
 
@@ -289,6 +287,7 @@ mod tests {
 
 	use crate::{
 		CompilerDatabase,
+		ids::EntityId,
 		input::{CompilerSettings, InlineModelFile, InputFiles, ModelFile},
 		source::{expression_nodes, find_expression, find_item, find_leaf, sorted_leaf_nodes},
 	};
@@ -415,6 +414,24 @@ mod tests {
 		check_find_leaf(model, 5, expect!["x"]);
 		check_find_leaf(model, 9, expect!["<not found>"]);
 		check_find_leaf(model, 15, expect!["int"]);
+	}
+
+	#[test]
+	fn test_find_leaf_prefers_shortest_span() {
+		let model = "int: foo; int: bar; solve minimize foo + bar;";
+		check_find_leaf(model, 35, expect!["foo"]);
+		check_find_leaf(model, 36, expect!["foo"]);
+		check_find_leaf(model, 37, expect!["foo"]);
+		check_find_leaf(model, 38, expect!["foo + bar"]);
+	}
+
+	#[test]
+	fn test_find_leaf_prefers_expression_over_pattern() {
+		let (db, model) = setup_test("int: foo; solve minimize foo;");
+		assert!(matches!(
+			find_leaf(&db, model, 26).map(|entity| entity.entity(&db)),
+			Some(EntityId::Expression(_))
+		));
 	}
 
 	#[test]

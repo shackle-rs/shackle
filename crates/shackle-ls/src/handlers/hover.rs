@@ -114,4 +114,49 @@ any: y = x.1;
     }"#]),
 		)
 	}
+
+	#[test]
+	fn test_hover_objective_identifier() {
+		test_handler::<HoverHandler, _, _>(
+			r#"
+int: foo;
+int: bar;
+solve minimize foo + bar;
+			"#,
+			false,
+			lsp_types::HoverParams {
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+				text_document_position_params: lsp_types::TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Uri::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 3,
+						character: 16,
+					},
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "contents": {
+          "language": "minizinc",
+          "value": "int"
+        },
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 15
+          },
+          "end": {
+            "line": 3,
+            "character": 18
+          }
+        }
+      }
+    }"#]),
+		)
+	}
 }
