@@ -32,31 +32,25 @@ fn follow_expression_inner<'a, 'db, T: Marker>(
 		ExpressionData::TupleAccess(ta) => {
 			let mut current: Option<&Expression<T>> = Some(&ta.tuple);
 			loop {
-				if let Some(tuple) = current {
-					if let ExpressionData::TupleLiteral(tl) = &**tuple {
-						return Some(&tl[(ta.field.0 - 1) as usize]);
-					}
-					maybe_grow_stack(|| {
-						current = follow_expression_inner(model, tuple);
-					});
-				} else {
-					return None;
+				let tuple = current?;
+				if let ExpressionData::TupleLiteral(tl) = &**tuple {
+					return Some(&tl[(ta.field.0 - 1) as usize]);
 				}
+				maybe_grow_stack(|| {
+					current = follow_expression_inner(model, tuple);
+				});
 			}
 		}
 		ExpressionData::RecordAccess(ra) => {
 			let mut current: Option<&Expression<T>> = Some(&ra.record);
 			loop {
-				if let Some(record) = current {
-					if let ExpressionData::RecordLiteral(rl) = &**record {
-						return Some(rl.as_hash_map()[&ra.field]);
-					}
-					maybe_grow_stack(|| {
-						current = follow_expression_inner(model, record);
-					});
-				} else {
-					return None;
+				let record = current?;
+				if let ExpressionData::RecordLiteral(rl) = &**record {
+					return Some(rl.as_hash_map()[&ra.field]);
 				}
+				maybe_grow_stack(|| {
+					current = follow_expression_inner(model, record);
+				});
 			}
 		}
 		ExpressionData::Let(l) => Some(&l.in_expression),

@@ -947,8 +947,7 @@ impl Display for Record {
 		write!(
 			f,
 			"({})",
-			&self
-				.fields
+			self.fields
 				.iter()
 				.map(|(k, v)| format!("{}: {}", *k, v))
 				.format(", ")

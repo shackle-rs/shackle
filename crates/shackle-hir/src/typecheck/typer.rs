@@ -2767,15 +2767,7 @@ supported in operation types."
 			}
 			Type::Any => {
 				*has_unbounded = true;
-				ty.and_then(|ty| {
-					if ty.contains_bottom(db) {
-						// Not allowed to use bottom type for any
-						None
-					} else {
-						Some(ty)
-					}
-				})
-				.unwrap_or_else(|| {
+				ty.filter(|&ty| !ty.contains_bottom(db)).unwrap_or_else(|| {
 					let (src, span) = TypeRef::new(db, self.item, t).source_span(db);
 					self.ctx.add_diagnostic(
 						db,

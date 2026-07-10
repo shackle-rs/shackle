@@ -858,7 +858,7 @@ impl<'de, Identifier: FromStr> Deserialize<'de> for Channel<Identifier> {
 			.map_err(|_| {
 				de::Error::custom(format!(
 					"invalid integer expressions `{}'",
-					&c.list[0].trim()
+					c.list[0].trim()
 				))
 			})?;
 		let inverse_list = if let Some(inverse_list) = c.list.get(1) {

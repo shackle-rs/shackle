@@ -98,7 +98,7 @@ impl<'a> MiniZincFormatter<'a> {
 		elements: impl IntoIterator<Item = Element>,
 	) -> Element {
 		if let Some(c) = self.comments.map.remove(&node.cst_node().id()) {
-			log::debug!("Attached comments to {:?}", &node.cst_node().id());
+			log::debug!("Attached comments to {:?}", node.cst_node().id());
 			vec![
 				Element::sequence(c.before),
 				Element::sequence(elements),
