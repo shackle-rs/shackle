@@ -36,7 +36,7 @@ function bundledMiniZincStdlib(context: ExtensionContext): string | undefined {
 	return fs.existsSync(stdlib) ? stdlib : undefined
 }
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext) {
 	const configuration = workspace.getConfiguration("shackleLanguageServer")
 	const configuredCommand = configuration.get<string>("executable")
 	const configuredEnvironment =
@@ -72,43 +72,42 @@ export function activate(context: ExtensionContext) {
 		clientOptions
 	)
 
-	client.start().then(() => {
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewCst", () =>
-				handleCstViewCommand(client)
-			)
+	await client.start()
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewCst", () =>
+			handleCstViewCommand(client)
 		)
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewAst", () =>
-				handleAstViewCommand(client)
-			)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewAst", () =>
+			handleAstViewCommand(client)
 		)
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewFormatIr", () =>
-				handleFormatIrViewCommand(client)
-			)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewFormatIr", () =>
+			handleFormatIrViewCommand(client)
 		)
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewHir", () =>
-				handleHirViewCommand(client)
-			)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewHir", () =>
+			handleHirViewCommand(client)
 		)
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewScope", () =>
-				handleScopeViewCommand(client)
-			)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewScope", () =>
+			handleScopeViewCommand(client)
 		)
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewPrettyPrint", () =>
-				handlePrettyPrintViewCommand(client)
-			)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewPrettyPrint", () =>
+			handlePrettyPrintViewCommand(client)
 		)
-		context.subscriptions.push(
-			commands.registerCommand("shackleLanguageServer.viewMir", () =>
-				handleMirViewCommand(client)
-			)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("shackleLanguageServer.viewMir", () =>
+			handleMirViewCommand(client)
 		)
-	})
+	)
 }
 
 export function deactivate(): Thenable<void> | undefined {

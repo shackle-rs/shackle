@@ -21,11 +21,6 @@
 	"engines": {
 		"vscode": "^1.74.0"
 	},
-	"activationEvents": [
-		"onLanguage:minizinc",
-		"onCommand:shackleLanguageServer.viewHir",
-		"onCommand:shackleLanguageServer.viewScope"
-	],
 	"main": "./out/main.js",
 	"contributes": {
 		"configuration": {
@@ -52,31 +47,38 @@
 		"commands": [
 			{
 				"command": "shackleLanguageServer.viewCst",
-				"title": "MiniZinc: View CST"
+				"title": "MiniZinc: View CST",
+				"enablement": "editorLangId == minizinc"
 			},
 			{
 				"command": "shackleLanguageServer.viewAst",
-				"title": "MiniZinc: View AST"
+				"title": "MiniZinc: View AST",
+				"enablement": "editorLangId == minizinc"
 			},
 			{
 				"command": "shackleLanguageServer.viewFormatIr",
-				"title": "MiniZinc: View Formatting IR"
+				"title": "MiniZinc: View Formatting IR",
+				"enablement": "editorLangId == minizinc"
 			},
 			{
 				"command": "shackleLanguageServer.viewHir",
-				"title": "MiniZinc: View HIR"
+				"title": "MiniZinc: View HIR",
+				"enablement": "editorLangId == minizinc"
 			},
 			{
 				"command": "shackleLanguageServer.viewScope",
-				"title": "MiniZinc: View Scope"
+				"title": "MiniZinc: View Scope",
+				"enablement": "editorLangId == minizinc"
 			},
 			{
 				"command": "shackleLanguageServer.viewPrettyPrint",
-				"title": "MiniZinc: View Pretty Printed MiniZinc"
+				"title": "MiniZinc: View Pretty Printed MiniZinc",
+				"enablement": "editorLangId == minizinc"
 			},
 			{
 				"command": "shackleLanguageServer.viewMir",
-				"title": "MiniZinc: View MIR"
+				"title": "MiniZinc: View MIR",
+				"enablement": "editorLangId == minizinc"
 			}
 		],
 		"grammars": [
@@ -99,6 +101,12 @@
 					"mzn"
 				],
 				"configuration": "./language-configuration.json"
+			}
+		],
+		"snippets": [
+			{
+				"language": "minizinc",
+				"path": "./snippets/minizinc.json"
 			}
 		]
 	},

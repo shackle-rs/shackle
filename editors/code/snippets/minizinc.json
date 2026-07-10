@@ -1,0 +1,47 @@
+{
+	"Array Declaration": {
+		"prefix": "arr",
+		"body": "array[${1:int}] of ${2:var int}: ${3:array}",
+		"description": "Array declaration"
+	},
+	"Forall": {
+		"prefix": "for",
+		"body": "forall(${1:i in ${2:N}}) ($3)",
+		"description": "For all predicate"
+	},
+	"Function": {
+		"prefix": "func",
+		"body": "function $3: ${1:foo}($2) = ${4:true};",
+		"description": "Function definition"
+	},
+	"Globals": {
+		"prefix": "glob",
+		"body": "import \"globals.mzn\";",
+		"description": "Import global constraints"
+	},
+	"Predicate": {
+		"prefix": "pred",
+		"body": "predicate ${1:foo}($2) = ${3:true};",
+		"description": "Predicate definition"
+	},
+	"Solve Satisfy": {
+		"prefix": "sat",
+		"body": "solve satisfy;",
+		"description": "Solve satisfy statement"
+	},
+	"Solve Maximize": {
+		"prefix": "max",
+		"body": "solve maximize ${1:objective};",
+		"description": "Solve maximize statement"
+	},
+	"Solve Minimize": {
+		"prefix": "min",
+		"body": "solve minimize ${1:objective};",
+		"description": "Solve minimize statement"
+	},
+	"Sum": {
+		"prefix": "sum",
+		"body": "sum(${1:i} in ${2:N}) ($3)",
+		"description": "Sum predicate"
+	}
+}

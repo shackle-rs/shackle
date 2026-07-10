@@ -15,3 +15,4 @@ Currently experimental, and targets the next major MiniZinc language version, wh
 - Find references
 - Code completion
 - Code formatting
+- Basic snippets
