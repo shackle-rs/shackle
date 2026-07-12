@@ -21,7 +21,7 @@
 		"parsers/tree-sitter-minizinc"
 	],
 	"devDependencies": {
-		"prettier": "^3.9.4"
+		"prettier": "^3.9.5"
 	},
 	"overrides": {
 		"serialize-javascript": "^7.0.3",
