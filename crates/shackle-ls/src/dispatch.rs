@@ -1,7 +1,7 @@
 use std::panic::{UnwindSafe, catch_unwind};
 
 use lsp_server::{
-	ErrorCode, ExtractError, Message, Notification, Request, Response, ResponseError,
+	ErrorCode, ExtractError, Message, Notification, Request, Response, ResponseError, ResponseKind,
 };
 use shackle_hir::db::CompilerDatabase;
 
@@ -48,8 +48,7 @@ impl<'a> DispatchRequest<'a> {
 								Err(e) => {
 									db.send(Message::Response(Response {
 										id,
-										result: None,
-										error: Some(e),
+										response_kind: ResponseKind::Err { error: e },
 									}))
 									.unwrap_or_else(|e| {
 										log::error!("failed to send response: {:?}", e)
@@ -67,8 +66,7 @@ impl<'a> DispatchRequest<'a> {
 									),
 									Ok(Err(err)) => Response {
 										id,
-										result: None,
-										error: Some(err),
+										response_kind: ResponseKind::Err { error: err },
 									},
 									_ => Response::new_err(
 										id,
