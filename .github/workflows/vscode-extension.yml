@@ -33,9 +33,9 @@ jobs:
             target: darwin-arm64
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: MiniZinc/libminizinc
           path: minizinc

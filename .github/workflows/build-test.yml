@@ -17,7 +17,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -36,7 +36,7 @@ jobs:
   test-coverage:
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -47,7 +47,7 @@ jobs:
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: MiniZinc/libminizinc
           path: minizinc
@@ -66,7 +66,7 @@ jobs:
       matrix:
         os: [macos-latest] # TODO: Add windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -74,7 +74,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: MiniZinc/libminizinc
           path: minizinc
@@ -87,7 +87,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain and clippy
         uses: moonrepo/setup-rust@v1
         with:
@@ -96,7 +96,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout MiniZinc repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: MiniZinc/libminizinc
           path: minizinc
