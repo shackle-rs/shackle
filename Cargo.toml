@@ -33,7 +33,7 @@ expect-test = "1.5.1"
 log = "0.4.29"
 miette = "7.6.0"
 rustc-hash = "2.1.2"
-salsa = "0.26.2"
+salsa = "0.27.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 stacker = "0.1.24"

@@ -14,11 +14,11 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-rangelist = { version = "0.4.0" }
+rangelist = { version = "0.5.0" }
 nom = "8.0.0"
 
 [dev-dependencies]
-quick-xml = { version = "0.39.3", features = ["serialize", "overlapped-lists"] }
+quick-xml = { version = "0.41.0", features = ["serialize", "overlapped-lists"] }
 expect-test = "1.5"
 
 [lints]
