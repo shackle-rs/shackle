@@ -1,11 +1,11 @@
 {
-	"name": "vscode-shackle",
-	"displayName": "MiniZinc Language Server",
-	"description": "Language support for the MiniZinc constraint modelling language",
-	"version": "0.1.0",
+	"name": "minizinc",
+	"displayName": "MiniZinc",
+	"description": "Language support for the MiniZinc modelling language",
+	"version": "0.1.2",
 	"icon": "minizinc_icon.png",
 	"license": "MPL-2.0",
-	"publisher": "shackle-rs",
+	"publisher": "DekkerOne",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/shackle-rs/shackle"

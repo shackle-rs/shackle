@@ -8,9 +8,9 @@
 		"parser:eprime:test": "npm run test -w tree-sitter-eprime",
 		"parser:minizinc:build": "npm run build -w tree-sitter-minizinc",
 		"parser:minizinc:test": "npm run test -w tree-sitter-minizinc",
-		"vscode:build": "npm run compile -w vscode-shackle",
-		"vscode:watch": "npm run watch -w vscode-shackle",
-		"vscode:lint": "npm run lint -w vscode-shackle",
+		"vscode:build": "npm run compile -w minizinc",
+		"vscode:watch": "npm run watch -w minizinc",
+		"vscode:lint": "npm run lint -w minizinc",
 		"format": "prettier -w .",
 		"format:check": "prettier -c ."
 	},
