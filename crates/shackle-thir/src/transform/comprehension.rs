@@ -413,9 +413,24 @@ impl<'db, Dst: Marker> ComprehensionRewriter<'db, Dst> {
 				clauses.pop().unwrap()
 			};
 
+			// The template may already be optional (an inner rewrite of a var
+			// where clause produces one); the resolved implication or
+			// conjunction is then the opt-bool overload, and the non-opt
+			// condition needs its coercion materialised — opt erasure only
+			// rewrites explicit `val2opt` coercions.
+			let coerce_pair =
+				|s: &mut Self, condition: Expression<'db, Dst>, template: Expression<'db, Dst>| {
+					let coercion_target =
+						Ty::most_specific_supertype(db, [template.ty(), condition.ty()]).unwrap();
+					(
+						add_coercion(db, &mut s.result, coercion_target, condition),
+						add_coercion(db, &mut s.result, coercion_target, template),
+					)
+				};
 			return match surrounding {
 				SurroundingCall::Forall => {
 					// Rewrite var where clauses into implications
+					let (condition, template) = coerce_pair(self, condition, template);
 					Expression::new(
 						db,
 						&self.result,
@@ -428,6 +443,7 @@ impl<'db, Dst: Marker> ComprehensionRewriter<'db, Dst> {
 				}
 				SurroundingCall::Exists => {
 					// Rewrite var where clauses into conjunctions
+					let (condition, template) = coerce_pair(self, condition, template);
 					Expression::new(
 						db,
 						&self.result,
