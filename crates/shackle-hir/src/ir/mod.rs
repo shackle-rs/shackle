@@ -22,11 +22,11 @@ mod model {
 	#[salsa::tracked(debug)]
 	pub struct Model<'db> {
 		/// The model file this came from
+		#[returns(copy)]
 		pub file: ModelFile,
 
 		/// Items in original order
 		#[tracked]
-		#[returns(ref)]
 		pub items: Vec<Item<'db>>,
 	}
 }

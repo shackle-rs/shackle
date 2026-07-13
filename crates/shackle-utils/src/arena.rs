@@ -71,14 +71,8 @@ impl<T> Ord for ArenaIndex<T> {
 	}
 }
 
-// SAFETY: Manual implementation of salsa::Update because deriving would require T to implement Update
-unsafe impl<T> salsa::Update for ArenaIndex<T> {
-	unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-		// SAFETY: Manual implementation of salsa::Update since T may not implement Update
-		let old_idx = unsafe { &mut *old_pointer };
-		old_idx.index != new_value.index
-	}
-}
+// SAFETY: Manual implementation of salsa::SalsaValue because deriving would require T to implement SalsaValue
+unsafe impl<T> salsa::SalsaValue for ArenaIndex<T> {}
 
 impl<T> ArenaIndex<T> {
 	/// Create a new arena index from a raw 1-based index
@@ -103,7 +97,7 @@ impl<T> From<ArenaIndex<T>> for NonZeroU32 {
 }
 
 /// A vector-based single-type arena
-#[derive(Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct Arena<T> {
 	/// The underlying storage for the arena
 	items: Vec<T>,
@@ -330,7 +324,7 @@ impl<T> IndexMut<RangeTo<ArenaIndex<T>>> for Arena<T> {
 }
 
 /// A mapping between `ArenaIndex`es and values
-#[derive(Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct ArenaMap<K, V> {
 	/// The underlying storage for the arena map, where the index in the vector corresponds to the `ArenaIndex`
 	items: Vec<Option<V>>,

@@ -3,21 +3,21 @@
 use crate::{ExpressionId, PatternId};
 
 /// Set literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct SetLiteral<'db> {
 	/// Set values
 	pub members: Box<[ExpressionId<'db>]>,
 }
 
 /// Array literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ArrayLiteral<'db> {
 	/// Array values
 	pub members: Box<[ExpressionId<'db>]>,
 }
 
 /// 2D array literal row/column index set
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum MaybeIndexSet<'db> {
 	/// Index set not specified
 	NonIndexed(usize),
@@ -37,7 +37,7 @@ impl<'db> MaybeIndexSet<'db> {
 }
 
 /// 2D array literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ArrayLiteral2D<'db> {
 	/// Row indices
 	pub rows: MaybeIndexSet<'db>,
@@ -48,7 +48,7 @@ pub struct ArrayLiteral2D<'db> {
 }
 
 /// Indexed array literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct IndexedArrayLiteral<'db> {
 	/// Indices
 	pub indices: Box<[ExpressionId<'db>]>,
@@ -57,7 +57,7 @@ pub struct IndexedArrayLiteral<'db> {
 }
 
 /// Array access
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ArrayAccess<'db> {
 	/// The array being indexed into
 	pub collection: ExpressionId<'db>,
@@ -66,7 +66,7 @@ pub struct ArrayAccess<'db> {
 }
 
 /// Array comprehension
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ArrayComprehension<'db> {
 	/// Value of the comprehension
 	pub template: ExpressionId<'db>,
@@ -77,7 +77,7 @@ pub struct ArrayComprehension<'db> {
 }
 
 /// Set comprehension
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct SetComprehension<'db> {
 	/// Value of the comprehension
 	pub template: ExpressionId<'db>,
@@ -86,7 +86,7 @@ pub struct SetComprehension<'db> {
 }
 
 /// Comprehension generator
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Generator<'db> {
 	/// Iterator generator
 	Iterator {
@@ -109,14 +109,14 @@ pub enum Generator<'db> {
 }
 
 /// Tuple literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct TupleLiteral<'db> {
 	/// Tuple fields
 	pub fields: Box<[ExpressionId<'db>]>,
 }
 
 /// Record literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct RecordLiteral<'db> {
 	/// Record fields (pairs of identifier and expressions)
 	pub fields: Box<[(PatternId<'db>, ExpressionId<'db>)]>,

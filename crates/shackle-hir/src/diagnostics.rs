@@ -51,7 +51,7 @@ impl Warnings {
 /// Helper for emitting diagnostics while avoiding accumulating values
 ///
 /// This is needed for cylclic queries (and their dependencies)
-#[derive(Debug, Default, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Diagnostics {
 	errors: Vec<Error>,
 	warnings: Vec<Warning>,

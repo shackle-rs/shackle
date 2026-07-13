@@ -5,7 +5,7 @@ use shackle_utils::InternedString;
 use crate::Db;
 
 /// An integer literal
-#[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct IntegerLiteral(pub i64);
 
 impl std::fmt::Display for IntegerLiteral {
@@ -15,7 +15,7 @@ impl std::fmt::Display for IntegerLiteral {
 }
 
 /// A boolean literal
-#[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Default, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct BooleanLiteral(pub bool);
 
 impl std::fmt::Display for BooleanLiteral {
@@ -28,7 +28,7 @@ impl std::fmt::Display for BooleanLiteral {
 ///
 /// Uses u64 for storage so that Eq and Hash can be defined
 /// (since float literals in MiniZinc are always finite)
-#[derive(Copy, Clone, Default, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Default, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct FloatLiteral(u64);
 
 impl FloatLiteral {
@@ -56,7 +56,7 @@ impl std::fmt::Display for FloatLiteral {
 }
 
 /// A string literal
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct StringLiteral<'db>(pub InternedString<'db>);
 
 impl<'db> StringLiteral<'db> {

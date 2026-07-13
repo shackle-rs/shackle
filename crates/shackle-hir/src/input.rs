@@ -30,7 +30,6 @@ mod input_files {
 	#[salsa::input(debug, singleton)]
 	pub struct InputFiles {
 		/// The set of initial input files
-		#[returns(ref)]
 		pub files: Vec<ModelFile>,
 	}
 }
@@ -51,7 +50,7 @@ mod model_file {
 		Hash,
 		From,
 		salsa::Supertype,
-		salsa::Update,
+		salsa::SalsaValue,
 		Unwrap,
 		TryUnwrap,
 	)]
@@ -66,11 +65,9 @@ mod model_file {
 	#[salsa::input]
 	pub struct NamedModelFile {
 		/// The file path
-		#[returns(ref)]
 		pub path: PathBuf,
 		/// The contents of the file
 		#[default]
-		#[returns(ref)]
 		pub text: Cached<String>,
 	}
 
@@ -120,8 +117,8 @@ mod model_file {
 	#[salsa::input]
 	pub struct InlineModelFile {
 		/// The contents of the file
-		#[returns(ref)]
 		pub contents: String,
+		#[returns(copy)]
 		/// The language of the file
 		pub language: InputLang,
 
@@ -131,7 +128,6 @@ mod model_file {
 
 		/// Directory used to resolve relative includes
 		#[default]
-		#[returns(ref)]
 		pub base_directory: Option<PathBuf>,
 	}
 
@@ -265,18 +261,16 @@ mod compiler_settings {
 	#[salsa::input(debug, singleton)]
 	pub struct CompilerSettings {
 		/// Include search directories.
-		#[returns(ref)]
 		pub search_directories: Vec<PathBuf>,
 
 		/// The directory for the standard library.
-		#[returns(ref)]
 		pub stdlib_directory: Option<PathBuf>,
 
 		/// The directory for the globals library.
-		#[returns(ref)]
 		pub globals_directory: Option<PathBuf>,
 
 		/// Whether or not to ignore stdlib.
+		#[returns(copy)]
 		pub ignore_stdlib: bool,
 	}
 }
@@ -310,7 +304,7 @@ impl CompilerSettings {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn share_directory(db: &dyn Db) -> Option<PathBuf> {
 	if let Some(p) = CompilerSettings::get(db).stdlib_directory(db) {
 		// If set with MZN_STDLIB_DIR then just use it
@@ -325,7 +319,7 @@ fn share_directory(db: &dyn Db) -> Option<PathBuf> {
 }
 
 /// Get the shackle share directory
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn shackle_share_directory(_db: &dyn Db) -> Option<PathBuf> {
 	if let Ok(p) = std::env::current_exe() {
 		// Otherwise find /share/minizinc/std from this executable
@@ -338,7 +332,7 @@ pub fn shackle_share_directory(_db: &dyn Db) -> Option<PathBuf> {
 	None
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn include_search_dirs(db: &dyn Db) -> Vec<PathBuf> {
 	let settings = CompilerSettings::get(db);
 	let mut include_dirs = settings.search_directories(db).clone();
@@ -378,16 +372,16 @@ mod model_ast_struct {
 	#[salsa::tracked(debug)]
 	pub struct ModelAst<'db> {
 		/// The model file this AST is for
+		#[returns(copy)]
 		pub input_file: ModelFile,
 
 		/// The model's abstract syntax tree
-		#[returns(ref)]
 		pub ast: ConstraintModel,
 	}
 }
 pub use model_ast_struct::ModelAst;
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn model_ast<'db>(db: &'db dyn Db, input_file: ModelFile) -> ModelAst<'db> {
 	log::info!("Parsing {}", input_file);
 	let cst = Cst::new(&input_file.contents(db), input_file.language(db));
@@ -399,7 +393,7 @@ fn model_ast<'db>(db: &'db dyn Db, input_file: ModelFile) -> ModelAst<'db> {
 	ModelAst::new(db, input_file, ast)
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn model_syntax_errors(db: &dyn Db, input_file: ModelFile) -> Vec<ShackleError> {
 	let cst = Cst::new(&input_file.contents(db), input_file.language(db));
 	if !cst.has_errors() {
@@ -410,14 +404,14 @@ fn model_syntax_errors(db: &dyn Db, input_file: ModelFile) -> Vec<ShackleError> 
 }
 
 /// Accumulate syntax errors for all resolved models.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn accumulate_syntax_errors(db: &dyn Db) {
 	for model in resolve_includes(db) {
 		Errors::extend(db, model_syntax_errors(db, *model).iter().cloned());
 	}
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 fn model_source_file(db: &dyn Db, model_file: ModelFile) -> SourceFile {
 	match model_file {
 		ModelFile::Named(m) => SourceFile::new(m.path(db).to_owned(), m.contents(db).to_owned()),
@@ -428,7 +422,7 @@ fn model_source_file(db: &dyn Db, model_file: ModelFile) -> SourceFile {
 /// Get the models included from a file
 ///
 /// Query creates fresh model files, so duplicates have to be filtered out by caller
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn includes_for_file(db: &dyn Db, model_file: ModelFile) -> Vec<(Origin, ModelFile)> {
 	log::debug!("Resolving includes for {}", model_file);
 	let mut result = Vec::new();
@@ -486,7 +480,7 @@ fn includes_for_file(db: &dyn Db, model_file: ModelFile) -> Vec<(Origin, ModelFi
 	result
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn needs_eprime_redefs(db: &dyn Db) -> bool {
 	let inputs = InputFiles::get(db);
 	inputs
@@ -496,7 +490,7 @@ fn needs_eprime_redefs(db: &dyn Db) -> bool {
 }
 
 /// Get the automatically included models (e.g. stdlib)
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 	log::debug!("Computing automatic includes");
 
@@ -531,7 +525,7 @@ pub fn auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 }
 
 /// Get the included models
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn resolve_includes(db: &dyn Db) -> Vec<ModelFile> {
 	log::info!("Resolving includes");
 	let inputs = InputFiles::get(db);
@@ -552,7 +546,7 @@ pub fn resolve_includes(db: &dyn Db) -> Vec<ModelFile> {
 }
 
 /// Get the automatically included models (e.g. stdlib) and their includes
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn resolve_auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 	let mut result = vec![];
 	let mut seen = Set::default();
@@ -567,7 +561,7 @@ pub fn resolve_auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 	result
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn model_file_map(db: &dyn Db) -> Map<PathBuf, NamedModelFile> {
 	resolve_includes(db)
 		.iter()
@@ -588,7 +582,7 @@ pub fn invalidate_file(db: &mut dyn Db, path: &Path) {
 }
 
 /// Get the names of enum items across all models
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn enumeration_names<'db>(db: &'db dyn Db) -> Vec<Identifier<'db>> {
 	let mut result = Vec::new();
 	for model_file in resolve_includes(db).iter() {

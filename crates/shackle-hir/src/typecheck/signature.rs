@@ -22,7 +22,7 @@ use crate::{
 /// Collected types for an item signature
 ///
 /// Obtained via `HasSignature::signature()`
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue, Default)]
 pub struct SignatureTypes<'db> {
 	/// Types of declarations
 	pub patterns: Map<PatternId<'db>, PatternTy<'db>>,
@@ -34,7 +34,7 @@ pub struct SignatureTypes<'db> {
 	pub pattern_resolution: Map<PatternId<'db>, PatternRef<'db>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 struct SignatureTypesResult<'db> {
 	/// The signature of this item
 	signature: SignatureTypes<'db>,
@@ -89,7 +89,7 @@ fn unknown_item_signature<'db>(
 }
 
 /// Accumulate signature typechecking diagnostics for this item
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub(super) fn accumulate_item_signature_diagnostics<'db>(db: &'db dyn Db, item: Item<'db>) {
 	item_signature(db, item)
 		.as_ref()

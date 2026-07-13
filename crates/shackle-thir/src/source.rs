@@ -15,7 +15,7 @@ use shackle_hir::{
 use crate::Db;
 
 /// The HIR node which produced a THIR node
-#[derive(Copy, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Origin<'db> {
 	/// Comes from a real HIR node
 	HirNode(NodeRef<'db>),

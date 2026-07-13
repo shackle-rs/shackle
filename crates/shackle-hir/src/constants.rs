@@ -9,7 +9,7 @@ macro_rules! id_registry {
 
 	(@def $struct:ident $all:ident ($($name:ident $(:$value:expr)?)?) ($($rest:tt)*)) => {
 		/// Registry for common identifiers
-		#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+		#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 		pub struct $struct<'db> {
 			/// All identifiers
 			pub $all: Vec<Identifier<'db>>,
@@ -287,7 +287,7 @@ id_registry!(
 );
 
 /// Registry for common identifiers
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct IdentifierRegistry<'db> {
 	/// Interpreter builtins
 	pub builtins: Builtins<'db>,
@@ -308,7 +308,7 @@ impl<'db> IdentifierRegistry<'db> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn create_id_registry<'db>(db: &'db dyn Db) -> IdentifierRegistry<'db> {
 	IdentifierRegistry {
 		builtins: Builtins::new(db),

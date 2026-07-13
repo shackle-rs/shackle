@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Map for storing entity origins
-#[derive(Clone, Debug, Default, PartialEq, Eq, TypedIndex, salsa::Update)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, TypedIndex, salsa::SalsaValue)]
 pub struct SourceMap<'db> {
 	#[index(ExpressionId<'db>)]
 	expressions: ArenaMap<Expression<'db>, Origin>,
@@ -57,7 +57,7 @@ impl<'db> Index<EntityId<'db>> for SourceMap<'db> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn sorted_leaf_nodes<'db>(db: &'db dyn Db, item: Item<'db>) -> Vec<(EntityId<'db>, usize, usize)> {
 	let mut nodes = Vec::new();
 	let sm = item.sources(db);
@@ -80,7 +80,7 @@ fn sorted_leaf_nodes<'db>(db: &'db dyn Db, item: Item<'db>) -> Vec<(EntityId<'db
 	nodes
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn expression_nodes<'db>(
 	db: &'db dyn Db,
 	item: Item<'db>,
@@ -115,7 +115,7 @@ pub fn find_item<'db>(db: &'db dyn Db, file: ModelFile, byte_offset: usize) -> O
 }
 
 /// Get the leaf nodes in the given model
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn model_leaves<'db>(db: &'db dyn Db, model: ModelFile) -> Vec<EntityRef<'db>> {
 	let mut result = Vec::new();
 	for item in model.hir(db).items(db).iter() {
@@ -182,7 +182,7 @@ pub fn find_expression<'db>(
 }
 
 /// Origin of an HIR node.
-#[derive(Clone, PartialEq, Eq, salsa::Update, Hash)]
+#[derive(Clone, PartialEq, Eq, salsa::SalsaValue, Hash)]
 pub struct Origin {
 	/// The file this construct is from
 	pub file: ModelFile,

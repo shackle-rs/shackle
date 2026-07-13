@@ -11,7 +11,7 @@ use crate::Db;
 pub type PatternId<'db> = ArenaIndex<Pattern<'db>>;
 
 /// A pattern for destructuring
-#[derive(Clone, Debug, From, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, From, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Pattern<'db> {
 	/// A single identifier
 	#[from]
@@ -158,7 +158,7 @@ impl<'db> Pattern<'db> {
 }
 
 /// Identifier
-#[derive(Copy, Clone, From, Into, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, From, Into, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Identifier<'db>(pub InternedString<'db>);
 
 impl<'db> Identifier<'db> {

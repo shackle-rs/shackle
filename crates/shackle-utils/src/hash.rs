@@ -15,7 +15,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 /// the key, which makes snapshot tests stable.
 ///
 /// Care must still be taken to not iterate over the map without sorting since this is non-deterministic.
-#[derive(Clone)]
+#[derive(Clone, salsa::SalsaValue)]
 pub struct Map<K, V>(FxHashMap<K, V>);
 
 impl<K, V> PartialEq for Map<K, V>
@@ -200,21 +200,6 @@ where
 	}
 }
 
-// SAFETY: Defer to FxHashMap update implementation
-unsafe impl<K, V> salsa::Update for Map<K, V>
-where
-	K: salsa::Update + Eq + Hash,
-	V: salsa::Update + PartialEq,
-{
-	unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-		// SAFETY: Defer to FxHashMap update implementation
-		unsafe {
-			let old_map = &mut *old_pointer;
-			salsa::Update::maybe_update(&mut old_map.0, new_value.0)
-		}
-	}
-}
-
 impl<K: Debug, V: Debug> Debug for Map<K, V> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		let mut entries = self
@@ -238,7 +223,7 @@ impl<K: Debug, V: Debug> Debug for Map<K, V> {
 /// each item, which makes snapshot tests stable.
 ///
 /// Care must still be taken to not iterate over the set without sorting since this is non-deterministic.
-#[derive(Clone)]
+#[derive(Clone, salsa::SalsaValue)]
 pub struct Set<T>(FxHashSet<T>);
 
 impl<T> PartialEq for Set<T>
@@ -424,20 +409,6 @@ where
 
 	fn sub(self, rhs: &Set<T>) -> Self::Output {
 		Set(self.0.difference(&rhs.0).cloned().collect())
-	}
-}
-
-// SAFETY: Defer to FxHashSet update implementation
-unsafe impl<T> salsa::Update for Set<T>
-where
-	T: salsa::Update + Eq + Hash,
-{
-	unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-		// SAFETY: Defer to FxHashSet update implementation
-		unsafe {
-			let old_set = &mut *old_pointer;
-			salsa::Update::maybe_update(&mut old_set.0, new_value.0)
-		}
 	}
 }
 

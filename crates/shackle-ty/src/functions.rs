@@ -129,7 +129,7 @@ struct Candidate<'db, T> {
 }
 
 /// An overloaded function entry
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct FunctionEntry<'db> {
 	/// Whether this function has a body
 	pub has_body: bool,
@@ -404,7 +404,7 @@ impl<'db> FunctionEntry<'db> {
 }
 
 /// An overloaded function
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum OverloadedFunction<'db> {
 	/// A non-generic function
 	Function(FunctionType<'db>),
@@ -516,7 +516,7 @@ impl<'db> OverloadedFunction<'db> {
 /// Type of a function expression.
 ///
 /// Function expressions can't be generic, so there are no unbound type-inst variables.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct FunctionType<'db> {
 	/// Return type
 	pub return_type: Ty<'db>,
@@ -618,7 +618,7 @@ impl<'db> FunctionType<'db> {
 pub type TyParamInstantiations<'db> = FxHashMap<TyVarRef<'db>, Ty<'db>>;
 
 /// Type of a generic function with type-inst parameters
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct PolymorphicFunctionType<'db> {
 	/// Return type
 	pub return_type: Ty<'db>,
