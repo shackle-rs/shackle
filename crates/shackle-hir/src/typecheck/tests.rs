@@ -300,3 +300,85 @@ fn test_type_errors() {
 		expect!("Undefined identifier"),
 	);
 }
+
+#[test]
+fn test_class_typecheck() {
+	let mut tester = TypeTester::new();
+	// A class, an object introduction supplying its input record, and a field read
+	tester.check_error(
+		r#"
+		class A (
+			1..10: x;
+			constraint x >= 1;
+		);
+		new A: a = (x: 3);
+		constraint a.x = 3;
+		"#,
+		expect!(""),
+	);
+	// Inherited attributes are in scope in the subclass body and readable through it
+	tester.check_error(
+		r#"
+		class A (1..10: x);
+		class B extends A (1..10: y; constraint y >= x);
+		new B: b = (x: 1, y: 2);
+		constraint b.x + b.y = 3;
+		"#,
+		expect!(""),
+	);
+	// A class name in a value position denotes the set of its objects
+	tester.check_error(
+		r#"
+		class A (1..10: x);
+		set of new A: as = [(x: 1), (x: 2)];
+		constraint forall (a in A) (a.x >= 1);
+		"#,
+		expect!(""),
+	);
+}
+
+#[test]
+fn test_class_type_errors() {
+	let mut tester = TypeTester::new();
+	tester.check_error(
+		r#"
+		class A (1..10: x);
+		new A: a = (x: 1);
+		constraint a.nope = 1;
+		"#,
+		expect!("Invalid field access"),
+	);
+	// The object's definition is checked against the class's input record
+	tester.check_error(
+		r#"
+		class A (1..10: x);
+		new A: a = (x: "not an int");
+		"#,
+		expect!("Type mismatch"),
+	);
+	tester.check_error(
+		r#"
+		int: notAClass;
+		new notAClass: a;
+		"#,
+		expect!("Type mismatch"),
+	);
+	// A computed attribute is part of storage but must not be supplied by the caller
+	tester.check_error(
+		r#"
+		class A (1..10: x; 1..20: y = x + 1);
+		new A: a = (x: 1, y: 2);
+		"#,
+		expect!("Type mismatch"),
+	);
+	// Objects may only be introduced at the top level
+	tester.check_error(
+		r#"
+		class A (1..10: x);
+		any: a = let { new A: b = (x: 1) } in b.x;
+		"#,
+		expect!([r#"
+    Syntax Error
+    Type mismatch"#]),
+	);
+}

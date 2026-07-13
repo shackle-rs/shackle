@@ -60,6 +60,7 @@ var foo(1, 3): y;
                                 cst_kind: "set_type",
                                 var_type: Par,
                                 opt_type: NonOpt,
+                                cardinality: None,
                                 element_type: TypeBase(
                                     TypeBase {
                                         cst_kind: "type_base",

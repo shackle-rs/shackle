@@ -86,7 +86,8 @@ module.exports = grammar({
 				$.include,
 				$.output,
 				$.predicate,
-				$.type_alias
+				$.type_alias,
+				$.class_decl
 			),
 
 		annotation: ($) =>
@@ -219,6 +220,17 @@ module.exports = grammar({
 
 		type_alias: ($) =>
 			seq("type", field("name", $._identifier), "=", field("type", $._type)),
+
+		class_decl: ($) =>
+			seq(
+				"class",
+				field("name", $._identifier),
+				optional(seq("extends", field("extends", $._identifier))),
+				"(",
+				sepBy(";", field("item", choice($.declaration, $.constraint))),
+				")",
+				optional($._annotation_list)
+			),
 
 		_expression: ($) =>
 			choice($._unannotated_expression, $.annotated_expression),
@@ -515,6 +527,7 @@ module.exports = grammar({
 				optional(field("var_par", choice("var", "par"))),
 				optional(field("opt", "opt")),
 				"set",
+				optional(seq("(", field("cardinality", $._expression), ")")),
 				"of",
 				field("type", $._type)
 			),
@@ -556,6 +569,7 @@ module.exports = grammar({
 						"domain",
 						choice(
 							$.primitive_type,
+							$.new_type,
 							$.type_inst_id,
 							$.type_inst_enum_id,
 							$._expression
@@ -567,6 +581,7 @@ module.exports = grammar({
 		primitive_type: ($) => choice(...primitive_types),
 		type_inst_id: ($) => /\$[A-Za-z][A-Za-z0-9_]*/,
 		type_inst_enum_id: ($) => /\$\$[A-Za-z][A-Za-z0-9_]*/,
+		new_type: ($) => seq("new", field("type", $._identifier)),
 		any_type: ($) => "any",
 		list_type: ($) => seq("list", "of", field("type", $._type)),
 
@@ -661,7 +676,7 @@ module.exports = grammar({
 				")"
 			),
 		record_literal: ($) =>
-			seq("(", sepBy1(",", field("member", $.record_member)), ")"),
+			seq("(", sepBy(",", field("member", $.record_member)), ")"),
 		record_member: ($) =>
 			seq(field("name", $._identifier), ":", field("value", $._expression)),
 

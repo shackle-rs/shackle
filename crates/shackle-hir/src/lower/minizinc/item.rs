@@ -46,6 +46,7 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 		match item {
 			minizinc::Item::Annotation(a) => self.collect_annotation(a),
 			minizinc::Item::Assignment(a) => self.collect_assignment(a),
+			minizinc::Item::ClassDecl(c) => self.collect_class(c),
 			minizinc::Item::Constraint(c) => self.collect_constraint(c),
 			minizinc::Item::Declaration(d) => self.collect_declaration(d),
 			minizinc::Item::Enumeration(e) => self.collect_enumeration(e),
@@ -225,6 +226,45 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 		});
 		self.items
 			.push(AssignmentItem::new(self.db, item, sources, origin).into());
+	}
+
+	fn collect_class(&mut self, c: &minizinc::ClassDecl) {
+		let documentation = c
+			.doc_comment()
+			.map(|comment| Origin::new(self.file, comment.span()));
+		let mut ctx = ExpressionCollector::new(
+			self.db,
+			self.file,
+			self.text.as_ref(),
+			&mut self.diagnostics,
+		);
+		let pattern = ctx.collect_pattern(&c.name().into());
+		// `this` is bound to its own pattern inside the class body, so that it can
+		// be given the class's instance type independently of the class name itself
+		let this_pattern = ctx.collect_pattern(&c.name().into());
+		let extends = c.extends().map(|e| ctx.collect_expression(&e.into()));
+		let items = c.items().map(|i| ctx.collect_class_item(&i)).collect();
+		let annotations = c
+			.annotations()
+			.map(|ann| ctx.collect_expression(&ann))
+			.collect();
+		let (data, source_map) = ctx.finish(Class {
+			pattern,
+			this_pattern,
+			extends,
+			items,
+			annotations,
+		});
+		self.items.push(
+			ClassItem::new(
+				self.db,
+				data,
+				source_map,
+				documentation,
+				Origin::new(self.file, c.span()),
+			)
+			.into(),
+		);
 	}
 
 	fn collect_constraint(&mut self, c: &minizinc::Constraint) {

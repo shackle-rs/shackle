@@ -214,6 +214,7 @@ id_registry!(
 id_registry!(
 	Names,
 	objective: "_objective",
+	this: "this",
 );
 
 id_registry!(

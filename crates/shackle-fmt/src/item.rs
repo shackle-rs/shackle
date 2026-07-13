@@ -26,6 +26,7 @@ impl<'tree> Format for minizinc::Item<'tree> {
 			minizinc::Item::Predicate(x) => x.format(formatter),
 			minizinc::Item::Solve(x) => x.format(formatter),
 			minizinc::Item::TypeAlias(x) => x.format(formatter),
+			minizinc::Item::ClassDecl(x) => x.format(formatter),
 		};
 		elements.push(element);
 		elements.push(Element::text(";"));
@@ -346,5 +347,43 @@ impl<'tree> Format for minizinc::TypeAlias<'tree> {
 			Element::text(" = "),
 			self.aliased_type().format(formatter),
 		])
+	}
+}
+
+impl<'tree> Format for minizinc::ClassDecl<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		let mut elements = vec![
+			Element::text("class "),
+			minizinc::Expression::Identifier(self.name()).format(formatter),
+		];
+		if let Some(e) = self.extends() {
+			elements.push(Element::text(" extends "));
+			elements.push(minizinc::Expression::Identifier(e).format(formatter));
+		}
+		elements.push(Element::text(" ("));
+		let items = self
+			.items()
+			.map(|item| item.format(formatter))
+			.collect::<Vec<_>>();
+		if !items.is_empty() {
+			elements.push(Element::indent(vec![
+				Element::line_break(),
+				Element::join(items, vec![Element::text(";"), Element::line_break()]),
+				Element::text(";"),
+			]));
+			elements.push(Element::line_break());
+		}
+		elements.push(Element::text(")"));
+		elements.push(formatter.format_annotations(self.annotations()));
+		Element::sequence(elements)
+	}
+}
+
+impl<'tree> Format for minizinc::ClassItem<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		match self {
+			minizinc::ClassItem::Declaration(x) => x.format(formatter),
+			minizinc::ClassItem::Constraint(x) => x.format(formatter),
+		}
 	}
 }

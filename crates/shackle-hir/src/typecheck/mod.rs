@@ -36,7 +36,7 @@ mod typer;
 
 pub use self::{body::*, signature::*, typer::*};
 use crate::{
-	Db, Expression, ExpressionId, Item, ItemData, Model, Pattern, PatternId,
+	Db, Expression, ExpressionId, Identifier, Item, ItemData, Model, Pattern, PatternId, TypeId,
 	ids::{EntityId, PatternRef},
 	input::resolve_includes,
 };
@@ -440,6 +440,12 @@ pub trait TypeContext<'db> {
 	/// Add a warning
 	fn add_warning(&mut self, db: &'db dyn Db, item: Item<'db>, e: impl Into<Warning>);
 
+	/// Record the type computed for a declared type
+	fn add_type(&mut self, db: &'db dyn Db, declared_type: TypeId<'db>, ty: Ty<'db>);
+
+	/// Get the type computed for a declared type
+	fn get_type(&self, db: &'db dyn Db, declared_type: TypeId<'db>) -> Ty<'db>;
+
 	/// Type a pattern (or lookup the type if already known)
 	fn type_pattern(&mut self, db: &'db dyn Db, pattern: PatternRef<'db>) -> PatternTy<'db>;
 }
@@ -509,6 +515,25 @@ pub enum PatternTy<'db> {
 	/// Record field (e.g. x in r.x, or (x: 1))
 	///
 	RecordField(Ty<'db>),
+	/// Class declaration
+	ClassDecl {
+		/// The attributes declared by this class itself, in declaration order.
+		///
+		/// Inherited attributes are not included; walk the superclass chain for
+		/// those. Class types carry only the name and superclass, so this is
+		/// where a class's attribute list lives.
+		attributes: Vec<(Identifier<'db>, Ty<'db>)>,
+		/// The set of objects of this class, which is the type the class name
+		/// denotes in a domain position
+		defining_set_ty: Ty<'db>,
+		/// The record type an object of this class is constructed from
+		input_record_ty: Ty<'db>,
+		/// The record type an object of this class is stored as
+		storage_record_ty: Ty<'db>,
+		/// The storage record with every attribute varified, used for classes
+		/// reached via a `var new` introduction path
+		var_storage_record_ty: Ty<'db>,
+	},
 	/// Currently computing - if encountered, indicates a cycle
 	Computing,
 }

@@ -134,6 +134,33 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		self.collect_type_with_tiids(t, &mut tiids, false, false)
 	}
 
+	/// Lower a member of a class body into HIR
+	pub fn collect_class_item(&mut self, i: &minizinc::ClassItem) -> ClassMember<'db> {
+		match i {
+			minizinc::ClassItem::Declaration(d) => {
+				let declared_type = self.collect_type(&d.declared_type());
+				Declaration {
+					pattern: self.collect_pattern(&d.pattern()),
+					definition: d.definition().map(|def| self.collect_expression(&def)),
+					declared_type,
+					annotations: d
+						.annotations()
+						.map(|ann| self.collect_expression(&ann))
+						.collect(),
+				}
+				.into()
+			}
+			minizinc::ClassItem::Constraint(c) => Constraint {
+				expression: self.collect_expression(&c.expression()),
+				annotations: c
+					.annotations()
+					.map(|ann| self.collect_expression(&ann))
+					.collect(),
+			}
+			.into(),
+		}
+	}
+
 	/// Lower an AST type into HIR and collect implicit type inst ID declarations
 	pub fn collect_type_with_tiids(
 		&mut self,
@@ -192,6 +219,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 			minizinc::Type::SetType(s) => Type::Set {
 				inst: s.var_type(),
 				opt: s.opt_type(),
+				cardinality: s.cardinality().map(|c| self.collect_expression(&c)),
 				element: self.collect_type_with_tiids(
 					&s.element_type(),
 					tiids,
@@ -448,6 +476,11 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 					domain: self.alloc_expression(&tiid, ident),
 				}
 			}
+			minizinc::Domain::NewType(n) => Type::New {
+				inst: b.var_type().unwrap_or(VarType::Par),
+				opt: b.opt_type().unwrap_or(OptType::NonOpt),
+				domain: self.collect_expression(&n.name().into()),
+			},
 		}
 	}
 

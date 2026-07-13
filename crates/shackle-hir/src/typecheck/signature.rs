@@ -5,15 +5,16 @@
 //! - Variable declaration LHS types
 use shackle_diagnostics::{Error, SyntaxError, TypeInferenceFailure, TypeMismatch, Warning};
 use shackle_ty::{
-	EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyData,
-	TyVar, TyVarRef, registry::TypeRegistry,
+	ClassRef, EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType,
+	Ty, TyData, TyVar, TyVarRef, registry::TypeRegistry,
 };
 use shackle_utils::hash::Map;
 
 use crate::{
-	Constructor, ConstructorParameter, Db, EnumConstructor, EnumConstructorEntry, Expression,
-	ExpressionId, Goal, Item, ItemData, Pattern, PatternId, PatternTy, Type, TypeCompletionMode,
-	TypeContext, Typer,
+	ClassMember, Constructor, ConstructorParameter, Db, EnumConstructor, EnumConstructorEntry,
+	Expression, ExpressionId, Goal, Identifier, Item, ItemData, Pattern, PatternId, PatternTy,
+	Type, TypeCompletionMode, TypeContext, TypeId, Typer,
+	class_analysis::{class_pattern_for, var_actual_set_classes},
 	constants::IdentifierRegistry,
 	diagnostics::Diagnostics,
 	ids::{ExpressionRef, NodeRef, PatternRef, TypeRef},
@@ -32,6 +33,8 @@ pub struct SignatureTypes<'db> {
 	pub identifier_resolution: Map<ExpressionId<'db>, PatternRef<'db>>,
 	/// Pattern resolution
 	pub pattern_resolution: Map<PatternId<'db>, PatternRef<'db>>,
+	/// Types computed for declared types
+	pub types: Map<TypeId<'db>, Ty<'db>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
@@ -515,6 +518,172 @@ impl<'db> SignatureTypeContext<'db> {
 					},
 				);
 			}
+			Item::Class(c) => {
+				let it = c.class(db);
+				let tys = TypeRegistry::lookup(db);
+				let class_pattern = PatternRef::new(db, item, it.pattern);
+				let name = class_pattern
+					.identifier(db)
+					.expect("Class declaration must have identifier pattern");
+
+				// Whether this class's *actual set* is var, i.e. its existence is a
+				// solver decision, in which case its defining set is `var set of C`.
+				// This is computed from the AST and the global scope alone, so
+				// consulting it here does not pull signature typing into a cycle.
+				// Note this is var-*actual-set*, not var-reached: a singular
+				// `var new C` has var storage but a par actual set, because the
+				// object always exists.
+				let is_var_actual = var_actual_set_classes(db).contains(&class_pattern);
+				let defining_set_ty = |class_ty: Ty<'db>| {
+					let par = Ty::par_set(db, class_ty).unwrap();
+					if is_var_actual {
+						par.make_var(db).unwrap_or(par)
+					} else {
+						par
+					}
+				};
+
+				self.add_declaration(db, it.pattern, PatternTy::Computing);
+
+				// Type the superclass first: a class type carries its superclass, so
+				// the class's own type is only fixed once the superclass is known.
+				let mut superclass = None;
+				let mut input_fields = Vec::new();
+				let mut storage_fields = Vec::new();
+				if let Some(base) = it.extends {
+					let base_ty = Typer::new(db, self, item, data).collect_expression(base);
+					if let Some(base_class) = base_ty.class_type(db) {
+						superclass = Some(base_ty);
+						let Some(base_pattern) = class_pattern_for(db, base_class) else {
+							unreachable!("Class type must have a declaring item")
+						};
+						match self.type_pattern(db, base_pattern) {
+							PatternTy::ClassDecl {
+								input_record_ty,
+								storage_record_ty,
+								..
+							} => {
+								// The superclass's record types already include what it
+								// inherits in turn, so the chain is walked implicitly.
+								if let Some(fields) = input_record_ty.record_fields(db) {
+									input_fields.extend(
+										fields.into_iter().map(|(i, ty)| (Identifier(i), ty)),
+									);
+								}
+								if let Some(fields) = storage_record_ty.record_fields(db) {
+									storage_fields.extend(
+										fields.into_iter().map(|(i, ty)| (Identifier(i), ty)),
+									);
+								}
+							}
+							_ => unreachable!("Class type must resolve to a class declaration"),
+						}
+					} else {
+						let (src, span) = ExpressionRef::new(db, item, base).source_span(db);
+						self.add_diagnostic(
+							db,
+							item,
+							TypeMismatch {
+								src,
+								span,
+								msg: format!(
+									"Expected class, but got '{}'",
+									base_ty.pretty_print(db)
+								),
+							},
+						);
+					}
+				}
+
+				let class_ty = Ty::class(db, ClassRef::new(name, superclass));
+
+				// Publish the class before typing its attributes, so that an
+				// attribute whose type refers to the class being declared (directly
+				// or through a cycle of classes) can resolve it. The record types are
+				// not known yet; the declaration is replaced once they are.
+				self.add_declaration(
+					db,
+					it.pattern,
+					PatternTy::ClassDecl {
+						attributes: Vec::new(),
+						defining_set_ty: defining_set_ty(class_ty),
+						input_record_ty: tys.error,
+						storage_record_ty: tys.error,
+						var_storage_record_ty: tys.error,
+					},
+				);
+				self.add_declaration(db, it.this_pattern, PatternTy::Variable(class_ty));
+
+				let mut typer = Typer::new(db, self, item, data);
+				for ann in it.annotations.iter() {
+					let _ = typer.typecheck_expression(*ann, tys.ann);
+				}
+
+				let mut attributes = Vec::new();
+				for member in it.items.iter() {
+					match member {
+						ClassMember::Constraint(constraint) => {
+							let mut typer = Typer::new(db, self, item, data);
+							for ann in constraint.annotations.iter() {
+								let _ = typer.typecheck_expression(*ann, tys.ann);
+							}
+							let _ = typer.typecheck_expression(constraint.expression, tys.var_bool);
+						}
+						ClassMember::Declaration(d) => {
+							let mut typer = Typer::new(db, self, item, data);
+							let field_name = PatternRef::new(db, item, d.pattern)
+								.identifier(db)
+								.expect("Class attribute must have identifier pattern");
+							let ty = typer.collect_declaration(d).ty;
+							// A computed attribute (`int: y = x + 1`) is part of the
+							// object's storage but is never supplied by the caller, so
+							// it stays out of the input record while remaining in the
+							// storage record. Without this, `new A: a = (x: 1)` would be
+							// rejected for not supplying the `y` the caller must not give.
+							if d.definition.is_none()
+								&& let Some(field_ty) =
+									typer.class_type_to_input_record_type(d.declared_type)
+							{
+								input_fields.push((field_name, field_ty));
+							}
+							attributes.push((field_name, ty));
+							storage_fields.push((field_name, ty));
+						}
+					}
+				}
+
+				// The varified storage record, used when this class is reached via a
+				// `var new` introduction path, so that the lowered per-class object
+				// arrays can be declared with a var element type from the start.
+				let var_storage_record_ty = Ty::record(
+					db,
+					storage_fields.iter().map(|(name, ty)| {
+						let varified = ty.make_var(db).or_else(|| {
+							// An array has no var form as a whole; var storage for an
+							// array attribute is an array of var elements.
+							match ty.lookup(db) {
+								TyData::Array { opt, dim, element } => element
+									.make_var(db)
+									.and_then(|el| Ty::array(db, *dim, el))
+									.map(|t| t.with_opt(db, *opt)),
+								_ => None,
+							}
+						});
+						(*name, varified.unwrap_or(*ty))
+					}),
+				);
+				self.add_declaration(
+					db,
+					it.pattern,
+					PatternTy::ClassDecl {
+						attributes,
+						defining_set_ty: defining_set_ty(class_ty),
+						input_record_ty: Ty::record(db, input_fields),
+						storage_record_ty: Ty::record(db, storage_fields),
+						var_storage_record_ty,
+					},
+				);
+			}
 			_ => unreachable!("Item {:?} does not have signature", item),
 		}
 	}
@@ -710,8 +879,14 @@ impl<'db> TypeContext<'db> for SignatureTypeContext<'db> {
 		declaration: PatternTy<'db>,
 	) {
 		let old = self.data.patterns.insert(pattern, declaration);
+		// A class is published provisionally before its attributes are typed, so that
+		// an attribute type may refer to the class being declared; the provisional
+		// declaration is then replaced with the complete one.
 		assert!(
-			matches!(old, None | Some(PatternTy::Computing)),
+			matches!(
+				old,
+				None | Some(PatternTy::Computing | PatternTy::ClassDecl { .. })
+			),
 			"Tried to add declaration for {:?} twice",
 			pattern
 		);
@@ -767,6 +942,20 @@ impl<'db> TypeContext<'db> for SignatureTypeContext<'db> {
 		let warning = e.into();
 		assert_eq!(item, self.item, "Got warning '{}' for wrong item", warning);
 		self.diagnostics.add_warning(warning);
+	}
+
+	fn add_type(&mut self, _db: &'db dyn Db, declared_type: TypeId<'db>, ty: Ty<'db>) {
+		let _ = self.data.types.insert(declared_type, ty);
+	}
+
+	fn get_type(&self, db: &'db dyn Db, declared_type: TypeId<'db>) -> Ty<'db> {
+		// A type which failed to complete is never recorded; an error was already
+		// reported for it, so report the error type here rather than panicking.
+		self.data
+			.types
+			.get(&declared_type)
+			.copied()
+			.unwrap_or_else(|| TypeRegistry::lookup(db).error)
 	}
 
 	fn type_pattern(&mut self, db: &'db dyn Db, pattern: PatternRef<'db>) -> PatternTy<'db> {

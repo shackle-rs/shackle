@@ -1497,6 +1497,7 @@ fn test_lower_type_alias() {
                     <Type::2>: Set {
                         inst: Par,
                         opt: NonOpt,
+                        cardinality: None,
                         element: <Type::1>,
                     },
                 },

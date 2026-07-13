@@ -20,6 +20,7 @@ ast_enum!(
 	"predicate" => Predicate,
 	"annotation" => Annotation,
 	"type_alias" => TypeAlias,
+	"class_decl" => ClassDecl,
 );
 
 ast_node!(
@@ -506,6 +507,52 @@ impl<'tree> TypeAlias<'tree> {
 	}
 }
 
+ast_enum!(
+	/// Member of a class declaration
+	ClassItem,
+	"declaration" => Declaration,
+	"constraint" => Constraint
+);
+
+ast_node!(
+	/// Class declaration item
+	ClassDecl,
+	name,
+	extends,
+	items,
+	annotations,
+);
+
+impl<'tree> ClassDecl<'tree> {
+	/// The name of this class
+	pub fn name(&self) -> Identifier<'tree> {
+		child_with_field_name(self, "name")
+	}
+
+	/// The superclass this class extends, if any
+	pub fn extends(&self) -> Option<Identifier<'tree>> {
+		optional_child_with_field_name(self, "extends")
+	}
+
+	/// The attributes and constraints declared in this class
+	pub fn items(&self) -> Children<'tree, ClassItem<'tree>> {
+		children_with_field_name(self, "item")
+	}
+
+	/// The annotations
+	pub fn annotations(&self) -> Children<'tree, Expression<'tree>> {
+		children_with_field_name(self, "annotation")
+	}
+
+	/// Get the documentation comment
+	pub fn doc_comment(&self) -> Option<DocComment<'tree>> {
+		self.cst_node()
+			.previous_named_sibling()
+			.filter(|node| node.kind() == "doc_comment")
+			.map(DocComment::from)
+	}
+}
+
 ast_node!(
 	/// Documentation comment
 	DocComment,
@@ -900,6 +947,7 @@ mod tests {
                                 cst_kind: "set_type",
                                 var_type: Par,
                                 opt_type: NonOpt,
+                                cardinality: None,
                                 element_type: TypeBase(
                                     TypeBase {
                                         cst_kind: "type_base",

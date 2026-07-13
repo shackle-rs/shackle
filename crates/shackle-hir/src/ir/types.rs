@@ -32,6 +32,15 @@ pub enum Type<'db> {
 		/// The domain
 		domain: ExpressionId<'db>,
 	},
+	/// Type which introduces new objects of a class
+	New {
+		/// Inst
+		inst: VarType,
+		/// Optionality
+		opt: OptType,
+		/// The class whose objects are introduced
+		domain: ExpressionId<'db>,
+	},
 	/// Array type
 	Array {
 		/// Optionality
@@ -47,6 +56,8 @@ pub enum Type<'db> {
 		inst: VarType,
 		/// Optionality
 		opt: OptType,
+		/// Cardinality of the set, if constrained
+		cardinality: Option<ExpressionId<'db>>,
 		/// Type of element
 		element: TypeId<'db>,
 	},
@@ -95,6 +106,7 @@ impl<'db> Type<'db> {
 		match self {
 			Type::Primitive { .. } | Type::Any | Type::Missing => true,
 			Type::Bounded { .. }
+			| Type::New { .. }
 			| Type::Array { .. }
 			| Type::Set { .. }
 			| Type::Operation { .. }
@@ -112,6 +124,7 @@ impl<'db> Type<'db> {
 			Type::Any => false,
 			Type::Primitive { .. }
 			| Type::Bounded { .. }
+			| Type::New { .. }
 			| Type::AnonymousTypeInstVar { .. }
 			| Type::Missing => true,
 			Type::Array {
@@ -171,7 +184,7 @@ impl<'db> Type<'db> {
 		data: &'a ItemData<'db>,
 	) -> impl 'a + Iterator<Item = ExpressionId<'db>> {
 		Type::walk(t, data).filter_map(|t| {
-			if let Type::Bounded { domain, .. } = data[t] {
+			if let Type::Bounded { domain, .. } | Type::New { domain, .. } = data[t] {
 				Some(domain)
 			} else {
 				None
@@ -211,5 +224,25 @@ impl<'db> Type<'db> {
 			}
 			Some(t)
 		})
+	}
+
+	/// Whether this type introduces new objects, possibly inside an array or set
+	pub fn is_new(&self, data: &ItemData<'db>) -> bool {
+		match self {
+			Type::New { .. } => true,
+			Type::Array { element, .. } | Type::Set { element, .. } => data[*element].is_new(data),
+			_ => false,
+		}
+	}
+
+	/// Get the class whose objects this type introduces, looking through arrays and sets
+	pub fn get_new_class(&self, data: &ItemData<'db>) -> Option<ExpressionId<'db>> {
+		match self {
+			Type::New { domain, .. } => Some(*domain),
+			Type::Array { element, .. } | Type::Set { element, .. } => {
+				data[*element].get_new_class(data)
+			}
+			_ => None,
+		}
 	}
 }

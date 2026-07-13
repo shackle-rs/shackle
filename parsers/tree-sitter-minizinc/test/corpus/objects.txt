@@ -1,0 +1,119 @@
+=================
+Class declaration
+=================
+
+class A (
+  int: x;
+  constraint this.x >= 0;
+);
+
+class B extends A (
+  var int: y;
+);
+
+---
+
+(source_file
+  (class_decl
+    (identifier)
+    (declaration
+      (type_base
+        (primitive_type))
+      (identifier))
+    (constraint
+      (infix_operator
+        (record_access
+          (identifier)
+          (identifier))
+        (integer_literal))))
+  (class_decl
+    (identifier)
+    (identifier)
+    (declaration
+      (type_base
+        (primitive_type))
+      (identifier))))
+
+====================
+Object introductions
+====================
+
+class A (
+  int: x;
+);
+
+var new A: a;
+var opt new A: maybe_a;
+var set(0..n) of new A: as;
+
+---
+
+(source_file
+  (class_decl
+    (identifier)
+    (declaration
+      (type_base
+        (primitive_type))
+      (identifier)))
+  (declaration
+    (type_base
+      (new_type
+        (identifier)))
+    (identifier))
+  (declaration
+    (type_base
+      (new_type
+        (identifier)))
+    (identifier))
+  (declaration
+    (set_type
+      (infix_operator
+        (integer_literal)
+        (identifier))
+      (type_base
+        (new_type
+          (identifier))))
+    (identifier)))
+
+===========
+Empty Class
+===========
+
+class A ();
+
+---
+
+(source_file
+  (class_decl (identifier)))
+
+===============
+Annotated Class
+===============
+
+class A (
+  int: x;
+) ::foo;
+
+class B extends A (
+  int: y;
+) ::foo ::bar;
+
+---
+
+(source_file
+  (class_decl
+    (identifier)
+    (declaration
+      (type_base
+        (primitive_type))
+      (identifier))
+    (identifier))
+  (class_decl
+    (identifier)
+    (identifier)
+    (declaration
+      (type_base
+        (primitive_type))
+      (identifier))
+    (identifier)
+    (identifier)))

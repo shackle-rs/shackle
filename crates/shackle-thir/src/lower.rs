@@ -109,6 +109,9 @@ impl<'db> ItemCollector<'db> {
 			}
 			Item::Solve(s) => self.collect_solve(s),
 			Item::TypeAlias(t) => self.collect_type_alias(t),
+			// Object lowering is not implemented yet. Models using classes are
+			// rejected before this point by object validation.
+			Item::Class(_) => {}
 		}
 	}
 

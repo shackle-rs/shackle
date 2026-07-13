@@ -10,8 +10,8 @@ use shackle_utils::arena::ArenaMap;
 use shackle_utils::hash::Map;
 
 use crate::{
-	Db, Expression, ExpressionId, Item, Pattern, PatternId, PatternTy, TypeContext, Typer,
-	constants::IdentifierRegistry, diagnostics::Diagnostics, ids::PatternRef,
+	Db, Expression, ExpressionId, Item, Pattern, PatternId, PatternTy, Type, TypeContext, TypeId,
+	Typer, constants::IdentifierRegistry, diagnostics::Diagnostics, ids::PatternRef,
 };
 
 /// Collected types for an item body
@@ -25,6 +25,8 @@ pub struct BodyTypes<'db> {
 	pub identifier_resolution: Map<ExpressionId<'db>, PatternRef<'db>>,
 	/// Pattern resolution
 	pub pattern_resolution: Map<PatternId<'db>, PatternRef<'db>>,
+	/// Types computed for declared types
+	pub types: ArenaMap<Type<'db>, Ty<'db>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
@@ -87,6 +89,7 @@ impl<'db> BodyTypeContext<'db> {
 				expressions: ArenaMap::with_capacity(expressions + 1),
 				identifier_resolution: Map::default(),
 				pattern_resolution: Map::default(),
+				types: ArenaMap::default(),
 			},
 			diagnostics: Diagnostics::default(),
 		}
@@ -130,9 +133,18 @@ impl<'db> BodyTypeContext<'db> {
 			Item::Declaration(d) => {
 				let it = d.declaration(db);
 				let signature = item.signature(db);
-				let expected = match &signature.patterns[&it.pattern] {
+				let lhs_ty = match &signature.patterns[&it.pattern] {
 					PatternTy::Variable(t) | PatternTy::Destructuring(t) => *t,
 					_ => unreachable!(),
+				};
+				// An object introduction is defined by the record its objects are
+				// constructed from, not by the class type itself
+				let expected = if data[it.declared_type].is_new(data) {
+					typer
+						.class_type_to_input_record_type(it.declared_type)
+						.unwrap_or(lhs_ty)
+				} else {
+					lhs_ty
 				};
 				// Declarations with incomplete types would have been done during signature typing
 				if data[it.declared_type].is_complete(data) {
@@ -199,6 +211,9 @@ impl<'db> BodyTypeContext<'db> {
 					let _ = typer.typecheck_expression(*ann, types.ann);
 				}
 			}
+			// A class has no body: its attributes, constraints and annotations are
+			// all typed as part of its signature.
+			Item::Class(_) => {}
 		}
 	}
 
@@ -283,6 +298,23 @@ impl<'db> TypeContext<'db> for BodyTypeContext<'db> {
 		let warning = e.into();
 		assert_eq!(item, self.item, "Got warning '{}' for wrong item", warning);
 		self.diagnostics.add_warning(warning);
+	}
+
+	fn add_type(&mut self, _db: &'db dyn Db, declared_type: TypeId<'db>, ty: Ty<'db>) {
+		self.data.types.insert(declared_type, ty);
+	}
+
+	fn get_type(&self, db: &'db dyn Db, declared_type: TypeId<'db>) -> Ty<'db> {
+		if let Some(ty) = self.data.types.get(declared_type) {
+			return *ty;
+		}
+		// A declared type is usually completed while typing this item's signature,
+		// not its body. A type which failed to complete is never recorded; an error
+		// was already reported for it, so report the error type rather than panicking.
+		self.item
+			.possibly_cyclic_signature(db)
+			.and_then(|signature| signature.types.get(&declared_type).copied())
+			.unwrap_or_else(|| TypeRegistry::lookup(db).error)
 	}
 
 	fn type_pattern(&mut self, db: &'db dyn Db, pattern: PatternRef<'db>) -> PatternTy<'db> {

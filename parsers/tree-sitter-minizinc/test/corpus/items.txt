@@ -171,3 +171,37 @@ type qux = foo;
   (type_alias (identifier) (set_type (type_base (primitive_type))))
   (type_alias (identifier) (array_type (type_base (primitive_type)) (type_base (primitive_type))))
   (type_alias (identifier) (type_base (identifier))))
+
+==========
+Class
+==========
+
+class A extends B (
+  var int: x;
+  set(1..3) of new C: bla;
+  constraint x < bla;
+);
+
+---
+
+    (source_file
+      (class_decl
+        (identifier)
+        (identifier)
+        (declaration
+          (type_base
+            (primitive_type))
+          (identifier))
+        (declaration
+          (set_type
+            (infix_operator
+              (integer_literal)
+              (integer_literal))
+            (type_base
+              (new_type
+                (identifier))))
+          (identifier))
+        (constraint
+          (infix_operator
+            (identifier)
+            (identifier)))))

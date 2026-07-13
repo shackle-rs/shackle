@@ -21,6 +21,7 @@
 //!
 //! The overall process is orchestrated by the `run_hir_phase` function.
 
+pub mod class_analysis;
 pub mod constants;
 pub mod counts;
 pub mod db;
@@ -29,6 +30,7 @@ pub mod input;
 pub mod interface;
 pub mod ir;
 pub mod lower;
+pub mod object_validation;
 pub mod pattern_matching;
 pub mod scope;
 pub mod source;
@@ -46,6 +48,7 @@ use crate::{
 	diagnostics::{Errors, Warnings},
 	input::{accumulate_syntax_errors, resolve_includes},
 	lower::{accumulate_lower_errors, lower_models},
+	object_validation::validate_object_lowering,
 	pattern_matching::check_case_exhaustiveness,
 	toposort::topological_sort,
 	validate::validate_hir,
@@ -117,4 +120,5 @@ fn run_hir_phase_internal(db: &dyn Db) {
 	let _ = topological_sort(db);
 	check_case_exhaustiveness(db);
 	validate_hir(db);
+	validate_object_lowering(db);
 }

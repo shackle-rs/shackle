@@ -491,6 +491,24 @@ pub struct TypeSpecialisationRecursionLimit {
 	pub span: SourceSpan,
 }
 
+/// An object-related language form which cannot be lowered.
+///
+/// Emitted while validating class declarations and object introductions, so
+/// that unsupported shapes produce a diagnostic rather than failing later.
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Unsupported object feature")]
+#[diagnostic(code(shackle::unsupported_object_feature))]
+pub struct UnsupportedObjectFeature {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
@@ -601,6 +619,10 @@ pub enum Error {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	TypeSpecialisationRecursionLimit(#[from] TypeSpecialisationRecursionLimit),
+	/// Unsupported object feature
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	UnsupportedObjectFeature(#[from] UnsupportedObjectFeature),
 	/// An internal error
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),

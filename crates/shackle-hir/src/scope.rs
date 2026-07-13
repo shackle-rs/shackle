@@ -17,10 +17,11 @@ use shackle_utils::{
 
 use super::{Constructor, Generator, MaybeIndexSet};
 use crate::{
-	AnnotationItem, AssignmentItem, ConstraintItem, Db, DeclarationItem, EnumAssignmentItem,
-	EnumConstructor, EnumerationItem, Expression, ExpressionId, FunctionItem, Goal, Identifier,
-	Item, ItemData, LetItem, Model, OutputItem, Pattern, PatternId, PatternTy, SolveItem, Type,
-	TypeAliasItem, TypeId,
+	AnnotationItem, AssignmentItem, ClassItem, ClassMember, ConstraintItem, Db, DeclarationItem,
+	EnumAssignmentItem, EnumConstructor, EnumerationItem, Expression, ExpressionId, FunctionItem,
+	Goal, Identifier, Item, ItemData, LetItem, Model, OutputItem, Pattern, PatternId, PatternTy,
+	SolveItem, Type, TypeAliasItem, TypeId,
+	constants::IdentifierRegistry,
 	db::with_attached_database,
 	diagnostics::Diagnostics,
 	ids::{EntityId, NodeRef, PatternRef},
@@ -328,6 +329,22 @@ fn collect_model_global_scope<'db>(db: &'db dyn Db, model: Model<'db>) -> ScopeD
 						);
 					}
 					_ => unreachable!("Type-alias must have identifier pattern"),
+				}
+			}
+			Item::Class(class_item) => {
+				let c = class_item.class(db);
+				match &c[c.pattern] {
+					Pattern::Identifier(identifier) => {
+						scope.add_variable(
+							db,
+							*identifier,
+							0,
+							PatternRef::new(db, *item, c.pattern),
+							false,
+							&mut diagnostics,
+						);
+					}
+					_ => unreachable!("Class declaration must have identifier pattern"),
 				}
 			}
 			Item::Assignment(_) | Item::Constraint(_) | Item::Output(_) => (),
@@ -989,6 +1006,60 @@ impl<'db> ScopeCollector<'db> {
 		}
 	}
 
+	/// Bring the attributes a class inherits from its superclass chain into the current scope
+	fn add_inherited_class_fields_to_scope(&mut self, item: Item<'db>, extends: ExpressionId<'db>) {
+		if let Some(base_class) = self.resolve_class_from_expression(item, extends) {
+			self.add_class_fields_to_current_scope(base_class);
+		}
+	}
+
+	/// Resolve an `extends` expression to the class item it names, if it names one
+	fn resolve_class_from_expression(
+		&self,
+		item: Item<'db>,
+		expr: ExpressionId<'db>,
+	) -> Option<ClassItem<'db>> {
+		let Expression::Identifier(identifier) = &item.data(self.db)[expr] else {
+			return None;
+		};
+		let pattern = GlobalScope::find_variable(self.db, *identifier)?;
+		match pattern.item(self.db) {
+			Item::Class(c) => Some(c),
+			_ => None,
+		}
+	}
+
+	/// Add a class's attributes to the current scope, superclasses first so that an
+	/// attribute redeclared in a subclass shadows the inherited one
+	fn add_class_fields_to_current_scope(&mut self, class_item: ClassItem<'db>) {
+		let db = self.db;
+		let item: Item<'db> = class_item.into();
+		let class = class_item.class(db);
+		if let Some(base) = class.extends
+			&& let Some(base_class) = self.resolve_class_from_expression(item, base)
+		{
+			self.add_class_fields_to_current_scope(base_class);
+		}
+		let generation = self.generation();
+		let diagnostics = &mut self.diagnostics;
+		let Scope::Local { scope, .. } = &mut self.scopes[self.current] else {
+			unreachable!("Class fields must be added to a local scope")
+		};
+		for member in class.items.iter() {
+			if let ClassMember::Declaration(d) = member {
+				for pattern in Pattern::identifiers(d.pattern, class.data()) {
+					let pattern_ref = PatternRef::new(db, item, pattern);
+					let identifier = pattern_ref
+						.identifier(db)
+						.expect("Pattern::identifiers yields identifier patterns");
+					if scope.find_variable(identifier, generation).is_none() {
+						scope.add_variable(db, identifier, 0, pattern_ref, false, diagnostics);
+					}
+				}
+			}
+		}
+	}
+
 	/// Collect scope for a type
 	fn collect_type(&mut self, index: TypeId<'db>) {
 		match &self.data[index] {
@@ -1001,7 +1072,17 @@ impl<'db> ScopeCollector<'db> {
 				self.collect_type(*dimensions);
 				self.collect_type(*element);
 			}
-			Type::Set { element, .. } => self.collect_type(*element),
+			Type::Set {
+				element,
+				cardinality,
+				..
+			} => {
+				self.collect_type(*element);
+				if let Some(c) = cardinality {
+					self.collect_expression(*c);
+				}
+			}
+			Type::New { domain, .. } => self.collect_expression(*domain),
 			Type::Tuple { fields, .. } => {
 				for f in fields.iter() {
 					self.collect_type(*f);
@@ -1416,7 +1497,64 @@ fn collect_item_scope_with_diagnostics<'db>(
 		Item::Output(item) => collect_output_scope(db, item),
 		Item::Solve(item) => collect_solve_scope(db, item),
 		Item::TypeAlias(item) => collect_type_alias_scope(db, item),
+		Item::Class(item) => collect_class_scope(db, item),
 	}
+}
+
+fn collect_class_scope<'db>(
+	db: &'db dyn Db,
+	item: ClassItem<'db>,
+) -> (ScopeResult<'db>, Diagnostics) {
+	let class_ref: Item<'db> = item.into();
+	let class = item.class(db);
+	let mut collector = ScopeCollector::new(db, class_ref, class.data());
+	// The superclass and the class-level annotations resolve in the enclosing scope,
+	// outside the `this`/member scope pushed below
+	if let Some(base) = class.extends {
+		collector.collect_expression(base);
+	}
+	for ann in class.annotations.iter() {
+		collector.collect_expression(*ann);
+	}
+	collector.push();
+	let identifiers = IdentifierRegistry::lookup(db);
+	let this_ref = PatternRef::new(db, class_ref, class.this_pattern);
+	let Scope::Local { scope, .. } = &mut collector.scopes[collector.current] else {
+		unreachable!("Just pushed a local scope")
+	};
+	scope.add_variable(
+		db,
+		identifiers.names.this,
+		0,
+		this_ref,
+		false,
+		&mut collector.diagnostics,
+	);
+	if let Some(base) = class.extends {
+		collector.add_inherited_class_fields_to_scope(class_ref, base);
+	}
+	for member in class.items.iter() {
+		match member {
+			ClassMember::Constraint(c) => {
+				for ann in c.annotations.iter() {
+					collector.collect_expression(*ann);
+				}
+				collector.collect_expression(c.expression);
+			}
+			ClassMember::Declaration(d) => {
+				for ann in d.annotations.iter() {
+					collector.collect_expression(*ann);
+				}
+				collector.collect_type(d.declared_type);
+				if let Some(def) = d.definition {
+					collector.collect_expression(def);
+				}
+				collector.collect_pattern(d.pattern, PatternMode::Destructuring);
+			}
+		}
+	}
+	collector.pop();
+	collector.finish()
 }
 
 fn collect_annotation_scope<'db>(

@@ -69,6 +69,11 @@ impl<'db> Ty<'db> {
 		Ty::new(db, TyData::Enum(VarType::Par, OptType::NonOpt, e))
 	}
 
+	/// Create a par class object type
+	pub fn class(db: &'db dyn Db, c: ClassRef<'db>) -> Self {
+		Ty::new(db, TyData::Class(VarType::Par, OptType::NonOpt, c))
+	}
+
 	/// Create a par string
 	pub fn string(db: &'db dyn Db) -> Self {
 		Ty::new(db, TyData::String(OptType::NonOpt))
@@ -162,6 +167,7 @@ impl<'db> Ty<'db> {
 			TyData::Integer(_, o) => TyData::Integer(inst, *o),
 			TyData::Float(_, o) => TyData::Float(inst, *o),
 			TyData::Enum(_, o, e) => TyData::Enum(inst, *o, *e),
+			TyData::Class(_, o, c) => TyData::Class(inst, *o, *c),
 			TyData::Set(_, o, e) if e.known_enumerable(db) => TyData::Set(inst, *o, *e),
 			TyData::Array { opt, dim, element } => TyData::Array {
 				opt: *opt,
@@ -206,6 +212,7 @@ impl<'db> Ty<'db> {
 				TyData::Integer(_, o) => TyData::Integer(VarType::Par, *o),
 				TyData::Float(_, o) => TyData::Float(VarType::Par, *o),
 				TyData::Enum(_, o, e) => TyData::Enum(VarType::Par, *o, *e),
+				TyData::Class(_, o, c) => TyData::Class(VarType::Par, *o, *c),
 				TyData::Array { opt, dim, element } => TyData::Array {
 					opt: *opt,
 					dim: *dim,
@@ -233,6 +240,7 @@ impl<'db> Ty<'db> {
 				TyData::Integer(i, _) => TyData::Integer(*i, opt),
 				TyData::Float(i, _) => TyData::Float(*i, opt),
 				TyData::Enum(i, _, e) => TyData::Enum(*i, opt, *e),
+				TyData::Class(i, _, c) => TyData::Class(*i, opt, *c),
 				TyData::String(_) => TyData::String(opt),
 				TyData::Annotation(_) => TyData::Annotation(opt),
 				TyData::Bottom(_) => TyData::Bottom(opt),
@@ -276,6 +284,7 @@ impl<'db> Ty<'db> {
 				| TyData::Bottom(_)
 				| TyData::Function(_, _)
 				| TyData::Set(VarType::Par, _, _)
+				| TyData::Class(VarType::Par, _, _)
 				| TyData::TyVar(Some(VarType::Par), _, _) => (),
 				TyData::Array { dim, element, .. } => {
 					todo.push(*dim);
@@ -303,6 +312,7 @@ impl<'db> Ty<'db> {
 				| TyData::Bottom(OptType::NonOpt)
 				| TyData::Function(OptType::NonOpt, _)
 				| TyData::Set(_, OptType::NonOpt, _)
+				| TyData::Class(_, OptType::NonOpt, _)
 				| TyData::TyVar(_, Some(OptType::NonOpt), _)
 				| TyData::Array {
 					opt: OptType::NonOpt,
@@ -324,9 +334,24 @@ impl<'db> Ty<'db> {
 			| TyData::Bottom(OptType::NonOpt)
 			| TyData::Boolean(_, OptType::NonOpt)
 			| TyData::Integer(_, OptType::NonOpt)
+			| TyData::Class(_, OptType::NonOpt, _)
 			| TyData::Enum(_, OptType::NonOpt, _) => true,
 			TyData::TyVar(_, Some(OptType::NonOpt), t) => t.enumerable,
 			_ => false,
+		}
+	}
+
+	/// Whether this type-inst is a class object type
+	pub fn is_class(&self, db: &'db dyn Db) -> bool {
+		matches!(self.lookup(db), TyData::Class(_, _, _))
+	}
+
+	/// Get the class this type refers to, looking through sets
+	pub fn class_type(&self, db: &'db dyn Db) -> Option<ClassRef<'db>> {
+		match self.lookup(db) {
+			TyData::Class(_, _, c) => Some(*c),
+			TyData::Set(_, _, t) => t.class_type(db),
+			_ => None,
 		}
 	}
 
@@ -540,6 +565,7 @@ impl<'db> Ty<'db> {
 			| TyData::Float(inst, _)
 			| TyData::Enum(inst, _, _)
 			| TyData::Set(inst, _, _)
+			| TyData::Class(inst, _, _)
 			| TyData::TyVar(Some(inst), _, _) => Some(*inst),
 
 			TyData::Error
@@ -566,6 +592,7 @@ impl<'db> Ty<'db> {
 			| TyData::Bottom(opt)
 			| TyData::Function(opt, _)
 			| TyData::Set(_, opt, _)
+			| TyData::Class(_, opt, _)
 			| TyData::TyVar(_, Some(opt), _)
 			| TyData::Array { opt, .. }
 			| TyData::Tuple(opt, _)
@@ -749,6 +776,16 @@ impl<'db> Ty<'db> {
 					(TyData::Enum(i1, o1, e1), TyData::Enum(i2, o2, e2)) if e1 == e2 => {
 						TyData::Enum((*i1).max(*i2), (*o1).max(*o2), *e1)
 					}
+					(TyData::Class(i1, o1, c1), TyData::Class(i2, o2, c2))
+						if c1.is_subclass_of(db, c2) =>
+					{
+						TyData::Class((*i1).max(*i2), (*o1).max(*o2), *c2)
+					}
+					(TyData::Class(i1, o1, c1), TyData::Class(i2, o2, c2))
+						if c2.is_subclass_of(db, c1) =>
+					{
+						TyData::Class((*i1).max(*i2), (*o1).max(*o2), *c1)
+					}
 					(TyData::String(o1), TyData::String(o2)) => TyData::String((*o1).max(*o2)),
 					(TyData::Annotation(o1), TyData::Annotation(o2)) => {
 						TyData::Annotation((*o1).max(*o2))
@@ -762,6 +799,8 @@ impl<'db> Ty<'db> {
 					| (TyData::Float(i, o2), TyData::Bottom(o1)) => TyData::Float(*i, (*o1).max(*o2)),
 					(TyData::Bottom(o1), TyData::Enum(i, o2, e))
 					| (TyData::Enum(i, o2, e), TyData::Bottom(o1)) => TyData::Enum(*i, (*o1).max(*o2), *e),
+					(TyData::Bottom(o1), TyData::Class(i, o2, c))
+					| (TyData::Class(i, o2, c), TyData::Bottom(o1)) => TyData::Class(*i, (*o1).max(*o2), *c),
 					(TyData::Bottom(o1), TyData::String(o2))
 					| (TyData::String(o2), TyData::Bottom(o1)) => TyData::String((*o1).max(*o2)),
 					(TyData::Bottom(o1), TyData::Annotation(o2))
@@ -944,6 +983,16 @@ impl<'db> Ty<'db> {
 					(TyData::Enum(i1, o1, e1), TyData::Enum(i2, o2, e2)) if e1 == e2 => {
 						TyData::Enum((*i1).min(*i2), (*o1).min(*o2), *e1)
 					}
+					(TyData::Class(i1, o1, c1), TyData::Class(i2, o2, c2))
+						if c1.is_subclass_of(db, c2) =>
+					{
+						TyData::Class((*i1).min(*i2), (*o1).min(*o2), *c1)
+					}
+					(TyData::Class(i1, o1, c1), TyData::Class(i2, o2, c2))
+						if c2.is_subclass_of(db, c1) =>
+					{
+						TyData::Class((*i1).min(*i2), (*o1).min(*o2), *c2)
+					}
 					(TyData::String(o1), TyData::String(o2)) => TyData::String((*o1).min(*o2)),
 					(TyData::Annotation(o1), TyData::Annotation(o2)) => {
 						TyData::Annotation((*o1).min(*o2))
@@ -957,6 +1006,8 @@ impl<'db> Ty<'db> {
 					| (TyData::Float(_, o2), TyData::Bottom(o1))
 					| (TyData::Bottom(o1), TyData::Enum(_, o2, _))
 					| (TyData::Enum(_, o2, _), TyData::Bottom(o1))
+					| (TyData::Bottom(o1), TyData::Class(_, o2, _))
+					| (TyData::Class(_, o2, _), TyData::Bottom(o1))
 					| (TyData::Bottom(o1), TyData::String(o2))
 					| (TyData::String(o2), TyData::Bottom(o1))
 					| (TyData::Bottom(o1), TyData::Annotation(o2))
@@ -1112,11 +1163,18 @@ impl<'db> Ty<'db> {
 						return false;
 					}
 				}
+				(TyData::Class(i1, o1, c1), TyData::Class(i2, o2, c2)) => {
+					if i1 != VarType::Par && i1 != i2 || o1 != OptType::NonOpt && o1 != o2 {
+						return false;
+					}
+					return c1.is_subclass_of(db, &c2);
+				}
 				(TyData::Bottom(o1), TyData::Bottom(o2))
 				| (TyData::Bottom(o1), TyData::Boolean(_, o2))
 				| (TyData::Bottom(o1), TyData::Integer(_, o2))
 				| (TyData::Bottom(o1), TyData::Float(_, o2))
 				| (TyData::Bottom(o1), TyData::Enum(_, o2, _))
+				| (TyData::Bottom(o1), TyData::Class(_, o2, _))
 				| (TyData::Bottom(o1), TyData::String(o2))
 				| (TyData::Bottom(o1), TyData::Annotation(o2))
 				| (TyData::Bottom(o1), TyData::Array { opt: o2, .. })
@@ -1297,6 +1355,13 @@ impl<'db> Ty<'db> {
 				.chain([e.pretty_print(db)])
 				.collect::<Vec<_>>()
 				.join(" "),
+			TyData::Class(i, o, c) => i
+				.pretty_print()
+				.into_iter()
+				.chain(o.pretty_print())
+				.chain([c.pretty_print(db)])
+				.collect::<Vec<_>>()
+				.join(" "),
 			TyData::String(o) => o
 				.pretty_print()
 				.into_iter()
@@ -1421,6 +1486,8 @@ pub enum TyData<'db> {
 	Float(VarType, OptType),
 	/// Enumerated type scalar
 	Enum(VarType, OptType, EnumRef<'db>),
+	/// Object of a class type
+	Class(VarType, OptType, ClassRef<'db>),
 
 	/// String scalar
 	String(OptType),
@@ -1504,6 +1571,59 @@ impl<'db> EnumRef<'db> {
 	/// Get the human readable name of this enum
 	pub fn pretty_print(&self, db: &'db dyn Db) -> String {
 		pretty_print_identifier(self.name().lookup(db))
+	}
+}
+
+/// The type of a class object value
+///
+/// A class is identified by its name. The superclass is carried inline because
+/// subtyping between class types is resolved here, without access to the HIR;
+/// the attribute list lives in the HIR signature instead, since only the
+/// typechecker needs it.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+pub struct ClassRef<'db> {
+	newtype: NewType<'db>,
+	superclass: Option<Ty<'db>>,
+}
+
+impl<'db> ClassRef<'db> {
+	/// Create a class ref for the class with the given name
+	pub fn new(name: impl Into<InternedString<'db>>, superclass: Option<Ty<'db>>) -> Self {
+		Self {
+			newtype: NewType(name.into()),
+			superclass,
+		}
+	}
+
+	/// Get the name of this class
+	pub fn name(&self) -> InternedString<'db> {
+		let NewType(inner) = self.newtype;
+		inner
+	}
+
+	/// Get the type of this class's superclass, if it has one
+	pub fn superclass(&self) -> Option<Ty<'db>> {
+		self.superclass
+	}
+
+	/// Get the human readable name of this class
+	pub fn pretty_print(&self, db: &'db dyn Db) -> String {
+		pretty_print_identifier(self.name().lookup(db))
+	}
+
+	/// Get an iterator over this class and all of its superclasses
+	pub fn superclasses(&self, db: &'db dyn Db) -> impl Iterator<Item = ClassRef<'db>> {
+		let mut current = Some(*self);
+		std::iter::from_fn(move || {
+			let class = current.take()?;
+			current = class.superclass.and_then(|s| s.class_type(db));
+			Some(class)
+		})
+	}
+
+	/// Test if this is a subclass of `other` (a class is a subclass of itself)
+	pub fn is_subclass_of(&self, db: &'db dyn Db, other: &ClassRef<'db>) -> bool {
+		self.superclasses(db).any(|c| c.newtype == other.newtype)
 	}
 }
 

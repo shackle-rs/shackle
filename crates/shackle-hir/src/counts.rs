@@ -12,6 +12,8 @@ pub struct EntityCounts {
 	pub assignments: u32,
 	/// Enum assignment item count
 	pub enum_assignments: u32,
+	/// Class declaration item count
+	pub classes: u32,
 	/// Constraint item count
 	pub constraints: u32,
 	/// Declaration item count
@@ -54,6 +56,7 @@ fn entity_counts(db: &dyn Db) -> EntityCounts {
 				crate::ir::Item::Annotation(_) => counts.annotations += 1,
 				crate::ir::Item::Assignment(_) => counts.assignments += 1,
 				crate::ir::Item::EnumAssignment(_) => counts.enum_assignments += 1,
+				crate::ir::Item::Class(_) => counts.classes += 1,
 				crate::ir::Item::Constraint(_) => counts.constraints += 1,
 				crate::ir::Item::Declaration(_) => counts.declarations += 1,
 				crate::ir::Item::Enumeration(_) => counts.enumerations += 1,

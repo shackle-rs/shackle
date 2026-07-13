@@ -46,6 +46,8 @@ pub enum Item<'db> {
 	Annotation(AnnotationItem<'db>),
 	/// Assignment item ID
 	Assignment(AssignmentItem<'db>),
+	/// Class declaration item ID
+	Class(ClassItem<'db>),
 	/// Constraint item ID
 	Constraint(ConstraintItem<'db>),
 	/// Declaration item ID
@@ -82,6 +84,7 @@ impl<'db> Item<'db> {
 		match self {
 			Item::Annotation(i) => i.annotation(db).data(),
 			Item::Assignment(i) => i.assignment(db).data(),
+			Item::Class(i) => i.class(db).data(),
 			Item::Constraint(i) => i.constraint(db).data(),
 			Item::Declaration(i) => i.declaration(db).data(),
 			Item::Enumeration(i) => i.enumeration(db).data(),
@@ -108,6 +111,7 @@ impl<'db> Item<'db> {
 		match self {
 			Item::Annotation(i) => i.sources(db),
 			Item::Assignment(i) => i.sources(db),
+			Item::Class(i) => i.sources(db),
 			Item::Constraint(i) => i.sources(db),
 			Item::Declaration(i) => i.sources(db),
 			Item::Enumeration(i) => i.sources(db),
@@ -124,6 +128,7 @@ impl<'db> Item<'db> {
 		match self {
 			Item::Annotation(i) => i.origin(db),
 			Item::Assignment(i) => i.origin(db),
+			Item::Class(i) => i.origin(db),
 			Item::Constraint(i) => i.origin(db),
 			Item::Declaration(i) => i.origin(db),
 			Item::Enumeration(i) => i.origin(db),
@@ -140,6 +145,7 @@ impl<'db> Item<'db> {
 		match self {
 			Item::Annotation(i) => i.annotation(db),
 			Item::Assignment(i) => i.assignment(db),
+			Item::Class(i) => i.class(db),
 			Item::Constraint(i) => i.constraint(db),
 			Item::Declaration(i) => i.declaration(db),
 			Item::Enumeration(i) => i.enumeration(db),
@@ -692,3 +698,52 @@ mod type_alias_item {
 	}
 }
 pub use type_alias_item::TypeAliasItem;
+
+/// A class declaration item
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+pub struct Class<'db> {
+	/// Name of this class (always an identifier)
+	pub pattern: PatternId<'db>,
+	/// Pattern bound by `this` inside the class body
+	pub this_pattern: PatternId<'db>,
+	/// The superclass this class extends, if any
+	pub extends: Option<ExpressionId<'db>>,
+	/// The attributes and constraints declared in this class
+	pub items: Box<[ClassMember<'db>]>,
+	/// Annotations
+	pub annotations: Box<[ExpressionId<'db>]>,
+}
+
+/// A member of a class body
+#[derive(Clone, Debug, Hash, PartialEq, Eq, From, salsa::Update)]
+pub enum ClassMember<'db> {
+	/// An attribute
+	Declaration(Declaration<'db>),
+	/// A constraint which must hold for every object of the class
+	Constraint(Constraint<'db>),
+}
+
+#[allow(missing_docs, reason = "Salsa generates code with missing docs")]
+mod class_item {
+	use super::*;
+	/// A class declaration item with data
+	#[salsa::tracked(debug)]
+	pub struct ClassItem<'db> {
+		/// The item and data
+		#[tracked]
+		#[returns(ref)]
+		pub class: ItemWithData<'db, Class<'db>>,
+
+		/// The source map for this item
+		#[tracked]
+		#[returns(ref)]
+		pub sources: SourceMap<'db>,
+
+		/// Origin of this class's documentation comment
+		pub documentation: Option<Origin>,
+
+		/// The origin of this item
+		pub origin: Origin,
+	}
+}
+pub use class_item::ClassItem;

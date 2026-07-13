@@ -228,6 +228,7 @@ impl<'db: 'a, 'tree, 'a> ItemCollector<'db, 'tree, 'a> {
 						Type::Set {
 							inst: VarType::Par,
 							opt: OptType::NonOpt,
+							cardinality: None,
 							element: declared_type,
 						},
 					),

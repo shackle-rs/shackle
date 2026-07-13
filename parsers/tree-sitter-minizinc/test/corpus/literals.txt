@@ -57,6 +57,24 @@ more = [<>, <>, 1, _];
     (array_literal_member (integer_literal))
     (array_literal_member (anonymous)))))
 
+======
+Record
+======
+
+empty = ();
+single = (a: 1);
+double = (a: 1, b: 2);
+
+---
+
+(source_file
+  (assignment (identifier) (record_literal))
+  (assignment (identifier) (record_literal
+    (record_member (identifier) (integer_literal))))
+  (assignment (identifier) (record_literal
+    (record_member (identifier) (integer_literal))
+    (record_member (identifier) (integer_literal)))))
+
 =============
 Indexed Array
 =============

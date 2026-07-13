@@ -12,7 +12,8 @@ use shackle_utils::hash::{Map, Set};
 
 use super::PatternTy;
 use crate::{
-	Db, Expression, GlobalScope, Goal, Item, Pattern, Type,
+	ClassMember, Db, Expression, GlobalScope, Goal, Item, Pattern, Type,
+	class_analysis::class_subclasses,
 	diagnostics::Errors,
 	ids::{ExpressionRef, NodeRef, PatternRef},
 	lower::lower_models,
@@ -86,7 +87,7 @@ impl<'db> TopoSorter<'db> {
 				let annotation = a.annotation(self.db);
 				for p in annotation.parameters() {
 					for e in Type::expressions(p.declared_type, annotation.data()) {
-						self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+						self.visit_type_expression(ExpressionRef::new(self.db, item, e));
 					}
 				}
 			}
@@ -120,7 +121,7 @@ impl<'db> TopoSorter<'db> {
 					.collect::<Vec<_>>();
 				self.current.extend(pats.iter().copied());
 				for e in Type::expressions(declaration.declared_type, declaration.data()) {
-					self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+					self.visit_type_expression(ExpressionRef::new(self.db, item, e));
 				}
 				for ann in declaration.annotations.iter() {
 					self.visit_expression(ExpressionRef::new(self.db, item, *ann), None);
@@ -153,7 +154,7 @@ impl<'db> TopoSorter<'db> {
 					for c in def.iter() {
 						for param in c.parameters() {
 							for e in Type::expressions(param.declared_type, data) {
-								self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+								self.visit_type_expression(ExpressionRef::new(self.db, item, e));
 							}
 						}
 					}
@@ -165,10 +166,9 @@ impl<'db> TopoSorter<'db> {
 							for c in assignment.definition.iter() {
 								for param in c.parameters() {
 									for e in Type::expressions(param.declared_type, data) {
-										self.visit_expression(
-											ExpressionRef::new(self.db, item, e),
-											None,
-										);
+										self.visit_type_expression(ExpressionRef::new(
+											self.db, item, e,
+										));
 									}
 								}
 							}
@@ -188,7 +188,7 @@ impl<'db> TopoSorter<'db> {
 					for c in enum_assignment.definition.iter() {
 						for param in c.parameters() {
 							for e in Type::expressions(param.declared_type, data) {
-								self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+								self.visit_type_expression(ExpressionRef::new(self.db, item, e));
 							}
 						}
 					}
@@ -243,11 +243,11 @@ impl<'db> TopoSorter<'db> {
 						self.visit_expression(ExpressionRef::new(self.db, item, *ann), None);
 					}
 					for e in Type::expressions(p.declared_type, data) {
-						self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+						self.visit_type_expression(ExpressionRef::new(self.db, item, e));
 					}
 				}
 				for e in Type::expressions(function.return_type, data) {
-					self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+					self.visit_type_expression(ExpressionRef::new(self.db, item, e));
 				}
 				for ann in function.annotations.iter() {
 					self.visit_expression(ExpressionRef::new(self.db, item, *ann), None);
@@ -297,7 +297,65 @@ impl<'db> TopoSorter<'db> {
 				}
 				let data = type_alias.data();
 				for e in Type::expressions(type_alias.aliased_type, data) {
-					self.visit_expression(ExpressionRef::new(self.db, item, e), None);
+					self.visit_type_expression(ExpressionRef::new(self.db, item, e));
+				}
+				let _ = self.current.remove(&p);
+			}
+			Item::Class(c) => {
+				let class = c.class(self.db);
+				let data = class.data();
+				let p = PatternRef::new(self.db, item, class.pattern);
+				let _ = self.current.insert(p);
+				// A subclass's signature contributes to its superclass's lowering, so
+				// sort subclasses before the class they extend.
+				if let Some(subclasses) = class_subclasses(self.db).get(&p) {
+					for subclass in subclasses.clone() {
+						self.run(subclass.item(self.db));
+					}
+				}
+				for ann in class.annotations.iter() {
+					self.visit_expression(ExpressionRef::new(self.db, item, *ann), None);
+				}
+				for member in class.items.iter() {
+					match member {
+						ClassMember::Declaration(d) => {
+							let pats = Pattern::identifiers(d.pattern, data)
+								.map(|p| PatternRef::new(self.db, item, p))
+								.collect::<Vec<_>>();
+							self.current.extend(pats.iter().copied());
+							for e in Type::expressions(d.declared_type, data) {
+								self.visit_type_expression(ExpressionRef::new(self.db, item, e));
+							}
+							for ann in d.annotations.iter() {
+								self.visit_expression(
+									ExpressionRef::new(self.db, item, *ann),
+									None,
+								);
+							}
+							if let Some(def) = d.definition {
+								self.visit_expression(ExpressionRef::new(self.db, item, def), None);
+							}
+							for p in pats.iter() {
+								let _ = self.current.remove(p);
+							}
+						}
+						ClassMember::Constraint(constraint) => {
+							// A class constraint may refer to the class's own objects
+							// (through `this`), which is not a cyclic definition.
+							let _ = self.current.remove(&p);
+							for ann in constraint.annotations.iter() {
+								self.visit_expression(
+									ExpressionRef::new(self.db, item, *ann),
+									None,
+								);
+							}
+							self.visit_expression(
+								ExpressionRef::new(self.db, item, constraint.expression),
+								None,
+							);
+							let _ = self.current.insert(p);
+						}
+					}
 				}
 				let _ = self.current.remove(&p);
 			}
@@ -310,6 +368,25 @@ impl<'db> TopoSorter<'db> {
 		expression: ExpressionRef<'db>,
 		visit_call_body: Option<PatternRef<'db>>,
 	) {
+		self.visit_expression_inner(expression, visit_call_body, false)
+	}
+
+	/// Visit an expression appearing inside a declared type.
+	///
+	/// A class named in a type position is not a cyclic definition even while that
+	/// class is being defined: classes may refer to one another through their
+	/// attribute types, and the reference is to the class's set of objects rather
+	/// than to a value being defined.
+	fn visit_type_expression(&mut self, expression: ExpressionRef<'db>) {
+		self.visit_expression_inner(expression, None, true)
+	}
+
+	fn visit_expression_inner(
+		&mut self,
+		expression: ExpressionRef<'db>,
+		visit_call_body: Option<PatternRef<'db>>,
+		in_type_expression: bool,
+	) {
 		let mut todo = vec![expression];
 		let mut seen = visit_call_body.into_iter().collect::<Set<_>>();
 		while let Some(expression) = todo.pop() {
@@ -320,8 +397,16 @@ impl<'db> TopoSorter<'db> {
 				if let Expression::Identifier(i) = data[e]
 					&& let Some(p) = types.name_resolution(e)
 				{
+					// A class name is the only identifier resolving to a class item's
+					// own name pattern, so this needs no signature lookup.
+					let is_class_type_reference = in_type_expression
+						&& matches!(
+							p.item(self.db),
+							Item::Class(c) if c.class(self.db).pattern == p.pattern(self.db)
+						);
 					if (visit_call_body.is_none() || !seen.contains(&p))
 						&& self.current.contains(&p)
+						&& !is_class_type_reference
 					{
 						// Cyclic definition, emit error
 						let (src, span) = NodeRef::from(
@@ -452,6 +537,31 @@ mod tests {
     int: y;
     int: x;
     x = y;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_class_topological_sort() {
+		// Classes may be named in each other's attribute types before they are
+		// declared, and a subclass is sorted before the class it extends.
+		check_toposort(
+			r#"
+			class C (set of new A: as);
+			var new A: a1;
+			var new B: b2;
+			class A (int: x);
+			class B extends A(int: y);
+
+			var new B: b1;
+		"#,
+			expect!([r#"
+    class B extends A(int: y);
+    class A (int: x);
+    class C (set of new A: as);
+    var new A: a1;
+    var new B: b2;
+    var new B: b1;
 "#]),
 		);
 	}

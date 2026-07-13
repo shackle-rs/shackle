@@ -258,6 +258,7 @@ fn test_domain_expressions() {
                     <Type::2>: Set {
                         inst: Par,
                         opt: NonOpt,
+                        cardinality: None,
                         element: <Type::1>,
                     },
                 },
@@ -1532,6 +1533,7 @@ fn test_lower_domain_alias() {
                     <Type::2>: Set {
                         inst: Par,
                         opt: NonOpt,
+                        cardinality: None,
                         element: <Type::1>,
                     },
                 },
@@ -1654,6 +1656,7 @@ fn test_lower_domain_alias() {
                     <Type::2>: Set {
                         inst: Par,
                         opt: NonOpt,
+                        cardinality: None,
                         element: <Type::1>,
                     },
                 },

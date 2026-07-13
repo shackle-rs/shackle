@@ -56,6 +56,10 @@ impl<'tree> Format for minizinc::Domain<'tree> {
 				Element::text(t.name(formatter.source()))
 			}
 			minizinc::Domain::TypeInstIdentifier(t) => Element::text(t.name(formatter.source())),
+			minizinc::Domain::NewType(n) => Element::sequence(vec![
+				Element::text("new "),
+				minizinc::Expression::Identifier(n.name()).format(formatter),
+			]),
 			minizinc::Domain::Unbounded(u) => Element::text(u.cst_text(formatter.source())),
 		};
 		formatter.attach_comments(self, vec![e])
@@ -89,7 +93,13 @@ impl<'tree> Format for minizinc::SetType<'tree> {
 		if let minizinc::OptType::Opt = self.opt_type() {
 			elements.push(Element::text("opt "));
 		}
-		elements.push(Element::text("set of "));
+		elements.push(Element::text("set"));
+		if let Some(c) = self.cardinality() {
+			elements.push(Element::text("("));
+			elements.push(c.format(formatter));
+			elements.push(Element::text(")"));
+		}
+		elements.push(Element::text(" of "));
 		elements.push(self.element_type().format(formatter));
 		Element::sequence(elements)
 	}

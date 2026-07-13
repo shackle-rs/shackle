@@ -1,7 +1,10 @@
 //! AST representation for types
 
 use super::{Children, Expression, Identifier};
-use crate::ast::{AstNode, ast_enum, ast_node, child_with_field_name, children_with_field_name};
+use crate::ast::{
+	AstNode, ast_enum, ast_node, child_with_field_name, children_with_field_name,
+	optional_child_with_field_name,
+};
 
 ast_enum!(
 	/// Type from a declaration
@@ -53,6 +56,7 @@ ast_node!(
 	SetType,
 	var_type,
 	opt_type,
+	cardinality,
 	element_type
 );
 
@@ -79,6 +83,11 @@ impl<'tree> SetType<'tree> {
 				_ => unreachable!(),
 			})
 			.unwrap_or(OptType::NonOpt)
+	}
+
+	/// Get the declared cardinality of the set
+	pub fn cardinality(&self) -> Option<Expression<'tree>> {
+		optional_child_with_field_name(self, "cardinality")
 	}
 
 	/// The type contained in the array
@@ -277,8 +286,22 @@ ast_enum!(
 	"primitive_type" => Unbounded(UnboundedDomain),
 	"type_inst_id" => TypeInstIdentifier,
 	"type_inst_enum_id" => TypeInstEnumIdentifier,
+	"new_type" => NewType,
 	_ => Bounded(Expression)
 );
+
+ast_node!(
+	/// Domain which introduces new objects of a class
+	NewType,
+	name
+);
+
+impl<'tree> NewType<'tree> {
+	/// Name of the class whose objects are introduced
+	pub fn name(&self) -> Identifier<'tree> {
+		child_with_field_name(self, "type")
+	}
+}
 
 ast_node!(
 	/// Unbounded primitive type domain
@@ -1040,6 +1063,7 @@ mod tests {
                                 cst_kind: "set_type",
                                 var_type: Var,
                                 opt_type: NonOpt,
+                                cardinality: None,
                                 element_type: TypeBase(
                                     TypeBase {
                                         cst_kind: "type_base",
@@ -1090,6 +1114,7 @@ mod tests {
                                 cst_kind: "set_type",
                                 var_type: Par,
                                 opt_type: Opt,
+                                cardinality: None,
                                 element_type: TypeBase(
                                     TypeBase {
                                         cst_kind: "type_base",

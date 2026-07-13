@@ -3,19 +3,25 @@ use std::{collections::hash_map::Entry, fmt::Write};
 use shackle_diagnostics::{
 	AmbiguousCall, BranchMismatch, Error, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
 	NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
+	UnsupportedObjectFeature,
 };
 use shackle_ty::{
-	FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty, TyData,
-	VarType, registry::TypeRegistry,
+	ClassRef, FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType,
+	Ty, TyData, VarType, registry::TypeRegistry,
 };
-use shackle_utils::{hash::Map, maybe_grow_stack};
+use shackle_utils::{
+	hash::{Map, Set},
+	maybe_grow_stack,
+};
 
 use super::{PatternTy, TypeContext};
 use crate::{
-	ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, Call, Case, Db, Declaration,
-	Expression, ExpressionId, Generator, Identifier, IfThenElse, IndexedArrayLiteral, Item,
-	ItemData, Lambda, Let, LetItem, MaybeIndexSet, Pattern, PatternId, PrimitiveType, RecordAccess,
-	RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type, TypeId,
+	ArrayAccess, ArrayComprehension, ArrayLiteral, ArrayLiteral2D, Call, Case, ClassMember, Db,
+	Declaration, Expression, ExpressionId, Generator, Identifier, IfThenElse, IndexedArrayLiteral,
+	Item, ItemData, Lambda, Let, LetItem, MaybeIndexSet, Pattern, PatternId, PrimitiveType,
+	RecordAccess, RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
+	TypeId,
+	class_analysis::{class_item_for, class_pattern_for},
 	constants::IdentifierRegistry,
 	ids::{ExpressionRef, PatternRef, TypeRef},
 };
@@ -232,6 +238,12 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					return self.types.error;
 				}
 				PatternTy::EnumConstructor { .. } | PatternTy::AnnotationConstructor(_) => (),
+				PatternTy::ClassDecl {
+					defining_set_ty, ..
+				} => {
+					// In a value position, a class name denotes the set of its objects
+					return defining_set_ty;
+				}
 				PatternTy::Computing => {
 					// Error will be emitted during topological sorting
 					return self.types.error;
@@ -753,7 +765,16 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					| TyData::Set(VarType::Par, OptType::NonOpt, element) => *element,
 					TyData::Set(VarType::Var, OptType::NonOpt, element) => {
 						is_var = true;
-						*element
+						// A `var set of new C` means both var membership and var
+						// attribute storage. Varify the binding for class elements so
+						// that field access through the bound name sees var storage:
+						// iterating `a.bs` where `a` is a `var new A` must bind a
+						// `var` object.
+						if let TyData::Class(VarType::Par, _, _) = element.lookup(db) {
+							element.make_var(db).unwrap_or(*element)
+						} else {
+							*element
+						}
 					}
 					TyData::Error => self.types.error,
 					_ => {
@@ -1153,6 +1174,89 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		ty
 	}
 
+	/// Find an attribute of a class, searching the superclass chain.
+	///
+	/// Returns the class which declares the attribute along with its type.
+	fn lookup_class_attribute(
+		&mut self,
+		class: ClassRef<'db>,
+		field: Identifier<'db>,
+	) -> Option<(ClassRef<'db>, Ty<'db>)> {
+		let db = self.db;
+		for c in class.superclasses(db).collect::<Vec<_>>() {
+			let pattern = class_pattern_for(db, c)?;
+			let PatternTy::ClassDecl { attributes, .. } = self.ctx.type_pattern(db, pattern) else {
+				continue;
+			};
+			if let Some((_, ty)) = attributes.iter().find(|(name, _)| *name == field) {
+				return Some((c, *ty));
+			}
+		}
+		None
+	}
+
+	/// Varify an array-typed class attribute read through a var receiver.
+	///
+	/// There is no `var array` type, so the array cannot be varified as a whole.
+	/// When the attribute's index sets are the same for every object of the class
+	/// — its declared dimensions mention neither another attribute nor `this` —
+	/// the read is an array of var elements, so it varifies element-wise. A ragged
+	/// attribute (`array [1..x] of int` with `x` an attribute) has no such form:
+	/// its read-back would need a decision-dependent index set, so it stays
+	/// rejected, as do multi-dimensional attributes.
+	fn varify_array_class_attribute(
+		&mut self,
+		class: ClassRef<'db>,
+		field: Identifier<'db>,
+		ty: Ty<'db>,
+	) -> Option<Ty<'db>> {
+		let db = self.db;
+		let TyData::Array {
+			opt: OptType::NonOpt,
+			dim,
+			element,
+		} = ty.lookup(db)
+		else {
+			return None;
+		};
+		let var_element = element.make_var(db)?;
+		let class_item = class_item_for(db, class)?;
+		let c = class_item.class(db);
+		let data = c.data();
+		let decl = c.items.iter().find_map(|member| match member {
+			ClassMember::Declaration(d) if data[d.pattern].identifier() == Some(field) => Some(d),
+			_ => None,
+		})?;
+		let Type::Array { dimensions, .. } = data[decl.declared_type] else {
+			return None;
+		};
+		if matches!(data[dimensions], Type::Tuple { .. }) {
+			return None;
+		}
+		// The names visible inside the class body: its own and inherited attributes,
+		// plus `this`. A dimension mentioning any of them varies per object.
+		let mut attribute_names = Set::default();
+		let _ = attribute_names.insert(self.identifiers.names.this);
+		for c in class.superclasses(db).collect::<Vec<_>>() {
+			let Some(pattern) = class_pattern_for(db, c) else {
+				continue;
+			};
+			if let PatternTy::ClassDecl { attributes, .. } = self.ctx.type_pattern(db, pattern) {
+				attribute_names.extend(attributes.iter().map(|(name, _)| *name));
+			}
+		}
+		for domain in Type::expressions(dimensions, data) {
+			for e in Expression::walk(domain, data) {
+				if let Expression::Identifier(identifier) = &data[e]
+					&& attribute_names.contains(identifier)
+				{
+					return None;
+				}
+			}
+		}
+		Ty::array(db, *dim, var_element)
+	}
+
 	fn collect_record_access(
 		&mut self,
 		expr: ExpressionId<'db>,
@@ -1253,6 +1357,53 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					self.types.error
 				}
 			},
+			TyData::Class(var_type, opt_type, class_ref) => {
+				let (var_type, opt_type, class_ref) = (*var_type, *opt_type, *class_ref);
+				match self.lookup_class_attribute(class_ref, field) {
+					Some((owner, mut ty)) => {
+						if let OptType::Opt = opt_type {
+							ty = ty.make_opt(db);
+						}
+						if let VarType::Var = var_type {
+							ty = ty
+								.make_var(db)
+								.or_else(|| self.varify_array_class_attribute(owner, field, ty))
+								.unwrap_or_else(|| {
+									let (src, span) =
+										ExpressionRef::new(db, self.item, expr).source_span(db);
+									self.ctx.add_diagnostic(
+										db,
+										self.item,
+										IllegalType {
+											src,
+											span,
+											ty: format!("var {}", ty.pretty_print(db)),
+										},
+									);
+									self.types.error
+								});
+						}
+						ty
+					}
+					None => {
+						let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+						self.ctx.add_diagnostic(
+							db,
+							self.item,
+							InvalidFieldAccess {
+								src,
+								span,
+								msg: format!(
+									"No such field {} for '{}'",
+									field.pretty_print(db),
+									class_ref.pretty_print(db)
+								),
+							},
+						);
+						self.types.error
+					}
+				}
+			}
 			TyData::Error => self.types.error,
 			_ => {
 				let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
@@ -1474,6 +1625,20 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					}
 				}
 				LetItem::Declaration(d) => {
+					if self.data[d.declared_type].is_new(self.data) {
+						let (src, span) =
+							TypeRef::new(db, self.item, d.declared_type).source_span(db);
+						self.ctx.add_diagnostic(
+							db,
+							self.item,
+							SyntaxError {
+								src,
+								span,
+								msg: "'new' declarations are not allowed in let expressions"
+									.to_owned(),
+							},
+						);
+					}
 					let result = self.collect_declaration(d);
 					if !result.ty.contains_error(db)
 						&& (result.ty.contains_par(db) || result.ty.contains_function(db))
@@ -2370,11 +2535,21 @@ supported in operation types."
 										}
 									}
 								}
-								PatternTy::Enum(ty) => match ty.lookup(db) {
-									TyData::Set(VarType::Par, OptType::NonOpt, inner) => {
+								PatternTy::Enum(ty)
+								| PatternTy::ClassDecl {
+									defining_set_ty: ty,
+									..
+								} => match ty.lookup(db) {
+									// A var-reached class has a `var set of C` defining
+									// set, but in a domain or type position the class
+									// denotes its par potential universe, not the var
+									// actual set. Accept either inst and record the par
+									// set; the var actual set is only used in value
+									// positions such as `x in C`.
+									TyData::Set(_, OptType::NonOpt, inner) => {
 										// Don't set has_bounded or has_unbounded as enums are accepted
 										// everywhere
-										self.ctx.add_expression(db, *domain, ty);
+										self.ctx.add_expression(db, *domain, ty.make_par(db));
 										*inner
 									}
 									TyData::Error => self.types.error,
@@ -2516,7 +2691,12 @@ supported in operation types."
 				});
 				ty.with_opt(db, *opt)
 			}
-			Type::Set { inst, opt, element } => {
+			Type::Set {
+				inst,
+				opt,
+				cardinality,
+				element,
+			} => {
 				let e_ty = match ty.map(|ty| ty.lookup(db)) {
 					Some(TyData::Set(_, _, element)) => Some(*element),
 					_ => None,
@@ -2530,6 +2710,9 @@ supported in operation types."
 					has_unbounded,
 				);
 				*has_bounded |= is_bounded;
+				if let Some(card) = cardinality {
+					let _ = self.typecheck_expression(*card, self.types.set_of_int);
+				}
 				let ty = Ty::par_set(db, el).unwrap_or_else(|| {
 					let (src, span) = TypeRef::new(db, self.item, t).source_span(db);
 					self.ctx.add_diagnostic(
@@ -2785,6 +2968,76 @@ supported in operation types."
 					self.types.error
 				})
 			}
+			Type::New { inst, opt, domain } => {
+				let mut ty = match &self.data[*domain] {
+					Expression::Identifier(i) => {
+						let Some(p) = self.find_variable(*domain, *i) else {
+							let (src, span) =
+								ExpressionRef::new(db, self.item, *domain).source_span(db);
+							self.ctx.add_diagnostic(
+								db,
+								self.item,
+								UndefinedIdentifier {
+									identifier: i.pretty_print(db),
+									src,
+									span,
+								},
+							);
+							return self.types.error;
+						};
+						self.ctx.add_identifier_resolution(db, *domain, p);
+						match self.ctx.type_pattern(db, p) {
+							PatternTy::ClassDecl {
+								defining_set_ty, ..
+							} => {
+								self.ctx.add_expression(db, *domain, defining_set_ty);
+								defining_set_ty
+									.elem_ty(db)
+									.expect("Class defining set must be a set type")
+							}
+							PatternTy::Computing => {
+								// Error will be emitted during topological sorting
+								self.ctx.add_expression(db, *domain, self.types.error);
+								return self.types.error;
+							}
+							_ => {
+								self.ctx.add_expression(db, *domain, self.types.error);
+								let (src, span) = TypeRef::new(db, self.item, t).source_span(db);
+								self.ctx.add_diagnostic(
+									db,
+									self.item,
+									TypeMismatch {
+										src,
+										span,
+										msg: "Expected a class name.".to_owned(),
+									},
+								);
+								return self.types.error;
+							}
+						}
+					}
+					_ => unreachable!("'new' domain must be an identifier"),
+				};
+				// `var new C` introduces fresh var attribute storage: the class type
+				// carries the var signal, so attribute access varifies through the
+				// field-access rules.
+				if let VarType::Var = inst {
+					ty = ty.make_var(db).unwrap_or_else(|| {
+						let (src, span) = TypeRef::new(db, self.item, t).source_span(db);
+						self.ctx.add_diagnostic(
+							db,
+							self.item,
+							IllegalType {
+								src,
+								span,
+								ty: format!("var {}", ty.pretty_print(db)),
+							},
+						);
+						self.types.error
+					});
+				}
+				ty.with_opt(db, *opt)
+			}
 			Type::Missing => self.types.error,
 		};
 
@@ -2792,7 +3045,128 @@ supported in operation types."
 			*has_var_bounded = true;
 		}
 
+		self.ctx.add_type(db, t, result);
 		result
+	}
+
+	/// Get the type of a class attribute as it appears in the class's input record,
+	/// i.e. the type the caller supplies when constructing an object.
+	///
+	/// Returns `None` when the attribute is not part of the input record: var
+	/// attributes are decided rather than supplied, and unsupported attribute
+	/// shapes report an error and are dropped.
+	pub fn class_type_to_input_record_type(&mut self, t: TypeId<'db>) -> Option<Ty<'db>> {
+		let db = self.db;
+		let ty = self.ctx.get_type(db, t);
+		if ty.inst(db) == Some(VarType::Var) {
+			return None;
+		}
+		match &self.data[t] {
+			Type::Primitive { .. } | Type::Bounded { .. } => Some(ty),
+
+			Type::Array {
+				dimensions,
+				element,
+				..
+			} => {
+				let dim_ty = self.ctx.get_type(db, *dimensions);
+				let element_ty = self.class_type_to_input_record_type(*element)?;
+				Ty::array(db, dim_ty, element_ty)
+			}
+
+			Type::New { opt, .. } => {
+				let class = ty.class_type(db)?;
+				let pattern = class_pattern_for(db, class)?;
+				match self.ctx.type_pattern(db, pattern) {
+					PatternTy::ClassDecl {
+						input_record_ty, ..
+					} => Some(input_record_ty.with_opt(db, *opt)),
+					_ => unreachable!("Class type must resolve to a class declaration"),
+				}
+			}
+
+			Type::Set { element, .. } => {
+				let element_ty = self.class_type_to_input_record_type(*element)?;
+				if ty.class_type(db).is_some() {
+					// The members of a `set of new C` are object identities, which
+					// cannot be given in data. Keep the array-of-input-records form,
+					// one slot per member; the actual set is derived from those inputs.
+					Ty::array(db, self.types.par_int, element_ty)
+				} else {
+					// A plain par set (`set of 0..3`) is an ordinary value, so it maps
+					// to a set-typed input slot and is stored directly. That keeps
+					// `card`, membership and iteration working on read-back.
+					Ty::par_set(db, element_ty)
+				}
+			}
+
+			Type::Tuple { .. } | Type::Record { .. } => {
+				// A structured attribute with no class reference anywhere in its
+				// subtree is an ordinary value: the caller supplies the tuple or
+				// record directly, so the input slot is the declared type itself.
+				// Structured attributes which do contain object machinery are
+				// rejected: occurrence expansion does not look inside tuple and
+				// record types, so a `tuple(new A, int)` would silently skip the
+				// introduction bookkeeping. A structured attribute with a var leaf is
+				// excluded from the input record without a diagnostic, like an
+				// explicitly var scalar attribute.
+				if ty.walk(db).any(|leaf| leaf.class_type(db).is_some()) {
+					let is_tuple = matches!(&self.data[t], Type::Tuple { .. });
+					self.add_unsupported_class_attribute_diagnostic(
+						t,
+						if is_tuple {
+							"tuple types containing class references or `new` \
+							 introductions are not supported as class attributes yet"
+						} else {
+							"record types containing class references or `new` \
+							 introductions are not supported as class attributes yet"
+						},
+					);
+					None
+				} else if !ty.known_par(db) {
+					None
+				} else {
+					Some(ty)
+				}
+			}
+			Type::Operation { .. } => {
+				self.add_unsupported_class_attribute_diagnostic(
+					t,
+					"function-typed class attributes are not supported",
+				);
+				None
+			}
+			Type::AnonymousTypeInstVar { .. } => {
+				self.add_unsupported_class_attribute_diagnostic(
+					t,
+					"anonymous type-inst variables are not supported as class attributes",
+				);
+				None
+			}
+			Type::Any => {
+				self.add_unsupported_class_attribute_diagnostic(
+					t,
+					"`any` typed class attributes are not supported",
+				);
+				None
+			}
+			Type::Missing => None,
+		}
+	}
+
+	/// Report a class attribute type which cannot be lowered into an input record.
+	fn add_unsupported_class_attribute_diagnostic(&mut self, t: TypeId<'db>, msg: &str) {
+		let db = self.db;
+		let (src, span) = TypeRef::new(db, self.item, t).source_span(db);
+		self.ctx.add_diagnostic(
+			db,
+			self.item,
+			UnsupportedObjectFeature {
+				src,
+				span,
+				msg: msg.to_owned(),
+			},
+		);
 	}
 
 	fn find_variable(
