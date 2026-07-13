@@ -33,7 +33,7 @@
 	},
 	"devDependencies": {
 		"prebuildify": "^6.0.1",
-		"tree-sitter-cli": "^0.26.10",
+		"tree-sitter-cli": "^0.26.11",
 		"tree-sitter-minizinc": "file:../tree-sitter-minizinc"
 	},
 	"peerDependencies": {
