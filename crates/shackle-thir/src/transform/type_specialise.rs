@@ -104,11 +104,15 @@ impl<'a, 'db, Dst: Marker> Folder<'_, 'db, Dst> for TypeSpecialiser<'a, 'db, Dst
 				continue;
 			}
 			if model[s.original].name() == self.ids.functions.show {
-				// Create specialised show function for types which will be erased, except show on direct enum which will be generated later
+				// Create specialised show function for types which will be erased, except show on direct enum which will be generated later.
+				// An opt enum is not direct: enum erasure would pass the
+				// erased `opt int` to `mzn_show_enum`, which takes a plain
+				// `int`. The occurs/deopt unwrapping generated here leaves
+				// an inner show on the deopted (direct) enum instead.
 				let p = self.specialised_model[f].parameter(0);
 				let ty = self.specialised_model[p].ty();
 				if ty.contains_erased_type(db) {
-					if !ty.is_enum(db) {
+					if !ty.is_enum(db) || ty.opt(db) == Some(OptType::Opt) {
 						let body = self.generate_show(db, model, p, ty);
 						self.specialised_model[f].set_body(body);
 						self.specialised_model[f].validate(db);
@@ -499,6 +503,23 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 				arguments: args,
 			}
 		};
+
+		if ty.inst(db) == Some(shackle_ty::VarType::Var) && ty.opt(db) == Some(OptType::Opt) {
+			// A var opt value cannot branch on `occurs` before solving (the
+			// occurs/deopt conditional below would need a var string), and
+			// output is evaluated on a fixed solution anyway: show(fix(x)).
+			let fix = call(
+				self,
+				self.ids.functions.fix,
+				vec![self.expr(db, origin, arg)],
+			);
+			let show = call(
+				self,
+				self.ids.functions.show,
+				vec![self.expr(db, origin, fix)],
+			);
+			return self.expr(db, origin, show);
+		}
 
 		if let Some(OptType::Opt) = ty.opt(db) {
 			// if occurs(x) then show(deopt(x)) else "<>" endif
