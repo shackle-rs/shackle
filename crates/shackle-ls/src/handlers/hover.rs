@@ -179,6 +179,92 @@ solve minimize foo + bar;
 	}
 
 	#[test]
+	fn test_hover_tuple_field_access() {
+		test_handler::<HoverHandler, _, _>(
+			r#"
+any: x = (1, 2).2;
+			"#,
+			true,
+			lsp_types::HoverParams {
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+				text_document_position_params: lsp_types::TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Uri::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 1,
+						character: 16,
+					},
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "contents": {
+          "language": "minizinc",
+          "value": "(tuple field) int"
+        },
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 16
+          },
+          "end": {
+            "line": 1,
+            "character": 17
+          }
+        }
+      }
+    }"#]),
+		)
+	}
+
+	#[test]
+	fn test_hover_record_field_access() {
+		test_handler::<HoverHandler, _, _>(
+			r#"
+any: x = (hello: 1).hello;
+			"#,
+			true,
+			lsp_types::HoverParams {
+				work_done_progress_params: lsp_types::WorkDoneProgressParams {
+					work_done_token: None,
+				},
+				text_document_position_params: lsp_types::TextDocumentPositionParams {
+					text_document: lsp_types::TextDocumentIdentifier {
+						uri: Uri::from_str("file:///test.mzn").unwrap(),
+					},
+					position: lsp_types::Position {
+						line: 1,
+						character: 22,
+					},
+				},
+			},
+			expect!([r#"
+    {
+      "Ok": {
+        "contents": {
+          "language": "minizinc",
+          "value": "(record field) int: hello"
+        },
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 20
+          },
+          "end": {
+            "line": 1,
+            "character": 25
+          }
+        }
+      }
+    }"#]),
+		)
+	}
+
+	#[test]
 	fn test_hover_documentation() {
 		test_handler::<HoverHandler, _, _>(
 			r#"

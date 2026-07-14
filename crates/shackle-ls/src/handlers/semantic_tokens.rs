@@ -83,6 +83,10 @@ impl RequestHandler<SemanticTokensFullRequest, ModelFile> for SemanticTokensHand
 						token_type = TokenType::Parameter
 					}
 					Some(PatternTy::Enum(_)) => token_type = TokenType::Enum,
+					Some(PatternTy::TupleField(ty)) => {
+						is_par = is_par || ty.known_par(db);
+						token_type = TokenType::Field
+					}
 					Some(PatternTy::RecordField(ty)) => {
 						is_par = is_par || ty.known_par(db);
 						token_type = TokenType::Field
@@ -171,7 +175,9 @@ mod tests {
 enum Foo = {A, B, C};
 int: x;
 var 1..3: y;
-any: z = x + y;
+function var int: bar(int: a, var int: b);
+any: z = bar(x, y);
+any: w = bar((hello: 1).hello, (3, 4).2);
 			"#,
 			false,
 			lsp_types::SemanticTokensParams {
@@ -235,25 +241,80 @@ any: z = x + y;
           6,
           0,
           1,
+          18,
+          3,
+          5,
+          0,
+          0,
+          9,
+          1,
+          3,
+          1,
+          0,
+          12,
+          1,
+          3,
+          0,
+          1,
           5,
           1,
           6,
           0,
           0,
           4,
-          1,
-          6,
-          1,
-          0,
-          2,
-          1,
+          3,
           5,
           1,
           0,
-          2,
+          4,
           1,
           6,
-          0
+          1,
+          0,
+          3,
+          1,
+          6,
+          0,
+          1,
+          5,
+          1,
+          6,
+          0,
+          0,
+          4,
+          3,
+          5,
+          1,
+          0,
+          5,
+          5,
+          7,
+          1,
+          0,
+          7,
+          1,
+          6,
+          1,
+          0,
+          3,
+          5,
+          7,
+          1,
+          0,
+          8,
+          1,
+          6,
+          1,
+          0,
+          3,
+          1,
+          6,
+          1,
+          0,
+          3,
+          1,
+          7,
+          1
         ]
       }
     }"#]),

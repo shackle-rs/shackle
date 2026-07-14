@@ -314,6 +314,9 @@ impl<'db> TypeResult<'db> {
 				data[pattern].identifier()?.pretty_print(self.db),
 				ty.pretty_print(self.db)
 			)),
+			PatternTy::TupleField(ty) => {
+				Some(format!("(tuple field) {}", ty.pretty_print(self.db)))
+			}
 			PatternTy::RecordField(ty) => Some(format!(
 				"(record field) {}: {}",
 				ty.pretty_print(self.db),
@@ -500,6 +503,9 @@ pub enum PatternTy<'db> {
 		/// The type of the destructor function
 		destructor: Ty<'db>,
 	},
+	/// Tuple field (e.g. x in t.1, or (x: 1))
+	///
+	TupleField(Ty<'db>),
 	/// Record field (e.g. x in r.x, or (x: 1))
 	///
 	RecordField(Ty<'db>),

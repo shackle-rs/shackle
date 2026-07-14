@@ -91,7 +91,7 @@ ast_node!(
 );
 
 impl<'tree> PatternRecord<'tree> {
-	/// Get the fields of this tuple pattern
+	/// Get the fields of this record pattern
 	pub fn fields(&self) -> Children<'tree, PatternRecordField<'tree>> {
 		children_with_field_name(self, "field")
 	}

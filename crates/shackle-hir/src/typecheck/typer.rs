@@ -1053,7 +1053,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 	fn collect_tuple_access(&mut self, expr: ExpressionId<'db>, ta: &TupleAccess<'db>) -> Ty<'db> {
 		let db = self.db;
 		let tuple = self.collect_expression(ta.tuple);
-		match tuple.lookup(db) {
+		let ty = match tuple.lookup(db) {
 			TyData::Tuple(opt, fields) => {
 				let i = self.data[ta.field].integer_value().unwrap();
 				if i < 1 || i > fields.len() as i64 {
@@ -1146,7 +1146,11 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 				);
 				self.types.error
 			}
-		}
+		};
+
+		self.ctx
+			.add_declaration(db, ta.field, PatternTy::TupleField(ty));
+		ty
 	}
 
 	fn collect_record_access(
