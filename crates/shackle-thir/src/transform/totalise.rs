@@ -1883,9 +1883,10 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 			field_tys.len() == 2
 				&& self.is_boolean_ty(field_tys[0])
 				&& field_tys[1].is_subtype_of(db, original.ty()),
-			"Totalisation of {} with type {} gave incorrect type {}",
+			"Totalisation of {} with type {} gave {} with incorrect type {}",
 			PrettyPrinter::new(db, model).pretty_print_expression(original),
 			original.ty().pretty_print(db),
+			PrettyPrinter::new(db, &self.totalised_model).pretty_print_expression(folded),
 			folded.ty().pretty_print(db)
 		);
 		false

@@ -843,11 +843,15 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 						decl.name()
 							.map(|n| n.pretty_print(self.db))
 							.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
-						decl.annotations()
-							.iter()
-							.map(|ann| { format!(" :: ({})", self.pretty_print_expression(ann)) })
-							.collect::<Vec<_>>()
-							.join(""),
+						if !self.old_compat {
+							decl.annotations()
+								.iter()
+								.map(|ann| format!(" :: ({})", self.pretty_print_expression(ann)))
+								.collect::<Vec<_>>()
+								.join("")
+						} else {
+							"".to_owned()
+						},
 						self.pretty_print_expression(decl.definition().unwrap())
 					),
 					where_clause,
