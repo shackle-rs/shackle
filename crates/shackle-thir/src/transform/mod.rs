@@ -80,7 +80,7 @@ pub fn thir_transforms() -> impl for<'db> FnMut(&'db dyn Db, Model<'db>) -> Resu
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use expect_test::Expect;
 	use rustc_hash::FxHashMap;
 	use salsa::Setter;
@@ -159,7 +159,7 @@ mod tests {
 	}
 
 	#[derive(Default)]
-	struct NameMapper<'db> {
+	pub(crate) struct NameMapper<'db> {
 		annotation: FxHashMap<AnnotationId<'db>, usize>,
 		declaration: FxHashMap<DeclarationId<'db>, usize>,
 	}
@@ -191,7 +191,7 @@ mod tests {
 	}
 
 	impl<'db> NameMapper<'db> {
-		fn run(
+		pub(crate) fn run(
 			&mut self,
 			db: &'db dyn Db,
 			model_ref: ModelFile,

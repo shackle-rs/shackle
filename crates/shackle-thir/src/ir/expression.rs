@@ -862,9 +862,8 @@ impl<'db, T: Marker> Call<'db, T> {
 					.iter()
 					.map(|p| kind.lift(db, model[*p].ty()))
 					.collect::<Box<_>>();
-				assert_eq!(
-					self.arguments.len(),
-					params.len(),
+				assert!(
+					self.arguments.len() == params.len() || self.arguments.is_empty(),
 					"Wrong number of arguments for enum constructor {}",
 					model[*e]
 						.name
@@ -1317,13 +1316,14 @@ impl EnumConstructorKind {
 				)
 			});
 
-		match (is_var, is_opt, is_set.unwrap()) {
-			(false, false, false) => EnumConstructorKind::Par,
-			(true, false, false) => EnumConstructorKind::Var,
-			(false, true, false) => EnumConstructorKind::Opt,
-			(true, true, false) => EnumConstructorKind::VarOpt,
-			(false, false, true) => EnumConstructorKind::Set,
-			(true, false, true) => EnumConstructorKind::VarSet,
+		match (is_var, is_opt, is_set) {
+			(_, _, None) => EnumConstructorKind::Set,
+			(false, false, Some(false)) => EnumConstructorKind::Par,
+			(true, false, Some(false)) => EnumConstructorKind::Var,
+			(false, true, Some(false)) => EnumConstructorKind::Opt,
+			(true, true, Some(false)) => EnumConstructorKind::VarOpt,
+			(false, false, Some(true)) => EnumConstructorKind::Set,
+			(true, false, Some(true)) => EnumConstructorKind::VarSet,
 			_ => unreachable!(),
 		}
 	}

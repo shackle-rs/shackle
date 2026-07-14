@@ -4,7 +4,7 @@
 use std::ops::{Deref, Index};
 
 use rustc_hash::FxHashMap;
-use shackle_hir::Identifier;
+use shackle_hir::{Identifier, ids::NodeRef};
 use shackle_ty::{
 	FunctionEntry, FunctionResolutionError, OverloadedFunction, Ty, TyParamInstantiations,
 };
@@ -103,6 +103,63 @@ impl<'db, T: Marker> Model<'db, T> {
 			ItemId::Output(idx) => self[idx].origin(),
 			ItemId::Solve => self.solve().unwrap().origin(),
 		}
+	}
+
+	fn is_top_level_item_id(&self, item: ItemId<'db, T>) -> bool {
+		match item {
+			ItemId::Annotation(_) | ItemId::Enumeration(_) | ItemId::Output(_) => true,
+			ItemId::Constraint(c) => self[c].top_level(),
+			ItemId::Declaration(d) => self[d].top_level(),
+			ItemId::Function(f) => self[f].top_level(),
+			ItemId::Solve => true,
+		}
+	}
+
+	fn origin_hir_item(
+		&self,
+		db: &'db dyn Db,
+		item: ItemId<'db, T>,
+	) -> Option<shackle_hir::Item<'db>> {
+		match self.item_origin(item) {
+			Origin::HirNode(NodeRef::Item(it)) => Some(it),
+			Origin::HirNode(NodeRef::Entity(entity)) => Some(entity.item(db)),
+			_ => None,
+		}
+	}
+
+	/// Reorder the top-level items to match the order their originating items
+	/// appear in the HIR.
+	///
+	/// Object lowering emits items grouped by class rather than in source
+	/// order; this restores a stable, source-ordered item list. Items without
+	/// a HIR origin, and local items, keep their relative order at the end.
+	pub(crate) fn reorder_top_level_items_by_hir_order(
+		&mut self,
+		db: &'db dyn Db,
+		item_order: &FxHashMap<shackle_hir::Item<'db>, usize>,
+	) {
+		let mut keyed_items = self
+			.items
+			.iter()
+			.copied()
+			.enumerate()
+			.map(|(original_index, item)| {
+				let key = if self.is_top_level_item_id(item) {
+					(
+						0_usize,
+						self.origin_hir_item(db, item)
+							.and_then(|origin_item| item_order.get(&origin_item).copied())
+							.unwrap_or(usize::MAX),
+						original_index,
+					)
+				} else {
+					(1_usize, usize::MAX, original_index)
+				};
+				(key, item)
+			})
+			.collect::<Vec<_>>();
+		keyed_items.sort_by_key(|(key, _)| *key);
+		self.items = keyed_items.into_iter().map(|(_, item)| item).collect();
 	}
 
 	/// Get the top-level annotation items

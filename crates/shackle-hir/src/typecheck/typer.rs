@@ -1365,23 +1365,30 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 							ty = ty.make_opt(db);
 						}
 						if let VarType::Var = var_type {
-							ty = ty
-								.make_var(db)
-								.or_else(|| self.varify_array_class_attribute(owner, field, ty))
-								.unwrap_or_else(|| {
-									let (src, span) =
-										ExpressionRef::new(db, self.item, expr).source_span(db);
-									self.ctx.add_diagnostic(
-										db,
-										self.item,
-										IllegalType {
-											src,
-											span,
-											ty: format!("var {}", ty.pretty_print(db)),
-										},
-									);
-									self.types.error
-								});
+							// An array attribute must go through the guarded
+							// element-wise varification: a plain `make_var`
+							// varifies the elements blindly, but a ragged
+							// array (per-object length) must reject the read —
+							// its index set would be decision-dependent.
+							let varified = if matches!(ty.lookup(db), TyData::Array { .. }) {
+								self.varify_array_class_attribute(owner, field, ty)
+							} else {
+								ty.make_var(db)
+							};
+							ty = varified.unwrap_or_else(|| {
+								let (src, span) =
+									ExpressionRef::new(db, self.item, expr).source_span(db);
+								self.ctx.add_diagnostic(
+									db,
+									self.item,
+									IllegalType {
+										src,
+										span,
+										ty: format!("var {}", ty.pretty_print(db)),
+									},
+								);
+								self.types.error
+							});
 						}
 						ty
 					}
@@ -3077,6 +3084,14 @@ supported in operation types."
 			Type::New { opt, .. } => {
 				let class = ty.class_type(db)?;
 				let pattern = class_pattern_for(db, class)?;
+				// A `new` attribute whose introduced class lies on an ownership
+				// cycle would make this record infinite: inlining the child's
+				// input record grows at every signature fixpoint iteration
+				// instead of converging. Drop the slot without a diagnostic;
+				// object validation rejects the model with the real error.
+				if crate::class_analysis::ownership_cyclic_classes(db).contains(&pattern) {
+					return None;
+				}
 				match self.ctx.type_pattern(db, pattern) {
 					PatternTy::ClassDecl {
 						input_record_ty, ..

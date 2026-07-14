@@ -580,6 +580,25 @@ function var bool: mzn_set_le_t(var set of int: x, var set of int: y) :: promise
 		constraint set_le_reif(x, y, r);
 	} in r;
 
+% Weak comparisons on optional values: true iff either side is absent, or
+% both occur and the underlying comparison holds.
+
+function bool: '<'(opt $T: x, opt $T: y) = absent(x) \/ absent(y) \/ deopt(x) < deopt(y);
+function var bool: '<'(var opt $T: x, var opt $T: y) =
+	 absent(x) \/ absent(y) \/ deopt(x) < deopt(y);
+
+function bool: '<='(opt $T: x, opt $T: y) = absent(x) \/ absent(y) \/ deopt(x) <= deopt(y);
+function var bool: '<='(var opt $T: x, var opt $T: y) =
+	absent(x) \/ absent(y) \/ deopt(x) <= deopt(y);
+
+function bool: '>'(opt $T: x, opt $T: y) = absent(x) \/ absent(y) \/ deopt(x) > deopt(y);
+function var bool: '>'(var opt $T: x, var opt $T: y) =
+	 absent(x) \/ absent(y) \/ deopt(x) > deopt(y);
+
+function bool: '>='(opt $T: x, opt $T: y) = absent(x) \/ absent(y) \/ deopt(x) >= deopt(y);
+function var bool: '>='(var opt $T: x, var opt $T: y) =
+	absent(x) \/ absent(y) \/ deopt(x) >= deopt(y);
+
 % Greater than and greater than or equal to are defined in terms of less than and less than or equal to
 
 function var bool: '>'(var $T: x, var $T: y) = y < x;

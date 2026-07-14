@@ -561,7 +561,12 @@ pub fn visit_domain<'a, 'db, T: Marker, V: Visitor<'a, 'db, T> + ?Sized>(
 				visitor.visit_domain(model, d);
 			}
 		}
-		DomainData::Set(d) => visitor.visit_domain(model, d),
+		DomainData::Set(d, c) => {
+			if let Some(card) = c {
+				visitor.visit_expression(model, card);
+			}
+			visitor.visit_domain(model, d);
+		}
 		DomainData::Tuple(items) => {
 			for d in items.iter() {
 				visitor.visit_domain(model, d);

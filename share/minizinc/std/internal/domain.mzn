@@ -31,6 +31,26 @@ test mzn_domain_constraint(string: name, set of float: x, set of float: s)
 		"the type-inst of '" ++ name ++ "' is \(s), but is assigned the value \(x).",
 	);
 
+test mzn_card_constraint(string: name, set of $T: x, set of int: cardinality)
+	:: mzn_inline_call_by_name =
+	mzn_assert_warn(
+		card(x) in cardinality,
+		"the cardinality of '" ++
+			name ++
+			"' is \(card(x)), but the type-inst constrains the cardinality to \(cardinality).",
+	);
+predicate mzn_card_constraint(string: name, var set of $$T: x, set of int: cardinality)
+	:: mzn_inline_call_by_name = card(x) in cardinality;
+
+% Symmetry-break default for a scalar var field. The object lowering pins
+% the fields of unused potential objects to a canonical in-domain value;
+% `lb`/`ub` of an unbounded var are -infinity/infinity, which are not valid
+% values, so fall back to the first finite bound, then 0.
+function int: mzn_safe_default(var int: x) =
+	if lb(x) != -infinity then lb(x) elseif ub(x) != infinity then ub(x) else 0 endif;
+function float: mzn_safe_default(var float: x) =
+	if lb(x) != -infinity then lb(x) elseif ub(x) != infinity then ub(x) else 0.0 endif;
+
 predicate mzn_domain_constraint(string: name, var $$E: x, set of $$E: s)
 	 :: mzn_inline_call_by_name = mzn_var_dom(enum2int(x), enum2int(s));
 predicate mzn_domain_constraint(string: name, var opt $$E: x, set of $$E: s)

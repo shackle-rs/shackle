@@ -295,21 +295,17 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 						!ty.known_par(self.db) && !ty.known_occurs(self.db)
 					} {
 					// For compatibility with old minizinc, we can just directly coerce
-					match &**body {
-						ExpressionData::Call(c) => match &c.function {
-							Callable::Function(idx) => {
-								assert_eq!(self.model[*idx].name(), self.ids.functions.to_enum);
-								assert_eq!(c.arguments.len(), 2);
-								write!(
-									&mut buf,
-									" = {}",
-									self.pretty_print_expression(&c.arguments[1])
-								)
-								.unwrap();
-							}
-							_ => unreachable!(),
-						},
-						_ => unreachable!(),
+					if let ExpressionData::Call(c) = &**body
+						&& let Callable::Function(idx) = &c.function
+						&& self.model[*idx].name() == self.ids.functions.to_enum
+						&& c.arguments.len() == 2
+					{
+						write!(
+							&mut buf,
+							" = {}",
+							self.pretty_print_expression(&c.arguments[1])
+						)
+						.unwrap();
 					}
 				}
 			} else if function.name() == self.ids.functions.enum2int {
@@ -399,12 +395,23 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 				.chain([self.pretty_print_expression(e)])
 				.collect::<Vec<_>>()
 				.join(" "),
-			DomainData::Set(s) => ty
+			DomainData::Set(s, None) => ty
 				.inst(self.db)
 				.into_iter()
 				.flat_map(|i| i.pretty_print())
 				.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
 				.chain(["set of".to_owned()])
+				.chain([self.pretty_print_domain(s)])
+				.collect::<Vec<_>>()
+				.join(" "),
+			DomainData::Set(s, Some(c)) => ty
+				.inst(self.db)
+				.into_iter()
+				.flat_map(|i| i.pretty_print())
+				.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
+				.chain(["set(".to_owned()])
+				.chain([self.pretty_print_expression(c)])
+				.chain([") of ".to_owned()])
 				.chain([self.pretty_print_domain(s)])
 				.collect::<Vec<_>>()
 				.join(" "),
@@ -423,6 +430,16 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 					.join(" ")
 			}
 			DomainData::Record(ds) => {
+				if self.old_compat && ds.is_empty() {
+					return ty
+						.inst(self.db)
+						.into_iter()
+						.flat_map(|i| i.pretty_print())
+						.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
+						.chain(["bool".to_owned()])
+						.collect::<Vec<_>>()
+						.join(" ");
+				}
 				let doms = ds
 					.iter()
 					.map(|(i, d)| {
@@ -746,6 +763,9 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 				)
 			}
 			ExpressionData::RecordLiteral(fs) => {
+				if self.old_compat && fs.is_empty() {
+					return "true".to_owned();
+				}
 				let pairs = fs
 					.iter()
 					.map(|(i, e)| {
@@ -880,17 +900,23 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 					.collect::<Vec<_>>()
 					.join(", ")
 			),
-			PatternData::Record(fs) => format!(
-				"({})",
-				fs.iter()
-					.map(|(i, p)| format!(
-						"{}: {}",
-						i.pretty_print(self.db),
-						self.pretty_print_pattern(p)
-					))
-					.collect::<Vec<_>>()
-					.join(", ")
-			),
+			PatternData::Record(fs) => {
+				if self.old_compat && fs.is_empty() {
+					"_".to_owned()
+				} else {
+					format!(
+						"({})",
+						fs.iter()
+							.map(|(i, p)| format!(
+								"{}: {}",
+								i.pretty_print(self.db),
+								self.pretty_print_pattern(p)
+							))
+							.collect::<Vec<_>>()
+							.join(", ")
+					)
+				}
+			}
 			PatternData::EnumConstructor { member, args, .. } => {
 				let ctor = self.model[*member].name.unwrap().pretty_print(self.db);
 				let ps = args

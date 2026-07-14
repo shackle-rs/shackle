@@ -621,34 +621,25 @@ impl<'db> SignatureTypeContext<'db> {
 
 				let mut attributes = Vec::new();
 				for member in it.items.iter() {
-					match member {
-						ClassMember::Constraint(constraint) => {
-							let mut typer = Typer::new(db, self, item, data);
-							for ann in constraint.annotations.iter() {
-								let _ = typer.typecheck_expression(*ann, tys.ann);
-							}
-							let _ = typer.typecheck_expression(constraint.expression, tys.var_bool);
+					if let ClassMember::Declaration(d) = member {
+						let mut typer = Typer::new(db, self, item, data);
+						let field_name = PatternRef::new(db, item, d.pattern)
+							.identifier(db)
+							.expect("Class attribute must have identifier pattern");
+						let ty = typer.collect_declaration(d).ty;
+						// A computed attribute (`int: y = x + 1`) is part of the
+						// object's storage but is never supplied by the caller, so
+						// it stays out of the input record while remaining in the
+						// storage record. Without this, `new A: a = (x: 1)` would be
+						// rejected for not supplying the `y` the caller must not give.
+						if d.definition.is_none()
+							&& let Some(field_ty) =
+								typer.class_type_to_input_record_type(d.declared_type)
+						{
+							input_fields.push((field_name, field_ty));
 						}
-						ClassMember::Declaration(d) => {
-							let mut typer = Typer::new(db, self, item, data);
-							let field_name = PatternRef::new(db, item, d.pattern)
-								.identifier(db)
-								.expect("Class attribute must have identifier pattern");
-							let ty = typer.collect_declaration(d).ty;
-							// A computed attribute (`int: y = x + 1`) is part of the
-							// object's storage but is never supplied by the caller, so
-							// it stays out of the input record while remaining in the
-							// storage record. Without this, `new A: a = (x: 1)` would be
-							// rejected for not supplying the `y` the caller must not give.
-							if d.definition.is_none()
-								&& let Some(field_ty) =
-									typer.class_type_to_input_record_type(d.declared_type)
-							{
-								input_fields.push((field_name, field_ty));
-							}
-							attributes.push((field_name, ty));
-							storage_fields.push((field_name, ty));
-						}
+						attributes.push((field_name, ty));
+						storage_fields.push((field_name, ty));
 					}
 				}
 
@@ -683,6 +674,21 @@ impl<'db> SignatureTypeContext<'db> {
 						var_storage_record_ty,
 					},
 				);
+
+				// Class-body constraints are typed only after the final
+				// ClassDecl above is published: field access through `this`
+				// reads the attribute list from the published pattern type,
+				// which is still empty in the provisional declaration the
+				// attributes themselves are typed against.
+				for member in it.items.iter() {
+					if let ClassMember::Constraint(constraint) = member {
+						let mut typer = Typer::new(db, self, item, data);
+						for ann in constraint.annotations.iter() {
+							let _ = typer.typecheck_expression(*ann, tys.ann);
+						}
+						let _ = typer.typecheck_expression(constraint.expression, tys.var_bool);
+					}
+				}
 			}
 			_ => unreachable!("Item {:?} does not have signature", item),
 		}

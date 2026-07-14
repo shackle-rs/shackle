@@ -18,6 +18,8 @@ pub mod source;
 pub mod transform;
 
 mod ir;
+#[cfg(test)]
+mod object_tests;
 
 pub use shackle_hir::{Db, Identifier};
 

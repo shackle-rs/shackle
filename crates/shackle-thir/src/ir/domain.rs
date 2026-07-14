@@ -102,7 +102,30 @@ impl<'db, T: Marker> Domain<'db, T> {
 			.with_opt(db, opt);
 		Self {
 			ty,
-			data: DomainData::Set(Box::new(element)),
+			data: DomainData::Set(Box::new(element), None),
+			origin: origin.into(),
+		}
+	}
+
+	/// Create a set variable domain with a cardinality bound
+	///
+	/// E.g. `var set(3..5) of 1..3`
+	pub fn set_with_card(
+		db: &'db dyn Db,
+		origin: impl Into<Origin<'db>>,
+		inst: VarType,
+		opt: OptType,
+		cardinality: Option<Expression<'db, T>>,
+		element: Domain<'db, T>,
+	) -> Self {
+		let ty = Ty::par_set(db, element.ty())
+			.expect("Invalid set element type")
+			.with_inst(db, inst)
+			.expect("Cannot make var set domain")
+			.with_opt(db, opt);
+		Self {
+			ty,
+			data: DomainData::Set(Box::new(element), cardinality),
 			origin: origin.into(),
 		}
 	}
@@ -198,7 +221,7 @@ impl<'db, T: Marker> Domain<'db, T> {
 					todo.push(el);
 					todo.push(dim);
 				}
-				DomainData::Set(el) => {
+				DomainData::Set(el, _) => {
 					todo.push(el);
 				}
 				DomainData::Tuple(fields) => {
@@ -241,8 +264,8 @@ pub enum DomainData<'db, T: Marker = ()> {
 	Bounded(Box<Expression<'db, T>>),
 	/// Array index sets and element domain
 	Array(Box<Domain<'db, T>>, Box<Domain<'db, T>>),
-	/// Set domain
-	Set(Box<Domain<'db, T>>),
+	/// Set domain with an optional cardinality bound
+	Set(Box<Domain<'db, T>>, Option<Expression<'db, T>>),
 	/// Tuple domain
 	Tuple(Vec<Domain<'db, T>>),
 	/// Record domain

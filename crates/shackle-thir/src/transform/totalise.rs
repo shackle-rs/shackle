@@ -1817,11 +1817,12 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 					self.totalise_domain(db, model, dim, items, definedness),
 					self.totalise_domain(db, model, elem, items, definedness),
 				),
-				DomainData::Set(elem) => Domain::set(
+				DomainData::Set(elem, card) => Domain::set_with_card(
 					db,
 					origin,
 					domain.ty().inst(db).unwrap(),
 					OptType::NonOpt,
+					card.as_ref().map(|c| self.fold_expression(db, model, c)),
 					self.totalise_domain(db, model, elem, items, definedness),
 				),
 				DomainData::Bounded(e) => {

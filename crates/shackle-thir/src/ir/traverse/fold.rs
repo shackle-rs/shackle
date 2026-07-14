@@ -1480,11 +1480,12 @@ pub fn fold_domain<'a, 'db, T: Marker, U: Marker, F: Folder<'a, 'db, U, T> + ?Si
 				.collect::<Vec<_>>();
 			Domain::record(db, origin, opt, fields)
 		}
-		DomainData::Set(d) => {
+		DomainData::Set(d, c) => {
 			let inst = ty.inst(db).unwrap();
 			let opt = ty.opt(db).unwrap();
 			let element = folder.fold_domain(db, model, d);
-			Domain::set(db, origin, inst, opt, element)
+			let cardinality = c.as_ref().map(|c| folder.fold_expression(db, model, c));
+			Domain::set_with_card(db, origin, inst, opt, cardinality, element)
 		}
 		DomainData::Tuple(items) => {
 			let opt = ty.opt(db).unwrap();

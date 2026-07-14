@@ -7,11 +7,15 @@ use std::{
 
 use derive_more::{Deref, DerefMut, From};
 use shackle_ty::{
-	EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyVar,
+	EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyData,
+	TyVar,
 };
 use shackle_utils::arena::ArenaIndex;
 
-use super::{Annotations, Expression, Identifier, Marker, Model, domain::Domain};
+use super::{
+	Annotations, Expression, Identifier, Marker, Model,
+	domain::{Domain, OptType, VarType},
+};
 use crate::{Db, source::Origin};
 
 /// An item of type `T`.
@@ -257,13 +261,69 @@ impl<'db, T: Marker> Declaration<'db, T> {
 		if let Some(rhs) = self.definition() {
 			let ty = rhs.ty();
 			assert!(
-				ty.is_subtype_of(db, self.ty()),
+				ty.is_subtype_of(db, self.ty()) || lowered_class_compatible(db, ty, self.ty()),
 				"RHS type {} ({}) does not match declaration LHS type {}",
 				ty.pretty_print(db),
 				rhs.origin().pretty_print(db),
 				self.ty().pretty_print(db)
 			);
 		}
+	}
+}
+
+/// Whether `actual` and `expected` agree up to the object lowering's
+/// class/potential-enum identification: the lowering represents an object of
+/// class `C` as a member of the `<C>_potential` enum, so a class-typed leaf
+/// on one side legitimately corresponds to an enum-typed leaf on the other
+/// (with a par actual accepted for a var expected). Every other shape must
+/// pass ordinary subtyping.
+fn lowered_class_compatible<'db>(db: &'db dyn Db, actual: Ty<'db>, expected: Ty<'db>) -> bool {
+	if actual.is_subtype_of(db, expected) {
+		return true;
+	}
+	let insts_ok = |a: VarType, e: VarType| a == e || a == VarType::Par;
+	match (actual.lookup(db), expected.lookup(db)) {
+		(TyData::Enum(ai, ao, _), TyData::Class(ei, eo, _))
+		| (TyData::Class(ai, ao, _), TyData::Enum(ei, eo, _)) => {
+			insts_ok(*ai, *ei) && (ao == eo || (*ao == OptType::NonOpt && *eo == OptType::Opt))
+		}
+		(TyData::Class(ai, ao, _), TyData::Class(ei, eo, _)) => insts_ok(*ai, *ei) && ao == eo,
+		(TyData::Set(ai, ao, ae), TyData::Set(ei, eo, ee)) => {
+			insts_ok(*ai, *ei) && ao == eo && lowered_class_compatible(db, *ae, *ee)
+		}
+		(
+			TyData::Array {
+				opt: ao,
+				dim: ad,
+				element: ae,
+			},
+			TyData::Array {
+				opt: eo,
+				dim: ed,
+				element: ee,
+			},
+		) => {
+			ao == eo
+				&& lowered_class_compatible(db, *ad, *ed)
+				&& lowered_class_compatible(db, *ae, *ee)
+		}
+		(TyData::Tuple(ao, afs), TyData::Tuple(eo, efs)) => {
+			ao == eo
+				&& afs.len() == efs.len()
+				&& afs
+					.iter()
+					.zip(efs.iter())
+					.all(|(a, e)| lowered_class_compatible(db, *a, *e))
+		}
+		(TyData::Record(ao, afs), TyData::Record(eo, efs)) => {
+			ao == eo
+				&& afs.len() == efs.len()
+				&& afs
+					.iter()
+					.zip(efs.iter())
+					.all(|((an, a), (en, e))| an == en && lowered_class_compatible(db, *a, *e))
+		}
+		_ => false,
 	}
 }
 
