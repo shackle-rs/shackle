@@ -381,4 +381,20 @@ fn test_class_type_errors() {
     Syntax Error
     Type mismatch"#]),
 	);
+	// Field access off a class NAME (`A.b`, `B.as`) rather than an instance is a
+	// type error, not a lowering gap.
+	tester.check_error(
+		r#"
+		class A (
+		  opt B: b;
+		);
+		class B (
+		  set of A: as;
+		);
+		constraint association(A.b, B.as);
+		"#,
+		expect!([r#"
+    Type mismatch
+    Type mismatch"#]),
+	);
 }

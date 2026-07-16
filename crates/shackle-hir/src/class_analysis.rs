@@ -947,3 +947,233 @@ fn expand_nested_occurrences<'db>(
 		);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use expect_test::{Expect, expect};
+	use salsa::Setter;
+	use shackle_syntax::InputLang;
+
+	use super::{LocalDomainSource, OccurrenceSource, analyse_new_objects};
+	use crate::{
+		Db, Identifier, Item,
+		db::CompilerDatabase,
+		ids::PatternRef,
+		input::{CompilerSettings, InlineModelFile, InputFiles},
+	};
+
+	fn db_for(source: &str) -> CompilerDatabase {
+		let mut db = CompilerDatabase::default();
+		let _ = CompilerSettings::get(&db)
+			.set_ignore_stdlib(&mut db)
+			.to(true);
+		let file = InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc);
+		let _ = InputFiles::get(&db)
+			.set_files(&mut db)
+			.to(vec![file.into()]);
+		db
+	}
+
+	fn check_class_analysis(source: &str, expected: Expect) {
+		let db = db_for(source);
+		let db: &dyn Db = &db;
+		let analysis = analyse_new_objects(db);
+		let mut lines = Vec::new();
+
+		let mut classes = analysis
+			.class_descriptors
+			.iter()
+			.map(|descriptor| {
+				format!(
+					"{} superclass: {} input: {} storage: {}",
+					pattern_name(db, descriptor.class_pattern),
+					descriptor
+						.superclass
+						.map(|class| pattern_name(db, class))
+						.unwrap_or_else(|| "-".to_owned()),
+					descriptor.input_record_ty.pretty_print(db),
+					descriptor.storage_record_ty.pretty_print(db)
+				)
+			})
+			.collect::<Vec<_>>();
+		classes.sort();
+		lines.push("classes:".to_owned());
+		lines.extend(classes.into_iter().map(|line| format!("  {line}")));
+
+		lines.push("occurrences:".to_owned());
+		lines.extend(analysis.occurrences.iter().map(|occurrence| {
+			format!(
+				"  #{} {} from {} parent:{} path:{} domain:{}",
+				occurrence.id.0,
+				pattern_name(db, occurrence.introduced_class),
+				occurrence_source_label(db, &occurrence.source),
+				occurrence
+					.parent
+					.map(|parent| format!("#{parent}", parent = parent.0))
+					.unwrap_or_else(|| "-".to_owned()),
+				path_label(db, &occurrence.path),
+				local_domain_source_label(occurrence.local_domain_source),
+			)
+		}));
+
+		let mut subclasses = analysis
+			.map_class_to_subclasses
+			.iter()
+			.map(|(class, subclasses)| {
+				let mut labels = subclasses
+					.iter()
+					.map(|subclass| pattern_name(db, *subclass))
+					.collect::<Vec<_>>();
+				labels.sort();
+				format!("{} <- {}", pattern_name(db, *class), labels.join(", "))
+			})
+			.collect::<Vec<_>>();
+		subclasses.sort();
+		lines.push("subclasses:".to_owned());
+		lines.extend(subclasses.into_iter().map(|line| format!("  {line}")));
+
+		let mut contributions = analysis
+			.contributions
+			.iter()
+			.fold(
+				std::collections::BTreeMap::<String, Vec<String>>::new(),
+				|mut grouped, contribution| {
+					grouped
+						.entry(pattern_name(db, contribution.target_class))
+						.or_default()
+						.push(format!(
+							"#{}@{} depth={}",
+							contribution.occurrence.0,
+							contribution.constructor_index,
+							contribution.projection_depth
+						));
+					grouped
+				},
+			)
+			.into_iter()
+			.map(|(class, mut grouped)| {
+				grouped.sort();
+				format!("{} <- {}", class, grouped.join(", "))
+			})
+			.collect::<Vec<_>>();
+		contributions.sort();
+		lines.push("contributions:".to_owned());
+		lines.extend(contributions.into_iter().map(|line| format!("  {line}")));
+
+		expected.assert_eq(&lines.join("\n"));
+	}
+
+	fn pattern_name<'db>(db: &'db dyn Db, pattern: PatternRef<'db>) -> String {
+		pattern
+			.identifier(db)
+			.map(|identifier| identifier.pretty_print(db))
+			.unwrap_or_else(|| "<non-identifier>".to_owned())
+	}
+
+	fn constructor_label<'db>(
+		db: &'db dyn Db,
+		pattern: PatternRef<'db>,
+		class_item_idx: usize,
+	) -> String {
+		match pattern.item(db) {
+			Item::Class(_) => format!("{}::item[{class_item_idx}]", pattern_name(db, pattern)),
+			_ => pattern_name(db, pattern),
+		}
+	}
+
+	fn occurrence_source_label<'db>(db: &'db dyn Db, source: &OccurrenceSource<'db>) -> String {
+		match source {
+			OccurrenceSource::TopLevelDeclaration(pattern) => pattern_name(db, *pattern),
+			OccurrenceSource::ClassAttribute {
+				owner_class,
+				item_index,
+				..
+			} => constructor_label(db, *owner_class, *item_index),
+		}
+	}
+
+	fn path_label<'db>(db: &'db dyn Db, path: &[Identifier<'db>]) -> String {
+		if path.is_empty() {
+			"-".to_owned()
+		} else {
+			path.iter()
+				.map(|identifier| identifier.pretty_print(db))
+				.collect::<Vec<_>>()
+				.join(".")
+		}
+	}
+
+	fn local_domain_source_label(source: LocalDomainSource) -> &'static str {
+		match source {
+			LocalDomainSource::SingleObject => "single",
+			LocalDomainSource::TopLevelCollection => "top-level-collection",
+			LocalDomainSource::OnePerParent => "one-per-parent",
+			LocalDomainSource::FlattenedChildCollection => "flattened-child-collection",
+		}
+	}
+
+	#[test]
+	fn class_analysis_snapshot() {
+		check_class_analysis(
+			r#"
+			class Leaf (
+				int: value;
+			);
+			class Node (
+				new Leaf: leaf;
+			);
+			class SpecialNode extends Node (
+				int: extra;
+			);
+			var new Leaf: top_leaf;
+			var new Node: top_node;
+			var set(0..3) of new SpecialNode: special_nodes;
+			"#,
+			expect!([r#"
+    classes:
+      Leaf superclass: - input: record(int: value) storage: record(int: value)
+      Node superclass: - input: record(record(int: value): leaf) storage: record(Leaf: leaf)
+      SpecialNode superclass: Node input: record(int: extra, record(int: value): leaf) storage: record(int: extra, Leaf: leaf)
+    occurrences:
+      #0 Leaf from top_leaf parent:- path:- domain:single
+      #1 Node from top_node parent:- path:- domain:single
+      #2 Leaf from Node::item[0] parent:#1 path:leaf domain:one-per-parent
+      #3 SpecialNode from special_nodes parent:- path:- domain:top-level-collection
+      #4 Leaf from Node::item[0] parent:#3 path:leaf domain:one-per-parent
+    subclasses:
+      Node <- SpecialNode
+    contributions:
+      Leaf <- #0@0 depth=0, #2@1 depth=0, #4@2 depth=0
+      Node <- #1@0 depth=0, #3@1 depth=1
+      SpecialNode <- #3@0 depth=0"#]),
+		);
+	}
+
+	#[test]
+	fn class_analysis_repeated_nested_paths() {
+		check_class_analysis(
+			r#"
+			class Leaf (
+				int: value;
+			);
+			class Node (
+				set of new Leaf: left;
+				set of new Leaf: right;
+			);
+			set of new Node: roots;
+			"#,
+			expect!([r#"
+    classes:
+      Leaf superclass: - input: record(int: value) storage: record(int: value)
+      Node superclass: - input: record(array [int] of record(int: value): left, array [int] of record(int: value): right) storage: record(set of Leaf: left, set of Leaf: right)
+    occurrences:
+      #0 Node from roots parent:- path:- domain:top-level-collection
+      #1 Leaf from Node::item[0] parent:#0 path:left domain:flattened-child-collection
+      #2 Leaf from Node::item[1] parent:#0 path:right domain:flattened-child-collection
+    subclasses:
+    contributions:
+      Leaf <- #1@0 depth=0, #2@1 depth=0
+      Node <- #0@0 depth=0"#]),
+		);
+	}
+}
