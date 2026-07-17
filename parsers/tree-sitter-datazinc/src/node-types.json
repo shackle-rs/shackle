@@ -342,7 +342,7 @@
     "fields": {
       "member": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "record_member",
