@@ -1,0 +1,7 @@
+enum A_potential;
+array [int] of record(int: x): A_objects;
+set of A_potential: A;
+constraint forall(['>='(('[]'(A_objects, enum2int(this))).x, 0) | this in A]);
+A: a;
+constraint '>='(('[]'(A_objects, enum2int(a))).x, 0);
+solve satisfy;

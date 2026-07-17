@@ -1,0 +1,7 @@
+enum A_potential = A_occ_0({1});
+array [int] of record(int: x, int: y): A_objects = A_a_objects;
+set of A_potential: A = A_occ_0({1});
+array [int] of record(int: x): A_a_inputs = [(x: 1)];
+array [int] of record(int: x, int: y): A_a_objects = [(x: x, y: y) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), x = (input).x, y = '+'(x, 1)];
+A_potential: a = A_occ_0(1);
+solve satisfy;

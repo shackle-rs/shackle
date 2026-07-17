@@ -1,0 +1,12 @@
+enum A_potential = A_occ_0({1});
+array [int] of record(var int: s, var '..'(0, 5): x, var '..'(1, 6): y): A_objects = A_a_objects;
+var set of A_potential: A;
+array [{1}] of record(var '..'(0, 5): x): A_a_storage;
+var '..'(1, 6): A_a_y_unrealised_default;
+constraint '='(A_a_y_unrealised_default, mzn_safe_default(A_a_y_unrealised_default));
+array [int] of record(var int: s, var '..'(0, 5): x, var '..'(1, 6): y): A_a_objects = [(s: s, x: x, y: y) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), realised = 'in'(A_occ_0(p), A), x = (input).x, s = '-'(5, x), y = if realised then 'div'(6, '+'(x, 1)) else A_a_y_unrealised_default endif];
+var opt A_potential: a = if 'in'(A_occ_0(1), A) then A_occ_0(1) else <> endif;
+constraint absent(a);
+output ["absent ok\n"];
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
+solve satisfy;

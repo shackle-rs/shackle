@@ -1,0 +1,13 @@
+enum A_potential = A_occ_0({1, 2}) ++ A_occ_1('..'(1, 4));
+array [int] of record(var '..'(0, 4): x): A_objects = '++'(A_a1_objects, A_a2_objects);
+var set of A_potential: A = array_union([a1, a2]);
+array [int] of record(int: x): A_a1_inputs = [(x: 3), (x: 4)];
+int: A_a1_root_start = 1;
+int: A_a1_root_end = 3;
+array [int] of record('..'(0, 4): x): A_a1_objects = A_a1_inputs;
+set of A_occ_0({1, 2}): a1 = A_occ_0({1, 2});
+array ['..'(1, 4)] of record(var '..'(0, 4): x): A_a2_storage;
+array [int] of record(var '..'(0, 4): x): A_a2_objects = A_a2_storage;
+var set( '..'(1, 4) ) of  A_occ_1('..'(1, 4)): a2;
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
+solve satisfy;

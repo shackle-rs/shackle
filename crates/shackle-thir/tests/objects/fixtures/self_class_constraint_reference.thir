@@ -1,0 +1,10 @@
+enum A_potential = A_occ_0({1, 2});
+array [int] of record(int: x): A_objects = A_as_objects;
+set of A_potential: A = as;
+constraint forall(['in'(this, A) | this in A]);
+array [int] of record(int: x): A_as_inputs = [(x: 1), (x: 2)];
+int: A_as_root_start = 1;
+int: A_as_root_end = 3;
+array [int] of record(int: x): A_as_objects = A_as_inputs;
+set of A_occ_0({1, 2}): as = A_occ_0({1, 2});
+solve satisfy;

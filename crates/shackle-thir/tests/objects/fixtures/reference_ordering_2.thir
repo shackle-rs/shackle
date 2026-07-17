@@ -1,0 +1,13 @@
+enum B_potential;
+array [int] of record(): B_objects;
+set of B_potential: B;
+enum A_potential;
+array [int] of record(): A_objects;
+set of A_potential: A;
+A: a;
+B: b;
+constraint '<'(enum2int(a), enum2int(b));
+constraint '<='(enum2int(a), enum2int(b));
+constraint '>'(enum2int(a), enum2int(b));
+constraint '>='(enum2int(a), enum2int(b));
+solve satisfy;

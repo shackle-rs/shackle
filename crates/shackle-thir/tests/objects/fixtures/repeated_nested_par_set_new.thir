@@ -1,0 +1,18 @@
+enum Leaf_potential = Leaf_occ_1('..'(1, sum([length((i).left) | i in Node_roots_inputs]))) ++ Leaf_occ_2('..'(1, sum([length((i).right) | i in Node_roots_inputs])));
+array [int] of record(int: value): Leaf_objects = '++'(Leaf_left_objects, Leaf_right_objects);
+set of Leaf_potential: Leaf = array_union('++'([Leaf_occ_1('..'(1, '-'(Node_roots_left_end, 1)))], [Leaf_occ_2('..'(1, '-'(Node_roots_right_end, Node_roots_left_end)))]));
+enum Node_potential = Node_occ_0({1, 2});
+array [int] of record(set of Leaf_potential: left, set of Leaf_potential: right): Node_objects = Node_roots_objects;
+set of Node_potential: Node = roots;
+array [int] of record(array [int] of record(int: value): left, array [int] of record(int: value): right): Node_roots_inputs = [(left: [(value: 1), (value: 2)], right: [(value: 3)]), (left: [(value: 4)], right: [(value: 5), (value: 6)])];
+array [int] of record(int: value): Leaf_left_objects = [k | i in Node_roots_inputs, k in (i).left];
+array [int] of record(int: value): Leaf_right_objects = [k | i in Node_roots_inputs, k in (i).right];
+int: Node_roots_left_start = 1;
+int: Node_roots_left_end = '+'(Node_roots_left_start, sum([length((i).left) | i in Node_roots_inputs]));
+int: Node_roots_right_start = Node_roots_left_end;
+int: Node_roots_right_end = '+'(Node_roots_right_start, sum([length((i).right) | i in Node_roots_inputs]));
+int: Node_roots_root_start = 1;
+int: Node_roots_root_end = 3;
+array [int] of record(set of Leaf_potential: left, set of Leaf_potential: right): Node_roots_objects = [(left: left, right: right) | p in index_set(Node_roots_inputs), input = '[]'(Node_roots_inputs, p), left = Leaf_occ_1('..'('+'(1, sum([length(('[]'(Node_roots_inputs, q)).left) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(Node_roots_inputs, q)).left) | q in '..'(1, '-'(p, 1))]), length((input).left)))), right = Leaf_occ_2('..'('+'(1, sum([length(('[]'(Node_roots_inputs, q)).right) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(Node_roots_inputs, q)).right) | q in '..'(1, '-'(p, 1))]), length((input).right))))];
+set of Node_occ_0({1, 2}): roots = Node_occ_0({1, 2});
+solve satisfy;

@@ -1,0 +1,16 @@
+enum T_potential = T_occ_0({1});
+array [int] of record(var '..'(0, 3): b, var int: c, var '..'(0, 2): d): T_objects = T_t_objects;
+set of T_potential: T = T_occ_0({1});
+enum S_potential = S_occ_0({1});
+array [int] of record(var '..'(0, 3): b, var int: c): S_objects = S_T_t_objects;
+set of S_potential: S = array_union([{S_occ_0(_DECL_1)} | _DECL_1 in index_set(T_t_objects)]);
+array [{1}] of record(var '..'(0, 3): b, var '..'(0, 2): d): T_t_storage;
+int: T_t__start = 1;
+int: T_t__end = 2;
+array [int] of record(var '..'(0, 3): b, var int: c, var '..'(0, 2): d): T_t_objects = [(b: b, c: c, d: d) | p in index_set(T_t_storage), input = '[]'(T_t_storage, p), b = (input).b, c = '+'(b, 1), d = (input).d];
+array [int] of record(var '..'(0, 3): b, var int: c): S_T_t_objects = [(b: ('[]'(T_t_objects, p)).b, c: ('[]'(T_t_objects, p)).c) | p in index_set(T_t_objects)];
+T_potential: t = T_occ_0(1);
+constraint '='(('[]'(T_objects, enum2int(t))).b, 2);
+constraint '='(('[]'(T_objects, enum2int(t))).d, 1);
+output ["cs=", show([fix(('[]'(S_objects, enum2int(s))).c) | s in S]), " d=", show(fix(('[]'(T_objects, enum2int(t))).d)), "\n"];
+solve satisfy;

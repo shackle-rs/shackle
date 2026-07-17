@@ -1,0 +1,13 @@
+enum A_potential = A_occ_0({1, 2});
+array [int] of record(var int: s, int: x, int: y, int: z): A_objects = A_a_objects;
+set of A_potential: A = a;
+array [int] of record(int: x): A_a_inputs = [(x: 3), (x: 5)];
+int: A_a_root_start = 1;
+int: A_a_root_end = 3;
+array [int] of record(var int: s, int: x, int: y, int: z): A_a_objects = [(s: s, x: x, y: y, z: z) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), x = (input).x, y = '+'(x, 1), z = '+'(y, 4), s = let {
+  var '..'(1, z): s_init;
+} in s_init];
+set of A_occ_0({1, 2}): a = A_occ_0({1, 2});
+constraint forall(['>='(('[]'(A_objects, enum2int(p))).s, ('[]'(A_objects, enum2int(p))).x) | p in a]);
+output ["xs=", show([('[]'(A_objects, enum2int(p))).x | p in a]), "\n", "ys=", show([('[]'(A_objects, enum2int(p))).y | p in a]), "\n", "zs=", show([('[]'(A_objects, enum2int(p))).z | p in a]), "\n", "ss=", show([('[]'(A_objects, enum2int(p))).s | p in a]), "\n"];
+solve satisfy;

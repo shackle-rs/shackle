@@ -1,0 +1,17 @@
+enum B_potential = B_occ_1('..'(1, sum([length((i).children) | i in A_as_inputs])));
+array [int] of record('..'(2, 3): x): B_objects = B_children_objects;
+set of B_potential: B = array_union([B_occ_1('..'(1, '-'(A_as_children_end, 1)))]);
+enum A_potential = A_occ_0({1, 2});
+array [int] of record(set of B_potential: children, int: n): A_objects = A_as_objects;
+set of A_potential: A = as;
+array [int] of record(array [int] of record(int: x): children): A_as_inputs = [(children: [(x: 2)]), (children: [(x: 2), (x: 3)])];
+constraint forall(['in'(length((i).children), '..'(1, 2)) | i in A_as_inputs]);
+array [int] of record('..'(2, 3): x): B_children_objects = [k | i in A_as_inputs, k in (i).children];
+int: A_as_root_start = 1;
+int: A_as_root_end = 3;
+int: A_as_children_start = 1;
+int: A_as_children_end = '+'(A_as_children_start, sum([length((i).children) | i in A_as_inputs]));
+array [int] of record(set of B_potential: children, int: n): A_as_objects = [(children: children, n: n) | p in index_set(A_as_inputs), input = '[]'(A_as_inputs, p), children = B_occ_1('..'('+'(1, sum([length(('[]'(A_as_inputs, q)).children) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(A_as_inputs, q)).children) | q in '..'(1, '-'(p, 1))]), length((input).children)))), n = card(children)];
+set( '..'(1, 2) ) of  A_occ_0({1, 2}): as = A_occ_0({1, 2});
+output ["ns=", show([('[]'(A_objects, enum2int(a))).n | a in as]), "\n"];
+solve satisfy;

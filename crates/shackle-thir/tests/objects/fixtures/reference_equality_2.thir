@@ -1,0 +1,8 @@
+enum A_potential;
+array [int] of record(): A_objects;
+set of A_potential: A;
+opt A: a;
+opt A: b;
+constraint '='(a, b);
+constraint '!='(a, b);
+solve satisfy;

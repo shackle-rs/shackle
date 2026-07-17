@@ -1,0 +1,8 @@
+enum A_potential = A_occ_0({1});
+array [int] of record(var '..'(0, 2): x): A_objects = A_maybe_a_objects;
+var set of A_potential: A;
+array [{1}] of record(var '..'(0, 2): x): A_maybe_a_storage;
+array [int] of record(var '..'(0, 2): x): A_maybe_a_objects = A_maybe_a_storage;
+var opt A_potential: maybe_a = if 'in'(A_occ_0(1), A) then A_occ_0(1) else <> endif;
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
+solve satisfy;

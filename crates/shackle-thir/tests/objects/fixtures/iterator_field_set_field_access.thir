@@ -1,0 +1,9 @@
+int: maxSeats = 2;
+enum Seat_potential;
+array [int] of record(Wagon_potential: wagon): Seat_objects;
+set of Seat_potential: Seat;
+enum Wagon_potential;
+array [int] of record(set of Seat_potential: seats): Wagon_objects;
+set of Wagon_potential: Wagon;
+constraint forall([forall(['in'(s, ('[]'(Wagon_objects, enum2int(('[]'(Seat_objects, enum2int(s))).wagon))).seats) | s in ('[]'(Wagon_objects, enum2int(w))).seats]) | w in Wagon]);
+solve satisfy;

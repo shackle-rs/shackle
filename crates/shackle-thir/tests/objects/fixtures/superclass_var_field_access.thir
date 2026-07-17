@@ -1,0 +1,15 @@
+enum B_potential = B_occ_0({1});
+array [int] of record(var '..'(0, 2): x, var '..'(0, 2): y): B_objects = B_b_objects;
+set of B_potential: B = B_occ_0({1});
+enum A_potential = A_occ_0({1});
+array [int] of record(var '..'(0, 2): x): A_objects = A_B_b_objects;
+set of A_potential: A = array_union([{A_occ_0(_DECL_1)} | _DECL_1 in index_set(B_b_objects)]);
+array [{1}] of record(var '..'(0, 2): x, var '..'(0, 2): y): B_b_storage;
+int: B_b__start = 1;
+int: B_b__end = 2;
+array [int] of record(var '..'(0, 2): x, var '..'(0, 2): y): B_b_objects = B_b_storage;
+array [int] of record(var '..'(0, 2): x): A_B_b_objects = [(x: ('[]'(B_b_objects, p)).x) | p in index_set(B_b_objects)];
+B_potential: b = B_occ_0(1);
+var A_potential: a = A_occ_0(enum2int(b));
+constraint '<='(('[]'(A_objects, enum2int(a))).x, 2);
+solve satisfy;

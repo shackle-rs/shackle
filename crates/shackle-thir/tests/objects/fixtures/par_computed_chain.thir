@@ -1,0 +1,10 @@
+enum A_potential = A_occ_0({1, 2});
+array [int] of record(int: x, int: y, int: z): A_objects = A_a_objects;
+set of A_potential: A = a;
+array [int] of record(int: x): A_a_inputs = [(x: 3), (x: 5)];
+int: A_a_root_start = 1;
+int: A_a_root_end = 3;
+array [int] of record(int: x, int: y, int: z): A_a_objects = [(x: x, y: y, z: z) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), x = (input).x, y = '+'(x, 1), z = '+'(y, 4)];
+set of A_occ_0({1, 2}): a = A_occ_0({1, 2});
+output ["xs=", show([('[]'(A_objects, enum2int(p))).x | p in a]), "\n", "ys=", show([('[]'(A_objects, enum2int(p))).y | p in a]), "\n", "zs=", show([('[]'(A_objects, enum2int(p))).z | p in a]), "\n"];
+solve satisfy;

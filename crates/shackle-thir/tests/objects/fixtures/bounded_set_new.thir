@@ -1,0 +1,9 @@
+int: n;
+enum A_potential = A_occ_0('..'(1, n));
+array [int] of record(var '..'(0, 2): x): A_objects = A_as_objects;
+var set of A_potential: A = as;
+array ['..'(1, n)] of record(var '..'(0, 2): x): A_as_storage;
+array [int] of record(var '..'(0, 2): x): A_as_objects = A_as_storage;
+var set( '..'(0, n) ) of  A_occ_0('..'(1, n)): as;
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
+solve satisfy;

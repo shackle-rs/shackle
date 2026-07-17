@@ -1,0 +1,26 @@
+enum B_potential = B_occ_2('..'(1, sum([length((i).bs) | i in Root_roots_inputs])));
+array [int] of record(int: x, int: y): B_objects = B_bs_objects;
+set of B_potential: B = array_union([B_occ_2('..'(1, '-'(Root_roots_bs_end, 1)))]);
+enum A_potential = A_occ_1('..'(1, sum([length((i).as) | i in Root_roots_inputs]))) ++ A_occ_2('..'(1, sum([length((i).bs) | i in Root_roots_inputs])));
+array [int] of record(int: x): A_objects = '++'(A_as_objects, A_bs_objects);
+set of A_potential: A = array_union('++'([A_occ_1('..'(1, '-'(Root_roots_as_end, 1)))], [{A_occ_2(_DECL_1)} | _DECL_1 in index_set(B_bs_objects)]));
+enum Root_potential = Root_occ_0({1, 2});
+array [int] of record(set of A_potential: as, set of B_potential: bs, var '..'(0, 2): z): Root_objects = Root_roots_objects;
+set of Root_potential: Root = roots;
+array [int] of record(array [int] of record(int: x): as, array [int] of record(int: x, int: y): bs): Root_roots_inputs = [(as: [(x: 1)], bs: [(x: 2, y: 3), (x: 4, y: 5)]), (as: [(x: 6), (x: 7)], bs: [(x: 8, y: 9)])];
+array [int] of record(int: x): A_as_objects = [k | i in Root_roots_inputs, k in (i).as];
+array [int] of record(int: x, int: y): B_bs_objects = [k | i in Root_roots_inputs, k in (i).bs];
+array [int] of record(int: x): A_bs_objects = [(x: (k).x) | i in Root_roots_inputs, k in (i).bs];
+int: Root_roots_as_start = 1;
+int: Root_roots_as_end = '+'(Root_roots_as_start, sum([length((i).as) | i in Root_roots_inputs]));
+int: Root_roots_bs_A_start = Root_roots_as_end;
+int: Root_roots_bs_A_end = '+'(Root_roots_bs_A_start, 1);
+int: Root_roots_bs_start = 1;
+int: Root_roots_bs_end = '+'(Root_roots_bs_start, sum([length((i).bs) | i in Root_roots_inputs]));
+int: Root_roots_root_start = 1;
+int: Root_roots_root_end = 3;
+array [int] of record(set of A_potential: as, set of B_potential: bs, var '..'(0, 2): z): Root_roots_objects = [(as: as, bs: bs, z: z) | p in index_set(Root_roots_inputs), input = '[]'(Root_roots_inputs, p), z = let {
+  var '..'(0, 2): z_init;
+} in z_init, as = A_occ_1('..'('+'(1, sum([length(('[]'(Root_roots_inputs, q)).as) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(Root_roots_inputs, q)).as) | q in '..'(1, '-'(p, 1))]), length((input).as)))), bs = B_occ_2('..'('+'(1, sum([length(('[]'(Root_roots_inputs, q)).bs) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(Root_roots_inputs, q)).bs) | q in '..'(1, '-'(p, 1))]), length((input).bs))))];
+set of Root_occ_0({1, 2}): roots = Root_occ_0({1, 2});
+solve satisfy;

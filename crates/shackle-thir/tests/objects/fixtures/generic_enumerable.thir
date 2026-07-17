@@ -1,0 +1,11 @@
+enum A_potential;
+array [int] of record(): A_objects;
+set of A_potential: A;
+A: a;
+A: b;
+opt A: oa;
+set of A_potential: span = '..'(a, b);
+constraint 'in'(a, enum_of(a));
+constraint 'in'(b, span);
+constraint '\/'(absent(oa), 'in'(deopt(oa), enum_of(oa)));
+solve satisfy;

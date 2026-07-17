@@ -1,0 +1,21 @@
+enum B_potential = B_occ_1('..'(1, '*'(card(A_potential), max('..'(0, 3)))));
+array [int] of record(var '..'(0, 3): x): B_objects = array1d(B_children_objects);
+var set of B_potential: B = array_union([('[]'(A_a_objects, _DECL_1)).children | _DECL_1 in index_set(A_a_objects)]);
+enum A_potential = A_occ_0({1});
+array [int] of record(var set of B_potential: children, var int: nChildren): A_objects = A_a_objects;
+set of A_potential: A = A_occ_0({1});
+constraint forall([let {
+  var set of B_potential: children = ('[]'(A_objects, enum2int(this))).children;
+} in '='(card(children), 2) | this in A]);
+constraint forall(['in'(card(('[]'(A_objects, enum2int(this))).children), '..'(0, 3)) | this in A]);
+array [{1}] of record(var set of B_potential: children): A_a_storage;
+array [B_occ_1('..'(1, '*'(card(A_potential), max('..'(0, 3)))))] of record(var '..'(0, 3): x): B_children_objects;
+int: A_a_children_start = 1;
+int: A_a_children_end = '+'(A_a_children_start, '*'(card(A_potential), max('..'(0, 3))));
+array [int] of set of B_potential: A_a_children_potential = [_DECL_2: B_occ_1('..'('+'(1, '*'('-'(_DECL_2, 1), max('..'(0, 3)))), '*'(_DECL_2, max('..'(0, 3))))) | _DECL_2 in index_set(A_a_storage)];
+array [int] of record(var set of B_potential: children, var int: nChildren): A_a_objects = [(children: children, nChildren: nChildren) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), children = (input).children, nChildren = card(children)];
+A_potential: a = A_occ_0(1);
+constraint forall(['subset'(enum2int(('[]'(A_a_objects, _DECL_3)).children), enum2int('[]'(A_a_children_potential, _DECL_3))) | _DECL_3 in index_set(A_a_objects)]);
+output ["n=", show(fix(('[]'(A_objects, enum2int(a))).nChildren)), "\n"];
+constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x, mzn_safe_default(('[]'(B_objects, enum2int(x))).x))) | x in B_potential]);
+solve satisfy;

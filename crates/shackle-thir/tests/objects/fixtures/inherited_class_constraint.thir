@@ -1,0 +1,15 @@
+enum B_potential = B_occ_0({1});
+array [int] of record(int: x, int: y): B_objects = B_b_objects;
+set of B_potential: B = B_occ_0({1});
+constraint forall(['<='(('[]'(B_objects, enum2int(this))).x, ('[]'(B_objects, enum2int(this))).y) | this in B]);
+enum A_potential = A_occ_0({1});
+array [int] of record(int: x): A_objects = A_B_b_objects;
+set of A_potential: A = array_union([{A_occ_0(_DECL_1)} | _DECL_1 in index_set(B_b_objects)]);
+constraint forall(['>='(('[]'(A_objects, enum2int(this))).x, 0) | this in A]);
+array [int] of record(int: x, int: y): B_b_inputs = [(x: 1, y: 2)];
+int: B_b__start = 1;
+int: B_b__end = 2;
+array [int] of record(int: x, int: y): B_b_objects = B_b_inputs;
+array [int] of record(int: x): A_B_b_objects = [(x: ('[]'(B_b_objects, p)).x) | p in index_set(B_b_objects)];
+B_potential: b = B_occ_0(1);
+solve satisfy;

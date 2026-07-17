@@ -1,0 +1,12 @@
+int: n;
+enum C_potential = C_occ_0('..'(1, n));
+array [int] of record(var bool: b, var '..'(5, 10): i, var opt int: o, var set of '..'(0, 3): s): C_objects = C_cs_objects;
+var set of C_potential: C = cs;
+array ['..'(1, n)] of record(var bool: b, var '..'(5, 10): i, var opt int: o, var set of '..'(0, 3): s): C_cs_storage;
+array [int] of record(var bool: b, var '..'(5, 10): i, var opt int: o, var set of '..'(0, 3): s): C_cs_objects = [(b: b, i: i, o: o, s: s) | p in index_set(C_cs_storage), input = '[]'(C_cs_storage, p), i = (input).i, b = (input).b, o = (input).o, s = (input).s];
+var set( '..'(0, n) ) of  C_occ_0('..'(1, n)): cs;
+constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).b, lb(('[]'(C_objects, enum2int(x))).b))) | x in C_potential]);
+constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).i, mzn_safe_default(('[]'(C_objects, enum2int(x))).i))) | x in C_potential]);
+constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).o, <>)) | x in C_potential]);
+constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).s, lb(('[]'(C_objects, enum2int(x))).s))) | x in C_potential]);
+solve satisfy;

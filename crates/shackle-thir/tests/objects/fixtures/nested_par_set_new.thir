@@ -1,0 +1,15 @@
+enum B_potential = B_occ_1('..'(1, sum([length((i).bs) | i in A_as_inputs])));
+array [int] of record(int: b): B_objects = B_bs_objects;
+set of B_potential: B = array_union([B_occ_1('..'(1, '-'(A_as_bs_end, 1)))]);
+enum A_potential = A_occ_0({1, 2});
+array [int] of record(int: a, set of B_potential: bs): A_objects = A_as_objects;
+set of A_potential: A = as;
+array [int] of record(int: a, array [int] of record(int: b): bs): A_as_inputs = [(a: 1, bs: [(b: 1), (b: 2)]), (a: 2, bs: [(b: 3)])];
+array [int] of record(int: b): B_bs_objects = [k | i in A_as_inputs, k in (i).bs];
+int: A_as_root_start = 1;
+int: A_as_root_end = 3;
+int: A_as_bs_start = 1;
+int: A_as_bs_end = '+'(A_as_bs_start, sum([length((i).bs) | i in A_as_inputs]));
+array [int] of record(int: a, set of B_potential: bs): A_as_objects = [(a: a, bs: bs) | p in index_set(A_as_inputs), input = '[]'(A_as_inputs, p), a = (input).a, bs = B_occ_1('..'('+'(1, sum([length(('[]'(A_as_inputs, q)).bs) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(A_as_inputs, q)).bs) | q in '..'(1, '-'(p, 1))]), length((input).bs))))];
+set of A_occ_0({1, 2}): as = A_occ_0({1, 2});
+solve satisfy;

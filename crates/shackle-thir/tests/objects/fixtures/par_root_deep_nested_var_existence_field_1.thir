@@ -1,0 +1,19 @@
+enum D_potential = D_occ_1('..'(1, '*'(card(C_potential), max('..'(1, 2)))));
+array [int] of record(var '..'(2, 3): v): D_objects = array1d(D_ds_objects);
+var set of D_potential: D = array_union([('[]'(C_c_objects, _DECL_1)).ds | _DECL_1 in index_set(C_c_objects)]);
+enum C_potential = C_occ_0({1});
+array [int] of record('..'(1, 3): ck, var set of D_potential: ds): C_objects = C_c_objects;
+set of C_potential: C = C_occ_0({1});
+constraint forall(['in'(card(('[]'(C_objects, enum2int(this))).ds), '..'(1, 2)) | this in C]);
+array [int] of record(int: ck): C_c_inputs = [(ck: 1)];
+array [D_occ_1('..'(1, '*'(card(C_potential), max('..'(1, 2)))))] of record(var '..'(2, 3): v): D_ds_objects;
+int: C_c_ds_start = 1;
+int: C_c_ds_end = '+'(C_c_ds_start, '*'(card(C_potential), max('..'(1, 2))));
+array [int] of set of D_potential: C_c_ds_potential = [_DECL_2: D_occ_1('..'('+'(1, '*'('-'(_DECL_2, 1), max('..'(1, 2)))), '*'(_DECL_2, max('..'(1, 2))))) | _DECL_2 in index_set(C_c_inputs)];
+array [int] of record('..'(1, 3): ck, var set of D_potential: ds): C_c_objects = [(ck: ck, ds: ds) | p in index_set(C_c_inputs), input = '[]'(C_c_inputs, p), ck = (input).ck, ds = let {
+  var set of D_potential: ds_init;
+} in ds_init];
+C_potential: c = C_occ_0(1);
+constraint forall(['subset'(enum2int(('[]'(C_c_objects, _DECL_3)).ds), enum2int('[]'(C_c_ds_potential, _DECL_3))) | _DECL_3 in index_set(C_c_objects)]);
+constraint forall(['\/'('in'(x, D), '='(('[]'(D_objects, enum2int(x))).v, mzn_safe_default(('[]'(D_objects, enum2int(x))).v))) | x in D_potential]);
+solve satisfy;

@@ -1,0 +1,15 @@
+enum B_potential = B_occ_1('..'(1, '*'(card(A_potential), 1)));
+array [int] of record(var '..'(0, 4): y): B_objects = array1d(B_b_objects);
+set of B_potential: B = array_union([{B_occ_1(_DECL_1)} | _DECL_1 in index_set(A_a_objects)]);
+enum A_potential = A_occ_0({1});
+array [int] of record(var B_potential: b, var '..'(0, 4): x): A_objects = A_a_objects;
+set of A_potential: A = A_occ_0({1});
+array [{1}] of record(var B_potential: b, var '..'(0, 4): x): A_a_storage;
+array [B_occ_1('..'(1, '*'(card(A_potential), 1)))] of record(var '..'(0, 4): y): B_b_objects;
+int: A_a_b_start = 1;
+int: A_a_b_end = '+'(A_a_b_start, '*'(card(A_potential), 1));
+array [int] of record(var B_potential: b, var '..'(0, 4): x): A_a_objects = [(b: b, x: x) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), b = (input).b, x = (input).x];
+A_potential: a = A_occ_0(1);
+constraint '>='(('[]'(B_objects, enum2int(('[]'(A_objects, enum2int(a))).b))).y, 0);
+constraint forall(['='(('[]'(A_a_objects, _DECL_2)).b, B_occ_1(_DECL_2)) | _DECL_2 in index_set(A_a_objects)]);
+solve satisfy;

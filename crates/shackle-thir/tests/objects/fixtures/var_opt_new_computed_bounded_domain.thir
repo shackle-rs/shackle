@@ -1,0 +1,12 @@
+enum A_potential = A_occ_0({1});
+array [int] of record(var '..'(0, 2): x1, var '..'(0, 2): x2, var int: z): A_objects = A_a_objects;
+var set of A_potential: A;
+constraint forall(['in'(('[]'(A_objects, enum2int(this))).z, '..'(3, 4)) | this in A]);
+array [{1}] of record(var '..'(0, 2): x1, var '..'(0, 2): x2): A_a_storage;
+array [int] of record(var '..'(0, 2): x1, var '..'(0, 2): x2, var int: z): A_a_objects = [(x1: x1, x2: x2, z: z) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), x1 = (input).x1, x2 = (input).x2, z = '+'(x1, x2)];
+var opt A_potential: a = if 'in'(A_occ_0(1), A) then A_occ_0(1) else <> endif;
+constraint absent(a);
+output ["absent ok\n"];
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x1, mzn_safe_default(('[]'(A_objects, enum2int(x))).x1))) | x in A_potential]);
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x2, mzn_safe_default(('[]'(A_objects, enum2int(x))).x2))) | x in A_potential]);
+solve satisfy;

@@ -1,0 +1,9 @@
+enum A_potential = A_occ_0({1});
+array [int] of record(var '..'(0, 4): x, var set of int: z): A_objects = A_a_objects;
+set of A_potential: A = A_occ_0({1});
+array [{1}] of record(var '..'(0, 4): x): A_a_storage;
+array [int] of record(var '..'(0, 4): x, var set of int: z): A_a_objects = [(x: x, z: z) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), x = (input).x, z = {x, '*'(2, x)}];
+A_potential: a = A_occ_0(1);
+constraint '='(('[]'(A_objects, enum2int(a))).x, 3);
+output ["x=", show(('[]'(A_objects, enum2int(a))).x), " z=", show(('[]'(A_objects, enum2int(a))).z), "\n"];
+solve satisfy;

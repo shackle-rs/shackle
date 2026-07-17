@@ -1,0 +1,14 @@
+enum B_potential = B_occ_1('..'(1, '*'(card(A_potential), 1)));
+array [int] of record(int: y): B_objects = B_b_objects;
+set of B_potential: B = array_union([{B_occ_1(_DECL_1)} | _DECL_1 in index_set(A_a_objects)]);
+enum A_potential = A_occ_0({1});
+array [int] of record(B_potential: b, int: x): A_objects = A_a_objects;
+set of A_potential: A = A_occ_0({1});
+array [int] of record(record(int: y): b, int: x): A_a_inputs = [(b: (y: 1), x: 2)];
+array [int] of record(int: y): B_b_objects = [(i).b | i in A_a_inputs];
+int: A_a_b_start = 1;
+int: A_a_b_end = '+'(A_a_b_start, '*'(card(A_potential), 1));
+array [int] of record(B_potential: b, int: x): A_a_objects = [(b: b, x: x) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), b = B_occ_1(p), x = (input).x];
+A_potential: a = A_occ_0(1);
+constraint '>='(('[]'(B_objects, enum2int(('[]'(A_objects, enum2int(a))).b))).y, 0);
+solve satisfy;

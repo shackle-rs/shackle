@@ -1,0 +1,7 @@
+enum A_potential = A_occ_0({1});
+array [int] of record(var '..'(0, 2): x): A_objects = A_a_objects;
+set of A_potential: A = A_occ_0({1});
+array [{1}] of record(var '..'(0, 2): x): A_a_storage;
+array [int] of record(var '..'(0, 2): x): A_a_objects = A_a_storage;
+A_potential: a = A_occ_0(1);
+solve satisfy;
