@@ -24,7 +24,7 @@ constraint forall(['subset'(enum2int(('[]'(A_as_objects, _DECL_6)).cs), enum2int
 constraint '='(card(B), sum(['+'(card(('[]'(A_objects, enum2int(a))).bs), card(('[]'(A_objects, enum2int(a))).cs)) | a in as]));
 constraint forall(['>='(('[]'(B_objects, enum2int(b))).y, 0) | a in as, b in ('[]'(A_objects, enum2int(a))).bs]);
 constraint forall(['>='(('[]'(B_objects, enum2int(c))).y, 0) | a in as, c in ('[]'(A_objects, enum2int(a))).cs]);
+constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).bs, lb(('[]'(A_objects, enum2int(x))).bs))) | x in A_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).cs, lb(('[]'(A_objects, enum2int(x))).cs))) | x in A_potential]);
-constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 solve satisfy;

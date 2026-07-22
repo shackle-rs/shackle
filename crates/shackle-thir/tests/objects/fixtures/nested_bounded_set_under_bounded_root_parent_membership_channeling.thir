@@ -16,6 +16,6 @@ array [int] of record(var set of B_potential: bs): A_as_objects = A_as_storage;
 var set( '..'(0, m) ) of  A_occ_0('..'(1, m)): as;
 constraint forall(['subset'(enum2int(('[]'(A_as_objects, _DECL_3)).bs), enum2int('[]'(A_as_bs_potential, _DECL_3))) | _DECL_3 in index_set(A_as_objects)]);
 constraint forall(['='(sum([bool2int('in'(b, ('[]'(A_objects, enum2int(a))).bs)) | a in as]), 1) | b in B]);
-constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).bs, lb(('[]'(A_objects, enum2int(x))).bs))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).bs, lb(('[]'(A_objects, enum2int(x))).bs))) | x in A_potential]);
 solve satisfy;

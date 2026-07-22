@@ -17,7 +17,7 @@ var set( '..'(0, 1) ) of  A_occ_0('..'(1, 1)): as;
 constraint forall(['subset'(enum2int(('[]'(A_as_objects, _DECL_3)).children), enum2int('[]'(A_as_children_potential, _DECL_3))) | _DECL_3 in index_set(A_as_objects)]);
 constraint '='(card(as), 0);
 output ["card=", show(card(as)), "\n"];
-constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).children, lb(('[]'(A_objects, enum2int(x))).children))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x1, mzn_safe_default(('[]'(B_objects, enum2int(x))).x1))) | x in B_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x2, mzn_safe_default(('[]'(B_objects, enum2int(x))).x2))) | x in B_potential]);
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).children, lb(('[]'(A_objects, enum2int(x))).children))) | x in A_potential]);
 solve satisfy;

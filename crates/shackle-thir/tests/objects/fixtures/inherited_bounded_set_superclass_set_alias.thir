@@ -13,7 +13,7 @@ array [int] of record(var '..'(0, 4): x): A_B_bs_objects = [(x: ('[]'(B_bs_objec
 var set( '..'(0, n) ) of  B_occ_0('..'(1, n)): bs;
 var set of A_potential: as = A_occ_0(enum2int(bs));
 constraint forall(['>='(('[]'(A_objects, enum2int(a))).x, 0) | a in as]);
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x, mzn_safe_default(('[]'(B_objects, enum2int(x))).x))) | x in B_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
-constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
 solve satisfy;

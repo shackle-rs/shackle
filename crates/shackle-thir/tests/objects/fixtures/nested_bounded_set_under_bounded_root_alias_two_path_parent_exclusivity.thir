@@ -24,7 +24,7 @@ constraint forall(['subset'(enum2int(('[]'(A_as_objects, _DECL_6)).cs), enum2int
 constraint forall(['='(sum([let {
   var set of B_potential: owned = 'union'(('[]'(A_objects, enum2int(a))).bs, ('[]'(A_objects, enum2int(a))).cs);
 } in bool2int('in'(b, owned)) | a in as]), 1) | b in B]);
+constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).bs, lb(('[]'(A_objects, enum2int(x))).bs))) | x in A_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).cs, lb(('[]'(A_objects, enum2int(x))).cs))) | x in A_potential]);
-constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 solve satisfy;

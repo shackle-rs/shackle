@@ -11,7 +11,7 @@ int: B_bs__end = 2;
 array [int] of record(var '..'(0, 2): x, var '..'(0, 2): y): B_bs_objects = B_bs_storage;
 array [int] of record(var '..'(0, 2): x): A_B_bs_objects = [(x: ('[]'(B_bs_objects, p)).x) | p in index_set(B_bs_objects)];
 var set( '..'(0, n) ) of  B_occ_0('..'(1, n)): bs;
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x, mzn_safe_default(('[]'(B_objects, enum2int(x))).x))) | x in B_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
-constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
 solve satisfy;

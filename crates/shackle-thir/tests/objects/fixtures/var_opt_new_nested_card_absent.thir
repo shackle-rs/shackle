@@ -15,6 +15,6 @@ var opt A_potential: a = if 'in'(A_occ_0(1), A) then A_occ_0(1) else <> endif;
 constraint forall(['subset'(enum2int(('[]'(A_a_objects, _DECL_3)).children), enum2int('[]'(A_a_children_potential, _DECL_3))) | _DECL_3 in index_set(A_a_objects)]);
 constraint absent(a);
 output ["absent ok\n"];
-constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).children, lb(('[]'(A_objects, enum2int(x))).children))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x, mzn_safe_default(('[]'(B_objects, enum2int(x))).x))) | x in B_potential]);
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).children, lb(('[]'(A_objects, enum2int(x))).children))) | x in A_potential]);
 solve satisfy;

@@ -26,7 +26,7 @@ constraint forall([let {
   var set of B_potential: owned_bs = {x | x in owned where 'in'(x, ('[]'(A_objects, enum2int(a))).bs)};
   var set of B_potential: owned_cs = {x | x in owned where 'in'(x, ('[]'(A_objects, enum2int(a))).cs)};
 } in '='('+'(card(owned_bs), card(owned_cs)), '+'(card(('[]'(A_objects, enum2int(a))).bs), card(('[]'(A_objects, enum2int(a))).cs))) | a in as]);
+constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).bs, lb(('[]'(A_objects, enum2int(x))).bs))) | x in A_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).cs, lb(('[]'(A_objects, enum2int(x))).cs))) | x in A_potential]);
-constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 solve satisfy;

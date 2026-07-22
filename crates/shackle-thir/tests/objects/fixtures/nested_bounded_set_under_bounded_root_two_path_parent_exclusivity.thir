@@ -22,7 +22,7 @@ var set( '..'(0, m) ) of  A_occ_0('..'(1, m)): as;
 constraint forall(['subset'(enum2int(('[]'(A_as_objects, _DECL_5)).bs), enum2int('[]'(A_as_bs_potential, _DECL_5))) | _DECL_5 in index_set(A_as_objects)]);
 constraint forall(['subset'(enum2int(('[]'(A_as_objects, _DECL_6)).cs), enum2int('[]'(A_as_cs_potential, _DECL_6))) | _DECL_6 in index_set(A_as_objects)]);
 constraint forall(['='(sum(['+'(bool2int('in'(b, ('[]'(A_objects, enum2int(a))).bs)), bool2int('in'(b, ('[]'(A_objects, enum2int(a))).cs))) | a in as]), 1) | b in B]);
+constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).bs, lb(('[]'(A_objects, enum2int(x))).bs))) | x in A_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).cs, lb(('[]'(A_objects, enum2int(x))).cs))) | x in A_potential]);
-constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 solve satisfy;

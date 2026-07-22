@@ -11,6 +11,14 @@
 //! - Tuple/record access into arrays of structs are rewritten using a
 //!   comprehension accessing the inner value
 
+// Emitted model item order must not depend on hash order: `PatternRef` and
+// friends hash their salsa ids, so iterating a map/set keyed by them yields an
+// order that shifts whenever interning order does (a different standard
+// library is enough). That produced snapshot failures on CI that were pure
+// reorderings and unreproducible locally. Sort into source order — see
+// `ObjectLoweringPlan::class_rank` — or justify the exception in place.
+#![deny(clippy::iter_over_hash_type)]
+
 use derive_more::From;
 use rustc_hash::{FxHashMap, FxHashSet};
 use shackle_hir::{
@@ -256,9 +264,48 @@ struct ObjectLoweringPlan<'db> {
 	/// here cannot keep its card bound in the shared element record — the
 	/// canonical unrealised-slot value (`lb` = `{}`) would violate it.
 	unrealisable_storage_classes: FxHashSet<PatternRef<'db>>,
+	/// Source-order rank of every class, used to give the class-keyed hash
+	/// maps and sets above a deterministic iteration order.
+	///
+	/// Iterating an `FxHashMap`/`FxHashSet` keyed by `PatternRef` walks the
+	/// keys in hashed-salsa-id order. That is stable for a fixed set of
+	/// interned ids but shifts as soon as interning order does — e.g. under a
+	/// different standard library — so any emission driven by it produces
+	/// models that differ by a reordering across machines. `analyse_new_objects`
+	/// builds `class_descriptors` by walking models and items in source order,
+	/// which is stable everywhere; rank by position in that list instead.
+	class_order: FxHashMap<PatternRef<'db>, u32>,
 }
 
 impl<'db> ObjectLoweringPlan<'db> {
+	/// Deterministic sort key for a class.
+	///
+	/// Every class reached during lowering has a descriptor, so ranks are
+	/// total and unique; the fallback only keeps this a total order if that
+	/// invariant is ever broken.
+	fn class_rank(&self, class: PatternRef<'db>) -> u32 {
+		self.class_order.get(&class).copied().unwrap_or(u32::MAX)
+	}
+
+	/// Sort classes into source order, for iteration that emits model items.
+	fn in_class_order(&self, classes: &mut [PatternRef<'db>]) {
+		classes.sort_by_key(|class| self.class_rank(*class));
+	}
+
+	/// The contribution lists, in ascending occurrence order.
+	///
+	/// `contributions_by_occurrence` is keyed by `OccurrenceId`, whose numeric
+	/// order follows `analysis.occurrences` and is therefore stable across
+	/// platforms — unlike the map's own hash order.
+	fn contributions_in_occurrence_order(
+		&self,
+	) -> impl Iterator<Item = &Vec<OccurrenceContribution<'db>>> {
+		let mut ids: Vec<OccurrenceId> = self.contributions_by_occurrence.keys().copied().collect();
+		ids.sort_by_key(|id| id.0);
+		ids.into_iter()
+			.map(move |id| &self.contributions_by_occurrence[&id])
+	}
+
 	fn new(db: &'db dyn Db) -> Self {
 		let analysis = analyse_new_objects(db);
 		let mut top_level_occurrences = FxHashMap::default();
@@ -398,6 +445,13 @@ impl<'db> ObjectLoweringPlan<'db> {
 		let mut changed = true;
 		while changed {
 			changed = false;
+			// Hash order is fine here: this runs to a fixpoint and only ever
+			// inserts into a set, so the result is the same whatever order the
+			// edges are visited in. Nothing is emitted from this loop.
+			#[allow(
+				clippy::iter_over_hash_type,
+				reason = "fixpoint over a set — order-independent"
+			)]
 			for (super_class, subclasses) in analysis.map_class_to_subclasses.iter() {
 				if !unrealisable_storage_classes.contains(super_class)
 					&& subclasses
@@ -420,6 +474,12 @@ impl<'db> ObjectLoweringPlan<'db> {
 			field_only_introduced_classes,
 			domain_relocation_classes,
 			unrealisable_storage_classes,
+			class_order: analysis
+				.class_descriptors
+				.iter()
+				.enumerate()
+				.map(|(rank, descriptor)| (descriptor.class_pattern, rank as u32))
+				.collect(),
 		}
 	}
 }
@@ -1355,12 +1415,14 @@ impl<'db> ItemCollector<'db> {
 		// members), which is what the assert below guards: a var-actual class
 		// must never take the fallback.
 		let introductions_map = std::mem::take(&mut self.class_set_field_introductions);
-		for &child_class in self
+		let mut field_only_classes: Vec<PatternRef<'db>> = self
 			.object_lowering
 			.field_only_introduced_classes
-			.clone()
 			.iter()
-		{
+			.copied()
+			.collect();
+		self.object_lowering.in_class_order(&mut field_only_classes);
+		for child_class in field_only_classes {
 			let Some(class_info) = self.class_map.get(&child_class) else {
 				continue;
 			};
@@ -1436,11 +1498,24 @@ impl<'db> ItemCollector<'db> {
 		// nested pieces and emits them as the subset lower bound. Classes with
 		// no definite pieces at all fall through harmlessly (empty lower
 		// bound).
+		// Hash order is fine here: this only seeds empty entries, and the keys
+		// are put into source order before anything is emitted from them.
+		#[allow(
+			clippy::iter_over_hash_type,
+			reason = "seeds map entries only — order-independent"
+		)]
 		for &opt_class in self.opt_free_subset_classes.iter() {
 			let _ = top_level_contributions.entry(opt_class).or_default();
 		}
 		let analysis = analyse_new_objects(self.db);
-		for (class_pattern, mut contributions) in top_level_contributions {
+		let mut contribution_classes: Vec<PatternRef<'db>> =
+			top_level_contributions.keys().copied().collect();
+		self.object_lowering
+			.in_class_order(&mut contribution_classes);
+		for class_pattern in contribution_classes {
+			let mut contributions = top_level_contributions
+				.remove(&class_pattern)
+				.expect("key came from this map");
 			let Some(class_info) = self.class_map.get(&class_pattern).copied() else {
 				continue;
 			};
@@ -1455,8 +1530,7 @@ impl<'db> ItemCollector<'db> {
 			// constructor order.
 			let mut unregistered: Vec<(usize, usize, PatternRef<'db>, usize, OccurrenceId)> =
 				Vec::new();
-			for occurrence_contributions in
-				self.object_lowering.contributions_by_occurrence.values()
+			for occurrence_contributions in self.object_lowering.contributions_in_occurrence_order()
 			{
 				let Some(direct) = occurrence_contributions
 					.iter()
@@ -1653,7 +1727,10 @@ impl<'db> ItemCollector<'db> {
 			}
 		}
 
-		let class_object_contributions: Vec<_> = self.class_object_contributions.drain().collect();
+		let mut class_object_contributions: Vec<_> =
+			self.class_object_contributions.drain().collect();
+		class_object_contributions
+			.sort_by_key(|(class_pattern, _)| self.object_lowering.class_rank(*class_pattern));
 		for (class_pattern, mut contributions) in class_object_contributions {
 			contributions.sort_by_key(|(contribution_index, _)| *contribution_index);
 			let class_objects = self.class_map[&class_pattern].class_objects;
@@ -1745,12 +1822,13 @@ impl<'db> ItemCollector<'db> {
 		// storage field of an unused potential to its canonical default.
 		// Runs last so it sees the now-defined class set and class objects
 		// array.
-		let var_reached: Vec<PatternRef<'db>> = self
+		let mut var_reached: Vec<PatternRef<'db>> = self
 			.object_lowering
 			.var_reached_classes
 			.iter()
 			.copied()
 			.collect();
+		self.object_lowering.in_class_order(&mut var_reached);
 		for class_pattern in var_reached {
 			self.emit_unused_potential_default_constraints(class_pattern);
 		}
@@ -2927,7 +3005,7 @@ impl<'db> ItemCollector<'db> {
 		// fields) means the set can't be derived and the caller falls back.
 		let mut contributions: Vec<(usize, usize, PatternRef<'db>, usize, OccurrenceId)> =
 			Vec::new();
-		for occurrence_contributions in self.object_lowering.contributions_by_occurrence.values() {
+		for occurrence_contributions in self.object_lowering.contributions_in_occurrence_order() {
 			let Some(direct) = occurrence_contributions
 				.iter()
 				.find(|contribution| contribution.projection_depth == 0)
@@ -11780,8 +11858,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		for occ_contribs in self
 			.parent
 			.object_lowering
-			.contributions_by_occurrence
-			.values()
+			.contributions_in_occurrence_order()
 		{
 			for contribution in occ_contribs
 				.iter()
@@ -14249,16 +14326,21 @@ pub fn lower_model<'db>(db: &'db dyn Db) -> Intermediate<Model<'db>> {
 			collector.predeclare_class(*c);
 		}
 	}
-	let contribution_targets = collector
+	// Source order, not hash order: predeclaring a class allocates its enum,
+	// `_objects` array and actual-set declarations, so this loop fixes the id
+	// allocation order that the whole emitted model is then ordered by.
+	let mut contribution_targets = collector
 		.object_lowering
-		.contributions_by_occurrence
-		.values()
+		.contributions_in_occurrence_order()
 		.flat_map(|contributions| {
 			contributions
 				.iter()
 				.map(|contribution| contribution.target_class)
 		})
 		.collect::<Vec<_>>();
+	collector
+		.object_lowering
+		.in_class_order(&mut contribution_targets);
 	for target_class in contribution_targets {
 		collector.ensure_class_predeclared(target_class);
 	}
