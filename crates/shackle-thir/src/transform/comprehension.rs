@@ -242,7 +242,7 @@ impl<'db, Dst: Marker> ComprehensionRewriter<'db, Dst> {
 						let has_set2iter = self
 							.result
 							.lookup_function(db, self.ids.functions.set2iter.into(), &[c.ty()])
-							.is_ok_and(|f| f.fn_entry.has_body);
+							.is_ok_and(|f| self.result[f.function].body().is_some());
 						*collection = Expression::new(
 							db,
 							&self.result,

@@ -109,6 +109,7 @@ var foo(1, 3): y;
                                     ),
                                 ),
                                 annotations: [],
+                                default: None,
                             },
                             Parameter {
                                 cst_kind: "parameter",
@@ -136,6 +137,7 @@ var foo(1, 3): y;
                                     ),
                                 ),
                                 annotations: [],
+                                default: None,
                             },
                         ],
                         body: Some(
@@ -230,16 +232,46 @@ var foo(1, 3): y;
                                                 ),
                                             ),
                                             arguments: [
-                                                IntegerLiteral(
-                                                    IntegerLiteral {
-                                                        cst_kind: "integer_literal",
-                                                    },
-                                                ),
-                                                IntegerLiteral(
-                                                    IntegerLiteral {
-                                                        cst_kind: "integer_literal",
-                                                    },
-                                                ),
+                                                ArgOrParam {
+                                                    cst_kind: "arg_or_param",
+                                                    left: TypeBase(
+                                                        TypeBase {
+                                                            cst_kind: "type_base",
+                                                            var_type: None,
+                                                            opt_type: None,
+                                                            any_type: false,
+                                                            domain: Bounded(
+                                                                IntegerLiteral(
+                                                                    IntegerLiteral {
+                                                                        cst_kind: "integer_literal",
+                                                                    },
+                                                                ),
+                                                            ),
+                                                        },
+                                                    ),
+                                                    right: None,
+                                                    default: None,
+                                                },
+                                                ArgOrParam {
+                                                    cst_kind: "arg_or_param",
+                                                    left: TypeBase(
+                                                        TypeBase {
+                                                            cst_kind: "type_base",
+                                                            var_type: None,
+                                                            opt_type: None,
+                                                            any_type: false,
+                                                            domain: Bounded(
+                                                                IntegerLiteral(
+                                                                    IntegerLiteral {
+                                                                        cst_kind: "integer_literal",
+                                                                    },
+                                                                ),
+                                                            ),
+                                                        },
+                                                    ),
+                                                    right: None,
+                                                    default: None,
+                                                },
                                             ],
                                         },
                                     ),

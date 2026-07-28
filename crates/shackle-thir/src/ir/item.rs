@@ -7,8 +7,7 @@ use std::{
 
 use derive_more::{Deref, DerefMut, From};
 use shackle_ty::{
-	EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyData,
-	TyVar,
+	EnumRef, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyData, TyVar,
 };
 use shackle_utils::arena::ArenaIndex;
 
@@ -744,21 +743,18 @@ impl<'db, T: Marker> Function<'db, T> {
 	}
 
 	/// Convert to a function entry
-	pub fn function_entry(&self, model: &Model<'db, T>) -> FunctionEntry<'db> {
-		FunctionEntry {
-			has_body: self.body.is_some(),
-			overload: if self.type_inst_vars.is_empty() {
-				OverloadedFunction::Function(FunctionType {
-					params: self.parameters.iter().map(|p| model[*p].ty()).collect(),
-					return_type: self.return_type(),
-				})
-			} else {
-				OverloadedFunction::PolymorphicFunction(PolymorphicFunctionType {
-					ty_params: self.type_inst_vars.iter().map(|t| t.ty_var).collect(),
-					params: self.parameters.iter().map(|p| model[*p].ty()).collect(),
-					return_type: self.return_type(),
-				})
-			},
+	pub fn function_entry(&self, model: &Model<'db, T>) -> OverloadedFunction<'db> {
+		if self.type_inst_vars.is_empty() {
+			OverloadedFunction::Function(FunctionType {
+				params: self.parameters.iter().map(|p| model[*p].ty()).collect(),
+				return_type: self.return_type(),
+			})
+		} else {
+			OverloadedFunction::PolymorphicFunction(PolymorphicFunctionType {
+				ty_params: self.type_inst_vars.iter().map(|t| t.ty_var).collect(),
+				params: self.parameters.iter().map(|p| model[*p].ty()).collect(),
+				return_type: self.return_type(),
+			})
 		}
 	}
 }

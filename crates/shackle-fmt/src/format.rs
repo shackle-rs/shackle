@@ -16,6 +16,11 @@ pub(crate) trait Format {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element;
 
 	/// Whether this node already has brackets around it
+	///
+	/// It is important to implement this for nodes which can simply be another node with nothing else around it
+	/// to correctly propagate the flag.
+	///
+	/// E.g. a Type can be an expression, so if the expression has brackets, then the type has brackets.
 	fn has_brackets(&self, _formatter: &MiniZincFormatter) -> bool {
 		false
 	}

@@ -175,10 +175,32 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 		let ty = match t {
 			minizinc::Type::ArrayType(a) => Type::Array {
 				opt: OptType::NonOpt,
+				dimension_pattern: {
+					let patterns = a
+						.dimensions()
+						.map(|dim| dim.name().map(|n| self.collect_pattern(&n.into())))
+						.collect::<Box<[_]>>();
+					if patterns.len() == 1 {
+						patterns[0]
+					} else {
+						let fields = patterns
+							.into_iter()
+							.map(|p| p.unwrap_or_else(|| self.alloc_pattern(a, Pattern::Anonymous)))
+							.collect();
+						Some(self.alloc_pattern(t, Pattern::Tuple { fields }))
+					}
+				},
 				dimensions: {
 					let dims: Box<[_]> = a
 						.dimensions()
-						.map(|dim| self.collect_type_with_tiids(&dim, tiids, true, is_fn_parameter))
+						.map(|dim| {
+							self.collect_type_with_tiids(
+								&dim.dim_type(),
+								tiids,
+								true,
+								is_fn_parameter,
+							)
+						})
 						.collect();
 					if dims.len() == 1 {
 						dims[0]
@@ -201,6 +223,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 			},
 			minizinc::Type::ListType(l) => Type::Array {
 				opt: OptType::NonOpt,
+				dimension_pattern: None,
 				dimensions: self.alloc_type(
 					t,
 					Type::Primitive {
@@ -688,10 +711,61 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 	}
 
 	fn collect_call(&mut self, c: &minizinc::Call) -> Call<'db> {
+		let function = self.collect_expression(&c.function());
+		let mut positional = Vec::new();
+		let mut named = Vec::new();
+		for arg in c.arguments() {
+			if let Some(e) = arg.right() {
+				let name = arg
+					.left()
+					.as_identifier()
+					.map(|i| self.collect_pattern(&i.into()))
+					.unwrap_or_else(|| {
+						let src = self.file.source_file(self.db);
+						let span = arg.left().span();
+						self.diagnostics.add_error(SyntaxError {
+							src,
+							span,
+							msg: format!("Expected identifier, but got {}", arg.left().cst_kind()),
+						});
+						self.alloc_pattern(&arg.left(), Pattern::Missing)
+					});
+				named.push((name, self.collect_expression(&e)));
+			} else {
+				let argument = if named.is_empty() {
+					arg.left()
+						.as_expression()
+						.map(|e| self.collect_expression(&e))
+						.unwrap_or_else(|| {
+							let src = self.file.source_file(self.db);
+							let span = arg.left().span();
+							self.diagnostics.add_error(SyntaxError {
+								src,
+								span,
+								msg: "Positional arguments must appear before all named arguments"
+									.to_owned(),
+							});
+							self.alloc_expression(&arg.left(), Expression::Missing)
+						})
+				} else {
+					let src = self.file.source_file(self.db);
+					let span = arg.left().span();
+					self.diagnostics.add_error(SyntaxError {
+						src,
+						span,
+						msg: "Positional arguments must appear before all named arguments"
+							.to_owned(),
+					});
+					self.alloc_expression(&arg.left(), Expression::Missing)
+				};
+				positional.push(argument);
+			}
+		}
 		Call {
 			kind: CallKind::SourceCall,
-			arguments: c.arguments().map(|a| self.collect_expression(&a)).collect(),
-			function: self.collect_expression(&c.function()),
+			function,
+			arguments: positional.into(),
+			named_arguments: named.into(),
 		}
 	}
 
@@ -716,6 +790,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				kind: CallKind::Operator,
 				function,
 				arguments,
+				named_arguments: Box::new([]),
 			},
 		)
 	}
@@ -737,6 +812,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				kind: CallKind::Operator,
 				function,
 				arguments,
+				named_arguments: Box::new([]),
 			},
 		)
 	}
@@ -751,6 +827,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				kind: CallKind::Operator,
 				function,
 				arguments,
+				named_arguments: Box::new([]),
 			},
 		)
 	}
@@ -770,6 +847,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				kind: CallKind::GeneratorCall,
 				arguments,
 				function,
+				named_arguments: Box::new([]),
 			},
 		)
 	}
@@ -791,6 +869,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 							kind: CallKind::Synthetic,
 							function,
 							arguments,
+							named_arguments: Box::new([]),
 						},
 					)
 				}
@@ -809,6 +888,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				kind: CallKind::Synthetic,
 				function,
 				arguments,
+				named_arguments: Box::new([]),
 			},
 		)
 	}
@@ -923,10 +1003,12 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						.map(|ann| self.collect_expression(&ann))
 						.collect();
 					let pattern = p.pattern().map(|p| self.collect_pattern(&p));
+					let default = p.default().map(|d| self.collect_expression(&d));
 					Parameter {
 						declared_type: ty,
 						pattern,
 						annotations,
+						default,
 					}
 				})
 				.collect(),

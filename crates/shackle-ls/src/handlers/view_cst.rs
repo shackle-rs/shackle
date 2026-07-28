@@ -906,7 +906,7 @@ var foo(1, 3): y;
                                         children: [],
                                     },
                                     CstNode {
-                                        kind: "integer_literal",
+                                        kind: "arg_or_param",
                                         start: Point {
                                             row: 3,
                                             column: 8,
@@ -921,7 +921,45 @@ var foo(1, 3): y;
                                         is_missing: false,
                                         is_extra: false,
                                         field: None,
-                                        children: [],
+                                        children: [
+                                            CstNode {
+                                                kind: "type_base",
+                                                start: Point {
+                                                    row: 3,
+                                                    column: 8,
+                                                },
+                                                end: Point {
+                                                    row: 3,
+                                                    column: 9,
+                                                },
+                                                is_named: true,
+                                                has_error: false,
+                                                is_error: false,
+                                                is_missing: false,
+                                                is_extra: false,
+                                                field: None,
+                                                children: [
+                                                    CstNode {
+                                                        kind: "integer_literal",
+                                                        start: Point {
+                                                            row: 3,
+                                                            column: 8,
+                                                        },
+                                                        end: Point {
+                                                            row: 3,
+                                                            column: 9,
+                                                        },
+                                                        is_named: true,
+                                                        has_error: false,
+                                                        is_error: false,
+                                                        is_missing: false,
+                                                        is_extra: false,
+                                                        field: None,
+                                                        children: [],
+                                                    },
+                                                ],
+                                            },
+                                        ],
                                     },
                                     CstNode {
                                         kind: ",",
@@ -942,7 +980,7 @@ var foo(1, 3): y;
                                         children: [],
                                     },
                                     CstNode {
-                                        kind: "integer_literal",
+                                        kind: "arg_or_param",
                                         start: Point {
                                             row: 3,
                                             column: 11,
@@ -957,7 +995,45 @@ var foo(1, 3): y;
                                         is_missing: false,
                                         is_extra: false,
                                         field: None,
-                                        children: [],
+                                        children: [
+                                            CstNode {
+                                                kind: "type_base",
+                                                start: Point {
+                                                    row: 3,
+                                                    column: 11,
+                                                },
+                                                end: Point {
+                                                    row: 3,
+                                                    column: 12,
+                                                },
+                                                is_named: true,
+                                                has_error: false,
+                                                is_error: false,
+                                                is_missing: false,
+                                                is_extra: false,
+                                                field: None,
+                                                children: [
+                                                    CstNode {
+                                                        kind: "integer_literal",
+                                                        start: Point {
+                                                            row: 3,
+                                                            column: 11,
+                                                        },
+                                                        end: Point {
+                                                            row: 3,
+                                                            column: 12,
+                                                        },
+                                                        is_named: true,
+                                                        has_error: false,
+                                                        is_error: false,
+                                                        is_missing: false,
+                                                        is_extra: false,
+                                                        field: None,
+                                                        children: [],
+                                                    },
+                                                ],
+                                            },
+                                        ],
                                     },
                                     CstNode {
                                         kind: ")",

@@ -407,13 +407,15 @@ pub(crate) fn collect_dzn_value(
 		Expression::Call(c) => match ty {
 			Type::Enum(_, _) => {
 				let ident: Identifier = c.function().cast().unwrap();
-				let args = c.arguments().map( |expr |
+				let args = c.dzn_arguments().map(|expr | {
 					match expr {
-						Expression::IntegerLiteral(v) => Ok(ParserVal::Integer(v.value(file.contents()).map_err(|e| InvalidNumericLiteral {
-							src: file.clone(),
-							span: v.cst_node().as_ref().byte_range().into(),
-							msg: e.to_string(),
-						})?)),
+						Expression::IntegerLiteral(v) => Ok(
+							ParserVal::Integer(v.value(file.contents()).map_err(|e| InvalidNumericLiteral {
+								src: file.clone(),
+								span: v.cst_node().as_ref().byte_range().into(),
+								msg: e.to_string(),
+							})?)
+						),
 						Expression::Identifier(_) | Expression::Call(_) => {
 							let unknown_enum: Type = Type::Enum(OptType::NonOpt, Arc::new(Enum::from_data("".into())));
 							collect_dzn_value(file,  &expr, &unknown_enum)
@@ -424,7 +426,7 @@ pub(crate) fn collect_dzn_value(
 							span: expr.cst_node().as_ref().byte_range().into(),
 						}.into())
 					}
-				).collect::<Result<Vec<_>, _>>()?;
+				}).collect::<Result<Vec<_>, _>>()?;
 				Ok(ParserVal::Enum(
 					ident.name(file.contents()).to_string(),
 					args,
@@ -545,10 +547,10 @@ impl EnumInner {
 
 					let mut args = Vec::new();
 					let mut len = 0;
-					for arg in c.arguments() {
+					for expr in c.dzn_arguments() {
 						let int_set_ty =
 							Type::Set(OptType::NonOpt, Box::new(Type::Integer(OptType::NonOpt)));
-						let val = collect_dzn_value(file, &arg, &int_set_ty)?;
+						let val = collect_dzn_value(file, &expr, &int_set_ty)?;
 						let val = val.resolve_value(&int_set_ty).unwrap();
 						let Value::Set(Set::Int(x)) = val else {
 							unreachable!()

@@ -21,6 +21,14 @@ impl<'tree> Format for minizinc::Type<'tree> {
 			formatter.attach_comments(self, vec![t])
 		})
 	}
+
+	fn has_brackets(&self, formatter: &MiniZincFormatter) -> bool {
+		if let minizinc::Type::TypeBase(b) = self {
+			b.has_brackets(formatter)
+		} else {
+			false
+		}
+	}
 }
 
 impl<'tree> Format for minizinc::TypeBase<'tree> {
@@ -46,6 +54,14 @@ impl<'tree> Format for minizinc::TypeBase<'tree> {
 		elements.push(self.domain().format(formatter));
 		Element::sequence(elements)
 	}
+
+	fn has_brackets(&self, formatter: &MiniZincFormatter) -> bool {
+		if !self.any_type() && self.var_type().is_none() && self.opt_type().is_none() {
+			self.domain().has_brackets(formatter)
+		} else {
+			false
+		}
+	}
 }
 
 impl<'tree> Format for minizinc::Domain<'tree> {
@@ -64,6 +80,14 @@ impl<'tree> Format for minizinc::Domain<'tree> {
 		};
 		formatter.attach_comments(self, vec![e])
 	}
+
+	fn has_brackets(&self, formatter: &MiniZincFormatter) -> bool {
+		if let minizinc::Domain::Bounded(b) = self {
+			b.has_brackets(formatter)
+		} else {
+			false
+		}
+	}
 }
 
 impl<'tree> Format for minizinc::ArrayType<'tree> {
@@ -72,6 +96,20 @@ impl<'tree> Format for minizinc::ArrayType<'tree> {
 			formatter.format_list("array [", "] of ", self.dimensions()),
 			self.element_type().format(formatter),
 		])
+	}
+}
+
+impl<'tree> Format for minizinc::ArrayDimension<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		if let Some(name) = self.name() {
+			Element::sequence([
+				Element::text(name.cst_text(formatter.source())),
+				Element::text(" in "),
+				self.dim_type().format(formatter),
+			])
+		} else {
+			self.dim_type().format(formatter)
+		}
 	}
 }
 

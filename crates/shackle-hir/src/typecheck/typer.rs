@@ -1,13 +1,13 @@
 use std::{collections::hash_map::Entry, fmt::Write};
 
 use shackle_diagnostics::{
-	AmbiguousCall, BranchMismatch, Error, IllegalType, InvalidArrayLiteral, InvalidFieldAccess,
-	NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch, UndefinedIdentifier,
-	UnsupportedObjectFeature,
+	AmbiguousCall, BranchMismatch, Error, IllegalType, InvalidArrayLiteral, InvalidCall,
+	InvalidFieldAccess, NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch,
+	UndefinedIdentifier, UnsupportedObjectFeature,
 };
 use shackle_ty::{
-	ClassRef, FunctionEntry, FunctionResolutionError, FunctionType, InstantiationError, OptType,
-	Ty, TyData, VarType, registry::TypeRegistry,
+	ClassRef, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty, TyData,
+	VarType, match_fn, registry::TypeRegistry,
 };
 use shackle_utils::{
 	hash::{Map, Set},
@@ -24,6 +24,7 @@ use crate::{
 	class_analysis::{class_item_for, class_pattern_for},
 	constants::IdentifierRegistry,
 	ids::{ExpressionRef, PatternRef, TypeRef},
+	overloading::{NamedArgumentResoler, OverloadEliminationReason},
 };
 
 /// Mode for completing types
@@ -260,36 +261,17 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		if let Some(ty) = is_annotation_for {
 			// This is an annotation, so look for any matching functions with ::annotated_expression
 			let patterns = self.find_function(expr, *i);
-			let fn_match = patterns
+			let overloads = patterns
 				.iter()
-				.find_map(|p| match self.ctx.type_pattern(db, *p) {
-					PatternTy::Function(function) => {
-						FunctionEntry::match_fn(db, [(*p, *function)], &[ty]).ok()
+				.filter_map(|p| match self.ctx.type_pattern(db, *p) {
+					PatternTy::Function(function) if function.has_annotated_expression => {
+						Some((*p, function.overload))
 					}
 					_ => None,
 				});
-			if let Some((p, fe, t)) = fn_match {
-				match p.item(db) {
-					Item::Function(f) => {
-						let fi = f.function(db);
-						let has_annotated_expression =
-							fi.parameters[0]
-								.annotations
-								.iter()
-								.any(|ann| match &fi[*ann] {
-									Expression::Identifier(i) => {
-										*i == self.identifiers.annotations.annotated_expression
-									}
-									_ => false,
-								});
-						if has_annotated_expression {
-							let ret = fe.overload.instantiate(db, &t).return_type;
-							self.ctx.add_identifier_resolution(db, expr, p);
-							return ret;
-						}
-					}
-					_ => unreachable!(),
-				}
+			if let Ok(r) = match_fn(db, overloads, &[ty]) {
+				self.ctx.add_identifier_resolution(db, expr, r.function.0);
+				return self.types.ann;
 			}
 		}
 
@@ -313,15 +295,22 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		is_annotation_for: Option<Ty<'db>>,
 	) -> Ty<'db> {
 		let db = self.db;
-		let args = c
-			.arguments
+		let mut args = Vec::with_capacity(c.arguments.len() + c.named_arguments.len());
+		for arg in c.arguments.iter() {
+			args.push(self.collect_expression(*arg));
+		}
+		for (_, arg) in c.named_arguments.iter() {
+			args.push(self.collect_expression(*arg));
+		}
+		let arg_names = c
+			.named_arguments
 			.iter()
-			.map(|e| self.collect_expression(*e))
+			.map(|(name, _)| self.data[*name].identifier().unwrap())
 			.collect::<Vec<_>>();
-
 		match self.data[c.function] {
 			Expression::Identifier(i) => {
-				let (op, ret) = self.resolve_overloading(c.function, i, &args, is_annotation_for);
+				let (op, ret) =
+					self.resolve_overloading(c.function, i, &args, &arg_names, is_annotation_for);
 				self.collect_annotations(c.function, op);
 				ret
 			}
@@ -1837,12 +1826,15 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 
 	/// Resolve overloading for the function `expr` that is the identifier `i`.
 	///
+	/// `arg_names` is a list of named arguments (the last arguments in `args`)
+	///
 	/// Returns a tuple of the type of the operation, and the return type
 	fn resolve_overloading(
 		&mut self,
 		expr: ExpressionId<'db>,
 		i: Identifier<'db>,
 		args: &[Ty<'db>],
+		arg_names: &[Identifier<'db>],
 		is_annotation_for: Option<Ty<'db>>,
 	) -> (Ty<'db>, Ty<'db>) {
 		let db = self.db;
@@ -1867,6 +1859,20 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			};
 			if let Some(f) = f {
 				if f.contains_error(db) {
+					return error;
+				}
+				if !arg_names.is_empty() {
+					let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+					self.ctx.add_diagnostic(
+						db,
+						self.item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Named arguments are not supported for function variables"
+								.to_owned(),
+						},
+					);
 					return error;
 				}
 				if let Err(e) = f.matches(db, args) {
@@ -1932,58 +1938,79 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			return error;
 		}
 
-		let mut overloads = Vec::with_capacity(patterns.len());
+		let mut had_duplicate = false;
+		let mut seen = Set::new();
+		for name in arg_names.iter() {
+			if !seen.insert(*name) {
+				let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+				self.ctx.add_diagnostic(
+					db,
+					self.item,
+					InvalidCall {
+						src,
+						span,
+						msg: format!(
+							"Name '{}' is used for multiple arguments in call",
+							name.pretty_print(db)
+						),
+					},
+				);
+				had_duplicate = true;
+			}
+		}
+		if had_duplicate {
+			self.ctx.add_expression(db, expr, self.types.error);
+			return error;
+		}
+
+		let n_positional = args.len() - arg_names.len();
+		let mut resolver = NamedArgumentResoler::new(n_positional, arg_names);
 		for p in patterns.iter() {
 			match self.ctx.type_pattern(db, *p) {
 				PatternTy::Function(function)
 				| PatternTy::AnnotationConstructor(function)
-				| PatternTy::AnnotationDestructure(function) => overloads.push((*p, *function.clone())),
+				| PatternTy::AnnotationDestructure(function) => resolver.add_overload(*p, *function),
 				PatternTy::EnumConstructor(ec) => {
-					overloads.extend(ec.iter().map(|ec| (*p, ec.constructor.clone())))
+					for entry in ec {
+						resolver.add_overload(*p, entry.constructor);
+					}
 				}
 				PatternTy::EnumDestructure(fs) => {
-					overloads.extend(fs.iter().map(|f| (*p, f.clone())))
+					for entry in fs {
+						resolver.add_overload(*p, entry);
+					}
 				}
 				PatternTy::Computing => (),
 				_ => unreachable!(),
 			}
 		}
+		let resolved = resolver.finish();
 
-		let fn_result = FunctionEntry::match_fn(db, overloads, args).or_else(|e| {
+		let fn_result = match_fn(db, resolved.canidates, args).or_else(|e| {
 			if let Some(ty) = is_annotation_for {
 				// Also try matching ::annotated_expression functions
 				let mut new_args = Vec::with_capacity(args.len() + 1);
 				new_args.push(ty);
 				new_args.extend(args.iter().copied());
 
-				let mut new_overloads = Vec::new();
+				let mut new_resolver = NamedArgumentResoler::new(n_positional + 1, arg_names);
 				for p in patterns.iter() {
 					if let PatternTy::Function(function) = self.ctx.type_pattern(db, *p)
-						&& let Item::Function(f) = p.item(db)
+						&& function.has_annotated_expression
 					{
-						let fi = f.function(db);
-						if let Some(param) = fi.parameters.first() {
-							let has_annotated_expression =
-								param.annotations.iter().any(|ann| match &fi[*ann] {
-									Expression::Identifier(i) => {
-										*i == self.identifiers.annotations.annotated_expression
-									}
-									_ => false,
-								});
-							if has_annotated_expression {
-								new_overloads.push((*p, *function.clone()));
-							}
-						}
+						new_resolver.add_overload(*p, *function);
 					}
 				}
-				return FunctionEntry::match_fn(db, new_overloads, &new_args);
+
+				return match_fn(db, new_resolver.finish().canidates, &new_args).map_err(|_| e);
 			}
 			Err(e)
 		});
 
 		match fn_result {
-			Ok((pattern, fe, tvs)) => {
-				let instantiation = fe.overload.instantiate(db, &tvs);
+			Ok(res) => {
+				let (pattern, entry) = res.function;
+				let instantiation = entry.overload.instantiate(db, &res.ty_params);
 				let ret = instantiation.return_type;
 				let op = Ty::function(db, instantiation);
 				self.ctx.add_expression(db, expr, op);
@@ -2003,8 +2030,8 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					"Could not choose an overload from the candidate functions:"
 				)
 				.unwrap();
-				for (_, f) in ps.iter() {
-					writeln!(&mut msg, "  {}", f.overload.pretty_print_item(db, i)).unwrap();
+				for (_, entry) in ps.iter() {
+					writeln!(&mut msg, "  {}", entry.overload.pretty_print_item(db, i)).unwrap();
 				}
 				let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
 				self.ctx
@@ -2024,19 +2051,36 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 				} else {
 					writeln!(
 						&mut msg,
-						"No function '{}' matching argument types {} could be found.",
+						"No function {}({}) could be found.",
 						i.pretty_print(db),
 						args.iter()
-							.map(|t| format!("'{}'", t.pretty_print(db)))
+							.enumerate()
+							.map(|(idx, t)| if idx < n_positional {
+								t.pretty_print(db)
+							} else {
+								format!(
+									"{}: {}",
+									t.pretty_print(db),
+									arg_names[idx - n_positional].pretty_print(db)
+								)
+							})
 							.collect::<Vec<_>>()
 							.join(", ")
 					)
 					.unwrap();
 				}
-				if !es.is_empty() {
+				if !es.is_empty() || !resolved.eliminated.is_empty() {
 					writeln!(&mut msg, "The following overloads could not be used:").unwrap();
-					for (_, f, e) in es.iter() {
-						writeln!(&mut msg, "  {}", f.overload.pretty_print_item(db, i)).unwrap();
+					for ((pattern, entry), e) in es.iter() {
+						writeln!(
+							&mut msg,
+							"  {}",
+							self.ctx
+								.type_pattern(db, *pattern)
+								.pretty_print(db, pattern.identifier(db))
+								.unwrap_or_else(|| entry.overload.pretty_print_item(db, i))
+						)
+						.unwrap();
 						match e {
 							InstantiationError::ArgumentCountMismatch { expected, actual } => {
 								writeln!(
@@ -2054,7 +2098,14 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 								writeln!(
 									&mut msg,
 									"    argument {} expected '{}', but '{}' given",
-									index + 1,
+									if *index < n_positional {
+										(index + 1).to_string()
+									} else {
+										format!(
+											"'{}'",
+											arg_names[*index - n_positional].pretty_print(db)
+										)
+									},
 									expected.pretty_print(db),
 									actual.pretty_print(db)
 								)
@@ -2083,6 +2134,53 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 									)
 									.unwrap();
 								}
+							}
+						}
+					}
+					for eliminated in resolved.eliminated.iter() {
+						writeln!(
+							&mut msg,
+							"  {}",
+							eliminated.overload.1.overload.pretty_print_item(db, i)
+						)
+						.unwrap();
+						match eliminated.reason {
+							OverloadEliminationReason::PositionalNameConflict {
+								position,
+								name,
+							} => {
+								writeln!(
+									&mut msg,
+									"    Argument {} conflicts with named argument '{}'",
+									position + 1,
+									name.pretty_print(db)
+								)
+								.unwrap();
+							}
+							OverloadEliminationReason::MissingParameter { name } => {
+								writeln!(
+									&mut msg,
+									"    Missing argument for parameter '{}'",
+									name.pretty_print(db)
+								)
+								.unwrap();
+							}
+							OverloadEliminationReason::ArgumentCountMismatch {
+								expected_min,
+								expected_max,
+								actual,
+							} => {
+								writeln!(
+									&mut msg,
+									"    {} arguments required, {} given",
+									if actual <= expected_min {
+										expected_min
+									} else {
+										expected_max
+									},
+									actual
+								)
+								.unwrap();
 							}
 						}
 					}
@@ -2656,6 +2754,7 @@ supported in operation types."
 			}
 			Type::Array {
 				opt,
+				dimension_pattern,
 				dimensions,
 				element,
 			} => {
@@ -2671,6 +2770,9 @@ supported in operation types."
 					has_var_bounded,
 					has_unbounded,
 				);
+				if let Some(pattern) = dimension_pattern {
+					let _ = self.collect_pattern(None, false, *pattern, dim, false);
+				}
 				let element = self.complete_type_inner(
 					*element,
 					e_ty,

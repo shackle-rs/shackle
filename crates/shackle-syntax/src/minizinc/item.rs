@@ -161,7 +161,7 @@ impl<'tree> EnumerationConstructor<'tree> {
 	}
 
 	/// Get the parameter types
-	pub fn parameters(&self) -> Children<'tree, Type<'tree>> {
+	pub fn parameters(&self) -> Children<'tree, Parameter<'tree>> {
 		children_with_field_name(self, "parameter")
 	}
 }
@@ -454,7 +454,8 @@ ast_node!(
 	Parameter,
 	declared_type,
 	pattern,
-	annotations
+	annotations,
+	default,
 );
 
 impl<'tree> Parameter<'tree> {
@@ -471,6 +472,11 @@ impl<'tree> Parameter<'tree> {
 	/// The annotations
 	pub fn annotations(&self) -> Children<'tree, Expression<'tree>> {
 		children_with_field_name(self, "annotation")
+	}
+
+	/// Get the default value of this parameter if there is one
+	pub fn default(&self) -> Option<Expression<'tree>> {
+		optional_child_with_field_name(self, "default")
 	}
 }
 
@@ -891,6 +897,7 @@ mod tests {
                                     ),
                                 ),
                                 annotations: [],
+                                default: None,
                             },
                         ],
                         body: Some(

@@ -58,6 +58,11 @@ pub struct Diagnostics {
 }
 
 impl Diagnostics {
+	/// Whether there are no errors
+	pub fn is_ok(&self) -> bool {
+		self.errors.is_empty()
+	}
+
 	/// Add an error
 	pub fn add_error(&mut self, error: impl Into<Error>) {
 		let e = error.into();

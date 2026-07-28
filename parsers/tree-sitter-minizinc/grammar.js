@@ -190,7 +190,12 @@ module.exports = grammar({
 			seq(
 				field("type", $._type),
 				optional(
-					seq(":", field("name", $._pattern), optional($._annotation_list))
+					seq(
+						":",
+						field("name", $._pattern),
+						optional($._annotation_list),
+						optional(seq("=", field("default", $._expression)))
+					)
 				)
 			),
 
@@ -214,7 +219,7 @@ module.exports = grammar({
 			seq(
 				field("name", $._identifier),
 				"(",
-				sepBy1(",", field("parameter", $._type)),
+				sepBy1(",", field("parameter", $.parameter)),
 				")"
 			),
 
@@ -281,8 +286,20 @@ module.exports = grammar({
 				seq(
 					field("function", $._callable),
 					"(",
-					sepBy(",", field("argument", $._expression)),
+					sepBy(",", field("argument", $.arg_or_param)),
 					")"
+				)
+			),
+
+		arg_or_param: ($) =>
+			seq(
+				field("type", $._type),
+				optional(
+					seq(
+						":",
+						field("expression", $._expression),
+						optional(seq("=", field("default", $._expression)))
+					)
 				)
 			),
 
@@ -517,10 +534,18 @@ module.exports = grammar({
 			seq(
 				"array",
 				"[",
-				sepBy1(",", field("dimension", $.type_base)),
+				sepBy1(",", field("dimension", $.array_dimension)),
 				"]",
 				"of",
 				field("type", $._type)
+			),
+		array_dimension: ($) =>
+			prec(
+				PREC.call,
+				seq(
+					optional(seq(field("name", $._identifier), "in")),
+					field("type", $._type)
+				)
 			),
 		set_type: ($) =>
 			seq(

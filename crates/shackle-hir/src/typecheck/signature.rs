@@ -5,19 +5,20 @@
 //! - Variable declaration LHS types
 use shackle_diagnostics::{Error, SyntaxError, TypeInferenceFailure, TypeMismatch, Warning};
 use shackle_ty::{
-	ClassRef, EnumRef, FunctionEntry, FunctionType, OverloadedFunction, PolymorphicFunctionType,
-	Ty, TyData, TyVar, TyVarRef, registry::TypeRegistry,
+	ClassRef, EnumRef, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyData,
+	TyVar, TyVarRef, registry::TypeRegistry,
 };
 use shackle_utils::hash::Map;
 
 use crate::{
-	ClassMember, Constructor, ConstructorParameter, Db, EnumConstructor, EnumConstructorEntry,
-	Expression, ExpressionId, Goal, Identifier, Item, ItemData, Pattern, PatternId, PatternTy,
-	Type, TypeCompletionMode, TypeContext, TypeId, Typer,
+	ClassMember, Constructor, Db, EnumConstructor, EnumConstructorEntry, Expression, ExpressionId,
+	Goal, Identifier, Item, ItemData, Parameter, Pattern, PatternId, PatternTy, Type,
+	TypeCompletionMode, TypeContext, TypeId, Typer,
 	class_analysis::{class_pattern_for, var_actual_set_classes},
 	constants::IdentifierRegistry,
 	diagnostics::Diagnostics,
 	ids::{ExpressionRef, NodeRef, PatternRef, TypeRef},
+	overloading::{FunctionEntry, ParamKind},
 };
 
 /// Collected types for an item signature
@@ -133,7 +134,7 @@ impl<'db> SignatureTypeContext<'db> {
 						destructor,
 						parameters,
 					} => {
-						let params = parameters
+						let (params, kinds): (Vec<_>, Vec<_>) = parameters
 							.iter()
 							.map(|p| {
 								let mut had_error = false;
@@ -165,17 +166,40 @@ impl<'db> SignatureTypeContext<'db> {
 								if let Some(pat) = p.pattern {
 									self.add_declaration(db, pat, PatternTy::Argument(ty));
 								}
-								ty
+								let kind = if let Some(name) =
+									p.pattern.and_then(|pat| data[pat].identifier())
+								{
+									ParamKind::Named {
+										name,
+										has_default: p.default.is_some(),
+									}
+								} else {
+									ParamKind::Unnamed
+								};
+								(ty, kind)
 							})
-							.collect::<Box<_>>();
+							.unzip();
 						let ann = TypeRegistry::lookup(db).ann;
 						let dtor = FunctionEntry {
 							has_body: false,
+							has_annotated_expression: false,
+							kinds: Box::new([ParamKind::Unnamed]),
 							overload: OverloadedFunction::Function(FunctionType {
 								return_type: if params.len() == 1 {
 									params[0]
-								} else {
+								} else if kinds.iter().any(|k| matches!(k, ParamKind::Unnamed)) {
 									Ty::tuple(db, params.iter().copied())
+								} else {
+									Ty::record(
+										db,
+										kinds.iter().zip(params.iter().copied()).map(|(k, t)| {
+											let name = match k {
+												ParamKind::Named { name, .. } => *name,
+												_ => unreachable!(),
+											};
+											(name, t)
+										}),
+									)
 								},
 								params: Box::new([ann]),
 							}),
@@ -187,9 +211,11 @@ impl<'db> SignatureTypeContext<'db> {
 						);
 						let ctor = FunctionEntry {
 							has_body: false,
+							has_annotated_expression: false,
+							kinds: kinds.into_boxed_slice(),
 							overload: OverloadedFunction::Function(FunctionType {
 								return_type: ann,
-								params,
+								params: params.into_boxed_slice(),
 							}),
 						};
 						self.add_declaration(
@@ -224,7 +250,8 @@ impl<'db> SignatureTypeContext<'db> {
 					})
 					.collect::<Box<[_]>>();
 				let mut var_partial = false;
-				let params = it
+				let mut has_annotated_expression = false;
+				let (params, kinds): (Vec<_>, Vec<_>) = it
 					.parameters
 					.iter()
 					.enumerate()
@@ -240,11 +267,10 @@ impl<'db> SignatureTypeContext<'db> {
 								_ => false,
 							})
 							.copied();
-						if i > 0
-							&& let Some(ann) = annotated_expression
-						{
-							let (src, span) = ExpressionRef::new(db, item, ann).source_span(db);
-							self.add_diagnostic(db,
+						if let Some(ann) = annotated_expression {
+							if i > 0 {
+								let (src, span) = ExpressionRef::new(db, item, ann).source_span(db);
+								self.add_diagnostic(db,
 									item,
 									SyntaxError {
 										src,
@@ -252,6 +278,9 @@ impl<'db> SignatureTypeContext<'db> {
 										msg: "'annotated_expression' only allowed on first function parameter.".to_owned(),
 									},
 								);
+							} else {
+								has_annotated_expression = true;
+							}
 						}
 						for t in Type::any_types(p.declared_type, data) {
 							let (src, span) = TypeRef::new(db, item, t).source_span(db);
@@ -281,19 +310,30 @@ impl<'db> SignatureTypeContext<'db> {
 						if let Some(pat) = p.pattern {
 							let _ = typer.collect_pattern(None, false, pat, ty, true);
 						}
-						ty
+						let kind =
+							if let Some(name) = p.pattern.and_then(|pat| data[pat].identifier()) {
+								ParamKind::Named {
+									name,
+									has_default: p.default.is_some(),
+								}
+							} else {
+								ParamKind::Unnamed
+							};
+						(ty, kind)
 					})
-					.collect();
+					.unzip();
 				if ty_params.is_empty() {
 					let f = FunctionType {
 						return_type: TypeRegistry::lookup(db).error,
-						params,
+						params: params.into_boxed_slice(),
 					};
 					self.add_declaration(
 						db,
 						it.pattern,
 						PatternTy::Function(Box::new(FunctionEntry {
 							has_body: it.body.is_some(),
+							has_annotated_expression,
+							kinds: kinds.into_boxed_slice(),
 							overload: OverloadedFunction::Function(f),
 						})),
 					);
@@ -301,13 +341,15 @@ impl<'db> SignatureTypeContext<'db> {
 					let p = PolymorphicFunctionType {
 						return_type: TypeRegistry::lookup(db).error,
 						ty_params,
-						params,
+						params: params.into_boxed_slice(),
 					};
 					self.add_declaration(
 						db,
 						it.pattern,
 						PatternTy::Function(Box::new(FunctionEntry {
 							has_body: it.body.is_some(),
+							has_annotated_expression,
+							kinds: kinds.into_boxed_slice(),
 							overload: OverloadedFunction::PolymorphicFunction(p),
 						})),
 					);
@@ -353,6 +395,19 @@ impl<'db> SignatureTypeContext<'db> {
 					}
 					result.ty
 				};
+
+				if has_annotated_expression && return_type != TypeRegistry::lookup(db).ann {
+					let (src, span) = TypeRef::new(db, item, it.return_type).source_span(db);
+					self.add_diagnostic(
+						db,
+						item,
+						TypeMismatch {
+							src,
+							span,
+							msg: "Functions with an annotated_expression parameter must have return type 'ann'".to_owned(),
+						},
+					);
+				}
 
 				let d = self.data.patterns.get_mut(&it.pattern).unwrap();
 				match d {
@@ -703,7 +758,7 @@ impl<'db> SignatureTypeContext<'db> {
 		cases: &[EnumConstructor<'db>],
 	) {
 		let get_param_types = |ctx: &mut SignatureTypeContext<'db>,
-		                       parameters: &[ConstructorParameter<'db>]| {
+		                       parameters: &[Parameter<'db>]| {
 			let param_types = {
 				let mut typer = Typer::new(db, ctx, item, data);
 				parameters
@@ -743,7 +798,21 @@ impl<'db> SignatureTypeContext<'db> {
 				}
 			}
 
-			(had_error, param_types)
+			let param_kinds = parameters
+				.iter()
+				.map(|p| {
+					if let Some(name) = p.pattern.and_then(|pat| data[pat].identifier()) {
+						ParamKind::Named {
+							name,
+							has_default: p.default.is_some(),
+						}
+					} else {
+						ParamKind::Unnamed
+					}
+				})
+				.collect::<Box<[_]>>();
+
+			(had_error, param_types, param_kinds)
 		};
 
 		for case in cases.iter() {
@@ -756,19 +825,33 @@ impl<'db> SignatureTypeContext<'db> {
 					destructor,
 					parameters,
 				}) => {
-					let (had_error, param_types) = get_param_types(self, parameters);
+					let (had_error, param_types, param_kinds) = get_param_types(self, parameters);
 					let is_single = param_types.len() == 1;
+					let has_unnamed = param_kinds.iter().any(|k| matches!(k, ParamKind::Unnamed));
 					let mut constructors = Vec::with_capacity(6);
 					let mut destructors = Vec::with_capacity(6);
 
 					let mut add_ctor = |e: Ty<'db>, ps: Box<[Ty<'db>]>, l: bool| {
 						destructors.push(FunctionEntry {
 							has_body: false,
+							has_annotated_expression: false,
+							kinds: Box::new([ParamKind::Unnamed]),
 							overload: OverloadedFunction::Function(FunctionType {
 								return_type: if is_single {
 									ps[0]
-								} else {
+								} else if has_unnamed {
 									Ty::tuple(db, ps.iter().copied())
+								} else {
+									Ty::record(
+										db,
+										param_kinds.iter().zip(ps.iter().copied()).map(|(k, t)| {
+											let name = match k {
+												ParamKind::Named { name, .. } => *name,
+												_ => unreachable!(),
+											};
+											(name, t)
+										}),
+									)
 								},
 								params: Box::new([e]),
 							}),
@@ -776,6 +859,8 @@ impl<'db> SignatureTypeContext<'db> {
 						constructors.push(EnumConstructorEntry {
 							constructor: FunctionEntry {
 								has_body: false,
+								has_annotated_expression: false,
+								kinds: param_kinds.clone(),
 								overload: OverloadedFunction::Function(FunctionType {
 									return_type: e,
 									params: ps,
@@ -851,12 +936,14 @@ impl<'db> SignatureTypeContext<'db> {
 					pattern,
 					parameters,
 				} => {
-					let (_, param_tys) = get_param_types(self, parameters);
+					let (_, param_tys, param_kinds) = get_param_types(self, parameters);
 					self.add_declaration(
 						db,
 						*pattern,
 						PatternTy::AnonymousEnumConstructor(Box::new(FunctionEntry {
 							has_body: false,
+							has_annotated_expression: false,
+							kinds: param_kinds,
 							overload: OverloadedFunction::Function(FunctionType {
 								return_type: ty,
 								params: param_tys,

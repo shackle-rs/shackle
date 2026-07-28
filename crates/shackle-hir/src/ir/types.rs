@@ -45,6 +45,8 @@ pub enum Type<'db> {
 	Array {
 		/// Optionality
 		opt: OptType,
+		/// Dimension pattern
+		dimension_pattern: Option<PatternId<'db>>,
 		/// Type of dimensions
 		dimensions: TypeId<'db>,
 		/// Type of element

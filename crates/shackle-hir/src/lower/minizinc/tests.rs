@@ -69,6 +69,7 @@ fn test_lower_constraint() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -253,13 +254,17 @@ fn test_lower_annotation() {
                 constructor: <Pattern::1>,
                 destructor: <Pattern::2>,
                 parameters: [
-                    ConstructorParameter {
+                    Parameter {
                         declared_type: <Type::1>,
                         pattern: None,
+                        annotations: [],
+                        default: None,
                     },
-                    ConstructorParameter {
+                    Parameter {
                         declared_type: <Type::2>,
                         pattern: None,
+                        annotations: [],
+                        default: None,
                     },
                 ],
             },
@@ -420,9 +425,11 @@ fn test_lower_enumeration() {
                             constructor: <Pattern::2>,
                             destructor: <Pattern::3>,
                             parameters: [
-                                ConstructorParameter {
+                                Parameter {
                                     declared_type: <Type::1>,
                                     pattern: None,
+                                    annotations: [],
+                                    default: None,
                                 },
                             ],
                         },
@@ -565,9 +572,11 @@ fn test_lower_enumeration() {
                         constructor: <Pattern::2>,
                         destructor: <Pattern::3>,
                         parameters: [
-                            ConstructorParameter {
+                            Parameter {
                                 declared_type: <Type::1>,
                                 pattern: None,
+                                annotations: [],
+                                default: None,
                             },
                         ],
                     },
@@ -645,6 +654,7 @@ fn test_lower_function() {
                         <Pattern::2>,
                     ),
                     annotations: [],
+                    default: None,
                 },
                 Parameter {
                     declared_type: <Type::3>,
@@ -652,6 +662,7 @@ fn test_lower_function() {
                         <Pattern::3>,
                     ),
                     annotations: [],
+                    default: None,
                 },
             ],
             body: Some(
@@ -745,6 +756,7 @@ fn test_lower_function() {
                         <Pattern::4>,
                     ),
                     annotations: [],
+                    default: None,
                 },
             ],
             body: Some(
@@ -772,6 +784,7 @@ fn test_lower_function() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -846,6 +859,7 @@ fn test_lower_function() {
                     declared_type: <Type::2>,
                     pattern: None,
                     annotations: [],
+                    default: None,
                 },
             ],
             body: Some(
@@ -905,6 +919,7 @@ fn test_lower_function() {
                     declared_type: <Type::2>,
                     pattern: None,
                     annotations: [],
+                    default: None,
                 },
             ],
             body: Some(
@@ -981,6 +996,7 @@ fn test_lower_function() {
                         <Pattern::4>,
                     ),
                     annotations: [],
+                    default: None,
                 },
                 Parameter {
                     declared_type: <Type::3>,
@@ -988,6 +1004,7 @@ fn test_lower_function() {
                         <Pattern::6>,
                     ),
                     annotations: [],
+                    default: None,
                 },
             ],
             body: None,
@@ -1216,30 +1233,31 @@ fn test_lower_solve() {
                 len: 6,
                 data: {
                     <Expression::1>: Identifier(
+                        "int_search",
+                    ),
+                    <Expression::2>: Identifier(
                         "x",
                     ),
-                    <Expression::2>: ArrayLiteral {
+                    <Expression::3>: ArrayLiteral {
                         members: [
-                            <Expression::1>,
+                            <Expression::2>,
                         ],
                     },
-                    <Expression::3>: Identifier(
+                    <Expression::4>: Identifier(
                         "input_order",
                     ),
-                    <Expression::4>: Identifier(
-                        "indomain_min",
-                    ),
                     <Expression::5>: Identifier(
-                        "int_search",
+                        "indomain_min",
                     ),
                     <Expression::6>: Call {
                         kind: SourceCall,
-                        function: <Expression::5>,
+                        function: <Expression::1>,
                         arguments: [
-                            <Expression::2>,
                             <Expression::3>,
                             <Expression::4>,
+                            <Expression::5>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -1313,30 +1331,31 @@ fn test_lower_solve() {
                 len: 7,
                 data: {
                     <Expression::1>: Identifier(
+                        "int_search",
+                    ),
+                    <Expression::2>: Identifier(
                         "x",
                     ),
-                    <Expression::2>: ArrayLiteral {
+                    <Expression::3>: ArrayLiteral {
                         members: [
-                            <Expression::1>,
+                            <Expression::2>,
                         ],
                     },
-                    <Expression::3>: Identifier(
+                    <Expression::4>: Identifier(
                         "input_order",
                     ),
-                    <Expression::4>: Identifier(
-                        "indomain_min",
-                    ),
                     <Expression::5>: Identifier(
-                        "int_search",
+                        "indomain_min",
                     ),
                     <Expression::6>: Call {
                         kind: SourceCall,
-                        function: <Expression::5>,
+                        function: <Expression::1>,
                         arguments: [
-                            <Expression::2>,
                             <Expression::3>,
                             <Expression::4>,
+                            <Expression::5>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::7>: Identifier(
                         "x",
@@ -1419,30 +1438,31 @@ fn test_lower_solve() {
                 len: 7,
                 data: {
                     <Expression::1>: Identifier(
+                        "int_search",
+                    ),
+                    <Expression::2>: Identifier(
                         "x",
                     ),
-                    <Expression::2>: ArrayLiteral {
+                    <Expression::3>: ArrayLiteral {
                         members: [
-                            <Expression::1>,
+                            <Expression::2>,
                         ],
                     },
-                    <Expression::3>: Identifier(
+                    <Expression::4>: Identifier(
                         "input_order",
                     ),
-                    <Expression::4>: Identifier(
-                        "indomain_min",
-                    ),
                     <Expression::5>: Identifier(
-                        "int_search",
+                        "indomain_min",
                     ),
                     <Expression::6>: Call {
                         kind: SourceCall,
-                        function: <Expression::5>,
+                        function: <Expression::1>,
                         arguments: [
-                            <Expression::2>,
                             <Expression::3>,
                             <Expression::4>,
+                            <Expression::5>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::7>: Identifier(
                         "x",
@@ -1546,6 +1566,7 @@ fn test_lower_type_alias() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },

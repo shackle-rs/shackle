@@ -6,7 +6,7 @@ use std::ops::{Deref, Index};
 use rustc_hash::FxHashMap;
 use shackle_hir::{Identifier, ids::NodeRef};
 use shackle_ty::{
-	FunctionEntry, FunctionResolutionError, OverloadedFunction, Ty, TyParamInstantiations,
+	FunctionResolutionError, OverloadedFunction, Ty, TyParamInstantiations, match_fn,
 };
 use shackle_utils::{TypedIndex, arena::Arena};
 
@@ -433,20 +433,18 @@ impl<'db, T: Marker> Model<'db, T> {
 					None
 				}
 			})
-			.partition::<Vec<_>, _>(|(i, _)| self[*i].specialised_from().is_some());
+			.partition::<Vec<_>, _>(|(f, _)| self[*f].specialised_from().is_some());
 
-		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db, overloads, args)?;
+		let res = match_fn(db, overloads, args)?;
+		let (function, fn_entry) = res.function;
 
-		if fn_entry.overload.is_polymorphic() {
-			let overload =
-				OverloadedFunction::Function(fn_entry.overload.instantiate(db, &ty_vars));
-			let concrete = specialised
-				.into_iter()
-				.find(|(_, fe)| fe.overload == overload);
-			if let Some((f, fe)) = concrete {
+		if fn_entry.is_polymorphic() {
+			let overload = OverloadedFunction::Function(fn_entry.instantiate(db, &res.ty_params));
+			let concrete = specialised.into_iter().find(|(_, fe)| *fe == overload);
+			if let Some((function, fn_entry)) = concrete {
 				return Ok(FunctionLookup {
-					function: f,
-					fn_entry: fe,
+					function,
+					fn_entry,
 					ty_vars: TyParamInstantiations::default(),
 				});
 			}
@@ -455,7 +453,7 @@ impl<'db, T: Marker> Model<'db, T> {
 		Ok(FunctionLookup {
 			function,
 			fn_entry,
-			ty_vars,
+			ty_vars: res.ty_params,
 		})
 	}
 
@@ -544,20 +542,18 @@ impl<'a, 'db, T: Marker> OverloadMap<'a, 'db, T> {
 			.ok_or_else(|| FunctionLookupError::NoMatchingFunction(Vec::new()))?
 			.iter()
 			.map(|f| (*f, self.model[*f].function_entry(self.model)))
-			.partition::<Vec<_>, _>(|(i, _)| self.model[*i].specialised_from().is_some());
+			.partition::<Vec<_>, _>(|(f, _)| self.model[*f].specialised_from().is_some());
 
-		let (function, fn_entry, ty_vars) = FunctionEntry::match_fn(db, overloads, args)?;
+		let res = match_fn(db, overloads, args)?;
+		let (function, fn_entry) = res.function;
 
-		if fn_entry.overload.is_polymorphic() {
-			let overload =
-				OverloadedFunction::Function(fn_entry.overload.instantiate(db, &ty_vars));
-			let concrete = specialised
-				.into_iter()
-				.find(|(_, fe)| fe.overload == overload);
-			if let Some((f, fe)) = concrete {
+		if fn_entry.is_polymorphic() {
+			let overload = OverloadedFunction::Function(fn_entry.instantiate(db, &res.ty_params));
+			let concrete = specialised.into_iter().find(|(_, fe)| *fe == overload);
+			if let Some((function, fn_entry)) = concrete {
 				return Ok(FunctionLookup {
-					function: f,
-					fn_entry: fe,
+					function,
+					fn_entry,
 					ty_vars: TyParamInstantiations::default(),
 				});
 			}
@@ -566,7 +562,7 @@ impl<'a, 'db, T: Marker> OverloadMap<'a, 'db, T> {
 		Ok(FunctionLookup {
 			function,
 			fn_entry,
-			ty_vars,
+			ty_vars: res.ty_params,
 		})
 	}
 }
@@ -585,13 +581,14 @@ pub struct FunctionLookup<'db, T: Marker> {
 	/// Id of the resolved function
 	pub function: FunctionId<'db, T>,
 	/// The function entry (i.e. not instantiated with the call arguments)
-	pub fn_entry: FunctionEntry<'db>,
+	pub fn_entry: OverloadedFunction<'db>,
 	/// The instantiated types of the type inst vars (if any)
 	pub ty_vars: TyParamInstantiations<'db>,
 }
 
 /// Error representing failure to lookup a function
-pub type FunctionLookupError<'db, T> = FunctionResolutionError<'db, FunctionId<'db, T>>;
+pub type FunctionLookupError<'db, T> =
+	FunctionResolutionError<'db, (FunctionId<'db, T>, OverloadedFunction<'db>)>;
 
 /// Trait for THIR marker
 ///

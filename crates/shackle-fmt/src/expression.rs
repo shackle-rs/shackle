@@ -12,23 +12,17 @@ use crate::{
 impl<'tree> Format for minizinc::Expression<'tree> {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let e = match self {
-			minizinc::Expression::IntegerLiteral(i) => {
-				Element::text(i.cst_text(formatter.source()))
-			}
-			minizinc::Expression::FloatLiteral(f) => Element::text(f.cst_text(formatter.source())),
+			minizinc::Expression::IntegerLiteral(i) => i.format(formatter),
+			minizinc::Expression::FloatLiteral(f) => f.format(formatter),
 			minizinc::Expression::TupleLiteral(t) => t.format(formatter),
 			minizinc::Expression::RecordLiteral(r) => r.format(formatter),
 			minizinc::Expression::SetLiteral(s) => s.format(formatter),
-			minizinc::Expression::BooleanLiteral(b) => {
-				Element::text(if b.value() { "true" } else { "false" })
-			}
-			minizinc::Expression::StringLiteral(s) => Element::text(s.cst_text(formatter.source())),
-			minizinc::Expression::Identifier(i) => {
-				Element::text(pretty_print_identifier(&i.name(formatter.source())))
-			}
-			minizinc::Expression::Absent(a) => Element::text(a.cst_text(formatter.source())),
-			minizinc::Expression::Infinity(i) => Element::text(i.cst_text(formatter.source())),
-			minizinc::Expression::Anonymous(a) => Element::text(a.cst_text(formatter.source())),
+			minizinc::Expression::BooleanLiteral(b) => b.format(formatter),
+			minizinc::Expression::StringLiteral(s) => s.format(formatter),
+			minizinc::Expression::Identifier(i) => i.format(formatter),
+			minizinc::Expression::Absent(a) => a.format(formatter),
+			minizinc::Expression::Infinity(i) => i.format(formatter),
+			minizinc::Expression::Anonymous(a) => a.format(formatter),
 			minizinc::Expression::ArrayLiteral(a) => a.format(formatter),
 			minizinc::Expression::ArrayLiteral2D(a) => a.format(formatter),
 			minizinc::Expression::ArrayAccess(a) => a.format(formatter),
@@ -77,6 +71,54 @@ impl<'tree> Format for minizinc::Expression<'tree> {
 	}
 }
 
+impl<'tree> Format for minizinc::IntegerLiteral<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		Element::text(self.cst_text(formatter.source()))
+	}
+}
+
+impl<'tree> Format for minizinc::FloatLiteral<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		Element::text(self.cst_text(formatter.source()))
+	}
+}
+
+impl<'tree> Format for minizinc::BooleanLiteral<'tree> {
+	fn format(&self, _formatter: &mut MiniZincFormatter) -> Element {
+		Element::text(if self.value() { "true" } else { "false" })
+	}
+}
+
+impl<'tree> Format for minizinc::StringLiteral<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		Element::text(self.cst_text(formatter.source()))
+	}
+}
+
+impl<'tree> Format for minizinc::Identifier<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		Element::text(pretty_print_identifier(&self.name(formatter.source())))
+	}
+}
+
+impl<'tree> Format for minizinc::Absent<'tree> {
+	fn format(&self, _formatter: &mut MiniZincFormatter) -> Element {
+		Element::text("<>")
+	}
+}
+
+impl<'tree> Format for minizinc::Infinity<'tree> {
+	fn format(&self, _formatter: &mut MiniZincFormatter) -> Element {
+		Element::text("infinity")
+	}
+}
+
+impl<'tree> Format for minizinc::Anonymous<'tree> {
+	fn format(&self, _formatter: &mut MiniZincFormatter) -> Element {
+		Element::text("_")
+	}
+}
+
 impl<'tree> Format for minizinc::AnnotatedExpression<'tree> {
 	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
 		let prec = Precedence::annotated_expression();
@@ -113,6 +155,33 @@ impl<'tree> Format for minizinc::Call<'tree> {
 			},
 			formatter.format_list("(", ")", self.arguments()),
 		])
+	}
+}
+
+impl<'tree> Format for minizinc::ArgOrParam<'tree> {
+	fn format(&self, formatter: &mut MiniZincFormatter) -> Element {
+		if let Some(right) = self.right() {
+			let mut elements = vec![
+				self.left().format(formatter),
+				Element::text(": "),
+				right.format(formatter),
+			];
+			if let Some(default) = self.default() {
+				elements.push(Element::text(" = "));
+				elements.push(default.format(formatter));
+			}
+			Element::sequence(elements)
+		} else {
+			self.left().format(formatter)
+		}
+	}
+
+	fn has_brackets(&self, formatter: &MiniZincFormatter) -> bool {
+		if self.right().is_none() {
+			self.left().has_brackets(formatter)
+		} else {
+			false
+		}
 	}
 }
 

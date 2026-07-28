@@ -5,10 +5,9 @@ use lsp_types::{
 };
 use shackle_hir::{
 	CallKind, Expression, Identifier, PatternTy, db::CompilerDatabase, ids::PatternRef,
-	input::ModelFile, source::find_item,
+	input::ModelFile, overloading::FunctionEntry, source::find_item,
 };
 use shackle_syntax::minizinc::documentation_markdown;
-use shackle_ty::FunctionEntry;
 
 use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::position_to_byte_offset};
 

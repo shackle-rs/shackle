@@ -93,6 +93,7 @@ impl<'db: 'a, 'tree, 'a> ItemCollector<'db, 'tree, 'a> {
 						kind: CallKind::Synthetic,
 						function,
 						arguments,
+						named_arguments: Box::new([]),
 					},
 				)])
 			}
@@ -157,6 +158,7 @@ impl<'db: 'a, 'tree, 'a> ItemCollector<'db, 'tree, 'a> {
 					kind: CallKind::Synthetic,
 					function,
 					arguments: arguments.into_boxed_slice(),
+					named_arguments: Box::new([]),
 				},
 			);
 		};

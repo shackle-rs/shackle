@@ -93,16 +93,17 @@ var {1, 2, 3}: x = foo(<>);
                             <Expression::3>,
                         ],
                     },
-                    <Expression::5>: Absent,
-                    <Expression::6>: Identifier(
+                    <Expression::5>: Identifier(
                         "foo",
                     ),
+                    <Expression::6>: Absent,
                     <Expression::7>: Call {
                         kind: SourceCall,
-                        function: <Expression::6>,
+                        function: <Expression::5>,
                         arguments: [
-                            <Expression::5>,
+                            <Expression::6>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -143,12 +144,12 @@ var {1, 2, 3}: x = foo(<>);
             <Expression::2>: int,
             <Expression::3>: int,
             <Expression::4>: set of int,
-            <Expression::5>: opt ..,
-            <Expression::6>: op(var int: (opt int)),
+            <Expression::5>: op(var int: (opt int)),
+            <Expression::6>: opt ..,
             <Expression::7>: var int,
         },
         identifier_resolutions: {
-            <Expression::6>: PatternRef {
+            <Expression::5>: PatternRef {
                 item: test.mzn:2.1-34,
                 pattern: <Pattern::1>,
             },

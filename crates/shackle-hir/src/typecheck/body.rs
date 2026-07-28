@@ -118,6 +118,9 @@ impl<'db> BodyTypeContext<'db> {
 						for ann in param.annotations.iter() {
 							typer.typecheck_declaration_annotation(*ann, param_ty);
 						}
+						if let Some(d) = param.default {
+							let _ = typer.typecheck_expression(d, param_ty);
+						}
 					}
 				}
 

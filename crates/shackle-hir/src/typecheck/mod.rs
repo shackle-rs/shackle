@@ -27,7 +27,7 @@
 use std::ops::{Deref, Index};
 
 use shackle_diagnostics::{Error, Warning};
-use shackle_ty::{FunctionEntry, Ty, TyData, TyVar};
+use shackle_ty::{Ty, TyData, TyVar, registry::TypeRegistry};
 use shackle_utils::arena::ArenaMap;
 
 mod body;
@@ -36,9 +36,10 @@ mod typer;
 
 pub use self::{body::*, signature::*, typer::*};
 use crate::{
-	Db, Expression, ExpressionId, Identifier, Item, ItemData, Model, Pattern, PatternId, TypeId,
+	Db, Expression, ExpressionId, Identifier, Item, ItemData, Model, PatternId, TypeId,
 	ids::{EntityId, PatternRef},
 	input::resolve_includes,
+	overloading::{FunctionEntry, ParamKind},
 };
 
 /// Typecheck the entire program
@@ -267,63 +268,7 @@ impl<'db> TypeResult<'db> {
 		pattern: PatternId<'db>,
 	) -> Option<String> {
 		let decl = self.get_pattern(pattern)?;
-		match decl {
-			PatternTy::Variable(ty)
-			| PatternTy::Argument(ty)
-			| PatternTy::Enum(ty)
-			| PatternTy::Destructuring(ty)
-			| PatternTy::DestructuringFn {
-				constructor: ty, ..
-			} => {
-				if let Pattern::Identifier(i) = data[pattern] {
-					if let TyData::Function(opt, function) = ty.lookup(self.db) {
-						// Pretty print functions using item-like syntax if possible
-						return Some(
-							opt.pretty_print()
-								.into_iter()
-								.chain([function.pretty_print_item(self.db, i)])
-								.collect::<Vec<_>>()
-								.join(" "),
-						);
-					}
-					return Some(format!(
-						"{}: {}",
-						ty.pretty_print(self.db),
-						i.pretty_print(self.db)
-					));
-				}
-				Some(ty.pretty_print(self.db))
-			}
-			PatternTy::EnumAtom(ty) => Some(format!(
-				"{}: {}",
-				ty.pretty_print(self.db),
-				data[pattern].identifier()?.pretty_print(self.db)
-			)),
-			PatternTy::Function(f) => Some(
-				f.overload
-					.pretty_print_item(self.db, data[pattern].identifier()?),
-			),
-			PatternTy::EnumConstructor(ec) => Some(
-				ec.first()?
-					.overload
-					.pretty_print_item(self.db, data[pattern].identifier()?),
-			),
-			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(self.db).to_owned()),
-			PatternTy::TypeAlias { ty, .. } => Some(format!(
-				"type {} = {}",
-				data[pattern].identifier()?.pretty_print(self.db),
-				ty.pretty_print(self.db)
-			)),
-			PatternTy::TupleField(ty) => {
-				Some(format!("(tuple field) {}", ty.pretty_print(self.db)))
-			}
-			PatternTy::RecordField(ty) => Some(format!(
-				"(record field) {}: {}",
-				ty.pretty_print(self.db),
-				data[pattern].identifier()?.pretty_print(self.db),
-			)),
-			_ => None,
-		}
+		decl.pretty_print(self.db, data[pattern].identifier())
 	}
 }
 
@@ -536,6 +481,86 @@ pub enum PatternTy<'db> {
 	},
 	/// Currently computing - if encountered, indicates a cycle
 	Computing,
+}
+
+impl<'db> PatternTy<'db> {
+	/// Pretty print using the given name
+	pub fn pretty_print(&self, db: &'db dyn Db, name: Option<Identifier<'db>>) -> Option<String> {
+		match self {
+			PatternTy::Variable(ty)
+			| PatternTy::Argument(ty)
+			| PatternTy::Enum(ty)
+			| PatternTy::Destructuring(ty)
+			| PatternTy::DestructuringFn {
+				constructor: ty, ..
+			} => {
+				if let Some(i) = name {
+					if let TyData::Function(opt, function) = ty.lookup(db) {
+						// Pretty print functions using item-like syntax if possible
+						return Some(
+							opt.pretty_print()
+								.into_iter()
+								.chain([function.pretty_print_item(db, i)])
+								.collect::<Vec<_>>()
+								.join(" "),
+						);
+					}
+					return Some(format!("{}: {}", ty.pretty_print(db), i.pretty_print(db)));
+				}
+				Some(ty.pretty_print(db))
+			}
+			PatternTy::EnumAtom(ty) => Some(format!(
+				"{}: {}",
+				ty.pretty_print(db),
+				name?.pretty_print(db)
+			)),
+			PatternTy::Function(f) => {
+				let tys = TypeRegistry::lookup(db);
+				let ret = if f.overload.return_type() == tys.par_bool {
+					"test".to_owned()
+				} else if f.overload.return_type() == tys.var_bool {
+					"predicate".to_owned()
+				} else {
+					format!("function {}:", f.overload.return_type().pretty_print(db))
+				};
+				let args = f
+					.overload
+					.params()
+					.iter()
+					.zip(f.kinds.iter())
+					.map(|(ty, kind)| match kind {
+						ParamKind::Unnamed => ty.pretty_print(db),
+						ParamKind::Named { name, has_default } if *has_default => format!(
+							"{}: {} = <default>",
+							ty.pretty_print(db),
+							name.pretty_print(db)
+						),
+						ParamKind::Named { name, .. } => {
+							format!("{}: {}", ty.pretty_print(db), name.pretty_print(db))
+						}
+					})
+					.collect::<Vec<_>>()
+					.join(", ");
+				Some(format!("{} {}({})", ret, name?.pretty_print(db), args))
+			}
+			PatternTy::EnumConstructor(ec) => {
+				Some(ec.first()?.overload.pretty_print_item(db, name?))
+			}
+			PatternTy::TyVar(t) => Some(t.ty_var.pretty_print(db).to_owned()),
+			PatternTy::TypeAlias { ty, .. } => Some(format!(
+				"type {} = {}",
+				name?.pretty_print(db),
+				ty.pretty_print(db)
+			)),
+			PatternTy::TupleField(ty) => Some(format!("(tuple field) {}", ty.pretty_print(db))),
+			PatternTy::RecordField(ty) => Some(format!(
+				"(record field) {}: {}",
+				ty.pretty_print(db),
+				name?.pretty_print(db),
+			)),
+			_ => None,
+		}
+	}
 }
 
 /// Constructor for an enum

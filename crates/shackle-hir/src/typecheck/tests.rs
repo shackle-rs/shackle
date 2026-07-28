@@ -264,6 +264,62 @@ fn test_function_resolution() {
 		"foo(1, 1)",
 		expect!("error"),
 	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x, string: y);
+		"#,
+		r#"foo(y: "y", x: 1)"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x, string: y = "y");
+		"#,
+		r#"foo(1)"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x, string: y = "y");
+		"#,
+		r#"foo(1, y: "z")"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x = 1, string: y = "y");
+		"#,
+		r#"foo()"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x = 1, string: y = "y");
+		"#,
+		r#"foo(y: "z")"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x, string: y = "y", float: z = 1.5);
+		"#,
+		r#"foo(z: 2.0, x: 4, y: "q")"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function int: foo(int: x, string: y = "y", float: z = 1.5);
+		"#,
+		r#"foo(z: 2.0, x: 4)"#,
+		expect!("int"),
+	);
+	tester.check_expression_preamble(
+		r#"
+        function any $T: id(any $T: x);
+		"#,
+		r#"id(x: 1.5)"#,
+		expect!("float"),
+	);
 }
 
 #[test]
@@ -298,6 +354,34 @@ fn test_type_errors() {
 		any: x = nope;
 		"#,
 		expect!("Undefined identifier"),
+	);
+	tester.check_error(
+		r#"
+		function int: foo(int: x, int: y);
+		any: z = foo(x: 1, x: 2);
+		"#,
+		expect!("Invalid function call"),
+	);
+	tester.check_error(
+		r#"
+		function int: foo(int: x, int: y = 2);
+		any: z = foo(y: 3);
+		"#,
+		expect!("No matching function"),
+	);
+	tester.check_error(
+		r#"
+		function int: foo(int: x, int: y = 2);
+		any: z = foo(1, x: 2);
+		"#,
+		expect!("No matching function"),
+	);
+	tester.check_error(
+		r#"
+		function int: foo(int: x, int: y = 2);
+		any: z = foo(z: 3);
+		"#,
+		expect!("No matching function"),
 	);
 }
 

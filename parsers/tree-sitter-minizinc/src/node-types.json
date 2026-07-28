@@ -579,6 +579,42 @@
     "fields": {}
   },
   {
+    "type": "arg_or_param",
+    "named": true,
+    "fields": {
+      "default": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "expression": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "array_comprehension",
     "named": true,
     "fields": {
@@ -612,6 +648,36 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "array_dimension",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
             "named": true
           }
         ]
@@ -721,7 +787,7 @@
         "required": true,
         "types": [
           {
-            "type": "type_base",
+            "type": "array_dimension",
             "named": true
           }
         ]
@@ -854,7 +920,7 @@
         "required": false,
         "types": [
           {
-            "type": "_expression",
+            "type": "arg_or_param",
             "named": true
           }
         ]
@@ -1708,7 +1774,7 @@
         "required": true,
         "types": [
           {
-            "type": "_type",
+            "type": "parameter",
             "named": true
           }
         ]
@@ -3076,6 +3142,16 @@
           },
           {
             "type": "tuple_literal",
+            "named": true
+          }
+        ]
+      },
+      "default": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
             "named": true
           }
         ]

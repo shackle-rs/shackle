@@ -927,26 +927,22 @@ impl<'db, T: Marker> Call<'db, T> {
 			Callable::Function(f) => {
 				let arg_tys = self.arguments.iter().map(|e| e.ty()).collect::<Vec<_>>();
 				let fe = model[*f].function_entry(model);
-				let (_, ft) = fe
-					.overload
-					.instantiate_ty_params(db, &arg_tys)
-					.unwrap_or_else(|e| {
-						panic!(
-							"Failed to instantiate function {} at {}{}: {}",
-							fe.overload
-								.pretty_print_item(db, model[*f].name().as_identifier(db)),
-							e.pretty_print(db),
-							if self.arguments.is_empty() {
-								"".to_owned()
-							} else {
-								format!(
-									" with call at {}",
-									self.arguments[0].origin().pretty_print(db)
-								)
-							},
-							model[*f].origin().pretty_print(db)
-						);
-					});
+				let (_, ft) = fe.instantiate_ty_params(db, &arg_tys).unwrap_or_else(|e| {
+					panic!(
+						"Failed to instantiate function {} at {}{}: {}",
+						fe.pretty_print_item(db, model[*f].name().as_identifier(db)),
+						e.pretty_print(db),
+						if self.arguments.is_empty() {
+							"".to_owned()
+						} else {
+							format!(
+								" with call at {}",
+								self.arguments[0].origin().pretty_print(db)
+							)
+						},
+						model[*f].origin().pretty_print(db)
+					);
+				});
 				ft.clone()
 			}
 		}
@@ -1002,7 +998,7 @@ impl<'db, T: Marker> LookupCall<'db, T> {
 					e.pretty_print(db)
 				)
 			});
-		let fn_type = lookup.fn_entry.overload.instantiate(db, &lookup.ty_vars);
+		let fn_type = lookup.fn_entry.instantiate(db, &lookup.ty_vars);
 		let return_ty = fn_type.return_type;
 
 		(
@@ -1099,8 +1095,8 @@ impl<'db, T: Marker> ExpressionBuilder<'db, T> for Lambda<'db, T> {
 			Ty::function(
 				db,
 				FunctionType {
-					return_type: fe.overload.return_type(),
-					params: fe.overload.params().iter().copied().collect(),
+					return_type: fe.return_type(),
+					params: fe.params().iter().copied().collect(),
 				},
 			),
 			self,

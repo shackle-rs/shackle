@@ -84,11 +84,18 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 				parameters: ps
 					.iter()
 					.map(|p| {
-						let pattern = p.pattern().map(|pat| ctx.collect_pattern(&pat));
 						let declared_type = ctx.collect_type(&p.declared_type());
-						ConstructorParameter {
+						let pattern = p.pattern().map(|pat| ctx.collect_pattern(&pat));
+						let annotations = p
+							.annotations()
+							.map(|ann| ctx.collect_expression(&ann))
+							.collect();
+						let default = p.default().map(|e| ctx.collect_expression(&e));
+						Parameter {
 							declared_type,
 							pattern,
+							annotations,
+							default,
 						}
 					})
 					.collect(),
@@ -161,17 +168,58 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 							let parameters = c
 								.arguments()
 								.map(|arg| {
-									let domain = ctx.collect_expression(&arg);
-									ConstructorParameter {
-										declared_type: ctx.alloc_type(
-											&arg,
-											Type::Bounded {
-												inst: None,
-												opt: None,
-												domain,
-											},
-										),
-										pattern: None,
+									let declared_type = ctx.collect_type(&arg.left());
+									let mut annotations = Vec::new();
+									let pattern = arg.right().map(|e| match e {
+										minizinc::Expression::Identifier(i) => {
+											ctx.collect_pattern(&i.into())
+										}
+										minizinc::Expression::AnnotatedExpression(annotated) => {
+											annotations = annotated
+												.annotations()
+												.map(|ann| ctx.collect_expression(&ann))
+												.collect();
+											if let minizinc::Expression::Identifier(i) =
+												annotated.expression()
+											{
+												ctx.collect_pattern(&i.into())
+											} else {
+												let src = self.file.source_file(self.db);
+												let span = annotated.expression().span();
+												ctx.diagnostics.add_error(SyntaxError {
+													src,
+													span,
+													msg: format!(
+														"Expected identifier, but got {}",
+														annotated.expression().cst_kind()
+													),
+												});
+												ctx.alloc_pattern(
+													&annotated.expression(),
+													Pattern::Missing,
+												)
+											}
+										}
+										e => {
+											let src = self.file.source_file(self.db);
+											let span = e.span();
+											ctx.diagnostics.add_error(SyntaxError {
+												src,
+												span,
+												msg: format!(
+													"Expected identifier, but got {}",
+													e.cst_kind()
+												),
+											});
+											ctx.alloc_pattern(&e, Pattern::Missing)
+										}
+									});
+									let default = arg.default().map(|e| ctx.collect_expression(&e));
+									Parameter {
+										declared_type,
+										pattern,
+										annotations: Box::new([]),
+										default,
 									}
 								})
 								.collect();
@@ -351,9 +399,14 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 					let name = Identifier::new(self.db, c.id().name(self.text.as_ref()));
 					let parameters = c
 						.parameters()
-						.map(|param| ConstructorParameter {
-							declared_type: ctx.collect_type(&param),
-							pattern: None,
+						.map(|param| Parameter {
+							declared_type: ctx.collect_type(&param.declared_type()),
+							pattern: param.pattern().map(|p| ctx.collect_pattern(&p)),
+							annotations: param
+								.annotations()
+								.map(|ann| ctx.collect_expression(&ann))
+								.collect(),
+							default: param.default().map(|e| ctx.collect_expression(&e)),
 						})
 						.collect();
 					cases.push(
@@ -370,9 +423,11 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 					let pattern = ctx.collect_pattern(&a.anonymous().into());
 					let parameters = a
 						.parameters()
-						.map(|param| ConstructorParameter {
+						.map(|param| Parameter {
 							declared_type: ctx.collect_type(&param),
 							pattern: None,
+							annotations: Box::new([]),
+							default: None,
 						})
 						.collect();
 					cases.push(EnumConstructor::Anonymous {
@@ -434,10 +489,12 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 					.map(|ann| ctx.collect_expression(&ann))
 					.collect();
 				let pattern = p.pattern().map(|p| ctx.collect_pattern(&p));
+				let default = p.default().map(|e| ctx.collect_expression(&e));
 				Parameter {
 					declared_type: ty,
 					pattern,
 					annotations,
+					default,
 				}
 			})
 			.collect();
@@ -518,10 +575,12 @@ impl<'db: 'a, 'a> ItemCollector<'db, 'a> {
 					.map(|ann| ctx.collect_expression(&ann))
 					.collect();
 				let pattern = p.pattern().map(|p| ctx.collect_pattern(&p));
+				let default = p.default().map(|e| ctx.collect_expression(&e));
 				Parameter {
 					declared_type: ty,
 					pattern,
 					annotations,
+					default,
 				}
 			})
 			.collect();

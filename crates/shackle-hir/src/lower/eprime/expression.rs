@@ -150,6 +150,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						kind: CallKind::Operator,
 						function,
 						arguments: Box::new([left, right]),
+						named_arguments: Box::new([]),
 					},
 				)
 			}
@@ -188,6 +189,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				);
 				return CollectedDomain::Array(Type::Array {
 					opt: OptType::NonOpt,
+					dimension_pattern: None,
 					dimensions,
 					element,
 				});
@@ -218,6 +220,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 								kind: CallKind::Synthetic,
 								function: union_expr,
 								arguments: Box::new([acc, e]),
+								named_arguments: Box::new([]),
 							},
 						)
 					})
@@ -244,6 +247,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 								kind: CallKind::Synthetic,
 								function: union_expr,
 								arguments: Box::new([l, d]),
+								named_arguments: Box::new([]),
 							},
 						)
 					}
@@ -291,6 +295,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 			kind,
 			function,
 			arguments,
+			named_arguments: Box::new([]),
 		}
 	}
 
@@ -398,6 +403,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 									kind: CallKind::Synthetic,
 									function,
 									arguments: Box::new([one, n]),
+									named_arguments: Box::new([]),
 								},
 							)
 						})
@@ -416,6 +422,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						kind: CallKind::Synthetic,
 						function,
 						arguments: index_sets.into_boxed_slice(),
+						named_arguments: Box::new([]),
 					},
 				)
 			}
@@ -438,6 +445,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 			kind: CallKind::GeneratorCall,
 			arguments,
 			function,
+			named_arguments: Box::new([]),
 		}
 	}
 
@@ -493,6 +501,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						kind: CallKind::Synthetic,
 						function,
 						arguments: Box::new([index_set, matrix_comprehension]),
+						named_arguments: Box::new([]),
 					},
 				)
 			}
@@ -648,6 +657,7 @@ impl<'db, 'a> CollectedDomain<'db> {
 								kind: CallKind::Synthetic,
 								function: ctx.ident_exp(ast, "-"),
 								arguments: Box::new([inf]),
+								named_arguments: Box::new([]),
 							}
 							.into(),
 							Expression::Infinity,
@@ -666,6 +676,7 @@ impl<'db, 'a> CollectedDomain<'db> {
 						kind: CallKind::Synthetic,
 						function,
 						arguments: Box::new([l, r]),
+						named_arguments: Box::new([]),
 					},
 				)
 			}

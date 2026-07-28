@@ -502,7 +502,7 @@ impl<'a, 'db, Src: Marker, Dst: Marker> TopDownTyper<'a, 'db, Dst, Src> {
 						if model[*f].is_polymorphic() {
 							let bottom_up_tys =
 								c.arguments.iter().map(|arg| arg.ty()).collect::<Vec<_>>();
-							let overload = model[*f].function_entry(model).overload;
+							let overload = model[*f].function_entry(model);
 							let mut ty_vars = overload
 								.instantiate_ty_params(db, &bottom_up_tys)
 								.unwrap()
@@ -527,7 +527,6 @@ impl<'a, 'db, Src: Marker, Dst: Marker> TopDownTyper<'a, 'db, Dst, Src> {
 							}
 							model[*f]
 								.function_entry(model)
-								.overload
 								.instantiate(db, &ty_vars)
 								.params
 								.to_vec()

@@ -292,6 +292,21 @@ pub struct InvalidArrayLiteral {
 	pub span: SourceSpan,
 }
 
+/// Invalid function call
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid function call")]
+#[diagnostic(code(shackle::invalid_call))]
+pub struct InvalidCall {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// No matching function found
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("No matching function")]
@@ -394,26 +409,10 @@ pub struct ConstructorAlreadyDefined {
 	#[source_code]
 	pub src: SourceFile,
 	/// The span associated with the error
-	#[label("The constructor function was first defined here")]
+	#[label("Constructor {identifier} already defined")]
 	pub span: SourceSpan,
-	/// The duplicate constructors
-	#[related]
-	pub others: Vec<DuplicateConstructor>,
-}
-
-/// Constructor already defined
-#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
-#[error("Constructor function already defined")]
-#[diagnostic(code(shackle::constructor_already_defined), help("{help}"))]
-pub struct DuplicateConstructor {
-	/// The source code
-	#[source_code]
-	pub src: SourceFile,
-	/// The help string
-	pub help: String,
-	/// The span associated with the error
-	#[label]
-	pub span: SourceSpan,
+	/// The constructor name which is already defined
+	pub identifier: String,
 }
 
 /// Type inference failure
@@ -579,6 +578,10 @@ pub enum Error {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	InvalidArrayLiteral(#[from] InvalidArrayLiteral),
+	/// Invalid function call
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidCall(#[from] InvalidCall),
 	/// No matching function found
 	#[error(transparent)]
 	#[diagnostic(transparent)]

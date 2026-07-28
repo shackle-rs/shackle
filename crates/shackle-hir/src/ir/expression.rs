@@ -195,6 +195,7 @@ impl<'db> Expression<'db> {
 				Expression::Call(c) => {
 					todo.push(c.function);
 					todo.extend(c.arguments.iter().copied());
+					todo.extend(c.named_arguments.iter().map(|(_, e)| *e));
 				}
 				Expression::Case(c) => {
 					todo.push(c.expression);
@@ -322,8 +323,10 @@ pub struct Call<'db> {
 	pub kind: CallKind,
 	/// Function being called
 	pub function: ExpressionId<'db>,
-	/// Call arguments
+	/// Positional call arguments
 	pub arguments: Box<[ExpressionId<'db>]>,
+	/// Named call arguments
+	pub named_arguments: Box<[(PatternId<'db>, ExpressionId<'db>)]>,
 }
 
 /// The source construct from which a function call was lowered.

@@ -7,7 +7,7 @@
 //! appear before the function declaration.
 
 use shackle_diagnostics::CyclicDefinition;
-use shackle_ty::FunctionEntry;
+use shackle_ty::match_fn;
 use shackle_utils::hash::{Map, Set};
 
 use super::PatternTy;
@@ -225,10 +225,9 @@ impl<'db> TopoSorter<'db> {
 				let types = item.signature(self.db);
 				match &types.patterns[&p.pattern(self.db)] {
 					PatternTy::Function(f) => {
-						let (is_self, _, _) =
-							FunctionEntry::match_fn(self.db, overloads, f.overload.params())
-								.unwrap_or_else(|e| unreachable!("Unexpected error: {:#?}", e));
-						if !is_self {
+						let res = match_fn(self.db, overloads, f.overload.params())
+							.unwrap_or_else(|e| unreachable!("Unexpected error: {:#?}", e));
+						if !res.function.0 {
 							// Ignore this function since it has been subsumed by another
 							return;
 						}

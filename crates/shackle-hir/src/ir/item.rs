@@ -345,7 +345,7 @@ pub enum Constructor<'db> {
 		/// Pattern for destructor (always an identifier with ^-1)
 		destructor: PatternId<'db>,
 		/// Constructor parameters
-		parameters: Box<[ConstructorParameter<'db>]>,
+		parameters: Box<[Parameter<'db>]>,
 	},
 }
 
@@ -359,22 +359,13 @@ impl<'db> Constructor<'db> {
 	}
 
 	/// Get the parameters for this constructor
-	pub fn parameters(&self) -> impl '_ + Iterator<Item = &ConstructorParameter<'db>> {
+	pub fn parameters(&self) -> impl '_ + Iterator<Item = &Parameter<'db>> {
 		let params = match self {
 			Constructor::Function { parameters, .. } => Some(parameters),
 			_ => None,
 		};
 		params.into_iter().flat_map(|ps| ps.iter())
 	}
-}
-
-/// A constructor function parameter
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
-pub struct ConstructorParameter<'db> {
-	/// Type of declaration
-	pub declared_type: TypeId<'db>,
-	/// Pattern of the parameter (usually just an identifier)
-	pub pattern: Option<PatternId<'db>>,
 }
 
 /// An annotation item
@@ -485,7 +476,7 @@ pub enum EnumConstructor<'db> {
 		/// Anonymous pattern
 		pattern: PatternId<'db>,
 		/// Parameters
-		parameters: Box<[ConstructorParameter<'db>]>,
+		parameters: Box<[Parameter<'db>]>,
 	},
 	/// Named constructor
 	#[from]
@@ -502,7 +493,7 @@ impl<'db> EnumConstructor<'db> {
 	}
 
 	/// Get the parameters for this constructor
-	pub fn parameters(&self) -> impl '_ + Iterator<Item = &ConstructorParameter<'db>> {
+	pub fn parameters(&self) -> impl '_ + Iterator<Item = &Parameter<'db>> {
 		let params = match self {
 			EnumConstructor::Anonymous { parameters, .. }
 			| EnumConstructor::Named(Constructor::Function { parameters, .. }) => Some(parameters),
@@ -578,6 +569,8 @@ pub struct Parameter<'db> {
 	pub pattern: Option<PatternId<'db>>,
 	/// Annotations
 	pub annotations: Box<[ExpressionId<'db>]>,
+	/// Default value for the parameter
+	pub default: Option<ExpressionId<'db>>,
 }
 
 /// Output item

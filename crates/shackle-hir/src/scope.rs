@@ -6,8 +6,9 @@
 use std::collections::hash_map::Entry;
 
 use derive_more::Deref;
-use shackle_diagnostics::{IdentifierAlreadyDefined, IdentifierShadowing, InvalidPattern};
-use shackle_ty::FunctionEntry;
+use shackle_diagnostics::{
+	ConstructorAlreadyDefined, IdentifierAlreadyDefined, IdentifierShadowing, InvalidPattern,
+};
 use shackle_utils::{
 	InternedString,
 	arena::{Arena, ArenaIndex, ArenaMap},
@@ -26,6 +27,7 @@ use crate::{
 	diagnostics::Diagnostics,
 	ids::{EntityId, NodeRef, PatternRef},
 	lower::lower_models,
+	overloading::check_overloading,
 };
 
 fn process_enum_constructor<'db>(
@@ -57,9 +59,23 @@ fn process_enum_constructor<'db>(
 			} => {
 				// Enum constructor (overloads handled later in type checker)
 				let ctor = data[*constructor].identifier().unwrap();
-				scope.add_function(db, ctor, 0, PatternRef::new(db, item, *constructor));
+				scope.add_function(
+					db,
+					ctor,
+					0,
+					PatternRef::new(db, item, *constructor),
+					true,
+					diagnostics,
+				);
 				let dtor = data[*destructor].identifier().unwrap();
-				scope.add_function(db, dtor, 0, PatternRef::new(db, item, *destructor));
+				scope.add_function(
+					db,
+					dtor,
+					0,
+					PatternRef::new(db, item, *destructor),
+					true,
+					diagnostics,
+				);
 			}
 		}
 	}
@@ -235,12 +251,16 @@ fn collect_model_global_scope<'db>(db: &'db dyn Db, model: Model<'db>) -> ScopeD
 							ctor_ident,
 							0,
 							PatternRef::new(db, *item, *constructor),
+							true,
+							&mut diagnostics,
 						);
 						scope.add_function(
 							db,
 							dtor_ident,
 							0,
 							PatternRef::new(db, *item, *destructor),
+							true,
+							&mut diagnostics,
 						);
 					}
 				}
@@ -288,7 +308,14 @@ fn collect_model_global_scope<'db>(db: &'db dyn Db, model: Model<'db>) -> ScopeD
 				let identifier = &f[f.pattern]
 					.identifier()
 					.expect("Function must have identifier pattern");
-				scope.add_function(db, *identifier, 0, PatternRef::new(db, *item, f.pattern));
+				scope.add_function(
+					db,
+					*identifier,
+					0,
+					PatternRef::new(db, *item, f.pattern),
+					false,
+					&mut diagnostics,
+				);
 			}
 			Item::Solve(solve_item) => {
 				let s = solve_item.solve(db);
@@ -399,6 +426,7 @@ pub struct ScopeData<'db> {
 	variable_names: Vec<Identifier<'db>>,
 	/// Identifiers which do not cause pattern matching to add new variable bindings
 	atoms: Set<Identifier<'db>>,
+	fn_atoms: Set<Identifier<'db>>,
 }
 
 impl<'db> ScopeData<'db> {
@@ -433,10 +461,12 @@ impl<'db> ScopeData<'db> {
 	/// Add a (possibly overloaded) function to the current scope
 	pub fn add_function(
 		&mut self,
-		_db: &'db dyn Db,
+		db: &'db dyn Db,
 		identifier: Identifier<'db>,
 		generation: u32,
 		pattern: PatternRef<'db>,
+		is_atom: bool,
+		diagnostics: &mut Diagnostics,
 	) {
 		match self.functions.entry(identifier) {
 			Entry::Occupied(mut e) => {
@@ -447,6 +477,14 @@ impl<'db> ScopeData<'db> {
 				let _ = e.insert(vec![(pattern, generation)]);
 				self.function_names.push(identifier);
 			}
+		}
+		if is_atom && self.fn_atoms.contains(&identifier) {
+			let (src, span) = NodeRef::from(pattern.into_entity(db)).source_span(db);
+			diagnostics.add_error(ConstructorAlreadyDefined {
+				src,
+				span,
+				identifier: identifier.pretty_print(db),
+			})
 		}
 	}
 
@@ -882,6 +920,9 @@ impl<'db> ScopeCollector<'db> {
 				for arg in c.arguments.iter() {
 					self.collect_expression(*arg);
 				}
+				for (_, arg) in c.named_arguments.iter() {
+					self.collect_expression(*arg);
+				}
 			}
 			Expression::IfThenElse(ite) => {
 				for branch in ite.branches.iter() {
@@ -1066,11 +1107,19 @@ impl<'db> ScopeCollector<'db> {
 			Type::Bounded { domain, .. } => self.collect_expression(*domain),
 			Type::Array {
 				dimensions,
+				dimension_pattern,
 				element,
 				..
 			} => {
 				self.collect_type(*dimensions);
-				self.collect_type(*element);
+				if let Some(pattern) = dimension_pattern {
+					self.push();
+					self.collect_pattern(*pattern, PatternMode::Generator);
+					self.collect_type(*element);
+					self.pop();
+				} else {
+					self.collect_type(*element);
+				}
 			}
 			Type::Set {
 				element,
@@ -1318,14 +1367,10 @@ impl RenameCheck {
 		pattern: PatternRef<'db>,
 		new_name: Identifier<'db>,
 	) -> Self {
-		if let PatternTy::Function(f) = &pattern.item(db).types(db)[pattern.pattern(db)] {
-			let mut overloads = vec![((), (**f).clone())];
-			for p in GlobalScope::find_function(db, new_name) {
-				if let PatternTy::Function(f) = &p.item(db).types(db)[p.pattern(db)] {
-					overloads.push(((), (**f).clone()));
-				}
-			}
-			if FunctionEntry::check_overloading(db, overloads).is_empty() {
+		if let PatternTy::Function(_) = &pattern.item(db).types(db)[pattern.pattern(db)] {
+			let mut overloads = vec![pattern];
+			overloads.extend(GlobalScope::find_function(db, new_name).iter().copied());
+			if check_overloading(db, &overloads).is_ok() {
 				return RenameCheck::Ok;
 			} else {
 				return RenameCheck::InvalidOverload;
@@ -1834,6 +1879,7 @@ mod tests {
                         <Pattern::2>,
                     ),
                     annotations: [],
+                    default: None,
                 },
             ],
             body: Some(
@@ -2075,6 +2121,7 @@ mod tests {
                             <Expression::2>,
                             <Expression::3>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::6>: Let {
                         items: [
@@ -2190,17 +2237,18 @@ mod tests {
                 len: 3,
                 data: {
                     <Expression::1>: Identifier(
-                        "qux",
+                        "test_fn",
                     ),
                     <Expression::2>: Identifier(
-                        "test_fn",
+                        "qux",
                     ),
                     <Expression::3>: Call {
                         kind: SourceCall,
-                        function: <Expression::2>,
+                        function: <Expression::1>,
                         arguments: [
-                            <Expression::1>,
+                            <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },

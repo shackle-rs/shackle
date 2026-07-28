@@ -19,6 +19,25 @@ ast_enum!(
 	"any_type" => AnyType,
 );
 
+impl<'tree> Type<'tree> {
+	/// Get the type as a plain identifier if it is one, otherwise `None`
+	pub fn as_identifier(&self) -> Option<Identifier<'tree>> {
+		self.as_expression().and_then(|e| e.cast())
+	}
+
+	/// Get the type as a plain expression if it is one, otherwise `None`
+	pub fn as_expression(&self) -> Option<Expression<'tree>> {
+		match self {
+			Type::TypeBase(t)
+				if !t.any_type() && t.var_type().is_none() && t.opt_type().is_none() =>
+			{
+				t.domain().cast()
+			}
+			_ => None,
+		}
+	}
+}
+
 ast_node!(
 	/// Type of an array
 	ArrayType,
@@ -28,12 +47,30 @@ ast_node!(
 
 impl<'tree> ArrayType<'tree> {
 	/// The ranges of the array.
-	pub fn dimensions(&self) -> Children<'tree, Type<'tree>> {
+	pub fn dimensions(&self) -> Children<'tree, ArrayDimension<'tree>> {
 		children_with_field_name(self, "dimension")
 	}
 
 	/// The type contained in the array
 	pub fn element_type(&self) -> Type<'tree> {
+		child_with_field_name(self, "type")
+	}
+}
+
+ast_node!(
+	/// Array dimension
+	ArrayDimension,
+	dim_type,
+);
+
+impl<'tree> ArrayDimension<'tree> {
+	/// Get the name of the dimension if it is a named dimension, otherwise `None`
+	pub fn name(&self) -> Option<Identifier<'tree>> {
+		optional_child_with_field_name(self, "name")
+	}
+
+	/// The type of the dimension
+	pub fn dim_type(&self) -> Type<'tree> {
 		child_with_field_name(self, "type")
 	}
 }
@@ -420,21 +457,24 @@ mod tests {
                             ArrayType {
                                 cst_kind: "array_type",
                                 dimensions: [
-                                    TypeBase(
-                                        TypeBase {
-                                            cst_kind: "type_base",
-                                            var_type: None,
-                                            opt_type: None,
-                                            any_type: false,
-                                            domain: Bounded(
-                                                Anonymous(
-                                                    Anonymous {
-                                                        cst_kind: "anonymous",
-                                                    },
+                                    ArrayDimension {
+                                        cst_kind: "array_dimension",
+                                        dim_type: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: None,
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Bounded(
+                                                    Anonymous(
+                                                        Anonymous {
+                                                            cst_kind: "anonymous",
+                                                        },
+                                                    ),
                                                 ),
-                                            ),
-                                        },
-                                    ),
+                                            },
+                                        ),
+                                    },
                                 ],
                                 element_type: TypeBase(
                                     TypeBase {
@@ -470,40 +510,46 @@ mod tests {
                             ArrayType {
                                 cst_kind: "array_type",
                                 dimensions: [
-                                    TypeBase(
-                                        TypeBase {
-                                            cst_kind: "type_base",
-                                            var_type: None,
-                                            opt_type: None,
-                                            any_type: false,
-                                            domain: Bounded(
-                                                Identifier(
-                                                    UnquotedIdentifier(
-                                                        UnquotedIdentifier {
-                                                            cst_kind: "identifier",
-                                                        },
+                                    ArrayDimension {
+                                        cst_kind: "array_dimension",
+                                        dim_type: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: None,
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Bounded(
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                            },
+                                                        ),
                                                     ),
                                                 ),
-                                            ),
-                                        },
-                                    ),
-                                    TypeBase(
-                                        TypeBase {
-                                            cst_kind: "type_base",
-                                            var_type: None,
-                                            opt_type: None,
-                                            any_type: false,
-                                            domain: Bounded(
-                                                Identifier(
-                                                    UnquotedIdentifier(
-                                                        UnquotedIdentifier {
-                                                            cst_kind: "identifier",
-                                                        },
+                                            },
+                                        ),
+                                    },
+                                    ArrayDimension {
+                                        cst_kind: "array_dimension",
+                                        dim_type: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: None,
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Bounded(
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                            },
+                                                        ),
                                                     ),
                                                 ),
-                                            ),
-                                        },
-                                    ),
+                                            },
+                                        ),
+                                    },
                                 ],
                                 element_type: TypeBase(
                                     TypeBase {

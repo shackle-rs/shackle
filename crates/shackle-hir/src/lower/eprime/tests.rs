@@ -77,6 +77,7 @@ fn test_lower_integer_domain() {
                             <Expression::2>,
                             <Expression::3>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::6>: SetLiteral {
                         members: [
@@ -93,6 +94,7 @@ fn test_lower_integer_domain() {
                             <Expression::6>,
                             <Expression::5>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -215,6 +217,7 @@ fn test_domain_expressions() {
                             <Expression::2>,
                             <Expression::4>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::7>: IntegerLiteral(
                         1,
@@ -242,6 +245,7 @@ fn test_domain_expressions() {
                             <Expression::8>,
                             <Expression::10>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -312,6 +316,7 @@ fn test_lower_matrix_domain() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -332,6 +337,7 @@ fn test_lower_matrix_domain() {
                     },
                     <Type::3>: Array {
                         opt: NonOpt,
+                        dimension_pattern: None,
                         dimensions: <Type::1>,
                         element: <Type::2>,
                     },
@@ -388,6 +394,7 @@ fn test_lower_call() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -450,6 +457,7 @@ fn test_lower_indexed_access() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: Identifier(
                         "M",
@@ -519,6 +527,7 @@ fn test_lower_infix_operator() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -577,6 +586,7 @@ fn test_lower_prefix_operator() {
                         arguments: [
                             <Expression::1>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -637,6 +647,7 @@ fn test_lower_quantification() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: Identifier(
                         "i",
@@ -663,6 +674,7 @@ fn test_lower_quantification() {
                         arguments: [
                             <Expression::6>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -728,6 +740,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: Identifier(
                         "num",
@@ -748,6 +761,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::6>,
                             <Expression::7>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::10>: ArrayComprehension {
                         template: <Expression::9>,
@@ -822,6 +836,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: Identifier(
                         "i",
@@ -845,6 +860,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::7>,
                             <Expression::8>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::11>: TupleLiteral {
                         fields: [
@@ -925,6 +941,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: Identifier(
                         "i",
@@ -945,6 +962,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::6>,
                             <Expression::7>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::10>: Identifier(
                         "j",
@@ -965,6 +983,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::11>,
                             <Expression::12>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::15>: TupleLiteral {
                         fields: [
@@ -1059,6 +1078,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: IntegerLiteral(
                         1,
@@ -1076,6 +1096,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::5>,
                             <Expression::6>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::9>: IntegerLiteral(
                         1,
@@ -1093,6 +1114,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::9>,
                             <Expression::10>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::13>: Identifier(
                         "i",
@@ -1116,6 +1138,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::15>,
                             <Expression::16>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::19>: ArrayComprehension {
                         template: <Expression::18>,
@@ -1204,6 +1227,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::5>: Identifier(
                         "i",
@@ -1240,6 +1264,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::8>,
                             <Expression::9>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::12>: Identifier(
                         "array1d",
@@ -1251,6 +1276,7 @@ fn test_lower_matrix_comprehension() {
                             <Expression::11>,
                             <Expression::7>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -1312,6 +1338,7 @@ fn test_lower_absolute() {
                         arguments: [
                             <Expression::1>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -1461,6 +1488,7 @@ fn test_lower_param_declaration() {
                             <Expression::1>,
                             <Expression::2>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -1507,6 +1535,7 @@ fn test_lower_domain_alias() {
                         arguments: [
                             <Expression::1>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::4>: Infinity,
                     <Expression::5>: Identifier(
@@ -1519,6 +1548,7 @@ fn test_lower_domain_alias() {
                             <Expression::3>,
                             <Expression::4>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -1588,6 +1618,7 @@ fn test_lower_domain_alias() {
                             <Expression::2>,
                             <Expression::3>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::6>: SetLiteral {
                         members: [
@@ -1604,6 +1635,7 @@ fn test_lower_domain_alias() {
                             <Expression::6>,
                             <Expression::5>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::9>: IntegerLiteral(
                         1,
@@ -1624,6 +1656,7 @@ fn test_lower_domain_alias() {
                             <Expression::10>,
                             <Expression::11>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::14>: SetLiteral {
                         members: [
@@ -1640,6 +1673,7 @@ fn test_lower_domain_alias() {
                             <Expression::14>,
                             <Expression::13>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -1839,6 +1873,7 @@ fn test_lower_branching() {
                             <Expression::3>,
                             <Expression::4>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::7>: Identifier(
                         "x",
@@ -2074,6 +2109,7 @@ fn test_lower_matrix_literal() {
                             <Expression::9>,
                             <Expression::10>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::13>: IntegerLiteral(
                         1,
@@ -2091,6 +2127,7 @@ fn test_lower_matrix_literal() {
                             <Expression::13>,
                             <Expression::14>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::17>: IntegerLiteral(
                         1,
@@ -2108,6 +2145,7 @@ fn test_lower_matrix_literal() {
                             <Expression::17>,
                             <Expression::18>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::21>: ArrayLiteral {
                         members: [
@@ -2133,6 +2171,7 @@ fn test_lower_matrix_literal() {
                             <Expression::20>,
                             <Expression::21>,
                         ],
+                        named_arguments: [],
                     },
                 },
             },
@@ -2185,6 +2224,7 @@ fn test_lower_output() {
                         arguments: [
                             <Expression::1>,
                         ],
+                        named_arguments: [],
                     },
                     <Expression::4>: ArrayLiteral {
                         members: [

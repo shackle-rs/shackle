@@ -31,6 +31,7 @@ pub mod interface;
 pub mod ir;
 pub mod lower;
 pub mod object_validation;
+pub mod overloading;
 pub mod pattern_matching;
 pub mod scope;
 pub mod source;

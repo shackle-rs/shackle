@@ -9,19 +9,23 @@ use crate::{Db, registry::TypeRegistry};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FunctionResolutionError<'db, T> {
 	/// No matching function
-	NoMatchingFunction(Vec<(T, FunctionEntry<'db>, InstantiationError<'db>)>),
+	NoMatchingFunction(Vec<(T, InstantiationError<'db>)>),
 	/// Ambiguous call
-	AmbiguousOverloading(Vec<(T, FunctionEntry<'db>)>),
+	AmbiguousOverloading(Vec<T>),
 }
 
-impl<'db, T> FunctionResolutionError<'db, T> {
+impl<'db, T: Overload<'db>> FunctionResolutionError<'db, T> {
 	/// Get the pretty error message
 	pub fn pretty_print(&self, db: &'db dyn Db) -> String {
 		match self {
 			Self::NoMatchingFunction(fs) => ["No matching function:".to_owned()]
 				.into_iter()
-				.chain(fs.iter().map(|(_, fe, e)| {
-					format!("  {}: {}", fe.overload.pretty_print(db), e.pretty_print(db))
+				.chain(fs.iter().map(|(f, e)| {
+					format!(
+						"  {}: {}",
+						f.overload().pretty_print(db),
+						e.pretty_print(db)
+					)
 				}))
 				.collect::<Vec<_>>()
 				.join("\n"),
@@ -29,7 +33,7 @@ impl<'db, T> FunctionResolutionError<'db, T> {
 				.into_iter()
 				.chain(
 					fs.iter()
-						.map(|(_, fe)| format!("  {}", fe.overload.pretty_print(db))),
+						.map(|f| format!("  {}", f.overload().pretty_print(db))),
 				)
 				.collect::<Vec<_>>()
 				.join("\n"),
@@ -99,308 +103,13 @@ impl<'db> InstantiationError<'db> {
 	}
 }
 
-/// Illegal overloading error
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum OverloadingError<'db, T> {
-	/// Function with the same signature already defined
-	FunctionAlreadyDefined {
-		/// First function with the signature
-		first: (T, FunctionEntry<'db>),
-		/// Other functions with the same signature
-		others: Vec<(T, FunctionEntry<'db>)>,
-	},
-	/// Subtyped overload has incompatible return type
-	IncompatibleReturnType {
-		/// First function
-		first: (T, FunctionEntry<'db>),
-		/// Other functions with incompatible return types
-		others: Vec<(T, FunctionEntry<'db>)>,
-	},
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Candidate<'db, T> {
 	is_candidate: bool,
 	has_error: bool,
-	data: T,
-	entry: FunctionEntry<'db>,
+	entry: T,
 	ty_params: TyParamInstantiations<'db>,
 	function_type: FunctionType<'db>,
-}
-
-/// An overloaded function entry
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
-pub struct FunctionEntry<'db> {
-	/// Whether this function has a body
-	pub has_body: bool,
-	/// The overloaded function
-	pub overload: OverloadedFunction<'db>,
-}
-
-impl<'db> FunctionEntry<'db> {
-	/// Return the most specific function overload which matches the given argument types.
-	///
-	/// If the function to dispatch to is polymorphic then also instantiate the polymorphic function.
-	/// If there is no one specific function, this is an error.
-	pub fn match_fn<T>(
-		db: &'db dyn Db,
-		overloads: impl IntoIterator<Item = (T, FunctionEntry<'db>)>,
-		args: &[Ty<'db>],
-	) -> Result<(T, FunctionEntry<'db>, TyParamInstantiations<'db>), FunctionResolutionError<'db, T>>
-	{
-		let (matches, mismatches) = overloads
-			.into_iter()
-			.map(|(data, entry)| {
-				let ty_params = entry.overload.instantiate_ty_params(db, args);
-				(data, entry, ty_params)
-			})
-			.partition::<Vec<_>, _>(|(_, _, ty_params)| ty_params.is_ok());
-
-		if matches.is_empty() {
-			return Err(FunctionResolutionError::NoMatchingFunction(
-				mismatches
-					.into_iter()
-					.map(|(data, overload, ty_params)| (data, overload, ty_params.unwrap_err()))
-					.collect(),
-			));
-		}
-
-		let mut candidates = matches
-			.into_iter()
-			.map(|(data, overload, instantiation)| {
-				let (ty_params, function_type) = instantiation.unwrap();
-				Candidate {
-					is_candidate: true,
-					has_error: overload.overload.contains_error(db),
-					data,
-					entry: overload,
-					ty_params,
-					function_type,
-				}
-			})
-			.collect::<Vec<_>>();
-
-		log::debug!(
-			"Overload resolution found {} matching candidates",
-			candidates.len()
-		);
-		for i in 1..candidates.len() {
-			// For each pair, eliminate the less specific function (based on instantiated signature if there were candidate polymorphic functions)
-			// e.g. prefer 'bool' over 'int', prefer 'int' over 'var int'
-			//      for an 'int' argument, prefer '$T' over 'float' (prefer the instantiated polymorphic function over the concrete function which requires a coercion)
-			//      prefer concrete function over polymorphic instantiation if equivalent
-			//      for two polymorphic candidates, prefer '$$E' over '$T' if they both instantiate to the same type
-			let (left, right) = candidates.split_at_mut(i);
-			let c1 = left.last_mut().unwrap();
-			if !c1.is_candidate {
-				continue;
-			}
-			for (j, c2) in right.iter_mut().enumerate() {
-				if !c2.is_candidate {
-					continue;
-				}
-				if c1.has_error && !c2.has_error {
-					c1.is_candidate = false;
-					continue;
-				} else if c2.has_error && !c1.has_error {
-					c2.is_candidate = false;
-					continue;
-				}
-				let f1 = &c1.function_type;
-				let f2 = &c2.function_type;
-				let m1 = f1.matches(db, &f2.params).is_ok();
-				let m2 = f2.matches(db, &f1.params).is_ok();
-
-				log::debug!(
-					"Candidate {}: {} instantiates to {}",
-					i,
-					c1.entry.overload.pretty_print(db),
-					f1.pretty_print(db)
-				);
-				log::debug!(
-					"Candidate {}: {} instantiates to {}",
-					i + j + 1,
-					c2.entry.overload.pretty_print(db),
-					f2.pretty_print(db)
-				);
-				log::debug!("Candidate {} accepts candidate 2's parameters? {:?}", i, m1);
-				log::debug!(
-					"Candidate {} accepts candidate 1's parameters? {:?}",
-					i + j + 1,
-					m2
-				);
-				if m1 && !m2 {
-					// We accept their args, but they don't accept ours, so they're more specific
-					c1.is_candidate = false;
-				} else if m2 && !m1 {
-					// They accept our args, but we don't accept theirs, so we're more specific
-					c2.is_candidate = false;
-				} else if m1 && m2 {
-					// Equivalent instantiation
-					match (&c1.entry.overload, &c2.entry.overload) {
-						// Prefer concrete function over polymorphic instance
-						(
-							OverloadedFunction::PolymorphicFunction(_),
-							OverloadedFunction::Function(_),
-						) => {
-							c1.is_candidate = false;
-						}
-						(
-							OverloadedFunction::Function(_),
-							OverloadedFunction::PolymorphicFunction(_),
-						) => {
-							c2.is_candidate = false;
-						}
-						// Prefer more specific polymorphic function
-						(
-							OverloadedFunction::PolymorphicFunction(p1),
-							OverloadedFunction::PolymorphicFunction(p2),
-						) => {
-							let m1 = p1.instantiate_ty_params(db, &p2.params).is_ok();
-							let m2 = p2.instantiate_ty_params(db, &p1.params).is_ok();
-							log::debug!(
-								"Polymorphic candidate {} accepts candidate 2's polymorphic parameters? {:?}",
-								i,
-								m1
-							);
-							log::debug!(
-								"Polymorphic candidate {} accepts candidate 1's polymorphic parameters? {:?}",
-								i + j + 1,
-								m2
-							);
-							if m1 && !m2 {
-								// We accept their args, but they don't accept ours, so they're more specific
-								c1.is_candidate = false;
-							} else if m2 && !m1 {
-								// They accept our args, but we don't accept theirs, so we're more specific
-								c2.is_candidate = false;
-							} else if c2.entry.has_body && !c1.entry.has_body {
-								// They have a body but we don't, so use them
-								c1.is_candidate = false;
-							} else if c1.entry.has_body && !c2.entry.has_body {
-								// We have a body but they don't, so use us
-								c2.is_candidate = false;
-							} else {
-								// Both have or don't have a body, so just choose one
-								c1.is_candidate = false;
-							}
-						}
-						_ => {
-							if c1.entry.has_body && !c2.entry.has_body {
-								// We have a body but they don't, so use us
-								c2.is_candidate = false;
-							} else if c2.entry.has_body && !c1.entry.has_body {
-								// They have a body but we don't, so use them
-								c1.is_candidate = false;
-							} else {
-								// Both have or don't have a body, so just choose one
-								c2.is_candidate = false;
-							}
-						}
-					}
-				}
-				if !c1.is_candidate {
-					log::debug!("Eliminated candidate {}", i);
-				}
-				if !c2.is_candidate {
-					log::debug!("Eliminated candidate {}", i + j + 1);
-				}
-			}
-		}
-		candidates.retain(|c| c.is_candidate);
-		assert!(
-			!candidates.is_empty(),
-			"Overload matches found, but all candidates eliminated!"
-		);
-		if candidates.len() > 1 {
-			return Err(FunctionResolutionError::AmbiguousOverloading(
-				candidates.into_iter().map(|c| (c.data, c.entry)).collect(),
-			));
-		}
-		let c = candidates.pop().unwrap();
-		Ok((c.data, c.entry, c.ty_params))
-	}
-
-	/// Validate that the given overloads are legal
-	pub fn check_overloading<T: Clone>(
-		db: &'db dyn Db,
-		overloads: impl IntoIterator<Item = (T, FunctionEntry<'db>)>,
-	) -> Vec<OverloadingError<'db, T>> {
-		let mut diagnostics = Vec::new();
-		let overloads = overloads.into_iter().collect::<Vec<_>>();
-		let mut same_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
-		let mut incompat_fns = overloads.iter().map(|_| None).collect::<Vec<_>>();
-		// TODO: Make less horrible
-		for (i, (_, a)) in overloads.iter().enumerate() {
-			for (j, (_, b)) in overloads[i + 1..].iter().enumerate() {
-				if let Ok((_, fta)) = a.overload.instantiate_ty_params(db, b.overload.params()) {
-					if b.overload
-						.instantiate_ty_params(db, a.overload.params())
-						.is_ok() && (a.has_body && b.has_body
-						|| fta.return_type != b.overload.return_type())
-					{
-						// Same function with multiple definitions
-						same_fns[i + j + 1] = same_fns[i].or(Some(i));
-					}
-					if !b.overload.return_type().is_subtype_of(db, fta.return_type) {
-						// Functions have incompatible return types
-						incompat_fns[i + j + 1] = incompat_fns[i].or(Some(i));
-					}
-				} else if let Ok((_, ftb)) =
-					b.overload.instantiate_ty_params(db, a.overload.params())
-					&& !a.overload.return_type().is_subtype_of(db, ftb.return_type)
-				{
-					// Functions have incompatible return types
-					incompat_fns[i + j + 1] = incompat_fns[i].or(Some(i));
-				}
-			}
-		}
-		let mut drain = overloads.iter().cloned().map(Some).collect::<Vec<_>>();
-		for i in 0..same_fns.len() {
-			let others = same_fns
-				.iter()
-				.enumerate()
-				.filter_map(|(j, dup)| {
-					if let Some(x) = dup
-						&& *x == i
-					{
-						return Some(drain[j].take().unwrap());
-					}
-					None
-				})
-				.collect::<Vec<_>>();
-			if !others.is_empty() {
-				diagnostics.push(OverloadingError::FunctionAlreadyDefined {
-					first: drain[i].take().unwrap(),
-					others,
-				});
-			}
-		}
-
-		let mut drain = overloads.iter().cloned().map(Some).collect::<Vec<_>>();
-		for i in 0..incompat_fns.len() {
-			let others = incompat_fns
-				.iter()
-				.enumerate()
-				.filter_map(|(j, dup)| {
-					if let Some(x) = dup
-						&& *x == i
-					{
-						return Some(drain[j].take().unwrap());
-					}
-					None
-				})
-				.collect::<Vec<_>>();
-			if !others.is_empty() {
-				diagnostics.push(OverloadingError::IncompatibleReturnType {
-					first: drain[i].take().unwrap(),
-					others,
-				});
-			}
-		}
-
-		diagnostics
-	}
 }
 
 /// An overloaded function
@@ -434,6 +143,22 @@ impl<'db> OverloadedFunction<'db> {
 		match self {
 			OverloadedFunction::Function(f) => &f.params,
 			OverloadedFunction::PolymorphicFunction(p) => &p.params,
+		}
+	}
+
+	/// Get mutable reference to the parameters of the function
+	pub fn params_mut(&mut self) -> &mut [Ty<'db>] {
+		match self {
+			OverloadedFunction::Function(f) => &mut f.params,
+			OverloadedFunction::PolymorphicFunction(p) => &mut p.params,
+		}
+	}
+
+	/// Set the parameters of the function
+	pub fn set_params(&mut self, params: Box<[Ty<'db>]>) {
+		match self {
+			OverloadedFunction::Function(f) => f.params = params,
+			OverloadedFunction::PolymorphicFunction(p) => p.params = params,
 		}
 	}
 
@@ -511,6 +236,219 @@ impl<'db> OverloadedFunction<'db> {
 			OverloadedFunction::PolymorphicFunction(p) => p.pretty_print_call_signature(db, name),
 		}
 	}
+}
+
+/// Trait for overloaded functions
+pub trait Overload<'db> {
+	/// Get the overload
+	fn overload(&self) -> &OverloadedFunction<'db>;
+
+	/// Called when two overloads are identical, to determine which one to prefer.
+	///
+	/// Return `Some(true)` to prefer `self`, `Some(false)` to prefer `other`, or `None` to indicate that neither is preferred.
+	fn tie_break(&self, _other: &Self) -> Option<bool> {
+		None
+	}
+}
+
+impl<'db> Overload<'db> for OverloadedFunction<'db> {
+	fn overload(&self) -> &OverloadedFunction<'db> {
+		self
+	}
+}
+
+impl<'db, T, U: Overload<'db>> Overload<'db> for (T, U) {
+	fn overload(&self) -> &OverloadedFunction<'db> {
+		self.1.overload()
+	}
+
+	fn tie_break(&self, other: &Self) -> Option<bool> {
+		self.1.tie_break(&other.1)
+	}
+}
+
+/// A matched function
+#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+pub struct ResolvedFunction<'db, T> {
+	/// The function
+	pub function: T,
+	/// The type parameter instantiations for the function
+	pub ty_params: TyParamInstantiations<'db>,
+}
+
+/// Return the most specific function overload which matches the given argument types.
+///
+/// If the function to dispatch to is polymorphic then also instantiate the polymorphic function.
+/// If there is no one specific function, this is an error.
+pub fn match_fn<'db, T: Overload<'db>>(
+	db: &'db dyn Db,
+	overloads: impl IntoIterator<Item = T>,
+	args: &[Ty<'db>],
+) -> Result<ResolvedFunction<'db, T>, FunctionResolutionError<'db, T>> {
+	let (matches, mismatches) = overloads
+		.into_iter()
+		.map(|entry| {
+			let ty_params = entry.overload().instantiate_ty_params(db, args);
+			(entry, ty_params)
+		})
+		.partition::<Vec<_>, _>(|(_, ty_params)| ty_params.is_ok());
+
+	if matches.is_empty() {
+		return Err(FunctionResolutionError::NoMatchingFunction(
+			mismatches
+				.into_iter()
+				.map(|(entry, ty_params)| (entry, ty_params.unwrap_err()))
+				.collect(),
+		));
+	}
+
+	let mut candidates = matches
+		.into_iter()
+		.map(|(entry, instantiation)| {
+			let (ty_params, function_type) = instantiation.unwrap();
+			Candidate {
+				is_candidate: true,
+				has_error: entry.overload().contains_error(db),
+				entry,
+				ty_params,
+				function_type,
+			}
+		})
+		.collect::<Vec<_>>();
+
+	log::debug!(
+		"Overload resolution found {} matching candidates",
+		candidates.len()
+	);
+	for i in 1..candidates.len() {
+		// For each pair, eliminate the less specific function (based on instantiated signature if there were candidate polymorphic functions)
+		// e.g. prefer 'bool' over 'int', prefer 'int' over 'var int'
+		//      for an 'int' argument, prefer '$T' over 'float' (prefer the instantiated polymorphic function over the concrete function which requires a coercion)
+		//      prefer concrete function over polymorphic instantiation if equivalent
+		//      for two polymorphic candidates, prefer '$$E' over '$T' if they both instantiate to the same type
+		let (left, right) = candidates.split_at_mut(i);
+		let c1 = left.last_mut().unwrap();
+		if !c1.is_candidate {
+			continue;
+		}
+		for (j, c2) in right.iter_mut().enumerate() {
+			if !c2.is_candidate {
+				continue;
+			}
+			if c1.has_error && !c2.has_error {
+				c1.is_candidate = false;
+				continue;
+			} else if c2.has_error && !c1.has_error {
+				c2.is_candidate = false;
+				continue;
+			}
+			let f1 = &c1.function_type;
+			let f2 = &c2.function_type;
+			let m1 = f1.matches(db, &f2.params).is_ok();
+			let m2 = f2.matches(db, &f1.params).is_ok();
+
+			log::debug!(
+				"Candidate {}: {} instantiates to {}",
+				i,
+				c1.entry.overload().pretty_print(db),
+				f1.pretty_print(db)
+			);
+			log::debug!(
+				"Candidate {}: {} instantiates to {}",
+				i + j + 1,
+				c2.entry.overload().pretty_print(db),
+				f2.pretty_print(db)
+			);
+			log::debug!("Candidate {} accepts candidate 2's parameters? {:?}", i, m1);
+			log::debug!(
+				"Candidate {} accepts candidate 1's parameters? {:?}",
+				i + j + 1,
+				m2
+			);
+			if m1 && !m2 {
+				// We accept their args, but they don't accept ours, so they're more specific
+				c1.is_candidate = false;
+			} else if m2 && !m1 {
+				// They accept our args, but we don't accept theirs, so we're more specific
+				c2.is_candidate = false;
+			} else if m1 && m2 {
+				// Equivalent instantiation
+				match (&c1.entry.overload(), &c2.entry.overload()) {
+					// Prefer concrete function over polymorphic instance
+					(
+						OverloadedFunction::PolymorphicFunction(_),
+						OverloadedFunction::Function(_),
+					) => {
+						c1.is_candidate = false;
+					}
+					(
+						OverloadedFunction::Function(_),
+						OverloadedFunction::PolymorphicFunction(_),
+					) => {
+						c2.is_candidate = false;
+					}
+					// Prefer more specific polymorphic function
+					(
+						OverloadedFunction::PolymorphicFunction(p1),
+						OverloadedFunction::PolymorphicFunction(p2),
+					) => {
+						let m1 = p1.instantiate_ty_params(db, &p2.params).is_ok();
+						let m2 = p2.instantiate_ty_params(db, &p1.params).is_ok();
+						log::debug!(
+							"Polymorphic candidate {} accepts candidate 2's polymorphic parameters? {:?}",
+							i,
+							m1
+						);
+						log::debug!(
+							"Polymorphic candidate {} accepts candidate 1's polymorphic parameters? {:?}",
+							i + j + 1,
+							m2
+						);
+						if m1 && !m2 {
+							// We accept their args, but they don't accept ours, so they're more specific
+							c1.is_candidate = false;
+						} else if m2 && !m1 {
+							// They accept our args, but we don't accept theirs, so we're more specific
+							c2.is_candidate = false;
+						} else {
+							// Prefer earlier candidate if both equivalent
+							c2.is_candidate = false;
+						}
+					}
+					_ => {
+						if let Some(prefer_c1) = c1.entry.tie_break(&c2.entry) {
+							if prefer_c1 {
+								c2.is_candidate = false;
+							} else {
+								c1.is_candidate = false;
+							}
+						}
+					}
+				}
+			}
+			if !c1.is_candidate {
+				log::debug!("Eliminated candidate {}", i);
+			}
+			if !c2.is_candidate {
+				log::debug!("Eliminated candidate {}", i + j + 1);
+			}
+		}
+	}
+	candidates.retain(|c| c.is_candidate);
+	assert!(
+		!candidates.is_empty(),
+		"Overload matches found, but all candidates eliminated!"
+	);
+	if candidates.len() > 1 {
+		return Err(FunctionResolutionError::AmbiguousOverloading(
+			candidates.into_iter().map(|c| c.entry).collect(),
+		));
+	}
+	let c = candidates.pop().unwrap();
+	Ok(ResolvedFunction {
+		function: c.entry,
+		ty_params: c.ty_params,
+	})
 }
 
 /// Type of a function expression.

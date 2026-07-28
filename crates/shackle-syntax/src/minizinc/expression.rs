@@ -215,8 +215,38 @@ impl<'tree> Call<'tree> {
 	}
 
 	/// Get the call arguments.
-	pub fn arguments(&self) -> Children<'tree, Expression<'tree>> {
+	pub fn arguments(&self) -> Children<'tree, ArgOrParam<'tree>> {
 		children_with_field_name(self, "argument")
+	}
+
+	/// Get the call arguments as expressions (used for dzn)
+	pub fn dzn_arguments(&self) -> Children<'tree, Expression<'tree>> {
+		children_with_field_name(self, "argument")
+	}
+}
+
+ast_node!(
+	/// Either a call argument (possibly named) or a parameter if this is a actually from an enum assignment
+	ArgOrParam,
+	left,
+	right,
+	default,
+);
+
+impl<'tree> ArgOrParam<'tree> {
+	/// The left hand side of the colon as a type (or the sole type if there is no colon)
+	pub fn left(&self) -> Type<'tree> {
+		child_with_field_name(self, "type")
+	}
+
+	/// The right hand side of the colon as an expression
+	pub fn right(&self) -> Option<Expression<'tree>> {
+		optional_child_with_field_name(self, "expression")
+	}
+
+	/// The right hand side of the equals sign
+	pub fn default(&self) -> Option<Expression<'tree>> {
+		optional_child_with_field_name(self, "default")
 	}
 }
 
@@ -1074,20 +1104,50 @@ mod tests {
                                     ),
                                 ),
                                 arguments: [
-                                    Identifier(
-                                        UnquotedIdentifier(
-                                            UnquotedIdentifier {
-                                                cst_kind: "identifier",
+                                    ArgOrParam {
+                                        cst_kind: "arg_or_param",
+                                        left: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: None,
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Bounded(
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ),
                                             },
                                         ),
-                                    ),
-                                    Identifier(
-                                        UnquotedIdentifier(
-                                            UnquotedIdentifier {
-                                                cst_kind: "identifier",
+                                        right: None,
+                                        default: None,
+                                    },
+                                    ArgOrParam {
+                                        cst_kind: "arg_or_param",
+                                        left: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: None,
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Bounded(
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ),
                                             },
                                         ),
-                                    ),
+                                        right: None,
+                                        default: None,
+                                    },
                                 ],
                             },
                         ),
@@ -1117,24 +1177,54 @@ mod tests {
                                             ),
                                         ),
                                         arguments: [
-                                            Identifier(
-                                                UnquotedIdentifier(
-                                                    UnquotedIdentifier {
-                                                        cst_kind: "identifier",
+                                            ArgOrParam {
+                                                cst_kind: "arg_or_param",
+                                                left: TypeBase(
+                                                    TypeBase {
+                                                        cst_kind: "type_base",
+                                                        var_type: None,
+                                                        opt_type: None,
+                                                        any_type: false,
+                                                        domain: Bounded(
+                                                            Identifier(
+                                                                UnquotedIdentifier(
+                                                                    UnquotedIdentifier {
+                                                                        cst_kind: "identifier",
+                                                                    },
+                                                                ),
+                                                            ),
+                                                        ),
                                                     },
                                                 ),
-                                            ),
+                                                right: None,
+                                                default: None,
+                                            },
                                         ],
                                     },
                                 ),
                                 arguments: [
-                                    Identifier(
-                                        UnquotedIdentifier(
-                                            UnquotedIdentifier {
-                                                cst_kind: "identifier",
+                                    ArgOrParam {
+                                        cst_kind: "arg_or_param",
+                                        left: TypeBase(
+                                            TypeBase {
+                                                cst_kind: "type_base",
+                                                var_type: None,
+                                                opt_type: None,
+                                                any_type: false,
+                                                domain: Bounded(
+                                                    Identifier(
+                                                        UnquotedIdentifier(
+                                                            UnquotedIdentifier {
+                                                                cst_kind: "identifier",
+                                                            },
+                                                        ),
+                                                    ),
+                                                ),
                                             },
                                         ),
-                                    ),
+                                        right: None,
+                                        default: None,
+                                    },
                                 ],
                             },
                         ),
@@ -1857,6 +1947,7 @@ mod tests {
                                             ),
                                         ),
                                         annotations: [],
+                                        default: None,
                                     },
                                 ],
                                 body: Identifier(

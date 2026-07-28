@@ -47,3 +47,13 @@ fn format_4() {
 	let expected = expect_file![path];
 	expected.assert_eq(&actual);
 }
+
+#[test]
+fn format_5() {
+	let options = MiniZincFormatOptions::default();
+	let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+	path.push("tests/formatting_5.mzn");
+	let actual = check_format_file(&path, &options);
+	let expected = expect_file![path];
+	expected.assert_eq(&actual);
+}

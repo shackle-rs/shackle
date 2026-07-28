@@ -294,7 +294,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 					}
 					true
 				};
-				for (arg, param) in args.iter().zip(fe.overload.params().iter()) {
+				for (arg, param) in args.iter().zip(fe.params().iter()) {
 					if !PolymorphicFunctionType::collect_instantiations(
 						db,
 						&mut add_instantiation,
@@ -304,7 +304,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 						return;
 					}
 				}
-				let ft = fe.overload.instantiate(db, &ty_vars);
+				let ft = fe.instantiate(db, &ty_vars);
 				if ft
 					.params
 					.iter()
@@ -373,7 +373,6 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 
 		let (ty_vars, function_type) = model[f]
 			.function_entry(model)
-			.overload
 			.instantiate_ty_params(db, args)
 			.unwrap();
 
@@ -399,7 +398,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 		let fn_match = model
 			.lookup_function(db, model[f].name(), args)
 			.unwrap_or_else(|e| panic!("{}", e.pretty_print(db)));
-		if !fn_match.fn_entry.overload.is_polymorphic() {
+		if !fn_match.fn_entry.is_polymorphic() {
 			// Already have existing concrete version, no need to create
 			return self.fold_function_id(db, model, fn_match.function);
 		}

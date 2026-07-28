@@ -10,131 +10,23 @@
 use std::collections::hash_map::Entry;
 
 use shackle_diagnostics::{
-	AdditionalSolveItem, ConstructorAlreadyDefined, DuplicateAssignment, DuplicateConstructor,
-	DuplicateFunction, FunctionAlreadyDefined, IllegalOverload, IllegalOverloading,
-	MultipleAssignments, MultipleSolveItems,
+	AdditionalSolveItem, DuplicateAssignment, MultipleAssignments, MultipleSolveItems,
 };
-use shackle_ty::{FunctionEntry, OverloadingError};
 use shackle_utils::hash::Map;
 
 use crate::{
-	Db, GlobalScope, Item, PatternTy,
+	Db, GlobalScope, Item,
 	diagnostics::Errors,
 	ids::{ExpressionRef, NodeRef},
 	lower::lower_models,
+	overloading::validate_overloading,
 };
 
 /// Validate HIR
 pub fn validate_hir<'db>(db: &'db dyn Db) {
 	log::info!("Validating HIR");
-	// Validate overloading
-	for (_, ps) in GlobalScope::functions(db) {
-		let mut overloads = Vec::new();
-		let mut annotation_constructors = Vec::new();
-		let mut enum_constructors = Vec::new();
-		for p in ps.iter() {
-			let signature = p.item(db).signature(db);
-			match &signature.patterns[&p.pattern(db)] {
-				PatternTy::Function(f) | PatternTy::AnnotationDestructure(f) => {
-					overloads.push((*p, *f.clone()));
-				}
-				PatternTy::AnnotationConstructor(f) => {
-					if annotation_constructors.is_empty() {
-						overloads.push((*p, *f.clone()));
-					}
-					annotation_constructors.push(*p);
-				}
-				PatternTy::EnumConstructor(ecs) => {
-					if enum_constructors.is_empty() {
-						overloads.extend(ecs.iter().map(|f| (*p, f.constructor.clone())));
-					}
-					enum_constructors.push(*p);
-				}
-				PatternTy::EnumDestructure(fs) => {
-					overloads.extend(fs.iter().map(|f| (*p, f.clone())));
-				}
-				_ => unreachable!(),
-			}
-		}
-		if annotation_constructors.len() > 1 {
-			let mut iter = annotation_constructors.into_iter();
-			let first = iter.next().unwrap();
-			let name = first.identifier(db).unwrap();
-			let (src, span) = first.source_span(db);
-			let others = iter
-				.map(|c| {
-					let (src, span) = c.source_span(db);
-					let help = format!(
-						"Try removing this item or use the functional syntax 'function ann: {}(..) = ..'.",
-						name.pretty_print(db)
-					);
-					DuplicateConstructor { help, src, span }
-				})
-				.collect();
-			Errors::add(db, ConstructorAlreadyDefined { src, span, others });
-		}
-		if enum_constructors.len() > 1 {
-			let mut iter = enum_constructors.into_iter();
-			let first = iter.next().unwrap();
-			let (src, span) = first.source_span(db);
-			let others = iter
-				.map(|c| {
-					let (src, span) = c.source_span(db);
-					let help = "Try removing this enum constructor.".to_owned();
-					DuplicateConstructor { help, src, span }
-				})
-				.collect();
-			Errors::add(db, ConstructorAlreadyDefined { src, span, others });
-		}
-		let errors = FunctionEntry::check_overloading(db, overloads);
-
-		for e in errors.iter() {
-			match e {
-				OverloadingError::FunctionAlreadyDefined {
-					first: (first_pat, first_fn),
-					others,
-				} => {
-					let name = first_pat.identifier(db).unwrap();
-					let signature = first_fn.overload.pretty_print_call_signature(db, name);
-					let (src, span) = first_pat.source_span(db);
-					Errors::add(
-						db,
-						FunctionAlreadyDefined {
-							src,
-							span,
-							signature,
-							others: others
-								.iter()
-								.map(|(p, _)| {
-									let (src, span) = p.source_span(db);
-									DuplicateFunction { src, span }
-								})
-								.collect(),
-						},
-					);
-				}
-				OverloadingError::IncompatibleReturnType {
-					first: (first_pat, _),
-					others,
-				} => {
-					let (src, span) = first_pat.source_span(db);
-					Errors::add(
-						db,
-						IllegalOverloading {
-							src,
-							span,
-							others: others
-								.iter()
-								.map(|(p, _)| {
-									let (src, span) = p.source_span(db);
-									IllegalOverload { src, span }
-								})
-								.collect(),
-						},
-					)
-				}
-			}
-		}
+	for (name, _) in GlobalScope::functions(db) {
+		validate_overloading(db, name);
 	}
 
 	// Check for multiple assignments to variables
