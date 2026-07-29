@@ -10,7 +10,7 @@ use crate::{
 	typecheck::{accumulate_typecheck_diagnostics, typecheck},
 };
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn compute_types(db: &dyn Db) {
 	typecheck(db);
 	accumulate_typecheck_diagnostics(db);

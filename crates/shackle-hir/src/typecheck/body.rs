@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Collected types for an item body
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue, Default)]
 pub struct BodyTypes<'db> {
 	/// Types of declarations
 	pub patterns: ArenaMap<Pattern<'db>, PatternTy<'db>>,
@@ -29,7 +29,7 @@ pub struct BodyTypes<'db> {
 	pub types: ArenaMap<Type<'db>, Ty<'db>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 struct BodyTypesResult<'db> {
 	/// The body types for this item
 	body_types: BodyTypes<'db>,
@@ -47,7 +47,7 @@ impl<'db> Item<'db> {
 }
 
 /// Get body types without accumulating errors
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn item_body_types<'db>(db: &'db dyn Db, item: Item<'db>) -> BodyTypesResult<'db> {
 	let mut ctx = BodyTypeContext::new(item);
 	ctx.type_item(db);
@@ -55,7 +55,7 @@ fn item_body_types<'db>(db: &'db dyn Db, item: Item<'db>) -> BodyTypesResult<'db
 }
 
 /// Accumulate body typechecking diagnostics for this item
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub(super) fn accumulate_item_body_diagnostics<'db>(db: &'db dyn Db, item: Item<'db>) {
 	item_body_types(db, item).errors.accumulate(db);
 }

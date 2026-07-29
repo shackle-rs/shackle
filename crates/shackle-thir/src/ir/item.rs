@@ -18,7 +18,7 @@ use super::{
 use crate::{Db, source::Origin};
 
 /// An item of type `T`.
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Item<'db, T> {
 	item: T,
 	origin: Origin<'db>,
@@ -59,7 +59,7 @@ impl<'db, T> Item<'db, T> {
 }
 
 /// Annotation item
-#[derive(Clone, Debug, PartialEq, Eq, Deref, DerefMut, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Deref, DerefMut, salsa::SalsaValue)]
 pub struct Annotation<'db, T: Marker = ()> {
 	#[deref]
 	constructor: Constructor<'db, T>,
@@ -91,7 +91,7 @@ impl<'db, T: Marker> Annotation<'db, T> {
 }
 
 /// Constraint item
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Constraint<'db, T: Marker = ()> {
 	expression: Expression<'db, T>,
 	annotations: Annotations<'db, T>,
@@ -143,7 +143,7 @@ impl<'db, T: Marker> Constraint<'db, T> {
 pub type ConstraintId<'db, T = ()> = ArenaIndex<ConstraintItem<'db, T>>;
 
 /// A declaration item
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Declaration<'db, T: Marker = ()> {
 	domain: Domain<'db, T>,
 	name: Option<Identifier<'db>>,
@@ -333,7 +333,7 @@ pub type EnumerationItem<'db, T = ()> = Item<'db, Enumeration<'db, T>>;
 pub type EnumerationId<'db, T = ()> = ArenaIndex<EnumerationItem<'db, T>>;
 
 /// A enum item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Enumeration<'db, T: Marker = ()> {
 	enum_type: EnumRef<'db>,
 	definition: Option<Vec<Constructor<'db, T>>>,
@@ -400,7 +400,7 @@ impl<'db, T: Marker> Enumeration<'db, T> {
 }
 
 /// A constructor (either atomic or a constructor function)
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Constructor<'db, T: Marker = ()> {
 	/// The name of this constructor
 	pub name: Option<Identifier<'db>>,
@@ -409,7 +409,7 @@ pub struct Constructor<'db, T: Marker = ()> {
 }
 
 /// Function name or identifier for anonymous function
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, From, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, From, salsa::SalsaValue)]
 pub enum FunctionName<'db> {
 	/// Named function.
 	#[from]
@@ -540,7 +540,7 @@ impl<'db> PartialEq<Identifier<'db>> for FunctionName<'db> {
 }
 
 /// Function item
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Function<'db, T: Marker = ()> {
 	domain: Domain<'db, T>,
 	name: FunctionName<'db>,
@@ -763,7 +763,7 @@ impl<'db, T: Marker> Function<'db, T> {
 ///
 /// This lets us keep track of which specialisations came from the same polymorphic
 /// definition and therefore should not be dispatched to one another.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, salsa::Update)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, salsa::SalsaValue)]
 pub struct SpecialisedFrom(NonZeroU32);
 
 impl<'db, T: Marker> From<FunctionId<'db, T>> for SpecialisedFrom {
@@ -773,7 +773,7 @@ impl<'db, T: Marker> From<FunctionId<'db, T>> for SpecialisedFrom {
 }
 
 /// Output item
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Output<'db, T: Marker = ()> {
 	section: Option<Expression<'db, T>>,
 	expression: Expression<'db, T>,
@@ -826,7 +826,7 @@ impl<'db, T: Marker> Output<'db, T> {
 }
 
 /// Solve item
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Solve<'db, T: Marker = ()> {
 	/// Solve goal
 	goal: Goal<'db, T>,
@@ -902,7 +902,7 @@ impl<'db, T: Marker> Solve<'db, T> {
 }
 
 /// Solve method and objective
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Goal<'db, T: Marker = ()> {
 	/// Satisfaction problem
 	Satisfy,
@@ -919,7 +919,7 @@ pub enum Goal<'db, T: Marker = ()> {
 }
 
 /// ID of an item
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, From, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, From, salsa::SalsaValue)]
 pub enum ItemId<'db, T: Marker = ()> {
 	/// Annotation item
 	Annotation(AnnotationId<'db, T>),

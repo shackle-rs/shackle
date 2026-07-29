@@ -108,7 +108,7 @@ pub fn all_warnings(db: &dyn Db) -> Vec<&Warning> {
 		.collect()
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn run_hir_phase_internal(db: &dyn Db) {
 	let _ = resolve_includes(db);
 	accumulate_syntax_errors(db);

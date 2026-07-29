@@ -37,7 +37,7 @@ use crate::{
 	PartialEq,
 	Eq,
 	salsa::Supertype,
-	salsa::Update,
+	salsa::SalsaValue,
 	TryUnwrap,
 	Unwrap,
 )]
@@ -68,13 +68,13 @@ pub enum Item<'db> {
 
 impl<'db> Item<'db> {
 	/// Get the origin of the documentation comment attached to this item, if any.
-	pub fn documentation(&self, db: &'db dyn Db) -> Option<Origin> {
+	pub fn documentation(&self, db: &'db dyn Db) -> Option<&'db Origin> {
 		match self {
-			Item::Annotation(i) => i.documentation(db),
-			Item::Declaration(i) => i.documentation(db),
-			Item::Enumeration(i) => i.documentation(db),
-			Item::Function(i) => i.documentation(db),
-			Item::TypeAlias(i) => i.documentation(db),
+			Item::Annotation(i) => i.documentation(db).as_ref(),
+			Item::Declaration(i) => i.documentation(db).as_ref(),
+			Item::Enumeration(i) => i.documentation(db).as_ref(),
+			Item::Function(i) => i.documentation(db).as_ref(),
+			Item::TypeAlias(i) => i.documentation(db).as_ref(),
 			_ => None,
 		}
 	}
@@ -124,7 +124,7 @@ impl<'db> Item<'db> {
 	}
 
 	/// Get the origin of this item
-	pub fn origin(&self, db: &'db dyn Db) -> Origin {
+	pub fn origin(&self, db: &'db dyn Db) -> &'db Origin {
 		match self {
 			Item::Annotation(i) => i.origin(db),
 			Item::Assignment(i) => i.origin(db),
@@ -159,15 +159,15 @@ impl<'db> Item<'db> {
 }
 
 /// An item with its data
-#[derive(Clone, Deref, Index, Debug, PartialEq, Eq, salsa::Update)]
-pub struct ItemWithData<'db, T: salsa::Update> {
+#[derive(Clone, Deref, Index, Debug, PartialEq, Eq, salsa::SalsaValue)]
+pub struct ItemWithData<'db, T> {
 	#[deref]
 	item: T,
 	#[index]
 	data: ItemData<'db>,
 }
 
-impl<'db, T: salsa::Update> ItemWithData<'db, T> {
+impl<'db, T> ItemWithData<'db, T> {
 	/// Create a new item
 	pub fn new(item: T, data: ItemData<'db>) -> Self {
 		Self { item, data }
@@ -188,7 +188,7 @@ impl<'db, T: salsa::Update> ItemWithData<'db, T> {
 }
 
 /// Storage for expressions, types and sub-items owned by an item.
-#[derive(Clone, Debug, Default, PartialEq, Eq, TypedIndex, salsa::Update)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, TypedIndex, salsa::SalsaValue)]
 pub struct ItemData<'db> {
 	/// Allocation for expressions
 	#[index_mut(ExpressionId<'db>)]
@@ -231,7 +231,7 @@ impl<'db> ItemData<'db> {
 }
 
 /// An assignment item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Assignment<'db> {
 	/// Expression being assigned (usually just an identifier)
 	pub assignee: ExpressionId<'db>,
@@ -247,12 +247,10 @@ mod assignment_item {
 	pub struct AssignmentItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub assignment: ItemWithData<'db, Assignment<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// The origin of this item
@@ -262,7 +260,7 @@ mod assignment_item {
 pub use assignment_item::AssignmentItem;
 
 /// Constraint item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Constraint<'db> {
 	/// Constraint value
 	pub expression: ExpressionId<'db>,
@@ -278,12 +276,10 @@ mod constraint_item {
 	pub struct ConstraintItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub constraint: ItemWithData<'db, Constraint<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// The origin of this item
@@ -293,7 +289,7 @@ mod constraint_item {
 pub use constraint_item::ConstraintItem;
 
 /// A declaration item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Declaration<'db> {
 	/// Type of declaration
 	pub declared_type: TypeId<'db>,
@@ -313,12 +309,10 @@ mod declaration_item {
 	pub struct DeclarationItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub declaration: ItemWithData<'db, Declaration<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// Origin of this declaration's documentation comment
@@ -331,7 +325,7 @@ mod declaration_item {
 pub use declaration_item::DeclarationItem;
 
 /// A constructor atom or function for an enum or annotations
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Constructor<'db> {
 	/// Atomic constructor
 	Atom {
@@ -369,7 +363,7 @@ impl<'db> Constructor<'db> {
 }
 
 /// An annotation item
-#[derive(Clone, Debug, Deref, DerefMut, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Deref, DerefMut, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Annotation<'db> {
 	/// The constructor this annotation item declares
 	#[deref]
@@ -384,12 +378,10 @@ mod annotation_item {
 	pub struct AnnotationItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub annotation: ItemWithData<'db, Annotation<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// Origin of this annotation's documentation comment
@@ -402,7 +394,7 @@ mod annotation_item {
 pub use annotation_item::AnnotationItem;
 
 /// An enum item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Enumeration<'db> {
 	/// Pattern being declared (an identifier)
 	pub pattern: PatternId<'db>,
@@ -420,12 +412,10 @@ mod enumeration_item {
 	pub struct EnumerationItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub enumeration: ItemWithData<'db, Enumeration<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// Origin of this enumeration's documentation comment
@@ -438,7 +428,7 @@ mod enumeration_item {
 pub use enumeration_item::EnumerationItem;
 
 /// An assignment item for an enum
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct EnumAssignment<'db> {
 	/// Expression being assigned (an identifier)
 	pub assignee: ExpressionId<'db>,
@@ -454,12 +444,10 @@ mod enum_assignment_item {
 	pub struct EnumAssignmentItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub enum_assignment: ItemWithData<'db, EnumAssignment<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// The origin of this item
@@ -469,7 +457,7 @@ mod enum_assignment_item {
 pub use enum_assignment_item::EnumAssignmentItem;
 
 /// An enum constructor (i.e. can be anonymous)
-#[derive(Clone, Debug, From, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, From, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum EnumConstructor<'db> {
 	/// Anonymous constructor
 	Anonymous {
@@ -504,7 +492,7 @@ impl<'db> EnumConstructor<'db> {
 }
 
 /// Function item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Function<'db> {
 	/// Return type of function
 	pub return_type: TypeId<'db>,
@@ -528,12 +516,10 @@ mod function_item {
 	pub struct FunctionItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub function: ItemWithData<'db, Function<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// Origin of this function's documentation comment
@@ -546,7 +532,7 @@ mod function_item {
 pub use function_item::FunctionItem;
 
 /// Declaration of a type-inst identifier
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct TypeInstIdentifierDeclaration<'db> {
 	/// The name of this identifier
 	pub name: PatternId<'db>,
@@ -561,7 +547,7 @@ pub struct TypeInstIdentifierDeclaration<'db> {
 }
 
 /// Function parameter
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Parameter<'db> {
 	/// Type of declaration
 	pub declared_type: TypeId<'db>,
@@ -574,7 +560,7 @@ pub struct Parameter<'db> {
 }
 
 /// Output item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Output<'db> {
 	/// Section (always a `StringLiteral` or `None`)
 	pub section: Option<ExpressionId<'db>>,
@@ -590,12 +576,10 @@ mod output_item {
 	pub struct OutputItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub output: ItemWithData<'db, Output<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// The origin of this item
@@ -605,7 +589,7 @@ mod output_item {
 pub use output_item::OutputItem;
 
 /// Solve item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Solve<'db> {
 	/// Solve goal
 	pub goal: Goal<'db>,
@@ -621,12 +605,10 @@ mod solve_item {
 	pub struct SolveItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub solve: ItemWithData<'db, Solve<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// The origin of this item
@@ -636,7 +618,7 @@ mod solve_item {
 pub use solve_item::SolveItem;
 
 /// Solve method and objective
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Goal<'db> {
 	/// Satisfaction problem
 	Satisfy,
@@ -657,7 +639,7 @@ pub enum Goal<'db> {
 }
 
 /// Type alias item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct TypeAlias<'db> {
 	/// Name of this type alias
 	pub name: PatternId<'db>,
@@ -675,12 +657,10 @@ mod type_alias_item {
 	pub struct TypeAliasItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub type_alias: ItemWithData<'db, TypeAlias<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// Origin of this type alias's documentation comment
@@ -693,7 +673,7 @@ mod type_alias_item {
 pub use type_alias_item::TypeAliasItem;
 
 /// A class declaration item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Class<'db> {
 	/// Name of this class (always an identifier)
 	pub pattern: PatternId<'db>,
@@ -708,7 +688,7 @@ pub struct Class<'db> {
 }
 
 /// A member of a class body
-#[derive(Clone, Debug, Hash, PartialEq, Eq, From, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, From, salsa::SalsaValue)]
 pub enum ClassMember<'db> {
 	/// An attribute
 	Declaration(Declaration<'db>),
@@ -724,12 +704,10 @@ mod class_item {
 	pub struct ClassItem<'db> {
 		/// The item and data
 		#[tracked]
-		#[returns(ref)]
 		pub class: ItemWithData<'db, Class<'db>>,
 
 		/// The source map for this item
 		#[tracked]
-		#[returns(ref)]
 		pub sources: SourceMap<'db>,
 
 		/// Origin of this class's documentation comment

@@ -25,12 +25,11 @@ pub use self::functions::*;
 pub mod registry;
 #[salsa::interned(debug)]
 struct InternedTy<'db> {
-	#[returns(ref)]
 	inner: TyData<'db>,
 }
 
 /// A type used in the type-system (as opposed to the type that is declared by the user and used in the `hir` module).
-#[derive(Copy, Clone, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Ty<'db>(InternedTy<'db>);
 
 impl<'db> Ty<'db> {
@@ -1476,7 +1475,7 @@ impl<'db> std::fmt::Display for Ty<'db> {
 }
 
 /// A type used in the type-system (as opposed to the type that is declared by the user and used in the `hir` module).
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum TyData<'db> {
 	/// Boolean scalar
 	Boolean(VarType, OptType),
@@ -1523,7 +1522,7 @@ pub enum TyData<'db> {
 }
 
 /// A new type (e.g. enums, type-inst vars)
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct NewType<'db>(InternedString<'db>);
 
 impl<'db> NewType<'db> {
@@ -1540,7 +1539,7 @@ impl<'db> NewType<'db> {
 }
 
 /// The type of an enum value
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct EnumRef<'db>(NewType<'db>);
 
 impl<'db> EnumRef<'db> {
@@ -1580,7 +1579,7 @@ impl<'db> EnumRef<'db> {
 /// subtyping between class types is resolved here, without access to the HIR;
 /// the attribute list lives in the HIR signature instead, since only the
 /// typechecker needs it.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ClassRef<'db> {
 	newtype: NewType<'db>,
 	superclass: Option<Ty<'db>>,
@@ -1628,7 +1627,7 @@ impl<'db> ClassRef<'db> {
 }
 
 /// The type of a reference to a type-inst var
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct TyVarRef<'db>(NewType<'db>);
 
 impl<'db> TyVarRef<'db> {
@@ -1653,7 +1652,7 @@ impl<'db> TyVarRef<'db> {
 }
 
 /// The type of a type-inst variable
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct TyVar<'db> {
 	/// The newtype for this type-inst var
 	pub ty_var: TyVarRef<'db>,

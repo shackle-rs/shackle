@@ -140,12 +140,12 @@ impl std::fmt::Debug for GlobalScope {
 
 // Cache these lookups (requires salsa struct arg, so use `InternedString` rather than `Identifier`)
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn lookup_global_atom_internal<'db>(db: &'db dyn Db, identifier: InternedString<'db>) -> bool {
 	GlobalScope::collect(db).is_atom(identifier.into(), 0)
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn lookup_global_variable_internal<'db>(
 	db: &'db dyn Db,
 	identifier: InternedString<'db>,
@@ -153,7 +153,7 @@ fn lookup_global_variable_internal<'db>(
 	GlobalScope::collect(db).find_variable(identifier.into(), 0)
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn lookup_global_function_internal<'db>(
 	db: &'db dyn Db,
 	identifier: InternedString<'db>,
@@ -164,7 +164,7 @@ fn lookup_global_function_internal<'db>(
 /// Force collection of all scopes (including global scope)
 ///
 /// To access the results, use `GlobalScope` or `item.scope(db)` for each item.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn collect_scopes(db: &dyn Db) {
 	let _ = GlobalScope::collect(db);
 	let models = lower_models(db);
@@ -174,7 +174,7 @@ pub fn collect_scopes(db: &dyn Db) {
 }
 
 /// Accumulate scope diagnostics for the whole program.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn accumulate_scope_diagnostics(db: &dyn Db) {
 	let (_, diagnostics) = collect_global_scope_with_diagnostics(db);
 	diagnostics.accumulate(db);
@@ -199,7 +199,7 @@ impl<'db> Model<'db> {
 	}
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn collect_scopes_for_model<'db>(db: &'db dyn Db, model: Model<'db>) {
 	log::info!(
 		"Computing scopes for expressions in model {}",
@@ -210,7 +210,7 @@ fn collect_scopes_for_model<'db>(db: &'db dyn Db, model: Model<'db>) {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn collect_model_global_scope<'db>(db: &'db dyn Db, model: Model<'db>) -> ScopeData<'db> {
 	log::info!("Computing names in scope for model {}", model.file(db));
 	let mut scope = ScopeData::default();
@@ -389,7 +389,7 @@ fn collect_model_global_scope<'db>(db: &'db dyn Db, model: Model<'db>) -> ScopeD
 /// Gets all variables in global scope.
 ///
 /// - Checks for multiply defined identifiers
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn collect_global_scope_with_diagnostics<'db>(db: &'db dyn Db) -> (ScopeData<'db>, Diagnostics) {
 	log::info!("Computing full global scope for program");
 	let mut diagnostics = Diagnostics::default();
@@ -418,7 +418,7 @@ enum PatternMode {
 }
 
 /// Variable scope
-#[derive(Clone, Default, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Default, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ScopeData<'db> {
 	functions: Map<Identifier<'db>, Vec<(PatternRef<'db>, u32)>>,
 	function_names: Vec<Identifier<'db>>,
@@ -633,7 +633,7 @@ impl<'db> std::fmt::Debug for ScopeData<'db> {
 
 /// A collected scope entry
 #[allow(variant_size_differences, reason = "Size difference is expected")]
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 enum Scope<'db> {
 	/// Global scope external to current model
 	Global,
@@ -1187,7 +1187,7 @@ impl<'db> ScopeCollector<'db> {
 }
 
 /// Result of collecting scopes for an item
-#[derive(Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ScopeResult<'db> {
 	model: Model<'db>,
 	scopes: Arena<Scope<'db>>,
@@ -1517,12 +1517,12 @@ impl<'db> Item<'db> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn collect_item_scope<'db>(db: &'db dyn Db, item: Item<'db>) -> ScopeResult<'db> {
 	collect_item_scope_with_diagnostics(db, item).0
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn collect_item_scope_diagnostics<'db>(db: &'db dyn Db, item: Item<'db>) -> Diagnostics {
 	collect_item_scope_with_diagnostics(db, item).1
 }

@@ -22,7 +22,7 @@ use super::source::Origin;
 use crate::{Db, counts::ItemCounts};
 
 /// A model
-#[derive(Debug, Clone, PartialEq, Eq, Default, TypedIndex, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, TypedIndex, salsa::SalsaValue)]
 pub struct Model<'db, T: Marker = ()> {
 	#[index_mut(AnnotationId<'db, T>)]
 	annotations: Arena<AnnotationItem<'db, T>>,
@@ -606,7 +606,7 @@ pub trait Marker:
 	+ std::hash::Hash
 	+ std::fmt::Debug
 	+ Default
-	+ salsa::Update
+	+ salsa::SalsaValue
 	+ 'static
 {
 }

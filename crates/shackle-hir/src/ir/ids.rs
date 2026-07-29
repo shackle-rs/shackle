@@ -15,8 +15,10 @@ mod entity_id {
 	#[salsa::interned(debug)]
 	pub struct ExpressionRef<'db> {
 		/// The item containing this expression
+		#[returns(copy)]
 		pub item: Item<'db>,
 		/// The index of this expression
+		#[returns(copy)]
 		pub expression: ExpressionId<'db>,
 	}
 }
@@ -41,8 +43,10 @@ mod type_ref {
 	#[salsa::interned(debug)]
 	pub struct TypeRef<'db> {
 		/// The item containing this type
+		#[returns(copy)]
 		pub item: Item<'db>,
 		/// The index of this type
+		#[returns(copy)]
 		pub type_id: TypeId<'db>,
 	}
 }
@@ -67,8 +71,10 @@ mod pattern_ref {
 	#[salsa::interned]
 	pub struct PatternRef<'db> {
 		/// The item containing this pattern
+		#[returns(copy)]
 		pub item: Item<'db>,
 		/// The index of this pattern
+		#[returns(copy)]
 		pub pattern: PatternId<'db>,
 	}
 }
@@ -119,7 +125,7 @@ impl<'db> std::fmt::Debug for PatternRef<'db> {
 }
 
 /// Local reference to an entity (expression, type, or pattern) owned by an item.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, From, salsa::Update, Unwrap, TryUnwrap)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, From, salsa::SalsaValue, Unwrap, TryUnwrap)]
 pub enum EntityId<'db> {
 	/// Expression ID
 	Expression(ExpressionId<'db>),
@@ -136,8 +142,10 @@ mod entity_ref {
 	#[salsa::interned(debug)]
 	pub struct EntityRef<'db> {
 		/// THe item this entity is owned by
+		#[returns(copy)]
 		pub item: Item<'db>,
 		/// The local entity ID
+		#[returns(copy)]
 		pub entity: EntityId<'db>,
 	}
 }
@@ -214,7 +222,7 @@ impl<'db> EntityRef<'db> {
 	Unwrap,
 	TryUnwrap,
 	salsa::Supertype,
-	salsa::Update,
+	salsa::SalsaValue,
 )]
 pub enum NodeRef<'db> {
 	/// Model reference

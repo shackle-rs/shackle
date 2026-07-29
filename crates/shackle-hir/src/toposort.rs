@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// Topologically sort items
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn topological_sort<'db>(db: &'db dyn Db) -> Vec<Item<'db>> {
 	log::info!("Topologically sorting items");
 	let models = lower_models(db);

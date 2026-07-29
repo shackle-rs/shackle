@@ -1,4 +1,0 @@
-   Compiling shackle-fmt v0.1.0 (/home/jason/Repos/shackle/crates/shackle-fmt)
-   Compiling shackle v0.1.0 (/home/jason/Repos/shackle/crates/shackle)
-   Compiling shackle-ls v0.1.0 (/home/jason/Repos/shackle/crates/shackle-ls)
-   Compiling shackle-cli v0.1.0 (/home/jason/Repos/shackle/crates/shackle-cli)

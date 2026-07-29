@@ -88,7 +88,7 @@ pub fn final_thir<'db>(db: &'db dyn Db) -> Result<&'db Model<'db>> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn run_thir_phase_internal<'db>(db: &'db dyn Db) -> Model<'db> {
 	let model = lower_model(db).take();
 	let result = thir_transforms()(db, model);

@@ -19,7 +19,7 @@ use crate::{PatternId, TypeId};
 pub type ExpressionId<'db> = ArenaIndex<Expression<'db>>;
 
 /// An expression
-#[derive(Clone, From, Hash, PartialEq, Eq, salsa::Update, Unwrap, TryUnwrap)]
+#[derive(Clone, From, Hash, PartialEq, Eq, salsa::SalsaValue, Unwrap, TryUnwrap)]
 #[unwrap(ref)]
 #[try_unwrap(ref)]
 pub enum Expression<'db> {
@@ -299,7 +299,7 @@ impl<'db> fmt::Debug for Expression<'db> {
 }
 
 /// If-then-else
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct IfThenElse<'db> {
 	/// The if-then and elseif-then branches
 	pub branches: Box<[Branch<'db>]>,
@@ -308,7 +308,7 @@ pub struct IfThenElse<'db> {
 }
 
 /// A branch of an `IfThenElse`
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Branch<'db> {
 	/// The boolean condition
 	pub condition: ExpressionId<'db>,
@@ -317,7 +317,7 @@ pub struct Branch<'db> {
 }
 
 /// Function call
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Call<'db> {
 	/// The source construct from which this call was lowered
 	pub kind: CallKind,
@@ -330,7 +330,7 @@ pub struct Call<'db> {
 }
 
 /// The source construct from which a function call was lowered.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum CallKind {
 	/// An explicit function call, such as `foo(x)`.
 	SourceCall,
@@ -343,7 +343,7 @@ pub enum CallKind {
 }
 
 /// Case expression
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Case<'db> {
 	/// Expression being matched
 	pub expression: ExpressionId<'db>,
@@ -352,7 +352,7 @@ pub struct Case<'db> {
 }
 
 /// Case item
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct CaseItem<'db> {
 	/// Pattern being matched
 	pub pattern: PatternId<'db>,
@@ -361,7 +361,7 @@ pub struct CaseItem<'db> {
 }
 
 /// Let expression
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Let<'db> {
 	/// Items in this let expression
 	pub items: Box<[LetItem<'db>]>,
@@ -370,7 +370,7 @@ pub struct Let<'db> {
 }
 
 /// Item in a let expression
-#[derive(Clone, Debug, From, Hash, PartialEq, Eq, salsa::Update, Unwrap, TryUnwrap)]
+#[derive(Clone, Debug, From, Hash, PartialEq, Eq, salsa::SalsaValue, Unwrap, TryUnwrap)]
 #[unwrap(ref)]
 pub enum LetItem<'db> {
 	/// A declaration
@@ -380,7 +380,7 @@ pub enum LetItem<'db> {
 }
 
 /// Tuple access expression
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct TupleAccess<'db> {
 	/// Tuple being accessed
 	pub tuple: ExpressionId<'db>,
@@ -389,7 +389,7 @@ pub struct TupleAccess<'db> {
 }
 
 /// Record access expression
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct RecordAccess<'db> {
 	/// Record being accessed
 	pub record: ExpressionId<'db>,
@@ -397,7 +397,7 @@ pub struct RecordAccess<'db> {
 	pub field: PatternId<'db>,
 }
 /// Lambda function
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Lambda<'db> {
 	/// Return type if given
 	pub return_type: Option<TypeId<'db>>,

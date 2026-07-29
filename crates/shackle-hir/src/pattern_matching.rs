@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Compute a mapping from (non-introduced) enum types to the constructors for the enum
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn enum_constructors<'db>(db: &'db dyn Db) -> Map<EnumRef<'db>, Vec<PatternRef<'db>>> {
 	let mut result = Map::default();
 	for model in lower_models(db).iter() {
@@ -58,7 +58,7 @@ pub fn enum_constructors<'db>(db: &'db dyn Db) -> Map<EnumRef<'db>, Vec<PatternR
 	result
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn lookup_enum_constructors_internal<'db>(
 	db: &'db dyn Db,
 	e: InternedString<'db>,
@@ -76,7 +76,7 @@ pub fn lookup_enum_constructors<'db>(
 }
 
 /// Check case exhaustiveness for all models
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn check_case_exhaustiveness(db: &dyn Db) {
 	for model in lower_models(db).iter() {
 		model.check_case_exhaustiveness(db);
@@ -90,7 +90,7 @@ impl<'db> Model<'db> {
 	}
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn check_model_case_exhaustiveness<'db>(db: &'db dyn Db, model: Model<'db>) {
 	log::info!("Checking case exhaustiveness for model: {}", model.file(db));
 	for item in model.items(db).iter() {
@@ -106,7 +106,7 @@ impl<'db> Item<'db> {
 }
 
 /// Check that all case statements in this item are exhaustive
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn check_item_case_exhaustiveness<'db>(db: &'db dyn Db, item: Item<'db>) {
 	let data = item.data(db);
 	let types = item.types(db);

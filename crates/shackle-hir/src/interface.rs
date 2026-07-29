@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Interface for program input
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct InputInterface<'db> {
 	/// The set of input enums
 	pub enums: Set<Identifier<'db>>,
@@ -42,7 +42,7 @@ impl<'db> InputInterface<'db> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn get_input_interface<'db>(db: &'db dyn Db) -> InputInterface<'db> {
 	let mut params = Map::default();
 	let mut enums = Set::default();
@@ -102,7 +102,7 @@ fn get_input_interface<'db>(db: &'db dyn Db) -> InputInterface<'db> {
 }
 
 /// The output interface of the program
-#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct OutputInterface<'db> {
 	/// The variables to be output
 	pub variables: Map<Identifier<'db>, Ty<'db>>,
@@ -126,7 +126,7 @@ impl<'db> OutputInterface<'db> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn get_output_interface<'db>(db: &'db dyn Db) -> OutputInterface<'db> {
 	let ids = IdentifierRegistry::lookup(db);
 	let mut variables = Map::default();

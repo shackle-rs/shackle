@@ -8,7 +8,7 @@ use super::{
 };
 
 /// Collection of annotations
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Annotations<'db, T: Marker = ()> {
 	annotations: Vec<Expression<'db, T>>,
 }

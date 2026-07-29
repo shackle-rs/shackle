@@ -6,7 +6,7 @@ use crate::Ty;
 macro_rules! type_registry {
 	($(#[$meta:meta])* $struct:ident, $db:ident, $($name:ident: $value:expr),+$(,)?) => {
         $(#[$meta])*
-		#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+		#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 		pub struct $struct<'db> {
 			/// All types in the registry
 			pub all: Vec<$crate::Ty<'db>>,
@@ -70,7 +70,7 @@ impl<'db> TypeRegistry<'db> {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn create_type_registry<'db>(db: &'db dyn salsa::Database) -> TypeRegistry<'db> {
 	TypeRegistry::new(db)
 }

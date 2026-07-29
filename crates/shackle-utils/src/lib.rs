@@ -46,7 +46,6 @@ mod interned_string {
 	/// An interned string
 	#[salsa::interned(debug)]
 	pub struct InternedString {
-		#[returns(ref)]
 		value: String,
 	}
 

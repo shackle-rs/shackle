@@ -9,7 +9,7 @@ use shackle_utils::{InternedString, hash::Map};
 use crate::{Db, GlobalScope, Identifier, PatternTy, diagnostics::Diagnostics, ids::PatternRef};
 
 /// Info about a function parameter
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum ParamKind<'db> {
 	/// An unnamed parameter
 	Unnamed,
@@ -22,7 +22,7 @@ pub enum ParamKind<'db> {
 	},
 }
 /// An overloaded function entry
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct FunctionEntry<'db> {
 	/// Whether this function has a body
 	pub has_body: bool,
@@ -87,7 +87,7 @@ pub struct EliminatedOverload<'db> {
 }
 
 /// An overloaded function entry
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct FunctionEntryData<'db> {
 	/// The function pattern
 	pub pattern: PatternRef<'db>,
@@ -213,7 +213,7 @@ pub fn validate_overloading<'db>(db: &'db dyn Db, name: Identifier<'db>) {
 	validate_overloading_internal(db, name.into())
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn validate_overloading_internal<'db>(db: &'db dyn Db, name: InternedString<'db>) {
 	let overloads = GlobalScope::find_function(db, name.into());
 	check_overloading(db, overloads).accumulate(db);

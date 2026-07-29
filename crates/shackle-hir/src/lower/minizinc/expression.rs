@@ -385,7 +385,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 	}
 
 	/// Get the collected expressions
-	pub fn finish<T: salsa::Update>(mut self, item: T) -> (ItemWithData<'db, T>, SourceMap<'db>) {
+	pub fn finish<T>(mut self, item: T) -> (ItemWithData<'db, T>, SourceMap<'db>) {
 		self.data.shrink_to_fit();
 		(ItemWithData::new(item, self.data), self.source_map)
 	}

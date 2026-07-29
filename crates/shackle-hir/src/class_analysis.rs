@@ -26,7 +26,7 @@ use crate::{
 /// Class types identify their class by name, so this is how a [`ClassRef`] is
 /// resolved back to the HIR. Reads only the lowered models, which keeps it
 /// usable from signature construction.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn class_items<'db>(db: &'db dyn Db) -> Map<Identifier<'db>, ClassItem<'db>> {
 	let mut result = Map::default();
 	for model in lower_models(db).iter() {
@@ -59,7 +59,7 @@ pub fn class_pattern_for<'db>(db: &'db dyn Db, class: ClassRef<'db>) -> Option<P
 ///
 /// Derived from the `extends` edges alone, so like the var-flow queries this is
 /// free of any dependency on type inference.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn class_subclasses<'db>(db: &'db dyn Db) -> Map<PatternRef<'db>, Vec<PatternRef<'db>>> {
 	let mut result: Map<PatternRef<'db>, Vec<PatternRef<'db>>> = Map::default();
 	for (class, node) in class_nodes(db) {
@@ -233,7 +233,7 @@ fn top_level_introductions<'db>(
 ///
 /// Computed from the AST and the pre-typecheck global scope only, so that
 /// signature construction can consult it without forming a salsa cycle.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn var_reached_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 	let nodes = class_nodes(db);
 
@@ -311,7 +311,7 @@ fn classify_top_level_intro<'db>(data: &ItemData<'db>, ty: TypeId<'db>) -> TopLe
 /// Like the var-flow queries, this reads only the AST and the pre-typecheck
 /// global scope, so signature construction can consult it without forming a
 /// cycle.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn ownership_cyclic_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 	let nodes = class_nodes(db);
 
@@ -376,7 +376,7 @@ pub fn ownership_cyclic_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 /// Like [`var_reached_classes`], this reads only the AST and the pre-typecheck
 /// global scope, so signature construction can consult it without forming a
 /// cycle.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn var_actual_set_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 	let nodes = class_nodes(db);
 	let var_reached = var_reached_classes(db);
@@ -498,11 +498,11 @@ pub fn var_actual_set_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 }
 
 /// Stable identifier for one object-introduction occurrence in the lowering plan.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, salsa::Update)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, salsa::SalsaValue)]
 pub struct OccurrenceId(pub u32);
 
 /// Origin of an object-introduction occurrence.
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub enum OccurrenceSource<'db> {
 	/// A top-level declaration introducing objects.
 	TopLevelDeclaration(PatternRef<'db>),
@@ -518,7 +518,7 @@ pub enum OccurrenceSource<'db> {
 }
 
 /// Shape of the potential identity domain for an occurrence.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub enum LocalDomainSource {
 	/// Exactly one potential object is introduced.
 	SingleObject,
@@ -531,7 +531,7 @@ pub enum LocalDomainSource {
 }
 
 /// Class-level metadata needed by object lowering.
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ClassDescriptor<'db> {
 	/// The class pattern.
 	pub class_pattern: PatternRef<'db>,
@@ -544,7 +544,7 @@ pub struct ClassDescriptor<'db> {
 }
 
 /// One object-introduction occurrence in the lowering plan.
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Occurrence<'db> {
 	/// Stable occurrence id.
 	pub id: OccurrenceId,
@@ -565,7 +565,7 @@ pub struct Occurrence<'db> {
 }
 
 /// Contribution of one occurrence to a target class enum.
-#[derive(Clone, Debug, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, salsa::SalsaValue)]
 pub struct OccurrenceContribution<'db> {
 	/// Source occurrence.
 	pub occurrence: OccurrenceId,
@@ -578,7 +578,7 @@ pub struct OccurrenceContribution<'db> {
 }
 
 /// Result of object-lowering analysis.
-#[derive(Clone, Debug, Default, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ClassAnalysisResult<'db> {
 	/// Stable class metadata in declaration order.
 	pub class_descriptors: Vec<ClassDescriptor<'db>>,
@@ -637,7 +637,7 @@ struct ClassInfo<'db> {
 /// Unlike the scope-only queries above, this reads the typechecked signatures,
 /// so it must only be consulted after signature typing (object validation and
 /// THIR lowering), never from within it.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn analyse_new_objects<'db>(db: &'db dyn Db) -> ClassAnalysisResult<'db> {
 	let mut result = ClassAnalysisResult::default();
 	let mut class_infos: Map<PatternRef<'db>, ClassInfo<'db>> = Map::default();

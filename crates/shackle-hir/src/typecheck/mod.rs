@@ -43,7 +43,7 @@ use crate::{
 };
 
 /// Typecheck the entire program
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn typecheck(db: &dyn Db) {
 	log::info!("Type-checking program");
 	for model in resolve_includes(db) {
@@ -53,14 +53,14 @@ pub fn typecheck(db: &dyn Db) {
 }
 
 /// Accumulate typechecking diagnostics for all items.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn accumulate_typecheck_diagnostics(db: &dyn Db) {
 	for model in resolve_includes(db) {
 		accumulate_typecheck_model_diagnostics(db, model.hir(db));
 	}
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn typecheck_model<'db>(db: &'db dyn Db, model: Model<'db>) {
 	log::info!("Type-checking model {}", model.file(db));
 	for i in model.items(db) {
@@ -78,7 +78,7 @@ fn typecheck_model<'db>(db: &'db dyn Db, model: Model<'db>) {
 	}
 }
 
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 fn accumulate_typecheck_model_diagnostics<'db>(db: &'db dyn Db, model: Model<'db>) {
 	for item in model.items(db) {
 		accumulate_item_body_diagnostics(db, *item);
@@ -396,7 +396,7 @@ pub trait TypeContext<'db> {
 }
 
 /// Type of a pattern (usually a declaration)
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum PatternTy<'db> {
 	/// Pattern is a variable declaration.
 	Variable(Ty<'db>),
@@ -564,7 +564,7 @@ impl<'db> PatternTy<'db> {
 }
 
 /// Constructor for an enum
-#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct EnumConstructorEntry<'db> {
 	/// If true, this constructor is lifted and is not used for pattern matching
 	pub is_lifted: bool,

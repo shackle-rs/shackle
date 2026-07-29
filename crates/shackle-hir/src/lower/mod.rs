@@ -16,7 +16,7 @@ use crate::{
 	input::{ModelFile, resolve_includes},
 };
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn lower_model_with_diagnostics<'db>(
 	db: &'db dyn Db,
 	model_file: ModelFile,
@@ -44,7 +44,7 @@ fn lower_model_with_diagnostics<'db>(
 }
 
 /// Accumulate lowering diagnostics for all resolved models.
-#[salsa::tracked]
+#[salsa::tracked(returns(copy))]
 pub fn accumulate_lower_errors(db: &dyn Db) {
 	for model in resolve_includes(db) {
 		let (_, diagnostics) = lower_model_with_diagnostics(db, *model);
@@ -60,7 +60,7 @@ impl ModelFile {
 }
 
 /// Lower all models to HIR
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 pub fn lower_models<'db>(db: &'db dyn Db) -> Vec<Model<'db>> {
 	let models = resolve_includes(db);
 	models.iter().map(|m| m.hir(db)).collect()

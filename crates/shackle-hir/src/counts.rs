@@ -45,7 +45,7 @@ impl EntityCounts {
 	}
 }
 
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked]
 fn entity_counts(db: &dyn Db) -> EntityCounts {
 	let models = lower_models(db);
 	let mut counts = EntityCounts::default();

@@ -12,7 +12,7 @@ use crate::{ExpressionId, PatternId};
 pub type TypeId<'db> = ArenaIndex<Type<'db>>;
 
 /// Type of an expression
-#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::Update)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub enum Type<'db> {
 	/// Primitive unbounded type
 	Primitive {
