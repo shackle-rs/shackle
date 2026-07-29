@@ -9,7 +9,7 @@ version = "0.1.0"
 crossbeam-channel = "0.5.8"
 env_logger = {workspace = true}
 log = {workspace = true}
-lsp-server = "0.9.0"
+lsp-server = "0.10.0"
 lsp-types = "0.97"
 miette = {workspace = true}
 serde_json = {workspace = true}
