@@ -523,6 +523,7 @@ struct ItemCollector<'db> {
 	db: &'db dyn Db,
 	ids: &'db IdentifierRegistry<'db>,
 	resolutions: FxHashMap<PatternRef<'db>, LoweredIdentifier<'db>>,
+	param_defaults: FxHashMap<DeclarationId<'db>, Expression<'db>>,
 	class_map: FxHashMap<PatternRef<'db>, ClassMapInfo<'db>>,
 	object_lowering: ObjectLoweringPlan<'db>,
 	model: Model<'db>,
@@ -614,6 +615,7 @@ impl<'db> ItemCollector<'db> {
 			db,
 			ids,
 			resolutions: FxHashMap::default(),
+			param_defaults: FxHashMap::default(),
 			class_map: FxHashMap::default(),
 			object_lowering: ObjectLoweringPlan::new(db),
 			model: Model::with_capacities(&entity_counts.into()),
@@ -696,23 +698,12 @@ impl<'db> ItemCollector<'db> {
 				},
 				PatternTy::AnnotationConstructor(fn_entry),
 			) => {
-				let mut parameters = Vec::with_capacity(fn_entry.overload.params().len());
-				for (param, ty) in params.iter().zip(fn_entry.overload.params()) {
-					let mut collector = ExpressionCollector::new(self, a.data(), item, &types);
-					let domain = collector.collect_domain(param.declared_type, *ty, false);
-					let mut param_decl = Declaration::new(false, domain);
-					// Ignore destructuring and recording resolution for now since these can't have bodies which refer
-					// to parameters anyway
-					if let Some(p) = param.pattern
-						&& let Some(i) = a[p].identifier()
-					{
-						param_decl.set_name(i);
-					}
-					let idx = self
-						.model
-						.add_declaration(DeclarationItem::new(param_decl, item));
-					parameters.push(idx);
-				}
+				let parameters = params
+					.iter()
+					.zip(fn_entry.overload.params())
+					.map(|(param, ty)| self.collect_fn_param(param, *ty, a.data(), item, &types))
+					.collect::<Vec<_>>();
+
 				let mut annotation = Annotation::new(
 					a[*constructor]
 						.identifier()
@@ -730,6 +721,7 @@ impl<'db> ItemCollector<'db> {
 					PatternRef::new(self.db, item, *destructor),
 					LoweredIdentifier::Callable(Callable::AnnotationDestructure(idx)),
 				);
+
 				idx
 			}
 			_ => unreachable!(),
@@ -1141,7 +1133,7 @@ impl<'db> ItemCollector<'db> {
 					.params()
 					.iter()
 					.zip(parameters.iter())
-					.map(|(ty, t)| (*ty, t.declared_type))
+					.map(|(ty, t)| self.collect_fn_param(t, *ty, data, item, types))
 					.collect::<Vec<_>>(),
 			),
 			(
@@ -1153,7 +1145,7 @@ impl<'db> ItemCollector<'db> {
 					.params()
 					.iter()
 					.zip(parameters.iter())
-					.map(|(ty, t)| (*ty, t.declared_type))
+					.map(|(ty, t)| self.collect_fn_param(t, *ty, data, item, types))
 					.collect::<Vec<_>>(),
 			),
 			_ => unreachable!(),
@@ -1161,18 +1153,7 @@ impl<'db> ItemCollector<'db> {
 
 		Constructor {
 			name,
-			parameters: Some(
-				params
-					.iter()
-					.map(|(ty, t)| {
-						let mut collector = ExpressionCollector::new(self, data, item, types);
-						let domain = collector.collect_domain(*t, *ty, false);
-						let declaration = Declaration::new(false, domain);
-						self.model
-							.add_declaration(DeclarationItem::new(declaration, item))
-					})
-					.collect(),
-			),
+			parameters: Some(params),
 		}
 	}
 
@@ -1246,8 +1227,14 @@ impl<'db> ItemCollector<'db> {
 				.iter()
 				.map(|ann| collector.collect_expression(*ann)),
 		);
-		self.model
-			.add_declaration(DeclarationItem::new(declaration, item))
+		let default = param.default.map(|def| collector.collect_expression(def));
+		let idx = self
+			.model
+			.add_declaration(DeclarationItem::new(declaration, item));
+		if let Some(def) = default {
+			let _ = self.param_defaults.insert(idx, def);
+		}
+		idx
 	}
 
 	/// Collect an output item
@@ -12254,7 +12241,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 									})
 							})
 					};
-				let arguments = c
+				let mut arguments = c
 					.arguments
 					.iter()
 					.map(|arg| {
@@ -12350,6 +12337,48 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						}
 					})
 					.collect::<Vec<_>>();
+
+				let params = match &function {
+					Callable::Function(f) => Some(self.parent.model[*f].parameters()),
+					Callable::Annotation(a) => {
+						self.parent.model[*a].parameters.as_ref().map(|v| &v[..])
+					}
+					Callable::EnumConstructor(e) => self.parent.model[e.enumeration_id()]
+						.definition()
+						.unwrap()[e.member_index() as usize]
+						.parameters
+						.as_ref()
+						.map(|v| &v[..]),
+					_ => None,
+				};
+
+				if let Some(params) = params
+					&& params.len() > arguments.len()
+				{
+					// Need to fill in default and named arguments
+					let params = params[arguments.len()..].to_vec();
+					let mut named = c
+						.named_arguments
+						.iter()
+						.map(|(name, arg)| {
+							(
+								self.data[*name].identifier().unwrap(),
+								self.collect_expression(*arg),
+							)
+						})
+						.collect::<FxHashMap<_, _>>();
+
+					for param in params {
+						let param_name = self.parent.model[param].name().unwrap();
+						if let Some(arg) = named.remove(&param_name) {
+							arguments.push(arg);
+						} else {
+							let default = self.parent.param_defaults[&param].clone();
+							arguments.push(default);
+						}
+					}
+				}
+
 				// The HIR-resolved function item may no longer match the
 				// lowered argument types: varified storage widens par HIR
 				// operands to var, and class operands are relabeled to their
@@ -14361,4 +14390,61 @@ pub fn lower_model<'db>(db: &'db dyn Db) -> Intermediate<Model<'db>> {
 		.model
 		.reorder_top_level_items_by_hir_order(db, &item_order);
 	Intermediate::new(collector.finish())
+}
+
+#[cfg(test)]
+mod tests {
+	use expect_test::{Expect, expect};
+	use salsa::Setter;
+	use shackle_hir::{
+		CompilerDatabase,
+		input::{CompilerSettings, InlineModelFile, InputFiles},
+	};
+	use shackle_syntax::InputLang;
+
+	use crate::{lower::lower_model, pretty_print::PrettyPrinter};
+
+	/// Perform a transform on the THIR, and verify the result matches an expected value.
+	///
+	/// Turns off stdlib inclusion.
+	pub(crate) fn check_no_stdlib(source: &str, expected: Expect) {
+		let mut db = CompilerDatabase::default();
+		let _ = CompilerSettings::get(&db)
+			.set_ignore_stdlib(&mut db)
+			.to(true);
+		let model_file = InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc).into();
+		let _ = InputFiles::get(&db).set_files(&mut db).to(vec![model_file]);
+		let model = lower_model(&db).take();
+		let pretty = PrettyPrinter::new(&db, &model).pretty_print();
+		expected.assert_eq(&pretty);
+	}
+
+	#[test]
+	fn test_lower_named_args() {
+		check_no_stdlib(
+			r#"
+			test foo(int: hello, int: world, int: bar, int: qux);
+			any: x = foo(1, 2, qux: 4, bar: 3);
+			"#,
+			expect![[r#"
+    function bool: foo(int: hello, int: world, int: bar, int: qux);
+    bool: x = foo(1, 2, 3, 4);
+    solve satisfy;
+"#]],
+		);
+	}
+	#[test]
+	fn test_lower_named_and_default_args() {
+		check_no_stdlib(
+			r#"
+			test foo(int: hello, int: world, int: bar = 3, int: qux = 4);
+			any: x = foo(1, world: 2, qux: 10);
+			"#,
+			expect![[r#"
+    function bool: foo(int: hello, int: world, int: bar, int: qux);
+    bool: x = foo(1, 2, 3, 10);
+    solve satisfy;
+"#]],
+		);
+	}
 }
