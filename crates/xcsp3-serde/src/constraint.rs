@@ -24,14 +24,15 @@ use crate::{
 	as_str, deserialize_int_vals,
 	error::UnrollError,
 	expression::{
-		identifier, int, sequence, tuple, whitespace_seperated, BoolExp, Exp, ExpList, IntExp,
+		identifier, int, range, sequence, tuple, whitespace_seperated, BoolExp, Exp, ExpList,
+		IntExp,
 	},
 	from_string, serialize_list, Instantiation, IntVal, IntoVar, MetaInfo, Placeholder, SimpleRef,
 	VarRef,
 };
 
 macro_rules! constraints_enum {
-	($(#[$attr:meta])* $vis:vis $name:ident, $basic:meta, $meta:meta, $args:meta) => {
+	($(#[$attr:meta])* $vis:vis $name:ident, $basic:meta, $meta:meta, $args:meta, $slide_list:meta) => {
 		$(#[$attr])*
 		$vis enum $name<Identifier = String, Var = VarRef<Identifier>> {
 			#[cfg($basic)]
@@ -53,6 +54,9 @@ macro_rules! constraints_enum {
 			/// [`Circuit`] constraint
 			Circuit(Circuit<Identifier, Var>),
 			#[cfg($basic)]
+			/// [`Clause`] constraint
+			Clause(Clause<Identifier, Var>),
+			#[cfg($basic)]
 			/// [`Count`] constraint
 			Count(Count<Identifier, Var>),
 			#[cfg($basic)]
@@ -73,6 +77,9 @@ macro_rules! constraints_enum {
 			#[cfg($basic)]
 			/// [`Knapsack`] constraint
 			Knapsack(Knapsack<Identifier, Var>),
+			#[cfg($basic)]
+			/// [`Lex`] constraint
+			Lex(Lex<Identifier, Var>),
 			#[cfg($basic)]
 			/// [`Maximum`] constraint
 			Maximum(Maximum<Identifier, Var>),
@@ -106,12 +113,19 @@ macro_rules! constraints_enum {
 			#[cfg($meta)]
 			/// Constraint [`Group`], that can serve as a template
 			Block(Block<Identifier, Var>),
+			#[cfg($meta)]
+			/// Meta-constraint [`Slide`], that instantiates a template over
+			/// successive sub-lists
+			Slide(Slide<Identifier, Var>),
 			#[cfg(not($basic))]
 			/// Simple [`Constraint`] type
 			Constraint(Constraint<Identifier, Var>),
 			#[cfg($args)]
 			/// Constraint [`Group`], that can serve as a template
 			Args(ExpList<Var>),
+			#[cfg($slide_list)]
+			/// A `<list>` element of a [`Slide`] meta-constraint
+			List(SlideList<Var>),
 		}
 	};
 }
@@ -126,7 +140,8 @@ constraints_enum!(
 	pub Constraint,
 	/* expand_basic = true */ all(),
 	/* meta = false */ any(),
-	/* template_args = false */ any()
+	/* template_args = false */ any(),
+	/* slide_list = false */ any()
 );
 constraints_enum!(
 	#[derive(Clone, Debug, PartialEq, Hash)]
@@ -135,7 +150,8 @@ constraints_enum!(
 	pub MetaConstraint,
 	/* expand_basic = false */ any(),
 	/* meta = true */ all(),
-	/* template_args = false */ any()
+	/* template_args = false */ any(),
+	/* slide_list = false */ any()
 );
 constraints_enum!(
 	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
@@ -150,7 +166,8 @@ constraints_enum!(
 	CaptureConstraint,
 	/* expand_basic = true */ all(),
 	/* meta = true */ all(),
-	/* template_args = false */ any()
+	/* template_args = false */ any(),
+	/* slide_list = false */ any()
 );
 constraints_enum!(
 	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
@@ -165,7 +182,25 @@ constraints_enum!(
 	TemplateCapture,
 	/* expand_basic = true */ all(),
 	/* meta = true */ any(),
-	/* template_args = false */ all()
+	/* template_args = false */ all(),
+	/* slide_list = false */ any()
+);
+constraints_enum!(
+	#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+	#[serde(
+		rename_all = "camelCase",
+		bound(
+			deserialize = "Identifier: From<String>, Var: IntoVar",
+			serialize = "Identifier: Display, Var: Display"
+		)
+	)]
+	/// Internal constraint enum used to capture basic constraints and the <list>
+	/// elements of a [`Slide`] meta-constraint
+	SlideCapture,
+	/* expand_basic = true */ all(),
+	/* meta = true */ any(),
+	/* template_args = false */ any(),
+	/* slide_list = true */ all()
 );
 
 /// Constraint forcing a set of expressions to take distinct values
@@ -180,11 +215,25 @@ pub struct AllDifferent<Identifier = String, Var = VarRef<Identifier>> {
 	pub info: MetaInfo<Identifier>,
 	#[serde(
 		alias = "$text",
+		default,
+		skip_serializing_if = "Vec::is_empty",
 		deserialize_with = "IntExp::parse_vec",
 		serialize_with = "serialize_list"
 	)]
 	/// List of expressions that must take distinct values
 	pub list: Vec<IntExp<Var>>,
+	/// Matrix of expressions of which every row and every column must take
+	/// distinct values
+	///
+	/// This is the `allDifferent-matrix` variant, which is used instead of
+	/// [`Self::list`].
+	#[serde(
+		default,
+		skip_serializing_if = "Vec::is_empty",
+		deserialize_with = "deserialize_exp_tuples",
+		serialize_with = "serialize_exp_tuples"
+	)]
+	pub matrix: Matrix<Var>,
 	/// List of values that are excluded from the constraint and can be taken by
 	/// multiple expressions
 	#[serde(
@@ -295,6 +344,15 @@ pub struct Block<Identifier = String, Var = VarRef<Identifier>> {
 	pub info: MetaInfo<Identifier>,
 }
 
+/// A two-dimensional list of expressions, as used by the "matrix" variants of
+/// [`AllDifferent`] and [`Element`].
+///
+/// Note that when a matrix is given as a single array slice (e.g. `x[][]`), it
+/// is stored as a single row containing that one expression. The row structure
+/// is only recovered when the constraint is unrolled, since that is where the
+/// dimensions of the array are known.
+pub type Matrix<Var> = Vec<Vec<IntExp<Var>>>;
+
 /// Constraint enforcing the amount of times certain values are taken by a set
 /// of expressions.
 #[derive(Clone, Debug, PartialEq, Hash)]
@@ -355,6 +413,26 @@ pub struct Circuit<Identifier = String, Var = VarRef<Identifier>> {
 	/// Size of the circuit
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub size: Option<IntExp<Var>>,
+}
+
+/// Constraint that enforces that at least one of the literals in
+/// [`Self::list`] takes the value `true`.
+#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Clause<Identifier = String, Var = VarRef<Identifier>> {
+	/// Optional metadata for the constraint
+	#[serde(flatten)]
+	pub info: MetaInfo<Identifier>,
+	/// Literals of the clause
+	#[serde(
+		alias = "$text",
+		deserialize_with = "deserialize_literals",
+		serialize_with = "serialize_list"
+	)]
+	pub list: Vec<BoolExp<Var>>,
 }
 
 /// Condition to be enforced
@@ -442,10 +520,30 @@ pub struct Element<Identifier = String, Var = VarRef<Identifier>> {
 	#[serde(flatten)]
 	pub info: MetaInfo<Identifier>,
 	/// Indexed list of values
+	#[serde(default, skip_serializing_if = "OffsetList::is_empty")]
 	pub list: OffsetList<Var>,
+	/// Indexed matrix of values
+	///
+	/// This is the `element-matrix` variant, which is used instead of
+	/// [`Self::list`] and is indexed by two expressions.
+	#[serde(
+		default,
+		skip_serializing_if = "Vec::is_empty",
+		deserialize_with = "deserialize_exp_tuples",
+		serialize_with = "serialize_exp_tuples"
+	)]
+	pub matrix: Matrix<Var>,
 	/// Index of the value to be constrained
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub index: Option<IntExp<Var>>,
+	///
+	/// The `element-matrix` variant is indexed by a row and a column, and
+	/// therefore has two index expressions.
+	#[serde(
+		default,
+		skip_serializing_if = "Vec::is_empty",
+		deserialize_with = "IntExp::parse_vec",
+		serialize_with = "serialize_list"
+	)]
+	pub index: Vec<IntExp<Var>>,
 	/// Value to be assigned to the indexed expression
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub value: Option<IntExp<Var>>,
@@ -454,7 +552,6 @@ pub struct Element<Identifier = String, Var = VarRef<Identifier>> {
 	pub condition: Option<Condition<Var>>,
 }
 
-// TODO: Support for "smart" extension
 /// Constraint that enforces that the expressions in [`Self::list`] either take
 /// the values of one of the rows in [`Self::supports`], or alternatively do not
 /// match any of the rows in [`Self::conflicts`].
@@ -475,21 +572,26 @@ pub struct Extension<Identifier = String, Var = VarRef<Identifier>> {
 	)]
 	pub list: Vec<IntExp<Var>>,
 	/// Combinations of values that the expressions are allowed to take
+	///
+	/// A [`None`] entry represents the star `*`, marking a position that is
+	/// allowed to take any value (a "short", or "starred", tuple).
 	#[serde(
 		default,
 		skip_serializing_if = "Vec::is_empty",
 		deserialize_with = "deserialize_int_tuples",
 		serialize_with = "serialize_int_tuples"
 	)]
-	pub supports: Vec<Vec<IntVal>>,
+	pub supports: Vec<Vec<Option<IntVal>>>,
 	/// Combinations of values that the expressions are not allowed to take
+	///
+	/// A [`None`] entry represents the star `*`, see [`Self::supports`].
 	#[serde(
 		default,
 		skip_serializing_if = "Vec::is_empty",
 		deserialize_with = "deserialize_int_tuples",
 		serialize_with = "serialize_int_tuples"
 	)]
-	pub conflicts: Vec<Vec<IntVal>>,
+	pub conflicts: Vec<Vec<Option<IntVal>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Hash)]
@@ -654,9 +756,12 @@ pub struct NValues<Identifier = String, Var = VarRef<Identifier>> {
 	pub condition: Condition<Var>,
 }
 
-// TODO: k-dimensional no-overlap constraint
-/// Constraint that enforces that the tasks defined by the [`Self::origins`] and
+/// Constraint that enforces that the boxes defined by the [`Self::origins`] and
 /// [`Self::lengths`] do not overlap.
+///
+/// Each entry of [`Self::origins`] and [`Self::lengths`] is one box, given as
+/// its coordinate in each dimension. In the common one-dimensional case (where
+/// boxes are tasks on a timeline) every entry holds a single expression.
 ///
 /// When [`Self::zero_ignored`] field is set to `false`, it indicates that
 /// zero-length tasks cannot be packed anywhere (cannot overlap with other
@@ -677,18 +782,18 @@ pub struct NoOverlap<Identifier = String, Var = VarRef<Identifier>> {
 	)]
 	/// Indicates whether zero-length tasks can be placed anywhere
 	pub zero_ignored: bool,
-	/// List of starting points of the tasks
+	/// List of starting points of the boxes, one coordinate per dimension
 	#[serde(
-		deserialize_with = "IntExp::parse_vec",
-		serialize_with = "serialize_list"
+		deserialize_with = "deserialize_exp_tuples",
+		serialize_with = "serialize_exp_tuples"
 	)]
-	pub origins: Vec<IntExp<Var>>,
-	/// List of lengths of the tasks
+	pub origins: Vec<Vec<IntExp<Var>>>,
+	/// List of lengths of the boxes, one length per dimension
 	#[serde(
-		deserialize_with = "IntExp::parse_vec",
-		serialize_with = "serialize_list"
+		deserialize_with = "deserialize_exp_tuples",
+		serialize_with = "serialize_exp_tuples"
 	)]
-	pub lengths: Vec<IntExp<Var>>,
+	pub lengths: Vec<Vec<IntExp<Var>>>,
 }
 
 /// List of expressions where the index is considered to start at
@@ -706,6 +811,13 @@ pub struct OffsetList<Var> {
 	/// Index of the first element in the list
 	#[serde(rename = "@startIndex", default, skip_serializing_if = "is_default")]
 	pub start_index: IntVal,
+}
+
+impl<Var> OffsetList<Var> {
+	/// Whether the list contains no expressions
+	fn is_empty(&self) -> bool {
+		self.list.is_empty()
+	}
 }
 
 /// Operator used as part of the [`Condition`] struct or a constraint.
@@ -815,6 +927,89 @@ pub struct Regular<Identifier = String, Var = VarRef<Identifier>> {
 	pub finish: Identifier,
 }
 
+/// Constraint that enforces that lists of expressions are lexicographically
+/// ordered according to [`Self::operator`].
+#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(bound(
+	deserialize = "Identifier: From<String>, Var: IntoVar",
+	serialize = "Identifier: Display, Var: Display"
+))]
+pub struct Lex<Identifier = String, Var = VarRef<Identifier>> {
+	/// Optional metadata for the constraint
+	#[serde(flatten)]
+	pub info: MetaInfo<Identifier>,
+	/// Lists that must be ordered with respect to each other
+	#[serde(
+		rename = "list",
+		default,
+		skip_serializing_if = "Vec::is_empty",
+		deserialize_with = "deserialize_exp_lists",
+		serialize_with = "serialize_exp_lists"
+	)]
+	pub lists: Matrix<Var>,
+	/// Matrix of which both the rows and the columns must be ordered
+	///
+	/// This is the `lex-matrix` variant, which is used instead of
+	/// [`Self::lists`].
+	#[serde(
+		default,
+		skip_serializing_if = "Vec::is_empty",
+		deserialize_with = "deserialize_exp_tuples",
+		serialize_with = "serialize_exp_tuples"
+	)]
+	pub matrix: Matrix<Var>,
+	/// The operator used to order the lists
+	///
+	/// The operator must be either [`Operator::Lt`], [`Operator::Le`],
+	/// [`Operator::Ge`], or [`Operator::Gt`].
+	pub operator: Operator,
+}
+
+/// Meta-constraint that instantiates a constraint template over successive
+/// sub-lists of one or more lists of expressions.
+///
+/// For each iteration, [`SlideList::collect`] expressions are taken from every
+/// list, and together they instantiate the placeholders of
+/// [`Self::constraint`]. Successive iterations start [`SlideList::offset`]
+/// expressions further along each list.
+#[derive(Clone, Debug, PartialEq, Hash)]
+pub struct Slide<Identifier = String, Var = VarRef<Identifier>> {
+	/// Optional metadata for the constraint
+	pub info: MetaInfo<Identifier>,
+	/// Whether the sliding wraps around the end of the list
+	pub circular: bool,
+	/// Lists of expressions over which the template is slid
+	pub lists: Vec<SlideList<Var>>,
+	/// Constraint template that is instantiated for every sub-list
+	pub constraint: Box<Constraint<Identifier, Var>>,
+}
+
+/// A list of expressions over which a [`Slide`] meta-constraint is slid.
+#[derive(Clone, Debug, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(bound(deserialize = "Var: IntoVar", serialize = "Var: Display"))]
+pub struct SlideList<Var> {
+	/// Expressions contained in the list
+	#[serde(
+		rename = "$text",
+		deserialize_with = "IntExp::parse_vec",
+		serialize_with = "serialize_list"
+	)]
+	pub list: Vec<IntExp<Var>>,
+	/// Distance between the starts of two successive sub-lists
+	#[serde(
+		rename = "@offset",
+		default = "usize_one",
+		skip_serializing_if = "is_one"
+	)]
+	pub offset: usize,
+	/// Number of expressions taken from this list for each instantiation
+	///
+	/// When absent, this defaults to 1 if the [`Slide`] has multiple lists, and
+	/// to the arity of the constraint template otherwise.
+	#[serde(rename = "@collect", default, skip_serializing_if = "Option::is_none")]
+	pub collect: Option<usize>,
+}
+
 /// Constraint that enforces that the sum of the values of the expressions in
 /// [`Self::list`], optionally multiplied by [`Self::coeffs`], abides by the
 /// [`Self::condition`].
@@ -862,13 +1057,17 @@ fn bool_true() -> bool {
 }
 
 /// Deserialize a list of integer tuples visiting a string
+///
+/// Both the general syntax `(1,2)(3,*)` and the unary syntax `1 2 4 8..10` (used
+/// when the table has arity one) are accepted. The star `*` marks a position
+/// that can take any value, and is represented by [`None`].
 fn deserialize_int_tuples<'de, D: Deserializer<'de>>(
 	deserializer: D,
-) -> Result<Vec<Vec<IntVal>>, D::Error> {
+) -> Result<Vec<Vec<Option<IntVal>>>, D::Error> {
 	/// Visitor to parse a list of integer tuples
 	struct V;
 	impl Visitor<'_> for V {
-		type Value = Vec<Vec<IntVal>>;
+		type Value = Vec<Vec<Option<IntVal>>>;
 
 		fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
 			formatter.write_str("an integer")
@@ -876,13 +1075,152 @@ fn deserialize_int_tuples<'de, D: Deserializer<'de>>(
 
 		fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
 			let v = v.trim();
-			let (_, v) = all_consuming(sequence(tuple(int)))
-				.parse(v)
-				.map_err(|_| E::custom(format!("invalid integer `{v}'")))?;
-			Ok(v)
+			// Each item yields one or more tuples: a range in the unary syntax
+			// stands for one tuple per value it contains.
+			let (_, tuples) = all_consuming(sequence(alt((
+				map(tuple(table_entry), |t| vec![t]),
+				map(char('*'), |_| vec![vec![None]]),
+				map(range, |r| r.map(|i| vec![Some(i)]).collect()),
+			))))
+			.parse(v)
+			.map_err(|_| E::custom(format!("invalid integer `{v}'")))?;
+			Ok(tuples.into_iter().flatten().collect())
 		}
 	}
 	deserializer.deserialize_str(V)
+}
+
+/// Parser combinator for a single value within a table, where `*` denotes that
+/// any value is allowed
+fn table_entry(input: &str) -> IResult<&str, Option<IntVal>> {
+	alt((map(char('*'), |_| None), map(int, Some))).parse(input)
+}
+
+/// Deserialize a list of literals visiting a string
+///
+/// In addition to the regular `not(x)` syntax, the older `@not@(x)` notation for
+/// a negated literal is accepted.
+fn deserialize_literals<'de, D: Deserializer<'de>, Var: IntoVar>(
+	deserializer: D,
+) -> Result<Vec<BoolExp<Var>>, D::Error> {
+	/// Visitor to parse a list of literals
+	struct V<X>(PhantomData<X>);
+	impl<X: IntoVar> Visitor<'_> for V<X> {
+		type Value = Vec<BoolExp<X>>;
+
+		fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+			formatter.write_str("a list of literals")
+		}
+
+		fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+			let v = v.trim();
+			let (_, lits) = all_consuming(whitespace_seperated(alt((
+				map(
+					delimited(tag("@not@("), VarRef::parse, char(')')),
+					|v: VarRef<String>| BoolExp::Not(Box::new(BoolExp::Var(X::into_var(v)))),
+				),
+				BoolExp::parse,
+			))))
+			.parse(v)
+			.map_err(|_| E::custom(format!("invalid literals `{v}'")))?;
+			Ok(lits)
+		}
+	}
+	deserializer.deserialize_str(V::<Var>(PhantomData))
+}
+
+/// Deserialize repeated `<list>` elements as the rows of a matrix
+fn deserialize_exp_lists<'de, D: Deserializer<'de>, Var: IntoVar>(
+	deserializer: D,
+) -> Result<Matrix<Var>, D::Error> {
+	/// A single `<list>` element
+	#[derive(Deserialize)]
+	#[serde(bound(deserialize = "Var: IntoVar"))]
+	struct ListElement<Var> {
+		/// Expressions contained in the list
+		#[serde(rename = "$text", deserialize_with = "IntExp::parse_vec")]
+		list: Vec<IntExp<Var>>,
+	}
+	Ok(Vec::<ListElement<Var>>::deserialize(deserializer)?
+		.into_iter()
+		.map(|l| l.list)
+		.collect())
+}
+
+/// Serialize the rows of a matrix as repeated `<list>` elements
+fn serialize_exp_lists<S: Serializer, Var: Display>(
+	lists: &Matrix<Var>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	/// A single `<list>` element
+	#[derive(Serialize)]
+	#[serde(bound(serialize = "Var: Display"))]
+	struct ListElement<'a, Var> {
+		/// Expressions contained in the list
+		#[serde(rename = "$text", serialize_with = "serialize_list")]
+		list: &'a Vec<IntExp<Var>>,
+	}
+	lists
+		.iter()
+		.map(|list| ListElement { list })
+		.collect::<Vec<_>>()
+		.serialize(serializer)
+}
+
+/// Deserialize a list of integer expression tuples visiting a string
+///
+/// Both the k-dimensional syntax `(x0,y0)(x1,y1)` and the one-dimensional
+/// syntax `x0 x1` are accepted; the latter results in singleton tuples.
+fn deserialize_exp_tuples<'de, D: Deserializer<'de>, Var: IntoVar>(
+	deserializer: D,
+) -> Result<Vec<Vec<IntExp<Var>>>, D::Error> {
+	/// Visitor to parse a list of integer expression tuples
+	struct V<X>(PhantomData<X>);
+	impl<X: IntoVar> Visitor<'_> for V<X> {
+		type Value = Vec<Vec<IntExp<X>>>;
+
+		fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+			formatter.write_str("a list of integer expression tuples")
+		}
+
+		fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+			let (_, rows) = all_consuming(sequence(alt((
+				tuple(IntExp::parse),
+				map(IntExp::parse, |e| vec![e]),
+			))))
+			.parse(v)
+			.map_err(|_| E::custom(format!("invalid integer expressions `{v}'")))?;
+			Ok(rows)
+		}
+	}
+	deserializer.deserialize_str(V::<Var>(PhantomData))
+}
+
+/// Serialize a list of integer expression tuples as a string
+///
+/// One-dimensional tuples are written using the plain `x0 x1` syntax.
+fn serialize_exp_tuples<S: Serializer, T: Display>(
+	vals: &[Vec<T>],
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	if vals.iter().all(|t| t.len() == 1) {
+		return serialize_list(&vals.iter().flatten().collect::<Vec<_>>(), serializer);
+	}
+	serializer.serialize_str(
+		&vals
+			.iter()
+			.map(|t| {
+				format!(
+					"({})",
+					t.iter()
+						.map(|e| e.to_string())
+						.collect::<Vec<_>>()
+						.join(",")
+				)
+			})
+			.collect::<Vec<_>>()
+			.join(""),
+	)
 }
 
 /// Whether the value is the default value
@@ -900,9 +1238,19 @@ fn is_true(x: &bool) -> bool {
 	*x
 }
 
+/// Whether the value is one
+fn is_one(x: &usize) -> bool {
+	*x == 1
+}
+
+/// The default step of a [`SlideList`]
+fn usize_one() -> usize {
+	1
+}
+
 /// Serialize a list of integer tuples as a string
 fn serialize_int_tuples<S: Serializer>(
-	vals: &[Vec<IntVal>],
+	vals: &[Vec<Option<IntVal>>],
 	serializer: S,
 ) -> Result<S::Ok, S::Error> {
 	serializer.serialize_str(
@@ -912,7 +1260,10 @@ fn serialize_int_tuples<S: Serializer>(
 				format!(
 					"({})",
 					e.iter()
-						.map(|e| format!("{}", e))
+						.map(|e| match e {
+							Some(e) => e.to_string(),
+							None => "*".to_owned(),
+						})
 						.collect::<Vec<_>>()
 						.join(",")
 				)
@@ -1191,7 +1542,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> Condition<VarRef<Identifier>> {
 	fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Condition<SimpleRef<Identifier>>, UnrollError> {
 		Ok(Condition {
@@ -1216,8 +1567,12 @@ impl<Var: Display> Serialize for Condition<Var> {
 impl<Identifier, I> Constraint<Identifier, VarRef<I>> {
 	fn max_placeholder(&self) -> Option<usize> {
 		match self {
-			Constraint::AllDifferent(AllDifferent { list, .. })
-			| Constraint::AllEqual(AllEqual { list, .. })
+			Constraint::AllDifferent(AllDifferent { list, matrix, .. }) => list
+				.iter()
+				.chain(matrix.iter().flatten())
+				.filter_map(|exp| exp.max_placeholder())
+				.max(),
+			Constraint::AllEqual(AllEqual { list, .. })
 			| Constraint::Extension(Extension { list, .. })
 			| Constraint::Mdd(Mdd { list, .. })
 			| Constraint::Regular(Regular { list, .. })
@@ -1270,6 +1625,9 @@ impl<Identifier, I> Constraint<Identifier, VarRef<I>> {
 				.chain(size)
 				.filter_map(|exp| exp.max_placeholder())
 				.max(),
+			Constraint::Clause(Clause { list, .. }) => {
+				list.iter().filter_map(|exp| exp.max_placeholder()).max()
+			}
 			Constraint::Count(Count {
 				list,
 				values,
@@ -1296,12 +1654,14 @@ impl<Identifier, I> Constraint<Identifier, VarRef<I>> {
 				.max(),
 			Constraint::Element(Element {
 				list: OffsetList { list, .. },
+				matrix,
 				index,
 				value,
 				condition,
 				..
 			}) => list
 				.iter()
+				.chain(matrix.iter().flatten())
 				.chain(index)
 				.chain(value)
 				.filter_map(|exp| exp.max_placeholder())
@@ -1325,6 +1685,12 @@ impl<Identifier, I> Constraint<Identifier, VarRef<I>> {
 				.filter_map(|e| e.max_placeholder())
 				.chain(condition.iter().filter_map(|c| c.operand.max_placeholder()))
 				.max(),
+			Constraint::Lex(Lex { lists, matrix, .. }) => lists
+				.iter()
+				.chain(matrix)
+				.flatten()
+				.filter_map(|e| e.max_placeholder())
+				.max(),
 			Constraint::Maximum(Maximum {
 				list, condition, ..
 			})
@@ -1346,6 +1712,7 @@ impl<Identifier, I> Constraint<Identifier, VarRef<I>> {
 			}) => origins
 				.iter()
 				.chain(lengths)
+				.flatten()
 				.flat_map(|e| e.max_placeholder())
 				.max(),
 			Constraint::Ordered(Ordered { list, lengths, .. }) => list
@@ -1361,7 +1728,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 	pub(crate) fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Constraint<Identifier, SimpleRef<Identifier>>, UnrollError> {
 		let instantiate_exps = |list: &[Exp<_>]| {
@@ -1378,6 +1745,25 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 			}
 			Ok(nlist)
 		};
+		let instantiate_int_rows = |rows: &[Vec<IntExp<_>>]| {
+			rows.iter()
+				.map(|row| instantiate_ints(row))
+				.collect::<Result<Vec<_>, _>>()
+		};
+		// A matrix given as a single array slice only gains its row structure
+		// here, where the dimensions of the array are known.
+		let instantiate_matrix = |rows: &[Vec<IntExp<_>>]| {
+			if let [row] = rows {
+				if let [IntExp::Var(v @ VarRef::ArrayAccess(_, _))] = &row[..] {
+					return v
+						.unroll_matrix(arrays, args, remainder)?
+						.into_iter()
+						.map(|row| row.into_iter().map(TryInto::try_into).collect())
+						.collect();
+				}
+			}
+			instantiate_int_rows(rows)
+		};
 		let instantiate_vars = |list: &[VarRef<_>]| {
 			let mut nlist = Vec::new();
 			for e in list {
@@ -1392,13 +1778,17 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 		};
 
 		match self {
-			Constraint::AllDifferent(AllDifferent { info, list, except }) => {
-				Ok(Constraint::AllDifferent(AllDifferent {
-					info: info.clone(),
-					list: instantiate_ints(list)?,
-					except: except.clone(),
-				}))
-			}
+			Constraint::AllDifferent(AllDifferent {
+				info,
+				list,
+				matrix,
+				except,
+			}) => Ok(Constraint::AllDifferent(AllDifferent {
+				info: info.clone(),
+				list: instantiate_ints(list)?,
+				matrix: instantiate_matrix(matrix)?,
+				except: except.clone(),
+			})),
 			Constraint::AllEqual(AllEqual { info, list, except }) => {
 				Ok(Constraint::AllEqual(AllEqual {
 					info: info.clone(),
@@ -1475,6 +1865,16 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 					None
 				},
 			})),
+			Constraint::Clause(Clause { info, list }) => {
+				let mut nlist = Vec::with_capacity(list.len());
+				for e in list {
+					nlist.extend(e.unroll(arrays, args, remainder)?);
+				}
+				Ok(Constraint::Clause(Clause {
+					info: info.clone(),
+					list: nlist,
+				}))
+			}
 			Constraint::Count(Count {
 				info,
 				list,
@@ -1502,15 +1902,12 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 			Constraint::Element(Element {
 				info,
 				list: OffsetList { list, start_index },
+				matrix,
 				index,
 				value,
 				condition,
 			}) => {
-				let index = if let Some(index) = index {
-					Some(index.unroll_single(arrays, args, remainder)?)
-				} else {
-					None
-				};
+				let index = instantiate_ints(index)?;
 				let value = if let Some(value) = value {
 					Some(value.unroll_single(arrays, args, remainder)?)
 				} else {
@@ -1527,6 +1924,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 						list: instantiate_ints(list)?,
 						start_index: *start_index,
 					},
+					matrix: instantiate_matrix(matrix)?,
 					index,
 					value,
 					condition,
@@ -1578,6 +1976,17 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 					c2.unroll(arrays, args, remainder)?,
 				],
 			})),
+			Constraint::Lex(Lex {
+				info,
+				lists,
+				matrix,
+				operator,
+			}) => Ok(Constraint::Lex(Lex {
+				info: info.clone(),
+				lists: instantiate_int_rows(lists)?,
+				matrix: instantiate_matrix(matrix)?,
+				operator: operator.clone(),
+			})),
 			Constraint::Maximum(Maximum {
 				info,
 				list,
@@ -1624,8 +2033,8 @@ impl<Identifier: Clone + Hash + Eq + ToString> Constraint<Identifier, VarRef<Ide
 			}) => Ok(Constraint::NoOverlap(NoOverlap {
 				info: info.clone(),
 				zero_ignored: *zero_ignored,
-				origins: instantiate_ints(origins)?,
-				lengths: instantiate_ints(lengths)?,
+				origins: instantiate_int_rows(origins)?,
+				lengths: instantiate_int_rows(lengths)?,
 			})),
 			Constraint::Ordered(Ordered {
 				info,
@@ -1690,6 +2099,7 @@ impl<Identifier, Var> TryFrom<TemplateCapture<Identifier, Var>> for Constraint<I
 			TemplateCapture::Cardinality(cardinality) => Ok(Constraint::Cardinality(cardinality)),
 			TemplateCapture::Channel(channel) => Ok(Constraint::Channel(channel)),
 			TemplateCapture::Circuit(circuit) => Ok(Constraint::Circuit(circuit)),
+			TemplateCapture::Clause(clause) => Ok(Constraint::Clause(clause)),
 			TemplateCapture::Count(count) => Ok(Constraint::Count(count)),
 			TemplateCapture::Cumulative(cumulative) => Ok(Constraint::Cumulative(cumulative)),
 			TemplateCapture::Element(element) => Ok(Constraint::Element(element)),
@@ -1699,6 +2109,7 @@ impl<Identifier, Var> TryFrom<TemplateCapture<Identifier, Var>> for Constraint<I
 			}
 			TemplateCapture::Intension(intension) => Ok(Constraint::Intension(intension)),
 			TemplateCapture::Knapsack(knapsack) => Ok(Constraint::Knapsack(knapsack)),
+			TemplateCapture::Lex(lex) => Ok(Constraint::Lex(lex)),
 			TemplateCapture::Maximum(maximum) => Ok(Constraint::Maximum(maximum)),
 			TemplateCapture::Mdd(mdd) => Ok(Constraint::Mdd(mdd)),
 			TemplateCapture::Minimum(minimum) => Ok(Constraint::Minimum(minimum)),
@@ -1709,6 +2120,44 @@ impl<Identifier, Var> TryFrom<TemplateCapture<Identifier, Var>> for Constraint<I
 			TemplateCapture::Regular(regular) => Ok(Constraint::Regular(regular)),
 			TemplateCapture::Sum(sum) => Ok(Constraint::Sum(sum)),
 			TemplateCapture::Args(_) => Err(()),
+		}
+	}
+}
+
+impl<Identifier, Var> TryFrom<SlideCapture<Identifier, Var>> for Constraint<Identifier, Var> {
+	type Error = ();
+
+	fn try_from(value: SlideCapture<Identifier, Var>) -> Result<Self, Self::Error> {
+		match value {
+			SlideCapture::AllDifferent(all_different) => {
+				Ok(Constraint::AllDifferent(all_different))
+			}
+			SlideCapture::AllEqual(all_equal) => Ok(Constraint::AllEqual(all_equal)),
+			SlideCapture::BinPacking(bin_packing) => Ok(Constraint::BinPacking(bin_packing)),
+			SlideCapture::Cardinality(cardinality) => Ok(Constraint::Cardinality(cardinality)),
+			SlideCapture::Channel(channel) => Ok(Constraint::Channel(channel)),
+			SlideCapture::Circuit(circuit) => Ok(Constraint::Circuit(circuit)),
+			SlideCapture::Clause(clause) => Ok(Constraint::Clause(clause)),
+			SlideCapture::Count(count) => Ok(Constraint::Count(count)),
+			SlideCapture::Cumulative(cumulative) => Ok(Constraint::Cumulative(cumulative)),
+			SlideCapture::Element(element) => Ok(Constraint::Element(element)),
+			SlideCapture::Extension(extension) => Ok(Constraint::Extension(extension)),
+			SlideCapture::Instantiation(instantiation) => {
+				Ok(Constraint::Instantiation(instantiation))
+			}
+			SlideCapture::Intension(intension) => Ok(Constraint::Intension(intension)),
+			SlideCapture::Knapsack(knapsack) => Ok(Constraint::Knapsack(knapsack)),
+			SlideCapture::Lex(lex) => Ok(Constraint::Lex(lex)),
+			SlideCapture::Maximum(maximum) => Ok(Constraint::Maximum(maximum)),
+			SlideCapture::Mdd(mdd) => Ok(Constraint::Mdd(mdd)),
+			SlideCapture::Minimum(minimum) => Ok(Constraint::Minimum(minimum)),
+			SlideCapture::NValues(nvalues) => Ok(Constraint::NValues(nvalues)),
+			SlideCapture::NoOverlap(no_overlap) => Ok(Constraint::NoOverlap(no_overlap)),
+			SlideCapture::Ordered(ordered) => Ok(Constraint::Ordered(ordered)),
+			SlideCapture::Precedence(precedence) => Ok(Constraint::Precedence(precedence)),
+			SlideCapture::Regular(regular) => Ok(Constraint::Regular(regular)),
+			SlideCapture::Sum(sum) => Ok(Constraint::Sum(sum)),
+			SlideCapture::List(_) => Err(()),
 		}
 	}
 }
@@ -1741,16 +2190,20 @@ impl<Identifier: Clone + Hash + Eq + ToString> Group<Identifier, VarRef<Identifi
 
 		let mut flat = Vec::with_capacity(self.constraints.len() * self.args.len());
 		for args in &self.args {
-			let mut expanded = Vec::new();
-			for arg in args {
-				expanded.extend(arg.unroll(arrays, &[], &[])?);
-			}
+			// Each `<args>` token is kept separate, since a single token (e.g.
+			// `x[0][]`) can stand for a whole list of expressions.
+			let expanded = args
+				.iter()
+				.map(|arg| arg.unroll(arrays, &[], &[]))
+				.collect::<Result<Vec<_>, _>>()?;
+			// Tokens beyond the highest placeholder are matched by `%...`.
+			let remainder: Vec<_> = expanded[rem_start.min(expanded.len())..]
+				.iter()
+				.flatten()
+				.cloned()
+				.collect();
 			for constraint in &self.constraints {
-				flat.push(constraint.unroll(
-					arrays,
-					&expanded[..rem_start],
-					&expanded[rem_start..],
-				)?);
+				flat.push(constraint.unroll(arrays, &expanded, &remainder)?);
 			}
 		}
 		Ok(flat)
@@ -1847,6 +2300,149 @@ impl<Identifier: Display, Var: Display> Serialize for Group<Identifier, Var> {
 	}
 }
 
+impl<Identifier: Clone + Hash + Eq + ToString> Slide<Identifier, VarRef<Identifier>> {
+	/// Create the instantiated versions of the constraint template
+	pub fn unroll(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+	) -> Result<Vec<Constraint<Identifier, SimpleRef<Identifier>>>, UnrollError> {
+		// The arity of the template determines how many expressions a single
+		// list contributes to each instantiation.
+		let arity = self.constraint.max_placeholder().map_or(0, |i| i + 1);
+		let lists = self
+			.lists
+			.iter()
+			.map(|l| {
+				let list = l
+					.list
+					.iter()
+					.map(|e| e.unroll(arrays, &[], &[]))
+					.collect::<Result<Vec<_>, _>>()?
+					.into_iter()
+					.flatten()
+					.map(|e| Exp::Int(Box::new(e)))
+					.collect::<Vec<_>>();
+				let collect = l
+					.collect
+					.unwrap_or(if self.lists.len() == 1 { arity } else { 1 });
+				Ok((list, l.offset, collect))
+			})
+			.collect::<Result<Vec<_>, UnrollError>>()?;
+
+		// Every list must be able to supply a sub-list for each iteration.
+		let iterations = lists
+			.iter()
+			.map(|(list, offset, collect)| {
+				if list.len() < *collect {
+					0
+				} else if self.circular {
+					list.len().div_ceil(*offset)
+				} else {
+					(list.len() - collect) / offset + 1
+				}
+			})
+			.min()
+			.unwrap_or(0);
+
+		let mut flat = Vec::with_capacity(iterations);
+		for i in 0..iterations {
+			let mut args = Vec::with_capacity(arity);
+			for (list, offset, collect) in &lists {
+				args.extend(
+					(0..*collect).map(|j| vec![list[(i * offset + j) % list.len()].clone()]),
+				);
+			}
+			flat.push(self.constraint.unroll(arrays, &args, &[])?);
+		}
+		Ok(flat)
+	}
+}
+
+// Note: flatten of MetaInfo does not seem to work here, see the note on the
+// implementation for `Group`
+impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de> for Slide<Identifier, Var> {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		#[derive(Deserialize)]
+		#[serde(bound(deserialize = "Identifier: From<String>, Var: IntoVar"))]
+		struct Slide<Identifier, Var> {
+			/// Name assigned to the element
+			#[serde(rename = "@id", default, deserialize_with = "crate::deserialize_ident")]
+			identifier: Option<Identifier>,
+			/// Comment from the user about the element
+			#[serde(rename = "@note", default)]
+			note: Option<String>,
+			/// Whether the sliding wraps around the end of the list
+			#[serde(rename = "@circular", default)]
+			circular: bool,
+			/// Lists and the constraint template
+			#[serde(default, rename = "$value")]
+			content: Vec<SlideCapture<Identifier, Var>>,
+		}
+		let slide: Slide<Identifier, Var> = Deserialize::deserialize(deserializer)?;
+		let mut lists = Vec::new();
+		let mut constraint = None;
+		for c in slide.content {
+			match c {
+				SlideCapture::List(l) => lists.push(l),
+				c => {
+					constraint = Some(
+						c.try_into()
+							.map_err(|_| de::Error::custom("invalid slide constraint template"))?,
+					)
+				}
+			}
+		}
+		let Some(constraint) = constraint else {
+			return Err(de::Error::missing_field("constraint template"));
+		};
+		Ok(Self {
+			info: MetaInfo {
+				identifier: slide.identifier,
+				note: slide.note,
+			},
+			circular: slide.circular,
+			lists,
+			constraint: Box::new(constraint),
+		})
+	}
+}
+
+// Note: flatten of MetaInfo does not seem to work here, see the note on the
+// implementation for `Group`
+impl<Identifier: Display, Var: Display> Serialize for Slide<Identifier, Var> {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		#[derive(Serialize)]
+		#[serde(bound(serialize = "Var: Display"), rename_all = "camelCase")]
+		enum SlideListE<'a, Var> {
+			List(&'a SlideList<Var>),
+		}
+		#[derive(Serialize)]
+		#[serde(bound(serialize = "Identifier: Display, Var: Display"))]
+		/// Helper struct to serialize the slide element
+		struct Slide<'a, Identifier, Var> {
+			/// Optional metadata for the constraint
+			#[serde(flatten)]
+			info: &'a MetaInfo<Identifier>,
+			/// Whether the sliding wraps around the end of the list
+			#[serde(rename = "@circular", skip_serializing_if = "is_false")]
+			circular: bool,
+			/// Lists over which the template is slid
+			#[serde(rename = "$value")]
+			lists: Vec<SlideListE<'a, Var>>,
+			/// Constraint template
+			#[serde(rename = "$value")]
+			constraint: &'a Constraint<Identifier, Var>,
+		}
+		Slide {
+			info: &self.info,
+			circular: self.circular,
+			lists: self.lists.iter().map(SlideListE::List).collect(),
+			constraint: &self.constraint,
+		}
+		.serialize(serializer)
+	}
+}
+
 impl<'de, Identifier: From<String>, Var: IntoVar> Deserialize<'de>
 	for MetaConstraint<Identifier, Var>
 {
@@ -1877,6 +2473,9 @@ impl<Identifier, Var> From<CaptureConstraint<Identifier, Var>> for MetaConstrain
 			CaptureConstraint::Circuit(circuit) => {
 				MetaConstraint::Constraint(Constraint::Circuit(circuit))
 			}
+			CaptureConstraint::Clause(clause) => {
+				MetaConstraint::Constraint(Constraint::Clause(clause))
+			}
 			CaptureConstraint::Count(count) => MetaConstraint::Constraint(Constraint::Count(count)),
 			CaptureConstraint::Cumulative(cumulative) => {
 				MetaConstraint::Constraint(Constraint::Cumulative(cumulative))
@@ -1896,6 +2495,7 @@ impl<Identifier, Var> From<CaptureConstraint<Identifier, Var>> for MetaConstrain
 			CaptureConstraint::Knapsack(knapsack) => {
 				MetaConstraint::Constraint(Constraint::Knapsack(knapsack))
 			}
+			CaptureConstraint::Lex(lex) => MetaConstraint::Constraint(Constraint::Lex(lex)),
 			CaptureConstraint::Maximum(maximum) => {
 				MetaConstraint::Constraint(Constraint::Maximum(maximum))
 			}
@@ -1921,6 +2521,7 @@ impl<Identifier, Var> From<CaptureConstraint<Identifier, Var>> for MetaConstrain
 			CaptureConstraint::Sum(sum) => MetaConstraint::Constraint(Constraint::Sum(sum)),
 			CaptureConstraint::Group(group) => MetaConstraint::Group(group),
 			CaptureConstraint::Block(block) => MetaConstraint::Block(block),
+			CaptureConstraint::Slide(slide) => MetaConstraint::Slide(slide),
 		}
 	}
 }
@@ -1945,6 +2546,8 @@ impl<Identifier: Display, Var: Display> Serialize for MetaConstraint<Identifier,
 			Channel(&'a Channel<Identifier, Var>),
 			/// [`Circuit`] constraint
 			Circuit(&'a Circuit<Identifier, Var>),
+			/// [`Clause`] constraint
+			Clause(&'a Clause<Identifier, Var>),
 			/// [`Count`] constraint
 			Count(&'a Count<Identifier, Var>),
 			/// [`Cumulative`] constraint
@@ -1959,6 +2562,8 @@ impl<Identifier: Display, Var: Display> Serialize for MetaConstraint<Identifier,
 			Intension(&'a Intension<Identifier, Var>),
 			/// [`Knapsack`] constraint
 			Knapsack(&'a Knapsack<Identifier, Var>),
+			/// [`Lex`] constraint
+			Lex(&'a Lex<Identifier, Var>),
 			/// [`Maximum`] constraint
 			Maximum(&'a Maximum<Identifier, Var>),
 			/// [`Mdd`] constraint
@@ -1981,11 +2586,14 @@ impl<Identifier: Display, Var: Display> Serialize for MetaConstraint<Identifier,
 			Group(&'a Group<Identifier, Var>),
 			/// Constraint [`Group`], that can serve as a template
 			Block(&'a Block<Identifier, Var>),
+			/// Meta-constraint [`Slide`]
+			Slide(&'a Slide<Identifier, Var>),
 		}
 
 		let c = match self {
 			MetaConstraint::Group(group) => OutputConstraint::Group(group),
 			MetaConstraint::Block(block) => OutputConstraint::Block(block),
+			MetaConstraint::Slide(slide) => OutputConstraint::Slide(slide),
 			MetaConstraint::Constraint(con) => match con {
 				Constraint::AllDifferent(all_different) => {
 					OutputConstraint::AllDifferent(all_different)
@@ -1995,6 +2603,7 @@ impl<Identifier: Display, Var: Display> Serialize for MetaConstraint<Identifier,
 				Constraint::Cardinality(cardinality) => OutputConstraint::Cardinality(cardinality),
 				Constraint::Channel(channel) => OutputConstraint::Channel(channel),
 				Constraint::Circuit(circuit) => OutputConstraint::Circuit(circuit),
+				Constraint::Clause(clause) => OutputConstraint::Clause(clause),
 				Constraint::Count(count) => OutputConstraint::Count(count),
 				Constraint::Cumulative(cumulative) => OutputConstraint::Cumulative(cumulative),
 				Constraint::Element(element) => OutputConstraint::Element(element),
@@ -2004,6 +2613,7 @@ impl<Identifier: Display, Var: Display> Serialize for MetaConstraint<Identifier,
 				}
 				Constraint::Intension(intension) => OutputConstraint::Intension(intension),
 				Constraint::Knapsack(knapsack) => OutputConstraint::Knapsack(knapsack),
+				Constraint::Lex(lex) => OutputConstraint::Lex(lex),
 				Constraint::Maximum(maximum) => OutputConstraint::Maximum(maximum),
 				Constraint::Mdd(mdd) => OutputConstraint::Mdd(mdd),
 				Constraint::Minimum(minimum) => OutputConstraint::Minimum(minimum),
@@ -2188,6 +2798,7 @@ impl<Identifier> From<Constraint<Identifier>> for TemplateCapture<Identifier> {
 			Constraint::Cardinality(cardinality) => TemplateCapture::Cardinality(cardinality),
 			Constraint::Channel(channel) => TemplateCapture::Channel(channel),
 			Constraint::Circuit(circuit) => TemplateCapture::Circuit(circuit),
+			Constraint::Clause(clause) => TemplateCapture::Clause(clause),
 			Constraint::Count(count) => TemplateCapture::Count(count),
 			Constraint::Cumulative(cumulative) => TemplateCapture::Cumulative(cumulative),
 			Constraint::Element(element) => TemplateCapture::Element(element),
@@ -2197,6 +2808,7 @@ impl<Identifier> From<Constraint<Identifier>> for TemplateCapture<Identifier> {
 			}
 			Constraint::Intension(intension) => TemplateCapture::Intension(intension),
 			Constraint::Knapsack(knapsack) => TemplateCapture::Knapsack(knapsack),
+			Constraint::Lex(lex) => TemplateCapture::Lex(lex),
 			Constraint::Maximum(maximum) => TemplateCapture::Maximum(maximum),
 			Constraint::Mdd(mdd) => TemplateCapture::Mdd(mdd),
 			Constraint::Minimum(minimum) => TemplateCapture::Minimum(minimum),
@@ -2249,12 +2861,6 @@ impl<Identifier: From<String>> Transition<Identifier> {
 
 impl<Identifier: Display> Display for Transition<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(
-			f,
-			"({},{},{})",
-			self.from.to_string(),
-			self.val,
-			self.to.to_string()
-		)
+		write!(f, "({},{},{})", self.from, self.val, self.to)
 	}
 }

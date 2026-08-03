@@ -1,0 +1,106 @@
+Instance {
+    ty: Csp,
+    variables: [],
+    arrays: [
+        Array {
+            identifier: "x",
+            note: None,
+            size: [
+                2,
+                3,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(1..=3),
+                ),
+            ],
+        },
+    ],
+    constraints: [
+        Group(
+            Group {
+                info: MetaInfo {
+                    identifier: None,
+                    note: None,
+                },
+                constraints: [
+                    Sum(
+                        Sum {
+                            info: MetaInfo {
+                                identifier: None,
+                                note: None,
+                            },
+                            list: [
+                                Var(
+                                    Placeholder(
+                                        Position(
+                                            0,
+                                        ),
+                                    ),
+                                ),
+                            ],
+                            coeffs: [],
+                            condition: Condition {
+                                operator: Eq,
+                                operand: Var(
+                                    Placeholder(
+                                        Position(
+                                            1,
+                                        ),
+                                    ),
+                                ),
+                            },
+                        },
+                    ),
+                ],
+                args: [
+                    [
+                        Var(
+                            ArrayAccess(
+                                "x",
+                                [
+                                    Single(
+                                        0,
+                                    ),
+                                    Full,
+                                ],
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                6,
+                            ),
+                        ),
+                    ],
+                    [
+                        Var(
+                            ArrayAccess(
+                                "x",
+                                [
+                                    Single(
+                                        1,
+                                    ),
+                                    Full,
+                                ],
+                            ),
+                        ),
+                        Int(
+                            Const(
+                                5,
+                            ),
+                        ),
+                    ],
+                ],
+            },
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

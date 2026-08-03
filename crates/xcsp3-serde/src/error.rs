@@ -3,7 +3,8 @@
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
-/// Error type returned when instantiating a [`Group`] fails.
+/// Error type returned when instantiating a [`Group`](crate::constraint::Group)
+/// or [`Slide`](crate::constraint::Slide) fails.
 pub enum UnrollError {
 	#[error("placeholder with index {placeholder} cannot be instantiated using only {args_len} arguments")]
 	/// Missing argument value

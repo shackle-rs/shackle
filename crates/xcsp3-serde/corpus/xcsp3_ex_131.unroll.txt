@@ -1,0 +1,152 @@
+[
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: In,
+                operand: Set(
+                    Range(
+                        (
+                            Const(
+                                1,
+                            ),
+                            Const(
+                                3,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: In,
+                operand: Set(
+                    Range(
+                        (
+                            Const(
+                                1,
+                            ),
+                            Const(
+                                3,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            4,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: In,
+                operand: Set(
+                    Range(
+                        (
+                            Const(
+                                1,
+                            ),
+                            Const(
+                                3,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        },
+    ),
+]

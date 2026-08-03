@@ -1,9 +1,15 @@
-<lex>
-  <matrix> 
-    (z1,z2,z3)
-    (z4,z5,z6)
-    (z7,z8,z9)
-  </matrix>
-  <operator> le </operator>
-</lex>
- 
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <array id="z" size="[9]"> 0..4 </array>
+  </variables>
+  <constraints>
+    <lex>
+      <matrix>
+        (z[0],z[1],z[2])
+        (z[3],z[4],z[5])
+        (z[6],z[7],z[8])
+      </matrix>
+      <operator> le </operator>
+    </lex>
+  </constraints>
+</instance>

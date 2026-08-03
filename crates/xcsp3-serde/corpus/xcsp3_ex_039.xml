@@ -1,5 +1,14 @@
-<extension id="c4">
-  <list> z1 z2 z3 z4 </list>
-  <supports> (1,*,1,2)(2,1,*,*) </supports>
-</extension>
- 
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <var id="z1"> 0..2 </var>
+    <var id="z2"> 0..2 </var>
+    <var id="z3"> 0..2 </var>
+    <var id="z4"> 0..2 </var>
+  </variables>
+  <constraints>
+    <extension id="c4">
+      <list> z1 z2 z3 z4 </list>
+      <supports> (1,*,1,2)(2,1,*,*) </supports>
+    </extension>
+  </constraints>
+</instance>

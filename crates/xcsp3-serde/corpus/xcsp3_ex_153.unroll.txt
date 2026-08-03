@@ -1,0 +1,215 @@
+[
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    Ident(
+                        "w",
+                    ),
+                ),
+                Var(
+                    Ident(
+                        "x",
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        3,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        3,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    Ident(
+                        "w",
+                    ),
+                ),
+                Var(
+                    Ident(
+                        "z",
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        3,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        3,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    Ident(
+                        "x",
+                    ),
+                ),
+                Var(
+                    Ident(
+                        "y",
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        3,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        3,
+                    ),
+                    Some(
+                        3,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+]

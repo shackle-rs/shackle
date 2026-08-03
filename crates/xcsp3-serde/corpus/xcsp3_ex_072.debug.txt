@@ -12,48 +12,64 @@ Instance {
                     },
                     zero_ignored: true,
                     origins: [
-                        Var(
-                            Ident(
-                                "x0",
+                        [
+                            Var(
+                                Ident(
+                                    "x0",
+                                ),
                             ),
-                        ),
-                        Var(
-                            Ident(
-                                "x1",
+                        ],
+                        [
+                            Var(
+                                Ident(
+                                    "x1",
+                                ),
                             ),
-                        ),
-                        Var(
-                            Ident(
-                                "x2",
+                        ],
+                        [
+                            Var(
+                                Ident(
+                                    "x2",
+                                ),
                             ),
-                        ),
-                        Var(
-                            Ident(
-                                "x3",
+                        ],
+                        [
+                            Var(
+                                Ident(
+                                    "x3",
+                                ),
                             ),
-                        ),
+                        ],
                     ],
                     lengths: [
-                        Var(
-                            Ident(
-                                "l0",
+                        [
+                            Var(
+                                Ident(
+                                    "l0",
+                                ),
                             ),
-                        ),
-                        Var(
-                            Ident(
-                                "l1",
+                        ],
+                        [
+                            Var(
+                                Ident(
+                                    "l1",
+                                ),
                             ),
-                        ),
-                        Var(
-                            Ident(
-                                "l2",
+                        ],
+                        [
+                            Var(
+                                Ident(
+                                    "l2",
+                                ),
                             ),
-                        ),
-                        Var(
-                            Ident(
-                                "l3",
+                        ],
+                        [
+                            Var(
+                                Ident(
+                                    "l3",
+                                ),
                             ),
-                        ),
+                        ],
                     ],
                 },
             ),

@@ -32,13 +32,14 @@ Instance {
                         ],
                         start_index: 0,
                     },
-                    index: Some(
+                    matrix: [],
+                    index: [
                         Var(
                             Ident(
                                 "i",
                             ),
                         ),
-                    ),
+                    ],
                     value: Some(
                         Var(
                             Ident(
@@ -84,7 +85,8 @@ Instance {
                         ],
                         start_index: 0,
                     },
-                    index: None,
+                    matrix: [],
+                    index: [],
                     value: Some(
                         Var(
                             Ident(

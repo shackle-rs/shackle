@@ -1,0 +1,463 @@
+[
+    AllDifferent(
+        AllDifferent {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            matrix: [],
+            except: [],
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            0,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            1,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        15,
+                    ),
+                ),
+            },
+        },
+    ),
+]

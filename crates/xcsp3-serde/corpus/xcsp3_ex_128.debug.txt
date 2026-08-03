@@ -1,0 +1,219 @@
+Instance {
+    ty: Csp,
+    variables: [],
+    arrays: [
+        Array {
+            identifier: "x",
+            note: None,
+            size: [
+                3,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(0..=4),
+                ),
+            ],
+        },
+        Array {
+            identifier: "y",
+            note: None,
+            size: [
+                3,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(0..=4),
+                ),
+            ],
+        },
+        Array {
+            identifier: "z",
+            note: None,
+            size: [
+                3,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(0..=8),
+                ),
+            ],
+        },
+    ],
+    constraints: [
+        Slide(
+            Slide {
+                info: MetaInfo {
+                    identifier: Some(
+                        "c4",
+                    ),
+                    note: None,
+                },
+                circular: false,
+                lists: [
+                    SlideList {
+                        list: [
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            0,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            0,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            1,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            1,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
+                        offset: 2,
+                        collect: Some(
+                            2,
+                        ),
+                    },
+                    SlideList {
+                        list: [
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            0,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            1,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
+                        offset: 1,
+                        collect: None,
+                    },
+                ],
+                constraint: Intension(
+                    Intension {
+                        info: MetaInfo {
+                            identifier: None,
+                            note: None,
+                        },
+                        function: Equal(
+                            [
+                                Int(
+                                    Add(
+                                        [
+                                            Var(
+                                                Placeholder(
+                                                    Position(
+                                                        0,
+                                                    ),
+                                                ),
+                                            ),
+                                            Var(
+                                                Placeholder(
+                                                    Position(
+                                                        1,
+                                                    ),
+                                                ),
+                                            ),
+                                        ],
+                                    ),
+                                ),
+                                Var(
+                                    Placeholder(
+                                        Position(
+                                            2,
+                                        ),
+                                    ),
+                                ),
+                            ],
+                        ),
+                    },
+                ),
+            },
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

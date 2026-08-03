@@ -1,0 +1,56 @@
+[
+    Clause(
+        Clause {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                        ],
+                    ),
+                ),
+                Not(
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                            ],
+                        ),
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+                Not(
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                4,
+                            ],
+                        ),
+                    ),
+                ),
+            ],
+        },
+    ),
+]

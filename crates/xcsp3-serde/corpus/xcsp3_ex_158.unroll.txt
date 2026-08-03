@@ -1,0 +1,54 @@
+[
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Card(
+                            Var(
+                                Ident(
+                                    "s1",
+                                ),
+                            ),
+                        ),
+                    ),
+                    Int(
+                        Const(
+                            2,
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Card(
+                            Var(
+                                Ident(
+                                    "s2",
+                                ),
+                            ),
+                        ),
+                    ),
+                    Int(
+                        Const(
+                            3,
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+]

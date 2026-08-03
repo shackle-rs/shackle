@@ -1,0 +1,91 @@
+Instance {
+    ty: Csp,
+    variables: [
+        Variable {
+            identifier: "z1",
+            note: None,
+            domain: RangeList::from(0..=2),
+        },
+        Variable {
+            identifier: "z2",
+            note: None,
+            domain: RangeList::from(0..=2),
+        },
+        Variable {
+            identifier: "z3",
+            note: None,
+            domain: RangeList::from(0..=2),
+        },
+        Variable {
+            identifier: "z4",
+            note: None,
+            domain: RangeList::from(0..=2),
+        },
+    ],
+    arrays: [],
+    constraints: [
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c4",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "z1",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z2",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z3",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "z4",
+                            ),
+                        ),
+                    ],
+                    supports: [
+                        [
+                            Some(
+                                1,
+                            ),
+                            None,
+                            Some(
+                                1,
+                            ),
+                            Some(
+                                2,
+                            ),
+                        ],
+                        [
+                            Some(
+                                2,
+                            ),
+                            Some(
+                                1,
+                            ),
+                            None,
+                            None,
+                        ],
+                    ],
+                    conflicts: [],
+                },
+            ),
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

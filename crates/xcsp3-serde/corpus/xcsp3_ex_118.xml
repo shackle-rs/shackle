@@ -1,7 +1,16 @@
-<element>
-  <matrix> 
-    x[][]
-  </matrix>
-  <index> i j </index>
-  <value> 5 </value>
-</element>
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <array id="x" size="[3][3]"> 0..9 </array>
+    <var id="i"> 0..2 </var>
+    <var id="j"> 0..2 </var>
+  </variables>
+  <constraints>
+    <element>
+      <matrix>
+        x[][]
+      </matrix>
+      <index> i j </index>
+      <value> 5 </value>
+    </element>
+  </constraints>
+</instance>

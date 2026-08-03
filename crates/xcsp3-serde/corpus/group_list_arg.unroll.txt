@@ -1,0 +1,94 @@
+[
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        6,
+                    ),
+                ),
+            },
+        },
+    ),
+    Sum(
+        Sum {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            coeffs: [],
+            condition: Condition {
+                operator: Eq,
+                operand: Int(
+                    Const(
+                        5,
+                    ),
+                ),
+            },
+        },
+    ),
+]

@@ -1,0 +1,456 @@
+[
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            0,
+                                        ],
+                                    ),
+                                ),
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            1,
+                                        ],
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Var(
+                            ArrayAccess(
+                                "x",
+                                [
+                                    2,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            1,
+                                        ],
+                                    ),
+                                ),
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            2,
+                                        ],
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Var(
+                            ArrayAccess(
+                                "x",
+                                [
+                                    3,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            1,
+                        ],
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+    Extension(
+        Extension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "y",
+                        [
+                            0,
+                        ],
+                    ),
+                ),
+            ],
+            supports: [
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        0,
+                    ),
+                    Some(
+                        2,
+                    ),
+                ],
+                [
+                    Some(
+                        1,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        0,
+                    ),
+                ],
+                [
+                    Some(
+                        2,
+                    ),
+                    Some(
+                        1,
+                    ),
+                ],
+            ],
+            conflicts: [],
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: NotEqual(
+                Int(
+                    Var(
+                        ArrayAccess(
+                            "w",
+                            [
+                                0,
+                            ],
+                        ),
+                    ),
+                ),
+                Int(
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                0,
+                            ],
+                        ),
+                    ),
+                ),
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: NotEqual(
+                Int(
+                    Var(
+                        ArrayAccess(
+                            "w",
+                            [
+                                1,
+                            ],
+                        ),
+                    ),
+                ),
+                Int(
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                1,
+                            ],
+                        ),
+                    ),
+                ),
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: NotEqual(
+                Int(
+                    Var(
+                        ArrayAccess(
+                            "w",
+                            [
+                                2,
+                            ],
+                        ),
+                    ),
+                ),
+                Int(
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                2,
+                            ],
+                        ),
+                    ),
+                ),
+            ),
+        },
+    ),
+]

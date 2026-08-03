@@ -1,16 +1,25 @@
-<slide id="c1">
-  <list> x1 x2 x3 x4 </list>
-  <intension> eq(add(%0,%1),%2) </intension>
-</slide>
-<slide id="c2" circular="true">
-  <list> y1 y2 y3 y4 </list>
-  <extension>
-    <list> %0 %1 </list>
-    <supports> (a,a)(a,c)(b,b)(c,a)(c,b) </supports>
-  </extension>
-</slide>
-<slide id="c3">
-  <list offset="2"> w1 z1 w2 z2 w3 z3 </list>
-  <intension> ne(%0,%1) </intension>
-</slide>
- 
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <array id="x" size="[4]"> 0..4 </array>
+    <array id="y" size="[4]"> 0..2 </array>
+    <array id="w" size="[3]"> 0..4 </array>
+    <array id="z" size="[3]"> 0..4 </array>
+  </variables>
+  <constraints>
+    <slide id="c1">
+      <list> x[0] x[1] x[2] x[3] </list>
+      <intension> eq(add(%0,%1),%2) </intension>
+    </slide>
+    <slide id="c2" circular="true">
+      <list> y[0] y[1] y[2] y[3] </list>
+      <extension>
+        <list> %0 %1 </list>
+        <supports> (0,0)(0,2)(1,1)(2,0)(2,1) </supports>
+      </extension>
+    </slide>
+    <slide id="c3">
+      <list offset="2"> w[0] z[0] w[1] z[1] w[2] z[2] </list>
+      <intension> ne(%0,%1) </intension>
+    </slide>
+  </constraints>
+</instance>

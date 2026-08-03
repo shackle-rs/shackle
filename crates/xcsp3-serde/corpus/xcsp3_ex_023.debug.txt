@@ -18,7 +18,11 @@ Instantiation {
         ),
     ],
     values: [
-        2,
-        2,
+        Some(
+            2,
+        ),
+        Some(
+            2,
+        ),
     ],
 }

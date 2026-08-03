@@ -1,0 +1,69 @@
+Instance {
+    ty: Csp,
+    variables: [
+        Variable {
+            identifier: "x",
+            note: None,
+            domain: RangeList::from(0..=10),
+        },
+    ],
+    arrays: [],
+    constraints: [
+        Constraint(
+            Extension(
+                Extension {
+                    info: MetaInfo {
+                        identifier: Some(
+                            "c3",
+                        ),
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            Ident(
+                                "x",
+                            ),
+                        ),
+                    ],
+                    supports: [
+                        [
+                            Some(
+                                1,
+                            ),
+                        ],
+                        [
+                            Some(
+                                2,
+                            ),
+                        ],
+                        [
+                            Some(
+                                4,
+                            ),
+                        ],
+                        [
+                            Some(
+                                8,
+                            ),
+                        ],
+                        [
+                            Some(
+                                9,
+                            ),
+                        ],
+                        [
+                            Some(
+                                10,
+                            ),
+                        ],
+                    ],
+                    conflicts: [],
+                },
+            ),
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

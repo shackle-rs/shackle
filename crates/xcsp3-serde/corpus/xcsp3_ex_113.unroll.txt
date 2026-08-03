@@ -1,0 +1,176 @@
+[
+    Lex(
+        Lex {
+            info: MetaInfo {
+                identifier: Some(
+                    "c1",
+                ),
+                note: None,
+            },
+            lists: [
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                0,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                2,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                3,
+                            ],
+                        ),
+                    ),
+                ],
+                [
+                    Var(
+                        ArrayAccess(
+                            "y",
+                            [
+                                0,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "y",
+                            [
+                                1,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "y",
+                            [
+                                2,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "y",
+                            [
+                                3,
+                            ],
+                        ),
+                    ),
+                ],
+            ],
+            matrix: [],
+            operator: Le,
+        },
+    ),
+    Lex(
+        Lex {
+            info: MetaInfo {
+                identifier: Some(
+                    "c2",
+                ),
+                note: None,
+            },
+            lists: [
+                [
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                0,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                1,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                2,
+                            ],
+                        ),
+                    ),
+                ],
+                [
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                3,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                4,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                5,
+                            ],
+                        ),
+                    ),
+                ],
+                [
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                6,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                7,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "z",
+                            [
+                                8,
+                            ],
+                        ),
+                    ),
+                ],
+            ],
+            matrix: [],
+            operator: Gt,
+        },
+    ),
+]

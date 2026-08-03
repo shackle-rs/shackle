@@ -1,0 +1,91 @@
+Instance {
+    ty: Csp,
+    variables: [
+        Variable {
+            identifier: "i",
+            note: None,
+            domain: RangeList::from(0..=2),
+        },
+        Variable {
+            identifier: "j",
+            note: None,
+            domain: RangeList::from(0..=2),
+        },
+    ],
+    arrays: [
+        Array {
+            identifier: "x",
+            note: None,
+            size: [
+                3,
+                3,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(0..=9),
+                ),
+            ],
+        },
+    ],
+    constraints: [
+        Constraint(
+            Element(
+                Element {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: OffsetList {
+                        list: [],
+                        start_index: 0,
+                    },
+                    matrix: [
+                        [
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Full,
+                                        Full,
+                                    ],
+                                ),
+                            ),
+                        ],
+                    ],
+                    index: [
+                        Var(
+                            Ident(
+                                "i",
+                            ),
+                        ),
+                        Var(
+                            Ident(
+                                "j",
+                            ),
+                        ),
+                    ],
+                    value: None,
+                    condition: Some(
+                        Condition {
+                            operator: Eq,
+                            operand: Int(
+                                Const(
+                                    5,
+                                ),
+                            ),
+                        },
+                    ),
+                },
+            ),
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

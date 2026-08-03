@@ -1,0 +1,242 @@
+[
+    AllDifferent(
+        AllDifferent {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                            3,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                            3,
+                        ],
+                    ),
+                ),
+            ],
+            matrix: [],
+            except: [],
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                0,
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            0,
+                                            0,
+                                        ],
+                                    ),
+                                ),
+                                Const(
+                                    2,
+                                ),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                1,
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            0,
+                                            1,
+                                        ],
+                                    ),
+                                ),
+                                Const(
+                                    3,
+                                ),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                2,
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            0,
+                                            2,
+                                        ],
+                                    ),
+                                ),
+                                Const(
+                                    4,
+                                ),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                3,
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            0,
+                                            3,
+                                        ],
+                                    ),
+                                ),
+                                Const(
+                                    5,
+                                ),
+                            ],
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+]

@@ -1,0 +1,47 @@
+Instance {
+    ty: Csp,
+    variables: [],
+    arrays: [],
+    constraints: [
+        Constraint(
+            Sum(
+                Sum {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [
+                        Var(
+                            ArrayAccess(
+                                "w",
+                                [
+                                    Full,
+                                ],
+                            ),
+                        ),
+                    ],
+                    coeffs: [
+                        1,
+                        1,
+                        1,
+                        1,
+                        2,
+                        2,
+                    ],
+                    condition: Condition {
+                        operator: Le,
+                        operand: Int(
+                            Const(
+                                10,
+                            ),
+                        ),
+                    },
+                },
+            ),
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

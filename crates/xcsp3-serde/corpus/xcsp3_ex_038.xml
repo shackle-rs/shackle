@@ -1,5 +1,11 @@
-<extension id="c3">
-  <list> x </list>
-  <supports> 1 2 4 8..10 </supports>
-</extension>
- 
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <var id="x"> 0..10 </var>
+  </variables>
+  <constraints>
+    <extension id="c3">
+      <list> x </list>
+      <supports> 1 2 4 8..10 </supports>
+    </extension>
+  </constraints>
+</instance>

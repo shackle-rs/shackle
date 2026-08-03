@@ -1,0 +1,101 @@
+[
+    AllDifferent(
+        AllDifferent {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [],
+            matrix: [
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                0,
+                                0,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                0,
+                                1,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                0,
+                                2,
+                            ],
+                        ),
+                    ),
+                ],
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                0,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                1,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                1,
+                                2,
+                            ],
+                        ),
+                    ),
+                ],
+                [
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                2,
+                                0,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                2,
+                                1,
+                            ],
+                        ),
+                    ),
+                    Var(
+                        ArrayAccess(
+                            "x",
+                            [
+                                2,
+                                2,
+                            ],
+                        ),
+                    ),
+                ],
+            ],
+            except: [],
+        },
+    ),
+]

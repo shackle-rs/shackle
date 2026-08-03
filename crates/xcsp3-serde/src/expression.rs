@@ -204,8 +204,8 @@ pub(crate) fn sequence<'a, O>(
 /// Parser combinator that expects parentheses with a comma seperated parser
 /// rules
 pub(crate) fn tuple<'a, O>(
-	p: impl Parser<&'a str, Output = O>,
-) -> impl Parser<&'a str, Output = Vec<O>> {
+	p: impl Parser<&'a str, Output = O, Error = nom::error::Error<&'a str>>,
+) -> impl Parser<&'a str, Output = Vec<O>, Error = nom::error::Error<&'a str>> {
 	delimited(char('('), separated_list1(char(','), p), char(')'))
 }
 
@@ -257,7 +257,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> BoolExp<VarRef<Identifier>> {
 	pub(crate) fn unroll_single(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<BoolExp<SimpleRef<Identifier>>, UnrollError> {
 		match self {
@@ -340,7 +340,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> BoolExp<VarRef<Identifier>> {
 	pub(crate) fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Vec<BoolExp<SimpleRef<Identifier>>>, UnrollError> {
 		if let BoolExp::Var(v) = self {
@@ -408,19 +408,13 @@ impl<Var: IntoVar> BoolExp<Var> {
 	/// Parser combinator for a call Boolean expression with two expression
 	/// arguments from a string.
 	fn call_arg2_exp(input: &str) -> IResult<&str, Self> {
-		let (input, tag) = tag("ne")(input)?;
+		let (input, _) = tag("ne")(input)?;
 		let (input, _) = char('(')(input)?;
 		let (input, e1) = Exp::parse(input)?;
 		let (input, _) = char(',')(input)?;
 		let (input, e2) = Exp::parse(input)?;
 		let (input, _) = char(')')(input)?;
-		Ok((
-			input,
-			match tag {
-				"imp" => BoolExp::NotEqual,
-				_ => unreachable!(),
-			}(Box::new(e1), Box::new(e2)),
-		))
+		Ok((input, BoolExp::NotEqual(Box::new(e1), Box::new(e2))))
 	}
 
 	/// Parser combinator for a call Boolean expression with two integer arguments
@@ -573,7 +567,7 @@ impl<Identifier: Display> Display for BoolExp<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			BoolExp::Const(b) => write!(f, "{}", if *b { 1 } else { 0 }),
-			BoolExp::Var(id) => write!(f, "{}", id.to_string()),
+			BoolExp::Var(id) => write!(f, "{}", id),
 			BoolExp::Not(e) => write!(f, "not({})", e),
 			BoolExp::And(es) => write!(
 				f,
@@ -713,7 +707,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> Exp<VarRef<Identifier>> {
 	pub(crate) fn unroll_single(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Exp<SimpleRef<Identifier>>, UnrollError> {
 		match self {
@@ -727,7 +721,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> Exp<VarRef<Identifier>> {
 	pub(crate) fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Vec<Exp<SimpleRef<Identifier>>>, UnrollError> {
 		match self {
@@ -795,7 +789,7 @@ impl<Identifier: Display> Display for Exp<Identifier> {
 			Exp::Bool(e) => write!(f, "{}", e),
 			Exp::Int(e) => write!(f, "{}", e),
 			Exp::Set(e) => write!(f, "{}", e),
-			Exp::Var(e) => write!(f, "{}", e.to_string()),
+			Exp::Var(e) => write!(f, "{}", e),
 		}
 	}
 }
@@ -859,7 +853,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> IntExp<VarRef<Identifier>> {
 	pub(crate) fn unroll_single(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<IntExp<SimpleRef<Identifier>>, UnrollError> {
 		match self {
@@ -919,7 +913,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> IntExp<VarRef<Identifier>> {
 	pub(crate) fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Vec<IntExp<SimpleRef<Identifier>>>, UnrollError> {
 		if let IntExp::Var(v) = self {
@@ -1097,7 +1091,7 @@ impl<Identifier: Display> Display for IntExp<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			IntExp::Const(i) => write!(f, "{}", i),
-			IntExp::Var(id) => write!(f, "{}", id.to_string()),
+			IntExp::Var(id) => write!(f, "{}", id),
 			IntExp::Neg(e) => write!(f, "neg({})", e),
 			IntExp::Abs(e) => write!(f, "abs({})", e),
 			IntExp::Add(es) => write!(
@@ -1189,7 +1183,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> SetExp<VarRef<Identifier>> {
 	pub(crate) fn unroll_single(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<SetExp<SimpleRef<Identifier>>, UnrollError> {
 		match self {
@@ -1232,7 +1226,7 @@ impl<Identifier: Clone + Hash + Eq + ToString> SetExp<VarRef<Identifier>> {
 	pub(crate) fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Vec<SetExp<SimpleRef<Identifier>>>, UnrollError> {
 		if let SetExp::Var(v) = self {
@@ -1326,7 +1320,7 @@ impl<Var: IntoVar> SetExp<Var> {
 impl<Identifier: Display> Display for SetExp<Identifier> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			SetExp::Var(id) => write!(f, "{}", id.to_string()),
+			SetExp::Var(id) => write!(f, "{}", id),
 			SetExp::Set(es) => write!(
 				f,
 				"{{{}}}",

@@ -1,0 +1,182 @@
+[
+    Count(
+        Count {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            0,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+            ],
+            values: [
+                Const(
+                    0,
+                ),
+                Const(
+                    2,
+                ),
+                Const(
+                    4,
+                ),
+            ],
+            condition: Condition {
+                operator: In,
+                operand: Set(
+                    Range(
+                        (
+                            Const(
+                                0,
+                            ),
+                            Const(
+                                1,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        },
+    ),
+    Count(
+        Count {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            1,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+            ],
+            values: [
+                Const(
+                    0,
+                ),
+                Const(
+                    2,
+                ),
+                Const(
+                    4,
+                ),
+            ],
+            condition: Condition {
+                operator: In,
+                operand: Set(
+                    Range(
+                        (
+                            Const(
+                                0,
+                            ),
+                            Const(
+                                1,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        },
+    ),
+    Count(
+        Count {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            list: [
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            2,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            3,
+                        ],
+                    ),
+                ),
+                Var(
+                    ArrayAccess(
+                        "x",
+                        [
+                            4,
+                        ],
+                    ),
+                ),
+            ],
+            values: [
+                Const(
+                    0,
+                ),
+                Const(
+                    2,
+                ),
+                Const(
+                    4,
+                ),
+            ],
+            condition: Condition {
+                operator: In,
+                operand: Set(
+                    Range(
+                        (
+                            Const(
+                                0,
+                            ),
+                            Const(
+                                1,
+                            ),
+                        ),
+                    ),
+                ),
+            },
+        },
+    ),
+]

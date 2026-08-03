@@ -1,0 +1,233 @@
+Instance {
+    ty: Csp,
+    variables: [],
+    arrays: [
+        Array {
+            identifier: "x",
+            note: None,
+            size: [
+                5,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(1..=5),
+                ),
+            ],
+        },
+        Array {
+            identifier: "y",
+            note: None,
+            size: [
+                5,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(1..=5),
+                ),
+            ],
+        },
+        Array {
+            identifier: "z",
+            note: None,
+            size: [
+                5,
+            ],
+            domains: [
+                (
+                    [
+                        Ident(
+                            "others",
+                        ),
+                    ],
+                    RangeList::from(1..=5),
+                ),
+            ],
+        },
+    ],
+    constraints: [
+        Constraint(
+            AllDifferent(
+                AllDifferent {
+                    info: MetaInfo {
+                        identifier: None,
+                        note: None,
+                    },
+                    list: [],
+                    matrix: [
+                        [
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            0,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            1,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            3,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "x",
+                                    [
+                                        Single(
+                                            4,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
+                        [
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            0,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            1,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            3,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "y",
+                                    [
+                                        Single(
+                                            4,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
+                        [
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            0,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            1,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            2,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            3,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            Var(
+                                ArrayAccess(
+                                    "z",
+                                    [
+                                        Single(
+                                            4,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ],
+                    ],
+                    except: [],
+                },
+            ),
+        ),
+    ],
+    objectives: Objectives {
+        combination: Lexico,
+        objectives: [],
+    },
+}

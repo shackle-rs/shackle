@@ -1,8 +1,15 @@
-<slide id="c">
-  <list> x1 x2 x3 x4 x5 </list>
-  <count>
-     <list> %0 %1 %2 </list>
-     <values> 0 2 4 </values>
-     <condition> (in,0..1) </condition>
-  </count>
-</slide>
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <array id="x" size="[5]"> 0..4 </array>
+  </variables>
+  <constraints>
+    <slide id="c">
+      <list> x[0] x[1] x[2] x[3] x[4] </list>
+      <count>
+         <list> %0 %1 %2 </list>
+         <values> 0 2 4 </values>
+         <condition> (in,0..1) </condition>
+      </count>
+    </slide>
+  </constraints>
+</instance>

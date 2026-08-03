@@ -1,0 +1,30 @@
+Instantiation {
+    info: MetaInfo {
+        identifier: None,
+        note: None,
+    },
+    ty: Some(
+        Solution,
+    ),
+    cost: None,
+    list: [
+        ArrayAccess(
+            "x",
+            [
+                Full,
+            ],
+        ),
+    ],
+    values: [
+        Some(
+            1,
+        ),
+        Some(
+            1,
+        ),
+        Some(
+            2,
+        ),
+        None,
+    ],
+}

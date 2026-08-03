@@ -1,0 +1,134 @@
+[
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            0,
+                                        ],
+                                    ),
+                                ),
+                                Var(
+                                    ArrayAccess(
+                                        "y",
+                                        [
+                                            0,
+                                        ],
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Var(
+                            ArrayAccess(
+                                "z",
+                                [
+                                    0,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            1,
+                                        ],
+                                    ),
+                                ),
+                                Var(
+                                    ArrayAccess(
+                                        "y",
+                                        [
+                                            1,
+                                        ],
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Var(
+                            ArrayAccess(
+                                "z",
+                                [
+                                    1,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+    Intension(
+        Intension {
+            info: MetaInfo {
+                identifier: None,
+                note: None,
+            },
+            function: Equal(
+                [
+                    Int(
+                        Add(
+                            [
+                                Var(
+                                    ArrayAccess(
+                                        "x",
+                                        [
+                                            2,
+                                        ],
+                                    ),
+                                ),
+                                Var(
+                                    ArrayAccess(
+                                        "y",
+                                        [
+                                            2,
+                                        ],
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                    Int(
+                        Var(
+                            ArrayAccess(
+                                "z",
+                                [
+                                    2,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+        },
+    ),
+]

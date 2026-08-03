@@ -72,7 +72,7 @@ use nom::{
 	character::complete::{char, digit1},
 	combinator::{all_consuming, map, map_res, opt, recognize},
 	multi::many0,
-	sequence::{delimited, preceded},
+	sequence::{delimited, pair, preceded},
 	IResult, Parser,
 };
 pub use rangelist::RangeList;
@@ -261,11 +261,14 @@ pub struct Instantiation<Identifier = String, Var = VarRef<Identifier>> {
 	/// List of variables that are assigned values
 	pub list: Vec<Var>,
 	/// List of values assigned to the variables
+	///
+	/// A [`None`] entry represents the star `*`, marking a variable that is
+	/// allowed to take any value.
 	#[serde(
-		deserialize_with = "deserialize_int_vals",
-		serialize_with = "serialize_list"
+		deserialize_with = "deserialize_opt_int_vals",
+		serialize_with = "serialize_opt_list"
 	)]
-	pub values: Vec<IntVal>,
+	pub values: Vec<Option<IntVal>>,
 }
 
 /// The type of instantiation
@@ -511,13 +514,51 @@ fn deserialize_int_vals<'de, D: Deserializer<'de>>(
 
 		fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
 			let v = v.trim();
-			let (_, v) = all_consuming(whitespace_seperated(int))
+			let (_, vals) = all_consuming(whitespace_seperated(repeated(int)))
 				.parse(v)
 				.map_err(|_| E::custom(format!("invalid list of integers {v}")))?;
-			Ok(v)
+			Ok(vals.into_iter().flatten().collect())
 		}
 	}
 	deserializer.deserialize_str(V)
+}
+
+/// Deserialize a string as a list of integers, where `*` denotes that any value
+/// is allowed
+fn deserialize_opt_int_vals<'de, D: Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Vec<Option<IntVal>>, D::Error> {
+	/// Visitor to parse a list of integers
+	struct V;
+	impl Visitor<'_> for V {
+		type Value = Vec<Option<IntVal>>;
+
+		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			formatter.write_str("a list of integers")
+		}
+
+		fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+			let v = v.trim();
+			let (_, vals) = all_consuming(whitespace_seperated(repeated(alt((
+				map(char('*'), |_| None),
+				map(int, Some),
+			)))))
+			.parse(v)
+			.map_err(|_| E::custom(format!("invalid list of integers {v}")))?;
+			Ok(vals.into_iter().flatten().collect())
+		}
+	}
+	deserializer.deserialize_str(V)
+}
+
+/// Parser combinator for a value that can be followed by `x<count>` to indicate
+/// that it occurs `count` times in a row
+fn repeated<'a, O: Clone>(
+	p: impl Parser<&'a str, Output = O, Error = nom::error::Error<&'a str>>,
+) -> impl Parser<&'a str, Output = Vec<O>> {
+	map(pair(p, opt(preceded(char('x'), idx_int))), |(v, n)| {
+		vec![v; n.unwrap_or(1)]
+	})
 }
 
 /// Deserialize a string as a range list
@@ -602,6 +643,23 @@ fn serialize_list<S: Serializer, T: Display>(exps: &[T], serializer: S) -> Resul
 		&exps
 			.iter()
 			.map(|e| format!("{}", e))
+			.collect::<Vec<_>>()
+			.join(" "),
+	)
+}
+
+/// Serialize a list of optional values as a string, writing [`None`] as `*`
+fn serialize_opt_list<S: Serializer, T: Display>(
+	exps: &[Option<T>],
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	serializer.serialize_str(
+		&exps
+			.iter()
+			.map(|e| match e {
+				Some(e) => e.to_string(),
+				None => "*".to_owned(),
+			})
 			.collect::<Vec<_>>()
 			.join(" "),
 	)
@@ -796,9 +854,10 @@ impl<Identifier: Display> Serialize for Array<Identifier> {
 }
 
 impl<Identifier: Clone + Eq + Hash + ToString> Instance<Identifier, VarRef<Identifier>> {
-	/// Create a flat list of constraints, instantiating all [`Group`]s,
-	/// extracting constraints from [`Block`]s, and expanding all slicing
-	/// operations.
+	/// Create a flat list of constraints, instantiating all
+	/// [`Group`](constraint::Group)s and [`Slide`](constraint::Slide)s,
+	/// extracting constraints from [`Block`](constraint::Block)s, and expanding
+	/// all slicing operations.
 	pub fn unroll_constraints(
 		&self,
 	) -> Result<Vec<Constraint<Identifier, SimpleRef<Identifier>>>, UnrollError> {
@@ -815,6 +874,7 @@ impl<Identifier: Clone + Eq + Hash + ToString> Instance<Identifier, VarRef<Ident
 			for con in cons {
 				match con {
 					MetaConstraint::Group(group) => flat.extend(group.unroll(&arrays)?),
+					MetaConstraint::Slide(slide) => flat.extend(slide.unroll(&arrays)?),
 					MetaConstraint::Block(block) => metas.push_back(&block.constraints),
 					MetaConstraint::Constraint(c) => flat.push(c.unroll(&arrays, &[], &[])?),
 				}
@@ -991,8 +1051,8 @@ impl<Identifier: Display, Var: Display> Serialize for Instantiation<Identifier, 
 			#[serde(serialize_with = "serialize_list")]
 			list: &'a Vec<Var>,
 			/// Values serialized as <values>
-			#[serde(serialize_with = "serialize_list")]
-			values: &'a Vec<IntVal>,
+			#[serde(serialize_with = "serialize_opt_list")]
+			values: &'a Vec<Option<IntVal>>,
 		}
 		Instantiation {
 			identifier: &self.info.identifier,
@@ -1063,16 +1123,20 @@ impl Display for Placeholder {
 }
 
 impl<Identifier: Clone + Hash + Eq + ToString> VarRef<Identifier> {
+	/// Expand the reference into the list of expressions it denotes.
+	///
+	/// Placeholders are resolved using `args` (one entry per `<args>` token, so
+	/// a single placeholder can stand for a whole list) and `remainder` (the
+	/// flattened tokens matched by `%...`). Array slices are expanded using the
+	/// dimensions given in `arrays`.
 	pub(crate) fn unroll(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Vec<Exp<SimpleRef<Identifier>>>, UnrollError> {
 		match self {
-			&VarRef::Placeholder(Placeholder::Position(i)) if args.len() < i => {
-				Ok(vec![args[i].clone()])
-			}
+			&VarRef::Placeholder(Placeholder::Position(i)) if i < args.len() => Ok(args[i].clone()),
 			&VarRef::Placeholder(Placeholder::Position(i)) => Err(UnrollError::ArgMissing {
 				placeholder: i,
 				args_len: args.len(),
@@ -1104,10 +1168,49 @@ impl<Identifier: Clone + Hash + Eq + ToString> VarRef<Identifier> {
 		}
 	}
 
+	/// Expand an array slice (e.g. `x[][]`) into the rows of the matrix it
+	/// denotes.
+	///
+	/// The width of a row is given by the last indexing operation, since
+	/// [`Self::unroll`] varies the last index the fastest.
+	pub(crate) fn unroll_matrix(
+		&self,
+		arrays: &HashMap<Identifier, &[usize]>,
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
+		remainder: &[Exp<SimpleRef<Identifier>>],
+	) -> Result<Vec<Vec<Exp<SimpleRef<Identifier>>>>, UnrollError> {
+		let VarRef::ArrayAccess(ident, indexings) = self else {
+			return Err(UnrollError::UnexpectedIndexes {
+				expected_len: 2,
+				args_len: 0,
+			});
+		};
+		let Some(size) = arrays.get(ident) else {
+			return Err(UnrollError::UnknownIdentifier(ident.to_string()));
+		};
+		let flat = self.unroll(arrays, args, remainder)?;
+		let row_len = match indexings.last() {
+			Some(&Indexing::Single(_)) => 1,
+			Some(&Indexing::Range(start, end)) => end - start + 1,
+			// `unroll` has already checked that the number of indexing
+			// operations matches the number of dimensions of the array.
+			Some(Indexing::Full) => size[indexings.len() - 1],
+			None => {
+				return Err(UnrollError::UnexpectedIndexes {
+					expected_len: 2,
+					args_len: 0,
+				})
+			}
+		};
+		Ok(flat.chunks(row_len).map(<[_]>::to_vec).collect())
+	}
+
+	/// Same as [`Self::unroll`], but requires that the reference denotes exactly
+	/// one expression.
 	pub(crate) fn unroll_single(
 		&self,
 		arrays: &HashMap<Identifier, &[usize]>,
-		args: &[Exp<SimpleRef<Identifier>>],
+		args: &[Vec<Exp<SimpleRef<Identifier>>>],
 		remainder: &[Exp<SimpleRef<Identifier>>],
 	) -> Result<Exp<SimpleRef<Identifier>>, UnrollError> {
 		let res = self.unroll(arrays, args, remainder)?;
@@ -1254,6 +1357,15 @@ mod tests {
 		assert_eq!(inst, inst2)
 	}
 
+	/// Round-trip the instance, and additionally check the flat list of
+	/// constraints produced by [`Instance::unroll_constraints`].
+	fn test_successful_unroll(file: &Path, exp: ExpectFile, unrolled: ExpectFile) {
+		test_successful_serialization::<Instance>(file, exp);
+		let rdr = BufReader::new(File::open(file).unwrap());
+		let inst: Instance = quick_xml::de::from_reader(rdr).unwrap();
+		unrolled.assert_debug_eq(&inst.unroll_constraints().unwrap());
+	}
+
 	macro_rules! test_file {
 		($file:ident) => {
 			test_file!($file, Instance);
@@ -1272,7 +1384,29 @@ mod tests {
 		};
 	}
 
+	macro_rules! test_unroll {
+		($file:ident) => {
+			#[test]
+			fn $file() {
+				test_successful_unroll(
+					std::path::Path::new(&format!("./corpus/{}.xml", stringify!($file))),
+					expect_test::expect_file![&format!(
+						"../corpus/{}.debug.txt",
+						stringify!($file)
+					)],
+					expect_test::expect_file![&format!(
+						"../corpus/{}.unroll.txt",
+						stringify!($file)
+					)],
+				)
+			}
+		};
+	}
+
 	test_file!(knapsack);
+	// A `<args>` token can expand to a whole list, so `%0` must bind to all of
+	// `x[0][]` and `%1` to the value that follows it.
+	test_unroll!(group_list_arg);
 
 	test_file!(xcsp3_ex_001);
 	test_file!(xcsp3_ex_002);
@@ -1299,9 +1433,9 @@ mod tests {
 	test_file!(xcsp3_ex_023, Instantiation);
 	test_file!(xcsp3_ex_024);
 	test_file!(xcsp3_ex_025, Instantiation);
-	// test_file!(xcsp3_ex_026, Instantiation);
+	test_file!(xcsp3_ex_026, Instantiation);
 	test_file!(xcsp3_ex_027, Instantiation);
-	// test_file!(xcsp3_ex_028, Instantiation);
+	test_file!(xcsp3_ex_028, Instantiation);
 	test_file!(xcsp3_ex_029);
 	test_file!(xcsp3_ex_030);
 	test_file!(xcsp3_ex_031);
@@ -1311,8 +1445,8 @@ mod tests {
 	test_file!(xcsp3_ex_035);
 	test_file!(xcsp3_ex_036);
 	test_file!(xcsp3_ex_037);
-	// test_file!(xcsp3_ex_038);
-	// test_file!(xcsp3_ex_039);
+	test_file!(xcsp3_ex_038);
+	test_file!(xcsp3_ex_039);
 	// test_file!(xcsp3_ex_040);
 	test_file!(xcsp3_ex_041);
 	// test_file!(xcsp3_ex_042);
@@ -1327,7 +1461,7 @@ mod tests {
 	test_file!(xcsp3_ex_051);
 	test_file!(xcsp3_ex_052);
 	test_file!(xcsp3_ex_053);
-	// test_file!(xcsp3_ex_054);
+	test_file!(xcsp3_ex_054);
 	test_file!(xcsp3_ex_055);
 	test_file!(xcsp3_ex_056);
 	test_file!(xcsp3_ex_057);
@@ -1346,7 +1480,7 @@ mod tests {
 	// test_file!(xcsp3_ex_070);
 	// test_file!(xcsp3_ex_071);
 	test_file!(xcsp3_ex_072);
-	// test_file!(xcsp3_ex_073);
+	test_unroll!(xcsp3_ex_073);
 	test_file!(xcsp3_ex_074);
 	test_file!(xcsp3_ex_075);
 	test_file!(xcsp3_ex_076);
@@ -1357,7 +1491,7 @@ mod tests {
 	// test_file!(xcsp3_ex_081);
 	// test_file!(xcsp3_ex_082);
 	// test_file!(xcsp3_ex_083);
-	// test_file!(xcsp3_ex_084);
+	test_unroll!(xcsp3_ex_084);
 	test_file!(xcsp3_ex_085);
 	test_file!(xcsp3_ex_086);
 	// test_file!(xcsp3_ex_087);
@@ -1386,12 +1520,12 @@ mod tests {
 	// test_file!(xcsp3_ex_110);
 	// test_file!(xcsp3_ex_111);
 	// test_file!(xcsp3_ex_112);
-	// test_file!(xcsp3_ex_113);
+	test_unroll!(xcsp3_ex_113);
 	// test_file!(xcsp3_ex_114);
-	// test_file!(xcsp3_ex_115);
-	// test_file!(xcsp3_ex_116);
-	// test_file!(xcsp3_ex_117);
-	// test_file!(xcsp3_ex_118);
+	test_unroll!(xcsp3_ex_115);
+	test_unroll!(xcsp3_ex_116);
+	test_unroll!(xcsp3_ex_117);
+	test_unroll!(xcsp3_ex_118);
 	// test_file!(xcsp3_ex_119);
 	// test_file!(xcsp3_ex_120);
 	// test_file!(xcsp3_ex_121);
@@ -1400,11 +1534,11 @@ mod tests {
 	// test_file!(xcsp3_ex_124);
 	// test_file!(xcsp3_ex_125);
 	// test_file!(xcsp3_ex_126);
-	// test_file!(xcsp3_ex_127);
-	// test_file!(xcsp3_ex_128);
+	test_unroll!(xcsp3_ex_127);
+	test_unroll!(xcsp3_ex_128);
 	// test_file!(xcsp3_ex_129);
-	// test_file!(xcsp3_ex_130);
-	// test_file!(xcsp3_ex_131);
+	test_unroll!(xcsp3_ex_130);
+	test_unroll!(xcsp3_ex_131);
 	// test_file!(xcsp3_ex_132);
 	// test_file!(xcsp3_ex_133);
 	// test_file!(xcsp3_ex_134);
@@ -1425,21 +1559,21 @@ mod tests {
 	// test_file!(xcsp3_ex_149);
 	// test_file!(xcsp3_ex_150);
 	// test_file!(xcsp3_ex_151);
-	test_file!(xcsp3_ex_152);
-	test_file!(xcsp3_ex_153);
-	test_file!(xcsp3_ex_154);
-	test_file!(xcsp3_ex_155);
-	// test_file!(xcsp3_ex_156);
-	test_file!(xcsp3_ex_157);
-	test_file!(xcsp3_ex_158);
+	test_unroll!(xcsp3_ex_152);
+	test_unroll!(xcsp3_ex_153);
+	test_unroll!(xcsp3_ex_154);
+	test_unroll!(xcsp3_ex_155);
+	test_unroll!(xcsp3_ex_156);
+	test_unroll!(xcsp3_ex_157);
+	test_unroll!(xcsp3_ex_158);
 	// test_file!(xcsp3_ex_159);
 	// test_file!(xcsp3_ex_160);
-	// test_file!(xcsp3_ex_161);
+	test_unroll!(xcsp3_ex_161);
 	// test_file!(xcsp3_ex_162);
 	// test_file!(xcsp3_ex_163);
 	// test_file!(xcsp3_ex_164);
 	// test_file!(xcsp3_ex_165);
-	// test_file!(xcsp3_ex_166);
+	test_unroll!(xcsp3_ex_166);
 	test_file!(xcsp3_ex_167);
 	// test_file!(xcsp3_ex_168);
 	// test_file!(xcsp3_ex_169);

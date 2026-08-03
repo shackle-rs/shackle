@@ -1,5 +1,13 @@
-<noOverlap>
-   <origins> (x0,y0,z0)(x1,y1,z1)(x2,y2,z2)(x3,y3,z3) </origins>  
-   <lengths> (2,4,1)(4,2,3)(5,1,2)(3,3,2) </lengths>  
-</noOverlap>
- 
+<instance format="XCSP3" type="CSP">
+  <variables>
+    <array id="x" size="[4]"> 0..10 </array>
+    <array id="y" size="[4]"> 0..10 </array>
+    <array id="z" size="[4]"> 0..10 </array>
+  </variables>
+  <constraints>
+    <noOverlap>
+       <origins> (x[0],y[0],z[0])(x[1],y[1],z[1])(x[2],y[2],z[2])(x[3],y[3],z[3]) </origins>
+       <lengths> (2,4,1)(4,2,3)(5,1,2)(3,3,2) </lengths>
+    </noOverlap>
+  </constraints>
+</instance>
