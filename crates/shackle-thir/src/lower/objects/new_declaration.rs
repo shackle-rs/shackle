@@ -7,7 +7,9 @@
 //! contributions, and returns the declaration for the user-named identity set.
 
 use shackle_hir::{
-	ClassMember, Item, PatternTy, TypeResult, class_analysis::LocalDomainSource, ids::PatternRef,
+	ClassMember, Item, PatternTy, TypeResult,
+	class_analysis::{LocalDomainSource, OccurrenceId},
+	ids::PatternRef,
 };
 use shackle_ty::{Ty, TyData};
 
@@ -19,6 +21,73 @@ use crate::{
 	},
 	*,
 };
+
+#[derive(Clone)]
+struct PendingRootCollection<'db> {
+	contribution_index: usize,
+	inst: VarType,
+	emit_root_contribution: bool,
+	contribution_expr: Option<Expression<'db>>,
+	nested_iteration_expr: Option<Expression<'db>>,
+	needs_reconstruction: bool,
+	sum_expr: Expression<'db>,
+	potential_ordinal_domain: Option<Expression<'db>>,
+}
+
+struct PendingSlice<'db> {
+	target_class: PatternRef<'db>,
+	contribution_index: usize,
+	name_suffix: String,
+	sum_expr: Expression<'db>,
+	/// Per-parent slice size for nested fresh-child collections.
+	/// Set when the slice corresponds to a `set of new <child>: <field>`
+	/// attribute on a parent that has more than one potential identity
+	/// (or even just one). Used to emit the per-parent slice array
+	/// `<parent>_<field>_potential`.
+	max_card_per_parent: Option<Expression<'db>>,
+	/// Immediate parent class for this slice's `<field>` attribute. For
+	/// a nested-of-nested slice (e.g. `Vehicle.crew` introduced via
+	/// `Expedition.vehicles`), this is the *immediate* parent (Vehicle),
+	/// not the root user decl class (Expedition). The slice-emission
+	/// loop uses `class_object_contribution_declaration(parent_class,
+	/// parent_contribution_index)` to find the parent's contribution
+	/// storage array, which becomes the slice array's index domain so
+	/// `slice[v]` lines up with `parent_storage[v].<field>` in the
+	/// per-parent subset constraint.
+	parent_class: PatternRef<'db>,
+	parent_contribution_index: usize,
+	/// The immediate `<field>` attribute name on `parent_class` (the
+	/// last path component), unlike `name_suffix` which joins the full
+	/// path from the root (`ps_ns`). This is what the actual-set
+	/// field-introduction record needs: the field is a direct record
+	/// field of the *parent's* storage element type, not the root's.
+	/// `None` for the root passthrough slice (no introducing field).
+	field_attribute: Option<Identifier<'db>>,
+	/// `Some(opt)` when the field is a singular `new`/`opt new`
+	/// attribute (`LocalDomainSource::OnePerParent`), recording its
+	/// opt-ness for the actual-set singleton contribution. `None` for
+	/// collection-shaped fields and the root passthrough slice.
+	singular_opt: Option<bool>,
+}
+
+/// The immutable setup a top-level `new` root declaration is lowered against.
+///
+/// `collect_new_declaration` threads these values through every phase of the
+/// lowering; bundling them keeps the extracted phase helpers to a readable
+/// signature.
+struct NewRootContext<'db, 'a> {
+	item: Item<'db>,
+	types: &'a TypeResult<'db>,
+	data: &'a shackle_hir::ItemData<'db>,
+	/// The declared type of the root, e.g. `set of new C`.
+	item_ty: &'a shackle_hir::Type<'db>,
+	class_pattern_ref: PatternRef<'db>,
+	root_pattern: PatternRef<'db>,
+	root_occurrence: OccurrenceId,
+	enum_member_id: EnumMemberId<'db>,
+	/// `<Class>_<declName>`, the prefix for every decl this root introduces.
+	class_and_decl_name: String,
+}
 
 impl<'db> ItemCollector<'db> {
 	/// Lower a top-level declaration whose type introduces objects (`new C`,
@@ -51,7 +120,7 @@ impl<'db> ItemCollector<'db> {
 			collector.parent.objects.plan.contributions_by_occurrence[&root_occurrence][0]
 				.constructor_index as u32,
 		);
-		let item_ty: &shackle_hir::Type = &collector.data[d.declared_type];
+		let item_ty: &shackle_hir::Type = &data[d.declared_type];
 
 		let class_and_decl_name = format!(
 			"{}_{}",
@@ -65,19 +134,19 @@ impl<'db> ItemCollector<'db> {
 				.pretty_print(collector.parent.db)
 		);
 
-		#[derive(Clone)]
-		struct PendingRootCollection<'db> {
-			contribution_index: usize,
-			inst: VarType,
-			emit_root_contribution: bool,
-			contribution_expr: Option<Expression<'db>>,
-			nested_iteration_expr: Option<Expression<'db>>,
-			needs_reconstruction: bool,
-			sum_expr: Expression<'db>,
-			potential_ordinal_domain: Option<Expression<'db>>,
-		}
+		let cx = NewRootContext {
+			item,
+			types,
+			data,
+			item_ty,
+			class_pattern_ref,
+			root_pattern,
+			root_occurrence,
+			enum_member_id,
+			class_and_decl_name: class_and_decl_name.clone(),
+		};
 
-		let (mut domain_decl, inputs_expr, pending_root_collection) = match item_ty {
+		let (domain_decl, inputs_expr, pending_root_collection) = match item_ty {
 			shackle_hir::Type::New { inst, opt, .. } => {
 				let class_types = class_pattern_ref
 					.item(collector.parent.db)
@@ -830,456 +899,669 @@ impl<'db> ItemCollector<'db> {
 			_ => todo!("Handle other cases of new A: x"),
 		};
 
-		struct PendingSlice<'db> {
-			target_class: PatternRef<'db>,
-			contribution_index: usize,
-			name_suffix: String,
-			sum_expr: Expression<'db>,
-			/// Per-parent slice size for nested fresh-child collections.
-			/// Set when the slice corresponds to a `set of new <child>: <field>`
-			/// attribute on a parent that has more than one potential identity
-			/// (or even just one). Used to emit the per-parent slice array
-			/// `<parent>_<field>_potential`.
-			max_card_per_parent: Option<Expression<'db>>,
-			/// Immediate parent class for this slice's `<field>` attribute. For
-			/// a nested-of-nested slice (e.g. `Vehicle.crew` introduced via
-			/// `Expedition.vehicles`), this is the *immediate* parent (Vehicle),
-			/// not the root user decl class (Expedition). The slice-emission
-			/// loop uses `class_object_contribution_declaration(parent_class,
-			/// parent_contribution_index)` to find the parent's contribution
-			/// storage array, which becomes the slice array's index domain so
-			/// `slice[v]` lines up with `parent_storage[v].<field>` in the
-			/// per-parent subset constraint.
-			parent_class: PatternRef<'db>,
-			parent_contribution_index: usize,
-			/// The immediate `<field>` attribute name on `parent_class` (the
-			/// last path component), unlike `name_suffix` which joins the full
-			/// path from the root (`ps_ns`). This is what the actual-set
-			/// field-introduction record needs: the field is a direct record
-			/// field of the *parent's* storage element type, not the root's.
-			/// `None` for the root passthrough slice (no introducing field).
-			field_attribute: Option<Identifier<'db>>,
-			/// `Some(opt)` when the field is a singular `new`/`opt new`
-			/// attribute (`LocalDomainSource::OnePerParent`), recording its
-			/// opt-ness for the actual-set singleton contribution. `None` for
-			/// collection-shaped fields and the root passthrough slice.
-			singular_opt: Option<bool>,
-		}
-
 		let mut pending_slices = Vec::new();
 		let nested_iteration_expr = pending_root_collection
 			.as_ref()
 			.and_then(|root_collection| root_collection.nested_iteration_expr.clone())
 			.unwrap_or_else(|| inputs_expr.clone());
-		if let Some(root_collection) = &pending_root_collection
-			&& root_collection.emit_root_contribution
-			&& root_collection.inst != VarType::Var
-		{
-			pending_slices.push(PendingSlice {
-				target_class: class_pattern_ref,
-				contribution_index: root_collection.contribution_index,
-				name_suffix: "root".to_owned(),
-				sum_expr: root_collection.sum_expr.clone(),
-				max_card_per_parent: None,
-				parent_class: class_pattern_ref,
-				parent_contribution_index: root_collection.contribution_index,
-				field_attribute: None,
-				singular_opt: None,
-			});
-		}
-
-		// Singular roots (`new C: x`, `var new C: x`, `var opt new C: x`)
-		// have a one-slot potential block. Any LATER contribution to the same
-		// class needs its predecessor's end offset in `contribution_end_map` —
-		// a subclass root's projection passthrough slice, or
-		// `project_class_identity` on a later constructor — so chain a
-		// one-slot root passthrough exactly like collection roots do, gated on
-		// a later contribution existing so single-root models don't grow
-		// unused `_root_start`/`_root_end` declarations.
-		if pending_root_collection.is_none() && matches!(item_ty, shackle_hir::Type::New { .. }) {
-			let contribution_index = collector
-				.parent
-				.occurrence_contribution(root_occurrence, class_pattern_ref)
-				.constructor_index;
-			let has_later_contribution = collector
-				.parent
-				.objects
-				.plan
-				.contributions_by_occurrence
-				.values()
-				.flatten()
-				.any(|contribution| {
-					contribution.target_class == class_pattern_ref
-						&& contribution.constructor_index > contribution_index
-				});
-			if has_later_contribution {
-				pending_slices.push(PendingSlice {
-					target_class: class_pattern_ref,
-					contribution_index,
-					name_suffix: "root".to_owned(),
-					sum_expr: Expression::new(
-						collector.parent.db,
-						&collector.parent.model,
-						item,
-						IntegerLiteral(1),
-					),
-					max_card_per_parent: None,
-					parent_class: class_pattern_ref,
-					parent_contribution_index: contribution_index,
-					field_attribute: None,
-					singular_opt: None,
-				});
-			}
-		}
+		self.push_root_passthrough_slice(&cx, &pending_root_collection, &mut pending_slices);
 
 		// Calculate the sizes of the different objects arrays based on the contained classes
 
-		let mut constructor_stack = vec![(vec![], class_pattern_ref)];
+		self.register_reachable_occurrence_constructors(&cx, &nested_iteration_expr);
 
-		while let Some((attrib_path, attrib_class_pattern_ref)) = constructor_stack.pop() {
-			let mut child_classes = vec![];
-			let Item::Class(class_item_ref) = attrib_class_pattern_ref.item(collector.parent.db)
-			else {
-				unreachable!()
-			};
-			let class_hir = class_item_ref.class(collector.parent.db);
-			let class_item_types = attrib_class_pattern_ref
-				.item(collector.parent.db)
-				.types(collector.parent.db);
-			let class_item_data = class_hir.data();
-			if let Some(c) = class_hir.extends {
-				let child_pattern = class_item_types.name_resolution(c).unwrap();
-				child_classes.push((None, child_pattern, None));
-			}
-			for member in class_hir.items.iter() {
-				if let ClassMember::Declaration(d) = member
-					&& let Some(c) = class_item_data[d.declared_type].get_new_class(class_item_data)
-				{
-					let child_pattern = class_item_types.name_resolution(c).unwrap();
-					child_classes.push((
-						Some(class_item_data[d.pattern].identifier().unwrap()),
-						child_pattern,
-						Some(d.declared_type),
-					));
-				}
-			}
+		self.size_class_storage_and_collect_slices(
+			&cx,
+			&inputs_expr,
+			&nested_iteration_expr,
+			&mut pending_slices,
+		);
 
-			for (attrib, _child_class, declared_type) in child_classes.iter() {
-				let Some(attrib) = attrib else {
-					continue;
-				};
-				let occurrence_path = attrib_path
-					.iter()
-					.copied()
-					.chain(std::iter::once(*attrib))
-					.collect::<Vec<_>>();
-				let source_occurrence = collector
-					.parent
-					.nested_occurrence(root_pattern, &occurrence_path);
-				if collector
-					.parent
-					.occurrence_constructors_available(source_occurrence)
-				{
-					continue;
-				}
-				let local_domain_source = collector
-					.parent
-					.occurrence_local_domain_source(source_occurrence);
+		self.emit_pending_slices(&cx, pending_slices, &nested_iteration_expr);
 
-				let (generators, prev_attrib) = collector.parent.nested_path_generators_and_cursor(
+		self.emit_root_collection_contribution(&cx, &inputs_expr, &pending_root_collection);
+
+		self.register_singular_root_contribution(&cx, &inputs_expr);
+
+		self.finish_root_collection(&cx, domain_decl, pending_root_collection)
+	}
+
+	/// Finish a collection-shaped root (`set of new`, `var set(c) of new`,
+	/// `array [d] of new`): give the user-named declaration its domain and its
+	/// definition over the contribution's identity block.
+	fn finish_root_collection(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		mut domain_decl: Declaration<'db>,
+		pending_root_collection: Option<PendingRootCollection<'db>>,
+	) -> Declaration<'db> {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			item_ty,
+			class_pattern_ref,
+			root_occurrence,
+			enum_member_id,
+			..
+		} = cx;
+		let mut collector = ExpressionCollector::new(self, data, item, types);
+		if let Some(root_collection) = pending_root_collection {
+			if root_collection.inst == VarType::Var {
+				// Constructor registration for this occurrence happened before
+				// the contribution block (the realisation guard needs it).
+				let ordinal_domain = root_collection
+					.potential_ordinal_domain
+					.expect("top-level var collections must have an ordinal domain");
+				let call_expr = alloc_expression(
+					Call {
+						function: Callable::EnumConstructor(enum_member_id),
+						arguments: vec![ordinal_domain],
+					},
+					&collector,
 					item,
-					&nested_iteration_expr,
-					root_pattern,
-					source_occurrence,
-					&attrib_path,
-					local_domain_source,
-					attrib_class_pattern_ref,
-					*declared_type,
-					class_item_data,
-					&class_item_types,
 				);
-
-				let (record_access, fallback_cardinality) = collector
-					.parent
-					.nested_child_record_access_and_fallback_cardinality(
-						item,
-						prev_attrib,
-						*attrib,
-						local_domain_source,
-						*declared_type,
-						class_item_data,
-						attrib_class_pattern_ref.item(collector.parent.db),
-						&class_item_types,
-					);
-				let sum = collector.parent.nested_occurrence_sum_expr(
+				let new_domain = Domain::bounded(
+					collector.parent.db,
 					item,
-					generators,
-					local_domain_source,
-					record_access,
-					fallback_cardinality,
-					attrib_class_pattern_ref,
+					VarType::Par,
+					OptType::NonOpt,
+					call_expr,
 				);
-				collector
-					.parent
-					.ensure_nested_occurrence_constructor_domain(item, source_occurrence, sum);
-			}
-
-			for (attrib, child_class, _) in child_classes.iter().rev() {
-				if let Some(a) = attrib {
-					let mut new_attrib_path = attrib_path.clone();
-					new_attrib_path.push(*a);
-					constructor_stack.push((new_attrib_path, *child_class));
-				} else {
-					constructor_stack.push((attrib_path.clone(), *child_class));
-				}
-			}
-		}
-
-		let mut class_stack = vec![(vec![], class_pattern_ref)];
-
-		while let Some((attrib_path, attrib_class_pattern_ref)) = class_stack.pop() {
-			let mut child_classes = vec![];
-			// 1. Collect the "new" attributes of the class (and the superclass)
-			let Item::Class(class_item_ref) = attrib_class_pattern_ref.item(collector.parent.db)
-			else {
-				unreachable!()
-			};
-			let class_hir = class_item_ref.class(collector.parent.db);
-			let class_item_types = attrib_class_pattern_ref
-				.item(collector.parent.db)
-				.types(collector.parent.db);
-			let class_item_data = class_hir.data();
-			// Push superclass first (if any)
-			if let Some(c) = class_hir.extends {
-				let child_pattern = class_item_types.name_resolution(c).unwrap();
-				child_classes.push((None, child_pattern, None));
-			}
-			// Then push all attribute classes
-			for member in class_hir.items.iter() {
-				if let ClassMember::Declaration(d) = member
-					&& let Some(c) = class_item_data[d.declared_type].get_new_class(class_item_data)
-				{
-					let child_pattern = class_item_types.name_resolution(c).unwrap();
-					child_classes.push((
-						Some(class_item_data[d.pattern].identifier().unwrap()),
-						child_pattern,
-						Some(d.declared_type),
-					));
-				}
-			}
-
-			// 2. Process the collected attributes
-			for (attrib, child_class, declared_type) in child_classes.iter() {
-				let occurrence_path = attrib_path
-					.iter()
-					.copied()
-					.chain(attrib.iter().copied())
-					.collect::<Vec<_>>();
-				let source_occurrence = collector
-					.parent
-					.nested_occurrence(root_pattern, &occurrence_path);
-				let local_domain_source = collector
-					.parent
-					.occurrence_local_domain_source(source_occurrence);
-				let contribution_index = collector
-					.parent
-					.occurrence_contribution(source_occurrence, *child_class)
-					.constructor_index;
-				let start_decl_name = attrib_path
-					.iter()
-					.chain(attrib.iter())
-					.map(|a: &Identifier<'db>| a.pretty_print(collector.parent.db))
-					.collect::<Vec<_>>()
-					.join("_");
-				let (generators, prev_attrib) = collector.parent.nested_path_generators_and_cursor(
-					item,
-					&nested_iteration_expr,
-					root_pattern,
-					source_occurrence,
-					&attrib_path,
-					local_domain_source,
-					attrib_class_pattern_ref,
-					*declared_type,
-					class_item_data,
-					&class_item_types,
-				);
-
-				let mut captured_max_card_per_parent: Option<Expression<'db>> = None;
-				let compr_template = if let Some(a) = attrib {
-					let (record_access, fallback_cardinality) = collector
-						.parent
-						.nested_child_record_access_and_fallback_cardinality(
-							item,
-							prev_attrib,
-							*a,
-							local_domain_source,
-							*declared_type,
-							class_item_data,
-							attrib_class_pattern_ref.item(collector.parent.db),
-							&class_item_types,
-						);
-					if let (Some(record_access), Some(cardinality)) = (
-						record_access.clone(),
-						collector.parent.nested_par_collection_cardinality(
-							attrib_class_pattern_ref.item(collector.parent.db),
-							*declared_type,
-							class_item_data,
-							&class_item_types,
-						),
-					) {
-						// This emission iterates the walker's cursor — potential
-						// storage for var roots — which over-constrains whenever a
-						// slot can be unrealised: a `var opt new` root with a nested
-						// `set(2..2) of new` field made `absent(a)` unsatisfiable
-						// (the unrealised slot's field defaults to `{}`,
-						// card 0 ∉ 2..2). For a var-reached owner the invariant is
-						// instead emitted once, over the *realised* class set, in
-						// `collect_class` (the same shape the var-declared nested
-						// set field already uses). Par-reached owners keep this
-						// emission: their iterated instances are all realised, and
-						// `collect_class` skips them to avoid double-emitting.
-						if !collector
-							.parent
-							.objects
-							.plan
-							.var_reached_classes
-							.contains(&attrib_class_pattern_ref)
-						{
-							collector.parent.emit_nested_cardinality_constraint(
-								item,
-								generators.clone(),
-								record_access,
-								cardinality,
-							);
-						}
+				// Carry the declared cardinality bound (`set(<card>) of new C`)
+				// into the domain. The pretty printer emits the `set(<card>)
+				// of …` syntax and the target MiniZinc desugars it to a
+				// `card(…) in <card>` constraint.
+				let cardinality = match item_ty {
+					shackle_hir::Type::Set { cardinality, .. } => {
+						cardinality.map(|c| collector.collect_expression(c))
 					}
-					let (contribution_generators, maybe_contribution_input) =
-						collector.parent.nested_contribution_generators_and_input(
-							item,
-							local_domain_source,
-							&generators,
-							record_access.clone(),
-						);
-					collector.parent.emit_nested_occurrence_contributions(
-						item,
-						root_pattern,
-						inputs_expr.clone(),
-						source_occurrence,
-						*child_class,
-						local_domain_source,
-						&attrib_path,
-						*a,
-						&contribution_generators,
-						maybe_contribution_input,
-						&start_decl_name,
-					);
-					// `fallback_cardinality` is the static per-parent slice
-					// size (max of the declared cardinality bound) when the
-					// nested child collection is identity-shaped. Capture
-					// it for the slice array emission below.
-					captured_max_card_per_parent = fallback_cardinality.clone();
-					collector.parent.nested_occurrence_sum_expr(
-						item,
-						generators.clone(),
-						local_domain_source,
-						record_access,
-						fallback_cardinality,
-						attrib_class_pattern_ref,
-					)
-				} else {
+					_ => None,
+				};
+				domain_decl.set_domain(Domain::set_with_card(
+					collector.parent.db,
+					item,
+					root_collection.inst,
+					OptType::NonOpt,
+					cardinality,
+					new_domain,
+				));
+				return domain_decl;
+			}
+
+			let start_expr = if root_collection.contribution_index == 0 {
+				Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					IntegerLiteral(1),
+				)
+			} else {
+				let end_decl = collector.parent.objects.contribution_end_map
+					[&(class_pattern_ref, root_collection.contribution_index - 1)];
+				Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					ResolvedIdentifier::Declaration(end_decl),
+				)
+			};
+			let end_decl = collector.parent.objects.contribution_end_map
+				[&(class_pattern_ref, root_collection.contribution_index)];
+			let end_expr = Expression::new(
+				collector.parent.db,
+				&collector.parent.model,
+				item,
+				ResolvedIdentifier::Declaration(end_decl),
+			);
+			let slice_range = match (&*start_expr, &*root_collection.sum_expr) {
+				(ExpressionData::IntegerLiteral(start), ExpressionData::IntegerLiteral(sum)) => {
 					Expression::new(
 						collector.parent.db,
 						&collector.parent.model,
 						item,
-						IntegerLiteral(1),
+						SetLiteral(
+							(start.0..(start.0 + sum.0))
+								.map(|value| {
+									Expression::new(
+										collector.parent.db,
+										&collector.parent.model,
+										item,
+										IntegerLiteral(value),
+									)
+								})
+								.collect(),
+						),
 					)
-				};
-
-				let sum = compr_template;
-				if attrib.is_some()
-					&& !collector
-						.parent
-						.occurrence_constructors_available(source_occurrence)
-				{
-					collector
-						.parent
-						.ensure_nested_occurrence_constructor_domain(
-							item,
-							source_occurrence,
-							sum.clone(),
-						);
 				}
-				let name_suffix = if attrib.is_none() && !attrib_path.is_empty() {
-					format!(
-						"{}_{}",
-						start_decl_name,
-						child_class
-							.identifier(collector.parent.db)
-							.unwrap()
-							.pretty_print(collector.parent.db)
+				_ => {
+					let one_expr = Expression::new(
+						collector.parent.db,
+						&collector.parent.model,
+						item,
+						IntegerLiteral(1),
+					);
+					let end_minus_one = Expression::new(
+						collector.parent.db,
+						&collector.parent.model,
+						item,
+						LookupCall {
+							function: collector.parent.ids.functions.minus.into(),
+							arguments: vec![end_expr, one_expr],
+						},
+					);
+					Expression::new(
+						collector.parent.db,
+						&collector.parent.model,
+						item,
+						LookupCall {
+							function: collector.parent.ids.functions.dot_dot.into(),
+							arguments: vec![start_expr, end_minus_one],
+						},
 					)
-				} else {
-					start_decl_name
-				};
-				// Immediate parent occurrence for this slice's `<field>`
-				// attribute: `attrib_path = []` means the parent is the root
-				// user decl class; a non-empty `attrib_path` means the parent
-				// is a nested class one level deeper. The parent's
-				// contribution index in its own class enum is what
-				// `class_object_contribution_declaration` keys on, so look it
-				// up here and pass through `PendingSlice` for use during
-				// slice-array emission.
-				let parent_occurrence = if attrib_path.is_empty() {
-					root_occurrence
-				} else {
-					collector
-						.parent
-						.nested_occurrence(root_pattern, &attrib_path)
-				};
-				let parent_contribution_index = collector
+				}
+			};
+			let enum_constr_domain = Domain::bounded(
+				collector.parent.db,
+				item,
+				VarType::Par,
+				OptType::NonOpt,
+				slice_range.clone(),
+			);
+			let decl = Declaration::new(false, enum_constr_domain);
+			let idx = collector
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(decl, item));
+			collector
+				.parent
+				.add_occurrence_constructors(root_occurrence, idx);
+			let call_expr = alloc_expression(
+				Call {
+					function: Callable::EnumConstructor(enum_member_id),
+					arguments: vec![slice_range.clone()],
+				},
+				&collector,
+				item,
+			);
+			if matches!(item_ty, shackle_hir::Type::Array { .. }) {
+				let ordinal_decl = Declaration::new(
+					false,
+					Domain::unbounded(collector.parent.db, item, Ty::par_int(collector.parent.db)),
+				);
+				let ordinal_idx = collector
 					.parent
-					.occurrence_contribution(parent_occurrence, attrib_class_pattern_ref)
-					.constructor_index;
-				let singular_opt = (matches!(local_domain_source, LocalDomainSource::OnePerParent)
-					&& attrib.is_some())
-				.then(|| {
-					declared_type
-						.map(|dt| {
-							matches!(
-								class_item_data[dt],
-								shackle_hir::Type::New {
-									opt: OptType::Opt,
-									..
-								}
-							)
+					.model
+					.add_declaration(DeclarationItem::new(ordinal_decl, item));
+				let ordinal_expr = Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					ordinal_idx,
+				);
+				domain_decl.set_definition(Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					ArrayComprehension::new(
+						[Generator::Iterator {
+							declarations: vec![ordinal_idx],
+							collection: slice_range,
+							where_clause: None,
+						}],
+						Expression::new(
+							collector.parent.db,
+							&collector.parent.model,
+							item,
+							Call {
+								function: Callable::EnumConstructor(enum_member_id),
+								arguments: vec![ordinal_expr],
+							},
+						),
+					),
+				));
+				return domain_decl;
+			}
+			let new_domain = Domain::bounded(
+				collector.parent.db,
+				item,
+				VarType::Par,
+				OptType::NonOpt,
+				call_expr.clone(),
+			);
+			// `set(<card>) of new C` roots carry the declared cardinality
+			// bound into the domain (`var set(<card>) of <C>_potential`).
+			// The pretty printer emits the `set(<card>) of …` syntax and the
+			// target MiniZinc desugars it to a `card(…) in <card>` constraint.
+			// Applies to both var and par roots.
+			let cardinality = match item_ty {
+				shackle_hir::Type::Set { cardinality, .. } => {
+					cardinality.map(|c| collector.collect_expression(c))
+				}
+				_ => None,
+			};
+			let domain = Domain::set_with_card(
+				collector.parent.db,
+				item,
+				root_collection.inst,
+				OptType::NonOpt,
+				cardinality,
+				new_domain,
+			);
+			domain_decl.set_domain(domain);
+			domain_decl.set_definition(call_expr);
+		}
+		domain_decl
+	}
+
+	/// Register the contribution for a singular root (`new C`, `var new C`,
+	/// `var opt new C`), whose potential block is exactly one slot.
+	fn register_singular_root_contribution(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		inputs_expr: &Expression<'db>,
+	) {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			item_ty,
+			class_pattern_ref,
+			root_pattern,
+			root_occurrence,
+			ref class_and_decl_name,
+			..
+		} = cx;
+		let collector = ExpressionCollector::new(self, data, item, types);
+		if matches!(item_ty, shackle_hir::Type::New { .. }) {
+			// Of the singular root shapes, only `var opt new` has an
+			// unrealisable slot (par `new` and plain `var new` realise their
+			// single potential unconditionally), so only it pays the
+			// realisation guard on defined fields.
+			let singular_slot_may_be_unrealised = matches!(
+				item_ty,
+				shackle_hir::Type::New {
+					inst: VarType::Var,
+					opt: OptType::Opt,
+					..
+				}
+			);
+			let mut root_contributions =
+				collector.parent.objects.plan.contributions_by_occurrence[&root_occurrence].clone();
+			// The direct contribution must be registered before the
+			// inheritance projections: they read the superclass's storage
+			// fields out of the already-reconstructed direct-class objects
+			// array (symmetric with the collection-root path) rather than
+			// fresh-minting defined fields from the raw inputs.
+			root_contributions.sort_by_key(|contribution| contribution.projection_depth);
+			let mut direct_contribution: Option<(Expression<'db>, bool)> = None;
+			for contribution in root_contributions.iter() {
+				let target_class = contribution.target_class;
+				let root_fields = collector.parent.class_storage_fields(target_class);
+				let has_object_fields = root_fields
+					.iter()
+					.any(|(_, field_ty)| field_ty.class_type(collector.parent.db).is_some());
+				// A storage field the input record doesn't carry (a computed
+				// attribute, or an explicitly-`var` attribute) means the input
+				// must be reconstructed into the full storage record rather than
+				// aliased straight through.
+				let input_elem_fields = inputs_expr
+					.ty()
+					.elem_ty(collector.parent.db)
+					.and_then(|elem| elem.record_fields(collector.parent.db));
+				let has_storage_only_field = root_fields.iter().any(|(field_ident, _)| {
+					!input_elem_fields
+						.as_ref()
+						.map(|fields| {
+							fields
+								.iter()
+								.any(|(field, _)| Identifier(*field) == *field_ident)
 						})
 						.unwrap_or(false)
 				});
-				pending_slices.push(PendingSlice {
-					target_class: *child_class,
-					contribution_index,
-					name_suffix,
-					sum_expr: sum,
-					max_card_per_parent: captured_max_card_per_parent,
-					parent_class: attrib_class_pattern_ref,
-					parent_contribution_index,
-					field_attribute: *attrib,
-					singular_opt,
-				});
-			}
-
-			// 3. Push the classes of the "new" attributes onto the stack in reverse order of child_classes
-			for (attrib, child_class, _) in child_classes.iter().rev() {
-				if let Some(a) = attrib {
-					let mut new_attrib_path = attrib_path.clone();
-					new_attrib_path.push(*a);
-					class_stack.push((new_attrib_path, *child_class));
+				let (contribution_expr, contribution_determined) = if target_class
+					== class_pattern_ref
+				{
+					if has_object_fields || has_storage_only_field {
+						// The engine reconstructs the direct contribution with
+						// per-field rules: computed attributes are *defined*
+						// (`n = card(children)`), class-typed fields are read
+						// through when the input holds identities (var
+						// `_storage`) or identity-minted when it holds inline
+						// records (par roots), var-only fields become fresh
+						// decisions with their declared per-object domains.
+						(
+							collector
+								.parent
+								.engine_reconstructed_root_contribution_expr(
+									item,
+									class_pattern_ref,
+									root_pattern,
+									inputs_expr.clone(),
+									&root_fields,
+									singular_slot_may_be_unrealised.then(|| RootRealisationGuard {
+										constructor_index: contribution.constructor_index,
+										name_prefix: class_and_decl_name.clone(),
+									}),
+								),
+							true,
+						)
+					} else {
+						// Input-record passthrough: every storage field is
+						// supplied by the input in storage form — no defined
+						// fields, vacuously determined.
+						(inputs_expr.clone(), true)
+					}
 				} else {
-					class_stack.push((attrib_path.clone(), *child_class));
+					// Inheritance projection: read the superclass's storage
+					// fields out of the already-registered direct-class objects
+					// array, which carries the direct contribution's (possibly
+					// alias-defined) values — so the projected columns are
+					// exactly as determined as the direct contribution's.
+					let (direct_expr, direct_determined) = direct_contribution
+						.clone()
+						.expect("direct contribution registered before singular-root projections");
+					(
+						collector.parent.reconstructed_root_contribution_expr(
+							item,
+							root_pattern,
+							direct_expr,
+							&root_fields,
+							true,
+						),
+						direct_determined,
+					)
+				};
+				let contribution_array_ty = contribution_expr.ty();
+				let contribution_domain = collector.parent.build_class_storage_array_domain(
+					target_class,
+					contribution_array_ty,
+					item,
+				);
+				let mut contribution_decl = Declaration::new(true, contribution_domain);
+				let target_class_name = target_class
+					.identifier(collector.parent.db)
+					.unwrap()
+					.pretty_print(collector.parent.db);
+				let contribution_name = if target_class == class_pattern_ref {
+					format!("{}_objects", class_and_decl_name)
+				} else {
+					format!("{}_{}_objects", target_class_name, class_and_decl_name)
+				};
+				contribution_decl.set_name(Identifier::new(collector.parent.db, contribution_name));
+				contribution_decl.set_definition(contribution_expr);
+				let contribution_decl_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(contribution_decl, item));
+				collector.parent.register_class_object_contribution(
+					target_class,
+					contribution.constructor_index,
+					contribution_decl_idx,
+					contribution_determined,
+				);
+				if target_class == class_pattern_ref {
+					direct_contribution = Some((
+						Expression::new(
+							collector.parent.db,
+							&collector.parent.model,
+							item,
+							ResolvedIdentifier::Declaration(contribution_decl_idx),
+						),
+						contribution_determined,
+					));
 				}
 			}
 		}
+	}
 
+	/// Emit a collection root's contribution: pre-register the occurrence's
+	/// enum constructor when existence is a decision (the realisation guard
+	/// needs it in scope), then reconstruct the contribution block from the
+	/// root's inputs and register it against the class.
+	fn emit_root_collection_contribution(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		inputs_expr: &Expression<'db>,
+		pending_root_collection: &Option<PendingRootCollection<'db>>,
+	) {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			class_pattern_ref,
+			root_pattern,
+			root_occurrence,
+			ref class_and_decl_name,
+			..
+		} = cx;
+		let collector = ExpressionCollector::new(self, data, item, types);
+
+		// A var collection root's enum constructors must exist BEFORE the
+		// contribution engine runs: the realisation guard's per-slot test
+		// references `<C>_occ_k(p)`, and building an enum-constructor call
+		// requires the enum definition. Nested/child occurrence constructors
+		// are registered by the machinery above; par collection roots keep
+		// registering theirs in the tail block below (nothing in their
+		// contributions references their own constructor).
+		if let Some(root_collection) = &pending_root_collection
+			&& root_collection.inst == VarType::Var
+		{
+			let ordinal_domain = root_collection
+				.potential_ordinal_domain
+				.clone()
+				.expect("top-level var collections must have an ordinal domain");
+			let enum_constr_domain = Domain::bounded(
+				collector.parent.db,
+				item,
+				VarType::Par,
+				OptType::NonOpt,
+				ordinal_domain,
+			);
+			let decl = Declaration::new(false, enum_constr_domain);
+			let idx = collector
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(decl, item));
+			collector
+				.parent
+				.add_occurrence_constructors(root_occurrence, idx);
+		}
+
+		if let Some(root_collection) = &pending_root_collection {
+			let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
+			if root_collection.emit_root_contribution {
+				// Every reconstructing root shape runs the same engine
+				// (`engine_reconstructed_root_contribution_expr`): per-field
+				// rules — defined / identity / read / free — selected from the
+				// source array's element type. The two shapes that skip it are
+				// trivial passthroughs where the source already IS the full
+				// storage record, so there is nothing to define or mint and the
+				// contribution is vacuously determined.
+				//
+				// Only a var collection root has unrealisable slots (a par
+				// root realises every input; `array of var new` realises every
+				// potential by construction), so only it pays the realisation
+				// guard on its defined fields.
+				let collection_realisation_guard = || {
+					(root_collection.inst == VarType::Var).then(|| RootRealisationGuard {
+						constructor_index: root_collection.contribution_index,
+						name_prefix: class_and_decl_name.clone(),
+					})
+				};
+				let (contribution_expr, contribution_determined) =
+					if let Some(contribution_expr) = &root_collection.contribution_expr {
+						// A var set-of-new object-field root sources its free
+						// `_storage` array. Computed / domain-dependent fields
+						// are excluded from `_storage` (they aren't free
+						// decisions — `free_storage_record_ty`), so if any
+						// storage field is absent from the free element record,
+						// run the engine over `_storage` (the missing fields are
+						// alias-defined; free fields read through). Without
+						// this, `<C>_objects` is missing the computed field
+						// entirely and every downstream `.<attr>` access (e.g.
+						// the symmetry-break default loop) panics in
+						// `RecordAccess::build`.
+						let storage_elem_fields = contribution_expr
+							.ty()
+							.elem_ty(collector.parent.db)
+							.and_then(|elem| elem.record_fields(collector.parent.db));
+						let missing_storage_field = root_fields.iter().any(|(field_ident, _)| {
+							!storage_elem_fields
+								.as_ref()
+								.map(|fields| {
+									fields
+										.iter()
+										.any(|(field, _)| Identifier(*field) == *field_ident)
+								})
+								.unwrap_or(false)
+						});
+						if missing_storage_field {
+							(
+								collector
+									.parent
+									.engine_reconstructed_root_contribution_expr(
+										item,
+										class_pattern_ref,
+										root_pattern,
+										contribution_expr.clone(),
+										&root_fields,
+										collection_realisation_guard(),
+									),
+								true,
+							)
+						} else {
+							// Free-storage passthrough: every storage field is a
+							// free decision, so there are no defined fields —
+							// vacuously determined.
+							(contribution_expr.clone(), true)
+						}
+					} else if root_collection.needs_reconstruction {
+						(
+							collector
+								.parent
+								.engine_reconstructed_root_contribution_expr(
+									item,
+									class_pattern_ref,
+									root_pattern,
+									inputs_expr.clone(),
+									&root_fields,
+									collection_realisation_guard(),
+								),
+							true,
+						)
+					} else {
+						// Input-record passthrough: the input representation
+						// equals the storage record (par roots whose class has
+						// no defined, var-only or object-typed fields) —
+						// vacuously determined.
+						(inputs_expr.clone(), true)
+					};
+				let contribution_array_ty = contribution_expr.ty();
+				let contribution_domain = collector.parent.build_class_storage_array_domain(
+					class_pattern_ref,
+					contribution_array_ty,
+					item,
+				);
+				let mut contribution_decl = Declaration::new(true, contribution_domain);
+				contribution_decl.set_name(Identifier::new(
+					collector.parent.db,
+					format!("{}_objects", class_and_decl_name),
+				));
+				contribution_decl.set_definition(contribution_expr);
+				let contribution_decl_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(contribution_decl, item));
+				collector.parent.register_class_object_contribution(
+					class_pattern_ref,
+					root_collection.contribution_index,
+					contribution_decl_idx,
+					contribution_determined,
+				);
+
+				// Inheritance: for each superclass contribution from this
+				// introduction, build a `_objects` array by projecting the
+				// superclass's storage fields out of the direct-class objects
+				// array. Mirrors the singular `var new` path's per-target
+				// reconstruction.
+				let direct_objects_expr = Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					ResolvedIdentifier::Declaration(contribution_decl_idx),
+				);
+				let root_contributions = collector.parent.objects.plan.contributions_by_occurrence
+					[&root_occurrence]
+					.clone();
+				for contribution in root_contributions {
+					let target_class = contribution.target_class;
+					if target_class == class_pattern_ref {
+						continue;
+					}
+					let target_fields = collector.parent.class_storage_fields(target_class);
+					let projection_expr = collector.parent.reconstructed_root_contribution_expr(
+						item,
+						root_pattern,
+						direct_objects_expr.clone(),
+						&target_fields,
+						true,
+					);
+					let projection_array_ty = projection_expr.ty();
+					let projection_domain = collector.parent.build_class_storage_array_domain(
+						target_class,
+						projection_array_ty,
+						item,
+					);
+					let target_class_name = target_class
+						.identifier(collector.parent.db)
+						.unwrap()
+						.pretty_print(collector.parent.db);
+					let mut projection_decl = Declaration::new(true, projection_domain);
+					projection_decl.set_name(Identifier::new(
+						collector.parent.db,
+						format!("{}_{}_objects", target_class_name, class_and_decl_name),
+					));
+					projection_decl.set_definition(projection_expr);
+					let projection_decl_idx = collector
+						.parent
+						.model
+						.add_declaration(DeclarationItem::new(projection_decl, item));
+					// The projection reads every target field out of the
+					// direct-class objects array, which carries the direct
+					// contribution's (possibly alias-defined) values — so the
+					// projected columns are exactly as determined as the direct
+					// contribution's.
+					collector.parent.register_class_object_contribution(
+						target_class,
+						contribution.constructor_index,
+						projection_decl_idx,
+						contribution_determined,
+					);
+				}
+			}
+		}
+	}
+
+	/// Emit every per-parent slice array collected while walking the class
+	/// graph, and register each one as a contribution to its child class.
+	///
+	/// Slices are emitted in a deterministic order (see the sort below) so the
+	/// model item order does not depend on the traversal's hash iteration.
+	fn emit_pending_slices(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		mut pending_slices: Vec<PendingSlice<'db>>,
+		nested_iteration_expr: &Expression<'db>,
+	) {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			ref class_and_decl_name,
+			..
+		} = cx;
+		let collector = ExpressionCollector::new(self, data, item, types);
 		pending_slices.sort_by(|left, right| {
 			let left_name = left
 				.target_class
@@ -1675,559 +1957,477 @@ impl<'db> ItemCollector<'db> {
 					});
 			}
 		}
+	}
 
-		// A var collection root's enum constructors must exist BEFORE the
-		// contribution engine runs: the realisation guard's per-slot test
-		// references `<C>_occ_k(p)`, and building an enum-constructor call
-		// requires the enum definition. Nested/child occurrence constructors
-		// are registered by the machinery above; par collection roots keep
-		// registering theirs in the tail block below (nothing in their
-		// contributions references their own constructor).
-		if let Some(root_collection) = &pending_root_collection
-			&& root_collection.inst == VarType::Var
-		{
-			let ordinal_domain = root_collection
-				.potential_ordinal_domain
-				.clone()
-				.expect("top-level var collections must have an ordinal domain");
-			let enum_constr_domain = Domain::bounded(
-				collector.parent.db,
-				item,
-				VarType::Par,
-				OptType::NonOpt,
-				ordinal_domain,
-			);
-			let decl = Declaration::new(false, enum_constr_domain);
-			let idx = collector
-				.parent
-				.model
-				.add_declaration(DeclarationItem::new(decl, item));
-			collector
-				.parent
-				.add_occurrence_constructors(root_occurrence, idx);
-		}
+	/// Walk the class graph below the root, sizing each reached class's
+	/// `_objects` storage array for this root's contribution and recording a
+	/// `PendingSlice` for every nested `new` field encountered.
+	fn size_class_storage_and_collect_slices(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		inputs_expr: &Expression<'db>,
+		nested_iteration_expr: &Expression<'db>,
+		pending_slices: &mut Vec<PendingSlice<'db>>,
+	) {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			class_pattern_ref,
+			root_pattern,
+			root_occurrence,
+			..
+		} = cx;
+		let collector = ExpressionCollector::new(self, data, item, types);
+		let mut class_stack = vec![(vec![], class_pattern_ref)];
 
-		if let Some(root_collection) = &pending_root_collection {
-			let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
-			if root_collection.emit_root_contribution {
-				// Every reconstructing root shape runs the same engine
-				// (`engine_reconstructed_root_contribution_expr`): per-field
-				// rules — defined / identity / read / free — selected from the
-				// source array's element type. The two shapes that skip it are
-				// trivial passthroughs where the source already IS the full
-				// storage record, so there is nothing to define or mint and the
-				// contribution is vacuously determined.
-				//
-				// Only a var collection root has unrealisable slots (a par
-				// root realises every input; `array of var new` realises every
-				// potential by construction), so only it pays the realisation
-				// guard on its defined fields.
-				let collection_realisation_guard = || {
-					(root_collection.inst == VarType::Var).then(|| RootRealisationGuard {
-						constructor_index: root_collection.contribution_index,
-						name_prefix: class_and_decl_name.clone(),
-					})
-				};
-				let (contribution_expr, contribution_determined) =
-					if let Some(contribution_expr) = &root_collection.contribution_expr {
-						// A var set-of-new object-field root sources its free
-						// `_storage` array. Computed / domain-dependent fields
-						// are excluded from `_storage` (they aren't free
-						// decisions — `free_storage_record_ty`), so if any
-						// storage field is absent from the free element record,
-						// run the engine over `_storage` (the missing fields are
-						// alias-defined; free fields read through). Without
-						// this, `<C>_objects` is missing the computed field
-						// entirely and every downstream `.<attr>` access (e.g.
-						// the symmetry-break default loop) panics in
-						// `RecordAccess::build`.
-						let storage_elem_fields = contribution_expr
-							.ty()
-							.elem_ty(collector.parent.db)
-							.and_then(|elem| elem.record_fields(collector.parent.db));
-						let missing_storage_field = root_fields.iter().any(|(field_ident, _)| {
-							!storage_elem_fields
-								.as_ref()
-								.map(|fields| {
-									fields
-										.iter()
-										.any(|(field, _)| Identifier(*field) == *field_ident)
-								})
-								.unwrap_or(false)
-						});
-						if missing_storage_field {
-							(
-								collector
-									.parent
-									.engine_reconstructed_root_contribution_expr(
-										item,
-										class_pattern_ref,
-										root_pattern,
-										contribution_expr.clone(),
-										&root_fields,
-										collection_realisation_guard(),
-									),
-								true,
-							)
-						} else {
-							// Free-storage passthrough: every storage field is a
-							// free decision, so there are no defined fields —
-							// vacuously determined.
-							(contribution_expr.clone(), true)
-						}
-					} else if root_collection.needs_reconstruction {
-						(
-							collector
-								.parent
-								.engine_reconstructed_root_contribution_expr(
-									item,
-									class_pattern_ref,
-									root_pattern,
-									inputs_expr.clone(),
-									&root_fields,
-									collection_realisation_guard(),
-								),
-							true,
-						)
-					} else {
-						// Input-record passthrough: the input representation
-						// equals the storage record (par roots whose class has
-						// no defined, var-only or object-typed fields) —
-						// vacuously determined.
-						(inputs_expr.clone(), true)
-					};
-				let contribution_array_ty = contribution_expr.ty();
-				let contribution_domain = collector.parent.build_class_storage_array_domain(
-					class_pattern_ref,
-					contribution_array_ty,
-					item,
-				);
-				let mut contribution_decl = Declaration::new(true, contribution_domain);
-				contribution_decl.set_name(Identifier::new(
-					collector.parent.db,
-					format!("{}_objects", class_and_decl_name),
-				));
-				contribution_decl.set_definition(contribution_expr);
-				let contribution_decl_idx = collector
+		while let Some((attrib_path, attrib_class_pattern_ref)) = class_stack.pop() {
+			let mut child_classes = vec![];
+			// 1. Collect the "new" attributes of the class (and the superclass)
+			let Item::Class(class_item_ref) = attrib_class_pattern_ref.item(collector.parent.db)
+			else {
+				unreachable!()
+			};
+			let class_hir = class_item_ref.class(collector.parent.db);
+			let class_item_types = attrib_class_pattern_ref
+				.item(collector.parent.db)
+				.types(collector.parent.db);
+			let class_item_data = class_hir.data();
+			// Push superclass first (if any)
+			if let Some(c) = class_hir.extends {
+				let child_pattern = class_item_types.name_resolution(c).unwrap();
+				child_classes.push((None, child_pattern, None));
+			}
+			// Then push all attribute classes
+			for member in class_hir.items.iter() {
+				if let ClassMember::Declaration(d) = member
+					&& let Some(c) = class_item_data[d.declared_type].get_new_class(class_item_data)
+				{
+					let child_pattern = class_item_types.name_resolution(c).unwrap();
+					child_classes.push((
+						Some(class_item_data[d.pattern].identifier().unwrap()),
+						child_pattern,
+						Some(d.declared_type),
+					));
+				}
+			}
+
+			// 2. Process the collected attributes
+			for (attrib, child_class, declared_type) in child_classes.iter() {
+				let occurrence_path = attrib_path
+					.iter()
+					.copied()
+					.chain(attrib.iter().copied())
+					.collect::<Vec<_>>();
+				let source_occurrence = collector
 					.parent
-					.model
-					.add_declaration(DeclarationItem::new(contribution_decl, item));
-				collector.parent.register_class_object_contribution(
-					class_pattern_ref,
-					root_collection.contribution_index,
-					contribution_decl_idx,
-					contribution_determined,
+					.nested_occurrence(root_pattern, &occurrence_path);
+				let local_domain_source = collector
+					.parent
+					.occurrence_local_domain_source(source_occurrence);
+				let contribution_index = collector
+					.parent
+					.occurrence_contribution(source_occurrence, *child_class)
+					.constructor_index;
+				let start_decl_name = attrib_path
+					.iter()
+					.chain(attrib.iter())
+					.map(|a: &Identifier<'db>| a.pretty_print(collector.parent.db))
+					.collect::<Vec<_>>()
+					.join("_");
+				let (generators, prev_attrib) = collector.parent.nested_path_generators_and_cursor(
+					item,
+					nested_iteration_expr,
+					root_pattern,
+					source_occurrence,
+					&attrib_path,
+					local_domain_source,
+					attrib_class_pattern_ref,
+					*declared_type,
+					class_item_data,
+					&class_item_types,
 				);
 
-				// Inheritance: for each superclass contribution from this
-				// introduction, build a `_objects` array by projecting the
-				// superclass's storage fields out of the direct-class objects
-				// array. Mirrors the singular `var new` path's per-target
-				// reconstruction.
-				let direct_objects_expr = Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					ResolvedIdentifier::Declaration(contribution_decl_idx),
-				);
-				let root_contributions = collector.parent.objects.plan.contributions_by_occurrence
-					[&root_occurrence]
-					.clone();
-				for contribution in root_contributions {
-					let target_class = contribution.target_class;
-					if target_class == class_pattern_ref {
-						continue;
+				let mut captured_max_card_per_parent: Option<Expression<'db>> = None;
+				let compr_template = if let Some(a) = attrib {
+					let (record_access, fallback_cardinality) = collector
+						.parent
+						.nested_child_record_access_and_fallback_cardinality(
+							item,
+							prev_attrib,
+							*a,
+							local_domain_source,
+							*declared_type,
+							class_item_data,
+							attrib_class_pattern_ref.item(collector.parent.db),
+							&class_item_types,
+						);
+					if let (Some(record_access), Some(cardinality)) = (
+						record_access.clone(),
+						collector.parent.nested_par_collection_cardinality(
+							attrib_class_pattern_ref.item(collector.parent.db),
+							*declared_type,
+							class_item_data,
+							&class_item_types,
+						),
+					) {
+						// This emission iterates the walker's cursor — potential
+						// storage for var roots — which over-constrains whenever a
+						// slot can be unrealised: a `var opt new` root with a nested
+						// `set(2..2) of new` field made `absent(a)` unsatisfiable
+						// (the unrealised slot's field defaults to `{}`,
+						// card 0 ∉ 2..2). For a var-reached owner the invariant is
+						// instead emitted once, over the *realised* class set, in
+						// `collect_class` (the same shape the var-declared nested
+						// set field already uses). Par-reached owners keep this
+						// emission: their iterated instances are all realised, and
+						// `collect_class` skips them to avoid double-emitting.
+						if !collector
+							.parent
+							.objects
+							.plan
+							.var_reached_classes
+							.contains(&attrib_class_pattern_ref)
+						{
+							collector.parent.emit_nested_cardinality_constraint(
+								item,
+								generators.clone(),
+								record_access,
+								cardinality,
+							);
+						}
 					}
-					let target_fields = collector.parent.class_storage_fields(target_class);
-					let projection_expr = collector.parent.reconstructed_root_contribution_expr(
+					let (contribution_generators, maybe_contribution_input) =
+						collector.parent.nested_contribution_generators_and_input(
+							item,
+							local_domain_source,
+							&generators,
+							record_access.clone(),
+						);
+					collector.parent.emit_nested_occurrence_contributions(
 						item,
 						root_pattern,
-						direct_objects_expr.clone(),
-						&target_fields,
-						true,
+						inputs_expr.clone(),
+						source_occurrence,
+						*child_class,
+						local_domain_source,
+						&attrib_path,
+						*a,
+						&contribution_generators,
+						maybe_contribution_input,
+						&start_decl_name,
 					);
-					let projection_array_ty = projection_expr.ty();
-					let projection_domain = collector.parent.build_class_storage_array_domain(
-						target_class,
-						projection_array_ty,
+					// `fallback_cardinality` is the static per-parent slice
+					// size (max of the declared cardinality bound) when the
+					// nested child collection is identity-shaped. Capture
+					// it for the slice array emission below.
+					captured_max_card_per_parent = fallback_cardinality.clone();
+					collector.parent.nested_occurrence_sum_expr(
 						item,
-					);
-					let target_class_name = target_class
-						.identifier(collector.parent.db)
-						.unwrap()
-						.pretty_print(collector.parent.db);
-					let mut projection_decl = Declaration::new(true, projection_domain);
-					projection_decl.set_name(Identifier::new(
-						collector.parent.db,
-						format!("{}_{}_objects", target_class_name, class_and_decl_name),
-					));
-					projection_decl.set_definition(projection_expr);
-					let projection_decl_idx = collector
-						.parent
-						.model
-						.add_declaration(DeclarationItem::new(projection_decl, item));
-					// The projection reads every target field out of the
-					// direct-class objects array, which carries the direct
-					// contribution's (possibly alias-defined) values — so the
-					// projected columns are exactly as determined as the direct
-					// contribution's.
-					collector.parent.register_class_object_contribution(
-						target_class,
-						contribution.constructor_index,
-						projection_decl_idx,
-						contribution_determined,
-					);
-				}
-			}
-		}
-
-		if matches!(item_ty, shackle_hir::Type::New { .. }) {
-			// Of the singular root shapes, only `var opt new` has an
-			// unrealisable slot (par `new` and plain `var new` realise their
-			// single potential unconditionally), so only it pays the
-			// realisation guard on defined fields.
-			let singular_slot_may_be_unrealised = matches!(
-				item_ty,
-				shackle_hir::Type::New {
-					inst: VarType::Var,
-					opt: OptType::Opt,
-					..
-				}
-			);
-			let mut root_contributions =
-				collector.parent.objects.plan.contributions_by_occurrence[&root_occurrence].clone();
-			// The direct contribution must be registered before the
-			// inheritance projections: they read the superclass's storage
-			// fields out of the already-reconstructed direct-class objects
-			// array (symmetric with the collection-root path) rather than
-			// fresh-minting defined fields from the raw inputs.
-			root_contributions.sort_by_key(|contribution| contribution.projection_depth);
-			let mut direct_contribution: Option<(Expression<'db>, bool)> = None;
-			for contribution in root_contributions.iter() {
-				let target_class = contribution.target_class;
-				let root_fields = collector.parent.class_storage_fields(target_class);
-				let has_object_fields = root_fields
-					.iter()
-					.any(|(_, field_ty)| field_ty.class_type(collector.parent.db).is_some());
-				// A storage field the input record doesn't carry (a computed
-				// attribute, or an explicitly-`var` attribute) means the input
-				// must be reconstructed into the full storage record rather than
-				// aliased straight through.
-				let input_elem_fields = inputs_expr
-					.ty()
-					.elem_ty(collector.parent.db)
-					.and_then(|elem| elem.record_fields(collector.parent.db));
-				let has_storage_only_field = root_fields.iter().any(|(field_ident, _)| {
-					!input_elem_fields
-						.as_ref()
-						.map(|fields| {
-							fields
-								.iter()
-								.any(|(field, _)| Identifier(*field) == *field_ident)
-						})
-						.unwrap_or(false)
-				});
-				let (contribution_expr, contribution_determined) = if target_class
-					== class_pattern_ref
-				{
-					if has_object_fields || has_storage_only_field {
-						// The engine reconstructs the direct contribution with
-						// per-field rules: computed attributes are *defined*
-						// (`n = card(children)`), class-typed fields are read
-						// through when the input holds identities (var
-						// `_storage`) or identity-minted when it holds inline
-						// records (par roots), var-only fields become fresh
-						// decisions with their declared per-object domains.
-						(
-							collector
-								.parent
-								.engine_reconstructed_root_contribution_expr(
-									item,
-									class_pattern_ref,
-									root_pattern,
-									inputs_expr.clone(),
-									&root_fields,
-									singular_slot_may_be_unrealised.then(|| RootRealisationGuard {
-										constructor_index: contribution.constructor_index,
-										name_prefix: class_and_decl_name.clone(),
-									}),
-								),
-							true,
-						)
-					} else {
-						// Input-record passthrough: every storage field is
-						// supplied by the input in storage form — no defined
-						// fields, vacuously determined.
-						(inputs_expr.clone(), true)
-					}
-				} else {
-					// Inheritance projection: read the superclass's storage
-					// fields out of the already-registered direct-class objects
-					// array, which carries the direct contribution's (possibly
-					// alias-defined) values — so the projected columns are
-					// exactly as determined as the direct contribution's.
-					let (direct_expr, direct_determined) = direct_contribution
-						.clone()
-						.expect("direct contribution registered before singular-root projections");
-					(
-						collector.parent.reconstructed_root_contribution_expr(
-							item,
-							root_pattern,
-							direct_expr,
-							&root_fields,
-							true,
-						),
-						direct_determined,
+						generators.clone(),
+						local_domain_source,
+						record_access,
+						fallback_cardinality,
+						attrib_class_pattern_ref,
 					)
-				};
-				let contribution_array_ty = contribution_expr.ty();
-				let contribution_domain = collector.parent.build_class_storage_array_domain(
-					target_class,
-					contribution_array_ty,
-					item,
-				);
-				let mut contribution_decl = Declaration::new(true, contribution_domain);
-				let target_class_name = target_class
-					.identifier(collector.parent.db)
-					.unwrap()
-					.pretty_print(collector.parent.db);
-				let contribution_name = if target_class == class_pattern_ref {
-					format!("{}_objects", class_and_decl_name)
 				} else {
-					format!("{}_{}_objects", target_class_name, class_and_decl_name)
-				};
-				contribution_decl.set_name(Identifier::new(collector.parent.db, contribution_name));
-				contribution_decl.set_definition(contribution_expr);
-				let contribution_decl_idx = collector
-					.parent
-					.model
-					.add_declaration(DeclarationItem::new(contribution_decl, item));
-				collector.parent.register_class_object_contribution(
-					target_class,
-					contribution.constructor_index,
-					contribution_decl_idx,
-					contribution_determined,
-				);
-				if target_class == class_pattern_ref {
-					direct_contribution = Some((
-						Expression::new(
-							collector.parent.db,
-							&collector.parent.model,
-							item,
-							ResolvedIdentifier::Declaration(contribution_decl_idx),
-						),
-						contribution_determined,
-					));
-				}
-			}
-		}
-
-		if let Some(root_collection) = pending_root_collection {
-			if root_collection.inst == VarType::Var {
-				// Constructor registration for this occurrence happened before
-				// the contribution block (the realisation guard needs it).
-				let ordinal_domain = root_collection
-					.potential_ordinal_domain
-					.expect("top-level var collections must have an ordinal domain");
-				let call_expr = alloc_expression(
-					Call {
-						function: Callable::EnumConstructor(enum_member_id),
-						arguments: vec![ordinal_domain],
-					},
-					&collector,
-					item,
-				);
-				let new_domain = Domain::bounded(
-					collector.parent.db,
-					item,
-					VarType::Par,
-					OptType::NonOpt,
-					call_expr,
-				);
-				// Carry the declared cardinality bound (`set(<card>) of new C`)
-				// into the domain. The pretty printer emits the `set(<card>)
-				// of …` syntax and the target MiniZinc desugars it to a
-				// `card(…) in <card>` constraint.
-				let cardinality = match item_ty {
-					shackle_hir::Type::Set { cardinality, .. } => {
-						cardinality.map(|c| collector.collect_expression(c))
-					}
-					_ => None,
-				};
-				domain_decl.set_domain(Domain::set_with_card(
-					collector.parent.db,
-					item,
-					root_collection.inst,
-					OptType::NonOpt,
-					cardinality,
-					new_domain,
-				));
-				return domain_decl;
-			}
-
-			let start_expr = if root_collection.contribution_index == 0 {
-				Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					IntegerLiteral(1),
-				)
-			} else {
-				let end_decl = collector.parent.objects.contribution_end_map
-					[&(class_pattern_ref, root_collection.contribution_index - 1)];
-				Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					ResolvedIdentifier::Declaration(end_decl),
-				)
-			};
-			let end_decl = collector.parent.objects.contribution_end_map
-				[&(class_pattern_ref, root_collection.contribution_index)];
-			let end_expr = Expression::new(
-				collector.parent.db,
-				&collector.parent.model,
-				item,
-				ResolvedIdentifier::Declaration(end_decl),
-			);
-			let slice_range = match (&*start_expr, &*root_collection.sum_expr) {
-				(ExpressionData::IntegerLiteral(start), ExpressionData::IntegerLiteral(sum)) => {
 					Expression::new(
-						collector.parent.db,
-						&collector.parent.model,
-						item,
-						SetLiteral(
-							(start.0..(start.0 + sum.0))
-								.map(|value| {
-									Expression::new(
-										collector.parent.db,
-										&collector.parent.model,
-										item,
-										IntegerLiteral(value),
-									)
-								})
-								.collect(),
-						),
-					)
-				}
-				_ => {
-					let one_expr = Expression::new(
 						collector.parent.db,
 						&collector.parent.model,
 						item,
 						IntegerLiteral(1),
-					);
-					let end_minus_one = Expression::new(
-						collector.parent.db,
-						&collector.parent.model,
-						item,
-						LookupCall {
-							function: collector.parent.ids.functions.minus.into(),
-							arguments: vec![end_expr, one_expr],
-						},
-					);
-					Expression::new(
-						collector.parent.db,
-						&collector.parent.model,
-						item,
-						LookupCall {
-							function: collector.parent.ids.functions.dot_dot.into(),
-							arguments: vec![start_expr, end_minus_one],
-						},
 					)
-				}
-			};
-			let enum_constr_domain = Domain::bounded(
-				collector.parent.db,
-				item,
-				VarType::Par,
-				OptType::NonOpt,
-				slice_range.clone(),
-			);
-			let decl = Declaration::new(false, enum_constr_domain);
-			let idx = collector
-				.parent
-				.model
-				.add_declaration(DeclarationItem::new(decl, item));
-			collector
-				.parent
-				.add_occurrence_constructors(root_occurrence, idx);
-			let call_expr = alloc_expression(
-				Call {
-					function: Callable::EnumConstructor(enum_member_id),
-					arguments: vec![slice_range.clone()],
-				},
-				&collector,
-				item,
-			);
-			if matches!(item_ty, shackle_hir::Type::Array { .. }) {
-				let ordinal_decl = Declaration::new(
-					false,
-					Domain::unbounded(collector.parent.db, item, Ty::par_int(collector.parent.db)),
-				);
-				let ordinal_idx = collector
-					.parent
-					.model
-					.add_declaration(DeclarationItem::new(ordinal_decl, item));
-				let ordinal_expr = Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					ordinal_idx,
-				);
-				domain_decl.set_definition(Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					ArrayComprehension::new(
-						[Generator::Iterator {
-							declarations: vec![ordinal_idx],
-							collection: slice_range,
-							where_clause: None,
-						}],
-						Expression::new(
-							collector.parent.db,
-							&collector.parent.model,
+				};
+
+				let sum = compr_template;
+				if attrib.is_some()
+					&& !collector
+						.parent
+						.occurrence_constructors_available(source_occurrence)
+				{
+					collector
+						.parent
+						.ensure_nested_occurrence_constructor_domain(
 							item,
-							Call {
-								function: Callable::EnumConstructor(enum_member_id),
-								arguments: vec![ordinal_expr],
-							},
-						),
-					),
-				));
-				return domain_decl;
-			}
-			let new_domain = Domain::bounded(
-				collector.parent.db,
-				item,
-				VarType::Par,
-				OptType::NonOpt,
-				call_expr.clone(),
-			);
-			// `set(<card>) of new C` roots carry the declared cardinality
-			// bound into the domain (`var set(<card>) of <C>_potential`).
-			// The pretty printer emits the `set(<card>) of …` syntax and the
-			// target MiniZinc desugars it to a `card(…) in <card>` constraint.
-			// Applies to both var and par roots.
-			let cardinality = match item_ty {
-				shackle_hir::Type::Set { cardinality, .. } => {
-					cardinality.map(|c| collector.collect_expression(c))
+							source_occurrence,
+							sum.clone(),
+						);
 				}
-				_ => None,
+				let name_suffix = if attrib.is_none() && !attrib_path.is_empty() {
+					format!(
+						"{}_{}",
+						start_decl_name,
+						child_class
+							.identifier(collector.parent.db)
+							.unwrap()
+							.pretty_print(collector.parent.db)
+					)
+				} else {
+					start_decl_name
+				};
+				// Immediate parent occurrence for this slice's `<field>`
+				// attribute: `attrib_path = []` means the parent is the root
+				// user decl class; a non-empty `attrib_path` means the parent
+				// is a nested class one level deeper. The parent's
+				// contribution index in its own class enum is what
+				// `class_object_contribution_declaration` keys on, so look it
+				// up here and pass through `PendingSlice` for use during
+				// slice-array emission.
+				let parent_occurrence = if attrib_path.is_empty() {
+					root_occurrence
+				} else {
+					collector
+						.parent
+						.nested_occurrence(root_pattern, &attrib_path)
+				};
+				let parent_contribution_index = collector
+					.parent
+					.occurrence_contribution(parent_occurrence, attrib_class_pattern_ref)
+					.constructor_index;
+				let singular_opt = (matches!(local_domain_source, LocalDomainSource::OnePerParent)
+					&& attrib.is_some())
+				.then(|| {
+					declared_type
+						.map(|dt| {
+							matches!(
+								class_item_data[dt],
+								shackle_hir::Type::New {
+									opt: OptType::Opt,
+									..
+								}
+							)
+						})
+						.unwrap_or(false)
+				});
+				pending_slices.push(PendingSlice {
+					target_class: *child_class,
+					contribution_index,
+					name_suffix,
+					sum_expr: sum,
+					max_card_per_parent: captured_max_card_per_parent,
+					parent_class: attrib_class_pattern_ref,
+					parent_contribution_index,
+					field_attribute: *attrib,
+					singular_opt,
+				});
+			}
+
+			// 3. Push the classes of the "new" attributes onto the stack in reverse order of child_classes
+			for (attrib, child_class, _) in child_classes.iter().rev() {
+				if let Some(a) = attrib {
+					let mut new_attrib_path = attrib_path.clone();
+					new_attrib_path.push(*a);
+					class_stack.push((new_attrib_path, *child_class));
+				} else {
+					class_stack.push((attrib_path.clone(), *child_class));
+				}
+			}
+		}
+	}
+
+	/// Register the enum constructors for every occurrence reachable from this
+	/// root, walking down the class graph before any storage is sized — the
+	/// contribution engine's realisation guards reference `<C>_occ_k(..)`, so
+	/// the constructors must already exist.
+	fn register_reachable_occurrence_constructors(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		nested_iteration_expr: &Expression<'db>,
+	) {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			class_pattern_ref,
+			root_pattern,
+			..
+		} = cx;
+		let collector = ExpressionCollector::new(self, data, item, types);
+		let mut constructor_stack = vec![(vec![], class_pattern_ref)];
+
+		while let Some((attrib_path, attrib_class_pattern_ref)) = constructor_stack.pop() {
+			let mut child_classes = vec![];
+			let Item::Class(class_item_ref) = attrib_class_pattern_ref.item(collector.parent.db)
+			else {
+				unreachable!()
 			};
-			let domain = Domain::set_with_card(
-				collector.parent.db,
-				item,
-				root_collection.inst,
-				OptType::NonOpt,
-				cardinality,
-				new_domain,
-			);
-			domain_decl.set_domain(domain);
-			domain_decl.set_definition(call_expr);
+			let class_hir = class_item_ref.class(collector.parent.db);
+			let class_item_types = attrib_class_pattern_ref
+				.item(collector.parent.db)
+				.types(collector.parent.db);
+			let class_item_data = class_hir.data();
+			if let Some(c) = class_hir.extends {
+				let child_pattern = class_item_types.name_resolution(c).unwrap();
+				child_classes.push((None, child_pattern, None));
+			}
+			for member in class_hir.items.iter() {
+				if let ClassMember::Declaration(d) = member
+					&& let Some(c) = class_item_data[d.declared_type].get_new_class(class_item_data)
+				{
+					let child_pattern = class_item_types.name_resolution(c).unwrap();
+					child_classes.push((
+						Some(class_item_data[d.pattern].identifier().unwrap()),
+						child_pattern,
+						Some(d.declared_type),
+					));
+				}
+			}
+
+			for (attrib, _child_class, declared_type) in child_classes.iter() {
+				let Some(attrib) = attrib else {
+					continue;
+				};
+				let occurrence_path = attrib_path
+					.iter()
+					.copied()
+					.chain(std::iter::once(*attrib))
+					.collect::<Vec<_>>();
+				let source_occurrence = collector
+					.parent
+					.nested_occurrence(root_pattern, &occurrence_path);
+				if collector
+					.parent
+					.occurrence_constructors_available(source_occurrence)
+				{
+					continue;
+				}
+				let local_domain_source = collector
+					.parent
+					.occurrence_local_domain_source(source_occurrence);
+
+				let (generators, prev_attrib) = collector.parent.nested_path_generators_and_cursor(
+					item,
+					nested_iteration_expr,
+					root_pattern,
+					source_occurrence,
+					&attrib_path,
+					local_domain_source,
+					attrib_class_pattern_ref,
+					*declared_type,
+					class_item_data,
+					&class_item_types,
+				);
+
+				let (record_access, fallback_cardinality) = collector
+					.parent
+					.nested_child_record_access_and_fallback_cardinality(
+						item,
+						prev_attrib,
+						*attrib,
+						local_domain_source,
+						*declared_type,
+						class_item_data,
+						attrib_class_pattern_ref.item(collector.parent.db),
+						&class_item_types,
+					);
+				let sum = collector.parent.nested_occurrence_sum_expr(
+					item,
+					generators,
+					local_domain_source,
+					record_access,
+					fallback_cardinality,
+					attrib_class_pattern_ref,
+				);
+				collector
+					.parent
+					.ensure_nested_occurrence_constructor_domain(item, source_occurrence, sum);
+			}
+
+			for (attrib, child_class, _) in child_classes.iter().rev() {
+				if let Some(a) = attrib {
+					let mut new_attrib_path = attrib_path.clone();
+					new_attrib_path.push(*a);
+					constructor_stack.push((new_attrib_path, *child_class));
+				} else {
+					constructor_stack.push((attrib_path.clone(), *child_class));
+				}
+			}
+		}
+	}
+
+	/// Record the root's own one-slot passthrough slice.
+	///
+	/// A later contribution to the same class needs this root's end offset in
+	/// `contribution_end_map` — a subclass root's projection passthrough, or
+	/// `project_class_identity` on a later constructor — so chain the root
+	/// exactly like a collection slice, gated on such a contribution existing
+	/// so single-root models do not grow unused `_root_start`/`_root_end`
+	/// declarations.
+	fn push_root_passthrough_slice(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		pending_root_collection: &Option<PendingRootCollection<'db>>,
+		pending_slices: &mut Vec<PendingSlice<'db>>,
+	) {
+		let &NewRootContext {
+			item,
+			data,
+			types,
+			item_ty,
+			class_pattern_ref,
+			root_occurrence,
+			..
+		} = cx;
+		let collector = ExpressionCollector::new(self, data, item, types);
+		if let Some(root_collection) = &pending_root_collection
+			&& root_collection.emit_root_contribution
+			&& root_collection.inst != VarType::Var
+		{
+			pending_slices.push(PendingSlice {
+				target_class: class_pattern_ref,
+				contribution_index: root_collection.contribution_index,
+				name_suffix: "root".to_owned(),
+				sum_expr: root_collection.sum_expr.clone(),
+				max_card_per_parent: None,
+				parent_class: class_pattern_ref,
+				parent_contribution_index: root_collection.contribution_index,
+				field_attribute: None,
+				singular_opt: None,
+			});
 		}
 
-		domain_decl
+		// Singular roots (`new C: x`, `var new C: x`, `var opt new C: x`)
+		// have a one-slot potential block. Any LATER contribution to the same
+		// class needs its predecessor's end offset in `contribution_end_map` —
+		// a subclass root's projection passthrough slice, or
+		// `project_class_identity` on a later constructor — so chain a
+		// one-slot root passthrough exactly like collection roots do, gated on
+		// a later contribution existing so single-root models don't grow
+		// unused `_root_start`/`_root_end` declarations.
+		if pending_root_collection.is_none() && matches!(item_ty, shackle_hir::Type::New { .. }) {
+			let contribution_index = collector
+				.parent
+				.occurrence_contribution(root_occurrence, class_pattern_ref)
+				.constructor_index;
+			let has_later_contribution = collector
+				.parent
+				.objects
+				.plan
+				.contributions_by_occurrence
+				.values()
+				.flatten()
+				.any(|contribution| {
+					contribution.target_class == class_pattern_ref
+						&& contribution.constructor_index > contribution_index
+				});
+			if has_later_contribution {
+				pending_slices.push(PendingSlice {
+					target_class: class_pattern_ref,
+					contribution_index,
+					name_suffix: "root".to_owned(),
+					sum_expr: Expression::new(
+						collector.parent.db,
+						&collector.parent.model,
+						item,
+						IntegerLiteral(1),
+					),
+					max_card_per_parent: None,
+					parent_class: class_pattern_ref,
+					parent_contribution_index: contribution_index,
+					field_attribute: None,
+					singular_opt: None,
+				});
+			}
+		}
 	}
 }
