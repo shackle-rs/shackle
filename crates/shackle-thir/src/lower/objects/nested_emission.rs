@@ -57,6 +57,7 @@ impl<'db> ItemCollector<'db> {
 		// contribution's range regardless of which constructor `this` came
 		// from.
 		let target_enum_decl = self
+			.objects
 			.class_map
 			.get(&target_class)
 			.map(|info| info.class_enum);
@@ -138,7 +139,7 @@ impl<'db> ItemCollector<'db> {
 		start_decl_name: &str,
 	) {
 		let mut occurrence_contributions =
-			self.object_lowering.contributions_by_occurrence[&source_occurrence].clone();
+			self.objects.plan.contributions_by_occurrence[&source_occurrence].clone();
 		occurrence_contributions.sort_by_key(|contribution| contribution.projection_depth);
 
 		if let Some(contribution_input) = maybe_contribution_input {
@@ -180,7 +181,7 @@ impl<'db> ItemCollector<'db> {
 						};
 						let child_contribution =
 							self.occurrence_contribution(child_occurrence, field_class);
-						let child_enum = self.class_map[&field_class].class_enum;
+						let child_enum = self.objects.class_map[&field_class].class_enum;
 						self.model[child_enum]
 							.definition()
 							.map(|constructors| {
@@ -248,7 +249,8 @@ impl<'db> ItemCollector<'db> {
 			// unreachable.
 			debug_assert!(
 				occurrence_contributions.iter().all(|contribution| self
-					.object_lowering
+					.objects
+					.plan
 					.var_reached_classes
 					.contains(&contribution.target_class)),
 				"nested contribution without record input reached a par-reached target"
@@ -267,7 +269,8 @@ impl<'db> ItemCollector<'db> {
 				{
 					if target_has_defined_field
 						&& self
-							.object_lowering
+							.objects
+							.plan
 							.var_reached_classes
 							.contains(&target_class)
 					{
@@ -369,7 +372,7 @@ impl<'db> ItemCollector<'db> {
 			_ => None,
 		};
 		if let Some(fallback) = cycle_break_fallback {
-			let class_info = self.class_map[&parent_class];
+			let class_info = self.objects.class_map[&parent_class];
 			let parent_enum_expr =
 				Expression::new(self.db, &self.model, item, class_info.class_enum);
 			let card_expr = Expression::new(

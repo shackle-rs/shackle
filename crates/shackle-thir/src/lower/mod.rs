@@ -20,7 +20,7 @@
 #![deny(clippy::iter_over_hash_type)]
 
 use derive_more::From;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use shackle_hir::{
 	Item, PatternTy, TypeResult,
 	class_analysis::{LocalDomainSource, OccurrenceId, class_pattern_for},
@@ -40,10 +40,7 @@ mod objects;
 // Imported by name rather than glob: `alloc_expression` would otherwise be
 // ambiguous with `crate::traverse::fold::alloc_expression`, which `super::*`
 // brings into scope.
-use self::{
-	expression::ExpressionCollector,
-	objects::{ClassMapInfo, FieldIntroduction, ObjectLoweringPlan},
-};
+use self::{expression::ExpressionCollector, objects::ObjectState};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, From)]
 enum DeclOrConstraint<'db> {
@@ -78,84 +75,12 @@ struct ItemCollector<'db> {
 	ids: &'db IdentifierRegistry<'db>,
 	resolutions: FxHashMap<PatternRef<'db>, LoweredIdentifier<'db>>,
 	param_defaults: FxHashMap<DeclarationId<'db>, Expression<'db>>,
-	class_map: FxHashMap<PatternRef<'db>, ClassMapInfo<'db>>,
-	object_lowering: ObjectLoweringPlan<'db>,
 	model: Model<'db>,
 	type_alias_expressions: FxHashMap<ExpressionRef<'db>, DeclarationId<'db>>,
 	deferred: Vec<(FunctionId<'db>, Item<'db>)>,
-	contribution_end_map: FxHashMap<(PatternRef<'db>, usize), DeclarationId<'db>>,
-	class_object_contributions: FxHashMap<PatternRef<'db>, Vec<(usize, DeclarationId<'db>)>>,
-	/// Per-occurrence slice array declarations (`<parent>_<field>_potential`),
-	/// keyed by the child class and contribution index. Consumed by the
-	/// per-parent subset constraint.
-	slice_array_decls: FxHashMap<(PatternRef<'db>, usize), DeclarationId<'db>>,
-	/// Records, per field-only-introduced child class, each parent-field
-	/// introduction contributing children — keyed one hop up (the *immediate*
-	/// parent class/contribution and the direct attribute name). Materialized
-	/// in `finish` as the class's actual-set definition:
-	/// `array_union(...)` over per-contribution, ITE-guarded expressions
-	/// (see `field_only_class_set_array_union`).
-	class_set_field_introductions: FxHashMap<PatternRef<'db>, Vec<FieldIntroduction<'db>>>,
-	/// Per top-level-introduced class, the identity-set expressions
-	/// contributed by each top-level introduction. Each entry is the
-	/// constructor's `contribution_index` paired with a contribution
-	/// expression:
-	///   - `set of new`, `var set(...) of new`: the user-named decl
-	///     reference (typed as `(var) set of <C>_occ_i(...)`).
-	///   - `array [d] of new`: the full enum reference (`<C>_potential`)
-	///     because every potential is realized by construction; the
-	///     `as` decl itself is array-typed and its element type already
-	///     references `<C>`, which would be circular if used as the
-	///     class-set definition.
-	///
-	/// Consumed by `finish()` as
-	/// `<C> = array_union([expr_1, expr_2, ...])` (single contribution
-	/// is assigned directly without the wrapping call).
-	class_set_top_level_contributions: FxHashMap<PatternRef<'db>, Vec<(usize, Expression<'db>)>>,
-	/// Per class, whether *every* registered `_objects` contribution leaves the
-	/// class's defined fields (computed attributes and domain-dependent fields)
-	/// functionally determined — alias-defined by the reconstruction chain, or
-	/// read through from an already-determined contribution. Only then may the
-	/// symmetry-break default wave skip pinning those fields: a pin on a
-	/// determined field is at best redundant and at worst inconsistent (a
-	/// non-monotone RHS evaluated at the frees' pinned defaults need not equal
-	/// the field's own flatten-time `lb`, which forces unrealised potentials
-	/// into the class set and silently removes solutions). A contribution that
-	/// fresh-mints a defined field (par-reached identity-mode nested storage,
-	/// singular-root inheritance projections from raw inputs) still relies on
-	/// the pin for symmetry breaking, so any such registration keeps the pins
-	/// for the whole class.
-	class_contributions_all_determined: FxHashMap<PatternRef<'db>, bool>,
-	/// Per (class, contribution index): the `defined_fields_determined` flag
-	/// each contribution registered with. Projections that read every field
-	/// from an already-registered contribution decl inherit exactly that
-	/// contribution's determinedness rather than guessing per class.
-	contribution_determined_by_index: FxHashMap<(PatternRef<'db>, usize), bool>,
-	/// Computed attributes' class-body foralls, deferred to `finish()` so
-	/// they can be dropped for classes whose contributions all alias-define
-	/// their defined fields (the gated forall-drop). One entry per computed
-	/// attribute: (class pattern, class item, attribute, RHS).
-	pending_class_definition_foralls: Vec<(
-		PatternRef<'db>,
-		Item<'db>,
-		Identifier<'db>,
-		shackle_hir::ExpressionId<'db>,
-	)>,
-	/// Classes whose actual set must be emitted FREE with a subset lower
-	/// bound rather than an `=` union definition, because a `var opt new`
-	/// root reaches the class. Populated by the opt-root branch of
-	/// `collect_declaration` with the opt root's direct class and every
-	/// superclass. In `finish()` the definite contributions of such a class
-	/// are unioned into a `<union> subset <C>` constraint (lower bound); the
-	/// upper bound is the declaration domain `<C>_potential`, and the opt
-	/// occurrence's own membership stays the free decision.
-	opt_free_subset_classes: FxHashSet<PatternRef<'db>>,
-	/// `(target_class, constructor_index)` of every contribution belonging to
-	/// a `var opt new` root. Skipped by `finish()`'s unregistered-contribution
-	/// scan so the opt occurrence is never materialised as a definitional (or
-	/// lower-bound) union piece — its membership IS the decision, and its
-	/// superclass image is pinned by an occurs biconditional instead.
-	opt_contribution_slots: FxHashSet<(PatternRef<'db>, usize)>,
+	/// Object-lowering state: the derived occurrence plan plus everything
+	/// accumulated while collecting class items and `new` declarations.
+	objects: ObjectState<'db>,
 }
 
 impl<'db> ItemCollector<'db> {
@@ -170,21 +95,10 @@ impl<'db> ItemCollector<'db> {
 			ids,
 			resolutions: FxHashMap::default(),
 			param_defaults: FxHashMap::default(),
-			class_map: FxHashMap::default(),
-			object_lowering: ObjectLoweringPlan::new(db),
 			model: Model::with_capacities(&entity_counts.into()),
 			type_alias_expressions: FxHashMap::default(),
 			deferred: Vec::new(),
-			contribution_end_map: FxHashMap::default(),
-			class_object_contributions: FxHashMap::default(),
-			slice_array_decls: FxHashMap::default(),
-			class_set_field_introductions: FxHashMap::default(),
-			class_set_top_level_contributions: FxHashMap::default(),
-			class_contributions_all_determined: FxHashMap::default(),
-			contribution_determined_by_index: FxHashMap::default(),
-			pending_class_definition_foralls: Vec::new(),
-			opt_free_subset_classes: FxHashSet::default(),
-			opt_contribution_slots: FxHashSet::default(),
+			objects: ObjectState::new(db),
 		}
 	}
 
@@ -396,9 +310,15 @@ impl<'db> ItemCollector<'db> {
 			) && let Some(class_domain) = data[d.declared_type].get_new_class(data)
 		{
 			let class_pattern_ref = types.name_resolution(class_domain).unwrap();
-			if let Some(class_info) = collector.parent.class_map.get(&class_pattern_ref).copied() {
+			if let Some(class_info) = collector
+				.parent
+				.objects
+				.class_map
+				.get(&class_pattern_ref)
+				.copied()
+			{
 				let root_occurrence = collector.parent.top_level_occurrence(root_pattern);
-				let contributions = collector.parent.object_lowering.contributions_by_occurrence
+				let contributions = collector.parent.objects.plan.contributions_by_occurrence
 					[&root_occurrence]
 					.clone();
 				// `set of new` / `var set(...) of new` contribute the
@@ -955,7 +875,8 @@ pub fn lower_model<'db>(db: &'db dyn Db) -> Intermediate<Model<'db>> {
 	// `_objects` array and actual-set declarations, so this loop fixes the id
 	// allocation order that the whole emitted model is then ordered by.
 	let mut contribution_targets = collector
-		.object_lowering
+		.objects
+		.plan
 		.contributions_in_occurrence_order()
 		.flat_map(|contributions| {
 			contributions
@@ -964,7 +885,8 @@ pub fn lower_model<'db>(db: &'db dyn Db) -> Intermediate<Model<'db>> {
 		})
 		.collect::<Vec<_>>();
 	collector
-		.object_lowering
+		.objects
+		.plan
 		.in_class_order(&mut contribution_targets);
 	for target_class in contribution_targets {
 		collector.ensure_class_predeclared(target_class);

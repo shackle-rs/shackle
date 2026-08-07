@@ -104,7 +104,8 @@ impl<'db> ItemCollector<'db> {
 		current_input: &Expression<'db>,
 	) -> Option<Expression<'db>> {
 		if self
-			.object_lowering
+			.objects
+			.plan
 			.var_actual_set_classes
 			.contains(&field_class)
 			&& field_ty.inst(self.db) == Some(VarType::Var)
@@ -356,7 +357,7 @@ impl<'db> ItemCollector<'db> {
 		contribution_index: usize,
 		target_fields: &[(Identifier<'db>, Ty<'db>)],
 	) -> Expression<'db> {
-		let class_enum = self.class_map[&target_class].class_enum;
+		let class_enum = self.objects.class_map[&target_class].class_enum;
 		let image_set_expr = self
 			.class_enum_constructor_image_set(item, class_enum, contribution_index)
 			.unwrap_or_else(|| Expression::new(self.db, &self.model, item, class_enum));

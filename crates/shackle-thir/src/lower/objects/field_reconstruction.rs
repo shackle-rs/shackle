@@ -157,7 +157,7 @@ impl<'db> ItemCollector<'db> {
 			);
 		};
 		let child_contribution = self.occurrence_contribution(child_occurrence, child_class);
-		let child_enum = self.class_map[&child_class].class_enum;
+		let child_enum = self.objects.class_map[&child_class].class_enum;
 		let child_enum_member =
 			EnumMemberId::new(child_enum, child_contribution.constructor_index as u32);
 		match self.occurrence_local_domain_source(child_occurrence) {
@@ -448,7 +448,7 @@ impl<'db> ItemCollector<'db> {
 		}
 		let child_occurrence = self.nested_occurrence(root_pattern, &[attribute, field_ident]);
 		let child_contribution = self.occurrence_contribution(child_occurrence, field_class);
-		let child_enum = self.class_map[&field_class].class_enum;
+		let child_enum = self.objects.class_map[&field_class].class_enum;
 		let child_enum_member =
 			EnumMemberId::new(child_enum, child_contribution.constructor_index as u32);
 		let one_expr = Expression::new(self.db, &self.model, item, IntegerLiteral(1));

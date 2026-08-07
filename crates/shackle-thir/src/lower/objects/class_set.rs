@@ -45,6 +45,7 @@ impl<'db> ItemCollector<'db> {
 	) -> Option<ConstraintId<'db>> {
 		let child_contribution = self.occurrence_contribution(child_occurrence, child_class);
 		let slice_decl_idx = *self
+			.objects
 			.slice_array_decls
 			.get(&(child_class, child_contribution.constructor_index))?;
 
@@ -223,7 +224,7 @@ impl<'db> ItemCollector<'db> {
 		// fields) means the set can't be derived and the caller falls back.
 		let mut contributions: Vec<(usize, usize, PatternRef<'db>, usize, OccurrenceId)> =
 			Vec::new();
-		for occurrence_contributions in self.object_lowering.contributions_in_occurrence_order() {
+		for occurrence_contributions in self.objects.plan.contributions_in_occurrence_order() {
 			let Some(direct) = occurrence_contributions
 				.iter()
 				.find(|contribution| contribution.projection_depth == 0)
@@ -377,12 +378,14 @@ impl<'db> ItemCollector<'db> {
 			return None;
 		}
 		let end_decl = *self
+			.objects
 			.contribution_end_map
 			.get(&(child_class, contribution_index))?;
 		let start_expr = if contribution_index == 0 {
 			Expression::new(self.db, &self.model, item, IntegerLiteral(1))
 		} else {
 			let previous_end = *self
+				.objects
 				.contribution_end_map
 				.get(&(child_class, contribution_index - 1))?;
 			Expression::new(
@@ -418,7 +421,7 @@ impl<'db> ItemCollector<'db> {
 			},
 		);
 		let member = EnumMemberId::new(
-			self.class_map[&child_class].class_enum,
+			self.objects.class_map[&child_class].class_enum,
 			contribution_index as u32,
 		);
 		Some(Expression::new(
@@ -505,7 +508,8 @@ impl<'db> ItemCollector<'db> {
 		// unrealised slots; a par parent's slots are all realised, so the
 		// guard would be vacuous noise there.
 		let realised = self
-			.object_lowering
+			.objects
+			.plan
 			.var_actual_set_classes
 			.contains(&intro.parent_class)
 			.then(|| {
@@ -520,7 +524,9 @@ impl<'db> ItemCollector<'db> {
 					self.db,
 					&self.model,
 					item,
-					ResolvedIdentifier::Declaration(self.class_map[&intro.parent_class].class_set),
+					ResolvedIdentifier::Declaration(
+						self.objects.class_map[&intro.parent_class].class_set,
+					),
 				);
 				Expression::new(
 					self.db,
@@ -546,7 +552,7 @@ impl<'db> ItemCollector<'db> {
 					p_expr.clone(),
 				);
 				let child_enum_member = EnumMemberId::new(
-					self.class_map[&child_class].class_enum,
+					self.objects.class_map[&child_class].class_enum,
 					intro.child_contribution_index as u32,
 				);
 				let identity = Expression::new(
@@ -681,7 +687,7 @@ impl<'db> ItemCollector<'db> {
 			p_expr.clone(),
 		);
 		let super_enum_member = EnumMemberId::new(
-			self.class_map[&super_class].class_enum,
+			self.objects.class_map[&super_class].class_enum,
 			super_constructor_index as u32,
 		);
 		let super_identity = Expression::new(
@@ -696,7 +702,8 @@ impl<'db> ItemCollector<'db> {
 		let singleton =
 			Expression::new(self.db, &self.model, item, SetLiteral(vec![super_identity]));
 		let template = if self
-			.object_lowering
+			.objects
+			.plan
 			.var_actual_set_classes
 			.contains(&direct_class)
 		{
@@ -711,7 +718,7 @@ impl<'db> ItemCollector<'db> {
 				self.db,
 				&self.model,
 				item,
-				ResolvedIdentifier::Declaration(self.class_map[&direct_class].class_set),
+				ResolvedIdentifier::Declaration(self.objects.class_map[&direct_class].class_set),
 			);
 			let realised = Expression::new(
 				self.db,

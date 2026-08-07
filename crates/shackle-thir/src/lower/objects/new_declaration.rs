@@ -42,13 +42,13 @@ impl<'db> ItemCollector<'db> {
 			.expect("new declarations should have a class domain");
 
 		let class_pattern_ref = types.name_resolution(class_domain).unwrap();
-		let class_enum = collector.parent.class_map[&class_pattern_ref].class_enum;
+		let class_enum = collector.parent.objects.class_map[&class_pattern_ref].class_enum;
 		let root_pattern = PatternRef::new(collector.parent.db, item, d.pattern);
 		let root_occurrence = collector.parent.top_level_occurrence(root_pattern);
 
 		let enum_member_id = EnumMemberId::new(
 			class_enum,
-			collector.parent.object_lowering.contributions_by_occurrence[&root_occurrence][0]
+			collector.parent.objects.plan.contributions_by_occurrence[&root_occurrence][0]
 				.constructor_index as u32,
 		);
 		let item_ty: &shackle_hir::Type = &collector.data[d.declared_type];
@@ -239,9 +239,9 @@ impl<'db> ItemCollector<'db> {
 					&collector,
 					item,
 				);
-				let root_contributions =
-					collector.parent.object_lowering.contributions_by_occurrence[&root_occurrence]
-						.clone();
+				let root_contributions = collector.parent.objects.plan.contributions_by_occurrence
+					[&root_occurrence]
+					.clone();
 				if *opt == OptType::Opt {
 					// `var opt new C: x` is an optional occurrence. The direct
 					// class's actual set is a free `var set of <C>_potential`
@@ -255,8 +255,9 @@ impl<'db> ItemCollector<'db> {
 					// existence), so no widening is needed here.
 					debug_assert!(
 						root_contributions.iter().all(|contribution| {
-							collector.parent.model
-								[collector.parent.class_map[&contribution.target_class].class_set]
+							collector.parent.model[collector.parent.objects.class_map
+								[&contribution.target_class]
+								.class_set]
 								.ty()
 								.inst(collector.parent.db)
 								== Some(VarType::Var)
@@ -265,7 +266,8 @@ impl<'db> ItemCollector<'db> {
 						 among its contributions; var_actual_set_classes is too \
 						 narrow"
 					);
-					let direct_class_set = collector.parent.class_map[&class_pattern_ref].class_set;
+					let direct_class_set =
+						collector.parent.objects.class_map[&class_pattern_ref].class_set;
 					let direct_set_expr = alloc_expression(direct_class_set, &collector, item);
 					// `<C>_occ_0(1) in <C>` — true exactly when the optional
 					// occurrence is realised.
@@ -286,10 +288,12 @@ impl<'db> ItemCollector<'db> {
 						// isn't clobbered).
 						let _ = collector
 							.parent
+							.objects
 							.opt_contribution_slots
 							.insert((contribution.target_class, contribution.constructor_index));
 						let _ = collector
 							.parent
+							.objects
 							.opt_free_subset_classes
 							.insert(contribution.target_class);
 						if contribution.target_class == class_pattern_ref {
@@ -308,8 +312,9 @@ impl<'db> ItemCollector<'db> {
 						// free (bounded by `<super>_potential`, lower-bounded by
 						// the definite roots in `finish`):
 						//   `(<super>_occ_k(1) in <super>) <-> (x realised)`.
-						let target_enum =
-							collector.parent.class_map[&contribution.target_class].class_enum;
+						let target_enum = collector.parent.objects.class_map
+							[&contribution.target_class]
+							.class_enum;
 						let target_enum_member =
 							EnumMemberId::new(target_enum, contribution.constructor_index as u32);
 						let one_expr = alloc_expression(IntegerLiteral(1), &collector, item);
@@ -321,8 +326,9 @@ impl<'db> ItemCollector<'db> {
 							&collector,
 							item,
 						);
-						let class_set_decl =
-							collector.parent.class_map[&contribution.target_class].class_set;
+						let class_set_decl = collector.parent.objects.class_map
+							[&contribution.target_class]
+							.class_set;
 						let class_set_expr = alloc_expression(class_set_decl, &collector, item);
 						let image_in_super = alloc_expression(
 							LookupCall {
@@ -363,7 +369,8 @@ impl<'db> ItemCollector<'db> {
 					// defining form (its enum is single-member).
 					let direct_is_mixed = collector
 						.parent
-						.object_lowering
+						.objects
+						.plan
 						.contributions_by_occurrence
 						.iter()
 						.filter(|(occ, _)| **occ != root_occurrence)
@@ -478,8 +485,9 @@ impl<'db> ItemCollector<'db> {
 					// as just `A_occ_0({1})`, forcing `as`'s members out of
 					// existence.
 					for contribution in root_contributions {
-						let target_enum =
-							collector.parent.class_map[&contribution.target_class].class_enum;
+						let target_enum = collector.parent.objects.class_map
+							[&contribution.target_class]
+							.class_enum;
 						let target_enum_member =
 							EnumMemberId::new(target_enum, contribution.constructor_index as u32);
 						let class_set_definition = alloc_expression(
@@ -895,7 +903,8 @@ impl<'db> ItemCollector<'db> {
 				.constructor_index;
 			let has_later_contribution = collector
 				.parent
-				.object_lowering
+				.objects
+				.plan
 				.contributions_by_occurrence
 				.values()
 				.flatten()
@@ -1131,7 +1140,8 @@ impl<'db> ItemCollector<'db> {
 						// `collect_class` skips them to avoid double-emitting.
 						if !collector
 							.parent
-							.object_lowering
+							.objects
+							.plan
 							.var_reached_classes
 							.contains(&attrib_class_pattern_ref)
 						{
@@ -1295,7 +1305,7 @@ impl<'db> ItemCollector<'db> {
 					IntegerLiteral(1),
 				)
 			} else {
-				let end_decl = collector.parent.contribution_end_map[&(
+				let end_decl = collector.parent.objects.contribution_end_map[&(
 					pending_slice.target_class,
 					pending_slice.contribution_index - 1,
 				)];
@@ -1353,7 +1363,7 @@ impl<'db> ItemCollector<'db> {
 				.parent
 				.model
 				.add_declaration(DeclarationItem::new(end_decl, item));
-			let _ = collector.parent.contribution_end_map.insert(
+			let _ = collector.parent.objects.contribution_end_map.insert(
 				(pending_slice.target_class, pending_slice.contribution_index),
 				end_idx,
 			);
@@ -1365,7 +1375,8 @@ impl<'db> ItemCollector<'db> {
 			// allowed to draw from. Consumed by the per-parent subset
 			// constraint.
 			if let Some(max_card_per_parent) = pending_slice.max_card_per_parent.clone() {
-				let child_enum = collector.parent.class_map[&pending_slice.target_class].class_enum;
+				let child_enum =
+					collector.parent.objects.class_map[&pending_slice.target_class].class_enum;
 				let child_enum_member =
 					EnumMemberId::new(child_enum, pending_slice.contribution_index as u32);
 
@@ -1612,7 +1623,7 @@ impl<'db> ItemCollector<'db> {
 					.parent
 					.model
 					.add_declaration(DeclarationItem::new(slice_decl, item));
-				let _ = collector.parent.slice_array_decls.insert(
+				let _ = collector.parent.objects.slice_array_decls.insert(
 					(pending_slice.target_class, pending_slice.contribution_index),
 					slice_decl_idx,
 				);
@@ -1627,6 +1638,7 @@ impl<'db> ItemCollector<'db> {
 				if let Some(field_attribute) = pending_slice.field_attribute {
 					collector
 						.parent
+						.objects
 						.class_set_field_introductions
 						.entry(pending_slice.target_class)
 						.or_default()
@@ -1650,6 +1662,7 @@ impl<'db> ItemCollector<'db> {
 			{
 				collector
 					.parent
+					.objects
 					.class_set_field_introductions
 					.entry(pending_slice.target_class)
 					.or_default()
@@ -1817,9 +1830,9 @@ impl<'db> ItemCollector<'db> {
 					item,
 					ResolvedIdentifier::Declaration(contribution_decl_idx),
 				);
-				let root_contributions =
-					collector.parent.object_lowering.contributions_by_occurrence[&root_occurrence]
-						.clone();
+				let root_contributions = collector.parent.objects.plan.contributions_by_occurrence
+					[&root_occurrence]
+					.clone();
 				for contribution in root_contributions {
 					let target_class = contribution.target_class;
 					if target_class == class_pattern_ref {
@@ -1882,8 +1895,7 @@ impl<'db> ItemCollector<'db> {
 				}
 			);
 			let mut root_contributions =
-				collector.parent.object_lowering.contributions_by_occurrence[&root_occurrence]
-					.clone();
+				collector.parent.objects.plan.contributions_by_occurrence[&root_occurrence].clone();
 			// The direct contribution must be registered before the
 			// inheritance projections: they read the superclass's storage
 			// fields out of the already-reconstructed direct-class objects
@@ -2061,7 +2073,7 @@ impl<'db> ItemCollector<'db> {
 					IntegerLiteral(1),
 				)
 			} else {
-				let end_decl = collector.parent.contribution_end_map
+				let end_decl = collector.parent.objects.contribution_end_map
 					[&(class_pattern_ref, root_collection.contribution_index - 1)];
 				Expression::new(
 					collector.parent.db,
@@ -2070,7 +2082,7 @@ impl<'db> ItemCollector<'db> {
 					ResolvedIdentifier::Declaration(end_decl),
 				)
 			};
-			let end_decl = collector.parent.contribution_end_map
+			let end_decl = collector.parent.objects.contribution_end_map
 				[&(class_pattern_ref, root_collection.contribution_index)];
 			let end_expr = Expression::new(
 				collector.parent.db,

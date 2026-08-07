@@ -31,7 +31,7 @@ impl<'db> ItemCollector<'db> {
 				let Some(class_pattern) = class_pattern_for(db, *class_ref) else {
 					return ty;
 				};
-				let Some(class_map_info) = self.class_map.get(&class_pattern) else {
+				let Some(class_map_info) = self.objects.class_map.get(&class_pattern) else {
 					// Class hasn't been registered yet. This only happens while
 					// predeclaring a class that participates in a reference
 					// cycle (`Seat` ↔ `Handrail`): items are predeclared in
@@ -110,7 +110,8 @@ impl<'db> ItemCollector<'db> {
 				// declared with var-typed fields from the start. Otherwise
 				// use the par-typed record from the class declaration.
 				let record_ty = if self
-					.object_lowering
+					.objects
+					.plan
 					.var_reached_classes
 					.contains(&class_pattern)
 				{

@@ -336,7 +336,8 @@ impl<'db> ItemCollector<'db> {
 		};
 		let owner_class_pattern = PatternRef::new(self.db, decl.owner, ci.class(self.db).pattern);
 		if !self
-			.object_lowering
+			.objects
+			.plan
 			.domain_relocation_classes
 			.contains(&owner_class_pattern)
 		{
@@ -376,7 +377,8 @@ impl<'db> ItemCollector<'db> {
 			return false;
 		}
 		let owner_class_pattern = PatternRef::new(self.db, decl.owner, ci.class(self.db).pattern);
-		self.object_lowering
+		self.objects
+			.plan
 			.unrealisable_storage_classes
 			.contains(&owner_class_pattern)
 	}

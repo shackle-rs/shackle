@@ -81,7 +81,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		let target_class =
 			class_pattern_for(self.parent.db, target_class).expect("class item for class type");
 		let target_enum =
-			self.parent.model[self.parent.class_map[&target_class].class_enum].enum_type();
+			self.parent.model[self.parent.objects.class_map[&target_class].class_enum].enum_type();
 		if expr.ty().enum_ty(self.parent.db) == Some(target_enum) {
 			let coerce_ty = self
 				.parent
@@ -105,7 +105,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			return expr;
 		};
 		let res = self.types.name_resolution(idx).unwrap();
-		let Some(source_occurrence) = self.parent.object_lowering.top_level_occurrences.get(&res)
+		let Some(source_occurrence) = self.parent.objects.plan.top_level_occurrences.get(&res)
 		else {
 			return expr;
 		};
@@ -195,7 +195,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				let Some(expected_class) = expected.class_type(self.parent.db) else {
 					return false;
 				};
-				self.parent.model[self.parent.class_map[&class_pattern(expected_class)].class_enum]
+				self.parent.model
+					[self.parent.objects.class_map[&class_pattern(expected_class)].class_enum]
 					.enum_type() == actual_enum
 			}
 			(
@@ -208,7 +209,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				let Some(expected_class) = expected_element.class_type(self.parent.db) else {
 					return false;
 				};
-				self.parent.model[self.parent.class_map[&class_pattern(expected_class)].class_enum]
+				self.parent.model
+					[self.parent.objects.class_map[&class_pattern(expected_class)].class_enum]
 					.enum_type() == actual_enum
 			}
 			_ => false,
@@ -223,7 +225,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		let db = self.parent.db;
 		let class_enum = |class: shackle_ty::ClassRef<'db>| {
 			class_pattern_for(db, class)
-				.and_then(|p| self.parent.class_map.get(&p))
+				.and_then(|p| self.parent.objects.class_map.get(&p))
 				.map(|info| self.parent.model[info.class_enum].enum_type())
 		};
 		match (actual.lookup(db), expected.lookup(db)) {
@@ -285,7 +287,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			.parent
 			.occurrence_contribution(source_occurrence, target_class);
 		let target_member = EnumMemberId::new(
-			self.parent.class_map[&target_class].class_enum,
+			self.parent.objects.class_map[&target_class].class_enum,
 			target_contribution.constructor_index as u32,
 		);
 		let source_constructor_index = source_contribution.constructor_index;
@@ -300,8 +302,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		let local_ordinal = if source_constructor_index == 0 {
 			global_ordinal
 		} else {
-			let previous_end =
-				self.parent.contribution_end_map[&(source_class, source_constructor_index - 1)];
+			let previous_end = self.parent.objects.contribution_end_map
+				[&(source_class, source_constructor_index - 1)];
 			let previous_end_expr =
 				alloc_expression(ResolvedIdentifier::Declaration(previous_end), self, origin);
 			let zero_based = alloc_expression(
@@ -358,11 +360,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		join_class: PatternRef<'db>,
 	) -> Option<usize> {
 		let mut single: Option<OccurrenceId> = None;
-		for occ_contribs in self
-			.parent
-			.object_lowering
-			.contributions_in_occurrence_order()
-		{
+		for occ_contribs in self.parent.objects.plan.contributions_in_occurrence_order() {
 			for contribution in occ_contribs
 				.iter()
 				.filter(|c| c.target_class == source_class)
@@ -379,7 +377,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			}
 		}
 		let occurrence = single?;
-		self.parent.object_lowering.contributions_by_occurrence[&occurrence]
+		self.parent.objects.plan.contributions_by_occurrence[&occurrence]
 			.iter()
 			.find(|c| c.target_class == join_class)
 			.map(|c| c.constructor_index)
@@ -434,7 +432,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			origin,
 		);
 		let join_member = EnumMemberId::new(
-			self.parent.class_map[&join_class].class_enum,
+			self.parent.objects.class_map[&join_class].class_enum,
 			join_constructor as u32,
 		);
 		alloc_expression(
@@ -712,7 +710,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 											.name_resolution(*arg)
 											.map(|res| {
 												self.parent
-													.object_lowering
+													.objects
+													.plan
 													.top_level_occurrences
 													.contains_key(&res)
 											})
@@ -749,7 +748,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 							&& classes[0] != classes[1]
 							&& classes.iter().all(|class| {
 								class
-									.and_then(|p| self.parent.class_map.get(&p))
+									.and_then(|p| self.parent.objects.class_map.get(&p))
 									.is_some_and(|info| {
 										self.parent.model[info.class_enum]
 											.definition()
@@ -797,7 +796,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 								// projects via the single-contribution closed form.
 								match self.types.name_resolution(*arg).and_then(|res| {
 									self.parent
-										.object_lowering
+										.objects
+										.plan
 										.top_level_occurrences
 										.get(&res)
 										.copied()
@@ -1027,7 +1027,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						class_pattern_for(db, target_class).expect("class item for class type");
 					let source_occurrence = self
 						.parent
-						.object_lowering
+						.objects
+						.plan
 						.top_level_occurrences
 						.get(&res)
 						.copied();
@@ -1255,7 +1256,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 					if let Some(class_ref) = static_class {
 						let class_pattern = class_pattern_for(self.parent.db, class_ref)
 							.expect("class item for class type");
-						let class_objects = self.parent.class_map[&class_pattern].class_objects;
+						let class_objects =
+							self.parent.objects.class_map[&class_pattern].class_objects;
 						let class_objects_expr = alloc_expression(class_objects, self, origin);
 						if record.ty().opt(self.parent.db) == Some(OptType::Opt) {
 							// Optional-occurrence receiver: indexing
@@ -2248,7 +2250,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		let db = self.parent.db;
 		if let TyData::Class(_, _, class_ref) = ty.lookup(db)
 			&& let Some(class_pattern) = class_pattern_for(db, *class_ref)
-			&& self.parent.class_map.contains_key(&class_pattern)
+			&& self.parent.objects.class_map.contains_key(&class_pattern)
 		{
 			let substituted = self.parent.substitute_class_with_potential_enum(ty);
 			let origin = EntityRef::new(db, self.item, shackle_hir::ids::EntityId::from(t));
@@ -2296,11 +2298,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						// an unbounded domain (`var A_potential: a`), mirroring
 						// `collect_element_domain` for nested class positions.
 						PatternTy::ClassDecl { .. }
-							if self
-								.parent
-								.object_lowering
-								.var_reached_classes
-								.contains(&res) =>
+							if self.parent.objects.plan.var_reached_classes.contains(&res) =>
 						{
 							let substituted = self.parent.substitute_class_with_potential_enum(ty);
 							return Domain::unbounded(self.parent.db, origin, substituted);
@@ -2414,7 +2412,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						let item_ty_idx = decl.declared_type;
 						let class_pattern_ref = self.types.name_resolution(*domain).unwrap();
 
-						let class_enum = self.parent.class_map[&class_pattern_ref].class_enum;
+						let class_enum =
+							self.parent.objects.class_map[&class_pattern_ref].class_enum;
 						let idx = self.parent.model[class_enum]
 							.definition()
 							.map(|constructors| constructors.len())

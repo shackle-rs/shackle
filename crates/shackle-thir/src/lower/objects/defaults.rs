@@ -110,7 +110,8 @@ impl<'db> ItemCollector<'db> {
 				},
 			))
 		} else if self
-			.object_lowering
+			.objects
+			.plan
 			.var_actual_set_classes
 			.contains(&intro.parent_class)
 		{
@@ -125,7 +126,9 @@ impl<'db> ItemCollector<'db> {
 				self.db,
 				&self.model,
 				item,
-				ResolvedIdentifier::Declaration(self.class_map[&intro.parent_class].class_set),
+				ResolvedIdentifier::Declaration(
+					self.objects.class_map[&intro.parent_class].class_set,
+				),
 			);
 			Some(Expression::new(
 				self.db,
@@ -349,7 +352,7 @@ impl<'db> ItemCollector<'db> {
 		&mut self,
 		class_pattern: PatternRef<'db>,
 	) {
-		let Some(class_info) = self.class_map.get(&class_pattern).copied() else {
+		let Some(class_info) = self.objects.class_map.get(&class_pattern).copied() else {
 			return;
 		};
 		let class_enum = class_info.class_enum;
@@ -403,6 +406,7 @@ impl<'db> ItemCollector<'db> {
 		// set and silently removes solutions. Where some contribution still
 		// fresh-mints a defined field, the pin stays load-bearing and is kept.
 		let skip_defined_fields = self
+			.objects
 			.class_contributions_all_determined
 			.get(&class_pattern)
 			.copied()

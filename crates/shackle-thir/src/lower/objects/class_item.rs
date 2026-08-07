@@ -56,6 +56,7 @@ impl<'db> ItemCollector<'db> {
 	/// type yet) makes the storage record independent of predeclare order.
 	pub(in crate::lower) fn repair_predeclared_class_objects_domains(&mut self) {
 		let entries = self
+			.objects
 			.class_map
 			.iter()
 			.map(|(class_pattern, info)| (*class_pattern, info.class_objects))
@@ -102,7 +103,7 @@ impl<'db> ItemCollector<'db> {
 					if let Some(value) = d.definition
 						&& let Some(attribute) = c.data()[d.pattern].identifier()
 					{
-						self.pending_class_definition_foralls.push((
+						self.objects.pending_class_definition_foralls.push((
 							class_pattern,
 							item,
 							attribute,
@@ -204,7 +205,7 @@ impl<'db> ItemCollector<'db> {
 		};
 		let c = class_ref.class(self.db);
 		let class_pattern = PatternRef::new(self.db, item, c.pattern);
-		let class_info = &self.class_map[&class_pattern];
+		let class_info = &self.objects.class_map[&class_pattern];
 		let class_enum_ref = self.model[class_info.class_enum].enum_type();
 		let class_objects_idx = class_info.class_objects;
 		let class_set_idx = class_info.class_set;
@@ -609,7 +610,7 @@ impl<'db> ItemCollector<'db> {
 	) {
 		let item: Item<'db> = it.into();
 		let c = it.class(self.db);
-		let class_info = &self.class_map[&class_pattern];
+		let class_info = &self.objects.class_map[&class_pattern];
 		let class_enum_ref = self.model[class_info.class_enum].enum_type();
 		let class_objects_idx = class_info.class_objects;
 		let class_set_idx = class_info.class_set;
@@ -632,7 +633,8 @@ impl<'db> ItemCollector<'db> {
 			if c.data()[d.declared_type].get_new_class(c.data()).is_some() {
 				if *inst != VarType::Var
 					&& !self
-						.object_lowering
+						.objects
+						.plan
 						.var_reached_classes
 						.contains(&class_pattern)
 				{
@@ -741,7 +743,7 @@ impl<'db> ItemCollector<'db> {
 	) {
 		let item: Item<'db> = it.into();
 		let c = it.class(self.db);
-		let class_info = &self.class_map[&class_pattern];
+		let class_info = &self.objects.class_map[&class_pattern];
 		let class_enum_ref = self.model[class_info.class_enum].enum_type();
 		let class_objects_idx = class_info.class_objects;
 		let class_set_idx = class_info.class_set;

@@ -24,7 +24,7 @@ impl<'db> ItemCollector<'db> {
 		let item: Item<'db> = it.into();
 		let c = it.class(self.db);
 		let class_pattern = PatternRef::new(self.db, item, c.pattern);
-		if self.class_map.contains_key(&class_pattern) {
+		if self.objects.class_map.contains_key(&class_pattern) {
 			return;
 		}
 		let class_name = class_pattern.identifier(self.db).unwrap();
@@ -51,7 +51,8 @@ impl<'db> ItemCollector<'db> {
 		// is needed.
 		let par_class_set_ty = Ty::par_set(self.db, Ty::par_enum(self.db, class_enum_ref)).unwrap();
 		let class_set_ty = if self
-			.object_lowering
+			.objects
+			.plan
 			.var_actual_set_classes
 			.contains(&class_pattern)
 		{
@@ -72,7 +73,7 @@ impl<'db> ItemCollector<'db> {
 			LoweredIdentifier::ResolvedIdentifier(class_set_idx.into()),
 		);
 
-		let _ = self.class_map.insert(
+		let _ = self.objects.class_map.insert(
 			class_pattern,
 			ClassMapInfo {
 				class_enum: class_enum_idx,
@@ -83,7 +84,7 @@ impl<'db> ItemCollector<'db> {
 	}
 
 	pub(in crate::lower) fn ensure_class_predeclared(&mut self, class_pattern: PatternRef<'db>) {
-		if self.class_map.contains_key(&class_pattern) {
+		if self.objects.class_map.contains_key(&class_pattern) {
 			return;
 		}
 		let Item::Class(c) = class_pattern.item(self.db) else {
@@ -93,14 +94,15 @@ impl<'db> ItemCollector<'db> {
 	}
 
 	pub(in crate::lower) fn top_level_occurrence(&self, pattern: PatternRef<'db>) -> OccurrenceId {
-		self.object_lowering.top_level_occurrences[&pattern]
+		self.objects.plan.top_level_occurrences[&pattern]
 	}
 
 	pub(in crate::lower) fn maybe_top_level_occurrence(
 		&self,
 		pattern: PatternRef<'db>,
 	) -> Option<OccurrenceId> {
-		self.object_lowering
+		self.objects
+			.plan
 			.top_level_occurrences
 			.get(&pattern)
 			.copied()
@@ -111,7 +113,7 @@ impl<'db> ItemCollector<'db> {
 		root_pattern: PatternRef<'db>,
 		path: &[Identifier<'db>],
 	) -> OccurrenceId {
-		self.object_lowering.nested_occurrences[&(root_pattern, path.to_vec())]
+		self.objects.plan.nested_occurrences[&(root_pattern, path.to_vec())]
 	}
 
 	pub(in crate::lower) fn maybe_nested_occurrence(
@@ -119,7 +121,8 @@ impl<'db> ItemCollector<'db> {
 		root_pattern: PatternRef<'db>,
 		path: &[Identifier<'db>],
 	) -> Option<OccurrenceId> {
-		self.object_lowering
+		self.objects
+			.plan
 			.nested_occurrences
 			.get(&(root_pattern, path.to_vec()))
 			.copied()
@@ -130,15 +133,15 @@ impl<'db> ItemCollector<'db> {
 		occurrence: OccurrenceId,
 		parameter_decl: DeclarationId<'db>,
 	) {
-		let target_classes = self.object_lowering.contributions_by_occurrence[&occurrence]
+		let target_classes = self.objects.plan.contributions_by_occurrence[&occurrence]
 			.iter()
 			.map(|contribution| contribution.target_class)
 			.collect::<Vec<_>>();
 		for target_class in target_classes {
 			self.ensure_class_predeclared(target_class);
 		}
-		for contribution in &self.object_lowering.contributions_by_occurrence[&occurrence] {
-			let class_enum = self.class_map[&contribution.target_class].class_enum;
+		for contribution in &self.objects.plan.contributions_by_occurrence[&occurrence] {
+			let class_enum = self.objects.class_map[&contribution.target_class].class_enum;
 			let next_index = self.model[class_enum]
 				.definition()
 				.map(|constructors| constructors.len())
@@ -166,10 +169,10 @@ impl<'db> ItemCollector<'db> {
 		&self,
 		occurrence: OccurrenceId,
 	) -> bool {
-		self.object_lowering.contributions_by_occurrence[&occurrence]
+		self.objects.plan.contributions_by_occurrence[&occurrence]
 			.iter()
 			.all(|contribution| {
-				let class_enum = self.class_map[&contribution.target_class].class_enum;
+				let class_enum = self.objects.class_map[&contribution.target_class].class_enum;
 				self.model[class_enum]
 					.definition()
 					.map(|constructors| constructors.len() > contribution.constructor_index)
@@ -192,7 +195,7 @@ impl<'db> ItemCollector<'db> {
 		occurrence: OccurrenceId,
 		target_class: PatternRef<'db>,
 	) -> &OccurrenceContribution<'db> {
-		self.object_lowering.contributions_by_occurrence[&occurrence]
+		self.objects.plan.contributions_by_occurrence[&occurrence]
 			.iter()
 			.find(|contribution| contribution.target_class == target_class)
 			.expect("missing occurrence contribution for target class")
@@ -202,6 +205,6 @@ impl<'db> ItemCollector<'db> {
 		&self,
 		occurrence: OccurrenceId,
 	) -> LocalDomainSource {
-		self.object_lowering.local_domain_sources[&occurrence]
+		self.objects.plan.local_domain_sources[&occurrence]
 	}
 }

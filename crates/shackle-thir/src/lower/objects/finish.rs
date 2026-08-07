@@ -42,16 +42,17 @@ impl<'db> ItemCollector<'db> {
 		// actual set. For var-existence shapes it would over-realise (phantom
 		// members), which is what the assert below guards: a var-actual class
 		// must never take the fallback.
-		let introductions_map = std::mem::take(&mut self.class_set_field_introductions);
+		let introductions_map = std::mem::take(&mut self.objects.class_set_field_introductions);
 		let mut field_only_classes: Vec<PatternRef<'db>> = self
-			.object_lowering
+			.objects
+			.plan
 			.field_only_introduced_classes
 			.iter()
 			.copied()
 			.collect();
-		self.object_lowering.in_class_order(&mut field_only_classes);
+		self.objects.plan.in_class_order(&mut field_only_classes);
 		for child_class in field_only_classes {
-			let Some(class_info) = self.class_map.get(&child_class) else {
+			let Some(class_info) = self.objects.class_map.get(&child_class) else {
 				continue;
 			};
 			let class_set = class_info.class_set;
@@ -66,7 +67,8 @@ impl<'db> ItemCollector<'db> {
 				.unwrap_or_else(|| {
 					debug_assert!(
 						!self
-							.object_lowering
+							.objects
+							.plan
 							.var_actual_set_classes
 							.contains(&child_class),
 						"field-only class {:?} with a var actual set fell back to \
@@ -117,7 +119,7 @@ impl<'db> ItemCollector<'db> {
 		// existence is a decision (`var set(...) of new` / `var opt new`), so
 		// no widening happens here (see the field-only loop above).
 		let mut top_level_contributions =
-			std::mem::take(&mut self.class_set_top_level_contributions);
+			std::mem::take(&mut self.objects.class_set_top_level_contributions);
 		// An opt-reached class whose only definite introductions are NESTED
 		// fields (no registered top-level contribution) is in neither this
 		// loop nor the field-only loop (a `var opt new` root makes it
@@ -132,19 +134,18 @@ impl<'db> ItemCollector<'db> {
 			clippy::iter_over_hash_type,
 			reason = "seeds map entries only — order-independent"
 		)]
-		for &opt_class in self.opt_free_subset_classes.iter() {
+		for &opt_class in self.objects.opt_free_subset_classes.iter() {
 			let _ = top_level_contributions.entry(opt_class).or_default();
 		}
 		let analysis = analyse_new_objects(self.db);
 		let mut contribution_classes: Vec<PatternRef<'db>> =
 			top_level_contributions.keys().copied().collect();
-		self.object_lowering
-			.in_class_order(&mut contribution_classes);
+		self.objects.plan.in_class_order(&mut contribution_classes);
 		for class_pattern in contribution_classes {
 			let mut contributions = top_level_contributions
 				.remove(&class_pattern)
 				.expect("key came from this map");
-			let Some(class_info) = self.class_map.get(&class_pattern).copied() else {
+			let Some(class_info) = self.objects.class_map.get(&class_pattern).copied() else {
 				continue;
 			};
 			let class_set = class_info.class_set;
@@ -158,8 +159,7 @@ impl<'db> ItemCollector<'db> {
 			// constructor order.
 			let mut unregistered: Vec<(usize, usize, PatternRef<'db>, usize, OccurrenceId)> =
 				Vec::new();
-			for occurrence_contributions in self.object_lowering.contributions_in_occurrence_order()
-			{
+			for occurrence_contributions in self.objects.plan.contributions_in_occurrence_order() {
 				let Some(direct) = occurrence_contributions
 					.iter()
 					.find(|contribution| contribution.projection_depth == 0)
@@ -182,6 +182,7 @@ impl<'db> ItemCollector<'db> {
 					// biconditional. Skip it (otherwise it would be counted
 					// underivable and drop members, or force the opt member in).
 					if self
+						.objects
 						.opt_contribution_slots
 						.contains(&(class_pattern, contribution.constructor_index))
 					{
@@ -246,7 +247,10 @@ impl<'db> ItemCollector<'db> {
 			// co-roots) needs no lower bound — its set stays free with the
 			// potential universe as its upper bound. Skip to avoid an empty
 			// `array_union`.
-			if self.opt_free_subset_classes.contains(&class_pattern)
+			if self
+				.objects
+				.opt_free_subset_classes
+				.contains(&class_pattern)
 				&& nested_pieces.is_empty()
 				&& contributions.is_empty()
 			{
@@ -306,7 +310,11 @@ impl<'db> ItemCollector<'db> {
 				class_pattern
 			);
 
-			if self.opt_free_subset_classes.contains(&class_pattern) {
+			if self
+				.objects
+				.opt_free_subset_classes
+				.contains(&class_pattern)
+			{
 				// A `var opt new` root reaches this class, so its actual set
 				// stays FREE (bounded above by its declaration domain
 				// `<C>_potential`). The definite contributions collected above
@@ -356,12 +364,12 @@ impl<'db> ItemCollector<'db> {
 		}
 
 		let mut class_object_contributions: Vec<_> =
-			self.class_object_contributions.drain().collect();
+			self.objects.class_object_contributions.drain().collect();
 		class_object_contributions
-			.sort_by_key(|(class_pattern, _)| self.object_lowering.class_rank(*class_pattern));
+			.sort_by_key(|(class_pattern, _)| self.objects.plan.class_rank(*class_pattern));
 		for (class_pattern, mut contributions) in class_object_contributions {
 			contributions.sort_by_key(|(contribution_index, _)| *contribution_index);
-			let class_objects = self.class_map[&class_pattern].class_objects;
+			let class_objects = self.objects.class_map[&class_pattern].class_objects;
 			let mut contributions = contributions.into_iter();
 			let Some((_, first_decl)) = contributions.next() else {
 				continue;
@@ -430,9 +438,10 @@ impl<'db> ItemCollector<'db> {
 		// forall. Classes with no registered contribution at all keep the
 		// forall too (it is vacuous over an empty class set).
 		let deferred_definition_foralls =
-			std::mem::take(&mut self.pending_class_definition_foralls);
+			std::mem::take(&mut self.objects.pending_class_definition_foralls);
 		for (class_pattern, class_item, attribute, value) in deferred_definition_foralls {
 			if self
+				.objects
 				.class_contributions_all_determined
 				.get(&class_pattern)
 				.copied()
@@ -451,12 +460,13 @@ impl<'db> ItemCollector<'db> {
 		// Runs last so it sees the now-defined class set and class objects
 		// array.
 		let mut var_reached: Vec<PatternRef<'db>> = self
-			.object_lowering
+			.objects
+			.plan
 			.var_reached_classes
 			.iter()
 			.copied()
 			.collect();
-		self.object_lowering.in_class_order(&mut var_reached);
+		self.objects.plan.in_class_order(&mut var_reached);
 		for class_pattern in var_reached {
 			self.emit_unused_potential_default_constraints(class_pattern);
 		}

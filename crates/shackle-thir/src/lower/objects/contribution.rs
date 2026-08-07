@@ -19,16 +19,18 @@ impl<'db> ItemCollector<'db> {
 		declaration: DeclarationId<'db>,
 		defined_fields_determined: bool,
 	) {
-		self.class_object_contributions
+		self.objects
+			.class_object_contributions
 			.entry(target_class)
 			.or_default()
 			.push((contribution_index, declaration));
 		let _ = self
+			.objects
 			.class_contributions_all_determined
 			.entry(target_class)
 			.and_modify(|all| *all &= defined_fields_determined)
 			.or_insert(defined_fields_determined);
-		let _ = self.contribution_determined_by_index.insert(
+		let _ = self.objects.contribution_determined_by_index.insert(
 			(target_class, contribution_index),
 			defined_fields_determined,
 		);
@@ -42,7 +44,8 @@ impl<'db> ItemCollector<'db> {
 		target_class: PatternRef<'db>,
 		contribution_index: usize,
 	) -> Option<bool> {
-		self.contribution_determined_by_index
+		self.objects
+			.contribution_determined_by_index
 			.get(&(target_class, contribution_index))
 			.copied()
 	}
@@ -52,7 +55,8 @@ impl<'db> ItemCollector<'db> {
 		target_class: PatternRef<'db>,
 		contribution_index: usize,
 	) -> Option<DeclarationId<'db>> {
-		self.class_object_contributions
+		self.objects
+			.class_object_contributions
 			.get(&target_class)
 			.and_then(|contributions| {
 				contributions.iter().find_map(|(index, declaration)| {
@@ -78,8 +82,10 @@ impl<'db> ItemCollector<'db> {
 		index_expr: Expression<'db>,
 	) -> Expression<'db> {
 		if index_ty == Ty::par_int(self.db) {
-			let enum_member =
-				EnumMemberId::new(self.class_map[&class].class_enum, contribution_index as u32);
+			let enum_member = EnumMemberId::new(
+				self.objects.class_map[&class].class_enum,
+				contribution_index as u32,
+			);
 			Expression::new(
 				self.db,
 				&self.model,
@@ -125,6 +131,7 @@ impl<'db> ItemCollector<'db> {
 			return global_ordinal;
 		}
 		let Some(previous_end) = self
+			.objects
 			.contribution_end_map
 			.get(&(class, contribution_index - 1))
 			.copied()
@@ -164,7 +171,8 @@ impl<'db> ItemCollector<'db> {
 		contribution_index: usize,
 		expression: Expression<'db>,
 	) {
-		self.class_set_top_level_contributions
+		self.objects
+			.class_set_top_level_contributions
 			.entry(target_class)
 			.or_default()
 			.push((contribution_index, expression));

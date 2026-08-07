@@ -41,6 +41,112 @@ mod new_declaration;
 mod occurrence;
 mod storage;
 
+/// Everything the object lowering accumulates while collecting items,
+/// alongside the read-only occurrence plan it is driven by.
+///
+/// Split out of `ItemCollector` so the objects feature owns its own state:
+/// `plan` is derived once from `analyse_new_objects` and never mutated, while
+/// the remaining fields accumulate as class items and `new` declarations are
+/// collected, and are consumed by `finish`.
+pub(in crate::lower) struct ObjectState<'db> {
+	/// Derived once from `analyse_new_objects`; read-only afterwards.
+	pub(in crate::lower) class_map: FxHashMap<PatternRef<'db>, ClassMapInfo<'db>>,
+	pub(in crate::lower) plan: ObjectLoweringPlan<'db>,
+	pub(in crate::lower) contribution_end_map:
+		FxHashMap<(PatternRef<'db>, usize), DeclarationId<'db>>,
+	class_object_contributions: FxHashMap<PatternRef<'db>, Vec<(usize, DeclarationId<'db>)>>,
+	/// Per-occurrence slice array declarations (`<parent>_<field>_potential`),
+	/// keyed by the child class and contribution index. Consumed by the
+	/// per-parent subset constraint.
+	slice_array_decls: FxHashMap<(PatternRef<'db>, usize), DeclarationId<'db>>,
+	/// Records, per field-only-introduced child class, each parent-field
+	/// introduction contributing children — keyed one hop up (the *immediate*
+	/// parent class/contribution and the direct attribute name). Materialized
+	/// in `finish` as the class's actual-set definition:
+	/// `array_union(...)` over per-contribution, ITE-guarded expressions
+	/// (see `field_only_class_set_array_union`).
+	class_set_field_introductions: FxHashMap<PatternRef<'db>, Vec<FieldIntroduction<'db>>>,
+	/// Per top-level-introduced class, the identity-set expressions
+	/// contributed by each top-level introduction. Each entry is the
+	/// constructor's `contribution_index` paired with a contribution
+	/// expression:
+	///   - `set of new`, `var set(...) of new`: the user-named decl
+	///     reference (typed as `(var) set of <C>_occ_i(...)`).
+	///   - `array [d] of new`: the full enum reference (`<C>_potential`)
+	///     because every potential is realized by construction; the
+	///     `as` decl itself is array-typed and its element type already
+	///     references `<C>`, which would be circular if used as the
+	///     class-set definition.
+	///
+	/// Consumed by `finish()` as
+	/// `<C> = array_union([expr_1, expr_2, ...])` (single contribution
+	/// is assigned directly without the wrapping call).
+	class_set_top_level_contributions: FxHashMap<PatternRef<'db>, Vec<(usize, Expression<'db>)>>,
+	/// Per class, whether *every* registered `_objects` contribution leaves the
+	/// class's defined fields (computed attributes and domain-dependent fields)
+	/// functionally determined — alias-defined by the reconstruction chain, or
+	/// read through from an already-determined contribution. Only then may the
+	/// symmetry-break default wave skip pinning those fields: a pin on a
+	/// determined field is at best redundant and at worst inconsistent (a
+	/// non-monotone RHS evaluated at the frees' pinned defaults need not equal
+	/// the field's own flatten-time `lb`, which forces unrealised potentials
+	/// into the class set and silently removes solutions). A contribution that
+	/// fresh-mints a defined field (par-reached identity-mode nested storage,
+	/// singular-root inheritance projections from raw inputs) still relies on
+	/// the pin for symmetry breaking, so any such registration keeps the pins
+	/// for the whole class.
+	class_contributions_all_determined: FxHashMap<PatternRef<'db>, bool>,
+	/// Per (class, contribution index): the `defined_fields_determined` flag
+	/// each contribution registered with. Projections that read every field
+	/// from an already-registered contribution decl inherit exactly that
+	/// contribution's determinedness rather than guessing per class.
+	contribution_determined_by_index: FxHashMap<(PatternRef<'db>, usize), bool>,
+	/// Computed attributes' class-body foralls, deferred to `finish()` so
+	/// they can be dropped for classes whose contributions all alias-define
+	/// their defined fields (the gated forall-drop). One entry per computed
+	/// attribute: (class pattern, class item, attribute, RHS).
+	pending_class_definition_foralls: Vec<(
+		PatternRef<'db>,
+		Item<'db>,
+		Identifier<'db>,
+		shackle_hir::ExpressionId<'db>,
+	)>,
+	/// Classes whose actual set must be emitted FREE with a subset lower
+	/// bound rather than an `=` union definition, because a `var opt new`
+	/// root reaches the class. Populated by the opt-root branch of
+	/// `collect_declaration` with the opt root's direct class and every
+	/// superclass. In `finish()` the definite contributions of such a class
+	/// are unioned into a `<union> subset <C>` constraint (lower bound); the
+	/// upper bound is the declaration domain `<C>_potential`, and the opt
+	/// occurrence's own membership stays the free decision.
+	opt_free_subset_classes: FxHashSet<PatternRef<'db>>,
+	/// `(target_class, constructor_index)` of every contribution belonging to
+	/// a `var opt new` root. Skipped by `finish()`'s unregistered-contribution
+	/// scan so the opt occurrence is never materialised as a definitional (or
+	/// lower-bound) union piece — its membership IS the decision, and its
+	/// superclass image is pinned by an occurs biconditional instead.
+	opt_contribution_slots: FxHashSet<(PatternRef<'db>, usize)>,
+}
+
+impl<'db> ObjectState<'db> {
+	pub(in crate::lower) fn new(db: &'db dyn Db) -> Self {
+		Self {
+			plan: ObjectLoweringPlan::new(db),
+			class_map: FxHashMap::default(),
+			contribution_end_map: FxHashMap::default(),
+			class_object_contributions: FxHashMap::default(),
+			slice_array_decls: FxHashMap::default(),
+			class_set_field_introductions: FxHashMap::default(),
+			class_set_top_level_contributions: FxHashMap::default(),
+			class_contributions_all_determined: FxHashMap::default(),
+			contribution_determined_by_index: FxHashMap::default(),
+			pending_class_definition_foralls: Vec::new(),
+			opt_free_subset_classes: FxHashSet::default(),
+			opt_contribution_slots: FxHashSet::default(),
+		}
+	}
+}
+
 /// Realisation-guard request for the root-reconstruction engine: identifies
 /// the root contribution's slots (`<C>_occ_<constructor_index>(p)`) so
 /// defined-field aliases can be guarded on `.. in <C>`, plus the root's
