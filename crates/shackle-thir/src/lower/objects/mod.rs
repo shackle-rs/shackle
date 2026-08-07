@@ -35,6 +35,8 @@ use crate::{
 	*,
 };
 
+mod finish;
+
 /// Realisation-guard request for the root-reconstruction engine: identifies
 /// the root contribution's slots (`<C>_occ_<constructor_index>(p)`) so
 /// defined-field aliases can be guarded on `.. in <C>`, plus the root's
@@ -184,7 +186,7 @@ pub(in crate::lower) struct StorageFieldDecl<'db> {
 pub(in crate::lower) struct ClassMapInfo<'db> {
 	pub(in crate::lower) class_enum: EnumerationId<'db>,
 	pub(in crate::lower) class_objects: DeclarationId<'db>,
-	pub(in crate::lower) class_set: DeclarationId<'db>,
+	class_set: DeclarationId<'db>,
 }
 
 pub(in crate::lower) struct ObjectLoweringPlan<'db> {
@@ -199,13 +201,13 @@ pub(in crate::lower) struct ObjectLoweringPlan<'db> {
 	/// or a var-existence nested set field). A strict subset of
 	/// `var_reached_classes`; drives the var-ness of the class-set declaration
 	/// at predeclare time so no after-the-fact widening is needed.
-	pub(in crate::lower) var_actual_set_classes: FxHashSet<PatternRef<'db>>,
+	var_actual_set_classes: FxHashSet<PatternRef<'db>>,
 	/// Classes that are introduced only via parent-field occurrences
 	/// (no top-level declaration). For these classes the actual-set
 	/// is derived as `array_union(...)` over parent fields, and the
 	/// class-set declaration is emitted as `var set of <class>_potential`
 	/// rather than the default par-set.
-	pub(in crate::lower) field_only_introduced_classes: FxHashSet<PatternRef<'db>>,
+	field_only_introduced_classes: FxHashSet<PatternRef<'db>>,
 	/// Classes eligible for domain relocation of their OWN defined fields
 	/// (the predicate is keyed on the field's *owner* class so every storage
 	/// site — the owner's and every subclass's `_objects` element domain —
@@ -468,7 +470,7 @@ pub(in crate::lower) struct FieldIntroduction<'db> {
 	/// introduction (the `k` in `<Child>_occ_k`). Matches the recorded
 	/// introduction against the child's contribution list in
 	/// `field_only_class_set_array_union`'s completeness check.
-	pub(in crate::lower) child_contribution_index: usize,
+	child_contribution_index: usize,
 	kind: FieldIntroductionKind,
 }
 
