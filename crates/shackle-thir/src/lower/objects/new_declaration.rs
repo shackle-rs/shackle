@@ -2218,44 +2218,4 @@ impl<'db> ItemCollector<'db> {
 
 		domain_decl
 	}
-
-	/// The bodyless-builtin total-ops whitelist: arithmetic that cannot
-	/// overflow-trap (`+ - *`), `card`, `sum`/`exists`/`forall` (total on
-	/// empty), set construction and set ops, comparisons, boolean ops.
-	/// `div`/`mod`/`'[]'`/`min`/`max`/`deopt`/`assert`/`pow` are deliberately
-	/// absent.
-	pub(in crate::lower) fn total_builtin_call(&self, ident: Identifier<'db>) -> bool {
-		let ids = self.ids;
-		[
-			ids.builtins.plus,
-			ids.functions.minus,
-			ids.builtins.times,
-			ids.functions.card,
-			ids.functions.sum,
-			ids.functions.forall,
-			ids.functions.exists,
-			ids.functions.dot_dot,
-			ids.functions.in_,
-			ids.builtins.subset,
-			ids.builtins.superset,
-			ids.builtins.intersect,
-			ids.builtins.union,
-			ids.builtins.diff,
-			ids.builtins.symdiff,
-			ids.functions.eq,
-			ids.builtins.ne,
-			ids.builtins.lt,
-			ids.builtins.le,
-			ids.functions.gt,
-			ids.functions.ge,
-			ids.functions.and,
-			ids.functions.or,
-			ids.functions.implies,
-			ids.functions.rev_imp,
-			ids.functions.iff,
-			ids.functions.not,
-			ids.builtins.xor,
-		]
-		.contains(&ident)
-	}
 }
