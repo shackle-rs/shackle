@@ -711,6 +711,59 @@ fn object_thir_lowering_superclass_var_field_access_snapshot() {
 	check_snapshot("superclass_var_field_access");
 }
 
+// The fixtures below came from the objects branch's `object_semantic_tests`
+// layer, which has not been ported: those tests solved the model with MiniZinc
+// and asserted the solution. A lowering snapshot cannot check a solution, but
+// it does pin the emitted structure — which is exactly where each of these
+// defects showed up — so they are wired up here until the equivalence layer
+// lands.
+
+// Array-typed attribute on a VAR-REACHED class: storage keeps the
+// array-of-var-elements field and the read-back goes through the var identity
+// (`erase_enum(a)` as a var index into `A_objects`).
+#[test]
+fn object_thir_lowering_array_field_var_index_var_reached_snapshot() {
+	check_snapshot("array_field_var_index_var_reached");
+}
+
+// Contradictory twin of the above: the read-back constraint must still be
+// emitted rather than flattening away. The snapshot pins its presence; the
+// unsatisfiability itself needs the equivalence layer.
+#[test]
+fn object_thir_lowering_array_field_var_index_var_reached_unsat_snapshot() {
+	check_snapshot("array_field_var_index_var_reached_unsat");
+}
+
+// Field-only actual-set derivation, family (a): a singular `opt new` field
+// introduction must not fall back to `H = H_potential` and claim a phantom
+// member.
+#[test]
+fn object_thir_lowering_field_only_fallback_phantom_opt_new_snapshot() {
+	check_snapshot("field_only_fallback_phantom_opt_new");
+}
+
+// Family (b): a field-only SUPERCLASS of a var-existence subclass derives its
+// actual set as the image of the subclass, not the whole potential universe.
+#[test]
+fn object_thir_lowering_field_only_fallback_phantom_superclass_snapshot() {
+	check_snapshot("field_only_fallback_phantom_superclass");
+}
+
+// Family (c): a multi-hop nested introduction records a joined-path field, so
+// the direct-field check must not send it to the universe fallback.
+#[test]
+fn object_thir_lowering_field_only_fallback_phantom_multihop_snapshot() {
+	check_snapshot("field_only_fallback_phantom_multihop");
+}
+
+// A `var set of new` root whose class carries a nested exact-cardinality
+// `set(2..2) of new B` field: the cardinality invariant must be emitted as a
+// realised-set class invariant (it was previously missing on this root shape).
+#[test]
+fn object_thir_lowering_var_set_new_nested_card_snapshot() {
+	check_snapshot("var_set_new_nested_card");
+}
+
 /// Parse, type-check and THIR-lower `source` through the full transform
 /// pipeline. Returns `Ok(())` on a clean run, or `Err(<diagnostic text>)`
 /// for HIR diagnostics, a THIR transform error, or a panic caught via

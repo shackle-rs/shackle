@@ -1,0 +1,17 @@
+enum H_potential = H_occ_1('..'(1, '*'(card(W_potential), 1)));
+array [int] of record(var '..'(0, 1): x): H_objects = array1d(H_h_objects);
+var set of H_potential: H = array_union([if occurs(('[]'(W_w_objects, _DECL_1)).h) then {H_occ_1(_DECL_1)} else {} endif | _DECL_1 in index_set(W_w_objects)]);
+enum W_potential = W_occ_0({1});
+array [int] of record(var opt H_potential: h): W_objects = W_w_objects;
+set of W_potential: W = W_occ_0({1});
+constraint forall(['not'(occurs(('[]'(W_objects, enum2int(w))).h)) | w in W]);
+array [{1}] of record(var opt H_potential: h): W_w_storage;
+array [H_occ_1('..'(1, '*'(card(W_potential), 1)))] of record(var '..'(0, 1): x): H_h_objects;
+int: W_w_h_start = 1;
+int: W_w_h_end = '+'(W_w_h_start, '*'(card(W_potential), 1));
+array [int] of record(var opt H_potential: h): W_w_objects = [(h: h) | p in index_set(W_w_storage), input = '[]'(W_w_storage, p), h = (input).h];
+W_potential: w = W_occ_0(1);
+output ["nH=", show(card(H))];
+constraint forall(['->'(occurs(('[]'(W_w_objects, _DECL_2)).h), '='(('[]'(W_w_objects, _DECL_2)).h, H_occ_1(_DECL_2))) | _DECL_2 in index_set(W_w_objects)]);
+constraint forall(['\/'('in'(x, H), '='(('[]'(H_objects, enum2int(x))).x, mzn_safe_default(('[]'(H_objects, enum2int(x))).x))) | x in H_potential]);
+solve satisfy;
