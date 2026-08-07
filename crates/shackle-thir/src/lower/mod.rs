@@ -75,14 +75,14 @@ enum LoweredIdentifier<'db> {
 /// the root contribution's slots (`<C>_occ_<constructor_index>(p)`) so
 /// defined-field aliases can be guarded on `.. in <C>`, plus the root's
 /// lowered name prefix for the per-field unrealised-default witness decls.
-struct RootRealisationGuard {
+pub(in crate::lower) struct RootRealisationGuard {
 	constructor_index: usize,
 	name_prefix: String,
 }
 
 /// How the reconstruction engine tests a slot's realisation
 /// (`<slot> in <C>`), for the per-slot `realised` alias.
-enum EngineRealisationTest<'db> {
+pub(in crate::lower) enum EngineRealisationTest<'db> {
 	/// The iteration index is an ordinal into the contribution's constructor:
 	/// the slot is `<C>_occ_<constructor_index>(<ordinal>)`. Root collections
 	/// iterate this way (`p in index_set(inputs)`).
@@ -99,7 +99,7 @@ enum EngineRealisationTest<'db> {
 /// Realisation-guard request for the generalised reconstruction engine:
 /// the slot test plus the contribution's lowered name prefix for the
 /// per-field unrealised-default witness decls.
-struct EngineRealisationGuard<'db> {
+pub(in crate::lower) struct EngineRealisationGuard<'db> {
 	name_prefix: String,
 	test: EngineRealisationTest<'db>,
 }
@@ -107,7 +107,7 @@ struct EngineRealisationGuard<'db> {
 /// How the reconstruction engine defines class-typed fields whose input
 /// representation does not already match storage (`<Child>_potential`
 /// identities must be minted, not read).
-enum EngineIdentityRule<'db> {
+pub(in crate::lower) enum EngineIdentityRule<'db> {
 	/// Top-level root regimes (`reconstructed_root_field_expr`):
 	/// `<C>_occ_k(p)` for one-per-parent fields, prefix-sum ordinal ranges
 	/// over the root inputs for flattened `set of new` collections.
@@ -172,7 +172,7 @@ enum EngineIdentityRule<'db> {
 /// are deferred to `finish()` so the redundant forall can be DROPPED for
 /// classes whose contributions all alias-define their defined fields (the
 /// gated forall-drop).
-enum ClassBodyConstraint<'db> {
+pub(in crate::lower) enum ClassBodyConstraint<'db> {
 	Constraint {
 		expression: shackle_hir::ExpressionId<'db>,
 		annotations: Vec<shackle_hir::ExpressionId<'db>>,
@@ -200,7 +200,7 @@ enum ClassBodyConstraint<'db> {
 /// record) storage field, used by the leaf-wise unused-potential pins
 /// (`pin_leaf_paths`).
 #[derive(Copy, Clone)]
-enum PinLeafStep<'db> {
+pub(in crate::lower) enum PinLeafStep<'db> {
 	Tuple(i64),
 	Record(Identifier<'db>),
 }
@@ -208,7 +208,7 @@ enum PinLeafStep<'db> {
 /// One class storage-field declaration, as gathered by
 /// `class_storage_field_decls` for the reconstruction comprehension.
 #[derive(Copy, Clone)]
-struct StorageFieldDecl<'db> {
+pub(in crate::lower) struct StorageFieldDecl<'db> {
 	ident: Identifier<'db>,
 	pattern: PatternRef<'db>,
 	definition: Option<shackle_hir::ExpressionId<'db>>,
@@ -217,17 +217,18 @@ struct StorageFieldDecl<'db> {
 }
 
 #[derive(Copy, Clone)]
-struct ClassMapInfo<'db> {
-	class_enum: EnumerationId<'db>,
-	class_objects: DeclarationId<'db>,
+pub(in crate::lower) struct ClassMapInfo<'db> {
+	pub(in crate::lower) class_enum: EnumerationId<'db>,
+	pub(in crate::lower) class_objects: DeclarationId<'db>,
 	class_set: DeclarationId<'db>,
 }
 
-struct ObjectLoweringPlan<'db> {
-	top_level_occurrences: FxHashMap<PatternRef<'db>, OccurrenceId>,
+pub(in crate::lower) struct ObjectLoweringPlan<'db> {
+	pub(in crate::lower) top_level_occurrences: FxHashMap<PatternRef<'db>, OccurrenceId>,
 	nested_occurrences: FxHashMap<(PatternRef<'db>, Vec<Identifier<'db>>), OccurrenceId>,
 	local_domain_sources: FxHashMap<OccurrenceId, LocalDomainSource>,
-	contributions_by_occurrence: FxHashMap<OccurrenceId, Vec<OccurrenceContribution<'db>>>,
+	pub(in crate::lower) contributions_by_occurrence:
+		FxHashMap<OccurrenceId, Vec<OccurrenceContribution<'db>>>,
 	var_reached_classes: FxHashSet<PatternRef<'db>>,
 	/// Classes whose actual-set declaration is emitted as a `var set` because
 	/// their existence is a solver decision (`var set of new`, `var opt new`,
@@ -290,12 +291,12 @@ impl<'db> ObjectLoweringPlan<'db> {
 	/// Every class reached during lowering has a descriptor, so ranks are
 	/// total and unique; the fallback only keeps this a total order if that
 	/// invariant is ever broken.
-	fn class_rank(&self, class: PatternRef<'db>) -> u32 {
+	pub(in crate::lower) fn class_rank(&self, class: PatternRef<'db>) -> u32 {
 		self.class_order.get(&class).copied().unwrap_or(u32::MAX)
 	}
 
 	/// Sort classes into source order, for iteration that emits model items.
-	fn in_class_order(&self, classes: &mut [PatternRef<'db>]) {
+	pub(in crate::lower) fn in_class_order(&self, classes: &mut [PatternRef<'db>]) {
 		classes.sort_by_key(|class| self.class_rank(*class));
 	}
 
@@ -304,7 +305,7 @@ impl<'db> ObjectLoweringPlan<'db> {
 	/// `contributions_by_occurrence` is keyed by `OccurrenceId`, whose numeric
 	/// order follows `analysis.occurrences` and is therefore stable across
 	/// platforms — unlike the map's own hash order.
-	fn contributions_in_occurrence_order(
+	pub(in crate::lower) fn contributions_in_occurrence_order(
 		&self,
 	) -> impl Iterator<Item = &Vec<OccurrenceContribution<'db>>> {
 		let mut ids: Vec<OccurrenceId> = self.contributions_by_occurrence.keys().copied().collect();
@@ -313,7 +314,7 @@ impl<'db> ObjectLoweringPlan<'db> {
 			.map(move |id| &self.contributions_by_occurrence[&id])
 	}
 
-	fn new(db: &'db dyn Db) -> Self {
+	pub(in crate::lower) fn new(db: &'db dyn Db) -> Self {
 		let analysis = analyse_new_objects(db);
 		let mut top_level_occurrences = FxHashMap::default();
 		let mut nested_occurrences = FxHashMap::default();
@@ -495,7 +496,7 @@ impl<'db> ObjectLoweringPlan<'db> {
 /// field-only-introduced class's actual set. Keyed one hop up: the
 /// *immediate* parent class/contribution and the direct attribute name (a
 /// record field of the parent's storage element type), never a joined path.
-struct FieldIntroduction<'db> {
+pub(in crate::lower) struct FieldIntroduction<'db> {
 	parent_class: PatternRef<'db>,
 	parent_contribution_index: usize,
 	attribute: Identifier<'db>,
@@ -509,7 +510,7 @@ struct FieldIntroduction<'db> {
 
 /// Shape of a recorded field introduction, selecting the contribution
 /// expression `field_only_class_set_array_union` builds for it.
-enum FieldIntroductionKind {
+pub(in crate::lower) enum FieldIntroductionKind {
 	/// `set of new` / `var set(...) of new` field: the storage field value
 	/// is a set of child identities and is unioned directly (guarded by the
 	/// parent slot's realisation when the parent is var-actual).
@@ -1388,7 +1389,7 @@ impl<'db> ItemCollector<'db> {
 	}
 
 	/// Finish lowering
-	fn finish(mut self) -> Model<'db> {
+	pub(in crate::lower) fn finish(mut self) -> Model<'db> {
 		// For field-only-introduced classes, derive the actual-set from the
 		// class's contributions (`field_only_class_set_array_union`): an
 		// `array_union(...)` of per-contribution, ITE-guarded expressions —
@@ -1834,7 +1835,7 @@ impl<'db> ItemCollector<'db> {
 /// Object lowering: turns class items and `new` declarations into the
 /// potential-enum / storage-array / actual-set encoding.
 impl<'db> ItemCollector<'db> {
-	fn predeclare_class(&mut self, it: shackle_hir::ClassItem<'db>) {
+	pub(in crate::lower) fn predeclare_class(&mut self, it: shackle_hir::ClassItem<'db>) {
 		let item: Item<'db> = it.into();
 		let c = it.class(self.db);
 		let class_pattern = PatternRef::new(self.db, item, c.pattern);
@@ -1896,7 +1897,7 @@ impl<'db> ItemCollector<'db> {
 		);
 	}
 
-	fn ensure_class_predeclared(&mut self, class_pattern: PatternRef<'db>) {
+	pub(in crate::lower) fn ensure_class_predeclared(&mut self, class_pattern: PatternRef<'db>) {
 		if self.class_map.contains_key(&class_pattern) {
 			return;
 		}
@@ -1906,18 +1907,21 @@ impl<'db> ItemCollector<'db> {
 		self.predeclare_class(c);
 	}
 
-	fn top_level_occurrence(&self, pattern: PatternRef<'db>) -> OccurrenceId {
+	pub(in crate::lower) fn top_level_occurrence(&self, pattern: PatternRef<'db>) -> OccurrenceId {
 		self.object_lowering.top_level_occurrences[&pattern]
 	}
 
-	fn maybe_top_level_occurrence(&self, pattern: PatternRef<'db>) -> Option<OccurrenceId> {
+	pub(in crate::lower) fn maybe_top_level_occurrence(
+		&self,
+		pattern: PatternRef<'db>,
+	) -> Option<OccurrenceId> {
 		self.object_lowering
 			.top_level_occurrences
 			.get(&pattern)
 			.copied()
 	}
 
-	fn nested_occurrence(
+	pub(in crate::lower) fn nested_occurrence(
 		&self,
 		root_pattern: PatternRef<'db>,
 		path: &[Identifier<'db>],
@@ -1925,7 +1929,7 @@ impl<'db> ItemCollector<'db> {
 		self.object_lowering.nested_occurrences[&(root_pattern, path.to_vec())]
 	}
 
-	fn maybe_nested_occurrence(
+	pub(in crate::lower) fn maybe_nested_occurrence(
 		&self,
 		root_pattern: PatternRef<'db>,
 		path: &[Identifier<'db>],
@@ -1936,7 +1940,7 @@ impl<'db> ItemCollector<'db> {
 			.copied()
 	}
 
-	fn add_occurrence_constructors(
+	pub(in crate::lower) fn add_occurrence_constructors(
 		&mut self,
 		occurrence: OccurrenceId,
 		parameter_decl: DeclarationId<'db>,
@@ -1973,7 +1977,10 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn occurrence_constructors_available(&self, occurrence: OccurrenceId) -> bool {
+	pub(in crate::lower) fn occurrence_constructors_available(
+		&self,
+		occurrence: OccurrenceId,
+	) -> bool {
 		self.object_lowering.contributions_by_occurrence[&occurrence]
 			.iter()
 			.all(|contribution| {
@@ -1985,7 +1992,7 @@ impl<'db> ItemCollector<'db> {
 			})
 	}
 
-	fn ensure_occurrence_constructors(
+	pub(in crate::lower) fn ensure_occurrence_constructors(
 		&mut self,
 		occurrence: OccurrenceId,
 		parameter_decl: DeclarationId<'db>,
@@ -1995,7 +2002,7 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn occurrence_contribution(
+	pub(in crate::lower) fn occurrence_contribution(
 		&self,
 		occurrence: OccurrenceId,
 		target_class: PatternRef<'db>,
@@ -2006,7 +2013,10 @@ impl<'db> ItemCollector<'db> {
 			.expect("missing occurrence contribution for target class")
 	}
 
-	fn occurrence_local_domain_source(&self, occurrence: OccurrenceId) -> LocalDomainSource {
+	pub(in crate::lower) fn occurrence_local_domain_source(
+		&self,
+		occurrence: OccurrenceId,
+	) -> LocalDomainSource {
 		self.object_lowering.local_domain_sources[&occurrence]
 	}
 
@@ -2016,7 +2026,7 @@ impl<'db> ItemCollector<'db> {
 	/// lowers to `var set of B_potential` rather than `var set of B` — the
 	/// latter would create a circular type definition once `B` is itself
 	/// derived as `array_union(...)` over the very `bs` field.
-	fn substitute_class_with_potential_enum(&self, ty: Ty<'db>) -> Ty<'db> {
+	pub(in crate::lower) fn substitute_class_with_potential_enum(&self, ty: Ty<'db>) -> Ty<'db> {
 		let db = self.db;
 		match ty.lookup(db) {
 			TyData::Class(inst, opt, class_ref) => {
@@ -2086,7 +2096,7 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn class_storage_fields(
+	pub(in crate::lower) fn class_storage_fields(
 		&self,
 		class_pattern: PatternRef<'db>,
 	) -> Vec<(Identifier<'db>, Ty<'db>)> {
@@ -2128,7 +2138,7 @@ impl<'db> ItemCollector<'db> {
 	/// child class's potential universe rather than the child class's
 	/// actual-set (which would create a circular type definition since
 	/// the actual-set is derived from these very fields).
-	fn class_storage_fields_for_domain(
+	pub(in crate::lower) fn class_storage_fields_for_domain(
 		&self,
 		class_pattern: PatternRef<'db>,
 	) -> Vec<(Identifier<'db>, Ty<'db>)> {
@@ -2143,7 +2153,7 @@ impl<'db> ItemCollector<'db> {
 	// superclass items first so that inherited fields appear before own
 	// fields. Used to build per-field domains for the `_storage` record that
 	// preserve declared bounds (`var 5..10: i`, `var set of 0..3: s`, etc.).
-	fn collect_class_field_descriptors(
+	pub(in crate::lower) fn collect_class_field_descriptors(
 		&self,
 		class_pattern: PatternRef<'db>,
 		descriptors: &mut FxHashMap<
@@ -2184,7 +2194,7 @@ impl<'db> ItemCollector<'db> {
 	// that need a tighter (par-enum or singleton ordinal) index domain
 	// should still call `build_class_storage_record_domain` directly and
 	// assemble the `Domain::array` themselves.
-	fn build_class_storage_array_domain(
+	pub(in crate::lower) fn build_class_storage_array_domain(
 		&mut self,
 		class_pattern: PatternRef<'db>,
 		array_ty: Ty<'db>,
@@ -2209,7 +2219,7 @@ impl<'db> ItemCollector<'db> {
 	// introduced by the per-field symmetry-breaking `= lb(...)` constraints).
 	// Class-typed fields keep their unbounded form — bounds for those live in
 	// the substituted potential-enum element type.
-	fn build_class_storage_record_domain(
+	pub(in crate::lower) fn build_class_storage_record_domain(
 		&mut self,
 		class_pattern: PatternRef<'db>,
 		storage_elem_ty: Ty<'db>,
@@ -2308,7 +2318,7 @@ impl<'db> ItemCollector<'db> {
 	/// index sets / the reconstruction comprehension carry the per-object
 	/// shape instead. Var-reached classes never get here for these shapes —
 	/// validation rejects attribute-referencing domains on them outright.
-	fn field_domain_references_attribute(
+	pub(in crate::lower) fn field_domain_references_attribute(
 		&self,
 		class_item: Item<'db>,
 		declared_type: shackle_hir::TypeId<'db>,
@@ -2346,7 +2356,7 @@ impl<'db> ItemCollector<'db> {
 	/// must be lowered to a non-opt 0-or-1-length list before it can appear in
 	/// a `_inputs` array. Used to gate the (snapshot-affecting) normalisation
 	/// so classes with no optional child are left byte-identical.
-	fn input_ty_needs_opt_new_lowering(&self, ty: Ty<'db>) -> bool {
+	pub(in crate::lower) fn input_ty_needs_opt_new_lowering(&self, ty: Ty<'db>) -> bool {
 		let db = self.db;
 		match ty.lookup(db) {
 			TyData::Record(opt, fields) => {
@@ -2366,7 +2376,7 @@ impl<'db> ItemCollector<'db> {
 	/// optional children are normalised too. The 0/1-length list feeds the
 	/// same flattened-collection machinery a `set(0..1) of new C` field uses;
 	/// see `lower_opt_new_input_value` for the matching value transform.
-	fn lower_opt_new_input_ty(&self, ty: Ty<'db>) -> Ty<'db> {
+	pub(in crate::lower) fn lower_opt_new_input_ty(&self, ty: Ty<'db>) -> Ty<'db> {
 		let db = self.db;
 		match ty.lookup(db) {
 			TyData::Record(opt, fields) => {
@@ -2399,7 +2409,7 @@ impl<'db> ItemCollector<'db> {
 	/// forbids `opt record` values, only STATICALLY present/absent literal
 	/// inputs are handled here; a non-literal optional input is left unchanged
 	/// (rejected earlier by validation).
-	fn lower_opt_new_input_value(
+	pub(in crate::lower) fn lower_opt_new_input_value(
 		&mut self,
 		item: Item<'db>,
 		value: Expression<'db>,
@@ -2478,7 +2488,7 @@ impl<'db> ItemCollector<'db> {
 	/// member. Passing the element record type directly (as if the value were a
 	/// single record) would fall through unchanged — the value is an array, not
 	/// a record. Non-literal collections are left unchanged (rejected earlier).
-	fn lower_opt_new_input_collection_value(
+	pub(in crate::lower) fn lower_opt_new_input_collection_value(
 		&mut self,
 		item: Item<'db>,
 		value: Expression<'db>,
@@ -2508,7 +2518,7 @@ impl<'db> ItemCollector<'db> {
 	/// Class-typed fields are *kept* — under a var-new root every attribute is a
 	/// free decision and class-typed fields carry their `<X>_potential` identity
 	/// in storage (bounded by the per-parent slice constraint).
-	fn free_storage_record_ty(
+	pub(in crate::lower) fn free_storage_record_ty(
 		&self,
 		class_pattern: PatternRef<'db>,
 		storage_record_ty: Ty<'db>,
@@ -2550,7 +2560,7 @@ impl<'db> ItemCollector<'db> {
 	// the unbounded form and instead get their bound from the nested
 	// cardinality invariant / slice loop. Only a constant bound belongs in the
 	// shared element type; a per-object bound would still need the `forall`.
-	fn class_storage_field_domain(
+	pub(in crate::lower) fn class_storage_field_domain(
 		&mut self,
 		class_item: Item<'db>,
 		declared_type: shackle_hir::TypeId<'db>,
@@ -2630,7 +2640,7 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	fn register_class_object_contribution(
+	pub(in crate::lower) fn register_class_object_contribution(
 		&mut self,
 		target_class: PatternRef<'db>,
 		contribution_index: usize,
@@ -2655,7 +2665,7 @@ impl<'db> ItemCollector<'db> {
 	/// The `defined_fields_determined` flag a specific contribution registered
 	/// with (`None` when not yet registered). Projections reading every field
 	/// from that contribution's decl inherit exactly this flag.
-	fn contribution_determined(
+	pub(in crate::lower) fn contribution_determined(
 		&self,
 		target_class: PatternRef<'db>,
 		contribution_index: usize,
@@ -2665,7 +2675,7 @@ impl<'db> ItemCollector<'db> {
 			.copied()
 	}
 
-	fn class_object_contribution_declaration(
+	pub(in crate::lower) fn class_object_contribution_declaration(
 		&self,
 		target_class: PatternRef<'db>,
 		contribution_index: usize,
@@ -2687,7 +2697,7 @@ impl<'db> ItemCollector<'db> {
 	/// index in the contribution's enum constructor — the same
 	/// `EnumMemberId::new(class_enum, contribution_index)` mapping the
 	/// per-parent slice arrays use.
-	fn contribution_slot_identity(
+	pub(in crate::lower) fn contribution_slot_identity(
 		&mut self,
 		item: Item<'db>,
 		class: PatternRef<'db>,
@@ -2719,7 +2729,7 @@ impl<'db> ItemCollector<'db> {
 	/// previous contribution's end offset — the same arithmetic as
 	/// `project_class_identity` (falling back to the global position when no
 	/// end offset was chained, matching the per-parent slice arithmetic).
-	fn contribution_local_ordinal(
+	pub(in crate::lower) fn contribution_local_ordinal(
 		&mut self,
 		item: Item<'db>,
 		class: PatternRef<'db>,
@@ -2776,7 +2786,7 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	fn register_class_set_top_level_contribution(
+	pub(in crate::lower) fn register_class_set_top_level_contribution(
 		&mut self,
 		target_class: PatternRef<'db>,
 		contribution_index: usize,
@@ -2788,7 +2798,11 @@ impl<'db> ItemCollector<'db> {
 			.push((contribution_index, expression));
 	}
 
-	fn record_expr_has_field(&self, expr: &Expression<'db>, field_ident: Identifier<'db>) -> bool {
+	pub(in crate::lower) fn record_expr_has_field(
+		&self,
+		expr: &Expression<'db>,
+		field_ident: Identifier<'db>,
+	) -> bool {
 		matches!(
 			expr.ty().lookup(self.db),
 			TyData::Record(_, fields) if fields.iter().any(|(field, _)| *field == field_ident.0)
@@ -2809,7 +2823,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn emit_per_parent_subset_constraint(
+	pub(in crate::lower) fn emit_per_parent_subset_constraint(
 		&mut self,
 		item: Item<'db>,
 		top_level: bool,
@@ -2984,7 +2998,7 @@ impl<'db> ItemCollector<'db> {
 	/// record field. The caller then falls back to the potential universe —
 	/// sound only for par existence (every potential realised); the call
 	/// site asserts the class is not var-actual when that happens.
-	fn field_only_class_set_array_union(
+	pub(in crate::lower) fn field_only_class_set_array_union(
 		&mut self,
 		item: Item<'db>,
 		child_class: PatternRef<'db>,
@@ -3103,7 +3117,7 @@ impl<'db> ItemCollector<'db> {
 	/// `None` when the block's boundaries were never chained (legacy shapes
 	/// with no pending slice) — the caller then falls back to the universe
 	/// as before.
-	fn par_contribution_block_image(
+	pub(in crate::lower) fn par_contribution_block_image(
 		&mut self,
 		item: Item<'db>,
 		child_class: PatternRef<'db>,
@@ -3124,7 +3138,7 @@ impl<'db> ItemCollector<'db> {
 	/// exact top-level contribution of a par `array [..] of new C` root —
 	/// registering this instead of the whole potential enum keeps other
 	/// contributions' potentials out of the class set when introductions mix.
-	fn par_contribution_block_set(
+	pub(in crate::lower) fn par_contribution_block_set(
 		&mut self,
 		item: Item<'db>,
 		child_class: PatternRef<'db>,
@@ -3211,7 +3225,7 @@ impl<'db> ItemCollector<'db> {
 	/// The per-contribution comprehension for one recorded field
 	/// introduction (see `field_only_class_set_array_union` for the emitted
 	/// shapes). Also emits the singular channelling pin as a side effect.
-	fn field_introduction_contribution_expr(
+	pub(in crate::lower) fn field_introduction_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		child_class: PatternRef<'db>,
@@ -3414,7 +3428,7 @@ impl<'db> ItemCollector<'db> {
 	/// contributes the same slots to every projection target 1:1, the
 	/// `project_class_identity` arithmetic). The guard is skipped for
 	/// non-var-actual direct classes (all slots realised).
-	fn superclass_projection_contribution_expr(
+	pub(in crate::lower) fn superclass_projection_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		super_class: PatternRef<'db>,
@@ -3539,7 +3553,7 @@ impl<'db> ItemCollector<'db> {
 	/// (an unrealised slot's field is symmetry-pinned to `lb`, which need not
 	/// be the static identity), and nothing otherwise. Par fields are skipped:
 	/// their values are minted statically by the reconstruction engine.
-	fn emit_singular_field_identity_pin(
+	pub(in crate::lower) fn emit_singular_field_identity_pin(
 		&mut self,
 		item: Item<'db>,
 		intro: &FieldIntroduction<'db>,
@@ -3699,7 +3713,7 @@ impl<'db> ItemCollector<'db> {
 	/// directly (always a valid finite default — `false` / first member /
 	/// `{}`); `<>` for any opt field; field-wise recursion for records and
 	/// tuples.
-	fn build_field_default_expr(
+	pub(in crate::lower) fn build_field_default_expr(
 		&mut self,
 		item: Item<'db>,
 		field_access_expr: Expression<'db>,
@@ -3857,7 +3871,10 @@ impl<'db> ItemCollector<'db> {
 	/// back to defining `<C>` as the full enum — in both shapes no potential
 	/// can ever be unused so the recipe is vacuous. The `array_union(...)`
 	/// definition path widens `<C>` to var and stays in the emit set.
-	fn emit_unused_potential_default_constraints(&mut self, class_pattern: PatternRef<'db>) {
+	pub(in crate::lower) fn emit_unused_potential_default_constraints(
+		&mut self,
+		class_pattern: PatternRef<'db>,
+	) {
 		let Some(class_info) = self.class_map.get(&class_pattern).copied() else {
 			return;
 		};
@@ -4099,7 +4116,10 @@ impl<'db> ItemCollector<'db> {
 	/// leaf at the empty path; tuple/record types expand field-wise. See
 	/// the leaf-wise pin note in
 	/// `emit_unused_potential_default_constraints`.
-	fn pin_leaf_paths(db: &'db dyn Db, ty: Ty<'db>) -> Vec<Vec<PinLeafStep<'db>>> {
+	pub(in crate::lower) fn pin_leaf_paths(
+		db: &'db dyn Db,
+		ty: Ty<'db>,
+	) -> Vec<Vec<PinLeafStep<'db>>> {
 		let mut out = Vec::new();
 		let mut todo: Vec<(Vec<PinLeafStep<'db>>, Ty<'db>)> = vec![(Vec::new(), ty)];
 		while let Some((path, t)) = todo.pop() {
@@ -4132,7 +4152,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn reconstructed_root_field_expr(
+	pub(in crate::lower) fn reconstructed_root_field_expr(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -4472,7 +4492,7 @@ impl<'db> ItemCollector<'db> {
 	/// ordinal is `ordinal_start`. The result type is `opt <C>_potential`,
 	/// matching the field's storage; the occurs-guarded read-back
 	/// reconstruction already emitted handles absence.
-	fn opt_child_identity_or_absent(
+	pub(in crate::lower) fn opt_child_identity_or_absent(
 		&mut self,
 		item: Item<'db>,
 		child_enum_member: EnumMemberId<'db>,
@@ -4514,7 +4534,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn reconstructed_nested_flattened_field_expr(
+	pub(in crate::lower) fn reconstructed_nested_flattened_field_expr(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -4943,7 +4963,7 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn occurrence_local_domain_size_expr(
+	pub(in crate::lower) fn occurrence_local_domain_size_expr(
 		&mut self,
 		item: Item<'db>,
 		local_domain_source: LocalDomainSource,
@@ -5006,7 +5026,7 @@ impl<'db> ItemCollector<'db> {
 	/// - **need not guard** (guard elision) — the RHS is provably total and
 	///   the declared domain provably non-binding, so the guard would buy
 	///   nothing and its var if-then-else can be saved.
-	fn realisation_guarded_alias_def(
+	pub(in crate::lower) fn realisation_guarded_alias_def(
 		&mut self,
 		item: Item<'db>,
 		decl: &StorageFieldDecl<'db>,
@@ -5157,7 +5177,7 @@ impl<'db> ItemCollector<'db> {
 	/// dangling identity constrains nothing. Only `new`-introducing declared
 	/// types keep the bail: their identities feed contributions and the
 	/// actual-set derivation, not a value default.
-	fn field_has_canonical_unrealised_default(
+	pub(in crate::lower) fn field_has_canonical_unrealised_default(
 		&self,
 		decl: &StorageFieldDecl<'db>,
 		field_ty: Ty<'db>,
@@ -5213,7 +5233,10 @@ impl<'db> ItemCollector<'db> {
 	/// RHS-at-the-pinned-frees — defined (total RHS), free to take that value
 	/// (non-binding domain), and still functionally determined — which is
 	/// exactly the pre-guard semantics minus the two failure channels.
-	fn defined_field_elides_realisation_guard(&self, decl: &StorageFieldDecl<'db>) -> bool {
+	pub(in crate::lower) fn defined_field_elides_realisation_guard(
+		&self,
+		decl: &StorageFieldDecl<'db>,
+	) -> bool {
 		self.field_declared_domain_nonbinding(decl) && self.defined_field_rhs_provably_total(decl)
 	}
 
@@ -5223,7 +5246,7 @@ impl<'db> ItemCollector<'db> {
 	/// rule ("need not guard") or the relocation rule ("guarded elsewhere").
 	/// Drives the per-slot `realised` alias emission in the engine — no
 	/// guarded field, no alias.
-	fn defined_field_keeps_realisation_guard(
+	pub(in crate::lower) fn defined_field_keeps_realisation_guard(
 		&self,
 		decl: &StorageFieldDecl<'db>,
 		field_ty: Ty<'db>,
@@ -5246,7 +5269,10 @@ impl<'db> ItemCollector<'db> {
 	/// the engine's guard routing, and the invariant) key on this ONE
 	/// predicate, and the predicate keys on the field's OWNER class, so the
 	/// owner's and every subclass's `_objects` domains cannot diverge.
-	fn field_relocates_declared_domain(&self, decl: &StorageFieldDecl<'db>) -> bool {
+	pub(in crate::lower) fn field_relocates_declared_domain(
+		&self,
+		decl: &StorageFieldDecl<'db>,
+	) -> bool {
 		if decl.definition.is_none() || !self.field_declared_domain_relocatable(decl) {
 			return false;
 		}
@@ -5277,7 +5303,7 @@ impl<'db> ItemCollector<'db> {
 	/// witness default of a defined field. Keying on the field's OWNER keeps
 	/// the owner's and every subclass's `_objects` domains in agreement,
 	/// mirroring `field_relocates_declared_domain`.
-	fn field_relocates_set_card(&self, decl: &StorageFieldDecl<'db>) -> bool {
+	pub(in crate::lower) fn field_relocates_set_card(&self, decl: &StorageFieldDecl<'db>) -> bool {
 		let Item::Class(ci) = decl.owner else {
 			return false;
 		};
@@ -5305,7 +5331,7 @@ impl<'db> ItemCollector<'db> {
 	/// the element-record domain and the realisation-guard witness so the
 	/// pinned `{}` unrealised-slot value satisfies the storage domain by
 	/// construction.
-	fn card_stripped_set_field_domain(
+	pub(in crate::lower) fn card_stripped_set_field_domain(
 		&mut self,
 		class_item: Item<'db>,
 		declared_type: shackle_hir::TypeId<'db>,
@@ -5346,7 +5372,10 @@ impl<'db> ItemCollector<'db> {
 	/// shapes and cardinality-bounded sets are also excluded: their
 	/// re-imposition is not a plain `in` and their guard story is the
 	/// existing bail.
-	fn field_declared_domain_relocatable(&self, decl: &StorageFieldDecl<'db>) -> bool {
+	pub(in crate::lower) fn field_declared_domain_relocatable(
+		&self,
+		decl: &StorageFieldDecl<'db>,
+	) -> bool {
 		let Item::Class(ci) = decl.owner else {
 			return false;
 		};
@@ -5363,7 +5392,10 @@ impl<'db> ItemCollector<'db> {
 	/// enum, or type alias), no set cardinality bound. An interval-arithmetic
 	/// proof that a declared domain contains the RHS image is a possible
 	/// later refinement.
-	fn field_declared_domain_nonbinding(&self, decl: &StorageFieldDecl<'db>) -> bool {
+	pub(in crate::lower) fn field_declared_domain_nonbinding(
+		&self,
+		decl: &StorageFieldDecl<'db>,
+	) -> bool {
 		let Item::Class(ci) = decl.owner else {
 			return false;
 		};
@@ -5389,7 +5421,10 @@ impl<'db> ItemCollector<'db> {
 	/// unresolvable calls — means NOT proven, keep the guard. This
 	/// deliberately ignores bool-context-benign partiality
 	/// (`ok = (x div y > 3)`).
-	fn defined_field_rhs_provably_total(&self, decl: &StorageFieldDecl<'db>) -> bool {
+	pub(in crate::lower) fn defined_field_rhs_provably_total(
+		&self,
+		decl: &StorageFieldDecl<'db>,
+	) -> bool {
 		let Some(definition) = decl.definition else {
 			return false;
 		};
@@ -5410,7 +5445,7 @@ impl<'db> ItemCollector<'db> {
 	/// a true builtin, accepted only from the total-ops whitelist.
 	/// `in_progress` is the call chain — recursive functions bail (their
 	/// termination is not provable here).
-	fn hir_expr_provably_total(
+	pub(in crate::lower) fn hir_expr_provably_total(
 		&self,
 		item: Item<'db>,
 		root: shackle_hir::ExpressionId<'db>,
@@ -5559,7 +5594,7 @@ impl<'db> ItemCollector<'db> {
 	/// from the already-reconstructed direct-class objects array — so nothing
 	/// is fresh-minted in practice and the projection inherits the direct
 	/// contribution's determined flag.
-	fn reconstructed_root_contribution_expr(
+	pub(in crate::lower) fn reconstructed_root_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -5660,7 +5695,7 @@ impl<'db> ItemCollector<'db> {
 	/// fire — provably total RHS AND provably non-binding declared domain
 	/// (`defined_field_elides_realisation_guard`); the `realised` alias is
 	/// only emitted if some defined field actually keeps its guard.
-	fn engine_reconstructed_root_contribution_expr(
+	pub(in crate::lower) fn engine_reconstructed_root_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		class_pattern: PatternRef<'db>,
@@ -5756,7 +5791,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn engine_reconstructed_contribution_expr(
+	pub(in crate::lower) fn engine_reconstructed_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		class_pattern: PatternRef<'db>,
@@ -6185,7 +6220,7 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	fn projected_contribution_expr_from_declaration(
+	pub(in crate::lower) fn projected_contribution_expr_from_declaration(
 		&mut self,
 		item: Item<'db>,
 		source_contribution_decl: DeclarationId<'db>,
@@ -6242,7 +6277,7 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	fn projected_nested_contribution_expr(
+	pub(in crate::lower) fn projected_nested_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		source_occurrence: OccurrenceId,
@@ -6267,7 +6302,7 @@ impl<'db> ItemCollector<'db> {
 	/// iteration for their prefix-sum ordinal arithmetic. Par-only (the input
 	/// is a par inline-record collection), so slots are always realised and
 	/// no realisation guard is passed.
-	fn reconstructed_nested_flattened_contribution_expr(
+	pub(in crate::lower) fn reconstructed_nested_flattened_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		target_class: PatternRef<'db>,
@@ -6401,7 +6436,7 @@ impl<'db> ItemCollector<'db> {
 	/// `EngineIdentityRule::NestedSingular` — otherwise the par input
 	/// record's inline child records would be stored where the identity
 	/// model (`<Child>_potential`) is expected, which MiniZinc rejects.
-	fn reconstructed_nested_singular_contribution_expr(
+	pub(in crate::lower) fn reconstructed_nested_singular_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		target_class: PatternRef<'db>,
@@ -6493,7 +6528,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn reconstructed_nested_singular_field_expr(
+	pub(in crate::lower) fn reconstructed_nested_singular_field_expr(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -6721,7 +6756,7 @@ impl<'db> ItemCollector<'db> {
 	/// canonical order the universe sum and the leaf `<C>_objects` flattening
 	/// use, which is what keeps the minted identity ranges pointing at the
 	/// right objects.
-	fn deep_flatten_generators_and_cursor(
+	pub(in crate::lower) fn deep_flatten_generators_and_cursor(
 		&mut self,
 		item: Item<'db>,
 		inputs_expr: &Expression<'db>,
@@ -6781,7 +6816,7 @@ impl<'db> ItemCollector<'db> {
 	/// minting object fields through `EngineIdentityRule::NestedDeep` with a
 	/// 1-D prefix sum. Depth-agnostic: the same builder serves depth 2, 3, …
 	/// because the flattening absorbs every intermediate hop.
-	fn reconstructed_deep_nested_contribution_expr(
+	pub(in crate::lower) fn reconstructed_deep_nested_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		target_class: PatternRef<'db>,
@@ -6915,7 +6950,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn reconstructed_deep_nested_field_expr(
+	pub(in crate::lower) fn reconstructed_deep_nested_field_expr(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -7129,7 +7164,11 @@ impl<'db> ItemCollector<'db> {
 	/// Whether `record_expr`'s record type declares `field`. Used to decide
 	/// whether a storage field can be read straight from the (par) input
 	/// record or must be reconstructed.
-	fn record_ty_has_field(&self, record_expr: &Expression<'db>, field: Identifier<'db>) -> bool {
+	pub(in crate::lower) fn record_ty_has_field(
+		&self,
+		record_expr: &Expression<'db>,
+		field: Identifier<'db>,
+	) -> bool {
 		record_expr
 			.ty()
 			.record_fields(self.db)
@@ -7142,7 +7181,7 @@ impl<'db> ItemCollector<'db> {
 	/// the input record (it's a decision, not data — see
 	/// `class_type_to_input_record_type`), but it is still a storage field, so
 	/// each contributed object needs its own free decision of the field type.
-	fn fresh_storage_field_decision(
+	pub(in crate::lower) fn fresh_storage_field_decision(
 		&mut self,
 		item: Item<'db>,
 		field_ident: Identifier<'db>,
@@ -7200,7 +7239,7 @@ impl<'db> ItemCollector<'db> {
 	///   input data on a par object (`P.kid = (children: [(x: 2)])`) — must be
 	///   reconstructed from that data as identities, NOT replaced by a free
 	///   decision (which would drop the data and over-generate).
-	fn var_existence_field_mint(
+	pub(in crate::lower) fn var_existence_field_mint(
 		&mut self,
 		item: Item<'db>,
 		field_class: PatternRef<'db>,
@@ -7227,7 +7266,7 @@ impl<'db> ItemCollector<'db> {
 	/// otherwise mint a fresh decision (a dropped `var` attribute). Projecting
 	/// every storage field unconditionally would panic in `RecordAccess::build`
 	/// when a `var` field was dropped from the par input record.
-	fn nested_contribution_template_record(
+	pub(in crate::lower) fn nested_contribution_template_record(
 		&mut self,
 		item: Item<'db>,
 		target_fields: &[(Identifier<'db>, Ty<'db>)],
@@ -7257,7 +7296,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn selected_nested_contribution_expr(
+	pub(in crate::lower) fn selected_nested_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -7415,7 +7454,7 @@ impl<'db> ItemCollector<'db> {
 	/// its full parameter domain. Returns `None` if the constructor is not
 	/// yet present, is atomic, or has no bounded parameter domain; the
 	/// caller falls back to the full class enum in that case.
-	fn class_enum_constructor_image_set(
+	pub(in crate::lower) fn class_enum_constructor_image_set(
 		&self,
 		item: Item<'db>,
 		class_enum: EnumerationId<'db>,
@@ -7453,7 +7492,7 @@ impl<'db> ItemCollector<'db> {
 	/// constructor-ordinal arithmetic is needed (the child's actual set is
 	/// derived from its parents' realised fields, which already encodes the
 	/// whole parent-realisation chain).
-	fn nested_var_storage_engine_contribution_expr(
+	pub(in crate::lower) fn nested_var_storage_engine_contribution_expr(
 		&mut self,
 		item: Item<'db>,
 		target_class: PatternRef<'db>,
@@ -7573,7 +7612,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn register_nested_class_object_contribution(
+	pub(in crate::lower) fn register_nested_class_object_contribution(
 		&mut self,
 		item: Item<'db>,
 		target_class: PatternRef<'db>,
@@ -7672,7 +7711,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn emit_nested_occurrence_contributions(
+	pub(in crate::lower) fn emit_nested_occurrence_contributions(
 		&mut self,
 		item: Item<'db>,
 		root_pattern: PatternRef<'db>,
@@ -7874,7 +7913,7 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn nested_occurrence_sum_expr(
+	pub(in crate::lower) fn nested_occurrence_sum_expr(
 		&mut self,
 		item: Item<'db>,
 		generators: Vec<Generator<'db>>,
@@ -7963,7 +8002,7 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	fn ensure_nested_occurrence_constructor_domain(
+	pub(in crate::lower) fn ensure_nested_occurrence_constructor_domain(
 		&mut self,
 		item: Item<'db>,
 		occurrence: OccurrenceId,
@@ -7991,7 +8030,7 @@ impl<'db> ItemCollector<'db> {
 		self.ensure_occurrence_constructors(occurrence, local_idx);
 	}
 
-	fn nested_var_collection_fallback_cardinality(
+	pub(in crate::lower) fn nested_var_collection_fallback_cardinality(
 		&mut self,
 		owner_item: Item<'db>,
 		declared_type: Option<shackle_hir::TypeId<'db>>,
@@ -8024,7 +8063,7 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	fn nested_par_collection_cardinality(
+	pub(in crate::lower) fn nested_par_collection_cardinality(
 		&mut self,
 		owner_item: Item<'db>,
 		declared_type: Option<shackle_hir::TypeId<'db>>,
@@ -8043,7 +8082,7 @@ impl<'db> ItemCollector<'db> {
 		Some(nested_collector.collect_expression(cardinality))
 	}
 
-	fn emit_nested_cardinality_constraint(
+	pub(in crate::lower) fn emit_nested_cardinality_constraint(
 		&mut self,
 		item: Item<'db>,
 		generators: Vec<Generator<'db>>,
@@ -8100,7 +8139,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn nested_child_record_access_and_fallback_cardinality(
+	pub(in crate::lower) fn nested_child_record_access_and_fallback_cardinality(
 		&mut self,
 		item: Item<'db>,
 		prev_attrib: Expression<'db>,
@@ -8157,7 +8196,7 @@ impl<'db> ItemCollector<'db> {
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
 	)]
-	fn nested_path_generators_and_cursor(
+	pub(in crate::lower) fn nested_path_generators_and_cursor(
 		&mut self,
 		item: Item<'db>,
 		inputs_expr: &Expression<'db>,
@@ -8293,7 +8332,7 @@ impl<'db> ItemCollector<'db> {
 		(generators, prev_attrib)
 	}
 
-	fn nested_contribution_generators_and_input(
+	pub(in crate::lower) fn nested_contribution_generators_and_input(
 		&mut self,
 		item: Item<'db>,
 		local_domain_source: LocalDomainSource,
@@ -8363,7 +8402,7 @@ impl<'db> ItemCollector<'db> {
 		(contribution_generators, maybe_contribution_input)
 	}
 
-	fn add_class_objects_decl(
+	pub(in crate::lower) fn add_class_objects_decl(
 		&self,
 		class_item: Item<'db>,
 		class_objects_name: Identifier<'db>,
@@ -8398,7 +8437,7 @@ impl<'db> ItemCollector<'db> {
 	/// first unsubstituted. Rebuilding after all classes are registered (and
 	/// before any item is collected, so no expression has frozen the stale
 	/// type yet) makes the storage record independent of predeclare order.
-	fn repair_predeclared_class_objects_domains(&mut self) {
+	pub(in crate::lower) fn repair_predeclared_class_objects_domains(&mut self) {
 		let entries = self
 			.class_map
 			.iter()
@@ -8416,7 +8455,7 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn collect_class(&mut self, it: shackle_hir::ClassItem<'db>) {
+	pub(in crate::lower) fn collect_class(&mut self, it: shackle_hir::ClassItem<'db>) {
 		let item: Item<'db> = it.into();
 		let c = it.class(self.db);
 		let class_pattern = PatternRef::new(self.db, item, c.pattern);
@@ -8473,7 +8512,10 @@ impl<'db> ItemCollector<'db> {
 	/// let-mint (`var 1..l: x` enumerates exactly `1..l`). Computed fields
 	/// are alias-defined and skipped. Set-typed and multi-dimension shapes
 	/// have no enforceable check here yet.
-	fn emit_dependent_domain_conformance_assertions(&mut self, it: shackle_hir::ClassItem<'db>) {
+	pub(in crate::lower) fn emit_dependent_domain_conformance_assertions(
+		&mut self,
+		it: shackle_hir::ClassItem<'db>,
+	) {
 		let item: Item<'db> = it.into();
 		let c = it.class(self.db);
 		let types = item.types(self.db);
@@ -8535,7 +8577,7 @@ impl<'db> ItemCollector<'db> {
 	/// `<C>_objects` projections via let-bound field aliases. Definition
 	/// bodies are emitted from `finish()` (see the gated forall-drop in
 	/// `collect_class`), so this method derives everything from `item`.
-	fn emit_class_body_constraint(
+	pub(in crate::lower) fn emit_class_body_constraint(
 		&mut self,
 		item: Item<'db>,
 		class_body: &ClassBodyConstraint<'db>,
@@ -8943,7 +8985,7 @@ impl<'db> ItemCollector<'db> {
 	/// `var set of new` roots). Par-declared fields of par-reached classes
 	/// keep the walker's `emit_nested_cardinality_constraint` emission,
 	/// where every iterated instance is realised.
-	fn emit_nested_set_cardinality_class_invariants(
+	pub(in crate::lower) fn emit_nested_set_cardinality_class_invariants(
 		&mut self,
 		it: shackle_hir::ClassItem<'db>,
 		class_pattern: PatternRef<'db>,
@@ -9075,7 +9117,7 @@ impl<'db> ItemCollector<'db> {
 	/// `var 3..4: z = x1 + x2` under `card(as) = 0` satisfiable. Emitted on
 	/// the field's OWNER class: subclass objects are members of the owner's
 	/// realised set, so one invariant covers every contribution.
-	fn emit_relocated_domain_class_invariants(
+	pub(in crate::lower) fn emit_relocated_domain_class_invariants(
 		&mut self,
 		it: shackle_hir::ClassItem<'db>,
 		class_pattern: PatternRef<'db>,
@@ -9197,7 +9239,7 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	fn class_constraint_fields(
+	pub(in crate::lower) fn class_constraint_fields(
 		&self,
 		class_item: Item<'db>,
 	) -> Vec<(PatternRef<'db>, Identifier<'db>)> {
@@ -9239,7 +9281,10 @@ impl<'db> ItemCollector<'db> {
 	/// (so a var field's per-object domain can be re-collected), and the
 	/// owning item (a superclass item for inherited fields, so the RHS/domain
 	/// is collected against the right `ItemData`).
-	fn class_storage_field_decls(&self, class_item: Item<'db>) -> Vec<StorageFieldDecl<'db>> {
+	pub(in crate::lower) fn class_storage_field_decls(
+		&self,
+		class_item: Item<'db>,
+	) -> Vec<StorageFieldDecl<'db>> {
 		fn collect<'db>(
 			lowerer: &ItemCollector<'db>,
 			class_item: Item<'db>,
@@ -9279,7 +9324,7 @@ impl<'db> ItemCollector<'db> {
 	/// class enum constructors, the inputs/storage arrays, the contribution
 	/// `_objects` arrays and slice arrays, and return the declaration for the
 	/// user-named identity (set).
-	fn collect_new_declaration(
+	pub(in crate::lower) fn collect_new_declaration(
 		&mut self,
 		ty: Ty<'db>,
 		types: &TypeResult<'db>,
@@ -11477,7 +11522,7 @@ impl<'db> ItemCollector<'db> {
 	/// empty), set construction and set ops, comparisons, boolean ops.
 	/// `div`/`mod`/`'[]'`/`min`/`max`/`deopt`/`assert`/`pow` are deliberately
 	/// absent.
-	fn total_builtin_call(&self, ident: Identifier<'db>) -> bool {
+	pub(in crate::lower) fn total_builtin_call(&self, ident: Identifier<'db>) -> bool {
 		let ids = self.ids;
 		[
 			ids.builtins.plus,
