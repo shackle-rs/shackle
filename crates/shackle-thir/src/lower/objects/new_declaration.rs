@@ -76,8 +76,11 @@ struct PendingSlice<'db> {
 /// lowering; bundling them keeps the extracted phase helpers to a readable
 /// signature.
 struct NewRootContext<'db, 'a> {
+	ty: Ty<'db>,
 	item: Item<'db>,
+	top_level: bool,
 	types: &'a TypeResult<'db>,
+	d: &'a shackle_hir::Declaration<'db>,
 	data: &'a shackle_hir::ItemData<'db>,
 	/// The declared type of the root, e.g. `set of new C`.
 	item_ty: &'a shackle_hir::Type<'db>,
@@ -104,7 +107,7 @@ impl<'db> ItemCollector<'db> {
 		data: &shackle_hir::ItemData<'db>,
 		top_level: bool,
 	) -> Declaration<'db> {
-		let mut collector = ExpressionCollector::new(self, data, item, types);
+		let collector = ExpressionCollector::new(self, data, item, types);
 
 		let class_domain = data[d.declared_type]
 			.get_new_class(data)
@@ -135,8 +138,11 @@ impl<'db> ItemCollector<'db> {
 		);
 
 		let cx = NewRootContext {
+			ty,
 			item,
+			top_level,
 			types,
+			d,
 			data,
 			item_ty,
 			class_pattern_ref,
@@ -148,452 +154,7 @@ impl<'db> ItemCollector<'db> {
 
 		let (domain_decl, inputs_expr, pending_root_collection) = match item_ty {
 			shackle_hir::Type::New { inst, opt, .. } => {
-				let class_types = class_pattern_ref
-					.item(collector.parent.db)
-					.types(collector.parent.db);
-				let (input_record_ty, _storage_record_ty) =
-					match &class_types[class_pattern_ref.pattern(collector.parent.db)] {
-						PatternTy::ClassDecl {
-							input_record_ty,
-							storage_record_ty,
-							..
-						} => (*input_record_ty, *storage_record_ty),
-						_ => unreachable!(),
-					};
-
-				let one_expr = Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					IntegerLiteral(1),
-				);
-				let singleton_ordinal_set =
-					alloc_expression(SetLiteral(vec![one_expr.clone()]), &collector, item);
-				let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
-
-				let storage_backed_var_root = *inst == VarType::Var && d.definition.is_none();
-				let inputs_expr = if storage_backed_var_root {
-					// Include every storage field directly — including class-typed
-					// and set-of-class fields. Under a var-new root, the
-					// var-attribute storage rule makes every field a free
-					// decision (the var-set-of-class field is bounded by the
-					// per-parent slice constraint, emitted separately). Substitute
-					// class types with the child class's potential enum to avoid
-					// a circular type definition
-					// (see `substitute_class_with_potential_enum`).
-					let root_storage_record_ty = Ty::record(
-						collector.parent.db,
-						root_fields
-							.iter()
-							.map(|(name, ty)| {
-								(
-									*name,
-									collector.parent.substitute_class_with_potential_enum(*ty),
-								)
-							})
-							.collect::<Vec<_>>(),
-					);
-					// Computed and domain-dependent fields are aliases defined in
-					// the reconstruction comprehension, not free `_storage`
-					// decisions — drop them from the free element type (also the
-					// only valid form for `array`/unbounded-`var set` computed
-					// fields, which can't be free decisions at all).
-					let root_storage_record_ty = collector
-						.parent
-						.free_storage_record_ty(class_pattern_ref, root_storage_record_ty);
-					let storage_elem_ty = root_storage_record_ty
-						.with_inst(collector.parent.db, VarType::Var)
-						.unwrap_or(root_storage_record_ty);
-					let storage_elem_dom = collector.parent.build_class_storage_record_domain(
-						class_pattern_ref,
-						storage_elem_ty,
-						item,
-					);
-					let storage_array_dom = Domain::array(
-						collector.parent.db,
-						item,
-						OptType::NonOpt,
-						Domain::bounded(
-							collector.parent.db,
-							item,
-							VarType::Par,
-							OptType::NonOpt,
-							singleton_ordinal_set.clone(),
-						),
-						storage_elem_dom,
-					);
-					let mut storage_decl = Declaration::new(true, storage_array_dom);
-					storage_decl.set_name(Identifier::new(
-						collector.parent.db,
-						format!("{}_storage", class_and_decl_name),
-					));
-					let storage_idx = collector
-						.parent
-						.model
-						.add_declaration(DeclarationItem::new(storage_decl, item));
-					alloc_expression(storage_idx, &collector, item)
-				} else {
-					// An `opt new C` attribute yields an `opt record` input
-					// slot, which MiniZinc rejects. Lower the slot (and the value)
-					// to a non-opt 0/1-length list; other classes are untouched.
-					let opt_new_input = collector
-						.parent
-						.input_ty_needs_opt_new_lowering(input_record_ty);
-					let lowered_input_record_ty = if opt_new_input {
-						collector.parent.lower_opt_new_input_ty(input_record_ty)
-					} else {
-						input_record_ty
-					};
-					let array_dom = Domain::array(
-						collector.parent.db,
-						item,
-						OptType::NonOpt,
-						Domain::unbounded(
-							collector.parent.db,
-							item,
-							Ty::par_int(collector.parent.db),
-						),
-						Domain::unbounded(collector.parent.db, item, lowered_input_record_ty),
-					);
-					let mut array_decl = Declaration::new(true, array_dom);
-					let inputs_name = format!("{}_inputs", class_and_decl_name);
-					array_decl.set_name(Identifier::new(collector.parent.db, inputs_name));
-					let input_value = if let Some(rhs) = d.definition {
-						let collected = collector.collect_expression(rhs);
-						if opt_new_input {
-							collector.parent.lower_opt_new_input_value(
-								item,
-								collected,
-								input_record_ty,
-							)
-						} else {
-							collected
-						}
-					} else {
-						alloc_expression(DummyValue(lowered_input_record_ty), &collector, item)
-					};
-					array_decl.set_definition(alloc_expression(
-						ArrayLiteral(vec![input_value]),
-						&collector,
-						item,
-					));
-
-					let inputs_idx = collector
-						.parent
-						.model
-						.add_declaration(DeclarationItem::new(array_decl, item));
-					alloc_expression(inputs_idx, &collector, item)
-				};
-				let enum_constr_domain = Domain::bounded(
-					collector.parent.db,
-					item,
-					VarType::Par,
-					OptType::NonOpt,
-					singleton_ordinal_set.clone(),
-				);
-				let decl = Declaration::new(false, enum_constr_domain);
-				let idx = collector
-					.parent
-					.model
-					.add_declaration(DeclarationItem::new(decl, item));
-				collector
-					.parent
-					.add_occurrence_constructors(root_occurrence, idx);
-
-				let call_expr = alloc_expression(
-					Call {
-						function: Callable::EnumConstructor(enum_member_id),
-						arguments: vec![one_expr],
-					},
-					&collector,
-					item,
-				);
-				let root_contributions = collector.parent.objects.plan.contributions_by_occurrence
-					[&root_occurrence]
-					.clone();
-				if *opt == OptType::Opt {
-					// `var opt new C: x` is an optional occurrence. The direct
-					// class's actual set is a free `var set of <C>_potential`
-					// decision (its members are `{}` or the lone potential
-					// identity); the identity `x` is lowered to a `var opt
-					// <C>_potential` defined as present iff that potential is
-					// realised. Superclass actual sets are derived from the same
-					// occurrence test. The direct class and its superclasses
-					// were already predeclared `var set` via
-					// `var_actual_set_classes` (a `var opt new` introduces var
-					// existence), so no widening is needed here.
-					debug_assert!(
-						root_contributions.iter().all(|contribution| {
-							collector.parent.model[collector.parent.objects.class_map
-								[&contribution.target_class]
-								.class_set]
-								.ty()
-								.inst(collector.parent.db)
-								== Some(VarType::Var)
-						}),
-						"var opt new occurrence has a par actual-set declaration \
-						 among its contributions; var_actual_set_classes is too \
-						 narrow"
-					);
-					let direct_class_set =
-						collector.parent.objects.class_map[&class_pattern_ref].class_set;
-					let direct_set_expr = alloc_expression(direct_class_set, &collector, item);
-					// `<C>_occ_0(1) in <C>` — true exactly when the optional
-					// occurrence is realised.
-					let occurs_expr = alloc_expression(
-						LookupCall {
-							function: collector.parent.ids.functions.in_.into(),
-							arguments: vec![call_expr.clone(), direct_set_expr],
-						},
-						&collector,
-						item,
-					);
-					for contribution in &root_contributions {
-						// Every opt-root contribution (direct AND superclass)
-						// is skipped by `finish`'s definitional/lower-bound union —
-						// its membership is the free decision — and every reached
-						// class emits its actual set FREE + subset lower bound
-						// rather than an `=` union (so a co-occurring definite root
-						// isn't clobbered).
-						let _ = collector
-							.parent
-							.objects
-							.opt_contribution_slots
-							.insert((contribution.target_class, contribution.constructor_index));
-						let _ = collector
-							.parent
-							.objects
-							.opt_free_subset_classes
-							.insert(contribution.target_class);
-						if contribution.target_class == class_pattern_ref {
-							// The direct class set stays a free decision: the opt
-							// occurrence's identity `x` (below) is present iff its
-							// lone potential is in the direct class set, so
-							// membership IS the presence decision — no constraint.
-							continue;
-						}
-						// A superclass image: `x present` (the direct occurrence
-						// test) must be MIRRORED by the projected identity's
-						// membership in the superclass set. Eagerly DEFINING
-						// `<super> = if occurs then {img} else {}` would clobber
-						// any co-occurring definite root's members. Emit a
-						// biconditional constraint instead and leave `<super>`
-						// free (bounded by `<super>_potential`, lower-bounded by
-						// the definite roots in `finish`):
-						//   `(<super>_occ_k(1) in <super>) <-> (x realised)`.
-						let target_enum = collector.parent.objects.class_map
-							[&contribution.target_class]
-							.class_enum;
-						let target_enum_member =
-							EnumMemberId::new(target_enum, contribution.constructor_index as u32);
-						let one_expr = alloc_expression(IntegerLiteral(1), &collector, item);
-						let image_ident = alloc_expression(
-							Call {
-								function: Callable::EnumConstructor(target_enum_member),
-								arguments: vec![one_expr],
-							},
-							&collector,
-							item,
-						);
-						let class_set_decl = collector.parent.objects.class_map
-							[&contribution.target_class]
-							.class_set;
-						let class_set_expr = alloc_expression(class_set_decl, &collector, item);
-						let image_in_super = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.in_.into(),
-								arguments: vec![image_ident, class_set_expr],
-							},
-							&collector,
-							item,
-						);
-						let biconditional = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.iff.into(),
-								arguments: vec![image_in_super, occurs_expr.clone()],
-							},
-							&collector,
-							item,
-						);
-						let _ = collector.parent.model.add_constraint(ConstraintItem::new(
-							Constraint::new(top_level, biconditional),
-							item,
-						));
-					}
-					// `var opt new C: x` lowers to a `var opt <C>_potential: x`
-					// identity that is present iff its lone potential is in the
-					// (free) direct class set.
-					let domain_ty = collector.parent.substitute_class_with_potential_enum(ty);
-					let mut domain_decl = Declaration::new(
-						top_level,
-						Domain::unbounded(collector.parent.db, item, domain_ty),
-					);
-					// Whether ANOTHER introduction also reaches the direct
-					// class — i.e. `<C>_potential` has more than the opt root's own
-					// constructor. Only then does the naive defining form below
-					// (`x = if occurs then <C>_occ_k(1) else <>`) misbehave: with a
-					// multi-constructor enum MiniZinc flags a model inconsistency
-					// and drops the absent branch, silently forcing the optional
-					// occurrence present. The unmixed case keeps the byte-identical
-					// defining form (its enum is single-member).
-					let direct_is_mixed = collector
-						.parent
-						.objects
-						.plan
-						.contributions_by_occurrence
-						.iter()
-						.filter(|(occ, _)| **occ != root_occurrence)
-						.flat_map(|(_, cs)| cs.iter())
-						.any(|c| c.target_class == class_pattern_ref);
-					let identity_def = if direct_is_mixed {
-						// Constraint-decomposed identity, wrapped in a `let` so `x`
-						// stays a defined declaration:
-						//   let { var opt <C>_potential: t;
-						//         constraint occurs(t) <-> <occurs>;
-						//         constraint occurs(t) -> deopt(t) = <C>_occ_k(1);
-						//   } in t
-						let t_decl = Declaration::new(
-							false,
-							Domain::unbounded(collector.parent.db, item, domain_ty),
-						);
-						let t_idx = collector
-							.parent
-							.model
-							.add_declaration(DeclarationItem::new(t_decl, item));
-						let t_expr = alloc_expression(t_idx, &collector, item);
-						let occurs_t = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.occurs.into(),
-								arguments: vec![t_expr.clone()],
-							},
-							&collector,
-							item,
-						);
-						let presence = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.iff.into(),
-								arguments: vec![occurs_t, occurs_expr],
-							},
-							&collector,
-							item,
-						);
-						let presence_id = collector.parent.model.add_constraint(
-							ConstraintItem::new(Constraint::new(false, presence), item),
-						);
-						let occurs_t2 = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.occurs.into(),
-								arguments: vec![t_expr.clone()],
-							},
-							&collector,
-							item,
-						);
-						let deopt_t = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.deopt.into(),
-								arguments: vec![t_expr.clone()],
-							},
-							&collector,
-							item,
-						);
-						let value_eq = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.eq.into(),
-								arguments: vec![deopt_t, call_expr],
-							},
-							&collector,
-							item,
-						);
-						let value_imp = alloc_expression(
-							LookupCall {
-								function: collector.parent.ids.functions.implies.into(),
-								arguments: vec![occurs_t2, value_eq],
-							},
-							&collector,
-							item,
-						);
-						let value_id = collector.parent.model.add_constraint(ConstraintItem::new(
-							Constraint::new(false, value_imp),
-							item,
-						));
-						alloc_expression(
-							Let {
-								items: vec![
-									LetItem::Declaration(t_idx),
-									LetItem::Constraint(presence_id),
-									LetItem::Constraint(value_id),
-								],
-								in_expression: Box::new(t_expr),
-							},
-							&collector,
-							item,
-						)
-					} else {
-						let absent = alloc_expression(Absent, &collector, item);
-						alloc_expression(
-							IfThenElse {
-								branches: vec![Branch::new(occurs_expr, call_expr)],
-								else_result: Box::new(absent),
-							},
-							&collector,
-							item,
-						)
-					};
-					domain_decl.set_definition(identity_def);
-					(domain_decl, inputs_expr, None)
-				} else {
-					// A non-opt singular root's identity always exists, so each
-					// contribution is the static singleton `<T>_occ_k({1})`.
-					// Register it through the SAME channel collection roots use
-					// (`class_set_top_level_contributions`, unioned in `finish`)
-					// instead of eagerly defining the class-set decl here: the
-					// eager definition made `finish`'s union loop skip the class
-					// (`definition().is_some()`), silently DROPPING any
-					// collection root's registered contribution — a par
-					// `new A: a` plus `var set(..) of new A: as` defined `A`
-					// as just `A_occ_0({1})`, forcing `as`'s members out of
-					// existence.
-					for contribution in root_contributions {
-						let target_enum = collector.parent.objects.class_map
-							[&contribution.target_class]
-							.class_enum;
-						let target_enum_member =
-							EnumMemberId::new(target_enum, contribution.constructor_index as u32);
-						let class_set_definition = alloc_expression(
-							Call {
-								function: Callable::EnumConstructor(target_enum_member),
-								arguments: vec![singleton_ordinal_set.clone()],
-							},
-							&collector,
-							item,
-						);
-						collector.parent.register_class_set_top_level_contribution(
-							contribution.target_class,
-							contribution.constructor_index,
-							class_set_definition,
-						);
-					}
-					// `var new C: x` produces HIR type `var Class<C>`, which encodes
-					// "attributes reached through x are var-storage". The lowered
-					// identity itself is par because the singular fresh root has a
-					// fixed identity (one potential, must-pick); var storage is
-					// emitted separately. Par-ify the declaration domain and bind
-					// it by the potential universe (`C_potential: x = …`) —
-					// membership in the actual set is definitional through the
-					// class-set union, and the class name itself can be a var set
-					// (when the class's existence is a decision elsewhere), which
-					// cannot serve as a declaration domain.
-					let domain_ty = collector
-						.parent
-						.substitute_class_with_potential_enum(ty)
-						.make_par(collector.parent.db);
-					let mut domain_decl = Declaration::new(
-						top_level,
-						Domain::unbounded(collector.parent.db, item, domain_ty),
-					);
-					domain_decl.set_definition(call_expr);
-					(domain_decl, inputs_expr, None)
-				}
+				self.lower_singular_new_root(&cx, inst, opt)
 			}
 			shackle_hir::Type::Array { .. } => {
 				// Array-of-new roots are rejected in `validate_root_decl`: an
@@ -607,295 +168,7 @@ impl<'db> ItemCollector<'db> {
 			}
 			shackle_hir::Type::Set {
 				cardinality, inst, ..
-			} => {
-				let class_types = class_pattern_ref
-					.item(collector.parent.db)
-					.types(collector.parent.db);
-				let (input_record_ty, storage_record_ty) =
-					match &class_types[class_pattern_ref.pattern(collector.parent.db)] {
-						PatternTy::ClassDecl {
-							input_record_ty,
-							storage_record_ty,
-							..
-						} => (*input_record_ty, *storage_record_ty),
-						_ => unreachable!(),
-					};
-				let needs_reconstruction = input_record_ty != storage_record_ty;
-				let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
-				let has_object_fields = root_fields.iter().any(|(_, field_ty)| {
-					field_ty
-						.walk(collector.parent.db)
-						.any(|nested_ty| nested_ty.class_type(collector.parent.db).is_some())
-				});
-				let scalar_storage_only_var_root = *inst == VarType::Var
-					&& d.definition.is_none()
-					&& root_fields.iter().all(|(_, field_ty)| {
-						field_ty
-							.walk(collector.parent.db)
-							.all(|nested_ty| nested_ty.class_type(collector.parent.db).is_none())
-					});
-				let object_storage_backed_var_root =
-					*inst == VarType::Var && d.definition.is_none() && has_object_fields;
-
-				// Compute the per-introduction potential ordinal domain (e.g.
-				// `1..max(c)` for `var set(c) of new C`). Used as the index
-				// domain for both the inputs and storage arrays below.
-				let potential_ordinal_domain = match (cardinality, inst) {
-					(Some(c), VarType::Var) => {
-						let card_expr = collector.collect_expression(*c);
-						let upper_bound = match &data[*c] {
-							shackle_hir::Expression::Call(call)
-								if call.arguments.len() == 2
-									&& matches!(&data[call.function], shackle_hir::Expression::Identifier(identifier) if *identifier == collector.parent.ids.functions.dot_dot) =>
-							{
-								collector.collect_expression(call.arguments[1])
-							}
-							_ => Expression::new(
-								collector.parent.db,
-								&collector.parent.model,
-								item,
-								LookupCall {
-									function: collector.parent.ids.builtins.max.into(),
-									arguments: vec![card_expr],
-								},
-							),
-						};
-						let one_expr = Expression::new(
-							collector.parent.db,
-							&collector.parent.model,
-							item,
-							IntegerLiteral(1),
-						);
-						Some(Expression::new(
-							collector.parent.db,
-							&collector.parent.model,
-							item,
-							LookupCall {
-								function: collector.parent.ids.functions.dot_dot.into(),
-								arguments: vec![one_expr, upper_bound],
-							},
-						))
-					}
-					(_, VarType::Par) => None,
-					_ => unreachable!(),
-				};
-
-				let build_index_domain = |potential_ordinal_domain: &Option<Expression<'db>>| {
-					if let Some(potential_ordinal_domain) = potential_ordinal_domain {
-						Domain::bounded(
-							collector.parent.db,
-							item,
-							VarType::Par,
-							OptType::NonOpt,
-							potential_ordinal_domain.clone(),
-						)
-					} else {
-						Domain::unbounded(
-							collector.parent.db,
-							item,
-							Ty::par_int(collector.parent.db),
-						)
-					}
-				};
-
-				// When the root is var with object-typed fields and has no
-				// RHS, the inputs array would be a phantom: its element type
-				// collapses to the empty record (all class fields are
-				// constructed via `new`), it has no consumers downstream, and
-				// MiniZinc rejects the missing initializer on the empty-record
-				// array. Skip the inputs decl entirely in that case and route
-				// `inputs_expr` to the `_storage` array we create below.
-				// A par `opt new C` field yields an `opt record` input
-				// slot, which MiniZinc rejects. Lower the slot type (and any
-				// inline value) to a non-opt 0/1-length list, exactly as the
-				// singular-root site does — so a `set of new` root whose member
-				// carries an optional child (inline OR via `.dzn`) reconstructs
-				// through the opt-aware `length(input.f) > 0` read-back instead
-				// of panicking on `length(opt record)`. Gated on
-				// `input_ty_needs_opt_new_lowering`, so non-opt-new roots and
-				// var-reached owners (where the opt-new field is a free decision,
-				// never in the input record) are byte-identical.
-				let set_root_opt_new_input = collector
-					.parent
-					.input_ty_needs_opt_new_lowering(input_record_ty);
-				let maybe_inputs_idx = if object_storage_backed_var_root {
-					None
-				} else {
-					let elem_ty = if scalar_storage_only_var_root {
-						// Free-storage element type excludes computed /
-						// domain-dependent fields (defined as reconstruction
-						// aliases instead), matching the singular `var new` path.
-						let free_storage_record_ty = collector
-							.parent
-							.free_storage_record_ty(class_pattern_ref, storage_record_ty);
-						free_storage_record_ty
-							.with_inst(collector.parent.db, VarType::Var)
-							.unwrap_or(free_storage_record_ty)
-					} else if set_root_opt_new_input {
-						collector.parent.lower_opt_new_input_ty(input_record_ty)
-					} else {
-						input_record_ty
-					};
-					let elem_dom = if scalar_storage_only_var_root {
-						collector.parent.build_class_storage_record_domain(
-							class_pattern_ref,
-							elem_ty,
-							item,
-						)
-					} else {
-						Domain::unbounded(collector.parent.db, item, elem_ty)
-					};
-					let array_dom = Domain::array(
-						collector.parent.db,
-						item,
-						OptType::NonOpt,
-						build_index_domain(&potential_ordinal_domain),
-						elem_dom,
-					);
-					let mut array_decl = Declaration::new(true, array_dom);
-					let array_name = if scalar_storage_only_var_root {
-						format!("{}_storage", class_and_decl_name)
-					} else {
-						format!("{}_inputs", class_and_decl_name)
-					};
-					array_decl.set_name(Identifier::new(collector.parent.db, array_name));
-					if matches!(inst, VarType::Par)
-						&& let Some(rhs) = d.definition
-					{
-						let inputs = collector.collect_expression(rhs);
-						let inputs = if set_root_opt_new_input {
-							collector.parent.lower_opt_new_input_collection_value(
-								item,
-								inputs,
-								input_record_ty,
-							)
-						} else {
-							inputs
-						};
-						array_decl.set_definition(inputs);
-					}
-					Some(
-						collector
-							.parent
-							.model
-							.add_declaration(DeclarationItem::new(array_decl, item)),
-					)
-				};
-
-				let storage_idx = if object_storage_backed_var_root {
-					// Computed / domain-dependent fields are reconstruction
-					// aliases, not free `_storage` decisions — drop them from the
-					// free element type (keeping class-typed fields, which stay
-					// free decisions bounded by the per-parent slice constraint).
-					let free_storage_record_ty = collector
-						.parent
-						.free_storage_record_ty(class_pattern_ref, storage_record_ty);
-					let varified = free_storage_record_ty
-						.with_inst(collector.parent.db, VarType::Var)
-						.unwrap_or(free_storage_record_ty);
-					// Substitute class types with their potential enums so the
-					// storage record doesn't reference the (derived) class set
-					// — see `substitute_class_with_potential_enum`.
-					let storage_elem_ty = collector
-						.parent
-						.substitute_class_with_potential_enum(varified);
-					let storage_elem_dom = collector.parent.build_class_storage_record_domain(
-						class_pattern_ref,
-						storage_elem_ty,
-						item,
-					);
-					let storage_domain = Domain::array(
-						collector.parent.db,
-						item,
-						OptType::NonOpt,
-						build_index_domain(&potential_ordinal_domain),
-						storage_elem_dom,
-					);
-					let mut storage_decl = Declaration::new(true, storage_domain);
-					storage_decl.set_name(Identifier::new(
-						collector.parent.db,
-						format!("{}_storage", class_and_decl_name),
-					));
-					Some(
-						collector
-							.parent
-							.model
-							.add_declaration(DeclarationItem::new(storage_decl, item)),
-					)
-				} else {
-					None
-				};
-
-				let inputs_expr = match (maybe_inputs_idx, storage_idx) {
-					(Some(idx), _) => alloc_expression(idx, &collector, item),
-					(None, Some(idx)) => alloc_expression(idx, &collector, item),
-					(None, None) => {
-						unreachable!("expected inputs or storage declaration")
-					}
-				};
-				let contribution_expr =
-					storage_idx.map(|idx| alloc_expression(idx, &collector, item));
-				let nested_iteration_expr = contribution_expr.as_ref().map(|storage_expr| {
-					Expression::new(
-						collector.parent.db,
-						&collector.parent.model,
-						item,
-						LookupCall {
-							function: collector.parent.ids.functions.index_set.into(),
-							arguments: vec![storage_expr.clone()],
-						},
-					)
-				});
-				let sum_expr = if let Some(rhs) = d.definition {
-					match &data[rhs] {
-						shackle_hir::Expression::ArrayLiteral(array_literal) => Expression::new(
-							collector.parent.db,
-							&collector.parent.model,
-							item,
-							IntegerLiteral(array_literal.members.len() as i64),
-						),
-						_ => Expression::new(
-							collector.parent.db,
-							&collector.parent.model,
-							item,
-							LookupCall {
-								function: collector.parent.ids.builtins.length.into(),
-								arguments: vec![inputs_expr.clone()],
-							},
-						),
-					}
-				} else {
-					Expression::new(
-						collector.parent.db,
-						&collector.parent.model,
-						item,
-						LookupCall {
-							function: collector.parent.ids.builtins.length.into(),
-							arguments: vec![inputs_expr.clone()],
-						},
-					)
-				};
-				let contribution_index = collector
-					.parent
-					.occurrence_contribution(root_occurrence, class_pattern_ref)
-					.constructor_index;
-				(
-					Declaration::new(top_level, Domain::unbounded(collector.parent.db, item, ty)),
-					inputs_expr,
-					Some(PendingRootCollection {
-						contribution_index,
-						inst: *inst,
-						emit_root_contribution: *inst != VarType::Var
-							|| scalar_storage_only_var_root
-							|| object_storage_backed_var_root,
-						contribution_expr,
-						nested_iteration_expr,
-						needs_reconstruction,
-						sum_expr,
-						potential_ordinal_domain,
-					}),
-				)
-			}
+			} => self.lower_set_of_new_root(&cx, cardinality, inst),
 			_ => todo!("Handle other cases of new A: x"),
 		};
 
@@ -2429,5 +1702,778 @@ impl<'db> ItemCollector<'db> {
 				});
 			}
 		}
+	}
+
+	/// Lower a singular root (`new C`, `var new C`, `var opt new C`), whose
+	/// potential block is exactly one slot built from the declaration's own
+	/// initialiser.
+	fn lower_singular_new_root(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		inst: &VarType,
+		opt: &OptType,
+	) -> (
+		Declaration<'db>,
+		Expression<'db>,
+		Option<PendingRootCollection<'db>>,
+	) {
+		let &NewRootContext {
+			ty,
+			item,
+			data,
+			types,
+			d,
+			top_level,
+			class_pattern_ref,
+			root_occurrence,
+			enum_member_id,
+			ref class_and_decl_name,
+			..
+		} = cx;
+		let mut collector = ExpressionCollector::new(self, data, item, types);
+		let class_types = class_pattern_ref
+			.item(collector.parent.db)
+			.types(collector.parent.db);
+		let (input_record_ty, _storage_record_ty) =
+			match &class_types[class_pattern_ref.pattern(collector.parent.db)] {
+				PatternTy::ClassDecl {
+					input_record_ty,
+					storage_record_ty,
+					..
+				} => (*input_record_ty, *storage_record_ty),
+				_ => unreachable!(),
+			};
+
+		let one_expr = Expression::new(
+			collector.parent.db,
+			&collector.parent.model,
+			item,
+			IntegerLiteral(1),
+		);
+		let singleton_ordinal_set =
+			alloc_expression(SetLiteral(vec![one_expr.clone()]), &collector, item);
+		let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
+
+		let storage_backed_var_root = *inst == VarType::Var && d.definition.is_none();
+		let inputs_expr = if storage_backed_var_root {
+			// Include every storage field directly — including class-typed
+			// and set-of-class fields. Under a var-new root, the
+			// var-attribute storage rule makes every field a free
+			// decision (the var-set-of-class field is bounded by the
+			// per-parent slice constraint, emitted separately). Substitute
+			// class types with the child class's potential enum to avoid
+			// a circular type definition
+			// (see `substitute_class_with_potential_enum`).
+			let root_storage_record_ty = Ty::record(
+				collector.parent.db,
+				root_fields
+					.iter()
+					.map(|(name, ty)| {
+						(
+							*name,
+							collector.parent.substitute_class_with_potential_enum(*ty),
+						)
+					})
+					.collect::<Vec<_>>(),
+			);
+			// Computed and domain-dependent fields are aliases defined in
+			// the reconstruction comprehension, not free `_storage`
+			// decisions — drop them from the free element type (also the
+			// only valid form for `array`/unbounded-`var set` computed
+			// fields, which can't be free decisions at all).
+			let root_storage_record_ty = collector
+				.parent
+				.free_storage_record_ty(class_pattern_ref, root_storage_record_ty);
+			let storage_elem_ty = root_storage_record_ty
+				.with_inst(collector.parent.db, VarType::Var)
+				.unwrap_or(root_storage_record_ty);
+			let storage_elem_dom = collector.parent.build_class_storage_record_domain(
+				class_pattern_ref,
+				storage_elem_ty,
+				item,
+			);
+			let storage_array_dom = Domain::array(
+				collector.parent.db,
+				item,
+				OptType::NonOpt,
+				Domain::bounded(
+					collector.parent.db,
+					item,
+					VarType::Par,
+					OptType::NonOpt,
+					singleton_ordinal_set.clone(),
+				),
+				storage_elem_dom,
+			);
+			let mut storage_decl = Declaration::new(true, storage_array_dom);
+			storage_decl.set_name(Identifier::new(
+				collector.parent.db,
+				format!("{}_storage", class_and_decl_name),
+			));
+			let storage_idx = collector
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(storage_decl, item));
+			alloc_expression(storage_idx, &collector, item)
+		} else {
+			// An `opt new C` attribute yields an `opt record` input
+			// slot, which MiniZinc rejects. Lower the slot (and the value)
+			// to a non-opt 0/1-length list; other classes are untouched.
+			let opt_new_input = collector
+				.parent
+				.input_ty_needs_opt_new_lowering(input_record_ty);
+			let lowered_input_record_ty = if opt_new_input {
+				collector.parent.lower_opt_new_input_ty(input_record_ty)
+			} else {
+				input_record_ty
+			};
+			let array_dom = Domain::array(
+				collector.parent.db,
+				item,
+				OptType::NonOpt,
+				Domain::unbounded(collector.parent.db, item, Ty::par_int(collector.parent.db)),
+				Domain::unbounded(collector.parent.db, item, lowered_input_record_ty),
+			);
+			let mut array_decl = Declaration::new(true, array_dom);
+			let inputs_name = format!("{}_inputs", class_and_decl_name);
+			array_decl.set_name(Identifier::new(collector.parent.db, inputs_name));
+			let input_value = if let Some(rhs) = d.definition {
+				let collected = collector.collect_expression(rhs);
+				if opt_new_input {
+					collector
+						.parent
+						.lower_opt_new_input_value(item, collected, input_record_ty)
+				} else {
+					collected
+				}
+			} else {
+				alloc_expression(DummyValue(lowered_input_record_ty), &collector, item)
+			};
+			array_decl.set_definition(alloc_expression(
+				ArrayLiteral(vec![input_value]),
+				&collector,
+				item,
+			));
+
+			let inputs_idx = collector
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(array_decl, item));
+			alloc_expression(inputs_idx, &collector, item)
+		};
+		let enum_constr_domain = Domain::bounded(
+			collector.parent.db,
+			item,
+			VarType::Par,
+			OptType::NonOpt,
+			singleton_ordinal_set.clone(),
+		);
+		let decl = Declaration::new(false, enum_constr_domain);
+		let idx = collector
+			.parent
+			.model
+			.add_declaration(DeclarationItem::new(decl, item));
+		collector
+			.parent
+			.add_occurrence_constructors(root_occurrence, idx);
+
+		let call_expr = alloc_expression(
+			Call {
+				function: Callable::EnumConstructor(enum_member_id),
+				arguments: vec![one_expr],
+			},
+			&collector,
+			item,
+		);
+		let root_contributions =
+			collector.parent.objects.plan.contributions_by_occurrence[&root_occurrence].clone();
+		if *opt == OptType::Opt {
+			// `var opt new C: x` is an optional occurrence. The direct
+			// class's actual set is a free `var set of <C>_potential`
+			// decision (its members are `{}` or the lone potential
+			// identity); the identity `x` is lowered to a `var opt
+			// <C>_potential` defined as present iff that potential is
+			// realised. Superclass actual sets are derived from the same
+			// occurrence test. The direct class and its superclasses
+			// were already predeclared `var set` via
+			// `var_actual_set_classes` (a `var opt new` introduces var
+			// existence), so no widening is needed here.
+			debug_assert!(
+				root_contributions.iter().all(|contribution| {
+					collector.parent.model
+						[collector.parent.objects.class_map[&contribution.target_class].class_set]
+						.ty()
+						.inst(collector.parent.db)
+						== Some(VarType::Var)
+				}),
+				"var opt new occurrence has a par actual-set declaration \
+				 among its contributions; var_actual_set_classes is too \
+				 narrow"
+			);
+			let direct_class_set = collector.parent.objects.class_map[&class_pattern_ref].class_set;
+			let direct_set_expr = alloc_expression(direct_class_set, &collector, item);
+			// `<C>_occ_0(1) in <C>` — true exactly when the optional
+			// occurrence is realised.
+			let occurs_expr = alloc_expression(
+				LookupCall {
+					function: collector.parent.ids.functions.in_.into(),
+					arguments: vec![call_expr.clone(), direct_set_expr],
+				},
+				&collector,
+				item,
+			);
+			for contribution in &root_contributions {
+				// Every opt-root contribution (direct AND superclass)
+				// is skipped by `finish`'s definitional/lower-bound union —
+				// its membership is the free decision — and every reached
+				// class emits its actual set FREE + subset lower bound
+				// rather than an `=` union (so a co-occurring definite root
+				// isn't clobbered).
+				let _ = collector
+					.parent
+					.objects
+					.opt_contribution_slots
+					.insert((contribution.target_class, contribution.constructor_index));
+				let _ = collector
+					.parent
+					.objects
+					.opt_free_subset_classes
+					.insert(contribution.target_class);
+				if contribution.target_class == class_pattern_ref {
+					// The direct class set stays a free decision: the opt
+					// occurrence's identity `x` (below) is present iff its
+					// lone potential is in the direct class set, so
+					// membership IS the presence decision — no constraint.
+					continue;
+				}
+				// A superclass image: `x present` (the direct occurrence
+				// test) must be MIRRORED by the projected identity's
+				// membership in the superclass set. Eagerly DEFINING
+				// `<super> = if occurs then {img} else {}` would clobber
+				// any co-occurring definite root's members. Emit a
+				// biconditional constraint instead and leave `<super>`
+				// free (bounded by `<super>_potential`, lower-bounded by
+				// the definite roots in `finish`):
+				//   `(<super>_occ_k(1) in <super>) <-> (x realised)`.
+				let target_enum =
+					collector.parent.objects.class_map[&contribution.target_class].class_enum;
+				let target_enum_member =
+					EnumMemberId::new(target_enum, contribution.constructor_index as u32);
+				let one_expr = alloc_expression(IntegerLiteral(1), &collector, item);
+				let image_ident = alloc_expression(
+					Call {
+						function: Callable::EnumConstructor(target_enum_member),
+						arguments: vec![one_expr],
+					},
+					&collector,
+					item,
+				);
+				let class_set_decl =
+					collector.parent.objects.class_map[&contribution.target_class].class_set;
+				let class_set_expr = alloc_expression(class_set_decl, &collector, item);
+				let image_in_super = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.in_.into(),
+						arguments: vec![image_ident, class_set_expr],
+					},
+					&collector,
+					item,
+				);
+				let biconditional = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.iff.into(),
+						arguments: vec![image_in_super, occurs_expr.clone()],
+					},
+					&collector,
+					item,
+				);
+				let _ = collector.parent.model.add_constraint(ConstraintItem::new(
+					Constraint::new(top_level, biconditional),
+					item,
+				));
+			}
+			// `var opt new C: x` lowers to a `var opt <C>_potential: x`
+			// identity that is present iff its lone potential is in the
+			// (free) direct class set.
+			let domain_ty = collector.parent.substitute_class_with_potential_enum(ty);
+			let mut domain_decl = Declaration::new(
+				top_level,
+				Domain::unbounded(collector.parent.db, item, domain_ty),
+			);
+			// Whether ANOTHER introduction also reaches the direct
+			// class — i.e. `<C>_potential` has more than the opt root's own
+			// constructor. Only then does the naive defining form below
+			// (`x = if occurs then <C>_occ_k(1) else <>`) misbehave: with a
+			// multi-constructor enum MiniZinc flags a model inconsistency
+			// and drops the absent branch, silently forcing the optional
+			// occurrence present. The unmixed case keeps the byte-identical
+			// defining form (its enum is single-member).
+			let direct_is_mixed = collector
+				.parent
+				.objects
+				.plan
+				.contributions_by_occurrence
+				.iter()
+				.filter(|(occ, _)| **occ != root_occurrence)
+				.flat_map(|(_, cs)| cs.iter())
+				.any(|c| c.target_class == class_pattern_ref);
+			let identity_def = if direct_is_mixed {
+				// Constraint-decomposed identity, wrapped in a `let` so `x`
+				// stays a defined declaration:
+				//   let { var opt <C>_potential: t;
+				//         constraint occurs(t) <-> <occurs>;
+				//         constraint occurs(t) -> deopt(t) = <C>_occ_k(1);
+				//   } in t
+				let t_decl = Declaration::new(
+					false,
+					Domain::unbounded(collector.parent.db, item, domain_ty),
+				);
+				let t_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(t_decl, item));
+				let t_expr = alloc_expression(t_idx, &collector, item);
+				let occurs_t = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.occurs.into(),
+						arguments: vec![t_expr.clone()],
+					},
+					&collector,
+					item,
+				);
+				let presence = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.iff.into(),
+						arguments: vec![occurs_t, occurs_expr],
+					},
+					&collector,
+					item,
+				);
+				let presence_id = collector
+					.parent
+					.model
+					.add_constraint(ConstraintItem::new(Constraint::new(false, presence), item));
+				let occurs_t2 = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.occurs.into(),
+						arguments: vec![t_expr.clone()],
+					},
+					&collector,
+					item,
+				);
+				let deopt_t = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.deopt.into(),
+						arguments: vec![t_expr.clone()],
+					},
+					&collector,
+					item,
+				);
+				let value_eq = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.eq.into(),
+						arguments: vec![deopt_t, call_expr],
+					},
+					&collector,
+					item,
+				);
+				let value_imp = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.implies.into(),
+						arguments: vec![occurs_t2, value_eq],
+					},
+					&collector,
+					item,
+				);
+				let value_id = collector
+					.parent
+					.model
+					.add_constraint(ConstraintItem::new(Constraint::new(false, value_imp), item));
+				alloc_expression(
+					Let {
+						items: vec![
+							LetItem::Declaration(t_idx),
+							LetItem::Constraint(presence_id),
+							LetItem::Constraint(value_id),
+						],
+						in_expression: Box::new(t_expr),
+					},
+					&collector,
+					item,
+				)
+			} else {
+				let absent = alloc_expression(Absent, &collector, item);
+				alloc_expression(
+					IfThenElse {
+						branches: vec![Branch::new(occurs_expr, call_expr)],
+						else_result: Box::new(absent),
+					},
+					&collector,
+					item,
+				)
+			};
+			domain_decl.set_definition(identity_def);
+			(domain_decl, inputs_expr, None)
+		} else {
+			// A non-opt singular root's identity always exists, so each
+			// contribution is the static singleton `<T>_occ_k({1})`.
+			// Register it through the SAME channel collection roots use
+			// (`class_set_top_level_contributions`, unioned in `finish`)
+			// instead of eagerly defining the class-set decl here: the
+			// eager definition made `finish`'s union loop skip the class
+			// (`definition().is_some()`), silently DROPPING any
+			// collection root's registered contribution — a par
+			// `new A: a` plus `var set(..) of new A: as` defined `A`
+			// as just `A_occ_0({1})`, forcing `as`'s members out of
+			// existence.
+			for contribution in root_contributions {
+				let target_enum =
+					collector.parent.objects.class_map[&contribution.target_class].class_enum;
+				let target_enum_member =
+					EnumMemberId::new(target_enum, contribution.constructor_index as u32);
+				let class_set_definition = alloc_expression(
+					Call {
+						function: Callable::EnumConstructor(target_enum_member),
+						arguments: vec![singleton_ordinal_set.clone()],
+					},
+					&collector,
+					item,
+				);
+				collector.parent.register_class_set_top_level_contribution(
+					contribution.target_class,
+					contribution.constructor_index,
+					class_set_definition,
+				);
+			}
+			// `var new C: x` produces HIR type `var Class<C>`, which encodes
+			// "attributes reached through x are var-storage". The lowered
+			// identity itself is par because the singular fresh root has a
+			// fixed identity (one potential, must-pick); var storage is
+			// emitted separately. Par-ify the declaration domain and bind
+			// it by the potential universe (`C_potential: x = …`) —
+			// membership in the actual set is definitional through the
+			// class-set union, and the class name itself can be a var set
+			// (when the class's existence is a decision elsewhere), which
+			// cannot serve as a declaration domain.
+			let domain_ty = collector
+				.parent
+				.substitute_class_with_potential_enum(ty)
+				.make_par(collector.parent.db);
+			let mut domain_decl = Declaration::new(
+				top_level,
+				Domain::unbounded(collector.parent.db, item, domain_ty),
+			);
+			domain_decl.set_definition(call_expr);
+			(domain_decl, inputs_expr, None)
+		}
+	}
+
+	/// Lower a collection root (`set of new C`, `var set(c) of new C`): size the
+	/// potential block, build the inputs array and the user-named declaration,
+	/// and return the pending contribution the caller finishes once the class
+	/// graph has been walked.
+	fn lower_set_of_new_root(
+		&mut self,
+		cx: &NewRootContext<'db, '_>,
+		cardinality: &Option<shackle_hir::ExpressionId<'db>>,
+		inst: &VarType,
+	) -> (
+		Declaration<'db>,
+		Expression<'db>,
+		Option<PendingRootCollection<'db>>,
+	) {
+		let &NewRootContext {
+			ty,
+			item,
+			data,
+			types,
+			d,
+			top_level,
+			class_pattern_ref,
+			root_occurrence,
+			ref class_and_decl_name,
+			..
+		} = cx;
+		let mut collector = ExpressionCollector::new(self, data, item, types);
+		let class_types = class_pattern_ref
+			.item(collector.parent.db)
+			.types(collector.parent.db);
+		let (input_record_ty, storage_record_ty) =
+			match &class_types[class_pattern_ref.pattern(collector.parent.db)] {
+				PatternTy::ClassDecl {
+					input_record_ty,
+					storage_record_ty,
+					..
+				} => (*input_record_ty, *storage_record_ty),
+				_ => unreachable!(),
+			};
+		let needs_reconstruction = input_record_ty != storage_record_ty;
+		let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
+		let has_object_fields = root_fields.iter().any(|(_, field_ty)| {
+			field_ty
+				.walk(collector.parent.db)
+				.any(|nested_ty| nested_ty.class_type(collector.parent.db).is_some())
+		});
+		let scalar_storage_only_var_root = *inst == VarType::Var
+			&& d.definition.is_none()
+			&& root_fields.iter().all(|(_, field_ty)| {
+				field_ty
+					.walk(collector.parent.db)
+					.all(|nested_ty| nested_ty.class_type(collector.parent.db).is_none())
+			});
+		let object_storage_backed_var_root =
+			*inst == VarType::Var && d.definition.is_none() && has_object_fields;
+
+		// Compute the per-introduction potential ordinal domain (e.g.
+		// `1..max(c)` for `var set(c) of new C`). Used as the index
+		// domain for both the inputs and storage arrays below.
+		let potential_ordinal_domain = match (cardinality, inst) {
+			(Some(c), VarType::Var) => {
+				let card_expr = collector.collect_expression(*c);
+				let upper_bound = match &data[*c] {
+					shackle_hir::Expression::Call(call)
+						if call.arguments.len() == 2
+							&& matches!(&data[call.function], shackle_hir::Expression::Identifier(identifier) if *identifier == collector.parent.ids.functions.dot_dot) =>
+					{
+						collector.collect_expression(call.arguments[1])
+					}
+					_ => Expression::new(
+						collector.parent.db,
+						&collector.parent.model,
+						item,
+						LookupCall {
+							function: collector.parent.ids.builtins.max.into(),
+							arguments: vec![card_expr],
+						},
+					),
+				};
+				let one_expr = Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					IntegerLiteral(1),
+				);
+				Some(Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					LookupCall {
+						function: collector.parent.ids.functions.dot_dot.into(),
+						arguments: vec![one_expr, upper_bound],
+					},
+				))
+			}
+			(_, VarType::Par) => None,
+			_ => unreachable!(),
+		};
+
+		let build_index_domain = |potential_ordinal_domain: &Option<Expression<'db>>| {
+			if let Some(potential_ordinal_domain) = potential_ordinal_domain {
+				Domain::bounded(
+					collector.parent.db,
+					item,
+					VarType::Par,
+					OptType::NonOpt,
+					potential_ordinal_domain.clone(),
+				)
+			} else {
+				Domain::unbounded(collector.parent.db, item, Ty::par_int(collector.parent.db))
+			}
+		};
+
+		// When the root is var with object-typed fields and has no
+		// RHS, the inputs array would be a phantom: its element type
+		// collapses to the empty record (all class fields are
+		// constructed via `new`), it has no consumers downstream, and
+		// MiniZinc rejects the missing initializer on the empty-record
+		// array. Skip the inputs decl entirely in that case and route
+		// `inputs_expr` to the `_storage` array we create below.
+		// A par `opt new C` field yields an `opt record` input
+		// slot, which MiniZinc rejects. Lower the slot type (and any
+		// inline value) to a non-opt 0/1-length list, exactly as the
+		// singular-root site does — so a `set of new` root whose member
+		// carries an optional child (inline OR via `.dzn`) reconstructs
+		// through the opt-aware `length(input.f) > 0` read-back instead
+		// of panicking on `length(opt record)`. Gated on
+		// `input_ty_needs_opt_new_lowering`, so non-opt-new roots and
+		// var-reached owners (where the opt-new field is a free decision,
+		// never in the input record) are byte-identical.
+		let set_root_opt_new_input = collector
+			.parent
+			.input_ty_needs_opt_new_lowering(input_record_ty);
+		let maybe_inputs_idx = if object_storage_backed_var_root {
+			None
+		} else {
+			let elem_ty = if scalar_storage_only_var_root {
+				// Free-storage element type excludes computed /
+				// domain-dependent fields (defined as reconstruction
+				// aliases instead), matching the singular `var new` path.
+				let free_storage_record_ty = collector
+					.parent
+					.free_storage_record_ty(class_pattern_ref, storage_record_ty);
+				free_storage_record_ty
+					.with_inst(collector.parent.db, VarType::Var)
+					.unwrap_or(free_storage_record_ty)
+			} else if set_root_opt_new_input {
+				collector.parent.lower_opt_new_input_ty(input_record_ty)
+			} else {
+				input_record_ty
+			};
+			let elem_dom = if scalar_storage_only_var_root {
+				collector
+					.parent
+					.build_class_storage_record_domain(class_pattern_ref, elem_ty, item)
+			} else {
+				Domain::unbounded(collector.parent.db, item, elem_ty)
+			};
+			let array_dom = Domain::array(
+				collector.parent.db,
+				item,
+				OptType::NonOpt,
+				build_index_domain(&potential_ordinal_domain),
+				elem_dom,
+			);
+			let mut array_decl = Declaration::new(true, array_dom);
+			let array_name = if scalar_storage_only_var_root {
+				format!("{}_storage", class_and_decl_name)
+			} else {
+				format!("{}_inputs", class_and_decl_name)
+			};
+			array_decl.set_name(Identifier::new(collector.parent.db, array_name));
+			if matches!(inst, VarType::Par)
+				&& let Some(rhs) = d.definition
+			{
+				let inputs = collector.collect_expression(rhs);
+				let inputs = if set_root_opt_new_input {
+					collector.parent.lower_opt_new_input_collection_value(
+						item,
+						inputs,
+						input_record_ty,
+					)
+				} else {
+					inputs
+				};
+				array_decl.set_definition(inputs);
+			}
+			Some(
+				collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(array_decl, item)),
+			)
+		};
+
+		let storage_idx = if object_storage_backed_var_root {
+			// Computed / domain-dependent fields are reconstruction
+			// aliases, not free `_storage` decisions — drop them from the
+			// free element type (keeping class-typed fields, which stay
+			// free decisions bounded by the per-parent slice constraint).
+			let free_storage_record_ty = collector
+				.parent
+				.free_storage_record_ty(class_pattern_ref, storage_record_ty);
+			let varified = free_storage_record_ty
+				.with_inst(collector.parent.db, VarType::Var)
+				.unwrap_or(free_storage_record_ty);
+			// Substitute class types with their potential enums so the
+			// storage record doesn't reference the (derived) class set
+			// — see `substitute_class_with_potential_enum`.
+			let storage_elem_ty = collector
+				.parent
+				.substitute_class_with_potential_enum(varified);
+			let storage_elem_dom = collector.parent.build_class_storage_record_domain(
+				class_pattern_ref,
+				storage_elem_ty,
+				item,
+			);
+			let storage_domain = Domain::array(
+				collector.parent.db,
+				item,
+				OptType::NonOpt,
+				build_index_domain(&potential_ordinal_domain),
+				storage_elem_dom,
+			);
+			let mut storage_decl = Declaration::new(true, storage_domain);
+			storage_decl.set_name(Identifier::new(
+				collector.parent.db,
+				format!("{}_storage", class_and_decl_name),
+			));
+			Some(
+				collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(storage_decl, item)),
+			)
+		} else {
+			None
+		};
+
+		let inputs_expr = match (maybe_inputs_idx, storage_idx) {
+			(Some(idx), _) => alloc_expression(idx, &collector, item),
+			(None, Some(idx)) => alloc_expression(idx, &collector, item),
+			(None, None) => {
+				unreachable!("expected inputs or storage declaration")
+			}
+		};
+		let contribution_expr = storage_idx.map(|idx| alloc_expression(idx, &collector, item));
+		let nested_iteration_expr = contribution_expr.as_ref().map(|storage_expr| {
+			Expression::new(
+				collector.parent.db,
+				&collector.parent.model,
+				item,
+				LookupCall {
+					function: collector.parent.ids.functions.index_set.into(),
+					arguments: vec![storage_expr.clone()],
+				},
+			)
+		});
+		let sum_expr = if let Some(rhs) = d.definition {
+			match &data[rhs] {
+				shackle_hir::Expression::ArrayLiteral(array_literal) => Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					IntegerLiteral(array_literal.members.len() as i64),
+				),
+				_ => Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					LookupCall {
+						function: collector.parent.ids.builtins.length.into(),
+						arguments: vec![inputs_expr.clone()],
+					},
+				),
+			}
+		} else {
+			Expression::new(
+				collector.parent.db,
+				&collector.parent.model,
+				item,
+				LookupCall {
+					function: collector.parent.ids.builtins.length.into(),
+					arguments: vec![inputs_expr.clone()],
+				},
+			)
+		};
+		let contribution_index = collector
+			.parent
+			.occurrence_contribution(root_occurrence, class_pattern_ref)
+			.constructor_index;
+		(
+			Declaration::new(top_level, Domain::unbounded(collector.parent.db, item, ty)),
+			inputs_expr,
+			Some(PendingRootCollection {
+				contribution_index,
+				inst: *inst,
+				emit_root_contribution: *inst != VarType::Var
+					|| scalar_storage_only_var_root
+					|| object_storage_backed_var_root,
+				contribution_expr,
+				nested_iteration_expr,
+				needs_reconstruction,
+				sum_expr,
+				potential_ordinal_domain,
+			}),
+		)
 	}
 }
