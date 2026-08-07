@@ -11506,15 +11506,15 @@ impl<'db> ItemCollector<'db> {
 	}
 }
 
-struct ExpressionCollector<'db, 'a, 'b, 'c> {
-	parent: &'a mut ItemCollector<'db>,
-	data: &'b shackle_hir::ItemData<'db>,
+pub(in crate::lower) struct ExpressionCollector<'db, 'a, 'b, 'c> {
+	pub(in crate::lower) parent: &'a mut ItemCollector<'db>,
+	pub(in crate::lower) data: &'b shackle_hir::ItemData<'db>,
 	item: Item<'db>,
 	types: &'c TypeResult<'db>,
 }
 
 impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
-	fn new(
+	pub(in crate::lower) fn new(
 		parent: &'a mut ItemCollector<'db>,
 		data: &'b shackle_hir::ItemData<'db>,
 		item: Item<'db>,
@@ -11543,14 +11543,17 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 	}
 
 	/// Collect an expression
-	fn collect_expression(&mut self, idx: shackle_hir::ExpressionId<'db>) -> Expression<'db> {
+	pub(in crate::lower) fn collect_expression(
+		&mut self,
+		idx: shackle_hir::ExpressionId<'db>,
+	) -> Expression<'db> {
 		maybe_grow_stack(|| self.collect_expression_inner(idx))
 	}
 
 	/// Collect an expression, projecting a class-typed identifier into the
 	/// expected class's identity universe when the two differ (a `Sub`-typed
 	/// root used where a `Super` is expected).
-	fn collect_expression_as(
+	pub(in crate::lower) fn collect_expression_as(
 		&mut self,
 		idx: shackle_hir::ExpressionId<'db>,
 		expected_ty: Ty<'db>,
@@ -13057,7 +13060,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		}
 	}
 
-	fn collect_declaration_annotation(
+	pub(in crate::lower) fn collect_declaration_annotation(
 		&mut self,
 		decl: DeclarationId<'db>,
 		ann: shackle_hir::ExpressionId<'db>,
@@ -13460,7 +13463,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		)
 	}
 
-	fn collect_array_access(
+	pub(in crate::lower) fn collect_array_access(
 		&mut self,
 		collection: Expression<'db>,
 		indices: Expression<'db>,
@@ -13723,7 +13726,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 	/// `class_storage_fields_for_domain`. Outermost-class positions
 	/// (e.g. `A: a`, `var new A: a`) are unchanged because callers do
 	/// not route through this helper.
-	fn collect_element_domain(
+	pub(in crate::lower) fn collect_element_domain(
 		&mut self,
 		t: shackle_hir::TypeId<'db>,
 		ty: Ty<'db>,
@@ -13742,7 +13745,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 	}
 
 	// Collect a domain from a user ascribed type
-	fn collect_domain(
+	pub(in crate::lower) fn collect_domain(
 		&mut self,
 		t: shackle_hir::TypeId<'db>,
 		ty: Ty<'db>,
@@ -13995,7 +13998,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 	}
 
 	/// Create declarations which perform destructuring according to the given pattern
-	fn collect_destructuring(
+	pub(in crate::lower) fn collect_destructuring(
 		&mut self,
 		root_decl: DeclarationId<'db>,
 		top_level: bool,
@@ -14302,7 +14305,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 	}
 }
 
-fn alloc_expression<'db>(
+pub(in crate::lower) fn alloc_expression<'db>(
 	data: impl ExpressionBuilder<'db>,
 	collector: &ExpressionCollector<'db, '_, '_, '_>,
 	origin: impl Into<Origin<'db>>,
@@ -14332,7 +14335,7 @@ impl<'db> DestructuringEntry<'db> {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Destructuring<'db> {
+pub(in crate::lower) enum Destructuring<'db> {
 	TupleAccess(IntegerLiteral),
 	RecordAccess(Identifier<'db>),
 	Enumeration(EnumMemberId<'db>),
