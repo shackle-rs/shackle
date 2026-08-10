@@ -280,8 +280,11 @@ impl<'db> ItemCollector<'db> {
 							&collector,
 							item,
 						);
-						let object_record =
-							collector.collect_array_access(class_objects_expr, object_index, item);
+						let object_record = collector.introduce_array_access(
+							class_objects_expr,
+							object_index,
+							item,
+						);
 						let field_expr = alloc_expression(
 							RecordAccess {
 								record: Box::new(object_record),
@@ -339,7 +342,7 @@ impl<'db> ItemCollector<'db> {
 						item,
 					);
 					let object_record =
-						collector.collect_array_access(class_objects_expr, object_index, item);
+						collector.introduce_array_access(class_objects_expr, object_index, item);
 					let lhs = alloc_expression(
 						RecordAccess {
 							record: Box::new(object_record),
@@ -374,7 +377,7 @@ impl<'db> ItemCollector<'db> {
 						item,
 					);
 					let object_record =
-						collector.collect_array_access(class_objects_expr, object_index, item);
+						collector.introduce_array_access(class_objects_expr, object_index, item);
 					let field_proj = alloc_expression(
 						RecordAccess {
 							record: Box::new(object_record),

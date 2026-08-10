@@ -14,10 +14,17 @@ use shackle_utils::maybe_grow_stack;
 
 use crate::{lower::ItemCollector, source::Origin, *};
 
-mod arms;
+mod array_access;
+mod array_literal;
+mod call;
 mod class;
+mod comprehension;
+mod declaration_annotation;
+mod domain;
+mod identifier;
+mod if_then_else;
 mod pattern;
-mod structural;
+mod record_access;
 
 pub(in crate::lower) struct ExpressionCollector<'db, 'a, 'b, 'c> {
 	pub(in crate::lower) parent: &'a mut ItemCollector<'db>,
@@ -130,158 +137,16 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		let origin = ExpressionRef::new(db, self.item, idx).into_entity(db);
 		let mut result = match &self.data[idx] {
 			shackle_hir::Expression::Absent => alloc_expression(Absent, self, origin),
-			shackle_hir::Expression::ArrayAccess(aa) => {
-				let is_slice = match self.types[aa.indices].lookup(db) {
-					TyData::Tuple(_, fs) => fs.iter().any(|f| f.is_set(db)),
-					TyData::Set(_, _, _) => true,
-					_ => false,
-				};
-				if is_slice {
-					self.collect_slice(aa.collection, aa.indices, origin)
-				} else {
-					let c = self.collect_expression(aa.collection);
-					let i = self.collect_expression(aa.indices);
-					self.collect_array_access(c, i, origin)
-				}
-			}
+			shackle_hir::Expression::ArrayAccess(aa) => self.collect_array_access(aa, origin),
 			shackle_hir::Expression::ArrayComprehension(c) => {
-				let mut generators = Vec::with_capacity(c.generators.len());
-				for g in c.generators.iter() {
-					self.collect_generator(g, &mut generators);
-				}
-				alloc_expression(
-					ArrayComprehension {
-						generators,
-						template: Box::new(self.collect_expression(c.template)),
-						indices: c
-							.indices
-							.map(|indices| Box::new(self.collect_expression(indices))),
-					},
-					self,
-					origin,
-				)
+				self.collect_array_comprehension(c, origin)
 			}
-			shackle_hir::Expression::ArrayLiteral(al) => alloc_expression(
-				ArrayLiteral(
-					al.members
-						.iter()
-						.map(|m| self.collect_expression(*m))
-						.collect(),
-				),
-				self,
-				origin,
-			),
-			// Desugar 2D array literal into array2d call
+			shackle_hir::Expression::ArrayLiteral(al) => self.collect_array_literal(al, origin),
 			shackle_hir::Expression::ArrayLiteral2D(al) => {
-				let mut idx_array = |dim: &shackle_hir::MaybeIndexSet<'db>| match dim {
-					shackle_hir::MaybeIndexSet::Indexed(es) => alloc_expression(
-						ArrayLiteral(es.iter().map(|e| self.collect_expression(*e)).collect()),
-						self,
-						origin,
-					),
-					shackle_hir::MaybeIndexSet::NonIndexed(c) => alloc_expression(
-						LookupCall {
-							function: self.parent.ids.functions.set2array.into(),
-							arguments: vec![if *c > 0 {
-								alloc_expression(
-									LookupCall {
-										function: self.parent.ids.functions.dot_dot.into(),
-										arguments: vec![
-											alloc_expression(IntegerLiteral(1), self, origin),
-											alloc_expression(
-												IntegerLiteral(*c as i64),
-												self,
-												origin,
-											),
-										],
-									},
-									self,
-									origin,
-								)
-							} else {
-								alloc_expression(SetLiteral(Vec::new()), self, origin)
-							}],
-						},
-						self,
-						origin,
-					),
-				};
-				let rows = idx_array(&al.rows);
-				let columns = idx_array(&al.columns);
-				alloc_expression(
-					LookupCall {
-						function: self.parent.ids.functions.mzn_array_2d_literal.into(),
-						arguments: vec![
-							rows,
-							columns,
-							alloc_expression(
-								ArrayLiteral(
-									al.members
-										.iter()
-										.map(|e| self.collect_expression(*e))
-										.collect(),
-								),
-								self,
-								origin,
-							),
-						],
-					},
-					self,
-					origin,
-				)
+				self.collect_array_literal_2d(al, origin)
 			}
-			// Desugar indexed array literal into arrayNd call
 			shackle_hir::Expression::IndexedArrayLiteral(al) => {
-				if al.indices.len() == 1 {
-					alloc_expression(
-						LookupCall {
-							function: self.parent.ids.functions.mzn_start_indexed_array.into(),
-							arguments: vec![
-								self.collect_expression(al.indices[0]),
-								alloc_expression(
-									ArrayLiteral(
-										al.members
-											.iter()
-											.map(|e| self.collect_expression(*e))
-											.collect(),
-									),
-									self,
-									origin,
-								),
-							],
-						},
-						self,
-						origin,
-					)
-				} else {
-					alloc_expression(
-						LookupCall {
-							function: self.parent.ids.builtins.mzn_indexed_array.into(),
-							arguments: vec![alloc_expression(
-								ArrayLiteral(
-									al.indices
-										.iter()
-										.zip(al.members.iter())
-										.map(|(i, e)| {
-											alloc_expression(
-												TupleLiteral(vec![
-													self.collect_expression(*i),
-													self.collect_expression(*e),
-												]),
-												self,
-												origin,
-											)
-										})
-										.collect(),
-								),
-								self,
-								origin,
-							)],
-						},
-						self,
-						origin,
-					)
-				}
+				self.collect_indexed_array_literal(al, origin)
 			}
 			shackle_hir::Expression::BooleanLiteral(b) => alloc_expression(*b, self, origin),
 			shackle_hir::Expression::Call(c) => self.collect_call_expression(c, idx),
@@ -344,28 +209,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				)
 			}
 			shackle_hir::Expression::FloatLiteral(f) => alloc_expression(*f, self, origin),
-			shackle_hir::Expression::Identifier(_) => self.collect_identifier_expression(idx),
-			shackle_hir::Expression::IfThenElse(ite) => alloc_expression(
-				IfThenElse {
-					branches: ite
-						.branches
-						.iter()
-						.map(|b| {
-							Branch::new(
-								self.collect_expression(b.condition),
-								self.collect_expression(b.result),
-							)
-						})
-						.collect(),
-					else_result: Box::new(
-						ite.else_result
-							.map(|e| self.collect_expression(e))
-							.unwrap_or_else(|| self.collect_default_else(ty, origin.into())),
-					),
-				},
-				self,
-				origin,
-			),
+			shackle_hir::Expression::Identifier(_) => self.collect_identifier(idx),
+			shackle_hir::Expression::IfThenElse(ite) => self.collect_if_then_else(ite, ty, origin),
 			shackle_hir::Expression::Infinity => alloc_expression(Infinity, self, origin),
 			shackle_hir::Expression::IntegerLiteral(i) => alloc_expression(*i, self, origin),
 			shackle_hir::Expression::Lambda(l) => {
@@ -459,18 +304,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				origin,
 			),
 			shackle_hir::Expression::SetComprehension(c) => {
-				let mut generators = Vec::with_capacity(c.generators.len());
-				for g in c.generators.iter() {
-					self.collect_generator(g, &mut generators);
-				}
-				alloc_expression(
-					SetComprehension {
-						generators,
-						template: Box::new(self.collect_expression(c.template)),
-					},
-					self,
-					origin,
-				)
+				self.collect_set_comprehension(c, origin)
 			}
 			shackle_hir::Expression::SetLiteral(sl) => alloc_expression(
 				SetLiteral(
