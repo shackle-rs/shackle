@@ -161,6 +161,8 @@ id_registry!(
 	max,
 	arg_min,
 	arg_max,
+	shackle_arg_min,
+	shackle_arg_max,
 	abs,
 	sqrt,
 	exp,
