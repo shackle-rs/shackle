@@ -94,6 +94,90 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
+	/// Domain-level counterpart of `substitute_class_with_potential_enum`:
+	/// build a `Domain` for `ty` in which every `Class<X>` element becomes a
+	/// `Bounded` domain referencing the `<X>_potential` enum item. Enum-typed
+	/// domains are expected to carry their universe as a `Bounded` expression
+	/// throughout shackle — type erasure replaces enum types with plain `int`
+	/// without materialising any bound, so an `Unbounded` potential-enum
+	/// position would lose its finiteness there (surfacing as e.g. an
+	/// unbounded `var set of int` storage slot, which MiniZinc rejects).
+	///
+	/// Classes not yet registered (reference cycles during predeclare) fall
+	/// back to the unbounded class-typed form, exactly like the type
+	/// substitution — `repair_predeclared_class_objects_domains` rebuilds
+	/// those domains through this same builder once registration completes.
+	pub(in crate::lower) fn substitute_class_with_potential_enum_domain(
+		&self,
+		ty: Ty<'db>,
+		origin: impl Into<Origin<'db>>,
+	) -> Domain<'db> {
+		let origin = origin.into();
+		let db = self.db;
+		match ty.lookup(db) {
+			TyData::Class(inst, opt, class_ref) => {
+				let Some(class_pattern) = class_pattern_for(db, *class_ref) else {
+					return Domain::unbounded(db, origin, ty);
+				};
+				let Some(class_map_info) = self.objects.class_map.get(&class_pattern) else {
+					return Domain::unbounded(db, origin, ty);
+				};
+				let potential = Expression::new(db, &self.model, origin, class_map_info.class_enum);
+				Domain::bounded(db, origin, *inst, *opt, potential)
+			}
+			TyData::Enum(inst, opt, enum_ref) => {
+				// A `<X>_potential` enum the caller substituted in already
+				// (storage element types are often built from pre-substituted
+				// record types): recover its enum item to serve as the bound.
+				// Non-potential enums are left alone — their declarations carry
+				// `Bounded` domains from HIR lowering.
+				let Some(class_enum) = self
+					.objects
+					.class_map
+					.values()
+					.map(|info| info.class_enum)
+					.find(|e| self.model[*e].enum_type() == *enum_ref)
+				else {
+					return Domain::unbounded(db, origin, ty);
+				};
+				let potential = Expression::new(db, &self.model, origin, class_enum);
+				Domain::bounded(db, origin, *inst, *opt, potential)
+			}
+			TyData::Set(inst, opt, element) => {
+				let element = self.substitute_class_with_potential_enum_domain(*element, origin);
+				Domain::set(db, origin, *inst, *opt, element)
+			}
+			TyData::Array { opt, dim, element } => {
+				let element = self.substitute_class_with_potential_enum_domain(*element, origin);
+				Domain::array(db, origin, *opt, Domain::unbounded(db, origin, *dim), element)
+			}
+			TyData::Tuple(opt, fields) => Domain::tuple(
+				db,
+				origin,
+				*opt,
+				fields
+					.iter()
+					.map(|f| self.substitute_class_with_potential_enum_domain(*f, origin))
+					.collect::<Vec<_>>(),
+			),
+			TyData::Record(opt, fields) => Domain::record(
+				db,
+				origin,
+				*opt,
+				fields
+					.iter()
+					.map(|(name, f)| {
+						(
+							Identifier(*name),
+							self.substitute_class_with_potential_enum_domain(*f, origin),
+						)
+					})
+					.collect::<Vec<_>>(),
+			),
+			_ => Domain::unbounded(db, origin, ty),
+		}
+	}
+
 	pub(in crate::lower) fn class_storage_fields(
 		&self,
 		class_pattern: PatternRef<'db>,
@@ -261,11 +345,9 @@ impl<'db> ItemCollector<'db> {
 				.map(|d| self.field_relocates_set_card(d))
 				.unwrap_or(false);
 			let domain = match descriptors.get(&ident).copied() {
-				Some(_) if relocated => Domain::unbounded(
-					db,
-					origin,
-					self.substitute_class_with_potential_enum(field_ty),
-				),
+				Some(_) if relocated => {
+					self.substitute_class_with_potential_enum_domain(field_ty, origin)
+				}
 				Some((class_item, declared_type, _original_ty)) if card_relocated => {
 					self.card_stripped_set_field_domain(class_item, declared_type, field_ty, origin)
 				}
@@ -278,14 +360,10 @@ impl<'db> ItemCollector<'db> {
 						// attribute (`var 1..z: s`, with `z` computed) can't carry
 						// that per-object bound in the shared record element type —
 						// it would need `z` in scope, which isn't meaningful for a
-						// record type. Leave the element type unbounded; the tight
+						// record type. Leave the declared bound off; the tight
 						// per-object bound is enforced in the reconstruction
 						// comprehension's fresh `let {var 1..z: ..} in ..` decl.
-						Domain::unbounded(
-							db,
-							origin,
-							self.substitute_class_with_potential_enum(field_ty),
-						)
+						self.substitute_class_with_potential_enum_domain(field_ty, origin)
 					} else {
 						let Item::Class(class_item_ref) = class_item else {
 							unreachable!()
@@ -297,11 +375,7 @@ impl<'db> ItemCollector<'db> {
 						inner.collect_domain(declared_type, field_ty, false)
 					}
 				}
-				None => Domain::unbounded(
-					db,
-					origin,
-					self.substitute_class_with_potential_enum(field_ty),
-				),
+				None => self.substitute_class_with_potential_enum_domain(field_ty, origin),
 			};
 			field_domains.push((ident, domain));
 		}
@@ -569,7 +643,7 @@ impl<'db> ItemCollector<'db> {
 		let db = self.db;
 		let subst = self.substitute_class_with_potential_enum(field_ty);
 		let Item::Class(class_item_ref) = class_item else {
-			return Domain::unbounded(db, origin, subst);
+			return self.substitute_class_with_potential_enum_domain(field_ty, origin);
 		};
 		let class_data = class_item_ref.class(db).data();
 		// A single-dimension array-of-class-reference field
@@ -599,7 +673,7 @@ impl<'db> ItemCollector<'db> {
 						);
 						inner.collect_element_domain(dimensions, dim_ty, false)
 					};
-					let elem_dom = Domain::unbounded(db, origin, elem_subst);
+					let elem_dom = self.substitute_class_with_potential_enum_domain(elem_ty, origin);
 					return Domain::array(db, origin, opt, dim_dom, elem_dom);
 				}
 			}
@@ -614,7 +688,7 @@ impl<'db> ItemCollector<'db> {
 			{
 				*card
 			}
-			_ => return Domain::unbounded(db, origin, subst),
+			_ => return self.substitute_class_with_potential_enum_domain(field_ty, origin),
 		};
 		let class_types = class_item.types(db);
 		let card_expr = {
@@ -626,7 +700,7 @@ impl<'db> ItemCollector<'db> {
 			);
 			inner.collect_expression(card_idx)
 		};
-		let elem_ty = subst.elem_ty(db).unwrap_or(subst);
+		let elem_ty = field_ty.elem_ty(db).unwrap_or(field_ty);
 		let inst = subst.inst(db).unwrap_or(VarType::Var);
 		let opt = subst.opt(db).unwrap_or(OptType::NonOpt);
 		Domain::set_with_card(
@@ -635,7 +709,7 @@ impl<'db> ItemCollector<'db> {
 			inst,
 			opt,
 			Some(card_expr),
-			Domain::unbounded(db, origin, elem_ty),
+			self.substitute_class_with_potential_enum_domain(elem_ty, origin),
 		)
 	}
 }

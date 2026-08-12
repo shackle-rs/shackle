@@ -399,20 +399,23 @@ impl<'db> ItemCollector<'db> {
 		let db = self.db;
 		let subst = self.substitute_class_with_potential_enum(field_ty);
 		let Item::Class(local) = class_item else {
-			return Domain::unbounded(db, origin, subst);
+			return self.substitute_class_with_potential_enum_domain(field_ty, origin);
 		};
 		let class_data = local.class(db).data();
 		let shackle_hir::Type::Set { element, .. } = &class_data[declared_type] else {
-			return Domain::unbounded(db, origin, subst);
+			return self.substitute_class_with_potential_enum_domain(field_ty, origin);
 		};
 		let element = *element;
 		let inst = subst.inst(db).unwrap_or(VarType::Var);
 		let opt = subst.opt(db).unwrap_or(OptType::NonOpt);
 		let elem_ty = subst.elem_ty(db).unwrap_or(subst);
 		let elem_domain = if subst != field_ty {
-			// Class-element reference set: the element bound lives in the
-			// substituted `<Child>_potential` enum type itself.
-			Domain::unbounded(db, origin, elem_ty)
+			// Class-element reference set: the element bound is the child's
+			// `<Child>_potential` identity universe.
+			self.substitute_class_with_potential_enum_domain(
+				field_ty.elem_ty(db).unwrap_or(field_ty),
+				origin,
+			)
 		} else {
 			let class_types = class_item.types(db);
 			let mut inner = ExpressionCollector::new(self, class_data, class_item, &class_types);

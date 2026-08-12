@@ -24,6 +24,44 @@ use crate::{
 	},
 };
 
+/// Whether erasing enums would silently lose this domain's finiteness: it
+/// contains an `Unbounded` enum-typed leaf as a var scalar or as a var set's
+/// element. Enum-typed domains are expected to carry their universe as a
+/// `Bounded` expression — enum erasure replaces the type with plain `int`
+/// without materialising any bound, so such a leaf on a declaration without a
+/// definition becomes an unbounded `var int` / non-finite `var set of int` in
+/// the emitted model. Used in debug assertions when unpacking free struct
+/// variables (the position where every field domain ends up on an unassigned
+/// fresh declaration).
+#[cfg(debug_assertions)]
+fn domain_loses_enum_bound<'db, T: Marker>(
+	db: &'db dyn Db,
+	domain: &Domain<'db, T>,
+	elem_of_var_set: bool,
+) -> bool {
+	use shackle_ty::TyData;
+	match &**domain {
+		DomainData::Unbounded => {
+			matches!(domain.ty().lookup(db), TyData::Enum(_, _, _))
+				&& (elem_of_var_set
+					|| domain.ty().inst(db) == Some(shackle_hir::VarType::Var))
+		}
+		DomainData::Set(element, _) => domain_loses_enum_bound(
+			db,
+			element,
+			domain.ty().inst(db) == Some(shackle_hir::VarType::Var),
+		),
+		DomainData::Array(_, element) => domain_loses_enum_bound(db, element, false),
+		DomainData::Tuple(fields) => fields
+			.iter()
+			.any(|f| domain_loses_enum_bound(db, f, false)),
+		DomainData::Record(fields) => fields
+			.iter()
+			.any(|(_, f)| domain_loses_enum_bound(db, f, false)),
+		DomainData::Bounded(_) => false,
+	}
+}
+
 enum DomainConstraint<'db, T: Marker> {
 	Array(
 		Origin<'db>,
@@ -972,7 +1010,15 @@ impl<'db, Dst: Marker, Src: Marker> DomainRewriter<'db, Dst, Src> {
 			DomainData::Set(_, Some(e)) => {
 				// A set variable with a cardinality bound: declare the variable
 				// with the element domain only and constrain its cardinality.
-				let dom_decl = Declaration::new(false, self.fold_domain(db, model, domain));
+				let folded_domain = self.fold_domain(db, model, domain);
+				#[cfg(debug_assertions)]
+				debug_assert!(
+					!domain_loses_enum_bound(db, &folded_domain, false),
+					"unpacked free set variable's domain contains an unbounded enum \
+					 position — enum erasure would lose its finiteness (at {})",
+					domain.origin().pretty_print(db)
+				);
+				let dom_decl = Declaration::new(false, folded_domain);
 				let dom_idx = self
 					.model
 					.add_declaration(Item::new(dom_decl, domain.origin()));
@@ -1011,10 +1057,15 @@ impl<'db, Dst: Marker, Src: Marker> DomainRewriter<'db, Dst, Src> {
 				dom_expr
 			}
 			_ => {
-				let decl = Declaration::new(
-					false,
-					self.collect_domain(db, model, domain, outer_let_items),
+				let collected_domain = self.collect_domain(db, model, domain, outer_let_items);
+				#[cfg(debug_assertions)]
+				debug_assert!(
+					!domain_loses_enum_bound(db, &collected_domain, false),
+					"unpacked free struct field's domain contains an unbounded enum \
+					 position — enum erasure would lose its finiteness (at {})",
+					domain.origin().pretty_print(db)
 				);
+				let decl = Declaration::new(false, collected_domain);
 				let idx = self.model.add_declaration(Item::new(decl, domain.origin()));
 				let dom_expr = Expression::new(db, &self.model, domain.origin(), idx);
 				inner_let_items.push(LetItem::Declaration(idx));
