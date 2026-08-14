@@ -381,6 +381,27 @@ impl Enum {
 		}
 	}
 
+	/// Create an enumerated type whose members are already known from the model
+	pub(crate) fn from_constructors<I: IntoIterator<Item = Constructor>>(
+		name: Arc<str>,
+		constructors: I,
+	) -> Self {
+		Self {
+			name,
+			state: EnumInner::Constructors(Vec::from_iter(constructors).into_boxed_slice()).into(),
+		}
+	}
+
+	/// Returns whether the members of the enumerated type are known
+	///
+	/// The methods that inspect the members panic when this is `false`
+	pub fn is_defined(&self) -> bool {
+		matches!(
+			self.state.lock().unwrap().deref(),
+			EnumInner::Constructors(_)
+		)
+	}
+
 	/// Returns the number of members of the enumerated type
 	///
 	/// ## Warning
@@ -483,7 +504,7 @@ pub struct EnumValue {
 
 impl EnumValue {
 	pub(crate) fn from_enum_and_pos(ty: Arc<Enum>, pos: usize) -> Self {
-		debug_assert!(pos >= 1 && pos <= ty.len());
+		debug_assert!(pos >= 1 && (!ty.is_defined() || pos <= ty.len()));
 		Self { ty, pos }
 	}
 
@@ -549,6 +570,11 @@ impl EnumValue {
 
 impl Display for EnumValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		if !self.ty.is_defined() {
+			// The members of the type are not known, but the value still has to
+			// be shown: `to_enum` names it by its position in the type
+			return write!(f, "to_enum({}, {})", self.ty.name(), self.pos);
+		}
 		let (c, a) = self.constructor_and_args();
 		write!(f, "{c}")?;
 		if !a.is_empty() {

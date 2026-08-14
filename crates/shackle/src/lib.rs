@@ -622,15 +622,38 @@ impl ModelIoInterface {
 		let mut enums = FxHashMap::default();
 		for (_, e) in model.enumerations() {
 			let name = resolve_name(e.enum_type().name());
-			if let Some(_ctor) = e.definition() {
+			let Some(ctors) = e.definition() else {
+				enums.insert(name.clone(), Arc::new(Enum::from_data(name)));
+				continue;
+			};
+			// A constructor that takes an argument ranges over that argument's
+			// domain, which is an arbitrary expression and so may depend on
+			// data. Only the atomic members can be resolved from the model.
+			let mut members = Vec::with_capacity(ctors.len());
+			for ctor in ctors {
+				match (ctor.name, &ctor.parameters) {
+					(Some(n), None) => {
+						members.push((resolve_name(n.0), Box::from([]), 1));
+					}
+					_ => {
+						members.clear();
+						break;
+					}
+				}
+			}
+			if members.is_empty() && !ctors.is_empty() {
 				log::warn!(
-					"TODO: enumerated type {} is defined in the model and member can currently not be constructed in data",
+					"TODO: the members of enumerated type {} are constructed from arguments that cannot be resolved from the model, so its values can only be shown by position",
 					name
 				);
-				// TODO: determine dependencies or directly initialize the enumerated type
+				// TODO: evaluate the constructor argument domains once the data
+				// they depend on is known
 				enums.insert(name.clone(), Arc::new(Enum::model_defined(name, [])));
 			} else {
-				enums.insert(name.clone(), Arc::new(Enum::from_data(name)));
+				enums.insert(
+					name.clone(),
+					Arc::new(Enum::from_constructors(name, members)),
+				);
 			}
 		}
 
