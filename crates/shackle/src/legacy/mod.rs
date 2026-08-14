@@ -94,39 +94,42 @@ impl Program {
 		cmd.args(&self.minizinc_args);
 
 		let mut child = cmd.spawn().unwrap(); // TODO: fix unwrap
-		child.wait().unwrap(); // TODO: fix unwrap
+		// The interpreter's output must be consumed as it is produced: waiting
+		// for the process to exit first deadlocks as soon as it writes more
+		// than fits in the pipe's buffer
 		let stdout = child.stdout.take().unwrap();
 
 		let mut status = Status::Unknown;
-		for line in BufReader::new(stdout).lines() {
-			match line {
-				Err(e) => {
-					return Err(InternalError::new(format!(
+		// Reading the output is fallible, but the interpreter has to be waited
+		// on whether it succeeds or not, or the process is left behind
+		let read = (|| -> Result<()> {
+			for line in BufReader::new(stdout).lines() {
+				let line = line.map_err(|e| {
+					Error::from(InternalError::new(format!(
 						"Unable to read interpreter output: “{e}”"
-					))
-					.into());
-				}
-				Ok(line) => {
-					match serde_json::Deserializer::from_str(&line)
-						.deserialize_map(SerdeMessageVisitor(&self.output_types))
-						.map_err(|e| {
-							Error::from_serde_json(e, &SourceFile::unnamed(line.clone()))
-						})? {
-						LegacyOutput::Status(s) => status = s,
-						LegacyOutput::Msg(msg) => {
-							if let Message::Solution { .. } = msg
-								&& status == Status::Unknown
-							{
-								status = Status::Satisfied
-							}
-							msg_callback(&msg)?
+					)))
+				})?;
+				match serde_json::Deserializer::from_str(&line)
+					.deserialize_map(SerdeMessageVisitor(&self.output_types))
+					.map_err(|e| Error::from_serde_json(e, &SourceFile::unnamed(line.clone())))?
+				{
+					LegacyOutput::Status(s) => status = s,
+					LegacyOutput::Msg(msg) => {
+						if let Message::Solution { .. } = msg
+							&& status == Status::Unknown
+						{
+							status = Status::Satisfied
 						}
-						LegacyOutput::Error(err) => return Err(err),
+						msg_callback(&msg)?
 					}
+					LegacyOutput::Error(err) => return Err(err),
 				}
 			}
-		}
-		match child.wait() {
+			Ok(())
+		})();
+		let exit = child.wait();
+		read?;
+		match exit {
 			Ok(code) => {
 				if !code.success() {
 					log::warn!(

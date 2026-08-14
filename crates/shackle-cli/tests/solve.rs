@@ -2,7 +2,14 @@
 //! the MiniZinc interpreter, and the standard output of the whole run is
 //! compared against a checked-in expected file.
 
-use std::{path::PathBuf, process::Command};
+use std::{
+	io::Read,
+	path::PathBuf,
+	process::{Command, Stdio},
+	sync::mpsc,
+	thread,
+	time::Duration,
+};
 
 use expect_test::expect_file;
 
@@ -48,6 +55,54 @@ fn solve_output_item() {
 #[test]
 fn solve_output_item_absent() {
 	check_solve("output_item_absent", false);
+}
+
+/// The interpreter's output has to be read as it is produced, so a solution
+/// bigger than the pipe's buffer must not deadlock the run. The expected output
+/// is too big to keep in a file, and a regression makes the solve hang rather
+/// than produce something to compare, so this checks the shape under a deadline.
+#[test]
+fn solve_large_output() {
+	let model = fixture("large_output", "mzn");
+	let mut child = Command::new(env!("CARGO_BIN_EXE_shackle"))
+		.args(["solve", model.to_str().unwrap()])
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.spawn()
+		.unwrap();
+	// The output is bigger than the pipe holds, so it has to be read while the
+	// solve is still running whether or not the deadlock is back. Reading the
+	// (small) error output afterwards is safe: by then the solve has finished.
+	let mut stdout = child.stdout.take().unwrap();
+	let mut stderr = child.stderr.take().unwrap();
+	let (sender, receiver) = mpsc::channel();
+	thread::spawn(move || {
+		let mut out = String::new();
+		let mut err = String::new();
+		let _ = stdout.read_to_string(&mut out);
+		let _ = stderr.read_to_string(&mut err);
+		let _ = sender.send((out, err));
+	});
+
+	let (stdout, stderr) = match receiver.recv_timeout(Duration::from_secs(120)) {
+		Ok(output) => output,
+		Err(_) => {
+			// A deadlocked solve never exits, and takes the interpreter with it
+			let _ = child.kill();
+			let _ = child.wait();
+			panic!("solve did not return a large solution within 120s");
+		}
+	};
+	let status = child.wait().unwrap();
+
+	assert!(
+		status.success(),
+		"solve failed\nstatus: {status}\nstderr:\n{stderr}"
+	);
+	// The 20000 lines of the output item, followed by the solution separator
+	assert_eq!(stdout.lines().count(), 20001);
+	assert!(stdout.starts_with("line 1 of a large output, x=2\n"));
+	assert!(stdout.ends_with("line 20000 of a large output, x=2\n----------\n"));
 }
 
 #[test]
