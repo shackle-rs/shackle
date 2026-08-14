@@ -381,7 +381,15 @@ impl Display for Type {
 #[derive(Debug)]
 pub enum Message<'a> {
 	/// (Intermediate) solution emitted in the process
-	Solution(FxHashMap<&'a str, Value>),
+	Solution {
+		/// Assignments of the values of the model's output variables
+		assignments: FxHashMap<&'a str, Value>,
+		/// Rendered contents of the model's output sections, in display order.
+		///
+		/// Empty when the model has no output items, in which case the
+		/// assignments are shown instead.
+		sections: Vec<(&'a str, String)>,
+	},
 	/// Statistical information of the shackle or solving process
 	Statistic(Vec<(&'a str, serde_json::Value)>),
 	/// Trace messages emitted during the shackle process
@@ -393,9 +401,27 @@ pub enum Message<'a> {
 impl Display for Message<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Message::Solution(sol) => {
-				for (name, val) in sol {
-					writeln!(f, "{} = {};", name, val)?;
+			Message::Solution {
+				assignments,
+				sections,
+			} => {
+				if sections.is_empty() {
+					for (name, val) in assignments {
+						writeln!(f, "{} = {};", name, val)?;
+					}
+				} else {
+					// The rendered sections are printed verbatim, but the
+					// solution separator must start on its own line
+					let mut ends_in_newline = true;
+					for (_, contents) in sections {
+						if let Some(c) = contents.chars().next_back() {
+							write!(f, "{}", contents)?;
+							ends_in_newline = c == '\n';
+						}
+					}
+					if !ends_in_newline {
+						writeln!(f)?;
+					}
 				}
 				writeln!(f, "----------")
 			}
