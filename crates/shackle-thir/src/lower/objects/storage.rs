@@ -149,7 +149,13 @@ impl<'db> ItemCollector<'db> {
 			}
 			TyData::Array { opt, dim, element } => {
 				let element = self.substitute_class_with_potential_enum_domain(*element, origin);
-				Domain::array(db, origin, *opt, Domain::unbounded(db, origin, *dim), element)
+				Domain::array(
+					db,
+					origin,
+					*opt,
+					Domain::unbounded(db, origin, *dim),
+					element,
+				)
 			}
 			TyData::Tuple(opt, fields) => Domain::tuple(
 				db,
@@ -673,7 +679,8 @@ impl<'db> ItemCollector<'db> {
 						);
 						inner.collect_element_domain(dimensions, dim_ty, false)
 					};
-					let elem_dom = self.substitute_class_with_potential_enum_domain(elem_ty, origin);
+					let elem_dom =
+						self.substitute_class_with_potential_enum_domain(elem_ty, origin);
 					return Domain::array(db, origin, opt, dim_dom, elem_dom);
 				}
 			}

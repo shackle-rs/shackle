@@ -43,8 +43,7 @@ fn domain_loses_enum_bound<'db, T: Marker>(
 	match &**domain {
 		DomainData::Unbounded => {
 			matches!(domain.ty().lookup(db), TyData::Enum(_, _, _))
-				&& (elem_of_var_set
-					|| domain.ty().inst(db) == Some(shackle_hir::VarType::Var))
+				&& (elem_of_var_set || domain.ty().inst(db) == Some(shackle_hir::VarType::Var))
 		}
 		DomainData::Set(element, _) => domain_loses_enum_bound(
 			db,
@@ -52,9 +51,7 @@ fn domain_loses_enum_bound<'db, T: Marker>(
 			domain.ty().inst(db) == Some(shackle_hir::VarType::Var),
 		),
 		DomainData::Array(_, element) => domain_loses_enum_bound(db, element, false),
-		DomainData::Tuple(fields) => fields
-			.iter()
-			.any(|f| domain_loses_enum_bound(db, f, false)),
+		DomainData::Tuple(fields) => fields.iter().any(|f| domain_loses_enum_bound(db, f, false)),
 		DomainData::Record(fields) => fields
 			.iter()
 			.any(|(_, f)| domain_loses_enum_bound(db, f, false)),
