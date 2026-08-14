@@ -83,6 +83,12 @@ pub fn generate_output<'db>(db: &'db dyn Db, mut model: Model<'db>) -> Result<Mo
 			origin,
 			ids.annotations.output_only,
 		));
+		declaration.annotations_mut().push(Expression::new(
+			db,
+			&model,
+			origin,
+			ids.annotations.output,
+		));
 		declaration.set_definition(definition);
 		let _ = model.add_declaration(Item::new(declaration, origin));
 	}
@@ -133,9 +139,9 @@ mod tests {
 				output :: "one" ["C"];
             "#,
 			expect!([r#"
-    string: mzn_output_default :: (output_only) = concat(["Hello, world"]);
-    string: mzn_output_one :: (output_only) = concat('++'(["A"], ["C"]));
-    string: mzn_output_two :: (output_only) = concat(["B"]);
+    string: mzn_output_default :: (output_only) :: ('output') = concat(["Hello, world"]);
+    string: mzn_output_one :: (output_only) :: ('output') = concat('++'(["A"], ["C"]));
+    string: mzn_output_two :: (output_only) :: ('output') = concat(["B"]);
 "#]),
 		);
 	}
