@@ -292,14 +292,26 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						.items
 						.iter()
 						.flat_map(|i| match i {
+							// A `let` inside an output expression is still an output
+							// context, but its items are collected through the
+							// ItemCollector, which builds a fresh
+							// ExpressionCollector. Hand the flag across explicitly
+							// or a reference to an OUTSIDE declaration made from
+							// within the let loses the par-ification the typer
+							// applied to it, and lands in `collect_identifier`'s
+							// unreachable arm.
 							shackle_hir::LetItem::Constraint(c) => {
-								let constraint =
-									self.parent.collect_constraint(self.item, c, false);
+								let constraint = self.parent.collect_constraint(
+									self.item,
+									c,
+									false,
+									self.in_output,
+								);
 								vec![LetItem::Constraint(constraint)]
 							}
 							shackle_hir::LetItem::Declaration(d) => self
 								.parent
-								.collect_declaration(self.item, d, false)
+								.collect_declaration(self.item, d, false, self.in_output)
 								.into_iter()
 								.map(|d| d.into())
 								.collect::<Vec<_>>(),

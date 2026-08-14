@@ -115,10 +115,12 @@ impl<'db> ItemCollector<'db> {
 			}
 			Item::Assignment(a) => self.collect_assignment(a),
 			Item::Constraint(c) => {
-				let _ = self.collect_constraint(item, c.constraint(self.db), true);
+				let _ = self.collect_constraint(item, c.constraint(self.db), true, false);
 			}
 			Item::Declaration(d) => {
-				let _ = self.collect_declaration(item, d.declaration(self.db), true);
+				// A top-level declaration is in an output context only if it says
+				// so itself, which `collect_declaration` reads off its annotations.
+				let _ = self.collect_declaration(item, d.declaration(self.db), true, false);
 			}
 			Item::Enumeration(e) => {
 				let _ = self.collect_enumeration(e);
@@ -240,10 +242,12 @@ impl<'db> ItemCollector<'db> {
 		item: Item<'db>,
 		c: &shackle_hir::Constraint<'db>,
 		top_level: bool,
+		in_output: bool,
 	) -> ConstraintId<'db> {
 		let db = self.db;
 		let types = item.types(db);
-		let mut collector = ExpressionCollector::new(self, item.data(db), item, &types);
+		let mut collector =
+			ExpressionCollector::new(self, item.data(db), item, &types).inherit_output(in_output);
 		let mut constraint = Constraint::new(top_level, collector.collect_expression(c.expression));
 		constraint.annotations_mut().extend(
 			c.annotations
@@ -277,6 +281,7 @@ impl<'db> ItemCollector<'db> {
 		item: Item<'db>,
 		d: &shackle_hir::Declaration<'db>,
 		top_level: bool,
+		in_output: bool,
 	) -> Vec<DeclOrConstraint<'db>> {
 		let db = self.db;
 		let types = item.types(db);
@@ -286,7 +291,10 @@ impl<'db> ItemCollector<'db> {
 			_ => unreachable!(),
 		};
 		let data = item.data(db);
-		let output_only = self.is_output_only(data, d);
+		// A declaration is in an output context either because it carries
+		// `::output_only` itself, or because it is a `let` item inside one that
+		// does — the caller knows the latter.
+		let output_only = in_output || self.is_output_only(data, d);
 		let mut collector =
 			ExpressionCollector::new(self, data, item, &types).inherit_output(output_only);
 		let root_pattern = PatternRef::new(db, item, d.pattern);

@@ -11,7 +11,7 @@ int: W_w_h_start = 1;
 int: W_w_h_end = '+'(W_w_h_start, '*'(card(W_potential), 1));
 array [int] of record(var opt H_potential: h): W_w_objects = [(h: h) | p in index_set(W_w_storage), input = '[]'(W_w_storage, p), h = (input).h];
 W_potential: w = W_occ_0(1);
-output ["nH=", show(card(H))];
+output ["nH=", show(card(fix(H)))];
 constraint forall(['->'(occurs(('[]'(W_w_objects, _DECL_2)).h), '='(('[]'(W_w_objects, _DECL_2)).h, H_occ_1(_DECL_2))) | _DECL_2 in index_set(W_w_objects)]);
 constraint forall(['\/'('in'(x, H), '='(('[]'(H_objects, enum2int(x))).x, mzn_safe_default(('[]'(H_objects, enum2int(x))).x))) | x in H_potential]);
 solve satisfy;

@@ -119,6 +119,33 @@ fn test_lower_output_comprehension_generator_fixes_var_reference() {
 	);
 }
 
+// A `let` inside an output expression is collected through the ItemCollector,
+// which builds a fresh ExpressionCollector — so the output context has to be
+// handed across explicitly. Without that, a reference to an OUTSIDE declaration
+// made from inside the let keeps the typer's par type but lowers var, and hits
+// `collect_identifier`'s unreachable arm. Note the let-local `z` is NOT fixed:
+// it is declared in this item, so the typer never par-ified it.
+#[test]
+fn test_lower_output_let_item_fixes_outer_var_reference() {
+	check_no_stdlib(
+		r#"
+		function $T: fix(var $T: x);
+		function string: show(var int: x);
+		var int: y;
+		output [show(let { var int: z = y } in z)];
+		"#,
+		expect![[r#"
+    function $T: fix(var $T: x);
+    function string: show(var int: x);
+    var int: y;
+    output [show(let {
+      var int: z = fix(y);
+    } in z)];
+    solve satisfy;
+"#]],
+	);
+}
+
 // Outside an output context the reference keeps its var-ness: nothing is
 // fixed, and the var overload is what the typer resolved against.
 #[test]

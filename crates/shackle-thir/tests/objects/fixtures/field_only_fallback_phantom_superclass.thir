@@ -20,7 +20,7 @@ array [int] of set of B_potential: R_r_bs_potential = [_DECL_3: B_occ_1('..'('+'
 array [int] of record(var set of B_potential: bs): R_r_objects = [(bs: bs) | p in index_set(R_r_storage), input = '[]'(R_r_storage, p), bs = (input).bs];
 R_potential: r = R_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(R_r_objects, _DECL_4)).bs), enum2int('[]'(R_r_bs_potential, _DECL_4))) | _DECL_4 in index_set(R_r_objects)]);
-output ["nA=", show(card(A)), " nB=", show(card(B))];
+output ["nA=", show(card(fix(A))), " nB=", show(card(fix(B)))];
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).y, mzn_safe_default(('[]'(A_objects, enum2int(x))).y))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
 solve satisfy;

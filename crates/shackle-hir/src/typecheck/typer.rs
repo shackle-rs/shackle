@@ -243,6 +243,12 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					defining_set_ty, ..
 				} => {
 					// In a value position, a class name denotes the set of its objects
+					if self.in_output_item {
+						// Same par-ification as the Variable arm above. Only the
+						// SET is fixed — the objects' attributes may still live in var
+						// storage, so `c.x` for `c in C` may remain a var read.
+						return defining_set_ty.make_par(db);
+					}
 					return defining_set_ty;
 				}
 				PatternTy::Computing => {

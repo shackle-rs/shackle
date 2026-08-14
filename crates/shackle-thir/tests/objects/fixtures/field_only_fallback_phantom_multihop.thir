@@ -23,7 +23,7 @@ C_potential: c = C_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(C_c_objects, _DECL_5)).ps), enum2int('[]'(C_c_ps_potential, _DECL_5))) | _DECL_5 in index_set(C_c_objects)]);
 constraint forall(['subset'(enum2int(('[]'(P_ps_objects, _DECL_6)).ns), enum2int('[]'(C_c_ps_ns_potential, _DECL_6))) | _DECL_6 in index_set(P_ps_objects)]);
 constraint forall(['='(card(('[]'(P_objects, enum2int(p))).ns), 0) | cc in C, p in ('[]'(C_objects, enum2int(cc))).ps]);
-output ["nN=", show(card(N)), " nP=", show(card(P))];
+output ["nN=", show(card(fix(N))), " nP=", show(card(fix(P)))];
 constraint forall(['\/'('in'(x, N), '='(('[]'(N_objects, enum2int(x))).v, mzn_safe_default(('[]'(N_objects, enum2int(x))).v))) | x in N_potential]);
 constraint forall(['\/'('in'(x, P), '='(('[]'(P_objects, enum2int(x))).ns, lb(('[]'(P_objects, enum2int(x))).ns))) | x in P_potential]);
 solve satisfy;
