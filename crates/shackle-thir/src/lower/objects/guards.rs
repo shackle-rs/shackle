@@ -607,6 +607,23 @@ impl<'db> ItemCollector<'db> {
 						if in_progress.contains(&res.item(db)) {
 							return false;
 						}
+						// `::promise_total` is the author's declaration that the
+						// function is defined everywhere, so take it and skip
+						// both checks below — it covers the parameter domains
+						// too, which is what the annotation means to MiniZinc.
+						// Without this the whitelist only ever sees the
+						// *bodyless* half of a stdlib pair: `card(set of $T)` is
+						// a true builtin and counts, while its var twin
+						// `card(var set of $$E) ::promise_total` fails the
+						// domain check (`$$E` is a `Bounded` type-inst alias)
+						// and then the body walk (a `let` with a domained
+						// decision) — so the same attribute would count as total
+						// or not depending only on whether its class is
+						// var-reached.
+						if self.function_promises_total(f) {
+							todo.extend(c.arguments.iter().copied());
+							continue;
+						}
 						// A parameter or return domain is a definedness
 						// side-condition of its own (`function int: f(1..3: x)`
 						// is undefined at `x = 0`), so a body-carrying
@@ -650,6 +667,19 @@ impl<'db> ItemCollector<'db> {
 	/// empty), set construction and set ops, comparisons, boolean ops.
 	/// `div`/`mod`/`'[]'`/`min`/`max`/`deopt`/`assert`/`pow` are deliberately
 	/// absent.
+	/// Whether a function item carries `::promise_total`.
+	fn function_promises_total(&self, f: shackle_hir::ir::item::FunctionItem<'db>) -> bool {
+		let db = self.db;
+		let function = f.function(db);
+		let data = function.data();
+		function.annotations.iter().any(|a| {
+			matches!(
+				&data[*a],
+				shackle_hir::Expression::Identifier(i) if *i == self.ids.annotations.promise_total
+			)
+		})
+	}
+
 	pub(in crate::lower) fn total_builtin_call(&self, ident: Identifier<'db>) -> bool {
 		let ids = self.ids;
 		[

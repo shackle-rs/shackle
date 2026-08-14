@@ -21,7 +21,7 @@ use crate::{
 	Item, ItemData, Lambda, Let, LetItem, MaybeIndexSet, Pattern, PatternId, PrimitiveType,
 	RecordAccess, RecordLiteral, SetComprehension, SetLiteral, TupleAccess, TupleLiteral, Type,
 	TypeId,
-	class_analysis::{class_item_for, class_pattern_for},
+	class_analysis::{class_item_for, class_pattern_for, var_reached_classes},
 	constants::IdentifierRegistry,
 	ids::{ExpressionRef, PatternRef, TypeRef},
 	overloading::{NamedArgumentResoler, OverloadEliminationReason},
@@ -219,7 +219,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					if self.in_output_item && p.item(db) != self.item {
 						return ty.make_par(db);
 					}
-					return ty;
+					return self.varify_class_body_attribute(p, *i, ty);
 				}
 				PatternTy::Argument(ty) | PatternTy::Enum(ty) | PatternTy::EnumAtom(ty) => {
 					return ty;
@@ -1246,6 +1246,61 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		Ty::array(db, *dim, var_element)
 	}
 
+	/// Varify a bare attribute name read inside the body of a var-reached class.
+	///
+	/// A record access varifies when its receiver is var, but inside a class
+	/// body an attribute is named without a receiver, and `this` is par — the
+	/// lowering iterates the realised object set, so the object handle really is
+	/// a par index. The attribute is still projected out of the class's varified
+	/// storage record, so the reference is var, exactly as `obj.x` would be.
+	/// Without this the body types against the declared par types and resolves
+	/// calls to par overloads that no longer apply once lowering hands them the
+	/// var projection.
+	fn varify_class_body_attribute(
+		&mut self,
+		pattern: PatternRef<'db>,
+		field: Identifier<'db>,
+		ty: Ty<'db>,
+	) -> Ty<'db> {
+		let db = self.db;
+		// Attribute patterns live in a class item; anything else is a global.
+		// For an inherited attribute that item is the declaring superclass, so
+		// the var-reach question is asked of the class being typed, whose
+		// storage the read actually goes through.
+		let (Item::Class(_), Item::Class(c)) = (pattern.item(db), self.item) else {
+			return ty;
+		};
+		let class = c.class(db);
+		// `this` resolves here too, and stays par.
+		if pattern == PatternRef::new(db, self.item, class.this_pattern) {
+			return ty;
+		}
+		if !var_reached_classes(db).contains(&PatternRef::new(db, self.item, class.pattern)) {
+			return ty;
+		}
+		let PatternTy::Variable(this_ty) = self
+			.ctx
+			.type_pattern(db, PatternRef::new(db, self.item, class.this_pattern))
+		else {
+			return ty;
+		};
+		let Some(class_ref) = this_ty.class_type(db) else {
+			return ty;
+		};
+		let varified = if matches!(ty.lookup(db), TyData::Array { .. }) {
+			self.varify_array_class_attribute(class_ref, field, ty)
+		} else {
+			ty.make_var(db)
+		};
+		varified.unwrap_or_else(|| {
+			// An unvarifiable attribute on a var-reached class is reported
+			// against its declaration by `object_validation`, with a message
+			// that names the class. Keep the declared type here rather than
+			// emitting a second, vaguer error at every use.
+			ty
+		})
+	}
+
 	fn collect_record_access(
 		&mut self,
 		expr: ExpressionId<'db>,
@@ -1353,7 +1408,15 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 						if let OptType::Opt = opt_type {
 							ty = ty.make_opt(db);
 						}
-						if let VarType::Var = var_type {
+						// A var-reached class has its whole storage record varified,
+						// so every read of one of its attributes is var — even
+						// through a par handle. A par `new C: p` declared alongside
+						// a `var new C` elsewhere still projects out of that one var
+						// storage array.
+						let reads_var_storage = matches!(var_type, VarType::Var)
+							|| class_pattern_for(db, class_ref)
+								.is_some_and(|p| var_reached_classes(db).contains(&p));
+						if reads_var_storage {
 							// An array attribute must go through the guarded
 							// element-wise varification: a plain `make_var`
 							// varifies the elements blindly, but a ragged

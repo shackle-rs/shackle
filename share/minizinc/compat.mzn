@@ -173,14 +173,18 @@ function set of float: mzn_array2set(array [int] of float: x) = array2set(x);
 function bool: mzn_add_warning(string: msg) = trace("WARNING: " ++ msg);
 
 function int: shackle_div(int: x, int: y) = x div y;
-function $$E: shackle_min(set of $$E: x) = min(x);
-function $$E: shackle_max(set of $$E: x) = max(x);
-function $$E: shackle_arg_min(array [$$E] of bool: x) = arg_min(x);
-function $$E: shackle_arg_min(array [$$E] of $$T: x) = arg_min(x);
-function $$E: shackle_arg_min(array [$$E] of float: x) = arg_min(x);
-function $$E: shackle_arg_max(array [$$E] of bool: x) = arg_max(x);
-function $$E: shackle_arg_max(array [$$E] of $$T: x) = arg_max(x);
-function $$E: shackle_arg_max(array [$$E] of float: x) = arg_max(x);
+% Parameter names must match the shackle stdlib's public wrappers
+% (std/internal/math.mzn): the old_compat prefixing renames those wrappers to
+% these same `shackle_*` names, and old MiniZinc rejects same-signature
+% overloads that differ only in parameter names as ambiguous.
+function $$E: shackle_min(set of $$E: s) = min(s);
+function $$E: shackle_max(set of $$E: s) = max(s);
+function $$E: shackle_arg_min(array [$$E] of bool: xs) = arg_min(xs);
+function $$E: shackle_arg_min(array [$$E] of $$T: xs) = arg_min(xs);
+function $$E: shackle_arg_min(array [$$E] of float: xs) = arg_min(xs);
+function $$E: shackle_arg_max(array [$$E] of bool: xs) = arg_max(xs);
+function $$E: shackle_arg_max(array [$$E] of $$T: xs) = arg_max(xs);
+function $$E: shackle_arg_max(array [$$E] of float: xs) = arg_max(xs);
 function int: shackle_pow(int: x, int: y) = pow(x, y);
 function array [$$E] of $$F: inverse(array [$$F] of $$E: f);
 function array [$$E] of $$F: shackle_inverse(array [$$F] of $$E: f) = inverse(f);

@@ -514,3 +514,71 @@ fn test_class_type_errors() {
     Type mismatch"#]),
 	);
 }
+
+/// A var-reached class has its whole storage record varified, so reads of its
+/// attributes are var wherever they appear — not only through a var handle.
+/// Typing them par would let the body resolve calls to par overloads that no
+/// longer apply once lowering hands them the var projection, which used to
+/// surface as a panic in THIR instead of an error here.
+#[test]
+fn test_var_reached_class_attribute_reads_are_var() {
+	let mut tester = TypeTester::new();
+	// Bare attribute name in a class body constraint.
+	tester.check_error(
+		r#"
+		predicate foo(int: x);
+		class A (1..10: x; constraint foo(x));
+		var new A: a;
+		"#,
+		expect!("No matching function"),
+	);
+	// Same read written through `this`, which is itself par.
+	tester.check_error(
+		r#"
+		predicate foo(int: x);
+		class A (1..10: x; constraint foo(this.x));
+		var new A: a;
+		"#,
+		expect!("No matching function"),
+	);
+	// A computed attribute's definition is a class-body expression too.
+	tester.check_error(
+		r#"
+		function int: idx(int: x) = x + 1;
+		class A (1..10: x; int: y = idx(x));
+		var new A: a;
+		"#,
+		expect!("No matching function"),
+	);
+	// An attribute inherited from a superclass, read in the subclass body.
+	tester.check_error(
+		r#"
+		predicate foo(int: x);
+		class A (1..10: x);
+		class B extends A (1..10: y; constraint foo(x));
+		var new B: b;
+		"#,
+		expect!("No matching function"),
+	);
+	// A par handle still projects out of the one var storage array, so the read
+	// is var even though the handle is not.
+	tester.check_error(
+		r#"
+		predicate foo(int: x);
+		class A (1..10: x);
+		var new A: a1;
+		new A: a2 = (x: 3);
+		constraint foo(a2.x);
+		"#,
+		expect!("No matching function"),
+	);
+	// A class reached only par keeps par attributes, so the same body is fine.
+	tester.check_error(
+		r#"
+		predicate foo(int: x);
+		class A (1..10: x; constraint foo(x));
+		new A: a = (x: 3);
+		"#,
+		expect!(""),
+	);
+}

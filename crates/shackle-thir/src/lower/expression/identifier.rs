@@ -124,15 +124,24 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				ty.pretty_print(db),
 				expr.ty().pretty_print(db),
 			);
-			// Lowered is var (a var-storage class field reached through
-			// a var-new path) but the HIR-typer kept the reference par —
-			// e.g. a bare attribute name in a class constraint, where
-			// `this`'s class type is unvarified. Let the var-ness flow:
-			// relabelling to the par HIR type would not survive a
-			// transform fold (identifier types are re-derived from
-			// their declarations), and `fix()` fails at runtime on a
-			// genuine var decision. Calls over the widened value
-			// re-dispatch by name to their var overloads.
+			// Lowered is var but the HIR-typer kept the reference par.
+			// The shape that reaches here is an output-context read:
+			// `typecheck_output` / `collect_output_declaration` par a
+			// reference to a declaration outside the item, because output
+			// is evaluated against the solved model where every var is
+			// fixed. Let the var-ness flow: relabelling to the par HIR
+			// type would not survive a transform fold (identifier types
+			// are re-derived from their declarations), and `fix()` fails
+			// at runtime on a genuine var decision.
+			//
+			// Class attributes used to arrive here too — a bare name in a
+			// class body typed par against the var-reached storage it
+			// lowers to — but the typer now varifies those at the read
+			// site (`varify_class_body_attribute`), so a call over one
+			// resolves against the var overloads during typechecking
+			// rather than being silently re-dispatched by name here. That
+			// silent re-dispatch is what turned a missing var overload
+			// into a panic instead of a type error.
 			expr
 		}
 	}
