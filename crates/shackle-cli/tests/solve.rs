@@ -57,6 +57,24 @@ fn solve_output_item_absent() {
 	check_solve("output_item_absent", false);
 }
 
+#[test]
+fn solve_enum_members() {
+	check_solve("enum_members", true);
+}
+
+/// Values of a type whose constructors take arguments cannot be named yet, so
+/// they are shown by position. The expected output records that gap: it becomes
+/// MiniZinc's `Bar(1)` when the constructor arguments can be resolved.
+#[test]
+fn solve_enum_constructor() {
+	check_solve("enum_constructor", true);
+}
+
+#[test]
+fn solve_enum_constructor_index() {
+	check_solve("enum_constructor_index", true);
+}
+
 /// The interpreter's output has to be read as it is produced, so a solution
 /// bigger than the pipe's buffer must not deadlock the run. The expected output
 /// is too big to keep in a file, and a regression makes the solve hang rather
@@ -126,6 +144,11 @@ fn solve_object_nested_singular_object_par_only() {
 }
 
 #[test]
+fn solve_object_nested_singular_object_var_reach() {
+	check_solve("objects/05_nested_singular_object_var_reach", true);
+}
+
+#[test]
 fn solve_object_inheritance_bounded() {
 	check_solve("objects/06_inheritance_bounded", true);
 }
@@ -133,6 +156,11 @@ fn solve_object_inheritance_bounded() {
 #[test]
 fn solve_object_deep_nested_depth3() {
 	check_solve("objects/07_deep_nested_depth3", true);
+}
+
+#[test]
+fn solve_object_mixed_par_var_children() {
+	check_solve("objects/08_mixed_par_var_children", true);
 }
 
 #[test]
