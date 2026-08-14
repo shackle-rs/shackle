@@ -172,20 +172,20 @@ function set of float: mzn_array2set(array [int] of float: x) = array2set(x);
 
 function bool: mzn_add_warning(string: msg) = trace("WARNING: " ++ msg);
 
-function int: shackle_div(int: x, int: y) = x div y;
+function int: div_internal(int: x, int: y) = x div y;
 % Parameter names must match the shackle stdlib's public wrappers
 % (std/internal/math.mzn): the old_compat prefixing renames those wrappers to
 % these same `shackle_*` names, and old MiniZinc rejects same-signature
 % overloads that differ only in parameter names as ambiguous.
-function $$E: shackle_min(set of $$E: s) = min(s);
-function $$E: shackle_max(set of $$E: s) = max(s);
-function $$E: shackle_arg_min(array [$$E] of bool: xs) = arg_min(xs);
-function $$E: shackle_arg_min(array [$$E] of $$T: xs) = arg_min(xs);
-function $$E: shackle_arg_min(array [$$E] of float: xs) = arg_min(xs);
-function $$E: shackle_arg_max(array [$$E] of bool: xs) = arg_max(xs);
-function $$E: shackle_arg_max(array [$$E] of $$T: xs) = arg_max(xs);
-function $$E: shackle_arg_max(array [$$E] of float: xs) = arg_max(xs);
-function int: shackle_pow(int: x, int: y) = pow(x, y);
+function $$E: min_internal(set of $$E: s) = min(s);
+function $$E: max_internal(set of $$E: s) = max(s);
+function $$E: arg_min_internal(array [$$E] of bool: xs) = arg_min(xs);
+function $$E: arg_min_internal(array [$$E] of $$T: xs) = arg_min(xs);
+function $$E: arg_min_internal(array [$$E] of float: xs) = arg_min(xs);
+function $$E: arg_max_internal(array [$$E] of bool: xs) = arg_max(xs);
+function $$E: arg_max_internal(array [$$E] of $$T: xs) = arg_max(xs);
+function $$E: arg_max_internal(array [$$E] of float: xs) = arg_max(xs);
+function int: pow_internal(int: x, int: y) = pow(x, y);
 function array [$$E] of $$F: inverse(array [$$F] of $$E: f);
-function array [$$E] of $$F: shackle_inverse(array [$$F] of $$E: f) = inverse(f);
-function set of $U: shackle_array_intersect(array [$T] of set of $U: x) = array_intersect(x);
+function array [$$E] of $$F: inverse_internal(array [$$F] of $$E: f) = inverse(f);
+function set of $U: array_intersect_internal(array [$T] of set of $U: x) = array_intersect(x);
