@@ -1417,9 +1417,23 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 						// through a par handle. A par `new C: p` declared alongside
 						// a `var new C` elsewhere still projects out of that one var
 						// storage array.
-						let reads_var_storage = matches!(var_type, VarType::Var)
-							|| class_pattern_for(db, class_ref)
-								.is_some_and(|p| var_reached_classes(db).contains(&p));
+						// An output context is the exception: the projection reads a
+						// SOLVED value, so it is par whatever the storage inst is,
+						// and the lowering wraps it in `fix`. Par-ifying here is
+						// what makes the rest of an output comprehension par too — a
+						// par `o.children` yields par generator identities, so the
+						// object-array accesses beneath it are par-indexed and
+						// totalise emits the PAR `if_then_else`, which has a par
+						// twin. Leaving it var is what left
+						// `shackle_if_then_else<.. var ..>` in the output with no par
+						// version to call.
+						if self.in_output_item {
+							ty = ty.make_par(db);
+						}
+						let reads_var_storage = !self.in_output_item
+							&& (matches!(var_type, VarType::Var)
+								|| class_pattern_for(db, class_ref)
+									.is_some_and(|p| var_reached_classes(db).contains(&p)));
 						if reads_var_storage {
 							// An array attribute must go through the guarded
 							// element-wise varification: a plain `make_var`

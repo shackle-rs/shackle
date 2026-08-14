@@ -120,6 +120,46 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		}
 	}
 
+	/// Wrap an output-context expression in `fix` when the lowering produced a
+	/// var value for a type the typer par-ified.
+	///
+	/// In an output context the typer pars both references to outside
+	/// declarations and projections out of class storage, because output is
+	/// evaluated against the solved model. The declaration or storage behind
+	/// them is still var, so the lowered expression has to be fixed for HIR and
+	/// THIR to agree on the inst. Returns `None` when this is not that
+	/// situation — not an output context, the types already agree, or they
+	/// differ by more than var/par — leaving the caller to handle it.
+	pub(super) fn fix_for_output(
+		&mut self,
+		expr: &Expression<'db>,
+		ty: Ty<'db>,
+		origin: impl Into<Origin<'db>>,
+	) -> Option<Expression<'db>> {
+		let db = self.parent.db;
+		if !self.in_output
+			|| self.lowered_ty_matches(expr.ty(), ty)
+			|| !self.lowered_ty_matches(expr.ty().make_par(db), ty)
+		{
+			return None;
+		}
+		let fixed = alloc_expression(
+			LookupCall {
+				function: self.parent.ids.functions.fix.into(),
+				arguments: vec![expr.clone()],
+			},
+			self,
+			origin,
+		);
+		assert!(
+			self.lowered_ty_matches(fixed.ty(), ty),
+			"output fix expected {} but produced {}",
+			ty.pretty_print(db),
+			fixed.ty().pretty_print(db),
+		);
+		Some(fixed)
+	}
+
 	/// Whether `actual` is the same lowered shape as `expected` modulo inst
 	/// and opt at every level (and the class/potential-enum identification):
 	/// the loosest form of the postcondition, for shapes where a var-set

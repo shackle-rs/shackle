@@ -16,6 +16,6 @@ array [int] of set of B_potential: A_a_children_potential = [_DECL_2: B_occ_1('.
 array [int] of record(var set of B_potential: children, var int: nChildren): A_a_objects = [(children: children, nChildren: nChildren) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), children = (input).children, nChildren = card(children)];
 A_potential: a = A_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(A_a_objects, _DECL_3)).children), enum2int('[]'(A_a_children_potential, _DECL_3))) | _DECL_3 in index_set(A_a_objects)]);
-output ["n=", show(fix(('[]'(A_objects, enum2int(a))).nChildren)), "\n"];
+output ["n=", show(fix(fix(('[]'(A_objects, enum2int(a))).nChildren))), "\n"];
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x, mzn_safe_default(('[]'(B_objects, enum2int(x))).x))) | x in B_potential]);
 solve satisfy;

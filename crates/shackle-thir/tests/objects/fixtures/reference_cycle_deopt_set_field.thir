@@ -22,7 +22,7 @@ array [int] of set of Seat_potential: Wagon_w_seats_potential = [_DECL_3: Seat_o
 array [int] of record(var opt Handrail_potential: handrail, var set of Seat_potential: seats): Wagon_w_objects = [(handrail: handrail, seats: seats) | p in index_set(Wagon_w_storage), input = '[]'(Wagon_w_storage, p), seats = (input).seats, handrail = (input).handrail];
 Wagon_potential: w = Wagon_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(Wagon_w_objects, _DECL_4)).seats), enum2int('[]'(Wagon_w_seats_potential, _DECL_4))) | _DECL_4 in index_set(Wagon_w_objects)]);
-output ["comforts=", show([('[]'(Seat_objects, enum2int(s))).comfort | s in ('[]'(Wagon_objects, enum2int(w))).seats])];
+output ["comforts=", show([fix(('[]'(Seat_objects, enum2int(s))).comfort) | s in fix(('[]'(Wagon_objects, enum2int(w))).seats)])];
 constraint forall(['->'(occurs(('[]'(Wagon_w_objects, _DECL_5)).handrail), '='(('[]'(Wagon_w_objects, _DECL_5)).handrail, Handrail_occ_2(_DECL_5))) | _DECL_5 in index_set(Wagon_w_objects)]);
 constraint forall(['\/'('in'(x, Handrail), '='(('[]'(Handrail_objects, enum2int(x))).attached, lb(('[]'(Handrail_objects, enum2int(x))).attached))) | x in Handrail_potential]);
 constraint forall(['\/'('in'(x, Seat), '='(('[]'(Seat_objects, enum2int(x))).comfort, mzn_safe_default(('[]'(Seat_objects, enum2int(x))).comfort))) | x in Seat_potential]);

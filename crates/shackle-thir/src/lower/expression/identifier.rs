@@ -110,7 +110,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 					source_occurrence.is_some(),
 				)
 			}
-		} else if self.in_output && self.lowered_ty_matches(expr.ty().make_par(db), ty) {
+		} else if let Some(fixed) = self.fix_for_output(&expr, ty, origin) {
 			// The HIR typer pars a reference to a declaration outside the item
 			// when typing an output context, because output is evaluated
 			// against the solved model. The declaration still lowers var, so
@@ -119,27 +119,6 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			// instead (letting the var-ness flow) would leave every call over
 			// the reference to be silently re-dispatched to a var overload,
 			// which is only well defined when one exists.
-			let fixed = alloc_expression(
-				LookupCall {
-					function: self.parent.ids.functions.fix.into(),
-					arguments: vec![expr],
-				},
-				self,
-				origin,
-			);
-			assert!(
-				self.lowered_ty_matches(fixed.ty(), ty),
-				"output fix of {:?} at {:?} expected {} but produced {}",
-				res,
-				NodeRef::from(EntityRef::new(
-					self.parent.db,
-					self.item,
-					shackle_hir::ids::EntityId::from(idx)
-				))
-				.source_span(self.parent.db),
-				ty.pretty_print(db),
-				fixed.ty().pretty_print(db),
-			);
 			fixed
 		} else {
 			// HIR and THIR disagree about this reference's type, and it is not

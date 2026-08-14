@@ -113,6 +113,9 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						else_result: Box::new(absent),
 					};
 					let inferred = alloc_expression(guarded.clone(), self, origin);
+					if let Some(fixed) = self.fix_for_output(&inferred, ty, origin) {
+						return fixed;
+					}
 					return if inferred.ty() == ty {
 						inferred
 					} else {
@@ -219,7 +222,15 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				// par relabel of a genuine var projection would not
 				// survive a transform fold. Calls over the value
 				// re-dispatch by name.
-				alloc_expression(field_access, self, origin)
+				//
+				// The exception is an output context, where the typer
+				// par-ified the projection because it reads a solved
+				// value — there the var storage read has to be fixed so
+				// the two agree, and so the generators beneath it stay
+				// par (see `collect_record_access` in the HIR typer).
+				let projected = alloc_expression(field_access, self, origin);
+				self.fix_for_output(&projected, ty, origin)
+					.unwrap_or(projected)
 			} else {
 				alloc_expression(
 					RecordAccess {

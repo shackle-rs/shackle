@@ -12,5 +12,5 @@ array [int] of record(var '..'(0, 3): b, var int: c): S_T_t_objects = [(b: ('[]'
 T_potential: t = T_occ_0(1);
 constraint '='(('[]'(T_objects, enum2int(t))).b, 2);
 constraint '='(('[]'(T_objects, enum2int(t))).d, 1);
-output ["cs=", show([fix(('[]'(S_objects, enum2int(s))).c) | s in S]), " d=", show(fix(('[]'(T_objects, enum2int(t))).d)), "\n"];
+output ["cs=", show([fix(fix(('[]'(S_objects, enum2int(s))).c)) | s in S]), " d=", show(fix(fix(('[]'(T_objects, enum2int(t))).d))), "\n"];
 solve satisfy;
