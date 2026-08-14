@@ -7,6 +7,6 @@ constraint '='(A_as_y_unrealised_default, mzn_safe_default(A_as_y_unrealised_def
 array [int] of record(var '..'(0, 5): x, var '..'(1, 6): y): A_as_objects = [(x: x, y: y) | p in index_set(A_as_storage), input = '[]'(A_as_storage, p), realised = 'in'(A_occ_0(p), A), x = (input).x, y = if realised then 'div'(6, '+'(x, 1)) else A_as_y_unrealised_default endif];
 var set( '..'(0, 2) ) of  A_occ_0('..'(1, 2)): as;
 constraint '='(card(as), 0);
-output ["card=", show(card(as)), "\n"];
+output ["card=", show(card(fix(as))), "\n"];
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
 solve satisfy;

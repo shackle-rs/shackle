@@ -84,16 +84,23 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				// so it must match exactly.
 				true
 			}
-			(_, _) if actual.enum_ty(self.parent.db).is_some() => {
-				let Some(actual_enum) = actual.enum_ty(self.parent.db) else {
-					return false;
-				};
-				let Some(expected_class) = expected.class_type(self.parent.db) else {
-					return false;
-				};
+			(
+				TyData::Enum(actual_inst, actual_opt, actual_enum),
+				TyData::Class(expected_inst, expected_opt, expected_class),
+			) if actual_opt == expected_opt
+				&& (actual_inst == expected_inst
+					|| (*actual_inst == VarType::Par && *expected_inst == VarType::Var)) =>
+			{
+				// `<C>_potential` is the lowered form of `Class<C>`, with the
+				// same par-for-var allowance as the Class/Class arm above (a
+				// singular fresh introduction collapses the identity to par).
+				//
+				// Matched only at the SAME level: a set/array wrapper is the
+				// business of the arms above, which recurse into the element and
+				// compare inst and opt as they go.
 				self.parent.model
-					[self.parent.objects.class_map[&class_pattern(expected_class)].class_enum]
-					.enum_type() == actual_enum
+					[self.parent.objects.class_map[&class_pattern(*expected_class)].class_enum]
+					.enum_type() == *actual_enum
 			}
 			(
 				TyData::Set(actual_inst, actual_opt, actual_element),
