@@ -31,6 +31,12 @@ pub(in crate::lower) struct ExpressionCollector<'db, 'a, 'b, 'c> {
 	pub(in crate::lower) data: &'b shackle_hir::ItemData<'db>,
 	item: Item<'db>,
 	types: &'c TypeResult<'db>,
+	/// Whether this is an output context, mirroring the HIR typer's
+	/// `in_output_item`. There, a reference to a declaration outside the item
+	/// is typed par, because output is evaluated against the solved model; the
+	/// declaration still lowers var, so the reference needs a `fix` to match
+	/// the type the typer gave it. See `collect_identifier`.
+	in_output: bool,
 }
 
 impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
@@ -45,7 +51,24 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			data,
 			types,
 			item,
+			in_output: false,
 		}
+	}
+
+	/// Mark this collector as lowering an output-context expression — an
+	/// output item, or the definition of an `::output_only` declaration. These
+	/// are exactly the two places the HIR typer sets `in_output_item`.
+	pub(in crate::lower) fn in_output(mut self) -> Self {
+		self.in_output = true;
+		self
+	}
+
+	/// Carry an output context across into a nested collector. A collector
+	/// built from an existing one has to inherit the flag, or a reference
+	/// inside it would lose the par-ification the typer applied and land in
+	/// `collect_identifier`'s unreachable arm.
+	pub(in crate::lower) fn inherit_output(self, from: bool) -> Self {
+		if from { self.in_output() } else { self }
 	}
 
 	fn introduce_declaration(

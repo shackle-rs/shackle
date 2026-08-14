@@ -14,5 +14,5 @@ constraint '='(sum([sum(('[]'(A_objects, enum2int(a))).xs) | a in as]), 1);
 constraint forall(['->'('='(('[]'(A_objects, enum2int(a))).id, 2), '='(sum(('[]'(A_objects, enum2int(a))).xs), 0)) | a in as]);
 constraint '='(sum(('[]'(A_objects, enum2int(chosen))).xs), 1);
 constraint '='(cid, ('[]'(A_objects, enum2int(chosen))).id);
-output ["cid=", show(cid), " sums=", show([sum(('[]'(A_objects, enum2int(a))).xs) | a in as])];
+output ["cid=", show(fix(cid)), " sums=", show([sum(('[]'(A_objects, enum2int(a))).xs) | a in as])];
 solve satisfy;

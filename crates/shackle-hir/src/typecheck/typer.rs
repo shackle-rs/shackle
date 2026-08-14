@@ -1292,13 +1292,11 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		} else {
 			ty.make_var(db)
 		};
-		varified.unwrap_or_else(|| {
-			// An unvarifiable attribute on a var-reached class is reported
-			// against its declaration by `object_validation`, with a message
-			// that names the class. Keep the declared type here rather than
-			// emitting a second, vaguer error at every use.
-			ty
-		})
+		// An unvarifiable attribute on a var-reached class is reported against
+		// its declaration by `object_validation`, with a message that names the
+		// class. Keep the declared type here rather than emitting a second,
+		// vaguer error at every use.
+		varified.unwrap_or(ty)
 	}
 
 	fn collect_record_access(

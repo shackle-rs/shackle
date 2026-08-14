@@ -254,6 +254,23 @@ impl<'db> ItemCollector<'db> {
 			.add_constraint(ConstraintItem::new(constraint, item))
 	}
 
+	/// Whether a declaration carries `::output_only`. This is the condition the
+	/// HIR typer uses to type the definition in output mode
+	/// (`collect_output_declaration` / `typecheck_output`), so the lowering has
+	/// to agree about it or the two disagree on the definition's inst.
+	fn is_output_only(
+		&self,
+		data: &shackle_hir::ItemData<'db>,
+		d: &shackle_hir::Declaration<'db>,
+	) -> bool {
+		d.annotations.iter().any(|ann| {
+			matches!(
+				&data[*ann],
+				shackle_hir::Expression::Identifier(i) if *i == self.ids.annotations.output_only
+			)
+		})
+	}
+
 	/// Collect a declaration item
 	fn collect_declaration(
 		&mut self,
@@ -269,7 +286,9 @@ impl<'db> ItemCollector<'db> {
 			_ => unreachable!(),
 		};
 		let data = item.data(db);
-		let mut collector = ExpressionCollector::new(self, data, item, &types);
+		let output_only = self.is_output_only(data, d);
+		let mut collector =
+			ExpressionCollector::new(self, data, item, &types).inherit_output(output_only);
 		let root_pattern = PatternRef::new(db, item, d.pattern);
 		let uses_occurrence_lowering = data[d.declared_type].is_new(data)
 			&& collector
@@ -716,7 +735,7 @@ impl<'db> ItemCollector<'db> {
 		let item: Item<'_> = it.into();
 		let o = it.output(self.db);
 		let types = item.types(self.db);
-		let mut collector = ExpressionCollector::new(self, o.data(), item, &types);
+		let mut collector = ExpressionCollector::new(self, o.data(), item, &types).in_output();
 		let mut output = Output::new(collector.collect_expression(o.expression));
 		if let Some(s) = o.section {
 			output.set_section(collector.collect_expression(s));

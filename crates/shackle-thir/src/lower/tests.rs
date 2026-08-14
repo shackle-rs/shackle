@@ -51,3 +51,91 @@ fn test_lower_named_and_default_args() {
 "#]],
 	);
 }
+
+// An output item is typed with references to outside declarations made par,
+// because output is evaluated against the solved model. The declaration still
+// lowers var, so the reference is fixed — otherwise HIR and THIR disagree on
+// the inst and every call over the reference has to be silently re-dispatched
+// to a var overload, which only works when one exists.
+#[test]
+fn test_lower_output_fixes_var_reference() {
+	check_no_stdlib(
+		r#"
+		function $T: fix(var $T: x);
+		function string: show(int: x);
+		var int: x;
+		output [show(x)];
+		"#,
+		expect![[r#"
+    function $T: fix(var $T: x);
+    function string: show(int: x);
+    var int: x;
+    output [show(fix(x))];
+    solve satisfy;
+"#]],
+	);
+}
+
+// The same par-ification applies to the definition of an `::output_only`
+// declaration, which the HIR typer routes through `collect_output_declaration`.
+#[test]
+fn test_lower_output_only_declaration_fixes_var_reference() {
+	check_no_stdlib(
+		r#"
+		function $T: fix(var $T: x);
+		annotation output_only;
+		var int: x;
+		int: y :: output_only = x;
+		"#,
+		expect![[r#"
+    function $T: fix(var $T: x);
+    annotation output_only;
+    var int: x;
+    int: y :: (output_only) = fix(x);
+    solve satisfy;
+"#]],
+	);
+}
+
+// An assignment generator's value is lowered by a nested collector, which has
+// to carry the output context across — otherwise the reference inside it loses
+// the par-ification the typer applied and the two disagree.
+#[test]
+fn test_lower_output_comprehension_generator_fixes_var_reference() {
+	check_no_stdlib(
+		r#"
+		function $T: fix(var $T: x);
+		function string: show(int: x);
+		var int: x;
+		output [show(v) | i in {1}, v = x];
+		"#,
+		expect![[r#"
+    function $T: fix(var $T: x);
+    function string: show(int: x);
+    var int: x;
+    output [show(v) | i in {1}, v = fix(x)];
+    solve satisfy;
+"#]],
+	);
+}
+
+// Outside an output context the reference keeps its var-ness: nothing is
+// fixed, and the var overload is what the typer resolved against.
+#[test]
+fn test_lower_non_output_reference_is_not_fixed() {
+	check_no_stdlib(
+		r#"
+		function $T: fix(var $T: x);
+		predicate p(var int: x);
+		var int: x;
+		constraint p(x);
+		"#,
+		expect![[r#"
+    function $T: fix(var $T: x);
+    predicate p(var int: x);
+    var int: x;
+    constraint p(x);
+    solve satisfy;
+"#]],
+	);
+}

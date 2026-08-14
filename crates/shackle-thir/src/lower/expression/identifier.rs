@@ -110,10 +110,56 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 					source_occurrence.is_some(),
 				)
 			}
-		} else {
+		} else if self.in_output && self.lowered_ty_matches(expr.ty().make_par(db), ty) {
+			// The HIR typer pars a reference to a declaration outside the item
+			// when typing an output context, because output is evaluated
+			// against the solved model. The declaration still lowers var, so
+			// FIX it: that is what the par type the typer handed out actually
+			// means, and it keeps HIR and THIR agreeing on the inst. Widening
+			// instead (letting the var-ness flow) would leave every call over
+			// the reference to be silently re-dispatched to a var overload,
+			// which is only well defined when one exists.
+			let fixed = alloc_expression(
+				LookupCall {
+					function: self.parent.ids.functions.fix.into(),
+					arguments: vec![expr],
+				},
+				self,
+				origin,
+			);
 			assert!(
-				self.lowered_ty_matches(expr.ty().make_par(db), ty),
-				"identifier {:?} at {:?} expected {} but lowered as {}",
+				self.lowered_ty_matches(fixed.ty(), ty),
+				"output fix of {:?} at {:?} expected {} but produced {}",
+				res,
+				NodeRef::from(EntityRef::new(
+					self.parent.db,
+					self.item,
+					shackle_hir::ids::EntityId::from(idx)
+				))
+				.source_span(self.parent.db),
+				ty.pretty_print(db),
+				fixed.ty().pretty_print(db),
+			);
+			fixed
+		} else {
+			// HIR and THIR disagree about this reference's type, and it is not
+			// the output-context par-ification handled above. There is no
+			// sound repair here: relabelling to the HIR type would not survive
+			// a transform fold (identifier types are re-derived from their
+			// declarations), and widening to the lowered type — what this arm
+			// used to do — silently leaves any call over the reference to be
+			// re-dispatched by name to a var overload, which only works when
+			// one happens to exist. A user-declared `predicate foo(int: x)`
+			// has none, so the widening turned a type error into a panic deep
+			// in call lowering.
+			//
+			// A var-reached class's attributes used to reach here (a bare name
+			// in a class body typed par against the var storage it lowers to);
+			// the typer now varifies those at the read site
+			// (`varify_class_body_attribute`), so the disagreement is reported
+			// as a type error against the source instead.
+			unreachable!(
+				"identifier {:?} at {:?} expected {} but lowered as {}{}",
 				res,
 				NodeRef::from(EntityRef::new(
 					self.parent.db,
@@ -123,26 +169,12 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				.source_span(self.parent.db),
 				ty.pretty_print(db),
 				expr.ty().pretty_print(db),
-			);
-			// Lowered is var but the HIR-typer kept the reference par.
-			// The shape that reaches here is an output-context read:
-			// `typecheck_output` / `collect_output_declaration` par a
-			// reference to a declaration outside the item, because output
-			// is evaluated against the solved model where every var is
-			// fixed. Let the var-ness flow: relabelling to the par HIR
-			// type would not survive a transform fold (identifier types
-			// are re-derived from their declarations), and `fix()` fails
-			// at runtime on a genuine var decision.
-			//
-			// Class attributes used to arrive here too — a bare name in a
-			// class body typed par against the var-reached storage it
-			// lowers to — but the typer now varifies those at the read
-			// site (`varify_class_body_attribute`), so a call over one
-			// resolves against the var overloads during typechecking
-			// rather than being silently re-dispatched by name here. That
-			// silent re-dispatch is what turned a missing var overload
-			// into a panic instead of a type error.
-			expr
+				if self.in_output {
+					" (in an output context, but not a var/par mismatch)"
+				} else {
+					""
+				},
+			)
 		}
 	}
 }

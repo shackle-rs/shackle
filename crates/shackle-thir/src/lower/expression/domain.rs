@@ -68,7 +68,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 									res_data,
 									res.item(db),
 									&res_types,
-								);
+								)
+								.inherit_output(self.in_output);
 								return c.collect_domain(ta.type_alias(db).aliased_type, ty, true);
 							}
 							_ => unreachable!(),

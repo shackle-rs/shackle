@@ -195,6 +195,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				where_clause,
 			} => {
 				let def = ExpressionCollector::new(self.parent, self.data, self.item, self.types)
+					.inherit_output(self.in_output)
 					.collect_expression(*value);
 				let assignment = Declaration::from_expression(self.parent.db, false, def);
 				let idx = self.parent.model.add_declaration(DeclarationItem::new(
