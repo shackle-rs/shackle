@@ -123,10 +123,10 @@
 		"@types/mocha": "^10.0.10",
 		"@types/node": "22.20.1",
 		"@types/vscode": "1.125.0",
-		"@typescript-eslint/eslint-plugin": "^8.66.0",
+		"@typescript-eslint/eslint-plugin": "^8.67.0",
 		"@typescript-eslint/parser": "^8.63.0",
 		"@vscode/vsce": "^3.9.2",
-		"esbuild": "^0.28.1",
+		"esbuild": "^0.28.2",
 		"eslint": "^10.8.1",
 		"mocha": "^11.8.0",
 		"typescript": "^7.0.2"
