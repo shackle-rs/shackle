@@ -46,7 +46,7 @@ impl<'db, T: Marker> ReachabilityVisitor<'db, T> {
 					visitor.visit_identifier(&model, &ident);
 				}
 			}
-			for name in ids.builtins.all.iter().chain(ids.functions.all.iter()) {
+			for name in ids.functions.all.iter().chain(ids.functions.all.iter()) {
 				if let Some(fs) = visitor.overloads.get(name) {
 					for f in fs.clone() {
 						visitor.visit_item(&model, f.into());

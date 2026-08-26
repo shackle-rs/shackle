@@ -227,7 +227,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 
 								let origin = card_expr.origin();
 								let max_call = LookupCall {
-									function: self.parent.ids.builtins.max.into(),
+									function: self.parent.ids.functions.max.into(),
 									arguments: vec![card_expr],
 								};
 								let max_exp = Expression::new(

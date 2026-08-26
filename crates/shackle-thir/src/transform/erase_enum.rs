@@ -234,7 +234,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for EnumEraser<'db
 								&self.model,
 								expression.origin(),
 								LookupCall {
-									function: self.ids.builtins.mzn_element_internal.into(),
+									function: self.ids.functions.mzn_element_internal.into(),
 									arguments: vec![
 										array,
 										Expression::new(db, &self.model, origin, IntegerLiteral(1)),
@@ -262,7 +262,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for EnumEraser<'db
 											LookupCall {
 												function: self
 													.ids
-													.builtins
+													.functions
 													.mzn_element_internal
 													.into(),
 												arguments: vec![

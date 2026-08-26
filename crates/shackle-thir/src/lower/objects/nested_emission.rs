@@ -472,7 +472,7 @@ impl<'db> ItemCollector<'db> {
 			&self.model,
 			card_expr.origin(),
 			LookupCall {
-				function: self.ids.builtins.max.into(),
+				function: self.ids.functions.max.into(),
 				arguments: vec![card_expr],
 			},
 		)
@@ -510,7 +510,7 @@ impl<'db> ItemCollector<'db> {
 		let size_fn = if record_access.ty().is_set(self.db) {
 			self.ids.functions.card
 		} else {
-			self.ids.builtins.length
+			self.ids.functions.length
 		};
 		let length_expr = Expression::new(
 			self.db,
@@ -673,7 +673,7 @@ impl<'db> ItemCollector<'db> {
 							&self.model,
 							item,
 							LookupCall {
-								function: self.ids.builtins.length.into(),
+								function: self.ids.functions.length.into(),
 								arguments: vec![source_decl_expr],
 							},
 						)

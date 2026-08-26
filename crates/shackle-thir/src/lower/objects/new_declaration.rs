@@ -904,7 +904,7 @@ impl<'db> ItemCollector<'db> {
 					&collector.parent.model,
 					item,
 					LookupCall {
-						function: collector.parent.ids.builtins.plus.into(),
+						function: collector.parent.ids.functions.plus.into(),
 						arguments: vec![start_expr, pending_slice.sum_expr],
 					},
 				),
@@ -1072,7 +1072,7 @@ impl<'db> ItemCollector<'db> {
 					&collector.parent.model,
 					item,
 					LookupCall {
-						function: collector.parent.ids.builtins.plus.into(),
+						function: collector.parent.ids.functions.plus.into(),
 						arguments: vec![one_expr, lower_offset],
 					},
 				);
@@ -2242,7 +2242,7 @@ impl<'db> ItemCollector<'db> {
 						&collector.parent.model,
 						item,
 						LookupCall {
-							function: collector.parent.ids.builtins.max.into(),
+							function: collector.parent.ids.functions.max.into(),
 							arguments: vec![card_expr],
 						},
 					),
@@ -2439,7 +2439,7 @@ impl<'db> ItemCollector<'db> {
 					&collector.parent.model,
 					item,
 					LookupCall {
-						function: collector.parent.ids.builtins.length.into(),
+						function: collector.parent.ids.functions.length.into(),
 						arguments: vec![inputs_expr.clone()],
 					},
 				),
@@ -2450,7 +2450,7 @@ impl<'db> ItemCollector<'db> {
 				&collector.parent.model,
 				item,
 				LookupCall {
-					function: collector.parent.ids.builtins.length.into(),
+					function: collector.parent.ids.functions.length.into(),
 					arguments: vec![inputs_expr.clone()],
 				},
 			)

@@ -79,9 +79,9 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			&self.data[c.function],
 			shackle_hir::Expression::Identifier(id)
 				if *id == self.parent.ids.functions.eq
-					|| *id == self.parent.ids.builtins.ne
-					|| *id == self.parent.ids.builtins.lt
-					|| *id == self.parent.ids.builtins.le
+					|| *id == self.parent.ids.functions.lt
+					|| *id == self.parent.ids.functions.ne
+					|| *id == self.parent.ids.functions.le
 					|| *id == self.parent.ids.functions.gt
 					|| *id == self.parent.ids.functions.ge
 		);

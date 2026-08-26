@@ -1040,7 +1040,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.length.into(),
+						function: self.ids.functions.length.into(),
 						arguments: vec![current_children],
 					},
 				);
@@ -1098,7 +1098,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.length.into(),
+						function: self.ids.functions.length.into(),
 						arguments: vec![Expression::new(
 							self.db,
 							&self.model,
@@ -1136,7 +1136,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.plus.into(),
+						function: self.ids.functions.plus.into(),
 						arguments: vec![one_expr.clone(), prefix_sum.clone()],
 					},
 				);
@@ -1155,7 +1155,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.plus.into(),
+						function: self.ids.functions.plus.into(),
 						arguments: vec![prefix_sum, current_length],
 					},
 				);
@@ -1467,7 +1467,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.length.into(),
+						function: self.ids.functions.length.into(),
 						arguments: vec![current_children],
 					},
 				);
@@ -1513,7 +1513,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.length.into(),
+						function: self.ids.functions.length.into(),
 						arguments: vec![Expression::new(
 							self.db,
 							&self.model,
@@ -1551,7 +1551,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.plus.into(),
+						function: self.ids.functions.plus.into(),
 						arguments: vec![one_expr, prefix_sum.clone()],
 					},
 				);
@@ -1570,7 +1570,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.plus.into(),
+						function: self.ids.functions.plus.into(),
 						arguments: vec![prefix_sum, current_length],
 					},
 				);

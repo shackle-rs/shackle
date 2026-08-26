@@ -47,7 +47,7 @@ impl<'db> ItemCollector<'db> {
 						&self.model,
 						item,
 						LookupCall {
-							function: self.ids.builtins.length.into(),
+							function: self.ids.functions.length.into(),
 							arguments: vec![record_access],
 						},
 					)
@@ -683,25 +683,25 @@ impl<'db> ItemCollector<'db> {
 	pub(in crate::lower) fn total_builtin_call(&self, ident: Identifier<'db>) -> bool {
 		let ids = self.ids;
 		[
-			ids.builtins.plus,
+			ids.functions.plus,
 			ids.functions.minus,
-			ids.builtins.times,
+			ids.functions.times,
 			ids.functions.card,
 			ids.functions.sum,
 			ids.functions.forall,
 			ids.functions.exists,
 			ids.functions.dot_dot,
 			ids.functions.in_,
-			ids.builtins.subset,
-			ids.builtins.superset,
-			ids.builtins.intersect,
-			ids.builtins.union,
-			ids.builtins.diff,
-			ids.builtins.symdiff,
+			ids.functions.subset,
+			ids.functions.superset,
+			ids.functions.intersect,
+			ids.functions.union,
+			ids.functions.diff,
+			ids.functions.symdiff,
 			ids.functions.eq,
-			ids.builtins.ne,
-			ids.builtins.lt,
-			ids.builtins.le,
+			ids.functions.ne,
+			ids.functions.lt,
+			ids.functions.le,
 			ids.functions.gt,
 			ids.functions.ge,
 			ids.functions.and,
@@ -710,7 +710,7 @@ impl<'db> ItemCollector<'db> {
 			ids.functions.rev_imp,
 			ids.functions.iff,
 			ids.functions.not,
-			ids.builtins.xor,
+			ids.functions.xor,
 		]
 		.contains(&ident)
 	}

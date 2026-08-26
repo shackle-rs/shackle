@@ -259,7 +259,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			);
 			alloc_expression(
 				LookupCall {
-					function: self.parent.ids.builtins.plus.into(),
+					function: self.parent.ids.functions.plus.into(),
 					arguments: vec![
 						alloc_expression(IntegerLiteral(1), self, origin),
 						zero_based,

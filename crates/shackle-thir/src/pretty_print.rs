@@ -65,12 +65,9 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 				match item {
 					ItemId::Function(f)
 						if self.model[f].name() == self.ids.functions.default
-							|| self.model[f].name() == self.ids.builtins.mzn_element_internal
-							|| self.model[f].name() == self.ids.builtins.mzn_slice_internal
-							|| self.model[f].name() == self.ids.builtins.mzn_indexed_array
-							|| ((self.model[f].name() == self.ids.builtins.arg_min_internal
-								|| self.model[f].name() == self.ids.builtins.arg_max_internal)
-								&& self.model[f].body().is_none()) =>
+							|| self.model[f].name() == self.ids.functions.mzn_element_internal
+							|| self.model[f].name() == self.ids.functions.mzn_slice_internal
+							|| self.model[f].name() == self.ids.functions.mzn_indexed_array =>
 					{
 						continue;
 					}

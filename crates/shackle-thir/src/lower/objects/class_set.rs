@@ -147,7 +147,7 @@ impl<'db> ItemCollector<'db> {
 			&self.model,
 			item,
 			LookupCall {
-				function: self.ids.builtins.subset.into(),
+				function: self.ids.functions.subset.into(),
 				arguments: vec![parent_field_erased, slice_erased],
 			},
 		);
@@ -361,11 +361,7 @@ impl<'db> ItemCollector<'db> {
 		let par_int = Ty::par_int(self.db);
 		if self
 			.model
-			.lookup_function(
-				self.db,
-				self.ids.functions.minus.into(),
-				&[par_int, par_int],
-			)
+			.lookup_function(self.db, self.ids.functions.minus.into(), &[par_int, par_int])
 			.is_err() || self
 			.model
 			.lookup_function(

@@ -394,24 +394,24 @@ impl<'a, 'db, T: Marker> ModeAnalyser<'a, 'db, T> {
 						let name = self.model[*f].name();
 						let is_builtin = self.model[*f].body().is_none();
 
-						if name == self.ids.builtins.not && c.arguments.len() == 1 && is_builtin {
+						if name == self.ids.functions.not && c.arguments.len() == 1 && is_builtin {
 							self.update(&c.arguments[0], !it.mode, false);
 							return;
-						} else if (name == self.ids.builtins.and && it.mode.is_root()
-							|| name == self.ids.builtins.or && it.mode.is_root_neg())
+						} else if (name == self.ids.functions.and && it.mode.is_root()
+							|| name == self.ids.functions.or && it.mode.is_root_neg())
 							&& c.arguments.len() == 2
 							&& is_builtin
 						{
 							self.update(&c.arguments[0], it.mode, false);
 							self.update(&c.arguments[1], it.mode, false);
-						} else if (name == self.ids.builtins.forall && it.mode.is_root()
-							|| name == self.ids.builtins.exists && it.mode.is_root_neg())
+						} else if (name == self.ids.functions.forall && it.mode.is_root()
+							|| name == self.ids.functions.exists && it.mode.is_root_neg())
 							&& c.arguments.len() == 1
 							&& is_builtin
 						{
 							self.update(&c.arguments[0], it.mode, true);
 							return;
-						} else if name == self.ids.builtins.clause
+						} else if name == self.ids.functions.clause
 							&& c.arguments.len() == 2
 							&& it.mode.is_root_neg()
 							&& is_builtin
@@ -425,7 +425,7 @@ impl<'a, 'db, T: Marker> ModeAnalyser<'a, 'db, T> {
 						{
 							self.update(&c.arguments[0], it.mode, false);
 							return;
-						} else if name == self.ids.builtins.mzn_default_partial
+						} else if name == self.ids.functions.mzn_default_partial
 							&& c.arguments.len() == 2
 						{
 							self.update(&c.arguments[0], Mode::NonRoot, it.update_bools);
@@ -595,7 +595,7 @@ impl<'a, 'db, T: Marker> Visitor<'a, 'db, T> for BooleanVisitor<'a, 'db, T> {
 	}
 
 	fn visit_call(&mut self, model: &'a Model<'db, T>, call: &'a Call<'db, T>) {
-		if call.matches_builtin(model, self.ids.builtins.abort) {
+		if call.matches_builtin(model, self.ids.functions.abort) {
 			return;
 		}
 		self.is_true = false;

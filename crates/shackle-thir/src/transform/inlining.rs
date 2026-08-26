@@ -12,7 +12,8 @@ use crate::{
 	Let, LetItem, Marker, Model, ResolvedIdentifier,
 	pretty_print::PrettyPrinter,
 	traverse::{
-		Folder, ReplacementMap, add_function, fold_declaration, fold_expression, fold_function_body,
+		Folder, ReplacementMap, add_function, fold_declaration, fold_expression,
+		fold_function_body, fold_function_id,
 	},
 };
 
@@ -44,7 +45,11 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 			// Remove inlined function
 			return;
 		}
-		let _ = add_function(self, db, model, f);
+		if model[f].top_level() {
+			let _ = fold_function_id(self, db, model, f);
+		} else {
+			let _ = add_function(self, db, model, f);
+		}
 	}
 
 	fn fold_function_body(

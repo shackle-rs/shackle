@@ -350,7 +350,7 @@ impl<'db> ItemCollector<'db> {
 					&self.model,
 					item,
 					LookupCall {
-						function: self.ids.builtins.subset.into(),
+						function: self.ids.functions.subset.into(),
 						arguments: vec![lower_erased, class_set_erased],
 					},
 				);

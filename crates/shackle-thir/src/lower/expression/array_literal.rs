@@ -120,7 +120,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 		} else {
 			alloc_expression(
 				LookupCall {
-					function: self.parent.ids.builtins.mzn_indexed_array.into(),
+					function: self.parent.ids.functions.mzn_indexed_array.into(),
 					arguments: vec![alloc_expression(
 						ArrayLiteral(
 							al.indices

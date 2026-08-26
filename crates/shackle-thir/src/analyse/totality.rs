@@ -208,7 +208,7 @@ impl<'a, 'db> Visitor<'a, 'db> for TotalityVisitor<'a, 'db> {
 	}
 
 	fn visit_call(&mut self, model: &'a Model<'db>, call: &'a Call<'db>) {
-		if call.matches_builtin(model, self.ids.builtins.mzn_default_partial)
+		if call.matches_builtin(model, self.ids.functions.mzn_default_partial)
 			&& call.arguments.len() == 2
 		{
 			// Totality only depends on RHS

@@ -90,6 +90,10 @@ impl<'db, Dst: Marker> Folder<'_, 'db, Dst> for ComprehensionRewriter<'db, Dst> 
 		maybe_grow_stack(|| {
 			match &**expression {
 				ExpressionData::ArrayComprehension(c) => {
+					log::debug!(
+						"Rewriting array comprehension at {}",
+						expression.origin().pretty_print(db)
+					);
 					let mut array =
 						self.rewrite_array_comprehension(db, model, c, SurroundingCall::Other);
 					if let Some(indices) = array.indices.take() {
@@ -105,7 +109,7 @@ impl<'db, Dst: Marker> Folder<'_, 'db, Dst> for ComprehensionRewriter<'db, Dst> 
 							&self.result,
 							expression.origin(),
 							LookupCall {
-								function: self.ids.builtins.mzn_indexed_array.into(),
+								function: self.ids.functions.mzn_indexed_array.into(),
 								arguments: vec![Expression::new(
 									db,
 									&self.result,
@@ -119,6 +123,10 @@ impl<'db, Dst: Marker> Folder<'_, 'db, Dst> for ComprehensionRewriter<'db, Dst> 
 				}
 				ExpressionData::SetComprehension(c) => {
 					// Set comprehensions are turned into array comprehensions surrounded by array2set()
+					log::debug!(
+						"Rewriting set comprehension at {}",
+						expression.origin().pretty_print(db)
+					);
 					let array =
 						self.rewrite_set_comprehension(db, model, c, SurroundingCall::Other);
 					let desugared = Expression::new(
@@ -126,7 +134,7 @@ impl<'db, Dst: Marker> Folder<'_, 'db, Dst> for ComprehensionRewriter<'db, Dst> 
 						&self.result,
 						expression.origin(),
 						LookupCall {
-							function: self.ids.builtins.mzn_array2set.into(),
+							function: self.ids.functions.mzn_array2set.into(),
 							arguments: vec![Expression::new(
 								db,
 								&self.result,
@@ -561,12 +569,14 @@ mod tests {
 	use expect_test::expect;
 
 	use super::desugar_comprehension;
-	use crate::transform::tests::check;
+	use crate::transform::{
+		tests::check, top_down_type::top_down_type, transformer, type_specialise::type_specialise,
+	};
 
 	#[test]
 	fn test_desugar_array_comprehension_var_where() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				predicate foo(var int: x);
 				array [int] of var int: x;
@@ -585,7 +595,7 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_var_set() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				var set of int: x;
 				any: y = [x_i | x_i in x];
@@ -602,7 +612,7 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_complex() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r"
 				var set of int: x;
 				predicate foo(var int: x);
@@ -623,7 +633,7 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_forall() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				predicate foo(var int: x);
 				var set of int: S;
@@ -640,7 +650,7 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_exists() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				predicate foo(var int: x);
 				var set of int: S;
@@ -657,7 +667,7 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_sum_par() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				var set of int: S;
 				any: x = sum (i in S) (i);
@@ -672,7 +682,7 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_sum_var() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				var set of int: S;
 				function var int: foo(int: x);
@@ -689,7 +699,7 @@ mod tests {
 	#[test]
 	fn test_desugar_set_comprehension() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				set of int: S;
 				function var int: foo(int: x);
@@ -706,7 +716,7 @@ mod tests {
 	#[test]
 	fn test_desugar_var_set_comprehension() {
 		check(
-			desugar_comprehension,
+			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
 			r#"
 				var set of int: S;
 				function var int: foo(int: x);

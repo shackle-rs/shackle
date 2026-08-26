@@ -77,7 +77,7 @@ impl<'a, 'db, Dst: Marker> Folder<'_, 'db, Dst> for Totaliser<'a, 'db, Dst> {
 				&self.totalised_model,
 				origin,
 				LookupCall {
-					function: self.ids.builtins.abort.into(),
+					function: self.ids.functions.abort.into(),
 					arguments: vec![Expression::new(
 						db,
 						&self.totalised_model,
@@ -97,7 +97,7 @@ impl<'a, 'db, Dst: Marker> Folder<'_, 'db, Dst> for Totaliser<'a, 'db, Dst> {
 	}
 
 	fn add_function(&mut self, db: &'db dyn Db, model: &Model<'db>, f: FunctionId<'db>) {
-		if model[f].name() == self.ids.builtins.mzn_default_partial {
+		if model[f].name() == self.ids.functions.mzn_default_partial {
 			// `default` calls rewritten so function no longer needed
 			return;
 		}
@@ -1621,12 +1621,13 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 		origin: Origin<'db>,
 		e: &Expression<'db>,
 	) -> Expression<'db, Dst> {
-		if c.matches_builtin(model, self.ids.builtins.mzn_default_partial) && c.arguments.len() == 2
+		if c.matches_builtin(model, self.ids.functions.mzn_default_partial)
+			&& c.arguments.len() == 2
 		{
 			return self.totalise_default(db, model, origin, e, &c.arguments[0], &c.arguments[1]);
 		}
 
-		if c.matches_builtin(model, self.ids.builtins.mzn_in_root_context) {
+		if c.matches_builtin(model, self.ids.functions.mzn_in_root_context) {
 			return Expression::new(
 				db,
 				&self.totalised_model,
@@ -1663,8 +1664,8 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 			(_, f) => f,
 		};
 
-		if c.matches_builtin(model, self.ids.builtins.fix)
-			|| c.matches_builtin(model, self.ids.builtins.is_fixed)
+		if c.matches_builtin(model, self.ids.functions.fix)
+			|| c.matches_builtin(model, self.ids.functions.is_fixed)
 		{
 			// Pass the totalised argument to the call
 			assert!(c.arguments.len() == 1);
@@ -1908,7 +1909,7 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 			&self.totalised_model,
 			origin,
 			LookupCall {
-				function: self.ids.builtins.forall.into(),
+				function: self.ids.functions.forall.into(),
 				arguments: vec![arg],
 			},
 		)
@@ -1921,7 +1922,7 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 			&self.totalised_model,
 			origin,
 			LookupCall {
-				function: self.ids.builtins.exists.into(),
+				function: self.ids.functions.exists.into(),
 				arguments: vec![arg],
 			},
 		)
@@ -1937,7 +1938,7 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 				ExpressionData::Call(Call {
 					function: Callable::Function(f),
 					arguments,
-				}) if self.totalised_model[*f].name() == self.ids.builtins.or
+				}) if self.totalised_model[*f].name() == self.ids.functions.or
 					&& arguments.len() == 2 =>
 				{
 					todo.push(&arguments[0]);

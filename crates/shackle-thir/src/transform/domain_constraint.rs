@@ -699,7 +699,7 @@ impl<'db, Dst: Marker, Src: Marker> DomainRewriter<'db, Dst, Src> {
 									&self.model,
 									origin,
 									LookupCall {
-										function: self.ids.builtins.forall.into(),
+										function: self.ids.functions.forall.into(),
 										arguments: vec![Expression::new(
 											db,
 											&self.model,
@@ -1216,7 +1216,7 @@ impl<'db, Dst: Marker, Src: Marker> DomainRewriter<'db, Dst, Src> {
 			&self.model,
 			origin,
 			LookupCall {
-				function: self.ids.builtins.mzn_array_kd.into(),
+				function: self.ids.functions.mzn_array_kd.into(),
 				arguments: vec![index_sets_expr, array],
 			},
 		)

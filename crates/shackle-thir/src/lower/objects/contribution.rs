@@ -159,7 +159,7 @@ impl<'db> ItemCollector<'db> {
 			&self.model,
 			item,
 			LookupCall {
-				function: self.ids.builtins.plus.into(),
+				function: self.ids.functions.plus.into(),
 				arguments: vec![one, zero_based],
 			},
 		)
