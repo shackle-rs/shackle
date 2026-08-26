@@ -1,9 +1,9 @@
 use std::{collections::hash_map::Entry, fmt::Write};
 
 use shackle_diagnostics::{
-	AmbiguousCall, BranchMismatch, Error, IllegalType, InvalidArrayLiteral, InvalidCall,
-	InvalidFieldAccess, NoMatchingFunction, SyntaxError, TypeInferenceFailure, TypeMismatch,
-	UndefinedIdentifier, UnsupportedObjectFeature,
+	AmbiguousCall, BranchMismatch, Error, IllegalOutputType, IllegalType, InvalidArrayLiteral,
+	InvalidCall, InvalidFieldAccess, NoMatchingFunction, SyntaxError, TypeInferenceFailure,
+	TypeMismatch, UndefinedIdentifier, UnsupportedObjectFeature,
 };
 use shackle_ty::{
 	ClassRef, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty, TyData,
@@ -163,6 +163,18 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			Expression::Slice(_) => self.types.set_of_bottom,
 			Expression::Missing => self.types.error,
 		};
+		if self.in_output_item && !result.known_par(db) {
+			let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+			self.ctx.add_diagnostic(
+				db,
+				self.item,
+				IllegalOutputType {
+					src,
+					span,
+					ty: result.pretty_print(db),
+				},
+			);
+		}
 		self.ctx.add_expression(db, expr, result);
 		self.collect_annotations(expr, result);
 		result

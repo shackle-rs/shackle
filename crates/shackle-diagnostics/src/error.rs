@@ -259,6 +259,24 @@ pub struct TypeMismatch {
 	pub span: SourceSpan,
 }
 
+/// A type which is illegal in output
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Illegal output type")]
+#[diagnostic(
+	code(shackle::illegal_output_type),
+	help("Try introducing a top-level declaration for this.")
+)]
+pub struct IllegalOutputType {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub ty: String,
+	/// The span associated with the error
+	#[label("Types in output must be par, but got '{ty}'")]
+	pub span: SourceSpan,
+}
+
 /// A mismatch in branch/arm types
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Type mismatch")]
@@ -574,6 +592,10 @@ pub enum Error {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	BranchMismatch(#[from] BranchMismatch),
+	/// Illegal output type
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	IllegalOutputType(#[from] IllegalOutputType),
 	/// Invalid array literal
 	#[error(transparent)]
 	#[diagnostic(transparent)]
