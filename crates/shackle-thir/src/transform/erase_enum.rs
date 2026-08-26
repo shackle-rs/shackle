@@ -112,6 +112,31 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for EnumEraser<'db
 				folded.set_body(body);
 			}
 		}
+		if f.name() == self.ids.functions.show_json && f.body().is_none() {
+			let p = &model[f.parameter(0)];
+			if let Some(enum_ty) = p.ty().enum_ty(db) {
+				let origin = p.origin();
+				let arg = Expression::new(db, &self.model, origin, folded.parameter(0));
+				let index = self.enum_id_for_ty[&enum_ty];
+				let enum_id = Expression::new(db, &self.model, origin, IntegerLiteral(index));
+				let enums = Expression::new(
+					db,
+					&self.model,
+					origin,
+					ArrayLiteral(self.enum_definitions[..index as usize].to_vec()),
+				);
+				let body = Expression::new(
+					db,
+					&self.model,
+					origin,
+					LookupCall {
+						function: self.ids.functions.mzn_show_enum.into(),
+						arguments: vec![enums, enum_id, arg],
+					},
+				);
+				folded.set_body(body);
+			}
+		}
 		folded
 	}
 

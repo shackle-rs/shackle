@@ -14,10 +14,10 @@ use shackle_ty::{FunctionType, PolymorphicFunctionType, Ty, TyData, TyParamInsta
 use shackle_utils::maybe_grow_stack;
 
 use crate::{
-	ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Db, Declaration, DeclarationId,
-	Domain, DomainData, Expression, ExpressionBuilder, Function, FunctionId, Generator, Identifier,
-	IfThenElse, IntegerLiteral, Item, ItemId, LookupCall, Marker, Model, OptType, OverloadMap,
-	RecordAccess, RecordLiteral, StringLiteral, TupleAccess, TupleLiteral,
+	ArrayComprehension, ArrayLiteral, Call, Callable, Db, Declaration, DeclarationId, Domain,
+	DomainData, Expression, ExpressionBuilder, Function, FunctionId, Generator, Identifier,
+	IntegerLiteral, Item, ItemId, Marker, Model, OverloadMap, RecordAccess, RecordLiteral,
+	StringLiteral, TupleAccess, TupleLiteral,
 	pretty_print::PrettyPrinter,
 	source::Origin,
 	traverse::{Folder, ReplacementMap, add_function, fold_call, fold_declaration_id, fold_domain},
@@ -76,6 +76,51 @@ impl<'a, 'db, Dst: Marker> Folder<'_, 'db, Dst> for TypeSpecialiser<'a, 'db, Dst
 					continue;
 				}
 			}
+			if (model[s.original].name() == self.ids.functions.show
+				|| model[s.original].name() == self.ids.functions.show_json)
+				&& model[s.original]
+					.annotations()
+					.has(model, self.ids.annotations.mzn_internal_generated)
+			{
+				// Create specialised show function for types which will be erased, except show on direct enum which will be generated later.
+				let p = self.specialised_model[f].parameter(0);
+				let ty = self.specialised_model[p].ty();
+				if ty.contains_erased_type(db) {
+					if !ty.is_enum(db) {
+						let body = if model[s.original].name() == self.ids.functions.show {
+							self.generate_show(db, model, p, ty)
+						} else {
+							self.generate_show_json(db, model, p, ty)
+						};
+						self.specialised_model[f].set_body(body);
+						self.specialised_model[f].validate(db);
+					}
+					// Show for enum will be generated in enum erasure, just leave it without a body for now.
+					continue;
+				}
+			}
+			if (model[s.original].name() == self.ids.functions.eq
+				|| model[s.original].name() == self.ids.functions.le
+				|| model[s.original].name() == self.ids.functions.lt)
+				&& model[s.original]
+					.annotations()
+					.has(model, self.ids.annotations.mzn_internal_generated)
+				&& model[s.original].return_type().inst(db) == Some(shackle_ty::VarType::Var)
+			{
+				let lhs = self.specialised_model[f].parameter(0);
+				let rhs = self.specialised_model[f].parameter(1);
+				let body = if model[s.original].name() == self.ids.functions.lt {
+					self.generate_lt_or_le(db, model, model[s.original].origin(), lhs, rhs, true)
+				} else if model[s.original].name() == self.ids.functions.le {
+					self.generate_lt_or_le(db, model, model[s.original].origin(), lhs, rhs, false)
+				} else {
+					self.generate_eq(db, model, model[s.original].origin(), lhs, rhs)
+				};
+				self.specialised_model[f].set_body(body);
+				self.specialised_model[f].validate(db);
+				continue;
+			}
+
 			if let Some(b) = model[s.original].body() {
 				log::debug!(
 					"Adding specialised body to {} (call depth {})",
@@ -98,28 +143,6 @@ impl<'a, 'db, Dst: Marker> Folder<'_, 'db, Dst> for TypeSpecialiser<'a, 'db, Dst
 				self.specialised_model[f].set_body(body);
 				self.specialised_model[f].validate(db);
 				continue;
-			}
-			if model[s.original].name() == self.ids.functions.show {
-				// Create specialised show function for types which will be erased, except show on direct enum which will be generated later.
-				// An opt enum is not direct: enum erasure would pass the
-				// erased `opt int` to `mzn_show_enum`, which takes a plain
-				// `int`. The occurs/deopt unwrapping generated here leaves
-				// an inner show on the deopted (direct) enum instead.
-				let p = self.specialised_model[f].parameter(0);
-				let ty = self.specialised_model[p].ty();
-				if ty.contains_erased_type(db) {
-					if !ty.is_enum(db) || ty.opt(db) == Some(OptType::Opt) {
-						let body = self.generate_show(db, model, p, ty);
-						self.specialised_model[f].set_body(body);
-						self.specialised_model[f].validate(db);
-						log::debug!(
-							"Generated specialised show\n{}",
-							PrettyPrinter::new(db, &self.specialised_model)
-								.pretty_print_item(f.into())
-						);
-					}
-					continue;
-				}
 			}
 		}
 
@@ -314,12 +337,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 				.join(", ")
 		);
 
-		let needs_instantiation = model[f].is_polymorphic()
-			&& (model[f].body().is_some()
-				|| (model[f].name() == self.ids.functions.show
-					|| model[f].name() == self.ids.functions.show_json
-					|| model[f].name() == self.ids.functions.show_dzn)
-					&& args[0].contains_erased_type(db));
+		let needs_instantiation = model[f].is_polymorphic() && model[f].body().is_some();
 		if !needs_instantiation {
 			return self.fold_function_id(db, model, f);
 		}
@@ -441,6 +459,31 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 		Expression::new(db, &self.specialised_model, origin, e)
 	}
 
+	/// Lookup call by name from original model and instantiate
+	fn call(
+		&mut self,
+		db: &'db dyn Db,
+		model: &Model<'db>,
+		origin: impl Into<Origin<'db>>,
+		name: Identifier<'db>,
+		args: Vec<Expression<'db, Dst>>,
+	) -> Expression<'db, Dst> {
+		let arg_tys = args.iter().map(|arg| arg.ty()).collect::<Vec<_>>();
+		let function = model
+			.lookup_function(db, name.into(), &arg_tys)
+			.unwrap()
+			.function;
+		let idx = self.instantiate(db, model, function, &arg_tys);
+		self.expr(
+			db,
+			origin,
+			Call {
+				function: Callable::Function(idx),
+				arguments: args,
+			},
+		)
+	}
+
 	// Generate specialised body for show needed if type will be erased
 	fn generate_show(
 		&mut self,
@@ -449,160 +492,10 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 		arg: DeclarationId<'db, Dst>,
 		ty: Ty<'db>,
 	) -> Expression<'db, Dst> {
+		log::debug!("Generating specialised show for {}", ty.pretty_print(db));
+
 		let origin = self.specialised_model[arg].origin();
-		let call = |ts: &mut Self, name: Identifier<'db>, args: Vec<Expression<'db, Dst>>| {
-			let arg_tys = args.iter().map(|arg| arg.ty()).collect::<Vec<_>>();
-			let function = model
-				.lookup_function(db, name.into(), &arg_tys)
-				.unwrap()
-				.function;
-			let idx = ts.instantiate(db, model, function, &arg_tys);
-			Call {
-				function: Callable::Function(idx),
-				arguments: args,
-			}
-		};
-
-		if ty.inst(db) == Some(shackle_ty::VarType::Var) && ty.opt(db) == Some(OptType::Opt) {
-			// A var opt value cannot branch on `occurs` before solving (the
-			// occurs/deopt conditional below would need a var string), and
-			// output is evaluated on a fixed solution anyway: show(fix(x)).
-			let fix = call(
-				self,
-				self.ids.functions.fix,
-				vec![self.expr(db, origin, arg)],
-			);
-			let show = call(
-				self,
-				self.ids.functions.show,
-				vec![self.expr(db, origin, fix)],
-			);
-			return self.expr(db, origin, show);
-		}
-
-		if let Some(OptType::Opt) = ty.opt(db) {
-			// if occurs(x) then show(deopt(x)) else "<>" endif
-			let occurs = call(
-				self,
-				self.ids.functions.occurs,
-				vec![self.expr(db, origin, arg)],
-			);
-			let deopt = call(
-				self,
-				self.ids.functions.deopt,
-				vec![self.expr(db, origin, arg)],
-			);
-			let show = call(
-				self,
-				self.ids.functions.show,
-				vec![self.expr(db, origin, deopt)],
-			);
-			return self.expr(
-				db,
-				origin,
-				IfThenElse {
-					branches: vec![Branch {
-						condition: self.expr(db, origin, occurs),
-						result: self.expr(db, origin, show),
-					}],
-					else_result: Box::new(self.expr(db, origin, StringLiteral::new(db, "<>"))),
-				},
-			);
-		}
-
 		match ty.lookup(db) {
-			TyData::Array { element, .. } => {
-				// concat(["[", join(", ", [show(x_i) | x_i in x]), "]"])
-				let gen_decl = Declaration::new(false, Domain::unbounded(db, origin, *element));
-				let x_i = self
-					.specialised_model
-					.add_declaration(Item::new(gen_decl, origin));
-				let show = call(
-					self,
-					self.ids.functions.show,
-					vec![self.expr(db, origin, x_i)],
-				);
-				let join = call(
-					self,
-					self.ids.functions.join,
-					vec![
-						self.expr(db, origin, StringLiteral::new(db, ", ")),
-						self.expr(
-							db,
-							origin,
-							ArrayComprehension {
-								generators: vec![Generator::Iterator {
-									declarations: vec![x_i],
-									collection: self.expr(db, origin, arg),
-									where_clause: None,
-								}],
-								indices: None,
-								template: Box::new(self.expr(db, origin, show)),
-							},
-						),
-					],
-				);
-				let concat = call(
-					self,
-					self.ids.functions.concat,
-					vec![self.expr(
-						db,
-						origin,
-						ArrayLiteral(vec![
-							self.expr(db, origin, StringLiteral::new(db, "[")),
-							self.expr(db, origin, join),
-							self.expr(db, origin, StringLiteral::new(db, "]")),
-						]),
-					)],
-				);
-				self.expr(db, origin, concat)
-			}
-			TyData::Set(_, _, element) => {
-				// concat(["{", join(", ", [show(x_i) | x_i in x]), "}"])
-				let gen_decl = Declaration::new(false, Domain::unbounded(db, origin, *element));
-				let x_i = self
-					.specialised_model
-					.add_declaration(Item::new(gen_decl, origin));
-				let show = call(
-					self,
-					self.ids.functions.show,
-					vec![self.expr(db, origin, x_i)],
-				);
-				let join = call(
-					self,
-					self.ids.functions.join,
-					vec![
-						self.expr(db, origin, StringLiteral::new(db, ", ")),
-						self.expr(
-							db,
-							origin,
-							ArrayComprehension {
-								generators: vec![Generator::Iterator {
-									declarations: vec![x_i],
-									collection: self.expr(db, origin, arg),
-									where_clause: None,
-								}],
-								indices: None,
-								template: Box::new(self.expr(db, origin, show)),
-							},
-						),
-					],
-				);
-				let concat = call(
-					self,
-					self.ids.functions.concat,
-					vec![self.expr(
-						db,
-						origin,
-						ArrayLiteral(vec![
-							self.expr(db, origin, StringLiteral::new(db, "{")),
-							self.expr(db, origin, join),
-							self.expr(db, origin, StringLiteral::new(db, "}")),
-						]),
-					)],
-				);
-				self.expr(db, origin, concat)
-			}
 			TyData::Tuple(_, fs) => {
 				// concat(["(", show(x.1), ", ", show(x.2), ")"])
 				let mut fields = Vec::with_capacity(2 * fs.len() + 1);
@@ -611,8 +504,10 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 					if i > 1 {
 						fields.push(self.expr(db, origin, StringLiteral::new(db, ", ")));
 					}
-					let show = call(
-						self,
+					let show = self.call(
+						db,
+						model,
+						origin,
 						self.ids.functions.show,
 						vec![self.expr(
 							db,
@@ -623,15 +518,16 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 							},
 						)],
 					);
-					fields.push(self.expr(db, origin, show));
+					fields.push(show);
 				}
 				fields.push(self.expr(db, origin, StringLiteral::new(db, ")")));
-				let concat = call(
-					self,
+				self.call(
+					db,
+					model,
+					origin,
 					self.ids.functions.concat,
 					vec![self.expr(db, origin, ArrayLiteral(fields))],
-				);
-				self.expr(db, origin, concat)
+				)
 			}
 			TyData::Record(_, fs) => {
 				// concat(["(", "foo", ": ", show(x.foo), ", ", "bar", ": ", show(x.bar), ")"])
@@ -646,8 +542,10 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 					}
 					fields.push(self.expr(db, origin, StringLiteral::from(*i)));
 					fields.push(self.expr(db, origin, StringLiteral::new(db, ": ")));
-					let show = call(
-						self,
+					let show = self.call(
+						db,
+						model,
+						origin,
 						self.ids.functions.show,
 						vec![self.expr(
 							db,
@@ -658,9 +556,75 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 							},
 						)],
 					);
-					fields.push(self.expr(db, origin, show));
+					fields.push(show);
 				}
 				fields.push(self.expr(db, origin, StringLiteral::new(db, ")")));
+				self.call(
+					db,
+					model,
+					origin,
+					self.ids.functions.concat,
+					vec![self.expr(db, origin, ArrayLiteral(fields))],
+				)
+			}
+			_ => unreachable!(
+				"Unexpected type for specialised show: {}",
+				ty.pretty_print(db)
+			),
+		}
+	}
+
+	// Generate specialised body for showJSON needed if type will be erased
+	fn generate_show_json(
+		&mut self,
+		db: &'db dyn Db,
+		model: &Model<'db>,
+		arg: DeclarationId<'db, Dst>,
+		ty: Ty<'db>,
+	) -> Expression<'db, Dst> {
+		log::debug!(
+			"Generating specialised showJSON for {}",
+			ty.pretty_print(db)
+		);
+
+		let origin = self.specialised_model[arg].origin();
+		let call = |ts: &mut Self, name: Identifier<'db>, args: Vec<Expression<'db, Dst>>| {
+			let arg_tys = args.iter().map(|arg| arg.ty()).collect::<Vec<_>>();
+			let function = model
+				.lookup_function(db, name.into(), &arg_tys)
+				.unwrap()
+				.function;
+			let idx = ts.instantiate(db, model, function, &arg_tys);
+			Call {
+				function: Callable::Function(idx),
+				arguments: args,
+			}
+		};
+
+		match ty.lookup(db) {
+			TyData::Tuple(_, fs) => {
+				// concat(["[", showJSON(x.1), ", ", showJSON(x.2), "]"])
+				let mut fields = Vec::with_capacity(2 * fs.len() + 1);
+				fields.push(self.expr(db, origin, StringLiteral::new(db, "[")));
+				for i in 1..=fs.len() {
+					if i > 1 {
+						fields.push(self.expr(db, origin, StringLiteral::new(db, ", ")));
+					}
+					let show = call(
+						self,
+						self.ids.functions.show_json,
+						vec![self.expr(
+							db,
+							origin,
+							TupleAccess {
+								tuple: Box::new(self.expr(db, origin, arg)),
+								field: IntegerLiteral(i as i64),
+							},
+						)],
+					);
+					fields.push(self.expr(db, origin, show));
+				}
+				fields.push(self.expr(db, origin, StringLiteral::new(db, "]")));
 				let concat = call(
 					self,
 					self.ids.functions.concat,
@@ -668,8 +632,214 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 				);
 				self.expr(db, origin, concat)
 			}
-			_ => unreachable!(),
+			TyData::Record(_, fs) => {
+				// concat(["{", "foo", showJSON(": "), showJSON(x.foo), ", ", showJSON("bar"), ": ", showJSON(x.bar), "}"])
+				let mut fields = Vec::with_capacity(fs.len() * 4 + 1);
+				fields.push(self.expr(db, origin, StringLiteral::new(db, "{")));
+				let mut first = true;
+				for (i, _) in fs.iter() {
+					if first {
+						first = false;
+					} else {
+						fields.push(self.expr(db, origin, StringLiteral::new(db, ", ")));
+					}
+					let show_name = call(
+						self,
+						self.ids.functions.show_json,
+						vec![self.expr(db, origin, StringLiteral::from(*i))],
+					);
+					fields.push(self.expr(db, origin, show_name));
+					fields.push(self.expr(db, origin, StringLiteral::new(db, ": ")));
+					let show_value = call(
+						self,
+						self.ids.functions.show_json,
+						vec![self.expr(
+							db,
+							origin,
+							RecordAccess {
+								record: Box::new(self.expr(db, origin, arg)),
+								field: Identifier(*i),
+							},
+						)],
+					);
+					fields.push(self.expr(db, origin, show_value));
+				}
+				fields.push(self.expr(db, origin, StringLiteral::new(db, "}")));
+				let concat = call(
+					self,
+					self.ids.functions.concat,
+					vec![self.expr(db, origin, ArrayLiteral(fields))],
+				);
+				self.expr(db, origin, concat)
+			}
+			_ => unreachable!(
+				"Unexpected type for specialised show: {}",
+				ty.pretty_print(db)
+			),
 		}
+	}
+
+	fn generate_eq(
+		&mut self,
+		db: &'db dyn Db,
+		model: &Model<'db>,
+		origin: Origin<'db>,
+		lhs: DeclarationId<'db, Dst>,
+		rhs: DeclarationId<'db, Dst>,
+	) -> Expression<'db, Dst> {
+		log::debug!(
+			"Generating specialised {} = {} function",
+			self.specialised_model[lhs].ty().pretty_print(db),
+			self.specialised_model[rhs].ty().pretty_print(db)
+		);
+		let mut eqs = Vec::new();
+		let mut todo = vec![(self.expr(db, origin, lhs), self.expr(db, origin, rhs))];
+		while let Some((lhs, rhs)) = todo.pop() {
+			let ty = lhs.ty();
+			match ty.lookup(db) {
+				TyData::Tuple(_, fs) => {
+					for i in 1i64..=(fs.len() as i64) {
+						let new_lhs = self.expr(
+							db,
+							origin,
+							TupleAccess {
+								tuple: Box::new(lhs.clone()),
+								field: IntegerLiteral(i),
+							},
+						);
+						let new_rhs = self.expr(
+							db,
+							origin,
+							TupleAccess {
+								tuple: Box::new(rhs.clone()),
+								field: IntegerLiteral(i),
+							},
+						);
+						todo.push((new_lhs, new_rhs));
+					}
+				}
+				TyData::Record(_, fs) => {
+					for i in fs.iter().map(|(i, _)| *i) {
+						let new_lhs = self.expr(
+							db,
+							origin,
+							RecordAccess {
+								record: Box::new(lhs.clone()),
+								field: Identifier(i),
+							},
+						);
+						let new_rhs = self.expr(
+							db,
+							origin,
+							RecordAccess {
+								record: Box::new(rhs.clone()),
+								field: Identifier(i),
+							},
+						);
+						todo.push((new_lhs, new_rhs));
+					}
+				}
+				_ => {
+					eqs.push(self.call(db, model, origin, self.ids.functions.eq, vec![lhs, rhs]));
+				}
+			}
+		}
+		self.call(
+			db,
+			model,
+			origin,
+			self.ids.functions.forall,
+			vec![self.expr(db, origin, ArrayLiteral(eqs))],
+		)
+	}
+
+	fn generate_lt_or_le(
+		&mut self,
+		db: &'db dyn Db,
+		model: &Model<'db>,
+		origin: Origin<'db>,
+		lhs: DeclarationId<'db, Dst>,
+		rhs: DeclarationId<'db, Dst>,
+		strict: bool,
+	) -> Expression<'db, Dst> {
+		log::debug!(
+			"Generating specialised {} < {} function",
+			self.specialised_model[lhs].ty().pretty_print(db),
+			self.specialised_model[rhs].ty().pretty_print(db)
+		);
+		// TODO: Generate lex_less[eq] constraint if possible
+
+		let mut parts = Vec::new();
+		let mut todo = vec![(self.expr(db, origin, lhs), self.expr(db, origin, rhs))];
+		while let Some((lhs, rhs)) = todo.pop() {
+			let ty = lhs.ty();
+			match ty.lookup(db) {
+				TyData::Tuple(_, fs) => {
+					for i in 1i64..=(fs.len() as i64) {
+						let new_lhs = self.expr(
+							db,
+							origin,
+							TupleAccess {
+								tuple: Box::new(lhs.clone()),
+								field: IntegerLiteral(i),
+							},
+						);
+						let new_rhs = self.expr(
+							db,
+							origin,
+							TupleAccess {
+								tuple: Box::new(rhs.clone()),
+								field: IntegerLiteral(i),
+							},
+						);
+						todo.push((new_lhs, new_rhs));
+					}
+				}
+				TyData::Record(_, fs) => {
+					for i in fs.iter().map(|(i, _)| *i) {
+						let new_lhs = self.expr(
+							db,
+							origin,
+							RecordAccess {
+								record: Box::new(lhs.clone()),
+								field: Identifier(i),
+							},
+						);
+						let new_rhs = self.expr(
+							db,
+							origin,
+							RecordAccess {
+								record: Box::new(rhs.clone()),
+								field: Identifier(i),
+							},
+						);
+						todo.push((new_lhs, new_rhs));
+					}
+				}
+				_ => {
+					parts.push((
+						self.call(
+							db,
+							model,
+							origin,
+							self.ids.functions.le,
+							vec![lhs.clone(), rhs.clone()],
+						),
+						self.call(db, model, origin, self.ids.functions.lt, vec![lhs, rhs]),
+					));
+				}
+			}
+		}
+
+		let mut iter = parts.into_iter();
+		let (last_le, last_lt) = iter.next().unwrap();
+		let mut expr = if strict { last_lt } else { last_le };
+		for (le, lt) in iter {
+			let or = self.call(db, model, origin, self.ids.functions.or, vec![lt, expr]);
+			expr = self.call(db, model, origin, self.ids.functions.and, vec![le, or]);
+		}
+
+		expr
 	}
 
 	fn decompose_array_access(
@@ -690,19 +860,6 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 				);
 
 				// Decompose access to array of structured types
-				let call =
-					|ts: &mut Self, name: Identifier<'db>, args: Vec<Expression<'db, Dst>>| {
-						let arg_tys = args.iter().map(|arg| arg.ty()).collect::<Vec<_>>();
-						let function = model
-							.lookup_function(db, name.into(), &arg_tys)
-							.unwrap()
-							.function;
-						let idx = ts.instantiate(db, model, function, &arg_tys);
-						Call {
-							function: Callable::Function(idx),
-							arguments: args,
-						}
-					};
 				let origin = self.specialised_model[f].origin();
 				let c_origin = self.specialised_model[array].origin();
 				let c_ident = Expression::new(db, &self.specialised_model, c_origin, array);
@@ -745,24 +902,21 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 								)),
 							},
 						);
-						let array = Expression::new(
+						let array = self.call(
 							db,
-							&self.specialised_model,
+							&model,
 							origin,
-							LookupCall {
-								function: self.ids.functions.array_xd.into(),
-								arguments: vec![c_ident.clone(), comprehension],
-							},
+							self.ids.functions.array_xd,
+							vec![c_ident.clone(), comprehension],
 						);
-						let inner = call(
-							self,
+						let inner = self.call(
+							db,
+							model,
+							origin,
 							self.ids.functions.array_access,
 							vec![array, i_ident.clone()],
 						);
-						decomposed.push((
-							field,
-							Expression::new(db, &self.specialised_model, origin, inner),
-						));
+						decomposed.push((field, inner));
 					}
 					return Some(Expression::new(
 						db,
@@ -806,21 +960,21 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 							)),
 						},
 					);
-					let array = Expression::new(
+					let array = self.call(
 						db,
-						&self.specialised_model,
+						model,
 						origin,
-						LookupCall {
-							function: self.ids.functions.array_xd.into(),
-							arguments: vec![c_ident.clone(), comprehension],
-						},
+						self.ids.functions.array_xd,
+						vec![c_ident.clone(), comprehension],
 					);
-					let inner = call(
-						self,
+					let inner = self.call(
+						db,
+						model,
+						origin,
 						self.ids.functions.array_access,
 						vec![array, i_ident.clone()],
 					);
-					decomposed.push(Expression::new(db, &self.specialised_model, origin, inner));
+					decomposed.push(inner);
 				}
 				return Some(Expression::new(
 					db,
@@ -969,30 +1123,69 @@ mod tests {
 		check_no_stdlib(
 			transformer(vec![type_specialise, mangle_names]),
 			r#"
+			annotation mzn_internal_generated;
 			test occurs(opt $T: x);
 			function $T: deopt(opt $T: x);
-			function string: show(any $T: x);
-			function string: show(array [$X] of any $T: x);
 			function string: concat(array [$T] of string: x);
 			function string: join(string: s, array [$T] of string: x);
+			function string: show($T: x) :: mzn_internal_generated = "";
+			function string: show(opt $T: x) = if occurs(x) then show(deopt(x)) else "<>" endif;
+			function string: show(array [$X] of $T: x) = concat(["[", join(",", [show(x_i) | x_i in x]), "]"]);
 			output [show((a: 1, b: 2))];
 			array [int] of tuple(opt int, bool): x;
 			output [show(x)];
 			"#,
 			expect!([r#"
+    annotation mzn_internal_generated;
     function bool: occurs(opt $T: x);
     function $T: deopt(opt $T: x);
-    function string: 'show<opt int>'(opt int: x) = if occurs(x) then 'show<any $T>'(deopt(x)) else "<>" endif;
-    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) = concat(["(", 'show<opt int>'((x).1), ", ", 'show<any $T>'((x).2), ")"]);
-    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) = concat(["(", "a", ": ", 'show<any $T>'((x).a), ", ", "b", ": ", 'show<any $T>'((x).b), ")"]);
-    function string: 'show<any $T>'(any $T: x);
-    function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = concat(["[", join(", ", ['show<tuple(opt int, bool)>'(_DECL_13) | _DECL_13 in x]), "]"]);
-    function string: 'show<array [$X] of any $T>'(array [$X] of any $T: x);
     function string: concat(array [$T] of string: x);
     function string: join(string: s, array [$T] of string: x);
+    function string: 'show<bool>'(bool: x) :: (mzn_internal_generated) = "";
+    function string: 'show<int>'(int: x) :: (mzn_internal_generated) = "";
+    function string: 'show<tuple(opt int, bool)>'(tuple(opt int, bool): x) :: (mzn_internal_generated) = concat(["(", 'show<opt int>'((x).1), ", ", 'show<bool>'((x).2), ")"]);
+    function string: 'show<record(int: a, int: b)>'(record(int: a, int: b): x) :: (mzn_internal_generated) = concat(["(", "a", ": ", 'show<int>'((x).a), ", ", "b", ": ", 'show<int>'((x).b), ")"]);
+    function string: 'show<opt int>'(opt int: x) = if occurs(x) then 'show<int>'(deopt(x)) else "<>" endif;
+    function string: 'show<array [int] of tuple(opt int, bool)>'(array [int] of tuple(opt int, bool): x) = concat(["[", join(",", ['show<tuple(opt int, bool)>'(x_i) | x_i in x]), "]"]);
     output ['show<record(int: a, int: b)>'((a: 1, b: 2))];
     array [int] of tuple(opt int, bool): x;
     output ['show<array [int] of tuple(opt int, bool)>'(x)];
+    solve satisfy;
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_type_specialisation_compare() {
+		check_no_stdlib(
+			transformer(vec![type_specialise, mangle_names]),
+			r#"
+				annotation mzn_internal_generated;
+				predicate forall(array [int] of var bool);
+				predicate '/\'(var bool: x, var bool: y);
+				predicate '\/'(var bool: x, var bool: y);
+				predicate '<='(any $T: x, any $T: y) :: mzn_internal_generated = true;
+				predicate '<'(any $T: x, any $T: y) :: mzn_internal_generated = true;
+				predicate '='(any $T: x, any $T: y) :: mzn_internal_generated = true;
+				record(var int: a, var int: b): x;
+				record(var int: a, var int: b): y;
+				constraint x < y;
+				constraint x = y;
+			"#,
+			expect!([r#"
+    annotation mzn_internal_generated;
+    predicate forall(array [int] of var bool: _DECL_1);
+    function var bool: '/\'(var bool: x, var bool: y);
+    function var bool: '\/'(var bool: x, var bool: y);
+    function var bool: '<='(var int: x, var int: y) :: (mzn_internal_generated) = '<='(x, y);
+    function var bool: '<<var int, var int>'(var int: x, var int: y) :: (mzn_internal_generated) = '<<var int, var int>'(x, y);
+    function var bool: '<<record(var int: a, var int: b), record(var int: a, var int: b)>'(record(var int: a, var int: b): x, record(var int: a, var int: b): y) :: (mzn_internal_generated) = '/\'('<='((x).a, (y).a), '\/'('<<var int, var int>'((x).a, (y).a), '<<var int, var int>'((x).b, (y).b)));
+    function var bool: '=<var int, var int>'(var int: x, var int: y) :: (mzn_internal_generated) = forall(['=<var int, var int>'(x, y)]);
+    function var bool: '=<record(var int: a, var int: b), record(var int: a, var int: b)>'(record(var int: a, var int: b): x, record(var int: a, var int: b): y) :: (mzn_internal_generated) = forall(['=<var int, var int>'((x).b, (y).b), '=<var int, var int>'((x).a, (y).a)]);
+    record(var int: a, var int: b): x;
+    record(var int: a, var int: b): y;
+    constraint '<<record(var int: a, var int: b), record(var int: a, var int: b)>'(x, y);
+    constraint '=<record(var int: a, var int: b), record(var int: a, var int: b)>'(x, y);
     solve satisfy;
 "#]),
 		)
@@ -1025,28 +1218,18 @@ mod tests {
 		check_no_stdlib(
 			transformer(vec![type_specialise, mangle_names]),
 			r#"
-			function string: show(any $T: x);
-			function string: show(array [$X] of any $T: x);
-			function string: concat(array [$T] of string: x);
-			function string: join(string: s, array [$T] of string: x);
+			annotation mzn_internal_generated;
+			function string: show($T: x) :: mzn_internal_generated = "";
 			enum Foo;
 			Foo: x;
-			array [int] of Foo: y;
 			output [show(x)];
-			output [show(y)];
 			"#,
 			expect!([r#"
-    function string: 'show<any $T>'(any $T: x);
-    function string: 'show<array [$X] of any $T>'(array [$X] of any $T: x);
-    function string: concat(array [$T] of string: x);
-    function string: join(string: s, array [$T] of string: x);
+    annotation mzn_internal_generated;
     enum Foo;
-    function string: 'show<array [int] of Foo>'(array [int] of Foo: x) = concat(["[", join(", ", ['show<Foo>'(_DECL_10) | _DECL_10 in x]), "]"]);
-    function string: 'show<Foo>'(Foo: x);
+    function string: show(Foo: x) :: (mzn_internal_generated);
     Foo: x;
-    array [int] of Foo: y;
-    output ['show<Foo>'(x)];
-    output ['show<array [int] of Foo>'(y)];
+    output [show(x)];
     solve satisfy;
 "#]),
 		)
@@ -1057,23 +1240,18 @@ mod tests {
 		check_no_stdlib(
 			transformer(vec![type_specialise, mangle_names]),
 			r#"
-			function string: show(any $T: x);
-			function string: show(array [$X] of any $T: x);
-			function string: concat(array [$T] of string: x);
-			function string: join(string: s, array [$T] of string: x);
+			annotation mzn_internal_generated;
+			function string: show($T: x) :: mzn_internal_generated = "";
 			function string: foo($$E: x) = show(x);
 			enum Foo;
 			Foo: x;
 			output [foo(x)];
 			"#,
 			expect!([r#"
-    function string: 'show<any $T>'(any $T: x);
-    function string: 'show<array [$X] of any $T>'(array [$X] of any $T: x);
-    function string: concat(array [$T] of string: x);
-    function string: join(string: s, array [$T] of string: x);
-    function string: foo(Foo: x) = 'show<Foo>'(x);
+    annotation mzn_internal_generated;
+    function string: foo(Foo: x) = show(x);
     enum Foo;
-    function string: 'show<Foo>'(Foo: x);
+    function string: show(Foo: x) :: (mzn_internal_generated);
     Foo: x;
     output [foo(x)];
     solve satisfy;
@@ -1129,7 +1307,7 @@ mod tests {
 			expect!([r#"
     array [int] of int: x = [1, 2, 3];
     int: v = '[]<array [int] of int, int>'(x, 1);
-    var '..<$$E, $$E>'(1, 3): i;
+    var '..<int, int>'(1, 3): i;
     var int: u = '[]<array [int] of var int, var int>'(x, i);
 "#]),
 		)
@@ -1148,7 +1326,7 @@ mod tests {
 		"#,
 			expect!([r#"
     enum Foo = { A } ++ { B } ++ { C };
-    array [Foo] of var '..<$$E, $$E>'(1, 3): x;
+    array [Foo] of var '..<int, int>'(1, 3): x;
     var int: v = '[]<array [Foo] of var int, Foo>'(x, A);
     var Foo: i;
     var int: u = '[]<array [Foo] of var int, var Foo>'(x, i);
@@ -1166,8 +1344,8 @@ mod tests {
 			any: v = x[i];
 		"#,
 			expect!([r#"
-    array ['..<$$E, $$E>'(1, 3)] of tuple(int, int): x;
-    var '..<$$E, $$E>'(1, 3): i;
+    array ['..<int, int>'(1, 3)] of tuple(int, int): x;
+    var '..<int, int>'(1, 3): i;
     tuple(var int, var int): v = '[]<array [int] of tuple(var int, var int), var int>'(x, i);
 "#]),
 		)
@@ -1183,8 +1361,8 @@ mod tests {
 			any: v = x[i];
 		"#,
 			expect!([r#"
-    array ['..<$$E, $$E>'(1, 3)] of record(int: bar, int: foo): x;
-    var '..<$$E, $$E>'(1, 3): i;
+    array ['..<int, int>'(1, 3)] of record(int: bar, int: foo): x;
+    var '..<int, int>'(1, 3): i;
     record(var int: bar, var int: foo): v = '[]<array [int] of record(var int: bar, var int: foo), var int>'(x, i);
 "#]),
 		)

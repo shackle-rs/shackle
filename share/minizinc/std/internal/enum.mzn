@@ -226,6 +226,57 @@ function string: mzn_show_enum(array [int] of MznEnum: enums, int: e, int: v) =
 			endif;
 	} in name ++ args;
 
+function string: mzn_show_json_enum(array [int] of MznEnum: enums, int: e, int: v) =
+	let {
+		any: (name, ctors) = mzn_unpack_enum(enums[e], v);
+		any: args =
+			if length(ctors) > 0 then
+				"(" ++
+					join(
+						", ",
+						[
+							if ctor.1 == 0 then
+								show(ctor.2)
+							else
+								mzn_show_json_enum(enums, ctor.1, ctor.2)
+							endif |
+								ctor in ctors,
+						],
+					) ++
+					")"
+			endif;
+	} in if length(ctors) > 1 then
+		"{\"c\": " ++
+			showJSON(name) ++
+			", \"e\": [" ++
+			join(
+				", ",
+				[
+					if ctor.1 == 0 then
+						show(ctor.2)
+					else
+						mzn_show_json_enum(enums, ctor.1, ctor.2)
+					endif |
+						ctor in ctors,
+				],
+			) ++
+			"]}"
+	elseif length(ctors) = 1 then
+		let {
+			any: ctor = ctors[1];
+		} in "{\"c\": " ++
+			showJSON(name) ++
+			", \"e\": " ++
+			if ctor.1 == 0 then
+				showJSON(ctor.2)
+			else
+				mzn_show_json_enum(enums, ctor.1, ctor.2)
+			endif ++
+			"}"
+	else
+		"{\"e\": " ++ showJSON(name) ++ "}"
+	endif;
+
 function array [int] of tuple(array [int] of int): mzn_cartesian_product(
 	array [int] of set of int: x,
 	int: i,

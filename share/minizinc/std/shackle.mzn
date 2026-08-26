@@ -1,6 +1,7 @@
 include "internal/annotation.mzn";
 include "internal/array.mzn";
 include "internal/coercion.mzn";
+include "internal/compare.mzn";
 include "internal/debug.mzn";
 include "internal/domain.mzn";
 include "internal/element.mzn";
