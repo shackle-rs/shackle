@@ -24,3 +24,5 @@ function set of $T: 'default'(opt set of $T: x, set of $T: y) :: mzn_inline_call
 	mzn_default_opt(x, y);
 function opt set of $T: 'default'(opt set of $T: x, opt set of $T: y) :: mzn_inline_call_by_name =
 	mzn_default_opt(x, y);
+
+function array [int] of $T: set2array(set of $T: x) = [v | v in x];

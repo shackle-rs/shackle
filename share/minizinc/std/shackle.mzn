@@ -11,6 +11,7 @@ include "internal/ite.mzn";
 include "internal/math.mzn";
 include "internal/opt.mzn";
 include "internal/partiality.mzn";
+include "internal/random.mzn";
 include "internal/reflect.mzn";
 include "internal/set.mzn";
 include "internal/shackle_redefinitions.mzn";

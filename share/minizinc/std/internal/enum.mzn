@@ -294,3 +294,8 @@ function array [int] of tuple(array [int] of int): mzn_cartesian_product(
 ) = mzn_cartesian_product(x, 1);
 
 function set of int: mzn_infinite_range() = -infinity..infinity;
+
+function $$E: to_enum(set of $$E: X, int: x) =
+	let {
+		constraint mzn_assert_warn(x in enum2int(enum_of(X)), "The value \(x) is out of bounds");
+	} in to_enum_internal(X, x);

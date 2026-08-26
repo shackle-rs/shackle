@@ -172,20 +172,31 @@ function set of float: mzn_array2set(array [int] of float: x) = array2set(x);
 
 function bool: mzn_add_warning(string: msg) = trace("WARNING: " ++ msg);
 
-function int: div_internal(int: x, int: y) = x div y;
-% Parameter names must match the shackle stdlib's public wrappers
-% (std/internal/math.mzn): the old_compat prefixing renames those wrappers to
-% these same `shackle_*` names, and old MiniZinc rejects same-signature
-% overloads that differ only in parameter names as ambiguous.
-function $$E: min_internal(set of $$E: s) = min(s);
-function $$E: max_internal(set of $$E: s) = max(s);
-function $$E: arg_min_internal(array [$$E] of bool: xs) = arg_min(xs);
-function $$E: arg_min_internal(array [$$E] of $$T: xs) = arg_min(xs);
-function $$E: arg_min_internal(array [$$E] of float: xs) = arg_min(xs);
-function $$E: arg_max_internal(array [$$E] of bool: xs) = arg_max(xs);
-function $$E: arg_max_internal(array [$$E] of $$T: xs) = arg_max(xs);
-function $$E: arg_max_internal(array [$$E] of float: xs) = arg_max(xs);
-function int: pow_internal(int: x, int: y) = pow(x, y);
-function array [$$E] of $$F: inverse(array [$$F] of $$E: f);
-function array [$$E] of $$F: inverse_internal(array [$$F] of $$E: f) = inverse(f);
-function set of $U: array_intersect_internal(array [$T] of set of $U: x) = array_intersect(x);
+function int: div_internal_int(int: x, int: y) = x div y;
+function float: div_internal_float(float: x, float: y) = x / y;
+function int: pow_internal_int(int: x, int: y) = pow(x, y);
+function float: pow_internal_float(float: x, float: y) = pow(x, y);
+
+function $T: min_internal_array(array [$U] of $T: x) = min(x);
+function $T: min_internal_set(set of $T: s) = min(s);
+function $T: max_internal_array(array [$U] of $T: x) = max(x);
+function $T: max_internal_set(set of $T: s) = max(s);
+function set of int: intersect_internal_int(set of int: x, set of int: y) = x intersect y;
+function set of float: intersect_internal_float(set of float: x, set of float: y) = x intersect y;
+function set of int: union_internal_int(set of int: x, set of int: y) = x union y;
+function set of float: union_internal_float(set of float: x, set of float: y) = x union y;
+function set of int: diff_internal_int(set of int: x, set of int: y) = x diff y;
+function set of float: diff_internal_float(set of float: x, set of float: y) = x diff y;
+
+function string: show_internal($T: x) = show(x);
+
+function array [int] of int: set_to_ranges_internal_int(set of int: S) = set_to_ranges(S);
+function array [int] of float: set_to_ranges_internal_float(set of float: S) = set_to_ranges(S);
+
+function set of int: range_internal_int(int: a, int: b) = a..b;
+function set of float: range_internal_float(float: a, float: b) = a..b;
+
+function float: uniform_internal_float(float: lowerbound, float: upperbound) =
+	uniform(lowerbound, upperbound);
+function int: uniform_internal_int(int: lowerbound, int: upperbound) =
+	uniform(lowerbound, upperbound);
