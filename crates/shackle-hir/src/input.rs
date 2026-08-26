@@ -173,6 +173,17 @@ impl ModelFile {
 		}
 	}
 
+	/// Get the name of this model file
+	pub fn name(&self, db: &dyn Db) -> Option<String> {
+		match self {
+			ModelFile::Named(n) => n
+				.path(db)
+				.file_name()
+				.map(|s| s.to_string_lossy().to_string()),
+			ModelFile::Inline(i) => i.name(db).clone(),
+		}
+	}
+
 	/// Get the resolved include items for this model
 	pub fn include_items<'db>(&self, db: &'db dyn Db) -> Vec<IncludeItem<'db>> {
 		includes_for_file(db, *self)

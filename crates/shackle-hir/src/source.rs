@@ -201,6 +201,13 @@ impl Origin {
 	pub fn source_span(&self, db: &dyn Db) -> (SourceFile, SourceSpan) {
 		(self.file.source_file(db), self.span)
 	}
+
+	/// Pretty-print this origin for diagnostics
+	pub fn pretty_print(&self, db: &dyn Db) -> String {
+		let (source, span) = self.source_span(db);
+		let range = span_to_range(span, source.contents().as_ref());
+		format!("{}:{}", source.name(), range)
+	}
 }
 
 impl std::fmt::Debug for Origin {

@@ -41,6 +41,8 @@ use crate::{
 	TryUnwrap,
 	Unwrap,
 )]
+#[unwrap(ref)]
+#[try_unwrap(ref)]
 pub enum Item<'db> {
 	/// Annotation item ID
 	Annotation(AnnotationItem<'db>),

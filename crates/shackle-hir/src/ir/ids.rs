@@ -6,6 +6,7 @@ use shackle_diagnostics::{SourceFile, SourceSpan};
 use crate::{
 	Db, ExpressionId, Identifier, Item, PatternId, TypeId,
 	input::{ModelFile, resolve_includes},
+	source::Origin,
 };
 
 #[allow(missing_docs, reason = "Salsa generates code with missing docs")]
@@ -30,9 +31,14 @@ impl<'db> ExpressionRef<'db> {
 		EntityRef::new(db, self.item(db), EntityId::from(self.expression(db)))
 	}
 
+	/// Get the origin of this expression
+	pub fn origin(&self, db: &'db dyn Db) -> &'db Origin {
+		&self.item(db).sources(db)[self.expression(db)]
+	}
+
 	/// Get the source and span for emitting a diagnostic
 	pub fn source_span(&self, db: &dyn Db) -> (SourceFile, SourceSpan) {
-		self.item(db).sources(db)[self.expression(db)].source_span(db)
+		self.origin(db).source_span(db)
 	}
 }
 
@@ -58,9 +64,14 @@ impl<'db> TypeRef<'db> {
 		EntityRef::new(db, self.item(db), EntityId::from(self.type_id(db)))
 	}
 
+	/// Get the origin of this type
+	pub fn origin(&self, db: &'db dyn Db) -> &'db Origin {
+		&self.item(db).sources(db)[self.type_id(db)]
+	}
+
 	/// Get the source and span for emitting a diagnostic
 	pub fn source_span(&self, db: &dyn Db) -> (SourceFile, SourceSpan) {
-		self.item(db).sources(db)[self.type_id(db)].source_span(db)
+		self.origin(db).source_span(db)
 	}
 }
 
@@ -106,9 +117,14 @@ impl<'db> PatternRef<'db> {
 		result
 	}
 
+	/// Get the origin of this pattern
+	pub fn origin(&self, db: &'db dyn Db) -> &'db Origin {
+		&self.item(db).sources(db)[self.pattern(db)]
+	}
+
 	/// Get the source and span for emitting a diagnostic
 	pub fn source_span(&self, db: &dyn Db) -> (SourceFile, SourceSpan) {
-		self.item(db).sources(db)[self.pattern(db)].source_span(db)
+		self.origin(db).source_span(db)
 	}
 }
 
@@ -200,13 +216,18 @@ impl<'db> EntityRef<'db> {
 		self.item(db).model_file(db)
 	}
 
+	/// Get the origin of this entity
+	pub fn origin(&self, db: &'db dyn Db) -> &'db Origin {
+		match self.entity(db) {
+			EntityId::Expression(i) => &self.item(db).sources(db)[i],
+			EntityId::Type(i) => &self.item(db).sources(db)[i],
+			EntityId::Pattern(i) => &self.item(db).sources(db)[i],
+		}
+	}
+
 	/// Get the source and span for emitting a diagnostic
 	pub fn source_span(&self, db: &dyn Db) -> (SourceFile, SourceSpan) {
-		match self.entity(db) {
-			EntityId::Expression(i) => self.item(db).sources(db)[i].source_span(db),
-			EntityId::Type(i) => self.item(db).sources(db)[i].source_span(db),
-			EntityId::Pattern(i) => self.item(db).sources(db)[i].source_span(db),
-		}
+		self.origin(db).source_span(db)
 	}
 }
 
