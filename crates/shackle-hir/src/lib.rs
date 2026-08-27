@@ -21,6 +21,7 @@
 //!
 //! The overall process is orchestrated by the `run_hir_phase` function.
 
+pub mod builtins;
 pub mod class_analysis;
 pub mod constants;
 pub mod counts;

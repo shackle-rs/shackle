@@ -533,6 +533,16 @@ mod function_item {
 }
 pub use function_item::FunctionItem;
 
+impl<'db> FunctionItem<'db> {
+	/// Pretty print the signature of this function item
+	pub fn pretty_print_signature(&self, db: &'db dyn Db) -> String {
+		let function = self.function(db);
+		Item::from(*self).signature(db).patterns[&function.pattern]
+			.pretty_print(db, function.data()[function.pattern].identifier())
+			.unwrap()
+	}
+}
+
 /// Declaration of a type-inst identifier
 #[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]
 pub struct TypeInstIdentifierDeclaration<'db> {
