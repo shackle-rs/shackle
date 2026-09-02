@@ -2,8 +2,8 @@ use std::{collections::hash_map::Entry, fmt::Write};
 
 use shackle_diagnostics::{
 	AmbiguousCall, BranchMismatch, Error, IllegalOutputType, IllegalType, InvalidArrayLiteral,
-	InvalidCall, InvalidFieldAccess, NoMatchingFunction, SyntaxError, TypeInferenceFailure,
-	TypeMismatch, UndefinedIdentifier, UnsupportedObjectFeature,
+	InvalidCall, InvalidDeclaration, InvalidFieldAccess, NoMatchingFunction, SyntaxError,
+	TypeInferenceFailure, TypeMismatch, UndefinedIdentifier, UnsupportedObjectFeature,
 };
 use shackle_ty::{
 	ClassRef, FunctionResolutionError, FunctionType, InstantiationError, OptType, Ty, TyData,
@@ -1738,11 +1738,16 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 						self.ctx.add_diagnostic(
 							db,
 							self.item,
-							TypeMismatch {
+							InvalidDeclaration {
 								src,
 								span,
-								msg: "Local parameter declaration must have a right-hand side"
-									.to_owned(),
+								msg: if result.ty.contains_var(db) {
+									"Local mixed var/par declaration must have a right-hand side"
+										.to_owned()
+								} else {
+									"Local parameter declaration must have a right-hand side"
+										.to_owned()
+								},
 							},
 						);
 					}

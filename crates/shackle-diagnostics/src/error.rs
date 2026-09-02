@@ -277,6 +277,21 @@ pub struct IllegalOutputType {
 	pub span: SourceSpan,
 }
 
+/// Invalid declaration
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid declaration")]
+#[diagnostic(code(shackle::invalid_declaration))]
+pub struct InvalidDeclaration {
+	/// The source code
+	#[source_code]
+	pub src: SourceFile,
+	/// The error message
+	pub msg: String,
+	/// The span associated with the error
+	#[label("{msg}")]
+	pub span: SourceSpan,
+}
+
 /// A mismatch in branch/arm types
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
 #[error("Type mismatch")]
@@ -596,6 +611,10 @@ pub enum Error {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	IllegalOutputType(#[from] IllegalOutputType),
+	/// Invalid declaration
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidDeclaration(#[from] InvalidDeclaration),
 	/// Invalid array literal
 	#[error(transparent)]
 	#[diagnostic(transparent)]

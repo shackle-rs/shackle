@@ -3,7 +3,9 @@
 //! E.g.
 //! - Function parameter/return type
 //! - Variable declaration LHS types
-use shackle_diagnostics::{Error, SyntaxError, TypeInferenceFailure, TypeMismatch, Warning};
+use shackle_diagnostics::{
+	Error, InvalidDeclaration, SyntaxError, TypeInferenceFailure, TypeMismatch, Warning,
+};
 use shackle_ty::{
 	ClassRef, EnumRef, FunctionType, OverloadedFunction, PolymorphicFunctionType, Ty, TyData,
 	TyVar, TyVarRef, registry::TypeRegistry,
@@ -462,10 +464,11 @@ impl<'db> SignatureTypeContext<'db> {
 					self.add_diagnostic(
 						db,
 						item,
-						SyntaxError {
+						InvalidDeclaration {
 							src,
 							span,
-							msg: "declaration must have a right-hand side.".to_owned(),
+							msg: "Declaration with mixed par/var type must have a right-hand side."
+								.to_owned(),
 						},
 					);
 				}
@@ -476,7 +479,7 @@ impl<'db> SignatureTypeContext<'db> {
 						self.add_diagnostic(
 							db,
 							item,
-							SyntaxError {
+							InvalidDeclaration {
 								src,
 								span,
 								msg: "'output_only' declarations must have a right-hand side."

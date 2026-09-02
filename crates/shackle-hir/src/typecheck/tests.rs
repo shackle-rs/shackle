@@ -582,3 +582,36 @@ fn test_var_reached_class_attribute_reads_are_var() {
 		expect!(""),
 	);
 }
+
+#[test]
+fn test_needs_rhs() {
+	let mut tester = TypeTester::new();
+	tester.check_error(
+		r#"
+		tuple(int, var 1..3): x;
+		"#,
+		expect!("Invalid declaration"),
+	);
+	tester.check_error(
+		r#"
+		int: x :: output_only;
+		"#,
+		expect!("Invalid declaration"),
+	);
+	tester.check_error(
+		r#"
+		int: x = let {
+			int: y;
+		} in 1;
+		"#,
+		expect!("Invalid declaration"),
+	);
+	tester.check_error(
+		r#"
+		int: x = let {
+			tuple(int, var 1..3): y;
+		} in 1;
+		"#,
+		expect!("Invalid declaration"),
+	);
+}
