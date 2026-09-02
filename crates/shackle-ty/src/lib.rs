@@ -438,7 +438,7 @@ impl<'db> Ty<'db> {
 				TyData::Tuple(_, fs) => todo.extend(fs.iter().copied()),
 				TyData::Record(_, fs) => todo.extend(fs.iter().map(|(_, t)| *t)),
 				_ => {
-					if self.known_par(db) {
+					if ty.known_par(db) {
 						return true;
 					}
 				}

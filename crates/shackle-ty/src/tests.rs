@@ -31,8 +31,9 @@ type_registry!(
 	array_int_of_var_int: Ty::array(db, par_int, var_int).unwrap(),
 	set_of_int: Ty::par_set(db, par_int).unwrap(),
 	set_of_float: Ty::par_set(db, par_float).unwrap(),
-	tuple_of_int: Ty::tuple(db, vec![par_int, par_int]),
-	tuple_of_float: Ty::tuple(db, vec![par_float, par_float]),
+	tuple_of_int_int: Ty::tuple(db, vec![par_int, par_int]),
+	tuple_of_float_float: Ty::tuple(db, vec![par_float, par_float]),
+	tuple_of_int_var_int: Ty::tuple(db, vec![par_int, var_int]),
 	record: Ty::record(db, vec![(InternedString::new(db, "a"), var_int)]),
 	sub_record: Ty::record(db, vec![(InternedString::new(db, "a"), par_int), (InternedString::new(db, "b"), par_bool)]),
 	par_enum: Ty::par_enum(db, EnumRef::new(InternedString::new(db, "Foo"))),
@@ -476,8 +477,9 @@ fn test_bottom_coercions() {
 			(types.bottom, types.set_of_int),
 			(types.bottom, types.set_of_float),
 			// Bottom to tuple
-			(types.bottom, types.tuple_of_int),
-			(types.bottom, types.tuple_of_float),
+			(types.bottom, types.tuple_of_int_int),
+			(types.bottom, types.tuple_of_float_float),
+			(types.bottom, types.tuple_of_int_var_int),
 			// Bottom to record
 			(types.bottom, types.record),
 			(types.bottom, types.sub_record),
@@ -579,23 +581,23 @@ fn test_tuple() {
 	let types = TypeRegistry::new(db);
 
 	assert_eq!(
-		types.tuple_of_int.lookup(db),
+		types.tuple_of_int_int.lookup(db),
 		&TyData::Tuple(OptType::NonOpt, Box::new([types.par_int, types.par_int]))
 	);
-	assert!(types.tuple_of_int.known_par(db));
-	assert!(types.tuple_of_int.known_varifiable(db));
-	assert!(!types.tuple_of_int.known_enumerable(db));
+	assert!(types.tuple_of_int_int.known_par(db));
+	assert!(types.tuple_of_int_int.known_varifiable(db));
+	assert!(!types.tuple_of_int_int.known_enumerable(db));
 
 	assert_eq!(
-		types.tuple_of_float.lookup(db),
+		types.tuple_of_float_float.lookup(db),
 		&TyData::Tuple(
 			OptType::NonOpt,
 			Box::new([types.par_float, types.par_float])
 		)
 	);
-	assert!(types.tuple_of_float.known_par(db));
-	assert!(types.tuple_of_float.known_varifiable(db));
-	assert!(!types.tuple_of_float.known_enumerable(db));
+	assert!(types.tuple_of_float_float.known_par(db));
+	assert!(types.tuple_of_float_float.known_varifiable(db));
+	assert!(!types.tuple_of_float_float.known_enumerable(db));
 }
 
 #[test]
@@ -605,9 +607,11 @@ fn test_tuple_coercions() {
 	check_coercions(
 		&db,
 		[
-			(types.tuple_of_int, types.tuple_of_int),
-			(types.tuple_of_float, types.tuple_of_float),
-			(types.tuple_of_int, types.tuple_of_float),
+			(types.tuple_of_int_int, types.tuple_of_int_int),
+			(types.tuple_of_float_float, types.tuple_of_float_float),
+			(types.tuple_of_int_int, types.tuple_of_float_float),
+			(types.tuple_of_int_int, types.tuple_of_int_var_int),
+			(types.tuple_of_int_var_int, types.tuple_of_int_var_int),
 		],
 	);
 }
@@ -824,4 +828,13 @@ fn test_most_general_subtype() {
 		Ty::most_general_subtype(db, [types.var_opt_bool, types.var_int, types.par_opt_float]),
 		Some(types.par_bool)
 	);
+}
+
+#[test]
+fn test_contains_par_var() {
+	let database_impl = DatabaseImpl::default();
+	let db = &database_impl;
+	let types = TypeRegistry::new(db);
+	assert!(types.tuple_of_int_var_int.contains_par(db));
+	assert!(types.tuple_of_int_var_int.contains_var(db));
 }
