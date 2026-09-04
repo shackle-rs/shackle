@@ -75,7 +75,17 @@ impl<'db> Item<'db> {
 			Item::Annotation(i) => i.documentation(db).as_ref(),
 			Item::Declaration(i) => i.documentation(db).as_ref(),
 			Item::Enumeration(i) => i.documentation(db).as_ref(),
-			Item::Function(i) => i.documentation(db).as_ref(),
+			Item::Function(i) => {
+				if let Some(doc) = i.documentation(db) {
+					return Some(doc);
+				}
+				for other in i.subsumes_others(db).iter().flat_map(|s| s.iter()) {
+					if let Some(d) = other.documentation(db) {
+						return Some(d);
+					}
+				}
+				None
+			}
 			Item::TypeAlias(i) => i.documentation(db).as_ref(),
 			_ => None,
 		}

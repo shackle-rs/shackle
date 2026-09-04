@@ -1,12 +1,16 @@
 //! Overloading validation and named argument handling
 
+use salsa::SalsaValue;
 use shackle_diagnostics::{
 	DuplicateFunction, FunctionAlreadyDefined, IllegalOverload, IllegalOverloading,
 };
-use shackle_ty::{Overload, OverloadedFunction, registry::TypeRegistry};
+use shackle_ty::{Overload, OverloadedFunction, match_fn, registry::TypeRegistry};
 use shackle_utils::{InternedString, hash::Map};
 
-use crate::{Db, GlobalScope, Identifier, PatternTy, diagnostics::Diagnostics, ids::PatternRef};
+use crate::{
+	Db, FunctionItem, GlobalScope, Identifier, Item, PatternTy, diagnostics::Diagnostics,
+	ids::PatternRef,
+};
 
 /// Info about a function parameter
 #[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::SalsaValue)]
@@ -432,6 +436,65 @@ pub fn check_overloading<'db>(db: &'db dyn Db, overloads: &[PatternRef<'db>]) ->
 	diagnostics
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, SalsaValue)]
+struct SubsumeMap<'db> {
+	map: Map<FunctionItem<'db>, FunctionItem<'db>>,
+	reverse: Map<FunctionItem<'db>, Vec<FunctionItem<'db>>>,
+}
+
+#[salsa::tracked]
+fn overload_subsumes<'db>(db: &'db dyn Db, name: InternedString<'db>) -> SubsumeMap<'db> {
+	let ps = GlobalScope::find_function(db, name.into());
+	let mut buckets: Map<_, Vec<_>> = Map::default();
+	for p in ps.iter() {
+		let signature = p.item(db).signature(db);
+		if let PatternTy::Function(f) = &signature.patterns[&p.pattern(db)] {
+			let Item::Function(pf) = p.item(db) else {
+				continue;
+			};
+			buckets
+				.entry(f.kinds.clone())
+				.or_default()
+				.push((pf, *f.clone()));
+		}
+	}
+	let mut result = SubsumeMap::default();
+	for overloads in buckets.into_values() {
+		if overloads.len() > 1 {
+			for (p, f) in overloads.iter() {
+				let Ok(res) = match_fn(db, overloads.iter().cloned(), f.overload.params()) else {
+					continue;
+				};
+				if res.function.0 != *p {
+					let _ = result.map.insert(*p, res.function.0);
+					result.reverse.entry(res.function.0).or_default().push(*p);
+				}
+			}
+		}
+	}
+	result
+}
+
+impl<'db> FunctionItem<'db> {
+	/// Get the function that subsumes this function, if any
+	pub fn subsumed(&self, db: &'db dyn Db) -> Option<FunctionItem<'db>> {
+		let function = self.function(db);
+		let Some(name) = function.data()[function.pattern].identifier() else {
+			return None;
+		};
+		overload_subsumes(db, name.into()).map.get(self).cloned()
+	}
+
+	/// Get the functions subsumed by this function
+	pub fn subsumes_others(&self, db: &'db dyn Db) -> Option<&'db Vec<FunctionItem<'db>>> {
+		let function = self.function(db);
+		let Some(name) = function.data()[function.pattern].identifier() else {
+			return None;
+		};
+		overload_subsumes(db, name.into()).reverse.get(self)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use expect_test::{Expect, expect};
@@ -485,5 +548,34 @@ mod tests {
 		"#,
 			expect!["Return type conflicts with return type of other overloads"],
 		);
+	}
+
+	#[test]
+	fn test_overload_subsumes() {
+		let mut db = CompilerDatabase::default();
+		let _ = CompilerSettings::get(&db)
+			.set_ignore_stdlib(&mut db)
+			.to(true);
+		let code = r#"
+			function int: foo(int: a, int: b) = 1;
+			function int: foo(int: a, int: b);
+			function int: foo(int: c, int: d) = 2;
+		"#;
+		let model = InlineModelFile::new(&db, code.to_owned(), InputLang::MiniZinc).into();
+		let _ = InputFiles::get(&db).set_files(&mut db).to(vec![model]);
+		let functions = model
+			.hir(&db)
+			.items(&db)
+			.iter()
+			.filter_map(|i| i.try_unwrap_function().ok())
+			.collect::<Vec<_>>();
+		assert!(functions[0].subsumed(&db).is_none());
+		assert_eq!(functions[1].subsumed(&db), Some(functions[0]));
+		assert!(functions[2].subsumed(&db).is_none());
+		let subsumes = functions[0]
+			.subsumes_others(&db)
+			.expect("should have subsumes");
+		assert_eq!(subsumes.len(), 1);
+		assert_eq!(subsumes[0], functions[1]);
 	}
 }
