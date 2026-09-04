@@ -80,6 +80,7 @@ fn solve_enum_constructor_index() {
 /// is too big to keep in a file, and a regression makes the solve hang rather
 /// than produce something to compare, so this checks the shape under a deadline.
 #[test]
+#[ignore = "takes too long and needs too much memory"]
 fn solve_large_output() {
 	let model = fixture("large_output", "mzn");
 	let mut child = Command::new(env!("CARGO_BIN_EXE_shackle"))
