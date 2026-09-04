@@ -427,7 +427,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				result.annotations_mut().push(e);
 			}
 		}
-		if annotations_to_rewrite.len() > 0 {
+		if !annotations_to_rewrite.is_empty() {
 			let origin = result.origin();
 			let decl = Declaration::from_expression(db, false, result);
 			let decl_idx = self

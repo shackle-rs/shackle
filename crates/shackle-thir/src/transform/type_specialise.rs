@@ -698,7 +698,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 			let ty = lhs.ty();
 			match ty.lookup(db) {
 				TyData::Tuple(_, fs) => {
-					for i in 1i64..=(fs.len() as i64) {
+					for i in 1_i64..=(fs.len() as i64) {
 						let new_lhs = self.expr(
 							db,
 							origin,
@@ -775,7 +775,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 			let ty = lhs.ty();
 			match ty.lookup(db) {
 				TyData::Tuple(_, fs) => {
-					for i in 1i64..=(fs.len() as i64) {
+					for i in 1_i64..=(fs.len() as i64) {
 						let new_lhs = self.expr(
 							db,
 							origin,
@@ -904,7 +904,7 @@ impl<'a, 'db, Dst: Marker> TypeSpecialiser<'a, 'db, Dst> {
 						);
 						let array = self.call(
 							db,
-							&model,
+							model,
 							origin,
 							self.ids.functions.array_xd,
 							vec![c_ident.clone(), comprehension],

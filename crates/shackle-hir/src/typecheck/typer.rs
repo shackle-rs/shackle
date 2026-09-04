@@ -152,7 +152,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 				TypeMismatch {
 					src,
 					span,
-					msg: format!("Only annotation item names are allowed in this context.",),
+					msg: "Only annotation item names are allowed in this context.".to_owned(),
 				},
 			);
 		}

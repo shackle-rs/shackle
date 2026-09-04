@@ -479,18 +479,14 @@ impl<'db> FunctionItem<'db> {
 	/// Get the function that subsumes this function, if any
 	pub fn subsumed(&self, db: &'db dyn Db) -> Option<FunctionItem<'db>> {
 		let function = self.function(db);
-		let Some(name) = function.data()[function.pattern].identifier() else {
-			return None;
-		};
+		let name = function.data()[function.pattern].identifier()?;
 		overload_subsumes(db, name.into()).map.get(self).cloned()
 	}
 
 	/// Get the functions subsumed by this function
 	pub fn subsumes_others(&self, db: &'db dyn Db) -> Option<&'db Vec<FunctionItem<'db>>> {
 		let function = self.function(db);
-		let Some(name) = function.data()[function.pattern].identifier() else {
-			return None;
-		};
+		let name = function.data()[function.pattern].identifier()?;
 		overload_subsumes(db, name.into()).reverse.get(self)
 	}
 }

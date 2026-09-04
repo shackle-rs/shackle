@@ -257,7 +257,7 @@ impl<'db> ItemCollector<'db> {
 				annotations.push(e);
 			}
 		}
-		if annotations_to_rewrite.len() > 0 {
+		if !annotations_to_rewrite.is_empty() {
 			let origin = expression.origin();
 			let decl = Declaration::from_expression(db, false, expression);
 			let decl_idx = collector

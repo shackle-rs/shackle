@@ -115,7 +115,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			_ => unreachable!(),
 		};
 
-		return Expression::new(
+		Expression::new(
 			self.parent.db,
 			&self.parent.model,
 			origin,
@@ -123,7 +123,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				function,
 				arguments,
 			},
-		);
+		)
 	}
 
 	/// Collect an annotation on a declaration which is a call requiring the annotated expression

@@ -205,7 +205,7 @@ impl Origin {
 	/// Pretty-print this origin for diagnostics
 	pub fn pretty_print(&self, db: &dyn Db) -> String {
 		let (source, span) = self.source_span(db);
-		let range = span_to_range(span, source.contents().as_ref());
+		let range = span_to_range(span, source.contents());
 		format!("{}:{}", source.name(), range)
 	}
 }
