@@ -432,15 +432,7 @@ impl<'db> SignatureTypeContext<'db> {
 			}
 			Item::Declaration(d) => {
 				let it = d.declaration(db);
-				let ids = IdentifierRegistry::lookup(db);
-				let output_only = it
-					.annotations
-					.iter()
-					.find(|ann| match &data[**ann] {
-						Expression::Identifier(i) => *i == ids.annotations.output_only,
-						_ => false,
-					})
-					.copied();
+				let output_only = d.output_only(db);
 				for p in Pattern::identifiers(it.pattern, data) {
 					self.add_declaration(db, p, PatternTy::Computing);
 				}

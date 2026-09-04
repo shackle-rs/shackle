@@ -23,6 +23,7 @@ use shackle_utils::{
 use super::{Expression, Pattern, Type};
 use crate::{
 	Db, ExpressionId, Model, PatternId, TypeId,
+	constants::IdentifierRegistry,
 	input::ModelFile,
 	source::{Origin, SourceMap},
 };
@@ -335,6 +336,25 @@ mod declaration_item {
 	}
 }
 pub use declaration_item::DeclarationItem;
+
+impl<'db> DeclarationItem<'db> {
+	/// Check if this declaration is annotated with `:: output_only`
+	pub fn output_only(&self, db: &'db dyn Db) -> Option<ExpressionId<'db>> {
+		let decl = self.declaration(db);
+		let ids = IdentifierRegistry::lookup(db);
+		for ann in decl.annotations.iter() {
+			if decl.data[*ann]
+				.try_unwrap_identifier_ref()
+				.ok()
+				.map(|i| *i == ids.annotations.output_only)
+				.unwrap_or(false)
+			{
+				return Some(*ann);
+			}
+		}
+		None
+	}
+}
 
 /// A constructor atom or function for an enum or annotations
 #[derive(Clone, Debug, Hash, PartialEq, Eq, salsa::SalsaValue)]

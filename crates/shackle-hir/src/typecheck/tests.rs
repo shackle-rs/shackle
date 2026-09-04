@@ -615,3 +615,15 @@ fn test_needs_rhs() {
 		expect!("Invalid declaration"),
 	);
 }
+
+#[test]
+fn test_mix_output_only() {
+	let mut tester = TypeTester::new();
+	tester.check_error(
+		r#"
+		int: y :: output_only = 3;
+		var int: x = y;
+		"#,
+		expect!("Type mismatch"),
+	);
+}

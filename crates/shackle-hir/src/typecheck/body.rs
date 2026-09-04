@@ -11,7 +11,7 @@ use shackle_utils::hash::Map;
 
 use crate::{
 	Db, Expression, ExpressionId, Item, Pattern, PatternId, PatternTy, Type, TypeContext, TypeId,
-	Typer, constants::IdentifierRegistry, diagnostics::Diagnostics, ids::PatternRef,
+	Typer, diagnostics::Diagnostics, ids::PatternRef,
 };
 
 /// Collected types for an item body
@@ -152,12 +152,7 @@ impl<'db> BodyTypeContext<'db> {
 				// Declarations with incomplete types would have been done during signature typing
 				if data[it.declared_type].is_complete(data) {
 					if let Some(e) = it.definition {
-						let ids = IdentifierRegistry::lookup(db);
-						let output_only = it.annotations.iter().any(|ann| match &data[*ann] {
-							Expression::Identifier(i) => *i == ids.annotations.output_only,
-							_ => false,
-						});
-						if output_only {
+						if d.output_only(db).is_some() {
 							typer.typecheck_output(e, expected);
 						} else {
 							let _ = typer.typecheck_expression(e, expected);

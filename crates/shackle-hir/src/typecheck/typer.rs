@@ -257,8 +257,24 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			self.ctx.add_identifier_resolution(db, expr, p);
 			match self.ctx.type_pattern(db, p) {
 				PatternTy::Variable(ty) => {
-					if self.in_output_item && p.item(db) != self.item {
-						return ty.make_par(db);
+					if self.in_output_item {
+						if p.item(db) != self.item {
+							return ty.make_par(db);
+						}
+					} else if let Item::Declaration(d) = p.item(db)
+						&& d.output_only(db).is_some()
+					{
+						let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+						self.ctx.add_diagnostic(
+							db,
+							self.item,
+							TypeMismatch {
+								msg: "Cannot use output-only declaration in a non-output context"
+									.to_owned(),
+								src,
+								span,
+							},
+						);
 					}
 					return self.varify_class_body_attribute(p, *i, ty);
 				}
