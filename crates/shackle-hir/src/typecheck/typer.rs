@@ -129,6 +129,35 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		self.in_output_item = prev;
 	}
 
+	/// Check that the given expression is a direct annotation atom
+	pub fn typecheck_annotation_atom(&mut self, expr: ExpressionId<'db>) {
+		let _ = self.typecheck_expression(expr, self.types.ann);
+		let is_atom = match &self.data[expr] {
+			Expression::Identifier(i) => self
+				.find_variable(expr, *i)
+				.map(|p| matches!(self.ctx.type_pattern(self.db, p), PatternTy::AnnotationAtom))
+				.unwrap_or(false),
+			Expression::Call(c) => self.data[c.function]
+				.try_unwrap_identifier_ref()
+				.ok()
+				.map(|i| *i == self.identifiers.annotations.mzn_deprecated)
+				.unwrap_or(false),
+			_ => false,
+		};
+		if !is_atom {
+			let (src, span) = ExpressionRef::new(self.db, self.item, expr).source_span(self.db);
+			self.ctx.add_diagnostic(
+				self.db,
+				self.item,
+				TypeMismatch {
+					src,
+					span,
+					msg: format!("Only annotation item names are allowed in this context.",),
+				},
+			);
+		}
+	}
+
 	/// Get the type of this expression
 	pub fn collect_expression(&mut self, expr: ExpressionId<'db>) -> Ty<'db> {
 		maybe_grow_stack(|| self.collect_expression_inner(expr))
@@ -180,7 +209,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		result
 	}
 
-	fn collect_annotations(&mut self, expr: ExpressionId<'db>, ty: Ty<'db>) {
+	fn collect_annotations(&mut self, expr: ExpressionId<'db>, expr_ty: Ty<'db>) {
 		let db = self.db;
 		for ann in self
 			.data
@@ -189,7 +218,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			.iter()
 			.flat_map(|anns| anns.iter())
 		{
-			let _ = self.typecheck_expression(*ann, self.types.ann);
+			self.typecheck_annotation(*ann, expr_ty);
 			// If annotation is shackle_type("...") then treat as sanity check for type
 			if let Expression::Call(c) = &self.data[*ann]
 				&& let Expression::Identifier(i) = &self.data[c.function]
@@ -197,7 +226,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 				&& let Expression::StringLiteral(sl) = &self.data[c.arguments[0]]
 			{
 				let expected = sl.value(db);
-				let actual = ty.pretty_print(db);
+				let actual = expr_ty.pretty_print(db);
 				if actual != expected {
 					let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
 					self.ctx.add_diagnostic(
@@ -1705,7 +1734,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			match item {
 				LetItem::Constraint(c) => {
 					for ann in c.annotations.iter() {
-						let _ = self.typecheck_expression(*ann, self.types.ann);
+						self.typecheck_annotation(*ann, self.types.var_bool);
 					}
 					let ty = self.typecheck_expression(c.expression, self.types.var_bool);
 					if ty == self.types.var_bool {
@@ -1815,9 +1844,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		};
 		let _ = self.collect_pattern(None, false, d.pattern, result.ty, false);
 		for ann in d.annotations.iter() {
-			// Handle identifiers/calls which lead to ::annotated_expression functions
-
-			let _ = self.typecheck_expression(*ann, self.types.ann);
+			self.typecheck_annotation(*ann, result.ty);
 		}
 		result
 	}
@@ -1831,19 +1858,28 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		result.ty
 	}
 
-	/// Typecheck an annotation for a declaration (since these may be calls to annotations using `::annotated_expression`)
-	pub fn typecheck_declaration_annotation(
-		&mut self,
-		ann: ExpressionId<'db>,
-		declaration_ty: Ty<'db>,
-	) {
+	/// Typecheck an annotation
+	///
+	/// `expression_ty` is the type of the expression that the annotation is attached to.
+	pub fn typecheck_annotation(&mut self, ann: ExpressionId<'db>, expression_ty: Ty<'db>) {
 		let db = self.db;
 		let actual = match &self.data[ann] {
-			Expression::Identifier(i) => self.collect_identifier(ann, i, Some(declaration_ty)),
-			Expression::Call(c) => self.collect_call(ann, c, Some(declaration_ty)),
+			Expression::Identifier(i) => {
+				let ty = self.collect_identifier(ann, i, Some(expression_ty));
+				self.ctx.add_expression(db, ann, ty);
+				self.collect_annotations(ann, ty);
+				ty
+			}
+			Expression::Call(c) => {
+				let ty = self.collect_call(ann, c, Some(expression_ty));
+				self.ctx.add_expression(db, ann, ty);
+				self.collect_annotations(ann, ty);
+				ty
+			}
 			_ => self.collect_expression(ann),
 		};
-		if !actual.is_subtype_of(db, self.types.ann) {
+
+		if actual != self.types.ann && actual != self.types.string {
 			let (src, span) = (ExpressionRef::new(db, self.item, ann)).source_span(self.db);
 			self.ctx.add_diagnostic(
 				db,
@@ -1851,16 +1887,10 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 				TypeMismatch {
 					src,
 					span,
-					msg: format!(
-						"Expected '{}' but got '{}'",
-						self.types.ann.pretty_print(db),
-						actual.pretty_print(db)
-					),
+					msg: format!("Expected 'ann' but got '{}'", actual.pretty_print(db)),
 				},
 			);
 		}
-		self.ctx.add_expression(db, ann, actual);
-		self.collect_annotations(ann, actual);
 	}
 
 	fn collect_lambda(&mut self, l: &Lambda<'db>) -> Ty<'db> {

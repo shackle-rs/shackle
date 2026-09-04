@@ -107,7 +107,7 @@ impl<'db> BodyTypeContext<'db> {
 				let it = f.function(db);
 				let signature = item.signature(db);
 				for ann in it.annotations.iter() {
-					let _ = typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_annotation_atom(*ann);
 				}
 				for param in it.parameters.iter() {
 					if let Some(p) = param.pattern {
@@ -116,7 +116,7 @@ impl<'db> BodyTypeContext<'db> {
 							_ => unreachable!(),
 						};
 						for ann in param.annotations.iter() {
-							typer.typecheck_declaration_annotation(*ann, param_ty);
+							typer.typecheck_annotation_atom(*ann);
 						}
 						if let Some(d) = param.default {
 							let _ = typer.typecheck_expression(d, param_ty);
@@ -164,7 +164,7 @@ impl<'db> BodyTypeContext<'db> {
 						}
 					}
 					for ann in it.annotations.iter() {
-						typer.typecheck_declaration_annotation(*ann, expected);
+						typer.typecheck_annotation(*ann, expected);
 					}
 				}
 			}
@@ -177,9 +177,9 @@ impl<'db> BodyTypeContext<'db> {
 			}
 			Item::Constraint(c) => {
 				let it = c.constraint(db);
-				let _ = typer.typecheck_expression(it.expression, types.var_bool);
+				let ty = typer.typecheck_expression(it.expression, types.var_bool);
 				for ann in it.annotations.iter() {
-					let _ = typer.typecheck_expression(*ann, types.ann);
+					typer.typecheck_annotation(*ann, ty);
 				}
 			}
 			Item::Solve(s) => {
@@ -201,7 +201,7 @@ impl<'db> BodyTypeContext<'db> {
 					_ => unreachable!(),
 				};
 				for ann in it.annotations.iter() {
-					typer.typecheck_declaration_annotation(*ann, ty);
+					typer.typecheck_annotation(*ann, ty);
 				}
 			}
 			Item::EnumAssignment(e) => {
