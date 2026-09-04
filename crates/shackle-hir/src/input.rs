@@ -321,11 +321,6 @@ fn share_directory(db: &dyn Db) -> Option<PathBuf> {
 		// If set with MZN_STDLIB_DIR then just use it
 		return Some(p.clone());
 	}
-
-	// TODO: For now, force use of MZN_STDLIB_DIR to grab old compiler's library
-	// if let Some(p) = shackle_share_directory(db) {
-	// 	return Ok(p);
-	// }
 	None
 }
 
@@ -509,18 +504,20 @@ pub fn auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 	if settings.ignore_stdlib(db) {
 		return vec![];
 	}
-	if !share_directory(db).as_ref().is_some_and(|share_dir| {
-		share_dir.join("std/stdlib.mzn").is_file()
-			&& share_dir.join("std/solver_redefinitions.mzn").is_file()
-	}) {
-		Errors::add(db, ShackleError::MiniZincStandardLibraryNotFound);
-	}
-
 	let Some(share_dir) = shackle_share_directory(db) else {
 		// share/minizinc directory does not exist
 		Errors::add(db, ShackleError::StandardLibraryNotFound);
 		return vec![];
 	};
+
+	let minizinc_share_dir = share_directory(db).as_ref().unwrap_or(share_dir);
+	if !minizinc_share_dir.join("std/stdlib.mzn").is_file()
+		|| !minizinc_share_dir
+			.join("std/solver_redefinitions.mzn")
+			.is_file()
+	{
+		Errors::add(db, ShackleError::MiniZincStandardLibraryNotFound);
+	}
 
 	let shackle_mzn = share_dir.join("std/shackle.mzn");
 	log::debug!("Automatically including {}", shackle_mzn.display());

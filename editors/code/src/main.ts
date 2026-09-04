@@ -25,23 +25,11 @@ function bundledExecutable(context: ExtensionContext): string | undefined {
 	return fs.existsSync(executable) ? executable : undefined
 }
 
-function bundledMiniZincStdlib(context: ExtensionContext): string | undefined {
-	const stdlib = path.join(
-		context.extensionPath,
-		"vendor",
-		"minizinc",
-		"share",
-		"minizinc"
-	)
-	return fs.existsSync(stdlib) ? stdlib : undefined
-}
-
 export async function activate(context: ExtensionContext) {
-	const configuration = workspace.getConfiguration("shackleLanguageServer")
+	const configuration = workspace.getConfiguration("minizincLanguageServer")
 	const configuredCommand = configuration.get<string>("executable")
 	const configuredEnvironment =
 		configuration.get<Record<string, string>>("environment") ?? {}
-	const bundledStdlib = bundledMiniZincStdlib(context)
 
 	const run: Executable = {
 		command:
@@ -51,7 +39,6 @@ export async function activate(context: ExtensionContext) {
 		options: {
 			env: {
 				...process.env,
-				...(bundledStdlib ? { MZN_STDLIB_DIR: bundledStdlib } : {}),
 				...configuredEnvironment,
 			},
 		},
@@ -66,7 +53,7 @@ export async function activate(context: ExtensionContext) {
 	}
 
 	client = new LanguageClient(
-		"shackleLanguageServer",
+		"minizincLanguageServer",
 		"MiniZinc language server",
 		serverOptions,
 		clientOptions
@@ -74,37 +61,37 @@ export async function activate(context: ExtensionContext) {
 
 	await client.start()
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewCst", () =>
+		commands.registerCommand("minizincLanguageServer.viewCst", () =>
 			handleCstViewCommand(client)
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewAst", () =>
+		commands.registerCommand("minizincLanguageServer.viewAst", () =>
 			handleAstViewCommand(client)
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewFormatIr", () =>
+		commands.registerCommand("minizincLanguageServer.viewFormatIr", () =>
 			handleFormatIrViewCommand(client)
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewHir", () =>
+		commands.registerCommand("minizincLanguageServer.viewHir", () =>
 			handleHirViewCommand(client)
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewScope", () =>
+		commands.registerCommand("minizincLanguageServer.viewScope", () =>
 			handleScopeViewCommand(client)
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewPrettyPrint", () =>
+		commands.registerCommand("minizincLanguageServer.viewPrettyPrint", () =>
 			handlePrettyPrintViewCommand(client)
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("shackleLanguageServer.viewMir", () =>
+		commands.registerCommand("minizincLanguageServer.viewMir", () =>
 			handleMirViewCommand(client)
 		)
 	)

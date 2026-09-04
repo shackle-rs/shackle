@@ -24,7 +24,8 @@ release = false
 
 [[package]]
 name = "shackle-ls"
-release = false
+git_only = true
+publish = false
 
 [[package]]
 name = "shackle-syntax"

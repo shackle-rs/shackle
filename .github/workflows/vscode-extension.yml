@@ -5,19 +5,18 @@ on:
     branches-ignore:
       - "dependabot/**"
       - "release-plz-*"
-    tags:
-      - "code-extension-v*"
   pull_request:
+  release:
+    types: [published]
 
 env:
   RUST_CHANNEL: "stable"
   MINIZINC_REF: "develop"
 
 jobs:
-  vscode-extension:
-    name: VS Code Extension (${{ matrix.target }})
+  language-server:
+    name: shackle-ls (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +33,6 @@ jobs:
             target: darwin-x64
           - os: macos-latest
             target: darwin-arm64
-
     steps:
       - uses: actions/checkout@v7
       - name: Checkout MiniZinc repo
@@ -43,11 +41,6 @@ jobs:
           repository: MiniZinc/libminizinc
           path: minizinc
           ref: ${{ env.MINIZINC_REF }}
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: lts/*
-          cache: npm
       - name: Install Rust toolchain
         uses: moonrepo/setup-rust@v1
         with:
@@ -55,6 +48,79 @@ jobs:
           channel: ${{ env.RUST_CHANNEL }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build shackle-ls
+        run: |
+          cargo install --root dist/ --path crates/shackle-ls
+      - name: Copy MiniZinc standard library (Windows)
+        if: startsWith(matrix.target, 'win32')
+        run: |
+          mkdir -p "dist/share/minizinc"
+          Get-ChildItem -Path "minizinc/share/minizinc/std/" | Copy-Item -Destination "dist/share/minizinc/std/" -Recurse -Force
+          Get-ChildItem -Path "share/minizinc/std/" | Copy-Item -Destination "dist/share/minizinc/std/" -Recurse -Force
+      - name: Copy MiniZinc standard library (non-Windows)
+        if: ${{ !startsWith(matrix.target, 'win32') }}
+        run: |
+          mkdir -p "dist/share/minizinc"
+          rsync -av "minizinc/share/minizinc/std/" "dist/share/minizinc/std/"
+          rsync -av "share/minizinc/std/" "dist/share/minizinc/std/"
+      - name: Create tar archive for shackle-ls
+        run: |
+          tar -czf "${{ env.TAR_PREFIX }}-${{ matrix.target }}.tar.gz" -C dist/ bin share
+        env:
+          TAR_PREFIX: ${{ startsWith(github.event.release.tag_name, 'shackle-ls-v') && github.event.release.tag_name || format('shackle-ls-build{0}', github.run_id) }}
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: shackle-ls-*.tar.gz
+          archive: false
+
+  publish-language-server:
+    name: Publish Language Server
+    runs-on: ubuntu-latest
+    needs: language-server
+    permissions:
+      contents: write
+    if: startsWith(github.event.release.tag_name, 'shackle-ls-v')
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download shackle-ls build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: shackle-ls-*
+          merge-multiple: true
+      - name: Add assets to release
+        run: |
+          for artifact in shackle-ls-*.tar.gz; do
+            gh release upload ${GITHUB_REF_NAME#refs/tags/} "$artifact" --clobber
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  vscode-extension:
+    name: VS Code Extension (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: language-server
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - linux-x64
+          - linux-arm64
+          - win32-x64
+          - win32-arm64
+          - darwin-x64
+          - darwin-arm64
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+      - name: Sync version with language server
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/shackle-ls/Cargo.toml)
+          npm version $VERSION --workspace minizinc --no-git-tag-version
       - name: Install dependencies
         run: npm ci --workspace minizinc --include-workspace-root
       - name: Run linter
@@ -62,29 +128,28 @@ jobs:
         continue-on-error: true
       - name: Bundle VS Code extension with esbuild
         run: npm run vscode:build
-      - name: Build shackle-ls
-        run: cargo install --root editors/code --path crates/shackle-ls
+      - name: Download shackle-ls build artifact
+        uses: actions/download-artifact@v8
+        with:
+          pattern: shackle-ls-*-${{ matrix.target }}.tar.gz
       - name: Bundle VS Code extension assets
         shell: bash
         run: |
-          mkdir -p "editors/code/share" "editors/code/vendor/minizinc/share"
+          tar -xzf shackle-ls-*.tar.gz -C "editors/code/"
           cp "LICENSE" "editors/code/LICENSE"
-          cp -R "share/minizinc" "editors/code/share/minizinc"
-          cp -R "minizinc/share/minizinc" "editors/code/vendor/minizinc/share/minizinc"
       - name: Package VS Code extension
         run: npm run package:vsix -w minizinc -- --target ${{ matrix.target }}
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: vscode-extension-${{ matrix.target }}
-          path: |
-            editors/code/*.vsix
+          path: editors/code/*.vsix
+          archive: false
 
   publish-extension:
     name: Publish VS Code Extension
     runs-on: ubuntu-latest
     needs: vscode-extension
-    if: startsWith(github.ref, 'refs/tags/code-extension-v')
+    if: startsWith(github.event.release.tag_name, 'shackle-ls-v')
     environment:
       name: vscode-extension
     permissions:
@@ -92,20 +157,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - name: Check tag matches extension version
-        shell: bash
-        run: |
-          tag_version="${GITHUB_REF_NAME#code-extension-v}"
-          package_version="$(node -p "require('./editors/code/package.json').version")"
-
-          if [[ "$tag_version" != "$package_version" ]]; then
-            echo "Tag version '$tag_version' does not match editors/code/package.json version '$package_version'." >&2
-            exit 1
-          fi
       - name: Download VS Code extension artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: vscode-extension-*
+          pattern: "*.vsix"
           path: editors/code
           merge-multiple: true
       - name: Publish release on Open VSX

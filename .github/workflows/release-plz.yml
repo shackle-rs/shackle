@@ -13,7 +13,6 @@ jobs:
   release-plz:
     name: Release-plz
     runs-on: ubuntu-latest
-    if: false # disable until we have crates to release again
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

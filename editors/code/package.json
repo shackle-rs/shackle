@@ -2,10 +2,10 @@
 	"name": "minizinc",
 	"displayName": "MiniZinc",
 	"description": "Language support for the MiniZinc modelling language",
-	"version": "0.2.0",
+	"version": "0.0.0",
 	"icon": "minizinc_icon.png",
 	"license": "MPL-2.0",
-	"publisher": "DekkerOne",
+	"publisher": "MiniZinc",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/shackle-rs/shackle"
@@ -25,15 +25,15 @@
 	"contributes": {
 		"configuration": {
 			"type": "object",
-			"title": "Shackle language server configuration",
+			"title": "MiniZinc language server configuration",
 			"properties": {
-				"shackleLanguageServer.executable": {
+				"minizincLanguageServer.executable": {
 					"scope": "window",
 					"type": "string",
 					"default": "",
 					"description": "Path to the shackle-ls executable. Leave empty to use the binary bundled with this extension, falling back to shackle-ls on PATH when no bundled binary is available."
 				},
-				"shackleLanguageServer.environment": {
+				"minizincLanguageServer.environment": {
 					"scope": "window",
 					"type": "object",
 					"default": {},
@@ -46,37 +46,37 @@
 		},
 		"commands": [
 			{
-				"command": "shackleLanguageServer.viewCst",
+				"command": "minizincLanguageServer.viewCst",
 				"title": "MiniZinc: View CST",
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "shackleLanguageServer.viewAst",
+				"command": "minizincLanguageServer.viewAst",
 				"title": "MiniZinc: View AST",
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "shackleLanguageServer.viewFormatIr",
+				"command": "minizincLanguageServer.viewFormatIr",
 				"title": "MiniZinc: View Formatting IR",
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "shackleLanguageServer.viewHir",
+				"command": "minizincLanguageServer.viewHir",
 				"title": "MiniZinc: View HIR",
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "shackleLanguageServer.viewScope",
+				"command": "minizincLanguageServer.viewScope",
 				"title": "MiniZinc: View Scope",
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "shackleLanguageServer.viewPrettyPrint",
+				"command": "minizincLanguageServer.viewPrettyPrint",
 				"title": "MiniZinc: View Pretty Printed MiniZinc",
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "shackleLanguageServer.viewMir",
+				"command": "minizincLanguageServer.viewMir",
 				"title": "MiniZinc: View MIR",
 				"enablement": "editorLangId == minizinc"
 			}
