@@ -166,3 +166,52 @@ fn test_lower_non_output_reference_is_not_fixed() {
 "#]],
 	);
 }
+
+#[test]
+fn test_lower_annotated_expression_call() {
+	check_no_stdlib(
+		r#"
+		function bool: annotate(any $T: x, ann: a);
+		annotation annotated_expression;
+		annotation ann_foo;
+		annotation ann_bar;
+		function ann: foo(var int: x :: annotated_expression) = ann_foo;
+		var int: x :: foo :: ann_bar;
+		int: y = 3 :: foo :: ann_bar;
+		"#,
+		expect![[r#"
+    function bool: annotate(any $T: x, ann: a);
+    annotation annotated_expression;
+    annotation ann_foo;
+    annotation ann_bar;
+    function ann: foo(var int: x :: (annotated_expression)) = ann_foo;
+    var int: x :: (ann_bar);
+    ann: _DECL_5 = foo(x);
+    constraint annotate(x, _DECL_5);
+    int: y = let {
+      int: _DECL_6 = 3 :: (ann_bar);
+    } in _DECL_6 :: (foo(_DECL_6));
+    solve satisfy;
+"#]],
+	)
+}
+
+#[test]
+
+fn test_lower_string_annotation() {
+	check_no_stdlib(
+		r#"
+		annotation expression_name(string: s);
+		annotation constraint_name(string: s);
+		constraint :: "foo" true;
+		int: x :: "bar" = 1 :: "qux";
+		"#,
+		expect![[r#"
+    annotation expression_name(string: s);
+    annotation constraint_name(string: s);
+    constraint :: (constraint_name("foo")) true;
+    int: x :: (expression_name("bar")) = 1 :: (expression_name("qux"));
+    solve satisfy;
+"#]],
+	)
+}

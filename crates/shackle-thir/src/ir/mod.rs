@@ -518,7 +518,7 @@ impl<'db, T: Marker> Model<'db, T> {
 	pub fn lookup_identifier(
 		&self,
 		_db: &'db dyn Db,
-		name: Identifier,
+		name: Identifier<'db>,
 	) -> Option<ResolvedIdentifier<'db, T>> {
 		self.top_level_declarations()
 			.find_map(|(idx, decl)| {

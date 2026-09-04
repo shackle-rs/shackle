@@ -14,12 +14,12 @@ use shackle_utils::maybe_grow_stack;
 
 use crate::{lower::ItemCollector, source::Origin, *};
 
+mod annotation;
 mod array_access;
 mod array_literal;
 mod call;
 mod class;
 mod comprehension;
-mod declaration_annotation;
 mod domain;
 mod identifier;
 mod if_then_else;
@@ -416,11 +416,50 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			),
 			shackle_hir::Expression::Missing => unreachable!("Missing expression"),
 		};
-		result.annotations_mut().extend(
-			self.data
-				.annotations(idx)
-				.map(|ann| self.collect_expression(ann)),
-		);
+
+		let mut annotations_to_rewrite = Vec::new();
+		for ann in self.data.annotations(idx) {
+			if let Some(function) = self.get_annotated_expression_call(ann) {
+				// Rewrite calls to functions with :: annotated_expression parameters
+				annotations_to_rewrite.push((ann, function));
+			} else {
+				let e = self.collect_annotation_value(ann, false);
+				result.annotations_mut().push(e);
+			}
+		}
+		if annotations_to_rewrite.len() > 0 {
+			let origin = result.origin();
+			let decl = Declaration::from_expression(db, false, result);
+			let decl_idx = self
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(decl, origin));
+			let ident = Expression::new(
+				db,
+				&self.parent.model,
+				origin,
+				ResolvedIdentifier::Declaration(decl_idx),
+			);
+			let mut result_ident = ident.clone();
+			result_ident
+				.annotations_mut()
+				.reserve(annotations_to_rewrite.len());
+			result_ident
+				.annotations_mut()
+				.extend(annotations_to_rewrite.into_iter().map(|(ann, function)| {
+					self.collect_expression_annotated_expression_call(ident.clone(), ann, function)
+				}));
+			result = Expression::new(
+				db,
+				&self.parent.model,
+				origin,
+				Let {
+					items: vec![LetItem::Declaration(decl_idx)],
+					in_expression: Box::new(result_ident),
+				},
+			);
+		}
+
 		// A var where the typechecker said par is a varified storage field
 		// read through an unvarified HIR context, and a var-opt lift the
 		// typechecker did not apply comes from a comprehension over a var

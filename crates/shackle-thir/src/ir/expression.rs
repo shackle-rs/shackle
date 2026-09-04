@@ -1029,6 +1029,51 @@ impl<'db, T: Marker> ExpressionBuilder<'db, T> for LookupCall<'db, T> {
 	}
 }
 
+/// A call to a function with the given name.
+///
+/// Used only to build expressions. Becomes a `Call` or `ResolvedIdentifier` once built.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct LookupAnnotation<'db, T: Marker = ()> {
+	/// Annotation name
+	pub name: Identifier<'db>,
+	/// Call arguments
+	pub arguments: Vec<Expression<'db, T>>,
+}
+
+impl<'db, T: Marker> ExpressionBuilder<'db, T> for LookupAnnotation<'db, T> {
+	fn build(
+		self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		origin: Origin<'db>,
+	) -> Expression<'db, T> {
+		for (idx, ann) in model.annotations() {
+			if ann.name == Some(self.name) {
+				if ann.parameters.is_some() {
+					return Expression::new_unchecked(
+						TypeRegistry::lookup(db).ann,
+						Call {
+							function: Callable::Annotation(idx),
+							arguments: self.arguments,
+						},
+						origin,
+					);
+				} else {
+					return Expression::new_unchecked(
+						TypeRegistry::lookup(db).ann,
+						ResolvedIdentifier::Annotation(idx),
+						origin,
+					);
+				}
+			}
+		}
+		panic!(
+			"Annotation '{}' not found at {}",
+			self.name.pretty_print(db),
+			origin.pretty_print(db)
+		)
+	}
+}
 /// A top-level identifier with the given name
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct LookupIdentifier<'db>(pub Identifier<'db>);

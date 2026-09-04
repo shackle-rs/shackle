@@ -76,6 +76,9 @@ id_registry!(
 	mzn_builtin,
 	mzn_internal_representation,
 	mzn_internal_generated,
+	expression_name,
+	constraint_name,
+	mzn_deprecated,
 );
 
 id_registry!(

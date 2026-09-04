@@ -29,7 +29,7 @@ use shackle_hir::{
 	ids::{EntityRef, ExpressionRef, PatternRef},
 	run_hir_phase,
 };
-use shackle_ty::{Ty, TyData};
+use shackle_ty::{Ty, TyData, registry::TypeRegistry};
 
 use super::{source::Origin, *};
 use crate::{Db, db::Intermediate};
@@ -58,12 +58,6 @@ impl<'db> From<DeclOrConstraint<'db>> for LetItem<'db> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum LoweredAnnotation<'db> {
-	Items(Vec<DeclOrConstraint<'db>>),
-	Expression(Expression<'db>),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 enum LoweredIdentifier<'db> {
 	ResolvedIdentifier(ResolvedIdentifier<'db>),
 	Callable(Callable<'db>),
@@ -72,6 +66,7 @@ enum LoweredIdentifier<'db> {
 /// Collects HIR items and lowers them to THIR
 struct ItemCollector<'db> {
 	db: &'db dyn Db,
+	tys: &'db TypeRegistry<'db>,
 	ids: &'db IdentifierRegistry<'db>,
 	resolutions: FxHashMap<PatternRef<'db>, LoweredIdentifier<'db>>,
 	param_defaults: FxHashMap<DeclarationId<'db>, Expression<'db>>,
@@ -87,11 +82,13 @@ impl<'db> ItemCollector<'db> {
 	/// Create a new item collector
 	fn new(
 		db: &'db dyn Db,
+		tys: &'db TypeRegistry<'db>,
 		ids: &'db IdentifierRegistry<'db>,
 		entity_counts: &EntityCounts,
 	) -> Self {
 		Self {
 			db,
+			tys,
 			ids,
 			resolutions: FxHashMap::default(),
 			param_defaults: FxHashMap::default(),
@@ -248,12 +245,57 @@ impl<'db> ItemCollector<'db> {
 		let types = item.types(db);
 		let mut collector =
 			ExpressionCollector::new(self, item.data(db), item, &types).inherit_output(in_output);
-		let mut constraint = Constraint::new(top_level, collector.collect_expression(c.expression));
-		constraint.annotations_mut().extend(
-			c.annotations
-				.iter()
-				.map(|ann| collector.collect_expression(*ann)),
-		);
+		let mut expression = collector.collect_expression(c.expression);
+		let mut annotations = Vec::with_capacity(c.annotations.len());
+		let mut annotations_to_rewrite = Vec::new();
+		for ann in c.annotations.iter().copied() {
+			if let Some(function) = collector.get_annotated_expression_call(ann) {
+				// Rewrite calls to functions with :: annotated_expression parameters
+				annotations_to_rewrite.push((ann, function));
+			} else {
+				let e = collector.collect_annotation_value(ann, true);
+				annotations.push(e);
+			}
+		}
+		if annotations_to_rewrite.len() > 0 {
+			let origin = expression.origin();
+			let decl = Declaration::from_expression(db, false, expression);
+			let decl_idx = collector
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(decl, origin));
+			let ident = Expression::new(
+				db,
+				&collector.parent.model,
+				origin,
+				ResolvedIdentifier::Declaration(decl_idx),
+			);
+			let mut result_ident = ident.clone();
+			result_ident
+				.annotations_mut()
+				.reserve(annotations_to_rewrite.len());
+			result_ident
+				.annotations_mut()
+				.extend(annotations_to_rewrite.into_iter().map(|(ann, function)| {
+					collector.collect_expression_annotated_expression_call(
+						ident.clone(),
+						ann,
+						function,
+					)
+				}));
+			expression = Expression::new(
+				db,
+				&collector.parent.model,
+				origin,
+				Let {
+					items: vec![LetItem::Declaration(decl_idx)],
+					in_expression: Box::new(result_ident),
+				},
+			);
+		}
+		let mut constraint = Constraint::new(top_level, expression);
+		constraint.annotations_mut().reserve(annotations.len());
+		constraint.annotations_mut().extend(annotations);
 		self.model
 			.add_constraint(ConstraintItem::new(constraint, item))
 	}
@@ -481,11 +523,14 @@ impl<'db> ItemCollector<'db> {
 			.annotations_mut()
 			.reserve(d.annotations.len());
 		for ann in d.annotations.iter().copied() {
-			match collector.collect_declaration_annotation(idx, ann) {
-				LoweredAnnotation::Expression(e) => {
-					collector.parent.model[idx].annotations_mut().push(e)
-				}
-				LoweredAnnotation::Items(items) => ids.extend(items),
+			if let Some(function) = collector.get_annotated_expression_call(ann) {
+				// Rewrite calls to functions with :: annotated_expression parameters
+				ids.extend(
+					collector.collect_declaration_annotated_expression_call(idx, ann, function),
+				);
+			} else {
+				let e = collector.collect_annotation_value(ann, false);
+				collector.parent.model[idx].annotations_mut().push(e);
 			}
 		}
 		ids.extend(decls.into_iter().map(DeclOrConstraint::Declaration));
@@ -886,9 +931,10 @@ impl<'db> ItemCollector<'db> {
 pub fn lower_model<'db>(db: &'db dyn Db) -> Intermediate<Model<'db>> {
 	log::info!("Lowering model to THIR");
 	let hir = run_hir_phase(db);
+	let tys = TypeRegistry::lookup(db);
 	let ids = IdentifierRegistry::lookup(db);
 	let counts = EntityCounts::lookup(db);
-	let mut collector = ItemCollector::new(db, ids, counts);
+	let mut collector = ItemCollector::new(db, tys, ids, counts);
 	// Predeclare every class (enum, `_objects` array, actual set) before any
 	// item is collected, so cross-class references resolve regardless of item
 	// order, then rebuild the storage domains once all classes are registered
