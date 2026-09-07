@@ -6,6 +6,10 @@ All notable changes to the MiniZinc Visual Studio Code Extension will be documen
 
 ## [0.3.0] - 2026-09-07
 
+- Bump version to fix marketplace publishing issue.
+
+## [0.3.0] - 2026-09-07
+
 - Fix bug in invalid overloading checks causing false positive duplicate definition errors.
 - Enable signature help and hover info to correctrly find doc comments in more cases.
 

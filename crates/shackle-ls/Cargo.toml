@@ -5,7 +5,7 @@ license = {workspace = true}
 repository = {workspace = true}
 description = "Language server implementation for Shackle"
 name = "shackle-ls"
-version = "0.3.0"
+version = "0.3.1"
 
 [dependencies]
 crossbeam-channel = "0.5.8"
