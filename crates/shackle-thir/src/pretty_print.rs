@@ -3,7 +3,7 @@
 
 use std::fmt::Write;
 
-use shackle_hir::constants::IdentifierRegistry;
+use shackle_hir::{constants::IdentifierRegistry, input::shackle_share_directory};
 use shackle_ty::registry::TypeRegistry;
 use shackle_utils::maybe_grow_stack;
 
@@ -12,8 +12,6 @@ use crate::{
 	Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Marker, Model,
 	OutputId, Pattern, PatternData, ResolvedIdentifier,
 };
-
-static MINIZINC_COMPAT: &str = include_str!("../../../share/minizinc/compat.mzn");
 
 /// Callback which adds an annotation to a pretty-printed expression.
 pub type ExpressionAnnotator<'db, T> = dyn Fn(&Expression<'db, T>) -> Option<String> + 'db;
@@ -85,7 +83,13 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 			writeln!(&mut buf, "solve satisfy;").unwrap();
 		}
 		if self.old_compat {
-			writeln!(&mut buf, "{}", MINIZINC_COMPAT).unwrap();
+			let compat_path = shackle_share_directory(self.db)
+				.as_ref()
+				.expect("Shackle share directory should exist")
+				.join("compat.mzn");
+			let compat = std::fs::read_to_string(&compat_path)
+				.unwrap_or_else(|err| panic!("failed to read {}: {err}", compat_path.display()));
+			writeln!(&mut buf, "{compat}").unwrap();
 		}
 		buf
 	}
