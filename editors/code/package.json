@@ -1,5 +1,5 @@
 {
-	"name": "minizinc",
+	"name": "minizinc-language",
 	"displayName": "MiniZinc",
 	"description": "Language support for the MiniZinc modelling language",
 	"version": "0.0.0",

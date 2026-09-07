@@ -11,9 +11,9 @@
 		"parser:minizinc:build": "npm run build -w tree-sitter-minizinc",
 		"parser:minizinc:test": "npm run test -w tree-sitter-minizinc",
 		"parser:minizinc:update": "npm run test -w tree-sitter-minizinc -- --update",
-		"vscode:build": "npm run compile -w minizinc",
-		"vscode:watch": "npm run watch -w minizinc",
-		"vscode:lint": "npm run lint -w minizinc",
+		"vscode:build": "npm run compile -w minizinc-language",
+		"vscode:watch": "npm run watch -w minizinc-language",
+		"vscode:lint": "npm run lint -w minizinc-language",
 		"format": "prettier -w .",
 		"format:check": "prettier -c ."
 	},

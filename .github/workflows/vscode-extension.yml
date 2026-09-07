@@ -120,9 +120,9 @@ jobs:
       - name: Sync version with language server
         run: |
           VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/shackle-ls/Cargo.toml)
-          npm version $VERSION --workspace minizinc --no-git-tag-version
+          npm version $VERSION --workspace minizinc-language --no-git-tag-version
       - name: Install dependencies
-        run: npm ci --workspace minizinc --include-workspace-root
+        run: npm ci --workspace minizinc-language --include-workspace-root
       - name: Run linter
         run: npm run vscode:lint
         continue-on-error: true
@@ -138,7 +138,7 @@ jobs:
           tar -xzf shackle-ls-*.tar.gz -C "editors/code/"
           cp "LICENSE" "editors/code/LICENSE"
       - name: Package VS Code extension
-        run: npm run package:vsix -w minizinc -- --target ${{ matrix.target }}
+        run: npm run package:vsix -w minizinc-language -- --target ${{ matrix.target }}
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
