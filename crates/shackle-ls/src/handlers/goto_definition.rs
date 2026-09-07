@@ -138,7 +138,7 @@ int: z = hello + let { int: hello = int; } in hello;
 			expect!([r#"
     {
       "Ok": {
-        "uri": "test.mzn",
+        "uri": "file:///test.mzn",
         "range": {
           "start": {
             "line": 1,
@@ -183,7 +183,7 @@ int: z = hello + let { int: hello = int; } in hello;
 			expect!([r#"
     {
       "Ok": {
-        "uri": "test.mzn",
+        "uri": "file:///test.mzn",
         "range": {
           "start": {
             "line": 3,
