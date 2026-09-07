@@ -110,7 +110,9 @@ pub(crate) mod tests {
 		let mut db = MockDatabase {
 			db: CompilerDatabase::with_file_handler(Arc::new(MockFileHandler(model.to_owned()))),
 			options: LanguageServerOptions {
-				workspace_uri: lsp_types::Uri::from_str("file:///").ok(),
+				// The mock model file below is registered under a relative path, so
+				// there is no workspace root it could sensibly be contained in.
+				workspace_uri: None,
 			},
 		};
 		let _ = CompilerSettings::get(&db.db)

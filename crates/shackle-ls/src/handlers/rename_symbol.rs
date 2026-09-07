@@ -214,7 +214,7 @@ any: z = x;
         "documentChanges": [
           {
             "textDocument": {
-              "uri": "test.mzn",
+              "uri": "file:///test.mzn",
               "version": null
             },
             "edits": [
@@ -236,7 +236,7 @@ any: z = x;
           },
           {
             "textDocument": {
-              "uri": "test.mzn",
+              "uri": "file:///test.mzn",
               "version": null
             },
             "edits": [

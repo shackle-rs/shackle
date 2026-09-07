@@ -103,7 +103,7 @@ int: z = hello + let { int: hello = int; } in hello;
     {
       "Ok": [
         {
-          "uri": "test.mzn",
+          "uri": "file:///test.mzn",
           "range": {
             "start": {
               "line": 1,
@@ -116,7 +116,7 @@ int: z = hello + let { int: hello = int; } in hello;
           }
         },
         {
-          "uri": "test.mzn",
+          "uri": "file:///test.mzn",
           "range": {
             "start": {
               "line": 2,
@@ -129,7 +129,7 @@ int: z = hello + let { int: hello = int; } in hello;
           }
         },
         {
-          "uri": "test.mzn",
+          "uri": "file:///test.mzn",
           "range": {
             "start": {
               "line": 3,

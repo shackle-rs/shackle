@@ -41,7 +41,6 @@ pub(crate) fn node_ref_to_location<'db, T: Into<NodeRef<'db>>>(
 }
 
 pub(crate) fn uri_to_path(uri: &Uri) -> PathBuf {
-	// TODO: Replace with less ad-hoc implementation
 	assert_eq!(
 		uri.scheme()
 			.expect("Not a file path")
@@ -59,7 +58,17 @@ pub(crate) fn uri_to_path(uri: &Uri) -> PathBuf {
 			));
 		}
 	}
-	for segment in uri.path().segments() {
+	// `segments()` strips the leading `/` of an absolute path, so the root has to
+	// be put back. Windows drive letters are handled by the loop below instead.
+	let uri_path = uri.path();
+	let mut segments = uri_path.segments().peekable();
+	if p.as_os_str().is_empty()
+		&& uri_path.is_absolute()
+		&& !segments.peek().is_some_and(|s| s.as_str().ends_with(":"))
+	{
+		p.push(MAIN_SEPARATOR_STR);
+	}
+	for segment in segments {
 		let s = segment.decode().into_string_lossy().to_string();
 		if s.ends_with(":") {
 			p.push(format!("{}{}", s, MAIN_SEPARATOR_STR));
@@ -70,13 +79,40 @@ pub(crate) fn uri_to_path(uri: &Uri) -> PathBuf {
 	p
 }
 
+/// Whether a byte can appear literally in the path of a URI, i.e. RFC 3986
+/// `pchar` plus the `/` separator.
+fn is_uri_path_byte(b: u8) -> bool {
+	b.is_ascii_alphanumeric()
+		|| matches!(
+			b,
+			b'-' | b'.'
+				| b'_' | b'~'
+				| b'!' | b'$'
+				| b'&' | b'\''
+				| b'(' | b')'
+				| b'*' | b'+'
+				| b',' | b';'
+				| b'=' | b':'
+				| b'@' | b'/'
+		)
+}
+
 pub(crate) fn path_to_uri(path: &Path) -> Uri {
-	// TODO: Replace with less ad-hoc implementation
-	Uri::from_str(path.as_os_str().to_str().unwrap()).unwrap_or_else(|_| {
-		let p = path.to_string_lossy().replace("\\", "/");
-		let url = format!("file://{}{}", if p.starts_with("/") { "" } else { "/" }, p);
-		Uri::from_str(&url).unwrap()
-	})
+	// Note that a bare path parses as a valid relative URI reference, so the
+	// `file://` scheme has to be added unconditionally rather than as a fallback.
+	let p = path.to_string_lossy().replace("\\", "/");
+	let mut url = String::from("file://");
+	if !p.starts_with("/") {
+		url.push('/');
+	}
+	for b in p.bytes() {
+		if is_uri_path_byte(b) {
+			url.push(b as char);
+		} else {
+			url.push_str(&format!("%{:02X}", b));
+		}
+	}
+	Uri::from_str(&url).expect("percent encoded file URI is always valid")
 }
 
 pub(crate) fn position_to_byte_offset(s: &str, position: Position) -> Option<usize> {
@@ -102,4 +138,27 @@ pub(crate) fn position_to_byte_offset(s: &str, position: Position) -> Option<usi
 	}
 
 	None
+}
+
+#[cfg(test)]
+mod tests {
+	use std::str::FromStr;
+
+	use lsp_types::Uri;
+
+	use super::{path_to_uri, uri_to_path};
+
+	#[test]
+	fn test_uri_path_round_trip() {
+		for uri in [
+			"file:///test.mzn",
+			"file:///Users/x/model.mzn",
+			"file:///Users/x/with%20space/model.mzn",
+			"file:///Users/x/@scope/model.mzn",
+		] {
+			let path = uri_to_path(&Uri::from_str(uri).unwrap());
+			assert!(path.is_absolute(), "{:?} should be absolute", path);
+			assert_eq!(path_to_uri(&path).as_str(), uri);
+		}
+	}
 }
