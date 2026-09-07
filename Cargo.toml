@@ -24,6 +24,7 @@ authors = [
 ]
 edition = "2024"
 license = "MPL-2.0"
+repository = "https://github.com/shackle-rs/shackle"
 
 [workspace.dependencies]
 derive_more = "2.1.1"
@@ -39,6 +40,18 @@ stacker = "0.1.24"
 streaming-iterator = "0.1.9"
 tree-sitter = "0.26.12"
 tree-sitter-language = "0.1.7"
+shackle = { path = "crates/shackle", version = "0.1.0" }
+shackle-diagnostics = { path = "crates/shackle-diagnostics", version = "0.1.0" }
+shackle-fmt = { path = "crates/shackle-fmt", version = "0.1.0" }
+shackle-hir = { path = "crates/shackle-hir", version = "0.1.0" }
+shackle-syntax = { path = "crates/shackle-syntax", version = "0.1.0" }
+shackle-thir = { path = "crates/shackle-thir", version = "0.1.0" }
+shackle-ty = { path = "crates/shackle-ty", version = "0.1.0" }
+shackle-utils = { path = "crates/shackle-utils", version = "0.1.0" }
+shackle-utils-derive = { path = "crates/shackle-utils-derive", version = "0.1.0" }
+tree-sitter-datazinc = { path = "parsers/tree-sitter-datazinc", version = "0.1.0" }
+tree-sitter-eprime = { path = "parsers/tree-sitter-eprime", version = "0.1.0" }
+tree-sitter-minizinc = { path = "parsers/tree-sitter-minizinc", version = "0.1.0" }
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"

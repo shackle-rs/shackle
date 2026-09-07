@@ -2,6 +2,8 @@
 authors = {workspace = true}
 edition = {workspace = true}
 license = {workspace = true}
+repository = {workspace = true}
+description = "High-level intermediate representation for Shackle"
 name = "shackle-hir"
 version = "0.1.0"
 
@@ -17,10 +19,10 @@ derive_more = {workspace = true, features = [
 ]}
 log = {workspace = true}
 salsa = {workspace = true}
-shackle-diagnostics = {path = "../shackle-diagnostics"}
-shackle-syntax = {path = "../shackle-syntax"}
-shackle-ty = {path = "../shackle-ty"}
-shackle-utils = {path = "../shackle-utils"}
+shackle-diagnostics = {workspace = true}
+shackle-syntax = {workspace = true}
+shackle-ty = {workspace = true}
+shackle-utils = {workspace = true}
 
 [dev-dependencies]
 expect-test = {workspace = true}

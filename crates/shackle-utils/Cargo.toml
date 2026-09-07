@@ -2,13 +2,15 @@
 authors = {workspace = true}
 edition = {workspace = true}
 license = {workspace = true}
+repository = {workspace = true}
+description = "Shared utilities for Shackle"
 name = "shackle-utils"
 version = "0.1.0"
 
 [dependencies]
 rustc-hash = {workspace = true}
 salsa = {workspace = true}
-shackle-utils-derive = {path = "../shackle-utils-derive"}
+shackle-utils-derive = {workspace = true}
 stacker = {workspace = true}
 
 [lints]

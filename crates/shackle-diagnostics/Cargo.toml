@@ -2,6 +2,8 @@
 authors = {workspace = true}
 edition = {workspace = true}
 license = {workspace = true}
+repository = {workspace = true}
+description = "Diagnostic types and rendering support for Shackle"
 name = "shackle-diagnostics"
 version = "0.1.0"
 

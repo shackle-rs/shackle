@@ -3,16 +3,18 @@ name = "shackle-syntax"
 version = "0.1.0"
 authors = { workspace = true }
 license = { workspace = true }
+repository = { workspace = true }
+description = "Syntax trees and parsing support for Shackle languages"
 edition = { workspace = true }
 
 [dependencies]
 derive_more = { workspace = true, features = ["as_ref", "from"] }
 miette = { workspace = true }
-shackle-diagnostics = { path = "../shackle-diagnostics" }
+shackle-diagnostics = { workspace = true }
 tree-sitter = { workspace = true }
-tree-sitter-datazinc = { path = "../../parsers/tree-sitter-datazinc" }
-tree-sitter-eprime = { path = "../../parsers/tree-sitter-eprime" }
-tree-sitter-minizinc = { path = "../../parsers/tree-sitter-minizinc" }
+tree-sitter-datazinc = { workspace = true }
+tree-sitter-eprime = { workspace = true }
+tree-sitter-minizinc = { workspace = true }
 
 [dev-dependencies]
 expect-test = { workspace = true }

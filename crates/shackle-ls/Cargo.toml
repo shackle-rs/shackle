@@ -2,6 +2,8 @@
 authors = {workspace = true}
 edition = {workspace = true}
 license = {workspace = true}
+repository = {workspace = true}
+description = "Language server implementation for Shackle"
 name = "shackle-ls"
 version = "0.3.0"
 
@@ -13,12 +15,12 @@ lsp-server = "0.10.0"
 lsp-types = "0.97"
 miette = {workspace = true}
 serde_json = {workspace = true}
-shackle-diagnostics = {path = "../shackle-diagnostics"}
-shackle-fmt = {path = "../shackle-fmt"}
-shackle-hir = {path = "../shackle-hir"}
-shackle-syntax = {path = "../shackle-syntax"}
-shackle-thir = {path = "../shackle-thir"}
-shackle-ty = {path = "../shackle-ty"}
+shackle-diagnostics = {workspace = true}
+shackle-fmt = {workspace = true}
+shackle-hir = {workspace = true}
+shackle-syntax = {workspace = true}
+shackle-thir = {workspace = true}
+shackle-ty = {workspace = true}
 threadpool = "1.8.1"
 # tree-sitter = { workspace = true }
 # tree-sitter-minizinc = { path = "../../parsers/tree-sitter-minizinc" }
