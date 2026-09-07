@@ -201,7 +201,7 @@ impl<'tree> CstNode<'tree> {
 	}
 
 	/// The kind of this CST node
-	pub fn kind(&self) -> &'static str {
+	pub fn kind(&self) -> &'tree str {
 		self.0.kind()
 	}
 

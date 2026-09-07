@@ -240,7 +240,7 @@ impl CommentMap {
 		let mut captures = cursor.captures(&query, *model.cst().root().as_ref(), text);
 
 		while let Some((c, _)) = captures.next() {
-			let node = CstNode::from(c.captures[0].node);
+			let node = CstNode::from(c.captures()[0].node);
 			let contents = node.text(source);
 			let is_line = node.kind() == "line_comment";
 			let mut prev = Some(node.clone());
