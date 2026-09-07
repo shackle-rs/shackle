@@ -2,6 +2,8 @@
 authors = {workspace = true}
 edition = {workspace = true}
 license = {workspace = true}
+repository = {workspace = true}
+description = "Typed high-level intermediate representation for Shackle"
 name = "shackle-thir"
 version = "0.1.0"
 
@@ -19,11 +21,11 @@ log = {workspace = true}
 miette = {workspace = true}
 rustc-hash = {workspace = true}
 salsa = {workspace = true}
-shackle-diagnostics = {path = "../shackle-diagnostics"}
-shackle-hir = {path = "../shackle-hir"}
-shackle-syntax = {path = "../shackle-syntax"}
-shackle-ty = {path = "../shackle-ty"}
-shackle-utils = {path = "../shackle-utils"}
+shackle-diagnostics = {workspace = true}
+shackle-hir = {workspace = true}
+shackle-syntax = {workspace = true}
+shackle-ty = {workspace = true}
+shackle-utils = {workspace = true}
 
 [dev-dependencies]
 expect-test = {workspace = true}

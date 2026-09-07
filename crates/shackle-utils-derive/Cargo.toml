@@ -2,6 +2,8 @@
 authors = {workspace = true}
 edition = {workspace = true}
 license = {workspace = true}
+repository = {workspace = true}
+description = "Procedural macros for Shackle utilities"
 name = "shackle-utils-derive"
 version = "0.1.0"
 
