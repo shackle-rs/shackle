@@ -1,5 +1,7 @@
 [workspace]
 changelog_update = false # disable automatic changelog update
+git_tag_name = "{{ package }}-v{{ version }}"
+git_release_name = "{{ package }}-v{{ version }}"
 
 ### DISABLE PACKAGES NOT READY FOR RELEASE ###
 [[package]]
