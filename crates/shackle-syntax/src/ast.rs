@@ -22,7 +22,7 @@ pub trait AstNode<'tree>: Debug {
 	}
 
 	/// Get the kind of the CST node
-	fn cst_kind(&self) -> &str {
+	fn cst_kind(&self) -> &'tree str {
 		self.cst_node().kind()
 	}
 
