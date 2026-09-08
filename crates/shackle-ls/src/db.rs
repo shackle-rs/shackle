@@ -1,15 +1,27 @@
 use std::{ops::Deref, path::Path, sync::Arc};
 
 use crossbeam_channel::{SendError, Sender};
-use lsp_server::{Connection, Message, ResponseError};
+use lsp_server::{Connection, ErrorCode, Message, ResponseError};
 use lsp_types::{TextDocumentIdentifier, Uri};
 use shackle_hir::{
 	CompilerDatabase,
 	db::Setter,
 	input::{CompilerSettings, InputFiles, ModelFile, NamedModelFile, invalidate_file},
 };
+use shackle_syntax::InputLang;
 
 use crate::{diagnostics, utils::uri_to_path, vfs::Vfs};
+
+/// Whether this file can be compiled as a model.
+///
+/// Data inputs (DataZinc, JSON) have no model AST, so registering one as an
+/// input file panics further down in the compiler.
+fn is_model_file(path: &Path) -> bool {
+	matches!(
+		InputLang::from_path(path),
+		InputLang::MiniZinc | InputLang::EPrime
+	)
+}
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct LanguageServerOptions {
@@ -72,7 +84,11 @@ impl LanguageServerDatabase {
 		log::info!("detected file changed for file {:?}", file);
 		self.vfs.manage_file(file, contents);
 		invalidate_file(&mut self.db, file);
-		let _ = self.set_active_file(file);
+		// Data files are still tracked in the VFS, but must not become the
+		// active model.
+		if is_model_file(file) {
+			let _ = self.set_active_file(file);
+		}
 	}
 
 	pub(crate) fn unmanage_file(&mut self, file: &Path) {
@@ -111,6 +127,16 @@ impl LanguageServerContext for LanguageServerDatabase {
 		doc: &TextDocumentIdentifier,
 	) -> Result<ModelFile, ResponseError> {
 		let requested_path = uri_to_path(&doc.uri);
+		if !is_model_file(&requested_path) {
+			return Err(ResponseError {
+				code: ErrorCode::InvalidRequest as i32,
+				message: format!(
+					"{:?} files are not supported by the language server",
+					InputLang::from_path(&requested_path)
+				),
+				data: None,
+			});
+		}
 		Ok(self.set_active_file(&requested_path))
 	}
 
