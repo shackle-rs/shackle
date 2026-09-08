@@ -3,7 +3,6 @@ use lsp_types::{
 	SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokens, SemanticTokensParams,
 	SemanticTokensResult, request::SemanticTokensFullRequest,
 };
-use miette::SourceCode;
 use shackle_hir::{
 	PatternTy,
 	db::CompilerDatabase,
@@ -12,7 +11,7 @@ use shackle_hir::{
 	source::model_leaves,
 };
 
-use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::span_contents_to_range};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::source_span_to_range};
 
 #[derive(Debug)]
 pub(crate) struct SemanticTokensHandler;
@@ -96,8 +95,7 @@ impl RequestHandler<SemanticTokensFullRequest, ModelFile> for SemanticTokensHand
 			}
 
 			let (src, span) = entity.source_span(db);
-			let span_contents = src.read_span(&span, 0, 0).unwrap();
-			let range = span_contents_to_range(&*span_contents);
+			let range = source_span_to_range(src.contents(), &span);
 			if range.start.line != range.end.line {
 				continue;
 			}

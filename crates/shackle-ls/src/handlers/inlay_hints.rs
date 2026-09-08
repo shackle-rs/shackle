@@ -3,7 +3,6 @@ use lsp_types::{
 	InlayHint, InlayHintKind, InlayHintLabel, InlayHintParams, Position, Range,
 	request::InlayHintRequest,
 };
-use miette::SourceCode;
 use shackle_hir::{
 	CallKind, Constructor, EnumConstructor, Expression, Item, PatternId,
 	db::CompilerDatabase,
@@ -11,7 +10,7 @@ use shackle_hir::{
 	input::ModelFile,
 };
 
-use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::span_contents_to_range};
+use crate::{db::LanguageServerContext, dispatch::RequestHandler, utils::source_span_to_range};
 
 #[derive(Debug)]
 pub(crate) struct InlayHintHandler;
@@ -206,8 +205,7 @@ fn expression_start<'db>(
 	expression: shackle_hir::ExpressionId<'db>,
 ) -> Option<Position> {
 	let (source, span) = ExpressionRef::new(db, item, expression).source_span(db);
-	let contents = source.read_span(&span, 0, 0).ok()?;
-	Some(span_contents_to_range(&*contents).start)
+	Some(source_span_to_range(source.contents(), &span).start)
 }
 
 fn range_contains_position(range: Range, position: Position) -> bool {

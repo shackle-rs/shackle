@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use lsp_types::notification::Notification;
-use miette::{Diagnostic, Severity};
+use miette::{Diagnostic, Severity, SourceCode, SourceSpan};
 use shackle_hir::{Db, all_errors, all_warnings};
 
-use crate::utils::{path_to_uri, span_contents_to_range};
+use crate::utils::{path_to_uri, source_span_to_range};
 
 /// Whether the span name of a diagnostic refers to `path`.
 ///
@@ -23,6 +23,19 @@ fn span_name_is(name: &str, path: &Path, base: Option<&Path>) -> bool {
 
 fn source_file_base() -> Option<PathBuf> {
 	std::env::current_dir().ok()?.canonicalize().ok()
+}
+
+/// Convert a diagnostic's span into an LSP range.
+///
+/// Only the erased `SourceCode` is available here, and reading a span with no
+/// context returns just the span itself, so the text preceding it — which is
+/// what the UTF-16 columns are measured over — has to be requested separately.
+fn span_to_range(sc: &dyn SourceCode, span: &SourceSpan) -> Option<lsp_types::Range> {
+	let prefix = sc
+		.read_span(&(0, span.offset() + span.len()).into(), 0, 0)
+		.ok()?;
+	let text = std::str::from_utf8(prefix.data()).ok()?;
+	Some(source_span_to_range(text, span))
 }
 
 pub(crate) fn diagnostics_notification(db: &dyn Db, path: &Path) -> lsp_server::Notification {
@@ -56,7 +69,7 @@ fn collect_diagnostic(
 	let mut ls = d.labels()?;
 	let first = ls.next()?;
 	let span = sc.read_span(first.inner(), 0, 0).ok()?;
-	let range = span_contents_to_range(span.as_ref());
+	let range = span_to_range(sc, first.inner())?;
 	let name = span.name()?;
 	if !span_name_is(name, path, base) {
 		return None;
@@ -65,8 +78,7 @@ fn collect_diagnostic(
 	let related_info: Vec<_> = ls
 		.filter_map(|l| {
 			let label = l.label()?;
-			let r = sc.read_span(l.inner(), 0, 0).unwrap();
-			let range = span_contents_to_range(r.as_ref());
+			let range = span_to_range(sc, l.inner())?;
 			Some(lsp_types::DiagnosticRelatedInformation {
 				location: lsp_types::Location {
 					range,

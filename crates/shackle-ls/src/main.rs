@@ -4,9 +4,10 @@ use std::error::Error;
 use db::LanguageServerDatabase;
 use lsp_server::{Connection, ExtractError, Message};
 use lsp_types::{
-	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, SemanticTokensFullOptions,
-	SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
-	ServerCapabilities, SignatureHelpOptions, TextDocumentSyncKind,
+	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, PositionEncodingKind,
+	SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+	SemanticTokensServerCapabilities, ServerCapabilities, SignatureHelpOptions,
+	TextDocumentSyncKind,
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
 };
 
@@ -14,6 +15,7 @@ use crate::{
 	db::LanguageServerOptions,
 	dispatch::{DispatchNotification, DispatchRequest},
 	handlers::*,
+	utils::PositionEncoding,
 };
 
 mod db;
@@ -37,7 +39,16 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 	log::info!("starting MiniZinc language server");
 	let (connection, io_threads) = Connection::stdio();
 
+	// Capabilities depend on the client's, so the handshake is driven manually
+	// rather than through `Connection::initialize`.
+	let (initialize_id, initialize_params) = connection.initialize_start()?;
+	let params: InitializeParams = serde_json::from_value(initialize_params)?;
+	let encoding = negotiate_position_encoding(&params);
+	log::info!("using {:?} position encoding", encoding);
+	utils::set_position_encoding(encoding);
+
 	let server_capabilities = serde_json::to_value(ServerCapabilities {
+		position_encoding: Some(encoding.into()),
 		definition_provider: Some(OneOf::Left(true)),
 		references_provider: Some(OneOf::Left(true)),
 		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
@@ -67,18 +78,39 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		..Default::default()
 	})
 	.unwrap();
-	let initialization_params = connection.initialize(server_capabilities)?;
-	main_loop(connection, initialization_params)?;
+	connection.initialize_finish(
+		initialize_id,
+		serde_json::json!({ "capabilities": server_capabilities }),
+	)?;
+	main_loop(connection, params)?;
 	io_threads.join()?;
 	log::info!("shutting down server");
 	Ok(())
 }
 
+/// Pick the encoding for `Position::character`.
+///
+/// UTF-8 avoids converting the byte offsets the compiler works in, but may only
+/// be chosen when the client offers it; UTF-16 is the protocol's default and is
+/// the only encoding some clients accept.
+fn negotiate_position_encoding(params: &InitializeParams) -> PositionEncoding {
+	let offered = params
+		.capabilities
+		.general
+		.as_ref()
+		.and_then(|general| general.position_encodings.as_ref());
+	match offered {
+		Some(encodings) if encodings.contains(&PositionEncodingKind::UTF8) => {
+			PositionEncoding::Utf8
+		}
+		_ => PositionEncoding::Utf16,
+	}
+}
+
 fn main_loop(
 	connection: Connection,
-	params: serde_json::Value,
+	params: InitializeParams,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
-	let params: InitializeParams = serde_json::from_value(params).unwrap();
 	let mut db = LanguageServerDatabase::new(
 		&connection,
 		LanguageServerOptions {
