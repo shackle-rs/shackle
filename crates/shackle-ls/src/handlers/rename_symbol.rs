@@ -1,6 +1,6 @@
 use lsp_server::{ErrorCode::InvalidRequest, ResponseError};
 use lsp_types::{
-	AnnotatedTextEdit, ChangeAnnotation, DocumentChanges, OneOf,
+	AnnotatedTextEdit, ChangeAnnotation, DocumentChanges, Location, OneOf,
 	OptionalVersionedTextDocumentIdentifier, Position, RenameParams, TextDocumentEdit, TextEdit,
 	Uri, WorkspaceEdit, request::Rename,
 };
@@ -30,6 +30,31 @@ fn create_error(msg: &str) -> ResponseError {
 		code: InvalidRequest as i32,
 		message: msg.into(),
 		data: None,
+	}
+}
+
+/// Record an edit renaming the symbol at `location` to `new_name`.
+///
+/// Edits are grouped per file: clients generally apply one `TextDocumentEdit`
+/// as one change, so emitting one per occurrence makes a rename take as many
+/// undo steps as there are occurrences.
+fn push_rename_edit(changes: &mut Vec<TextDocumentEdit>, location: Location, new_name: &str) {
+	let edit = OneOf::Right(AnnotatedTextEdit {
+		annotation_id: "rename".to_owned(),
+		text_edit: TextEdit::new(location.range, new_name.to_owned()),
+	});
+	match changes
+		.iter_mut()
+		.find(|c| c.text_document.uri == location.uri)
+	{
+		Some(existing) => existing.edits.push(edit),
+		None => changes.push(TextDocumentEdit {
+			edits: vec![edit],
+			text_document: OptionalVersionedTextDocumentIdentifier {
+				uri: location.uri,
+				version: None,
+			},
+		}),
 	}
 }
 
@@ -94,16 +119,8 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 
 		let decl_loc = node_ref_to_location(db, declaration.into_entity(db))
 			.ok_or_else(|| create_error("Failed to get location of symbol declaration"))?;
-		let mut changes = vec![TextDocumentEdit {
-			edits: vec![OneOf::Right(AnnotatedTextEdit {
-				annotation_id: "rename".to_owned(),
-				text_edit: TextEdit::new(decl_loc.range, data.new_name.clone()),
-			})],
-			text_document: OptionalVersionedTextDocumentIdentifier {
-				uri: decl_loc.uri,
-				version: None,
-			},
-		}];
+		let mut changes = Vec::new();
+		push_rename_edit(&mut changes, decl_loc, &data.new_name);
 
 		let references = declaration.references(db);
 		for reference in references {
@@ -121,16 +138,7 @@ impl RequestHandler<Rename, SymbolHandlerData> for RenameHandler {
 
 			let ref_loc = node_ref_to_location(db, reference)
 				.ok_or_else(|| create_error("Failed to get location of symbol reference"))?;
-			changes.push(TextDocumentEdit {
-				edits: vec![OneOf::Right(AnnotatedTextEdit {
-					annotation_id: "rename".to_owned(),
-					text_edit: TextEdit::new(ref_loc.range, data.new_name.clone()),
-				})],
-				text_document: OptionalVersionedTextDocumentIdentifier {
-					uri: ref_loc.uri,
-					version: None,
-				},
-			});
+			push_rename_edit(&mut changes, ref_loc, &data.new_name);
 		}
 
 		Ok(Some(WorkspaceEdit {
@@ -231,15 +239,7 @@ any: z = x;
                 },
                 "newText": "'abc 123 !@# \"'",
                 "annotationId": "rename"
-              }
-            ]
-          },
-          {
-            "textDocument": {
-              "uri": "file:///test.mzn",
-              "version": null
-            },
-            "edits": [
+              },
               {
                 "range": {
                   "start": {
