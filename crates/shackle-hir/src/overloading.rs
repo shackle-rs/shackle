@@ -69,18 +69,9 @@ impl<'db> FunctionEntry<'db> {
 		found_named
 	}
 
-	/// Pretty print as a signature using the given name
-	pub fn pretty_print(&self, db: &'db dyn Db, name: Identifier<'db>) -> String {
-		let tys = TypeRegistry::lookup(db);
-		let ret = if self.overload.return_type() == tys.par_bool {
-			"test".to_owned()
-		} else if self.overload.return_type() == tys.var_bool {
-			"predicate".to_owned()
-		} else {
-			format!("function {}:", self.overload.return_type().pretty_print(db))
-		};
-		let args = self
-			.overload
+	/// Pretty print each parameter as it appears in [`Self::pretty_print`]
+	pub fn pretty_print_params(&self, db: &'db dyn Db) -> Vec<String> {
+		self.overload
 			.params()
 			.iter()
 			.zip(self.kinds.iter())
@@ -95,8 +86,20 @@ impl<'db> FunctionEntry<'db> {
 					format!("{}: {}", ty.pretty_print(db), name.pretty_print(db))
 				}
 			})
-			.collect::<Vec<_>>()
-			.join(", ");
+			.collect()
+	}
+
+	/// Pretty print as a signature using the given name
+	pub fn pretty_print(&self, db: &'db dyn Db, name: Identifier<'db>) -> String {
+		let tys = TypeRegistry::lookup(db);
+		let ret = if self.overload.return_type() == tys.par_bool {
+			"test".to_owned()
+		} else if self.overload.return_type() == tys.var_bool {
+			"predicate".to_owned()
+		} else {
+			format!("function {}:", self.overload.return_type().pretty_print(db))
+		};
+		let args = self.pretty_print_params(db).join(", ");
 		format!("{} {}({})", ret, name.pretty_print(db), args)
 	}
 }

@@ -1,7 +1,7 @@
 use lsp_server::{ErrorCode, ResponseError};
 use lsp_types::{
-	Documentation, MarkupContent, MarkupKind, Position, SignatureHelp, SignatureHelpParams,
-	SignatureInformation, request::SignatureHelpRequest,
+	Documentation, MarkupContent, MarkupKind, ParameterInformation, ParameterLabel, Position,
+	SignatureHelp, SignatureHelpParams, SignatureInformation, request::SignatureHelpRequest,
 };
 use shackle_hir::{
 	CallKind, Expression, Identifier, PatternTy, db::CompilerDatabase, ids::PatternRef,
@@ -73,9 +73,20 @@ impl RequestHandler<SignatureHelpRequest, (ModelFile, Position)> for SignatureHe
 
 		let active_parameter =
 			active_parameter(&contents[call_start..call_end], cursor - call_start);
+		// `active_parameter` indexes into the active signature, so pick an
+		// overload that actually has that parameter or nothing is highlighted.
+		let active_signature = signatures
+			.iter()
+			.position(|signature| {
+				signature
+					.parameters
+					.as_ref()
+					.is_some_and(|params| params.len() as u32 > active_parameter)
+			})
+			.map(|index| index as u32);
 		Ok(Some(SignatureHelp {
 			signatures,
-			active_signature: None,
+			active_signature,
 			active_parameter: Some(active_parameter),
 		}))
 	}
@@ -124,10 +135,20 @@ fn signature<'db>(
 			value,
 		}))
 	});
+	// `SignatureHelp::active_parameter` indexes into these, so without them
+	// nothing can ever be highlighted.
+	let parameters = function
+		.pretty_print_params(db)
+		.into_iter()
+		.map(|label| ParameterInformation {
+			label: ParameterLabel::Simple(label),
+			documentation: None,
+		})
+		.collect();
 	SignatureInformation {
 		label: function.pretty_print(db, identifier),
 		documentation,
-		parameters: None,
+		parameters: Some(parameters),
 		active_parameter: None,
 	}
 }
@@ -193,14 +214,24 @@ int: result = twice(1, );
             "documentation": {
               "kind": "markdown",
               "value": "Add an integer to itself."
-            }
+            },
+            "parameters": [
+              {
+                "label": "int: value"
+              }
+            ]
           },
           {
             "label": "function string: twice(string: value)",
             "documentation": {
               "kind": "markdown",
               "value": "Repeat a string."
-            }
+            },
+            "parameters": [
+              {
+                "label": "string: value"
+              }
+            ]
           }
         ],
         "activeParameter": 1
@@ -223,9 +254,18 @@ int: result = foo([1, 2][1], );
       "Ok": {
         "signatures": [
           {
-            "label": "function int: foo(int: first, int: second)"
+            "label": "function int: foo(int: first, int: second)",
+            "parameters": [
+              {
+                "label": "int: first"
+              },
+              {
+                "label": "int: second"
+              }
+            ]
           }
         ],
+        "activeSignature": 0,
         "activeParameter": 1
       }
     }"#]],

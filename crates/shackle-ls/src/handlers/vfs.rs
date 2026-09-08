@@ -14,14 +14,11 @@ pub(crate) fn on_document_changed(
 	params: DidChangeTextDocumentParams,
 ) {
 	let file = uri_to_path(&params.text_document.uri);
-	db.manage_file(
-		&file,
-		&params
-			.content_changes
-			.iter()
-			.map(|c| c.text.clone())
-			.collect::<String>(),
-	);
+	// Sync is FULL, so every change is a whole document and only the last one
+	// counts. Concatenating them duplicates the file.
+	if let Some(change) = params.content_changes.last() {
+		db.manage_file(&file, &change.text);
+	}
 }
 
 pub(crate) fn on_document_closed(

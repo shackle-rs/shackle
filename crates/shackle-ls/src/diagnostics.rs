@@ -48,6 +48,18 @@ pub(crate) fn diagnostics_notification(db: &dyn Db, path: &Path) -> lsp_server::
 	for d in all_warnings(db) {
 		let _ = collect_diagnostic(path, base, d, &mut diagnostics);
 	}
+	publish(path, diagnostics)
+}
+
+/// Clear any diagnostics previously published for `path`.
+///
+/// Clients keep showing them until the server says otherwise, so a closed file
+/// would otherwise keep its markers for the rest of the session.
+pub(crate) fn clear_notification(path: &Path) -> lsp_server::Notification {
+	publish(path, Vec::new())
+}
+
+fn publish(path: &Path, diagnostics: Vec<lsp_types::Diagnostic>) -> lsp_server::Notification {
 	lsp_server::Notification {
 		method: lsp_types::notification::PublishDiagnostics::METHOD.to_owned(),
 		params: serde_json::to_value(lsp_types::PublishDiagnosticsParams {

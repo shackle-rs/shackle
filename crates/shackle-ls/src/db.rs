@@ -93,8 +93,9 @@ impl LanguageServerDatabase {
 
 	pub(crate) fn unmanage_file(&mut self, file: &Path) {
 		self.vfs.unmanage_file(file);
-		log::info!("detected file changed for file {:?}", file);
+		log::info!("detected file closed for file {:?}", file);
 		invalidate_file(&mut self.db, file);
+		let _ = self.send(Message::Notification(diagnostics::clear_notification(file)));
 	}
 
 	pub(crate) fn set_active_file(&mut self, path: &Path) -> ModelFile {

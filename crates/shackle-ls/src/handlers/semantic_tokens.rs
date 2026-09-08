@@ -28,9 +28,9 @@ impl RequestHandler<SemanticTokensFullRequest, ModelFile> for SemanticTokensHand
 		db: &CompilerDatabase,
 		model_ref: ModelFile,
 	) -> Result<Option<SemanticTokensResult>, ResponseError> {
-		let mut tokens = Vec::new();
-		let mut prev_line = 0;
-		let mut prev_char = 0;
+		// Collected unencoded: the delta encoding below requires tokens in
+		// ascending position order, which the traversal does not guarantee.
+		let mut raw: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
 		for entity in model_leaves(db, model_ref).iter().copied() {
 			let item = entity.item(db);
 			let types = item.types(db);
@@ -99,19 +99,33 @@ impl RequestHandler<SemanticTokensFullRequest, ModelFile> for SemanticTokensHand
 			if range.start.line != range.end.line {
 				continue;
 			}
+			raw.push((
+				range.start.line,
+				range.start.character,
+				range.end.character.saturating_sub(range.start.character),
+				token_type as u32,
+				(is_par as u32) << (TokenModifier::ReadOnly as u32),
+			));
+		}
+
+		raw.sort_unstable_by_key(|(line, character, ..)| (*line, *character));
+		let mut prev_line = 0;
+		let mut prev_char = 0;
+		let mut tokens = Vec::with_capacity(raw.len());
+		for (line, character, length, token_type, token_modifiers_bitset) in raw {
 			tokens.push(SemanticToken {
-				delta_line: range.start.line - prev_line,
-				delta_start: if range.start.line == prev_line {
-					range.start.character - prev_char
+				delta_line: line - prev_line,
+				delta_start: if line == prev_line {
+					character - prev_char
 				} else {
-					range.start.character
+					character
 				},
-				length: range.end.character - range.start.character,
-				token_type: token_type as u32,
-				token_modifiers_bitset: (is_par as u32) << (TokenModifier::ReadOnly as u32),
+				length,
+				token_type,
+				token_modifiers_bitset,
 			});
-			prev_line = range.start.line;
-			prev_char = range.start.character;
+			prev_line = line;
+			prev_char = character;
 		}
 
 		Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {

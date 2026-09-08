@@ -192,8 +192,17 @@ fn position_to_byte_offset_in(
 
 	let mut chars = s.char_indices().peekable();
 	while let Some((byte_idx, ch)) = chars.next() {
-		if line == position.line && character == position.character {
-			return Some(byte_idx);
+		if line == position.line {
+			if matches!(ch, '\n' | '\r') {
+				// The spec requires a character past the end of the line to clamp
+				// to the line length.
+				return Some(byte_idx);
+			}
+			if position.character < character + encoding.width(ch) {
+				// Covers both an exact hit and a position inside a character,
+				// which clamps to where that character starts.
+				return Some(byte_idx);
+			}
 		}
 
 		if matches!(ch, '\n' | '\r') {
@@ -207,12 +216,8 @@ fn position_to_byte_offset_in(
 		}
 	}
 
-	// Handle position at end of string
-	if line == position.line && character == position.character {
-		return Some(s.len());
-	}
-
-	None
+	// Anything at or past the end of the document clamps to the end.
+	(line <= position.line).then_some(s.len())
 }
 
 #[cfg(test)]
@@ -279,6 +284,26 @@ mod tests {
 		assert_eq!(
 			position_to_byte_offset_in("a\rb", Position::new(1, 0), PositionEncoding::Utf16),
 			Some(2)
+		);
+	}
+
+	#[test]
+	fn test_position_to_byte_offset_clamps() {
+		let e = PositionEncoding::Utf16;
+		// Past the end of a line clamps to the line end, not an error.
+		assert_eq!(
+			position_to_byte_offset_in(TEXT, Position::new(0, 99), e),
+			Some(15)
+		);
+		// Inside a surrogate pair clamps to the start of the character.
+		assert_eq!(
+			position_to_byte_offset_in(TEXT, Position::new(1, 12), e),
+			Some(27)
+		);
+		// Past the end of the document clamps to the end.
+		assert_eq!(
+			position_to_byte_offset_in(TEXT, Position::new(99, 0), e),
+			Some(TEXT.len())
 		);
 	}
 
