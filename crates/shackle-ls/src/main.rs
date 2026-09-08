@@ -2,12 +2,12 @@
 use std::error::Error;
 
 use db::LanguageServerDatabase;
-use lsp_server::{Connection, ExtractError, Message};
+use lsp_server::{Connection, ErrorCode, ExtractError, Message, Response};
 use lsp_types::{
 	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, PositionEncodingKind,
 	SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
 	SemanticTokensServerCapabilities, ServerCapabilities, SignatureHelpOptions,
-	TextDocumentSyncKind,
+	TextDocumentSyncKind, Uri,
 	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
 };
 
@@ -107,6 +107,25 @@ fn negotiate_position_encoding(params: &InitializeParams) -> PositionEncoding {
 	}
 }
 
+/// The workspace root.
+///
+/// A client may advertise workspace folder support and still send an empty
+/// list, and one without folder support sends only the deprecated `rootUri`.
+fn workspace_uri(params: &InitializeParams) -> Option<Uri> {
+	if let Some(folder) = params
+		.workspace_folders
+		.as_ref()
+		.and_then(|folders| folders.first())
+	{
+		return Some(folder.uri.clone());
+	}
+	#[allow(
+		deprecated,
+		reason = "rootUri is the only workspace root a client without folder support sends"
+	)]
+	params.root_uri.clone()
+}
+
 fn main_loop(
 	connection: Connection,
 	params: InitializeParams,
@@ -114,9 +133,7 @@ fn main_loop(
 	let mut db = LanguageServerDatabase::new(
 		&connection,
 		LanguageServerOptions {
-			workspace_uri: params
-				.workspace_folders
-				.map(|folders| folders[0].uri.clone()),
+			workspace_uri: workspace_uri(&params),
 		},
 	);
 	for msg in &connection.receiver {
@@ -126,6 +143,7 @@ fn main_loop(
 					return Ok(());
 				}
 
+				let id = req.id.clone();
 				let result = DispatchRequest::new(req, &mut db)
 					.on::<ViewCstHandler, _, _>()
 					.on::<ViewAstHandler, _, _>()
@@ -145,13 +163,31 @@ fn main_loop(
 					.on::<FormatHandler, _, _>()
 					.finish();
 
-				match result {
-					Ok(_) => (),
-					Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
+				// JSON-RPC requires a response for every request, so an
+				// unhandled or malformed one has to be reported as an error
+				// rather than dropped.
+				let error = match result {
+					Ok(_) => None,
 					Err(ExtractError::MethodMismatch(req)) => {
-						log::warn!("unhandled {}", req.method)
+						log::warn!("unhandled request {}", req.method);
+						Some((
+							req.id,
+							ErrorCode::MethodNotFound,
+							format!("Unhandled method {}", req.method),
+						))
+					}
+					Err(ExtractError::JsonError { method, error }) => {
+						log::error!("malformed params for {}: {}", method, error);
+						Some((id, ErrorCode::InvalidParams, error.to_string()))
 					}
 				};
+				if let Some((id, code, message)) = error {
+					connection.sender.send(Message::Response(Response::new_err(
+						id,
+						code as i32,
+						message,
+					)))?;
+				}
 			}
 			Message::Response(resp) => {
 				log::info!("got response: {:?}", resp);
