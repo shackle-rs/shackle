@@ -2,9 +2,26 @@
 
 All notable changes to the MiniZinc Visual Studio Code Extension will be documented in this file.
 
-## [Unreleased]
+## [0.3.2] - 2026-09-10
 
-## [0.3.0] - 2026-09-07
+- Fix errors and warnings not being reported at all for files inside the directory the language
+  server was started in.
+- Fix go to definition, find references and rename returning document URIs the editor rejects.
+- Report positions using the encoding negotiated with the editor rather than byte offsets, which
+  misplaced ranges and corrupted renames on lines containing non-ASCII characters.
+- Apply a rename as one change per file, so undoing it takes a single step rather than one per
+  occurrence.
+- Fix includes of neighbouring files failing to resolve.
+- Report a missing or incomplete MiniZinc standard library, rather than only the unresolved
+  builtins that it causes.
+- Distinguish warnings from errors, which were previously all shown as errors.
+- Provide the parameters that signature help highlights, and select the overload being called.
+- Clear the diagnostics for a file when it is closed.
+- Fix hovering past the end of a line reporting an error instead of doing nothing.
+- Answer requests the language server does not implement, and stop exiting on malformed request
+  parameters or a workspace with no folders.
+
+## [0.3.1] - 2026-09-07
 
 - Bump version to fix marketplace publishing issue.
 
