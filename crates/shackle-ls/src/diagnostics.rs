@@ -6,6 +6,9 @@ use shackle_hir::{Db, all_errors, all_warnings};
 
 use crate::utils::{path_to_uri, source_span_to_range};
 
+const ERROR: lsp_types::DiagnosticSeverity = lsp_types::DiagnosticSeverity::ERROR;
+const WARNING: lsp_types::DiagnosticSeverity = lsp_types::DiagnosticSeverity::WARNING;
+
 /// Whether the span name of a diagnostic refers to `path`.
 ///
 /// `SourceFile::name` is a display string: it strips the canonicalised working
@@ -43,10 +46,10 @@ pub(crate) fn diagnostics_notification(db: &dyn Db, path: &Path) -> lsp_server::
 	let base = base.as_deref();
 	let mut diagnostics = Vec::new();
 	for d in all_errors(db) {
-		let _ = collect_diagnostic(path, base, d, &mut diagnostics);
+		let _ = collect_diagnostic(path, base, ERROR, d, &mut diagnostics);
 	}
 	for d in all_warnings(db) {
-		let _ = collect_diagnostic(path, base, d, &mut diagnostics);
+		let _ = collect_diagnostic(path, base, WARNING, d, &mut diagnostics);
 	}
 	publish(path, diagnostics)
 }
@@ -74,41 +77,68 @@ fn publish(path: &Path, diagnostics: Vec<lsp_types::Diagnostic>) -> lsp_server::
 fn collect_diagnostic(
 	path: &Path,
 	base: Option<&Path>,
+	default_severity: lsp_types::DiagnosticSeverity,
 	d: &dyn Diagnostic,
 	out: &mut Vec<lsp_types::Diagnostic>,
 ) -> Option<()> {
-	let sc = d.source_code()?;
-	let mut ls = d.labels()?;
-	let first = ls.next()?;
-	let span = sc.read_span(first.inner(), 0, 0).ok()?;
-	let range = span_to_range(sc, first.inner())?;
-	let name = span.name()?;
-	if !span_name_is(name, path, base) {
-		return None;
-	}
-	let uri = path_to_uri(path);
-	let related_info: Vec<_> = ls
-		.filter_map(|l| {
-			let label = l.label()?;
-			let range = span_to_range(sc, l.inner())?;
-			Some(lsp_types::DiagnosticRelatedInformation {
-				location: lsp_types::Location {
-					range,
-					uri: uri.clone(),
-				},
-				message: label.to_owned(),
-			})
-		})
-		.collect();
+	// Some diagnostics carry no source span at all — a missing standard library
+	// being the important one. Reporting them against the start of the file is
+	// the only way they reach the editor, and without them the user sees just
+	// the errors they cause downstream.
+	let located = d
+		.source_code()
+		.zip(d.labels())
+		.and_then(|(sc, mut labels)| Some((sc, labels.next()?)));
+
+	let (range, label, related_info) = match located {
+		Some((sc, first)) => {
+			let name = sc.read_span(first.inner(), 0, 0).ok()?;
+			if !span_name_is(name.name()?, path, base) {
+				return None;
+			}
+			let uri = path_to_uri(path);
+			let related_info: Vec<_> = d
+				.labels()
+				.into_iter()
+				.flatten()
+				.skip(1)
+				.filter_map(|l| {
+					let label = l.label()?;
+					let range = span_to_range(sc, l.inner())?;
+					Some(lsp_types::DiagnosticRelatedInformation {
+						location: lsp_types::Location {
+							range,
+							uri: uri.clone(),
+						},
+						message: label.to_owned(),
+					})
+				})
+				.collect();
+			(
+				span_to_range(sc, first.inner())?,
+				first.label().map(|l| l.to_owned()),
+				related_info,
+			)
+		}
+		None => (lsp_types::Range::default(), None, Vec::new()),
+	};
+
 	out.push(lsp_types::Diagnostic {
 		code: d
 			.code()
 			.map(|c| lsp_types::NumberOrString::String(c.to_string())),
-		severity: d.severity().map(|s| match s {
-			Severity::Error => lsp_types::DiagnosticSeverity::ERROR,
-			Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
-			Severity::Advice => lsp_types::DiagnosticSeverity::HINT,
-		}),
+		// Most diagnostics do not declare a severity, and an omitted one makes
+		// clients render everything as an error; which accumulator it came from
+		// is the better default.
+		severity: Some(
+			d.severity()
+				.map(|s| match s {
+					Severity::Error => ERROR,
+					Severity::Warning => WARNING,
+					Severity::Advice => lsp_types::DiagnosticSeverity::HINT,
+				})
+				.unwrap_or(default_severity),
+		),
 		related_information: if related_info.is_empty() {
 			None
 		} else {
@@ -120,7 +150,7 @@ fn collect_diagnostic(
 			"{}\n",
 			[d.to_string()]
 				.into_iter()
-				.chain(first.label().map(|l| l.to_owned()))
+				.chain(label)
 				.chain(d.help().map(|h| h.to_string()))
 				.collect::<Vec<_>>()
 				.join("\n")
@@ -129,7 +159,7 @@ fn collect_diagnostic(
 	});
 	if let Some(related) = d.related() {
 		for d in related {
-			let _ = collect_diagnostic(path, base, d, out);
+			let _ = collect_diagnostic(path, base, default_severity, d, out);
 		}
 	}
 	Some(())
