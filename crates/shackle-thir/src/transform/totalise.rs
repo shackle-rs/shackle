@@ -636,10 +636,11 @@ impl<'a, 'db, Dst: Marker> Totaliser<'a, 'db, Dst> {
 						.annotations()
 						.has(model, self.ids.annotations.mzn_var_where_clause);
 					let o = model[*assignment].origin();
-					let idx = self.totalised_model.add_declaration(Item::new(
-						Declaration::from_expression(db, false, rhs),
-						o,
-					));
+					let mut asg_decl = Declaration::from_expression(db, false, rhs);
+					if let Some(name) = model[*assignment].name() {
+						asg_decl.set_name(name);
+					}
+					let idx = self.totalised_model.add_declaration(Item::new(asg_decl, o));
 					if !total {
 						// Make sure identifier refers to actual value
 						let ident = Expression::new(
