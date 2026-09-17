@@ -149,7 +149,7 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 			for ann in constraint.annotations().iter() {
 				if matches!(&**ann, ExpressionData::StringLiteral(_)) {
 					// Old compiler only supports single string annotation
-					write!(&mut buf, ":: ({}) ", self.pretty_print_expression(ann)).unwrap();
+					write!(&mut buf, ":: {} ", self.pretty_print_expression(ann)).unwrap();
 					break;
 				}
 			}
