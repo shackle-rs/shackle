@@ -36,7 +36,7 @@ use shackle_hir::{
 	run_hir_phase,
 };
 use shackle_syntax::{InputLang, ast::AstNode, minizinc::Identifier};
-use shackle_thir::{db::final_thir, lower::lower_model, pretty_print::PrettyPrinter};
+use shackle_thir::{db::final_thir, lower::lower_model, pretty_print::OldMiniZincPrinter};
 // Export OptType enumeration used in [`Type`]
 pub use shackle_ty::OptType;
 use shackle_ty::{Ty, TyData};
@@ -459,7 +459,7 @@ impl Program {
 	/// Output the [`Program`] using the given output interface, using the [`Write`] trait
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
 		let model = final_thir(&self.db).unwrap();
-		let printer = PrettyPrinter::new_compat(&self.db, model);
+		let printer = OldMiniZincPrinter::new(&self.db, model, true);
 		let code = printer.pretty_print();
 		let formatted = format_str(
 			&code,
