@@ -13,942 +13,1232 @@ use crate::{
 	Marker, Model, OutputId, Pattern, PatternData, ResolvedIdentifier,
 };
 
-/// Callback which adds an annotation to a pretty-printed expression.
-pub type ExpressionAnnotator<'db, T> = dyn Fn(&Expression<'db, T>) -> Option<String> + 'db;
-
 /// Pretty prints THIR as MiniZinc
-pub struct PrettyPrinter<'db, T: Marker = ()> {
+pub struct PrettyPrinter<'db, T: Marker> {
 	db: &'db dyn Db,
 	model: &'db Model<'db, T>,
-	ids: &'db IdentifierRegistry<'db>,
-	/// Whether to output a model compatible with old MiniZinc (default `false`)
-	pub old_compat: bool,
-	/// Add an extra annotation on each expression using the given function
-	pub expression_annotator: Option<Box<ExpressionAnnotator<'db, T>>>,
 }
 
 impl<'db, T: Marker> std::fmt::Debug for PrettyPrinter<'db, T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("PrettyPrinter")
-			.field("old_compat", &self.old_compat)
-			.finish()
+		f.debug_struct("PrettyPrinter").finish()
 	}
 }
 
 impl<'db, T: Marker> PrettyPrinter<'db, T> {
 	/// Create a new pretty printer
 	pub fn new(db: &'db dyn Db, model: &'db Model<'db, T>) -> Self {
-		let ids = IdentifierRegistry::lookup(db);
-		Self {
-			db,
-			model,
-			ids,
-			old_compat: false,
-			expression_annotator: None,
-		}
-	}
-
-	/// Create a new pretty printer which prints output compatible with old MiniZinc
-	pub fn new_compat(db: &'db dyn Db, model: &'db Model<'db, T>) -> Self {
-		let mut printer = Self::new(db, model);
-		printer.old_compat = true;
-		printer
+		Self { db, model }
 	}
 
 	/// Pretty print the model
 	pub fn pretty_print(&self) -> String {
-		let mut buf = String::new();
-		for item in self.model.top_level_items() {
-			if self.old_compat {
-				match item {
-					ItemId::Function(f)
-						if self.model[f].name() == self.ids.functions.default
-							|| self.model[f].name() == self.ids.functions.mzn_element_internal
-							|| self.model[f].name() == self.ids.functions.mzn_slice_internal
-							|| self.model[f].name() == self.ids.functions.mzn_indexed_array =>
-					{
-						// These signatures aren't accepted by the old compiler, so don't print them
-						// Instead alternative implementations are provided in compat.mzn
-						continue;
-					}
-					ItemId::Annotation(a)
-						if self.model[a].name == Some(self.ids.annotations.output)
-							|| self.model[a]
-								.origin()
-								.node()
-								.and_then(|n| n.model_file(self.db).name(self.db))
-								.map(|n| n.starts_with("stdlib_"))
-								.unwrap_or(false) =>
-					{
-						// These will conflict with stdlib annotations in the old compiler, so don't print them
-						continue;
-					}
-					_ => (),
-				}
-			}
-			writeln!(&mut buf, "{};", self.pretty_print_item(item)).unwrap();
-		}
-		if self.model.solve().is_none() {
-			writeln!(&mut buf, "solve satisfy;").unwrap();
-		}
-		if self.old_compat {
-			let compat_path = shackle_share_directory(self.db)
-				.as_ref()
-				.expect("Shackle share directory should exist")
-				.join("compat.mzn");
-			let compat = std::fs::read_to_string(&compat_path)
-				.unwrap_or_else(|err| panic!("failed to read {}: {err}", compat_path.display()));
-			writeln!(&mut buf, "{compat}").unwrap();
-		}
-		buf
+		self.print_model(self.db, self.model)
 	}
 
 	/// Pretty print an item from a model
 	pub fn pretty_print_signature(&self, item: ItemId<'db, T>) -> String {
-		match item {
-			ItemId::Annotation(i) => self.pretty_print_annotation(i),
-			ItemId::Constraint(i) => self.pretty_print_constraint(i),
-			ItemId::Declaration(i) => self.pretty_print_declaration(i, false, true),
-			ItemId::Enumeration(i) => self.pretty_print_enumeration(i, true),
-			ItemId::Function(i) => self.pretty_print_function(i, true),
-			ItemId::Output(i) => self.pretty_print_output(i),
-			ItemId::Solve => self.pretty_print_solve(),
-		}
+		print_signature(self, self.db, self.model, item)
 	}
 
 	/// Pretty print an item from a model
 	pub fn pretty_print_item(&self, item: ItemId<'db, T>) -> String {
-		match item {
-			ItemId::Annotation(i) => self.pretty_print_annotation(i),
-			ItemId::Constraint(i) => self.pretty_print_constraint(i),
-			ItemId::Declaration(i) => self.pretty_print_declaration(i, false, false),
-			ItemId::Enumeration(i) => self.pretty_print_enumeration(i, false),
-			ItemId::Function(i) => self.pretty_print_function(i, false),
-			ItemId::Output(i) => self.pretty_print_output(i),
-			ItemId::Solve => self.pretty_print_solve(),
-		}
-	}
-
-	fn pretty_print_annotation(&self, idx: AnnotationId<'db, T>) -> String {
-		let annotation = &self.model[idx];
-		let mut buf = format!("annotation {}", self.pretty_print_annotation_id(idx));
-		if let Some(params) = &annotation.parameters {
-			write!(
-				&mut buf,
-				"({})",
-				params
-					.iter()
-					.map(|p| self.pretty_print_declaration(*p, false, true))
-					.collect::<Vec<_>>()
-					.join(", ")
-			)
-			.unwrap();
-		}
-		buf
-	}
-
-	fn pretty_print_constraint(&self, idx: ConstraintId<'db, T>) -> String {
-		let constraint = &self.model[idx];
-		let mut buf = "constraint ".to_owned();
-		if self.old_compat {
-			for ann in constraint.annotations().iter() {
-				if matches!(&**ann, ExpressionData::StringLiteral(_)) {
-					// Old compiler only supports single string annotation
-					write!(&mut buf, ":: {} ", self.pretty_print_expression(ann)).unwrap();
-					break;
-				}
-			}
-		} else {
-			for ann in constraint.annotations().iter() {
-				write!(&mut buf, ":: ({}) ", self.pretty_print_expression(ann)).unwrap();
-			}
-		}
-		write!(
-			&mut buf,
-			"{}",
-			self.pretty_print_expression(constraint.expression())
-		)
-		.unwrap();
-		buf
-	}
-
-	fn pretty_print_declaration(
-		&self,
-		idx: DeclarationId<'db, T>,
-		is_let_item: bool,
-		signature_only: bool,
-	) -> String {
-		let declaration = &self.model[idx];
-		let ty = declaration.ty();
-		let mut buf = if is_let_item
-			&& ty.contains_type_inst_var(self.db)
-			&& declaration.definition().is_some()
-			|| ty == TypeRegistry::lookup(self.db).bottom
-		{
-			// Workaround since let items can't use TiIDs in MiniZinc
-			"any".to_owned()
-		} else {
-			self.pretty_print_domain(declaration.domain())
-		};
-		write!(&mut buf, ": {}", self.pretty_print_declaration_id(idx)).unwrap();
-		for ann in declaration.annotations().iter() {
-			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
-		}
-		if !signature_only && let Some(def) = declaration.definition() {
-			write!(&mut buf, " = {}", self.pretty_print_expression(def)).unwrap();
-		}
-		buf
-	}
-
-	fn pretty_print_enumeration(&self, idx: EnumerationId<'db, T>, signature_only: bool) -> String {
-		let enumeration = &self.model[idx];
-		let enum_name = self.pretty_print_enumeration_id(idx);
-		let mut buf = format!("enum {}", enum_name);
-		for ann in enumeration.annotations().iter() {
-			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
-		}
-		if !signature_only && let Some(cases) = enumeration.definition() {
-			write!(
-				&mut buf,
-				" = {}",
-				cases
-					.iter()
-					.enumerate()
-					.map(|(i, c)| {
-						let name = self
-							.pretty_print_enumeration_member_id(EnumMemberId::new(idx, i as u32));
-
-						match &c.parameters {
-							Some(ps) => {
-								let params = ps
-									.iter()
-									.map(|d| self.pretty_print_domain(self.model[*d].domain()))
-									.collect::<Vec<_>>()
-									.join(", ");
-								format!("{}({})", name, params)
-							}
-							None => format!("{{ {} }}", name),
-						}
-					})
-					.collect::<Vec<_>>()
-					.join(" ++ ")
-			)
-			.unwrap();
-		}
-		buf
-	}
-
-	fn pretty_print_function(&self, idx: FunctionId<'db, T>, signature_only: bool) -> String {
-		let function = &self.model[idx];
-		let name = self.pretty_print_function_id(idx);
-		let mut buf = String::new();
-		if function.body().is_none()
-			&& function.return_type() == TypeRegistry::lookup(self.db).var_bool
-			&& !name.starts_with('\'')
-		{
-			write!(&mut buf, "predicate",).unwrap();
-		} else {
-			write!(
-				&mut buf,
-				"function {}:",
-				self.pretty_print_domain(function.domain()),
-			)
-			.unwrap();
-		}
-		write!(
-			&mut buf,
-			" {}({})",
-			name,
-			function
-				.parameters()
-				.iter()
-				.map(|p| self.pretty_print_declaration(*p, false, signature_only))
-				.collect::<Vec<_>>()
-				.join(", ")
-		)
-		.unwrap();
-		for ann in function.annotations().iter() {
-			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
-		}
-		if self.old_compat {
-			write!(&mut buf, " :: promise_total").unwrap();
-			if let Some(body) = function.body() {
-				if function.name() == self.ids.functions.deopt
-					&& !function.type_inst_vars().is_empty()
-					&& function.parameters().len() == 1
-					&& {
-						let ty = self.model[function.parameter(0)].ty();
-						!ty.known_par(self.db) && !ty.known_occurs(self.db)
-					} {
-					// For compatibility with old minizinc, we can just directly coerce
-					if let ExpressionData::Call(c) = &**body
-						&& let Callable::Function(idx) = &c.function
-						&& self.model[*idx].name() == self.ids.functions.to_enum
-						&& c.arguments.len() == 2
-					{
-						write!(
-							&mut buf,
-							" = {}",
-							self.pretty_print_expression(&c.arguments[1])
-						)
-						.unwrap();
-					}
-				}
-			} else if function.name() == self.ids.functions.enum2int {
-				// For compatibility with old minizinc, we can just directly coerce
-				let d = function.parameter(0);
-				let ident = self.model[d]
-					.name()
-					.map(|n| n.pretty_print(self.db))
-					.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)));
-				write!(&mut buf, " = {}", ident).unwrap();
-			}
-		}
-
-		if !signature_only && let Some(body) = function.body() {
-			write!(&mut buf, " = {}", self.pretty_print_expression(body)).unwrap();
-		}
-
-		buf
-	}
-
-	fn pretty_print_output(&self, idx: OutputId<'db, T>) -> String {
-		let output = &self.model[idx];
-		let mut buf = "output ".to_owned();
-		if let Some(s) = output.section() {
-			write!(&mut buf, ":: {} ", self.pretty_print_expression(s)).unwrap();
-		}
-		write!(
-			&mut buf,
-			"{}",
-			self.pretty_print_expression(output.expression())
-		)
-		.unwrap();
-		buf
-	}
-
-	fn pretty_print_solve(&self) -> String {
-		let solve = self.model.solve().unwrap();
-		let mut buf = "solve ".to_owned();
-		for ann in solve.annotations().iter() {
-			write!(&mut buf, ":: ({}) ", self.pretty_print_expression(ann)).unwrap();
-		}
-		match solve.goal() {
-			Goal::Satisfy => write!(&mut buf, "satisfy").unwrap(),
-			Goal::Maximize { objective } => write!(
-				&mut buf,
-				"maximize {}",
-				self.pretty_print_declaration_id(*objective)
-			)
-			.unwrap(),
-			Goal::Minimize { objective } => write!(
-				&mut buf,
-				"minimize {}",
-				self.pretty_print_declaration_id(*objective)
-			)
-			.unwrap(),
-		};
-		buf
+		print_item(self, self.db, self.model, item)
 	}
 
 	/// Pretty print a domain
 	pub fn pretty_print_domain(&self, domain: &Domain<'db, T>) -> String {
-		maybe_grow_stack(|| self.pretty_print_domain_inner(domain))
-	}
-
-	fn pretty_print_domain_inner(&self, domain: &Domain<'db, T>) -> String {
-		let ty = domain.ty();
-		match &**domain {
-			DomainData::Array(dim, el) => {
-				let dims = match &***dim {
-					DomainData::Tuple(ds) => ds
-						.iter()
-						.map(|d| self.pretty_print_domain(d))
-						.collect::<Vec<_>>()
-						.join(", "),
-					DomainData::Unbounded => {
-						ty.dim_ty(self.db).unwrap().pretty_print_as_dims(self.db)
-					}
-					_ => self.pretty_print_domain(dim),
-				};
-				ty.opt(self.db)
-					.into_iter()
-					.flat_map(|o| o.pretty_print())
-					.chain([format!(
-						"array [{}] of {}",
-						dims,
-						self.pretty_print_domain(el)
-					)])
-					.collect::<Vec<_>>()
-					.join(" ")
-			}
-			DomainData::Bounded(e) => ty
-				.inst(self.db)
-				.into_iter()
-				.flat_map(|i| i.pretty_print())
-				.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
-				.chain([self.pretty_print_expression(e)])
-				.collect::<Vec<_>>()
-				.join(" "),
-			DomainData::Set(s, None) => ty
-				.inst(self.db)
-				.into_iter()
-				.flat_map(|i| i.pretty_print())
-				.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
-				.chain(["set of".to_owned()])
-				.chain([self.pretty_print_domain(s)])
-				.collect::<Vec<_>>()
-				.join(" "),
-			DomainData::Set(s, Some(c)) => ty
-				.inst(self.db)
-				.into_iter()
-				.flat_map(|i| i.pretty_print())
-				.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
-				.chain(["set(".to_owned()])
-				.chain([self.pretty_print_expression(c)])
-				.chain([") of ".to_owned()])
-				.chain([self.pretty_print_domain(s)])
-				.collect::<Vec<_>>()
-				.join(" "),
-			DomainData::Tuple(ds) => {
-				let doms = ds
-					.iter()
-					.map(|d| self.pretty_print_domain(d))
-					.collect::<Vec<_>>()
-					.join(", ");
-				ty.inst(self.db)
-					.into_iter()
-					.flat_map(|i| i.pretty_print())
-					.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
-					.chain([format!("tuple({})", doms)])
-					.collect::<Vec<_>>()
-					.join(" ")
-			}
-			DomainData::Record(ds) => {
-				if self.old_compat && ds.is_empty() {
-					return ty
-						.inst(self.db)
-						.into_iter()
-						.flat_map(|i| i.pretty_print())
-						.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
-						.chain(["bool".to_owned()])
-						.collect::<Vec<_>>()
-						.join(" ");
-				}
-				let doms = ds
-					.iter()
-					.map(|(i, d)| {
-						format!(
-							"{}: {}",
-							self.pretty_print_domain(d),
-							i.pretty_print(self.db)
-						)
-					})
-					.collect::<Vec<_>>()
-					.join(", ");
-				ty.inst(self.db)
-					.into_iter()
-					.flat_map(|i| i.pretty_print())
-					.chain(ty.opt(self.db).into_iter().flat_map(|o| o.pretty_print()))
-					.chain([format!("record({})", doms)])
-					.collect::<Vec<_>>()
-					.join(" ")
-			}
-			DomainData::Unbounded => ty.pretty_print(self.db),
-		}
+		self.print_domain(self.db, self.model, domain)
 	}
 
 	/// Pretty print an expression
 	pub fn pretty_print_expression(&self, expression: &Expression<'db, T>) -> String {
-		maybe_grow_stack(|| self.pretty_print_expression_inner(expression))
+		self.print_expression(self.db, self.model, expression)
+	}
+}
+
+impl<'db, T: Marker> Printer<'db, T> for PrettyPrinter<'db, T> {}
+
+/// Pretty print to be compatible with the old MiniZinc compiler
+pub struct OldMiniZincPrinter<'db, T: Marker> {
+	db: &'db dyn Db,
+	model: &'db Model<'db, T>,
+	ids: &'db IdentifierRegistry<'db>,
+	is_transformed: bool,
+}
+
+impl<'db, T: Marker> std::fmt::Debug for OldMiniZincPrinter<'db, T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("OldMiniZincPrinter").finish()
+	}
+}
+
+impl<'db, T: Marker> OldMiniZincPrinter<'db, T> {
+	/// Create a new pretty printer
+	pub fn new(db: &'db dyn Db, model: &'db Model<'db, T>, is_transformed: bool) -> Self {
+		Self {
+			db,
+			model,
+			is_transformed,
+			ids: IdentifierRegistry::lookup(db),
+		}
 	}
 
-	fn pretty_print_expression_inner(&self, expression: &Expression<'db, T>) -> String {
-		let mut out = match &**expression {
-			ExpressionData::Absent => "<>".to_owned(),
-			ExpressionData::ArrayComprehension(c) => {
-				let mut buf = String::new();
-				write!(&mut buf, "[").unwrap();
-				if let Some(i) = &c.indices {
-					write!(&mut buf, "{}: ", self.pretty_print_expression(i)).unwrap();
-				}
-				let t = self.pretty_print_expression(&c.template);
-				let gs = c
-					.generators
-					.iter()
-					.map(|g| self.pretty_print_generator(g))
-					.collect::<Vec<_>>()
-					.join(", ");
-				write!(&mut buf, "{} | {}]", t, gs).unwrap();
-				buf
-			}
-			ExpressionData::ArrayLiteral(al) => {
-				format!(
-					"[{}]",
-					al.iter()
-						.map(|e| self.pretty_print_expression(e))
-						.collect::<Vec<_>>()
-						.join(", ")
-				)
-			}
-			ExpressionData::BooleanLiteral(b) => {
-				if b.0 {
-					"true".to_owned()
-				} else {
-					"false".to_owned()
-				}
-			}
-			ExpressionData::Call(c) => {
-				if self.old_compat
-					&& (c.arguments.len() == 1 || c.arguments.len() == 2)
-					&& let Callable::Function(f) = &c.function
-					&& self.model[*f].body().is_none()
+	/// Pretty print the model
+	pub fn pretty_print(&self) -> String {
+		self.print_model(self.db, self.model)
+	}
+}
+
+impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db, T> {
+	fn print_model(&self, db: &'db dyn Db, model: &Model<'db, T>) -> String {
+		let mut buf = String::new();
+		for item in model.top_level_items() {
+			match item {
+				ItemId::Function(f)
+					if model[f].name() == self.ids.functions.default
+						|| model[f].name() == self.ids.functions.mzn_element_internal
+						|| model[f].name() == self.ids.functions.mzn_slice_internal
+						|| model[f].name() == self.ids.functions.mzn_indexed_array =>
 				{
-					let name = self.model[*f].name().as_identifier(self.db).lookup(self.db);
-					if c.arguments.len() == 1 {
-						if matches!(name, "o.." | "o<.." | "o..<" | "o<..<") {
-							return format!(
-								"({}({}))",
-								&name[1..],
-								self.pretty_print_expression(&c.arguments[0])
-							);
-						}
-						if shackle_syntax::is_prefix_operator(name) {
-							return format!(
-								"({}({}))",
-								name,
-								self.pretty_print_expression(&c.arguments[0])
-							);
-						}
-						if name.len() > 1
-							&& shackle_syntax::is_postfix_operator(&name[..name.len() - 1])
-						{
-							return format!(
-								"(({}){})",
-								self.pretty_print_expression(&c.arguments[0]),
-								&name[..name.len() - 1],
-							);
-						};
-					} else if shackle_syntax::is_infix_operator(name) {
-						return format!(
-							"(({}) {} ({}))",
-							self.pretty_print_expression(&c.arguments[0]),
-							name,
-							self.pretty_print_expression(&c.arguments[1])
-						);
-					}
+					// These signatures aren't accepted by the old compiler, so don't print them
+					// Instead alternative implementations are provided in compat.mzn
+					continue;
 				}
-
-				let f = match &c.function {
-					Callable::Annotation(a) => self.model[*a]
-						.name
-						.map(|n| n.pretty_print(self.db))
-						.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
-					Callable::AnnotationDestructure(a) => self.model[*a]
-						.name
-						.map(|n| n.inversed(self.db).pretty_print(self.db))
-						.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
-					Callable::EnumConstructor(m) => self.model[*m]
-						.name
-						.map(|n| n.pretty_print(self.db))
-						.unwrap_or_else(|| {
-							format!(
-								"_EM_{}_{}",
-								self.model[m.enumeration_id()]
-									.enum_type()
-									.pretty_print(self.db),
-								m.member_index()
-							)
-						}),
-					Callable::EnumDestructor(m) => self.model[*m]
-						.name
-						.map(|n| n.inversed(self.db).pretty_print(self.db))
-						.unwrap_or_else(|| {
-							format!(
-								"_EM_{}_{}⁻¹",
-								self.model[m.enumeration_id()]
-									.enum_type()
-									.pretty_print(self.db),
-								m.member_index()
-							)
-						}),
-					Callable::Function(f) => {
-						let name = self.model[*f].name();
-						if self.old_compat
-							&& (name == self.ids.functions.forall
-								|| name == self.ids.functions.exists)
-							&& c.arguments.len() == 1
-							&& let ExpressionData::ArrayLiteral(al) = &*c.arguments[0]
-							&& !al.is_empty()
-						{
-							// Sometimes the old compiler doesn't make these short-circuit (e.g. inside flat_cv_exp), so turn into and/or
-							return al
-								.iter()
-								.map(|e| format!("({})", self.pretty_print_expression(e)))
-								.collect::<Vec<_>>()
-								.join(if name == self.ids.functions.forall {
-									" /\\ "
-								} else {
-									" \\/ "
-								});
-						}
-						self.pretty_print_function_id(*f)
-					}
-					Callable::Expression(e) => format!("({})", self.pretty_print_expression(e)),
-				};
-				let args = c
-					.arguments
-					.iter()
-					.map(|a| self.pretty_print_expression(a))
-					.collect::<Vec<_>>()
-					.join(", ");
-				format!("{}({})", f, args)
-			}
-			ExpressionData::Case(c) => {
-				let branches = c
-					.branches
-					.iter()
-					.map(|b| {
-						format!(
-							"{} => {}",
-							self.pretty_print_pattern(&b.pattern),
-							self.pretty_print_expression(&b.result)
-						)
-					})
-					.collect::<Vec<_>>();
-				format!(
-					"case {} of {} endcase",
-					self.pretty_print_expression(&c.scrutinee),
-					branches.join(", ")
-				)
-			}
-			ExpressionData::FloatLiteral(f) => {
-				let value = f.value();
-				if value.fract() == 0.0 {
-					// Ensure this is is printed as a float literal and not an integer
-					format!("{}.0", value)
-				} else {
-					format!("{}", value)
+				ItemId::Annotation(a)
+					if self.model[a].name == Some(self.ids.annotations.output)
+						|| self.model[a]
+							.origin()
+							.node()
+							.and_then(|n| n.model_file(db).name(db))
+							.map(|n| n.starts_with("stdlib_"))
+							.unwrap_or(false) =>
+				{
+					// These will conflict with stdlib annotations in the old compiler, so don't print them
+					continue;
 				}
+				_ => (),
 			}
-			ExpressionData::Identifier(i) => match i {
-				ResolvedIdentifier::Annotation(a) => self.pretty_print_annotation_id(*a),
-				ResolvedIdentifier::Declaration(d) => self.pretty_print_declaration_id(*d),
-				ResolvedIdentifier::Enumeration(e) => self.pretty_print_enumeration_id(*e),
-				ResolvedIdentifier::EnumerationMember(m) => {
-					self.pretty_print_enumeration_member_id(*m)
-				}
-			},
-			ExpressionData::IfThenElse(ite) => {
-				let mut buf = String::new();
-				let mut bs = ite.branches.iter();
-				let first = bs.next().expect("No branches in if-then-else");
-				write!(
-					&mut buf,
-					"if {} then {} ",
-					self.pretty_print_expression(&first.condition),
-					self.pretty_print_expression(&first.result)
-				)
-				.unwrap();
-				for branch in bs {
-					write!(
-						&mut buf,
-						"elseif {} then {} ",
-						self.pretty_print_expression(&branch.condition),
-						self.pretty_print_expression(&branch.result)
-					)
-					.unwrap();
-				}
-				write!(
-					&mut buf,
-					"else {} endif",
-					self.pretty_print_expression(&ite.else_result)
-				)
-				.unwrap();
-				buf
-			}
-			ExpressionData::Infinity => "infinity".to_owned(),
-			ExpressionData::IntegerLiteral(i) => format!("{}", i.0),
-			ExpressionData::Lambda(l) => format!(
-				"lambda {}: ({}) => {}",
-				self.pretty_print_domain(self.model[**l].domain()),
-				self.model[**l]
-					.parameters()
-					.iter()
-					.map(|p| self.pretty_print_declaration(*p, false, true))
-					.collect::<Vec<_>>()
-					.join(", "),
-				self.pretty_print_expression(self.model[**l].body().unwrap())
-			),
-			ExpressionData::Let(l) => {
-				let mut buf = String::new();
-				writeln!(&mut buf, "let {{").unwrap();
-				for item in l.items.iter() {
-					match item {
-						LetItem::Constraint(c) => {
-							writeln!(&mut buf, "  {};", self.pretty_print_constraint(*c)).unwrap()
-						}
-						LetItem::Declaration(d) => writeln!(
-							&mut buf,
-							"  {};",
-							self.pretty_print_declaration(*d, true, false)
-						)
-						.unwrap(),
-					}
-				}
-				write!(
-					&mut buf,
-					"}} in {}",
-					self.pretty_print_expression(&l.in_expression)
-				)
-				.unwrap();
-				buf
-			}
-			ExpressionData::RecordAccess(ra) => {
-				format!(
-					"({}).{}",
-					self.pretty_print_expression(&ra.record),
-					ra.field.pretty_print(self.db)
-				)
-			}
-			ExpressionData::RecordLiteral(fs) => {
-				if self.old_compat && fs.is_empty() {
-					return "true".to_owned();
-				}
-				let pairs = fs
-					.iter()
-					.map(|(i, e)| {
-						format!(
-							"{}: {}",
-							i.pretty_print(self.db),
-							self.pretty_print_expression(e)
-						)
-					})
-					.collect::<Vec<_>>()
-					.join(", ");
-				format!("({})", pairs)
-			}
-			ExpressionData::SetComprehension(c) => {
-				let mut buf = String::new();
-				write!(&mut buf, "{{").unwrap();
-				let t = self.pretty_print_expression(&c.template);
-				let gs = c
-					.generators
-					.iter()
-					.map(|g| self.pretty_print_generator(g))
-					.collect::<Vec<_>>()
-					.join(", ");
-				write!(&mut buf, "{} | {}}}", t, gs).unwrap();
-				buf
-			}
-			ExpressionData::SetLiteral(sl) => {
-				format!(
-					"{{{}}}",
-					sl.iter()
-						.map(|e| self.pretty_print_expression(e))
-						.collect::<Vec<_>>()
-						.join(", ")
-				)
-			}
-			ExpressionData::StringLiteral(s) => format!("{:?}", s.value(self.db)),
-			ExpressionData::TupleAccess(ta) => {
-				format!(
-					"({}).{}",
-					self.pretty_print_expression(&ta.tuple),
-					ta.field.0
-				)
-			}
-			ExpressionData::TupleLiteral(fs) => {
-				let fields = fs
-					.iter()
-					.map(|f| self.pretty_print_expression(f))
-					.collect::<Vec<_>>()
-					.join(", ");
-				let end = if fs.len() <= 1 { "," } else { "" };
-				format!("({}{})", fields, end)
-			}
-		};
-		for ann in expression.annotations().iter() {
-			write!(&mut out, " :: ({})", self.pretty_print_expression(ann)).unwrap();
+			writeln!(&mut buf, "{};", print_item(self, db, model, item)).unwrap();
 		}
-		if let Some(f) = &self.expression_annotator
-			&& let Some(v) = f(expression)
+		if self.model.solve().is_none() {
+			writeln!(&mut buf, "solve satisfy;").unwrap();
+		}
+		let compat_path = shackle_share_directory(db)
+			.as_ref()
+			.expect("Shackle share directory should exist")
+			.join("compat.mzn");
+		let compat = std::fs::read_to_string(&compat_path)
+			.unwrap_or_else(|err| panic!("failed to read {}: {err}", compat_path.display()));
+		writeln!(&mut buf, "{compat}").unwrap();
+		buf
+	}
+
+	fn print_constraint(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: ConstraintId<'db, T>,
+	) -> String {
+		let constraint = &self.model[idx];
+		let mut buf = "constraint ".to_owned();
+		for ann in constraint.annotations().iter() {
+			if matches!(&**ann, ExpressionData::StringLiteral(_)) {
+				// Old compiler only supports single string annotation
+				write!(&mut buf, ":: {} ", self.print_expression(db, model, ann)).unwrap();
+				break;
+			}
+		}
+		write!(
+			&mut buf,
+			"{}",
+			self.print_expression(db, model, constraint.expression())
+		)
+		.unwrap();
+		buf
+	}
+
+	fn print_function(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: FunctionId<'db, T>,
+		signature_only: bool,
+	) -> String {
+		let mut buf = print_function(self, db, model, idx, true);
+		if self.is_transformed {
+			buf.push_str(" :: promise_total");
+		}
+		if !signature_only && let Some(body) = model[idx].body() {
+			write!(&mut buf, " = {}", self.print_expression(db, model, body)).unwrap();
+		}
+		buf
+	}
+
+	fn print_expression(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		expression: &Expression<'db, T>,
+	) -> String {
+		if let ExpressionData::Call(c) = &**expression
+			&& (c.arguments.len() == 1 || c.arguments.len() == 2)
+			&& let Callable::Function(f) = &c.function
+			&& self.model[*f].body().is_none()
 		{
-			write!(&mut out, ":: {}", v).unwrap();
-		}
-		out
-	}
-
-	fn pretty_print_generator(&self, g: &Generator<'db, T>) -> String {
-		let (mut gtor, w) = match g {
-			Generator::Iterator {
-				declarations,
-				collection,
-				where_clause,
-			} => {
-				let decls = declarations
-					.iter()
-					.map(|d| {
-						self.model[*d]
-							.name()
-							.map(|n| n.pretty_print(self.db))
-							.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d)))
-					})
-					.collect::<Vec<_>>()
-					.join(", ");
-				(
-					format!("{} in {}", decls, self.pretty_print_expression(collection)),
-					where_clause,
-				)
-			}
-			Generator::Assignment {
-				assignment,
-				where_clause,
-			} => {
-				let decl = &self.model[*assignment];
-				(
-					format!(
-						"{}{} = {}",
-						decl.name()
-							.map(|n| n.pretty_print(self.db))
-							.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
-						if !self.old_compat {
-							decl.annotations()
-								.iter()
-								.map(|ann| format!(" :: ({})", self.pretty_print_expression(ann)))
-								.collect::<Vec<_>>()
-								.join("")
-						} else {
-							"".to_owned()
-						},
-						self.pretty_print_expression(decl.definition().unwrap())
-					),
-					where_clause,
-				)
-			}
-		};
-		if let Some(where_clause) = w {
-			write!(
-				&mut gtor,
-				" where {}",
-				self.pretty_print_expression(where_clause)
-			)
-			.unwrap();
-		}
-		gtor
-	}
-
-	fn pretty_print_pattern(&self, pat: &Pattern<'db, T>) -> String {
-		match &**pat {
-			PatternData::Anonymous(_) => "_".to_owned(),
-			PatternData::Expression(e) => self.pretty_print_expression(e),
-			PatternData::Tuple(fs) => format!(
-				"({})",
-				fs.iter()
-					.map(|p| self.pretty_print_pattern(p))
-					.collect::<Vec<_>>()
-					.join(", ")
-			),
-			PatternData::Record(fs) => {
-				if self.old_compat && fs.is_empty() {
-					"_".to_owned()
-				} else {
-					format!(
-						"({})",
-						fs.iter()
-							.map(|(i, p)| format!(
-								"{}: {}",
-								i.pretty_print(self.db),
-								self.pretty_print_pattern(p)
-							))
-							.collect::<Vec<_>>()
-							.join(", ")
-					)
+			let name = self.model[*f].name().as_identifier(db).lookup(db);
+			if c.arguments.len() == 1 {
+				if matches!(name, "o.." | "o<.." | "o..<" | "o<..<") {
+					return format!(
+						"({}({}))",
+						&name[1..],
+						self.print_expression(db, model, &c.arguments[0])
+					);
 				}
-			}
-			PatternData::EnumConstructor { member, args, .. } => {
-				let ctor = self.model[*member].name.unwrap().pretty_print(self.db);
-				let ps = args
-					.iter()
-					.map(|p| self.pretty_print_pattern(p))
-					.collect::<Vec<_>>()
-					.join(", ");
-				format!("{}({})", ctor, ps)
-			}
-			PatternData::AnnotationConstructor { item, args } => {
-				let ctor = self.model[*item].name.unwrap().pretty_print(self.db);
-				let ps = args
-					.iter()
-					.map(|p| self.pretty_print_pattern(p))
-					.collect::<Vec<_>>()
-					.join(", ");
-				format!("{}({})", ctor, ps)
+				if shackle_syntax::is_prefix_operator(name) {
+					return format!(
+						"({}({}))",
+						name,
+						self.print_expression(db, model, &c.arguments[0])
+					);
+				}
+				if name.len() > 1 && shackle_syntax::is_postfix_operator(&name[..name.len() - 1]) {
+					return format!(
+						"(({}){})",
+						self.print_expression(db, model, &c.arguments[0]),
+						&name[..name.len() - 1],
+					);
+				};
+				if (self.model[*f].name() == self.ids.functions.forall
+					|| self.model[*f].name() == self.ids.functions.exists)
+					&& c.arguments.len() == 1
+					&& let ExpressionData::ArrayLiteral(al) = &*c.arguments[0]
+					&& !al.is_empty()
+				{
+					// Sometimes the old compiler doesn't make these short-circuit (e.g. inside flat_cv_exp), so turn into and/or
+					return al
+						.iter()
+						.map(|e| format!("({})", self.print_expression(db, model, e)))
+						.collect::<Vec<_>>()
+						.join(if self.model[*f].name() == self.ids.functions.forall {
+							" /\\ "
+						} else {
+							" \\/ "
+						});
+				}
+			} else if shackle_syntax::is_infix_operator(name) {
+				return format!(
+					"(({}) {} ({}))",
+					self.print_expression(db, model, &c.arguments[0]),
+					name,
+					self.print_expression(db, model, &c.arguments[1])
+				);
 			}
 		}
+
+		maybe_grow_stack(|| print_expression(self, db, model, expression))
 	}
 
-	fn pretty_print_annotation_id(&self, a: AnnotationId<'db, T>) -> String {
-		self.model[a]
-			.name
-			.map(|n| n.pretty_print(self.db))
-			.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(a)))
+	fn print_generator(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		g: &Generator<'db, T>,
+	) -> String {
+		if let Generator::Assignment {
+			assignment,
+			where_clause,
+		} = g
+		{
+			let decl = &model[*assignment];
+			return format!(
+				"{} = {}{}",
+				decl.name()
+					.map(|n| n.pretty_print(db))
+					.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
+				self.print_expression(db, model, decl.definition().unwrap()),
+				if let Some(where_clause) = where_clause {
+					format!(" where {}", self.print_expression(db, model, where_clause))
+				} else {
+					"".to_owned()
+				}
+			);
+		}
+		print_generator(self, db, model, g)
 	}
 
-	fn pretty_print_declaration_id(&self, d: DeclarationId<'db, T>) -> String {
-		if self.old_compat
-			&& self.model[d].top_level()
-			&& let Some(name) = self.model[d].name()
+	fn print_declaration_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		d: DeclarationId<'db, T>,
+	) -> String {
+		if model[d].top_level()
+			&& let Some(name) = model[d].name()
 			&& (name == self.ids.names.objective
-				|| self.model[d]
+				|| model[d]
 					.origin()
 					.node()
-					.and_then(|n| n.model_file(self.db).name(self.db))
+					.and_then(|n| n.model_file(db).name(db))
 					.map(|n| n.starts_with("stdlib_"))
 					.unwrap_or(false))
 		{
-			return Identifier::new(self.db, format!("shackle_{}", name.lookup(self.db)))
-				.pretty_print(self.db);
+			return Identifier::new(db, format!("shackle_{}", name.lookup(db))).pretty_print(db);
 		}
-		self.model[d]
-			.name()
-			.map(|n| n.pretty_print(self.db))
-			.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)))
+		print_declaration_id(self, db, model, d)
 	}
 
-	fn pretty_print_function_id(&self, f: FunctionId<'db, T>) -> String {
-		let name = if let Some(tys) = self.model[f].mangled_param_tys()
-			&& (!self.old_compat || self.model[f].body().is_some())
+	fn print_function_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		f: FunctionId<'db, T>,
+	) -> String {
+		let name = if let Some(tys) = model[f].mangled_param_tys()
+			&& model[f].body().is_some()
 		{
-			self.model[f].name().mangled(self.db, tys.iter().copied())
+			model[f].name().mangled(db, tys.iter().copied())
 		} else {
-			self.model[f].name().as_identifier(self.db)
+			model[f].name().as_identifier(db)
 		};
 
-		if self.old_compat && self.model[f].body().is_some() {
+		if model[f].body().is_some() {
 			// Prefix to avoid conflicts with stdlib functions in the old compiler
-			return Identifier::new(self.db, format!("shackle_{}", name.lookup(self.db)))
-				.pretty_print(self.db);
+			return Identifier::new(db, format!("shackle_{}", name.lookup(db))).pretty_print(db);
 		}
 
-		name.pretty_print(self.db)
+		name.pretty_print(db)
 	}
+}
 
-	fn pretty_print_enumeration_id(&self, e: EnumerationId<'db, T>) -> String {
-		self.model[e].enum_type().pretty_print(self.db)
+/// Trait for implementing a pretty printer for THIR
+pub trait Printer<'db, T: Marker> {
+	/// Pretty print the model
+	fn print_model(&self, db: &'db dyn Db, model: &Model<'db, T>) -> String {
+		print_model(self, db, model)
 	}
+	/// Pretty print an annotation
+	fn print_annotation(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: AnnotationId<'db, T>,
+	) -> String {
+		print_annotation(self, db, model, idx)
+	}
+	/// Pretty print a constraint
+	fn print_constraint(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: ConstraintId<'db, T>,
+	) -> String {
+		print_constraint(self, db, model, idx)
+	}
+	/// Pretty print a declaration
+	fn print_declaration(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: DeclarationId<'db, T>,
+		is_let_item: bool,
+		signature_only: bool,
+	) -> String {
+		print_declaration(self, db, model, idx, is_let_item, signature_only)
+	}
+	/// Pretty print an enumeration
+	fn print_enumeration(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: EnumerationId<'db, T>,
+		signature_only: bool,
+	) -> String {
+		print_enumeration(self, db, model, idx, signature_only)
+	}
+	/// Pretty print a function
+	fn print_function(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: FunctionId<'db, T>,
+		signature_only: bool,
+	) -> String {
+		print_function(self, db, model, idx, signature_only)
+	}
+	/// Pretty print an output item
+	fn print_output(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		idx: OutputId<'db, T>,
+	) -> String {
+		print_output(self, db, model, idx)
+	}
+	/// Pretty print the solve item
+	fn print_solve(&self, db: &'db dyn Db, model: &Model<'db, T>) -> String {
+		print_solve(self, db, model)
+	}
+	/// Pretty print an expression
+	fn print_expression(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		expression: &Expression<'db, T>,
+	) -> String {
+		maybe_grow_stack(|| print_expression(self, db, model, expression))
+	}
+	/// Pretty print a domain
+	fn print_domain(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		domain: &Domain<'db, T>,
+	) -> String {
+		maybe_grow_stack(|| print_domain(self, db, model, domain))
+	}
+	/// Pretty print a generator
+	fn print_generator(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		g: &Generator<'db, T>,
+	) -> String {
+		print_generator(self, db, model, g)
+	}
+	/// Pretty print a pattern
+	fn print_pattern(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		pat: &Pattern<'db, T>,
+	) -> String {
+		print_pattern(self, db, model, pat)
+	}
+	/// Pretty print the name of an annotation
+	fn print_annotation_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		a: AnnotationId<'db, T>,
+	) -> String {
+		print_annotation_id(self, db, model, a)
+	}
+	/// Pretty print the name of a declaration
+	fn print_declaration_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		d: DeclarationId<'db, T>,
+	) -> String {
+		print_declaration_id(self, db, model, d)
+	}
+	/// Pretty print the name of an enumeration
+	fn print_function_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		f: FunctionId<'db, T>,
+	) -> String {
+		print_function_id(self, db, model, f)
+	}
+	/// Pretty print the name of an enumeration
+	fn print_enumeration_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		e: EnumerationId<'db, T>,
+	) -> String {
+		print_enumeration_id(self, db, model, e)
+	}
+	/// Pretty print the name of an enumeration member
+	fn print_enumeration_member_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		m: EnumMemberId<'db, T>,
+	) -> String {
+		print_enumeration_member_id(self, db, model, m)
+	}
+}
 
-	fn pretty_print_enumeration_member_id(&self, m: EnumMemberId<'db, T>) -> String {
-		self.model[m]
-			.name
-			.map(|n| n.pretty_print(self.db))
-			.unwrap_or_else(|| {
-				format!(
-					"_EM_{}_{}",
-					self.model[m.enumeration_id()]
-						.enum_type()
-						.pretty_print(self.db),
-					m.member_index()
+/// Default implementation for printing a model
+pub fn print_model<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+) -> String {
+	let mut buf = String::new();
+	for item in model.top_level_items() {
+		writeln!(&mut buf, "{};", print_item(printer, db, model, item)).unwrap();
+	}
+	if model.solve().is_none() {
+		writeln!(&mut buf, "solve satisfy;").unwrap();
+	}
+	buf
+}
+
+/// Default implementation for printing a signature of an item
+pub fn print_signature<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	item: ItemId<'db, T>,
+) -> String {
+	match item {
+		ItemId::Annotation(i) => printer.print_annotation(db, model, i),
+		ItemId::Constraint(i) => printer.print_constraint(db, model, i),
+		ItemId::Declaration(i) => printer.print_declaration(db, model, i, false, true),
+		ItemId::Enumeration(i) => printer.print_enumeration(db, model, i, true),
+		ItemId::Function(i) => printer.print_function(db, model, i, true),
+		ItemId::Output(i) => printer.print_output(db, model, i),
+		ItemId::Solve => printer.print_solve(db, model),
+	}
+}
+/// Default implementation for printing an item
+pub fn print_item<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	item: ItemId<'db, T>,
+) -> String {
+	match item {
+		ItemId::Annotation(i) => printer.print_annotation(db, model, i),
+		ItemId::Constraint(i) => printer.print_constraint(db, model, i),
+		ItemId::Declaration(i) => printer.print_declaration(db, model, i, false, false),
+		ItemId::Enumeration(i) => printer.print_enumeration(db, model, i, false),
+		ItemId::Function(i) => printer.print_function(db, model, i, false),
+		ItemId::Output(i) => printer.print_output(db, model, i),
+		ItemId::Solve => printer.print_solve(db, model),
+	}
+}
+/// Default implementation for printing an annotation
+pub fn print_annotation<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	idx: AnnotationId<'db, T>,
+) -> String {
+	let annotation = &model[idx];
+	let mut buf = format!("annotation {}", printer.print_annotation_id(db, model, idx));
+	if let Some(params) = &annotation.parameters {
+		write!(
+			&mut buf,
+			"({})",
+			params
+				.iter()
+				.map(|p| printer.print_declaration(db, model, *p, false, true))
+				.collect::<Vec<_>>()
+				.join(", ")
+		)
+		.unwrap();
+	}
+	buf
+}
+/// Default implementation for printing a constraint
+pub fn print_constraint<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	idx: ConstraintId<'db, T>,
+) -> String {
+	let constraint = &model[idx];
+	let mut buf = "constraint ".to_owned();
+	for ann in constraint.annotations().iter() {
+		write!(
+			&mut buf,
+			":: ({}) ",
+			printer.print_expression(db, model, ann)
+		)
+		.unwrap();
+	}
+	write!(
+		&mut buf,
+		"{}",
+		printer.print_expression(db, model, constraint.expression())
+	)
+	.unwrap();
+	buf
+}
+/// Default implementation for printing a declaration
+pub fn print_declaration<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	idx: DeclarationId<'db, T>,
+	is_let_item: bool,
+	signature_only: bool,
+) -> String {
+	let declaration = &model[idx];
+	let ty = declaration.ty();
+	let mut buf =
+		if is_let_item && ty.contains_type_inst_var(db) && declaration.definition().is_some()
+			|| ty == TypeRegistry::lookup(db).bottom
+		{
+			"any".to_owned()
+		} else {
+			printer.print_domain(db, model, declaration.domain())
+		};
+	write!(
+		&mut buf,
+		": {}",
+		printer.print_declaration_id(db, model, idx)
+	)
+	.unwrap();
+	for ann in declaration.annotations().iter() {
+		write!(
+			&mut buf,
+			" :: ({})",
+			printer.print_expression(db, model, ann)
+		)
+		.unwrap();
+	}
+	if !signature_only && let Some(def) = declaration.definition() {
+		write!(&mut buf, " = {}", printer.print_expression(db, model, def)).unwrap();
+	}
+	buf
+}
+/// Default implementation for printing an enumeration
+pub fn print_enumeration<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	idx: EnumerationId<'db, T>,
+	signature_only: bool,
+) -> String {
+	let enumeration = &model[idx];
+	let enum_name = printer.print_enumeration_id(db, model, idx);
+	let mut buf = format!("enum {}", enum_name);
+	for ann in enumeration.annotations().iter() {
+		write!(
+			&mut buf,
+			" :: ({})",
+			printer.print_expression(db, model, ann)
+		)
+		.unwrap();
+	}
+	if !signature_only && let Some(cases) = enumeration.definition() {
+		write!(
+			&mut buf,
+			" = {}",
+			cases
+				.iter()
+				.enumerate()
+				.map(|(i, c)| {
+					let name = printer.print_enumeration_member_id(
+						db,
+						model,
+						EnumMemberId::new(idx, i as u32),
+					);
+					match &c.parameters {
+						Some(ps) => format!(
+							"{}({})",
+							name,
+							ps.iter()
+								.map(|d| printer.print_domain(db, model, model[*d].domain()))
+								.collect::<Vec<_>>()
+								.join(", ")
+						),
+						None => format!("{{ {} }}", name),
+					}
+				})
+				.collect::<Vec<_>>()
+				.join(" ++ ")
+		)
+		.unwrap();
+	}
+	buf
+}
+/// Default implementation for printing a function
+pub fn print_function<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	idx: FunctionId<'db, T>,
+	signature_only: bool,
+) -> String {
+	let function = &model[idx];
+	let name = printer.print_function_id(db, model, idx);
+	let mut buf = String::new();
+	if function.body().is_none()
+		&& function.return_type() == TypeRegistry::lookup(db).var_bool
+		&& !name.starts_with('\'')
+	{
+		write!(&mut buf, "predicate").unwrap();
+	} else {
+		write!(
+			&mut buf,
+			"function {}:",
+			printer.print_domain(db, model, function.domain())
+		)
+		.unwrap();
+	}
+	write!(
+		&mut buf,
+		" {}({})",
+		name,
+		function
+			.parameters()
+			.iter()
+			.map(|p| printer.print_declaration(db, model, *p, false, signature_only))
+			.collect::<Vec<_>>()
+			.join(", ")
+	)
+	.unwrap();
+	for ann in function.annotations().iter() {
+		write!(
+			&mut buf,
+			" :: ({})",
+			printer.print_expression(db, model, ann)
+		)
+		.unwrap();
+	}
+	if !signature_only && let Some(body) = function.body() {
+		write!(&mut buf, " = {}", printer.print_expression(db, model, body)).unwrap();
+	}
+	buf
+}
+/// Default implementation for printing an output item
+pub fn print_output<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	idx: OutputId<'db, T>,
+) -> String {
+	let output = &model[idx];
+	let mut buf = "output ".to_owned();
+	if let Some(s) = output.section() {
+		write!(&mut buf, ":: {} ", printer.print_expression(db, model, s)).unwrap();
+	}
+	write!(
+		&mut buf,
+		"{}",
+		printer.print_expression(db, model, output.expression())
+	)
+	.unwrap();
+	buf
+}
+/// Default implementation for printing the solve item
+pub fn print_solve<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+) -> String {
+	let solve = model.solve().unwrap();
+	let mut buf = "solve ".to_owned();
+	for ann in solve.annotations().iter() {
+		write!(
+			&mut buf,
+			":: ({}) ",
+			printer.print_expression(db, model, ann)
+		)
+		.unwrap();
+	}
+	match solve.goal() {
+		Goal::Satisfy => write!(&mut buf, "satisfy").unwrap(),
+		Goal::Maximize { objective } => write!(
+			&mut buf,
+			"maximize {}",
+			printer.print_declaration_id(db, model, *objective)
+		)
+		.unwrap(),
+		Goal::Minimize { objective } => write!(
+			&mut buf,
+			"minimize {}",
+			printer.print_declaration_id(db, model, *objective)
+		)
+		.unwrap(),
+	};
+	buf
+}
+/// Default implementation for printing a domain
+pub fn print_domain<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	domain: &Domain<'db, T>,
+) -> String {
+	let ty = domain.ty();
+	match &**domain {
+		DomainData::Array(dim, el) => {
+			let dims = match &***dim {
+				DomainData::Tuple(ds) => ds
+					.iter()
+					.map(|d| printer.print_domain(db, model, d))
+					.collect::<Vec<_>>()
+					.join(", "),
+				DomainData::Unbounded => ty.dim_ty(db).unwrap().pretty_print_as_dims(db),
+				_ => printer.print_domain(db, model, dim),
+			};
+			ty.opt(db)
+				.into_iter()
+				.flat_map(|o| o.pretty_print())
+				.chain([format!(
+					"array [{}] of {}",
+					dims,
+					printer.print_domain(db, model, el)
+				)])
+				.collect::<Vec<_>>()
+				.join(" ")
+		}
+		DomainData::Bounded(e) => ty
+			.inst(db)
+			.into_iter()
+			.flat_map(|i| i.pretty_print())
+			.chain(ty.opt(db).into_iter().flat_map(|o| o.pretty_print()))
+			.chain([printer.print_expression(db, model, e)])
+			.collect::<Vec<_>>()
+			.join(" "),
+		DomainData::Set(s, None) => ty
+			.inst(db)
+			.into_iter()
+			.flat_map(|i| i.pretty_print())
+			.chain(ty.opt(db).into_iter().flat_map(|o| o.pretty_print()))
+			.chain(["set of".to_owned()])
+			.chain([printer.print_domain(db, model, s)])
+			.collect::<Vec<_>>()
+			.join(" "),
+		DomainData::Set(s, Some(c)) => ty
+			.inst(db)
+			.into_iter()
+			.flat_map(|i| i.pretty_print())
+			.chain(ty.opt(db).into_iter().flat_map(|o| o.pretty_print()))
+			.chain(["set(".to_owned()])
+			.chain([printer.print_expression(db, model, c)])
+			.chain([") of ".to_owned()])
+			.chain([printer.print_domain(db, model, s)])
+			.collect::<Vec<_>>()
+			.join(" "),
+		DomainData::Tuple(ds) => {
+			let doms = ds
+				.iter()
+				.map(|d| printer.print_domain(db, model, d))
+				.collect::<Vec<_>>()
+				.join(", ");
+			ty.inst(db)
+				.into_iter()
+				.flat_map(|i| i.pretty_print())
+				.chain(ty.opt(db).into_iter().flat_map(|o| o.pretty_print()))
+				.chain([format!("tuple({})", doms)])
+				.collect::<Vec<_>>()
+				.join(" ")
+		}
+		DomainData::Record(ds) => {
+			let doms = ds
+				.iter()
+				.map(|(i, d)| {
+					format!(
+						"{}: {}",
+						printer.print_domain(db, model, d),
+						i.pretty_print(db)
+					)
+				})
+				.collect::<Vec<_>>()
+				.join(", ");
+			ty.inst(db)
+				.into_iter()
+				.flat_map(|i| i.pretty_print())
+				.chain(ty.opt(db).into_iter().flat_map(|o| o.pretty_print()))
+				.chain([format!("record({})", doms)])
+				.collect::<Vec<_>>()
+				.join(" ")
+		}
+		DomainData::Unbounded => ty.pretty_print(db),
+	}
+}
+/// Default implementation for printing an expression
+pub fn print_expression<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	expression: &Expression<'db, T>,
+) -> String {
+	let mut out = match &**expression {
+		ExpressionData::Absent => "<>".to_owned(),
+		ExpressionData::ArrayComprehension(c) => {
+			let mut buf = String::new();
+			write!(&mut buf, "[").unwrap();
+			if let Some(i) = &c.indices {
+				write!(&mut buf, "{}: ", printer.print_expression(db, model, i)).unwrap();
+			}
+			write!(
+				&mut buf,
+				"{} | {}]",
+				printer.print_expression(db, model, &c.template),
+				c.generators
+					.iter()
+					.map(|g| printer.print_generator(db, model, g))
+					.collect::<Vec<_>>()
+					.join(", ")
+			)
+			.unwrap();
+			buf
+		}
+		ExpressionData::ArrayLiteral(al) => format!(
+			"[{}]",
+			al.iter()
+				.map(|e| printer.print_expression(db, model, e))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		ExpressionData::BooleanLiteral(b) => {
+			if b.0 {
+				"true".to_owned()
+			} else {
+				"false".to_owned()
+			}
+		}
+		ExpressionData::Call(c) => {
+			let f = match &c.function {
+				Callable::Annotation(a) => printer.print_annotation_id(db, model, *a),
+				Callable::AnnotationDestructure(a) => model[*a]
+					.name
+					.map(|n| n.inversed(db).pretty_print(db))
+					.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
+				Callable::EnumConstructor(m) => printer.print_enumeration_member_id(db, model, *m),
+				Callable::EnumDestructor(m) => model[*m]
+					.name
+					.map(|n| n.inversed(db).pretty_print(db))
+					.unwrap_or_else(|| {
+						format!(
+							"_EM_{}_{}⁻¹",
+							model[m.enumeration_id()].enum_type().pretty_print(db),
+							m.member_index()
+						)
+					}),
+				Callable::Function(f) => printer.print_function_id(db, model, *f),
+				Callable::Expression(e) => format!("({})", printer.print_expression(db, model, e)),
+			};
+			format!(
+				"{}({})",
+				f,
+				c.arguments
+					.iter()
+					.map(|a| printer.print_expression(db, model, a))
+					.collect::<Vec<_>>()
+					.join(", ")
+			)
+		}
+		ExpressionData::Case(c) => format!(
+			"case {} of {} endcase",
+			printer.print_expression(db, model, &c.scrutinee),
+			c.branches
+				.iter()
+				.map(|b| format!(
+					"{} => {}",
+					printer.print_pattern(db, model, &b.pattern),
+					printer.print_expression(db, model, &b.result)
+				))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		ExpressionData::FloatLiteral(f) => {
+			let value = f.value();
+			if value.fract() == 0.0 {
+				format!("{}.0", value)
+			} else {
+				format!("{}", value)
+			}
+		}
+		ExpressionData::Identifier(i) => match i {
+			ResolvedIdentifier::Annotation(a) => printer.print_annotation_id(db, model, *a),
+			ResolvedIdentifier::Declaration(d) => printer.print_declaration_id(db, model, *d),
+			ResolvedIdentifier::Enumeration(e) => printer.print_enumeration_id(db, model, *e),
+			ResolvedIdentifier::EnumerationMember(m) => {
+				printer.print_enumeration_member_id(db, model, *m)
+			}
+		},
+		ExpressionData::IfThenElse(ite) => {
+			let mut buf = String::new();
+			let mut bs = ite.branches.iter();
+			let first = bs.next().expect("No branches in if-then-else");
+			write!(
+				&mut buf,
+				"if {} then {} ",
+				printer.print_expression(db, model, &first.condition),
+				printer.print_expression(db, model, &first.result)
+			)
+			.unwrap();
+			for branch in bs {
+				write!(
+					&mut buf,
+					"elseif {} then {} ",
+					printer.print_expression(db, model, &branch.condition),
+					printer.print_expression(db, model, &branch.result)
 				)
-			})
+				.unwrap();
+			}
+			write!(
+				&mut buf,
+				"else {} endif",
+				printer.print_expression(db, model, &ite.else_result)
+			)
+			.unwrap();
+			buf
+		}
+		ExpressionData::Infinity => "infinity".to_owned(),
+		ExpressionData::IntegerLiteral(i) => format!("{}", i.0),
+		ExpressionData::Lambda(l) => format!(
+			"lambda {}: ({}) => {}",
+			printer.print_domain(db, model, model[**l].domain()),
+			model[**l]
+				.parameters()
+				.iter()
+				.map(|p| printer.print_declaration(db, model, *p, false, true))
+				.collect::<Vec<_>>()
+				.join(", "),
+			printer.print_expression(db, model, model[**l].body().unwrap())
+		),
+		ExpressionData::Let(l) => {
+			let mut buf = String::new();
+			writeln!(&mut buf, "let {{").unwrap();
+			for item in l.items.iter() {
+				match item {
+					LetItem::Constraint(c) => {
+						writeln!(&mut buf, "  {};", printer.print_constraint(db, model, *c))
+							.unwrap()
+					}
+					LetItem::Declaration(d) => writeln!(
+						&mut buf,
+						"  {};",
+						printer.print_declaration(db, model, *d, true, false)
+					)
+					.unwrap(),
+				}
+			}
+			write!(
+				&mut buf,
+				"}} in {}",
+				printer.print_expression(db, model, &l.in_expression)
+			)
+			.unwrap();
+			buf
+		}
+		ExpressionData::RecordAccess(ra) => format!(
+			"({}).{}",
+			printer.print_expression(db, model, &ra.record),
+			ra.field.pretty_print(db)
+		),
+		ExpressionData::RecordLiteral(fs) => format!(
+			"({})",
+			fs.iter()
+				.map(|(i, e)| format!(
+					"{}: {}",
+					i.pretty_print(db),
+					printer.print_expression(db, model, e)
+				))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		ExpressionData::SetComprehension(c) => format!(
+			"{{{} | {}}}",
+			printer.print_expression(db, model, &c.template),
+			c.generators
+				.iter()
+				.map(|g| printer.print_generator(db, model, g))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		ExpressionData::SetLiteral(sl) => format!(
+			"{{{}}}",
+			sl.iter()
+				.map(|e| printer.print_expression(db, model, e))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		ExpressionData::StringLiteral(s) => format!("{:?}", s.value(db)),
+		ExpressionData::TupleAccess(ta) => format!(
+			"({}).{}",
+			printer.print_expression(db, model, &ta.tuple),
+			ta.field.0
+		),
+		ExpressionData::TupleLiteral(fs) => {
+			let fields = fs
+				.iter()
+				.map(|f| printer.print_expression(db, model, f))
+				.collect::<Vec<_>>()
+				.join(", ");
+			let end = if fs.len() <= 1 { "," } else { "" };
+			format!("({}{})", fields, end)
+		}
+	};
+	for ann in expression.annotations().iter() {
+		write!(
+			&mut out,
+			" :: ({})",
+			printer.print_expression(db, model, ann)
+		)
+		.unwrap();
 	}
+	out
+}
+/// Default implementation for printing a generator
+pub fn print_generator<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	g: &Generator<'db, T>,
+) -> String {
+	let (mut gtor, where_clause) = match g {
+		Generator::Iterator {
+			declarations,
+			collection,
+			where_clause,
+		} => (
+			format!(
+				"{} in {}",
+				declarations
+					.iter()
+					.map(|d| model[*d]
+						.name()
+						.map(|n| n.pretty_print(db))
+						.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d))))
+					.collect::<Vec<_>>()
+					.join(", "),
+				printer.print_expression(db, model, collection)
+			),
+			where_clause,
+		),
+		Generator::Assignment {
+			assignment,
+			where_clause,
+		} => {
+			let decl = &model[*assignment];
+			(
+				format!(
+					"{}{} = {}",
+					decl.name()
+						.map(|n| n.pretty_print(db))
+						.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
+					decl.annotations()
+						.iter()
+						.map(|ann| format!(" :: ({})", printer.print_expression(db, model, ann)))
+						.collect::<Vec<_>>()
+						.join(""),
+					printer.print_expression(db, model, decl.definition().unwrap()),
+				),
+				where_clause,
+			)
+		}
+	};
+	if let Some(where_clause) = where_clause {
+		write!(
+			&mut gtor,
+			" where {}",
+			printer.print_expression(db, model, where_clause)
+		)
+		.unwrap();
+	}
+	gtor
+}
+/// Default implementation for printing a pattern
+pub fn print_pattern<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	pat: &Pattern<'db, T>,
+) -> String {
+	match &**pat {
+		PatternData::Anonymous(_) => "_".to_owned(),
+		PatternData::Expression(e) => printer.print_expression(db, model, e),
+		PatternData::Tuple(fs) => format!(
+			"({})",
+			fs.iter()
+				.map(|p| printer.print_pattern(db, model, p))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		PatternData::Record(fs) => format!(
+			"({})",
+			fs.iter()
+				.map(|(i, p)| format!(
+					"{}: {}",
+					i.pretty_print(db),
+					printer.print_pattern(db, model, p)
+				))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		PatternData::EnumConstructor { member, args, .. } => format!(
+			"{}({})",
+			printer.print_enumeration_member_id(db, model, *member),
+			args.iter()
+				.map(|p| printer.print_pattern(db, model, p))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+		PatternData::AnnotationConstructor { item, args } => format!(
+			"{}({})",
+			printer.print_annotation_id(db, model, *item),
+			args.iter()
+				.map(|p| printer.print_pattern(db, model, p))
+				.collect::<Vec<_>>()
+				.join(", ")
+		),
+	}
+}
+/// Default implementation for printing the name of an annotation
+pub fn print_annotation_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	a: AnnotationId<'db, T>,
+) -> String {
+	model[a]
+		.name
+		.map(|n| n.pretty_print(db))
+		.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(a)))
+}
+/// Default implementation for printing the name of a declaration
+pub fn print_declaration_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	d: DeclarationId<'db, T>,
+) -> String {
+	model[d]
+		.name()
+		.map(|n| n.pretty_print(db))
+		.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)))
+}
+/// Default implementation for printing the name of a function
+pub fn print_function_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	f: FunctionId<'db, T>,
+) -> String {
+	let name = if let Some(tys) = model[f].mangled_param_tys() {
+		model[f].name().mangled(db, tys.iter().copied())
+	} else {
+		model[f].name().as_identifier(db)
+	};
+	name.pretty_print(db)
+}
+/// Default implementation for printing the name of an enumeration
+pub fn print_enumeration_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	e: EnumerationId<'db, T>,
+) -> String {
+	model[e].enum_type().pretty_print(db)
+}
+/// Default implementation for printing the name of an enumeration member
+pub fn print_enumeration_member_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	m: EnumMemberId<'db, T>,
+) -> String {
+	model[m]
+		.name
+		.map(|n| n.pretty_print(db))
+		.unwrap_or_else(|| {
+			format!(
+				"_EM_{}_{}",
+				model[m.enumeration_id()].enum_type().pretty_print(db),
+				m.member_index()
+			)
+		})
 }

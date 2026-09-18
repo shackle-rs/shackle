@@ -650,11 +650,42 @@ mod tests {
 		input::{CompilerSettings, InlineModelFile, InputFiles},
 	};
 	use shackle_syntax::InputLang;
+	use shackle_utils::maybe_grow_stack;
 
 	use super::ModeAnalysis;
 	use crate::{
-		lower::lower_model, pretty_print::PrettyPrinter, transform::inlining::inline_functions,
+		Marker,
+		lower::lower_model,
+		pretty_print::{Printer, print_expression, print_item},
+		transform::inlining::inline_functions,
 	};
+
+	struct ContextAnnotatingPrinter<'m, 'a, 'db, T: Marker> {
+		fn_root: bool,
+		analysis: &'m ModeAnalysis<'a, 'db, T>,
+	}
+
+	impl<'m, 'a, 'db, T: Marker> Printer<'db, T> for ContextAnnotatingPrinter<'m, 'a, 'db, T> {
+		fn print_expression(
+			&self,
+			db: &'db dyn shackle_hir::Db,
+			model: &crate::Model<'db, T>,
+			expression: &crate::Expression<'db, T>,
+		) -> String {
+			maybe_grow_stack(|| {
+				let inner = print_expression(self, db, model, expression);
+				if self.fn_root {
+					format!(
+						"{} :: {}",
+						inner,
+						self.analysis.get_in_root_fn(expression).as_str()
+					)
+				} else {
+					format!("{} :: {}", inner, self.analysis.get(expression).as_str())
+				}
+			})
+		}
+	}
 
 	fn check_bool_ctx(program: &str, expected: Expect, fn_root: bool) {
 		let mut db = CompilerDatabase::default();
@@ -666,14 +697,10 @@ mod tests {
 		let mut model = lower_model(&db).take();
 		model = inline_functions(&db, model).unwrap();
 		let result = ModeAnalysis::analyse(&db, &model);
-		let mut printer = PrettyPrinter::new(&db, &model);
-		printer.expression_annotator = Some(Box::new(|e| {
-			if fn_root {
-				Some(result.get_in_root_fn(e).as_str().to_owned())
-			} else {
-				Some(result.get(e).as_str().to_owned())
-			}
-		}));
+		let printer = ContextAnnotatingPrinter {
+			fn_root,
+			analysis: &result,
+		};
 		let to_print = model
 			.top_level_items()
 			.filter(|it| match model.item_origin(*it).node() {
@@ -684,7 +711,7 @@ mod tests {
 			});
 		let mut pretty = String::new();
 		for item in to_print {
-			pretty.push_str(&printer.pretty_print_item(item));
+			pretty.push_str(&print_item(&printer, &db, &model, item));
 			pretty.push_str(";\n");
 		}
 		expected.assert_eq(&pretty);
@@ -720,20 +747,20 @@ mod tests {
     function var bool: 'not'(var bool: x);
     var bool: a;
     var bool: b;
-    constraint forall([a:: ctx_root, b:: ctx_root]:: ctx_root):: ctx_root;
+    constraint forall([a :: ctx_root, b :: ctx_root] :: ctx_root) :: ctx_root;
     var bool: c;
     var int: d;
     predicate foo(var bool: c, var int: d);
-    constraint foo(c:: ctx_non_root, d:: ctx_root):: ctx_root;
+    constraint foo(c :: ctx_non_root, d :: ctx_root) :: ctx_root;
     var bool: e;
     var bool: f;
-    constraint 'not'('\/'(e:: ctx_root_neg, f:: ctx_root_neg):: ctx_root_neg):: ctx_root;
+    constraint 'not'('\/'(e :: ctx_root_neg, f :: ctx_root_neg) :: ctx_root_neg) :: ctx_root;
     var int: g = let {
-      var int: h = 1:: ctx_root;
-      var bool: p = true:: ctx_non_root;
-      var bool: q = true:: ctx_root;
-      constraint q:: ctx_root;
-    } in h:: ctx_root:: ctx_root;
+      var int: h = 1 :: ctx_root;
+      var bool: p = true :: ctx_non_root;
+      var bool: q = true :: ctx_root;
+      constraint q :: ctx_root;
+    } in h :: ctx_root :: ctx_root;
 "#]],
 			false,
 		)
@@ -754,8 +781,8 @@ mod tests {
     function var bool: '>'(var int: x, var int: y);
     function var int: '+'(var int: x, var int: y);
     function var int: foo(var int: x, var int: y) = let {
-      constraint '>'(x:: ctx_non_root, y:: ctx_non_root):: ctx_non_root;
-    } in '+'(x:: ctx_non_root, y:: ctx_non_root):: ctx_non_root:: ctx_non_root;
+      constraint '>'(x :: ctx_non_root, y :: ctx_non_root) :: ctx_non_root;
+    } in '+'(x :: ctx_non_root, y :: ctx_non_root) :: ctx_non_root :: ctx_non_root;
 "#]],
 			false,
 		);
@@ -765,8 +792,8 @@ mod tests {
     function var bool: '>'(var int: x, var int: y);
     function var int: '+'(var int: x, var int: y);
     function var int: foo(var int: x, var int: y) = let {
-      constraint '>'(x:: ctx_root, y:: ctx_root):: ctx_root;
-    } in '+'(x:: ctx_root, y:: ctx_root):: ctx_root:: ctx_root;
+      constraint '>'(x :: ctx_root, y :: ctx_root) :: ctx_root;
+    } in '+'(x :: ctx_root, y :: ctx_root) :: ctx_root :: ctx_root;
 "#]],
 			true,
 		);
@@ -785,8 +812,8 @@ mod tests {
 			expect![[r#"
     function var set of int: foo() = let {
       var bool: b;
-      constraint b:: ctx_non_root;
-    } in {1:: ctx_non_root, 3:: ctx_non_root, 5:: ctx_non_root}:: ctx_non_root:: ctx_non_root;
+      constraint b :: ctx_non_root;
+    } in {1 :: ctx_non_root, 3 :: ctx_non_root, 5 :: ctx_non_root} :: ctx_non_root :: ctx_non_root;
 "#]],
 			false,
 		);
@@ -795,8 +822,8 @@ mod tests {
 			expect![[r#"
     function var set of int: foo() = let {
       var bool: b;
-      constraint b:: ctx_root;
-    } in {1:: ctx_root, 3:: ctx_root, 5:: ctx_root}:: ctx_root:: ctx_root;
+      constraint b :: ctx_root;
+    } in {1 :: ctx_root, 3 :: ctx_root, 5 :: ctx_root} :: ctx_root :: ctx_root;
 "#]],
 			true,
 		);
@@ -817,8 +844,8 @@ mod tests {
     function bool: abort(string: msg);
     function bool: bar(int: x);
     function int: foo(int: x) = let {
-      constraint if bar(x:: ctx_non_root):: ctx_non_root then abort("foo":: ctx_root):: ctx_root else true:: ctx_root endif:: ctx_root;
-    } in x:: ctx_non_root:: ctx_non_root;
+      constraint if bar(x :: ctx_non_root) :: ctx_non_root then abort("foo" :: ctx_root) :: ctx_root else true :: ctx_root endif :: ctx_root;
+    } in x :: ctx_non_root :: ctx_non_root;
 "#]],
 			false,
 		);
@@ -828,8 +855,8 @@ mod tests {
     function bool: abort(string: msg);
     function bool: bar(int: x);
     function int: foo(int: x) = let {
-      constraint if bar(x:: ctx_non_root):: ctx_non_root then abort("foo":: ctx_root):: ctx_root else true:: ctx_root endif:: ctx_root;
-    } in x:: ctx_root:: ctx_root;
+      constraint if bar(x :: ctx_non_root) :: ctx_non_root then abort("foo" :: ctx_root) :: ctx_root else true :: ctx_root endif :: ctx_root;
+    } in x :: ctx_root :: ctx_root;
 "#]],
 			true,
 		);
@@ -845,7 +872,7 @@ mod tests {
 			program,
 			expect![[r#"
     function var int: mzn_default_partial(var int: _DECL_1, var int: _DECL_2);
-    function var int: foo() = mzn_default_partial(1:: ctx_non_root, 2:: ctx_non_root):: ctx_non_root;
+    function var int: foo() = mzn_default_partial(1 :: ctx_non_root, 2 :: ctx_non_root) :: ctx_non_root;
 "#]],
 			false,
 		);
@@ -853,7 +880,7 @@ mod tests {
 			program,
 			expect![[r#"
     function var int: mzn_default_partial(var int: _DECL_1, var int: _DECL_2);
-    function var int: foo() = mzn_default_partial(1:: ctx_non_root, 2:: ctx_non_root):: ctx_root;
+    function var int: foo() = mzn_default_partial(1 :: ctx_non_root, 2 :: ctx_non_root) :: ctx_root;
 "#]],
 			true,
 		);
@@ -875,10 +902,10 @@ mod tests {
 			expect![[r#"
     annotation promise_total;
     predicate bar(var int: x, var bool: r);
-    function var int: foo(var int: x) :: (promise_total:: ctx_root) = let {
+    function var int: foo(var int: x) :: (promise_total :: ctx_root) = let {
       var bool: r;
-      constraint bar(x:: ctx_root, r:: ctx_non_root):: ctx_root;
-    } in r:: ctx_root:: ctx_root;
+      constraint bar(x :: ctx_root, r :: ctx_non_root) :: ctx_root;
+    } in r :: ctx_root :: ctx_root;
 "#]],
 			false,
 		);
@@ -887,10 +914,10 @@ mod tests {
 			expect![[r#"
     annotation promise_total;
     predicate bar(var int: x, var bool: r);
-    function var int: foo(var int: x) :: (promise_total:: ctx_root) = let {
+    function var int: foo(var int: x) :: (promise_total :: ctx_root) = let {
       var bool: r;
-      constraint bar(x:: ctx_root, r:: ctx_non_root):: ctx_root;
-    } in r:: ctx_root:: ctx_root;
+      constraint bar(x :: ctx_root, r :: ctx_non_root) :: ctx_root;
+    } in r :: ctx_root :: ctx_root;
 "#]],
 			true,
 		);
@@ -912,10 +939,10 @@ mod tests {
 			expect![[r#"
     annotation promise_total;
     predicate bar(var int: x, var int: r);
-    function var int: foo(var int: x) :: (promise_total:: ctx_root) = let {
+    function var int: foo(var int: x) :: (promise_total :: ctx_root) = let {
       var int: r;
-      constraint bar(x:: ctx_root, r:: ctx_root):: ctx_root;
-    } in r:: ctx_root:: ctx_root;
+      constraint bar(x :: ctx_root, r :: ctx_root) :: ctx_root;
+    } in r :: ctx_root :: ctx_root;
 "#]],
 			false,
 		);
@@ -924,10 +951,10 @@ mod tests {
 			expect![[r#"
     annotation promise_total;
     predicate bar(var int: x, var int: r);
-    function var int: foo(var int: x) :: (promise_total:: ctx_root) = let {
+    function var int: foo(var int: x) :: (promise_total :: ctx_root) = let {
       var int: r;
-      constraint bar(x:: ctx_root, r:: ctx_root):: ctx_root;
-    } in r:: ctx_root:: ctx_root;
+      constraint bar(x :: ctx_root, r :: ctx_root) :: ctx_root;
+    } in r :: ctx_root :: ctx_root;
 "#]],
 			true,
 		);
