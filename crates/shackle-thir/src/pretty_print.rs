@@ -3,14 +3,14 @@
 
 use std::fmt::Write;
 
-use shackle_hir::{constants::IdentifierRegistry, input::shackle_share_directory};
+use shackle_hir::{Identifier, constants::IdentifierRegistry, input::shackle_share_directory};
 use shackle_ty::registry::TypeRegistry;
 use shackle_utils::maybe_grow_stack;
 
 use crate::{
-	AnnotationId, Callable, ConstraintId, Db, DeclarationId, Domain, DomainData, EnumerationId,
-	Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem, Marker, Model,
-	OutputId, Pattern, PatternData, ResolvedIdentifier,
+	AnnotationId, Callable, ConstraintId, Db, DeclarationId, Domain, DomainData, EnumMemberId,
+	EnumerationId, Expression, ExpressionData, FunctionId, Generator, Goal, ItemId, LetItem,
+	Marker, Model, OutputId, Pattern, PatternData, ResolvedIdentifier,
 };
 
 /// Callback which adds an annotation to a pretty-printed expression.
@@ -67,11 +67,20 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 							|| self.model[f].name() == self.ids.functions.mzn_slice_internal
 							|| self.model[f].name() == self.ids.functions.mzn_indexed_array =>
 					{
+						// These signatures aren't accepted by the old compiler, so don't print them
+						// Instead alternative implementations are provided in compat.mzn
 						continue;
 					}
 					ItemId::Annotation(a)
-						if self.model[a].name == Some(self.ids.annotations.output) =>
+						if self.model[a].name == Some(self.ids.annotations.output)
+							|| self.model[a]
+								.origin()
+								.node()
+								.and_then(|n| n.model_file(self.db).name(self.db))
+								.map(|n| n.starts_with("stdlib_"))
+								.unwrap_or(false) =>
 					{
+						// These will conflict with stdlib annotations in the old compiler, so don't print them
 						continue;
 					}
 					_ => (),
@@ -122,11 +131,7 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 
 	fn pretty_print_annotation(&self, idx: AnnotationId<'db, T>) -> String {
 		let annotation = &self.model[idx];
-		let name = annotation
-			.name
-			.map(|i| i.pretty_print(self.db))
-			.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(idx)));
-		let mut buf = format!("annotation {}", name);
+		let mut buf = format!("annotation {}", self.pretty_print_annotation_id(idx));
 		if let Some(params) = &annotation.parameters {
 			write!(
 				&mut buf,
@@ -185,19 +190,7 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 		} else {
 			self.pretty_print_domain(declaration.domain())
 		};
-		write!(
-			&mut buf,
-			": {}",
-			declaration
-				.name()
-				.map(|name| if name.lookup(self.db) == "_objective" {
-					"_DECL_OBJ".to_owned()
-				} else {
-					name.pretty_print(self.db)
-				})
-				.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(idx)))
-		)
-		.unwrap();
+		write!(&mut buf, ": {}", self.pretty_print_declaration_id(idx)).unwrap();
 		for ann in declaration.annotations().iter() {
 			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
 		}
@@ -209,7 +202,7 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 
 	fn pretty_print_enumeration(&self, idx: EnumerationId<'db, T>, signature_only: bool) -> String {
 		let enumeration = &self.model[idx];
-		let enum_name = enumeration.enum_type().pretty_print(self.db);
+		let enum_name = self.pretty_print_enumeration_id(idx);
 		let mut buf = format!("enum {}", enum_name);
 		for ann in enumeration.annotations().iter() {
 			write!(&mut buf, " :: ({})", self.pretty_print_expression(ann)).unwrap();
@@ -222,10 +215,8 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 					.iter()
 					.enumerate()
 					.map(|(i, c)| {
-						let name = c
-							.name
-							.map(|n| n.pretty_print(self.db))
-							.unwrap_or_else(|| format!("_EM_{}_{}", enum_name, i));
+						let name = self
+							.pretty_print_enumeration_member_id(EnumMemberId::new(idx, i as u32));
 
 						match &c.parameters {
 							Some(ps) => {
@@ -249,17 +240,7 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 
 	fn pretty_print_function(&self, idx: FunctionId<'db, T>, signature_only: bool) -> String {
 		let function = &self.model[idx];
-		let name = (|| {
-			if let Some(tys) = function.mangled_param_tys()
-				&& (!self.old_compat || function.body().is_some())
-			{
-				return function
-					.name()
-					.mangled(self.db, tys.iter().copied())
-					.pretty_print(self.db);
-			}
-			function.name().pretty_print(self.db)
-		})();
+		let name = self.pretty_print_function_id(idx);
 		let mut buf = String::new();
 		if function.body().is_none()
 			&& function.return_type() == TypeRegistry::lookup(self.db).var_bool
@@ -352,12 +333,21 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 		for ann in solve.annotations().iter() {
 			write!(&mut buf, ":: ({}) ", self.pretty_print_expression(ann)).unwrap();
 		}
-		let s = match solve.goal() {
-			Goal::Satisfy => "satisfy",
-			Goal::Maximize { .. } => "maximize _DECL_OBJ",
-			Goal::Minimize { .. } => "minimize _DECL_OBJ",
+		match solve.goal() {
+			Goal::Satisfy => write!(&mut buf, "satisfy").unwrap(),
+			Goal::Maximize { objective } => write!(
+				&mut buf,
+				"maximize {}",
+				self.pretty_print_declaration_id(*objective)
+			)
+			.unwrap(),
+			Goal::Minimize { objective } => write!(
+				&mut buf,
+				"minimize {}",
+				self.pretty_print_declaration_id(*objective)
+			)
+			.unwrap(),
 		};
-		write!(&mut buf, "{}", s).unwrap();
 		buf
 	}
 
@@ -602,17 +592,7 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 									" \\/ "
 								});
 						}
-						(|| {
-							if let Some(tys) = self.model[*f].mangled_param_tys()
-								&& (!self.old_compat || self.model[*f].body().is_some())
-							{
-								return self.model[*f]
-									.name()
-									.mangled(self.db, tys.iter().copied())
-									.pretty_print(self.db);
-							}
-							name.pretty_print(self.db)
-						})()
+						self.pretty_print_function_id(*f)
 					}
 					Callable::Expression(e) => format!("({})", self.pretty_print_expression(e)),
 				};
@@ -652,48 +632,12 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 				}
 			}
 			ExpressionData::Identifier(i) => match i {
-				ResolvedIdentifier::Annotation(a) => self.model[*a]
-					.name
-					.map(|n| match &n.pretty_print(self.db)[..] {
-						"shackle_mzn_internal_representation" if self.old_compat => {
-							"mzn_internal_representation".to_owned()
-						}
-						"shackle_output_only" if self.old_compat => "output_only".to_owned(),
-						"shackle_promise_total" if self.old_compat => "promise_total".to_owned(),
-						"shackle_promise_commutative" if self.old_compat => {
-							"promise_commutative".to_owned()
-						}
-						"shackle_promise_ctx_monotone" if self.old_compat => {
-							"promise_ctx_monotone".to_owned()
-						}
-						"shackle_promise_ctx_antitone" if self.old_compat => {
-							"promise_ctx_antitone".to_owned()
-						}
-						"shackle_maybe_partial" if self.old_compat => "maybe_partial".to_owned(),
-						"shackle_output" if self.old_compat => "output".to_owned(),
-						n => n.to_owned(),
-					})
-					.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(*a))),
-
-				ResolvedIdentifier::Declaration(d) => self.model[*d]
-					.name()
-					.map(|n| n.pretty_print(self.db))
-					.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d))),
-				ResolvedIdentifier::Enumeration(e) => {
-					self.model[*e].enum_type().pretty_print(self.db)
+				ResolvedIdentifier::Annotation(a) => self.pretty_print_annotation_id(*a),
+				ResolvedIdentifier::Declaration(d) => self.pretty_print_declaration_id(*d),
+				ResolvedIdentifier::Enumeration(e) => self.pretty_print_enumeration_id(*e),
+				ResolvedIdentifier::EnumerationMember(m) => {
+					self.pretty_print_enumeration_member_id(*m)
 				}
-				ResolvedIdentifier::EnumerationMember(m) => self.model[*m]
-					.name
-					.map(|n| n.pretty_print(self.db))
-					.unwrap_or_else(|| {
-						format!(
-							"_EM_{}_{}",
-							self.model[m.enumeration_id()]
-								.enum_type()
-								.pretty_print(self.db),
-							m.member_index()
-						)
-					}),
 			},
 			ExpressionData::IfThenElse(ite) => {
 				let mut buf = String::new();
@@ -941,5 +885,70 @@ impl<'db, T: Marker> PrettyPrinter<'db, T> {
 				format!("{}({})", ctor, ps)
 			}
 		}
+	}
+
+	fn pretty_print_annotation_id(&self, a: AnnotationId<'db, T>) -> String {
+		self.model[a]
+			.name
+			.map(|n| n.pretty_print(self.db))
+			.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(a)))
+	}
+
+	fn pretty_print_declaration_id(&self, d: DeclarationId<'db, T>) -> String {
+		if self.old_compat
+			&& self.model[d].top_level()
+			&& let Some(name) = self.model[d].name()
+			&& (name == self.ids.names.objective
+				|| self.model[d]
+					.origin()
+					.node()
+					.and_then(|n| n.model_file(self.db).name(self.db))
+					.map(|n| n.starts_with("stdlib_"))
+					.unwrap_or(false))
+		{
+			return Identifier::new(self.db, format!("shackle_{}", name.lookup(self.db)))
+				.pretty_print(self.db);
+		}
+		self.model[d]
+			.name()
+			.map(|n| n.pretty_print(self.db))
+			.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(d)))
+	}
+
+	fn pretty_print_function_id(&self, f: FunctionId<'db, T>) -> String {
+		let name = if let Some(tys) = self.model[f].mangled_param_tys()
+			&& (!self.old_compat || self.model[f].body().is_some())
+		{
+			self.model[f].name().mangled(self.db, tys.iter().copied())
+		} else {
+			self.model[f].name().as_identifier(self.db)
+		};
+
+		if self.old_compat && self.model[f].body().is_some() {
+			// Prefix to avoid conflicts with stdlib functions in the old compiler
+			return Identifier::new(self.db, format!("shackle_{}", name.lookup(self.db)))
+				.pretty_print(self.db);
+		}
+
+		name.pretty_print(self.db)
+	}
+
+	fn pretty_print_enumeration_id(&self, e: EnumerationId<'db, T>) -> String {
+		self.model[e].enum_type().pretty_print(self.db)
+	}
+
+	fn pretty_print_enumeration_member_id(&self, m: EnumMemberId<'db, T>) -> String {
+		self.model[m]
+			.name
+			.map(|n| n.pretty_print(self.db))
+			.unwrap_or_else(|| {
+				format!(
+					"_EM_{}_{}",
+					self.model[m.enumeration_id()]
+						.enum_type()
+						.pretty_print(self.db),
+					m.member_index()
+				)
+			})
 	}
 }

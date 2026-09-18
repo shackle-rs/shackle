@@ -8,7 +8,6 @@ use shackle_diagnostics::Result;
 use totalise::totalise;
 
 use self::{
-	compat::old_compat,
 	// capturing_fn::decapture_model,
 	comprehension::desugar_comprehension,
 	dead_code::{eliminate_dead_code, eliminate_dead_code_conservative},
@@ -27,7 +26,6 @@ use super::Model;
 use crate::Db;
 
 pub mod capturing_fn;
-pub mod compat;
 pub mod comprehension;
 pub mod dead_code;
 pub mod domain_constraint;
@@ -74,7 +72,6 @@ pub fn thir_transforms() -> impl for<'db> FnMut(&'db dyn Db, Model<'db>) -> Resu
 		inline_functions,
 		totalise,
 		eliminate_dead_code,
-		old_compat,
 	];
 	transformer(fns)
 }
