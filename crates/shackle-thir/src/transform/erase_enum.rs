@@ -562,13 +562,12 @@ pub fn erase_enum<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db>>
 mod tests {
 	use expect_test::expect;
 
-	use super::erase_enum;
-	use crate::transform::{tests::check, transformer, type_specialise::type_specialise};
+	use crate::transform::{Transform, tests::check};
 
 	#[test]
 	fn test_enum_type_erasure() {
 		check(
-			transformer(vec![type_specialise, erase_enum]),
+			vec![Transform::TypeSpecialise, Transform::EraseEnum],
 			r#"
                 enum Foo = {A, B, C} ++ D(Bar);
 				enum Bar = {E, F};
@@ -604,7 +603,7 @@ mod tests {
 	#[test]
 	fn test_enum_show() {
 		check(
-			transformer(vec![type_specialise, erase_enum]),
+			vec![Transform::TypeSpecialise, Transform::EraseEnum],
 			r#"
                 enum Foo = {A, B, C} ++ D(Bar);
 				enum Bar = {E, F};
@@ -640,7 +639,7 @@ mod tests {
 	#[test]
 	fn test_erase_to_enum() {
 		check(
-			transformer(vec![type_specialise, erase_enum]),
+			vec![Transform::TypeSpecialise, Transform::EraseEnum],
 			r#"
                 enum Foo = {A};
 				Foo: x = to_enum(Foo, 1);
@@ -661,7 +660,7 @@ mod tests {
 	#[test]
 	fn test_erase_enum_of() {
 		check(
-			transformer(vec![type_specialise, erase_enum]),
+			vec![Transform::TypeSpecialise, Transform::EraseEnum],
 			r#"
                 enum Foo = {A};
 				any: x = enum_of(A);

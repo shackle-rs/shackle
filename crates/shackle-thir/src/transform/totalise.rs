@@ -1977,16 +1977,12 @@ pub fn totalise<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db>> {
 mod tests {
 	use expect_test::expect;
 
-	use super::totalise;
-	use crate::transform::{
-		comprehension::desugar_comprehension, erase_opt::erase_opt, tests::check_no_stdlib,
-		transformer,
-	};
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_totalise_par_let() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
 				test forall(array [int] of bool);
 				bool: x = let {
@@ -2006,7 +2002,7 @@ mod tests {
 	#[test]
 	fn test_totalise_par_fn() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
 				test forall(array [int] of bool);
                 function int: foo() = let {
@@ -2038,7 +2034,7 @@ mod tests {
 	#[test]
 	fn test_totalise_ite() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
 				test forall(array [int] of bool);
                 predicate if_then_else(array [int] of var bool: c, array [int] of var bool: x);
@@ -2097,7 +2093,7 @@ mod tests {
 	#[test]
 	fn test_totalise_comp() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
                 predicate forall(array [int] of var bool);
                 predicate forall_reif(array [int] of var bool, var bool);
@@ -2145,7 +2141,11 @@ mod tests {
 	#[test]
 	fn test_totalise_var_comp() {
 		check_no_stdlib(
-			transformer(vec![desugar_comprehension, erase_opt, totalise]),
+			vec![
+				Transform::DesugarComprehension,
+				Transform::EraseOpt,
+				Transform::Totalise,
+			],
 			r#"
 				annotation mzn_var_where_clause;
 				function opt $T: val2opt($T: x);
@@ -2207,7 +2207,7 @@ mod tests {
 	#[test]
 	fn test_totalise_bool_fns() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
     			function bool: forall(array [int] of bool: _DECL_2);
 				function int: foo(int: x) = let {
@@ -2239,7 +2239,7 @@ mod tests {
 	#[test]
 	fn test_totalise_predicate_with_ite() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
                 predicate forall(array [int] of var bool);
                 predicate forall_reif(array [int] of var bool, var bool);
@@ -2253,7 +2253,7 @@ mod tests {
 					if true then let {
 						var int: x = qux(3);
 					} in bar(x)
-					else true endif;;
+					else true endif;
 				var int: v;
 				constraint foo(v);
 			"#,
@@ -2283,7 +2283,7 @@ mod tests {
 	#[test]
 	fn test_totalise_abort() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
                 test forall(array [int] of bool);
                 test abort(string: msg);
@@ -2309,10 +2309,10 @@ mod tests {
 	#[test]
 	fn test_totalise_default() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
                 test forall(array [int] of bool);
-                function var int: mzn_default_partial(var int: x, var int: def);
+                function int: mzn_default_partial(int: x, int: def);
 				function int: foo() = mzn_default_partial(1, 2);
 				function int: bar(bool: b) = mzn_default_partial(let { constraint b } in 1, 2);
 				function int: qux(bool: b, bool: c) = mzn_default_partial(let { constraint b } in 1, let { constraint c } in 2);
@@ -2352,7 +2352,7 @@ mod tests {
 	#[test]
 	fn test_mzn_in_root_context() {
 		check_no_stdlib(
-			totalise,
+			Transform::Totalise,
 			r#"
                 predicate forall(array [int] of var bool);
                 predicate forall_reif(array [int] of var bool, var bool);

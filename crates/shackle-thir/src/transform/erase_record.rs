@@ -114,13 +114,12 @@ pub fn erase_record<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db
 mod tests {
 	use expect_test::expect;
 
-	use super::erase_record;
-	use crate::transform::tests::check_no_stdlib;
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_record_type_erasure() {
 		check_no_stdlib(
-			erase_record,
+			Transform::EraseRecord,
 			r#"
                 record(int: foo, float: bar): x = (foo: 1, bar: 2.5);
 				int: y = x.foo;
@@ -138,7 +137,7 @@ mod tests {
 	#[test]
 	fn test_record_type_erasure_sorting() {
 		check_no_stdlib(
-			erase_record,
+			Transform::EraseRecord,
 			r#"
                 record(int: foo, float: bar): x = (bar: 2.5, foo: 1);
 				int: y = x.foo;

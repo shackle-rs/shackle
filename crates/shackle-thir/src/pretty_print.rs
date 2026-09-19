@@ -253,9 +253,7 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db, T> {
 			let decl = &model[*assignment];
 			return format!(
 				"{} = {}{}",
-				decl.name()
-					.map(|n| n.pretty_print(db))
-					.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
+				self.print_declaration_id(db, model, *assignment),
 				self.print_expression(db, model, decl.definition().unwrap()),
 				if let Some(where_clause) = where_clause {
 					format!(" where {}", self.print_expression(db, model, where_clause))
@@ -424,6 +422,15 @@ pub trait Printer<'db, T: Marker> {
 	) -> String {
 		print_annotation_id(self, db, model, a)
 	}
+	/// Pretty print the name of an inversed annotation with a ^-1 suffix
+	fn print_inversed_annotation_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		a: AnnotationId<'db, T>,
+	) -> String {
+		print_inversed_annotation_id(self, db, model, a)
+	}
 	/// Pretty print the name of a declaration
 	fn print_declaration_id(
 		&self,
@@ -459,6 +466,15 @@ pub trait Printer<'db, T: Marker> {
 		m: EnumMemberId<'db, T>,
 	) -> String {
 		print_enumeration_member_id(self, db, model, m)
+	}
+	/// Pretty print the name of an enumeration member with a ^-1 suffix
+	fn print_inversed_enumeration_member_id(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		m: EnumMemberId<'db, T>,
+	) -> String {
+		print_inversed_enumeration_member_id(self, db, model, m)
 	}
 }
 
@@ -891,21 +907,13 @@ pub fn print_expression<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 		ExpressionData::Call(c) => {
 			let f = match &c.function {
 				Callable::Annotation(a) => printer.print_annotation_id(db, model, *a),
-				Callable::AnnotationDestructure(a) => model[*a]
-					.name
-					.map(|n| n.inversed(db).pretty_print(db))
-					.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(*a))),
+				Callable::AnnotationDestructure(a) => {
+					printer.print_inversed_annotation_id(db, model, *a)
+				}
 				Callable::EnumConstructor(m) => printer.print_enumeration_member_id(db, model, *m),
-				Callable::EnumDestructor(m) => model[*m]
-					.name
-					.map(|n| n.inversed(db).pretty_print(db))
-					.unwrap_or_else(|| {
-						format!(
-							"_EM_{}_{}⁻¹",
-							model[m.enumeration_id()].enum_type().pretty_print(db),
-							m.member_index()
-						)
-					}),
+				Callable::EnumDestructor(m) => {
+					printer.print_inversed_enumeration_member_id(db, model, *m)
+				}
 				Callable::Function(f) => printer.print_function_id(db, model, *f),
 				Callable::Expression(e) => format!("({})", printer.print_expression(db, model, e)),
 			};
@@ -1089,10 +1097,7 @@ pub fn print_generator<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 				"{} in {}",
 				declarations
 					.iter()
-					.map(|d| model[*d]
-						.name()
-						.map(|n| n.pretty_print(db))
-						.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*d))))
+					.map(|d| printer.print_declaration_id(db, model, *d))
 					.collect::<Vec<_>>()
 					.join(", "),
 				printer.print_expression(db, model, collection)
@@ -1107,9 +1112,7 @@ pub fn print_generator<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 			(
 				format!(
 					"{}{} = {}",
-					decl.name()
-						.map(|n| n.pretty_print(db))
-						.unwrap_or_else(|| format!("_DECL_{}", Into::<u32>::into(*assignment))),
+					printer.print_declaration_id(db, model, *assignment),
 					decl.annotations()
 						.iter()
 						.map(|ann| format!(" :: ({})", printer.print_expression(db, model, ann)))
@@ -1189,6 +1192,18 @@ pub fn print_annotation_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 		.map(|n| n.pretty_print(db))
 		.unwrap_or_else(|| format!("_ANN_{}", Into::<u32>::into(a)))
 }
+/// Default implementation for printing the name of an inversed annotation
+pub fn print_inversed_annotation_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	a: AnnotationId<'db, T>,
+) -> String {
+	model[a]
+		.name
+		.map(|n| n.inversed(db).pretty_print(db))
+		.unwrap_or_else(|| format!("_ANN_{}⁻¹", Into::<u32>::into(a)))
+}
 /// Default implementation for printing the name of a declaration
 pub fn print_declaration_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 	_printer: &P,
@@ -1237,6 +1252,24 @@ pub fn print_enumeration_member_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 		.unwrap_or_else(|| {
 			format!(
 				"_EM_{}_{}",
+				model[m.enumeration_id()].enum_type().pretty_print(db),
+				m.member_index()
+			)
+		})
+}
+/// Default implementation for printing the name of an inversed enumeration member
+pub fn print_inversed_enumeration_member_id<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
+	_printer: &P,
+	db: &'db dyn Db,
+	model: &Model<'db, T>,
+	m: EnumMemberId<'db, T>,
+) -> String {
+	model[m]
+		.name
+		.map(|n| n.pretty_print(db))
+		.unwrap_or_else(|| {
+			format!(
+				"_EM_{}_{}⁻¹",
 				model[m.enumeration_id()].enum_type().pretty_print(db),
 				m.member_index()
 			)

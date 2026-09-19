@@ -202,12 +202,12 @@ pub fn eliminate_dead_code<'db, T: Marker>(
 mod tests {
 	use expect_test::expect;
 
-	use crate::transform::{dead_code::eliminate_dead_code, tests::check_no_stdlib};
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_dce() {
 		check_no_stdlib(
-			eliminate_dead_code,
+			Transform::EliminateDeadCode,
 			r#"
             test unused(int: x) = true;
             test used(int: x) = true;

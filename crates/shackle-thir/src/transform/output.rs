@@ -125,13 +125,12 @@ pub fn generate_output<'db>(db: &'db dyn Db, mut model: Model<'db>) -> Result<Mo
 mod tests {
 	use expect_test::expect;
 
-	use super::generate_output;
-	use crate::transform::tests::check;
+	use crate::transform::{Transform, tests::check};
 
 	#[test]
 	fn test_output_generation() {
 		check(
-			generate_output,
+			Transform::GenerateOutput,
 			r#"
 				output ["Hello, world"];
 				output :: "one" ["A"];
@@ -149,7 +148,7 @@ mod tests {
 	#[test]
 	fn test_implicit_output_vars() {
 		check(
-			generate_output,
+			Transform::GenerateOutput,
 			r#"
 				var 1..3: x;
 				var opt 1..3: y;

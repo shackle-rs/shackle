@@ -629,13 +629,12 @@ pub fn function_dispatch<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Mode
 mod tests {
 	use expect_test::expect;
 
-	use super::function_dispatch;
-	use crate::transform::{tests::check, transformer, type_specialise};
+	use crate::transform::{Transform, tests::check};
 
 	#[test]
 	fn test_function_dispatch() {
 		check(
-			function_dispatch,
+			Transform::FunctionDispatch,
 			r#"
             predicate foo(var int: x) = true;
             predicate foo(var int: x, var bool: b) = true;
@@ -654,7 +653,7 @@ mod tests {
 	#[test]
 	fn test_function_dispatch_2() {
 		check(
-			function_dispatch,
+			Transform::FunctionDispatch,
 			r#"
             predicate foo(var opt int: x) = true;
             predicate foo(var int: x) = true;
@@ -673,7 +672,7 @@ mod tests {
 	#[test]
 	fn test_function_dispatch_struct() {
 		check(
-			function_dispatch,
+			Transform::FunctionDispatch,
 			r#"
             predicate foo(tuple(tuple(var int)): x) = true;
             predicate foo(tuple(tuple(int)): x) = true;
@@ -692,7 +691,7 @@ mod tests {
 	#[test]
 	fn test_function_dispatch_specialised() {
 		check(
-			transformer(vec![type_specialise, function_dispatch]),
+			vec![Transform::TypeSpecialise, Transform::FunctionDispatch],
 			r#"
             test foo(any $T: x) = true;
             test foo($$E: x) = false;
@@ -719,7 +718,7 @@ mod tests {
 	#[test]
 	fn test_function_dispatch_names() {
 		check(
-			function_dispatch,
+			Transform::FunctionDispatch,
 			r#"
             function int: foo(int: x) = 3;
 			function int: foo(int: y) = 4;

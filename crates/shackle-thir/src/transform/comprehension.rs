@@ -568,15 +568,16 @@ pub fn desugar_comprehension<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<
 mod tests {
 	use expect_test::expect;
 
-	use super::desugar_comprehension;
-	use crate::transform::{
-		tests::check, top_down_type::top_down_type, transformer, type_specialise::type_specialise,
-	};
+	use crate::transform::{Transform, tests::check};
 
 	#[test]
 	fn test_desugar_array_comprehension_var_where() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				predicate foo(var int: x);
 				array [int] of var int: x;
@@ -595,7 +596,11 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_var_set() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				var set of int: x;
 				any: y = [x_i | x_i in x];
@@ -612,7 +617,11 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_complex() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r"
 				var set of int: x;
 				predicate foo(var int: x);
@@ -633,7 +642,11 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_forall() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				predicate foo(var int: x);
 				var set of int: S;
@@ -650,7 +663,11 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_exists() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				predicate foo(var int: x);
 				var set of int: S;
@@ -667,7 +684,11 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_sum_par() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				var set of int: S;
 				any: x = sum (i in S) (i);
@@ -682,7 +703,11 @@ mod tests {
 	#[test]
 	fn test_desugar_array_comprehension_sum_var() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				var set of int: S;
 				function var int: foo(int: x);
@@ -699,7 +724,11 @@ mod tests {
 	#[test]
 	fn test_desugar_set_comprehension() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				set of int: S;
 				function var int: foo(int: x);
@@ -716,7 +745,11 @@ mod tests {
 	#[test]
 	fn test_desugar_var_set_comprehension() {
 		check(
-			transformer(vec![top_down_type, type_specialise, desugar_comprehension]),
+			vec![
+				Transform::TopDownType,
+				Transform::TypeSpecialise,
+				Transform::DesugarComprehension,
+			],
 			r#"
 				var set of int: S;
 				function var int: foo(int: x);

@@ -26,9 +26,9 @@
 use std::sync::{RwLock, RwLockReadGuard};
 
 use shackle_diagnostics::Result;
-use shackle_hir::{Db, diagnostics::Errors};
+use shackle_hir::Db;
 
-use crate::{Model, lower::lower_model, transform::thir_transforms};
+use crate::{Model, transform::Transformer};
 
 /// Represents an intermediate query result which can be taken
 /// at some point, making any future reads panic.
@@ -79,21 +79,5 @@ impl<T: Eq> Eq for Intermediate<T> {}
 
 /// Get the final THIR after all transforms have been applied
 pub fn final_thir<'db>(db: &'db dyn Db) -> Result<&'db Model<'db>> {
-	let model = run_thir_phase_internal(db);
-	let error = run_thir_phase_internal::accumulated::<Errors>(db).pop();
-	if let Some(e) = error {
-		Err((**e).clone())
-	} else {
-		Ok(model)
-	}
-}
-
-#[salsa::tracked]
-fn run_thir_phase_internal<'db>(db: &'db dyn Db) -> Model<'db> {
-	let model = lower_model(db).take();
-	let result = thir_transforms()(db, model);
-	result.unwrap_or_else(|error| {
-		Errors::add(db, error);
-		Model::default()
-	})
+	Transformer::run(db)
 }

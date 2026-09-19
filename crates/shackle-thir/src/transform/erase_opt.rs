@@ -301,13 +301,12 @@ pub fn erase_opt<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db>> 
 mod tests {
 	use expect_test::expect;
 
-	use super::erase_opt;
-	use crate::transform::{tests::check_no_stdlib, top_down_type, transformer};
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_option_type_erasure() {
 		check_no_stdlib(
-			transformer(vec![top_down_type, erase_opt]),
+			vec![Transform::TopDownType, Transform::EraseOpt],
 			r#"
 				annotation mzn_opt_bool;
 				function var opt $T: val2opt(var $T: x);
@@ -360,7 +359,7 @@ mod tests {
 	#[test]
 	fn test_option_type_erasure_2() {
 		check_no_stdlib(
-			transformer(vec![top_down_type, erase_opt]),
+			vec![Transform::TopDownType, Transform::EraseOpt],
 			r#"
 			function var opt $T: val2opt(var $T: x);
 			function opt $T: val2opt($T: x);
