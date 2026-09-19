@@ -249,13 +249,12 @@ pub fn inline_functions<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model
 mod tests {
 	use expect_test::expect;
 
-	use super::inline_functions;
-	use crate::transform::tests::check_no_stdlib;
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_inline_call_by_name() {
 		check_no_stdlib(
-			inline_functions,
+			Transform::InlineFunctions,
 			r#"
 				annotation mzn_inline_call_by_name;
                 function int: foo(bool: a, int: b, int: c) :: mzn_inline_call_by_name =
@@ -273,7 +272,7 @@ mod tests {
 	#[test]
 	fn test_inline_alpha_rename() {
 		check_no_stdlib(
-			inline_functions,
+			Transform::InlineFunctions,
 			r#"
 				annotation mzn_inline_call_by_name;
                 function int: foo(bool: a, int: b, int: c) :: mzn_inline_call_by_name =
@@ -297,7 +296,7 @@ mod tests {
 	#[test]
 	fn test_inline_call_by_value() {
 		check_no_stdlib(
-			inline_functions,
+			Transform::InlineFunctions,
 			r#"
 				annotation mzn_inline;
                 function int: foo(bool: a, int: b, int: c) :: mzn_inline =

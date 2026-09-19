@@ -19,9 +19,7 @@ use shackle_hir::{
 use shackle_syntax::InputLang;
 
 use crate::{
-	lower::lower_model,
-	pretty_print::PrettyPrinter,
-	transform::{tests::NameMapper, thir_transforms},
+	db::final_thir, lower::lower_model, pretty_print::PrettyPrinter, transform::tests::NameMapper,
 };
 
 /// HIR-phase errors attributable to the test's own inline model.
@@ -94,13 +92,7 @@ fn user_items_pretty(source: &str) -> String {
 		InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc).into();
 	let _ = InputFiles::get(&db).set_files(&mut db).to(vec![model_file]);
 	let mut model = lower_model(&db).take();
-	let to_print = NameMapper::default().run(&db, model_file, &mut model);
-	let printer = PrettyPrinter::new(&db, &model);
-	let mut pretty = String::new();
-	for item in to_print {
-		pretty.push_str(&printer.pretty_print_item(item));
-		pretty.push_str(";\n");
-	}
+	let pretty = NameMapper::default().run(&db, model_file, &mut model);
 	pretty
 }
 
@@ -779,10 +771,9 @@ fn lowering_gate(source: &str) -> Result<(), String> {
 				.collect::<Vec<_>>()
 				.join("\n"));
 		}
-		match thir_transforms()(&db, lower_model(&db).take()) {
-			Ok(_) => Ok(()),
-			Err(err) => Err(format!("THIR transform error: {err}")),
-		}
+		final_thir(&db)
+			.map(|_| ())
+			.map_err(|err| format!("THIR transform error: {err}"))
 	}));
 	match outcome {
 		Ok(inner) => inner,

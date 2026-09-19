@@ -560,13 +560,12 @@ pub fn top_down_type<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'d
 mod tests {
 	use expect_test::expect;
 
-	use super::top_down_type;
-	use crate::transform::tests::check_no_stdlib;
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_top_down_type_bottom() {
 		check_no_stdlib(
-			top_down_type,
+			Transform::TopDownType,
 			r#"
                     function set of int: foo(opt int);
                     any: a = foo(<>);
@@ -592,7 +591,7 @@ mod tests {
 	#[test]
 	fn test_top_down_type_bottom_polymorphic() {
 		check_no_stdlib(
-			top_down_type,
+			Transform::TopDownType,
 			r#"
                     function any $T: foo(any $T, array [$X] of any $U);
                     opt int: x = foo(<>, []);
@@ -612,7 +611,7 @@ mod tests {
 	#[test]
 	fn test_top_down_type_opt() {
 		check_no_stdlib(
-			top_down_type,
+			Transform::TopDownType,
 			r#"
 					function opt $T: val2opt($T: x);
                     any: x = ([1, <>],);
@@ -642,7 +641,7 @@ mod tests {
 	#[test]
 	fn test_top_down_type_array_opt() {
 		check_no_stdlib(
-			top_down_type,
+			Transform::TopDownType,
 			r#"
 					function opt $T: val2opt($T: x);
 					function array [int] of opt int: arrayXd(array [int] of int, array [int] of opt int);
@@ -668,7 +667,7 @@ mod tests {
 	#[test]
 	fn test_coercions() {
 		check_no_stdlib(
-			top_down_type,
+			Transform::TopDownType,
 			r#"
 				function int: bool2int(bool: b);
 				function float: bool2float(bool: b);

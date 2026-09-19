@@ -1052,17 +1052,15 @@ pub fn type_specialise<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<
 mod tests {
 	use expect_test::expect;
 
-	use super::type_specialise;
 	use crate::transform::{
-		name_mangle::mangle_names,
+		Transform,
 		tests::{check, check_no_stdlib},
-		transformer,
 	};
 
 	#[test]
 	fn test_type_specialisation_basic_1() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 					function any $T: foo(any $T: x) = x;
 					predicate bar(var bool: p) = foo(p);
@@ -1083,7 +1081,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_basic_2() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			test foo(any $T: x) = true;
 			any: a = foo((1, 2));
@@ -1102,7 +1100,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_overloading() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			test foo(any $T: x) = bar(x);
 			test bar(any $T: x) = true;
@@ -1121,7 +1119,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_show() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			annotation mzn_internal_generated;
 			test occurs(opt $T: x);
@@ -1158,7 +1156,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_compare() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 				annotation mzn_internal_generated;
 				predicate forall(array [int] of var bool);
@@ -1194,7 +1192,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_equivalent() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			test foo(var $T: v) = true;
 			var int: x;
@@ -1216,7 +1214,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_enum_show() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			annotation mzn_internal_generated;
 			function string: show($T: x) :: mzn_internal_generated = "";
@@ -1238,7 +1236,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_enum_show_2() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			annotation mzn_internal_generated;
 			function string: show($T: x) :: mzn_internal_generated = "";
@@ -1262,7 +1260,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_recursive() {
 		check_no_stdlib(
-			type_specialise,
+			Transform::TypeSpecialise,
 			r#"
 			test foo($T: x) = foo((1, x));
 			any: f = foo(1);
@@ -1274,7 +1272,7 @@ mod tests {
 	#[test]
 	fn test_type_specialisation_nested() {
 		check_no_stdlib(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			function $T: foo($T: x) = bar(x);
 			function $T: bar($T: x) = x;
@@ -1297,7 +1295,7 @@ mod tests {
 	#[test]
 	fn test_specialise_array_access_1() {
 		check(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			any: x = [1, 2, 3];
 			any: v = x[1];
@@ -1316,7 +1314,7 @@ mod tests {
 	#[test]
 	fn test_specialise_array_access_2() {
 		check(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			enum Foo = {A, B, C};
 			array [Foo] of var 1..3: x;
@@ -1337,7 +1335,7 @@ mod tests {
 	#[test]
 	fn test_specialise_array_access_3() {
 		check(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			array [1..3] of tuple(int, int): x;
 			var 1..3: i;
@@ -1354,7 +1352,7 @@ mod tests {
 	#[test]
 	fn test_specialise_array_access_4() {
 		check(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			array [1..3] of record(int: foo, int: bar): x;
 			var 1..3: i;
@@ -1371,7 +1369,7 @@ mod tests {
 	#[test]
 	fn test_specialise_dispatch() {
 		check(
-			transformer(vec![type_specialise, mangle_names]),
+			vec![Transform::TypeSpecialise, Transform::MangleNames],
 			r#"
 			function int: foo(var opt $$E: x) = 1;
 			function int: foo(var $$E: x) = 2;

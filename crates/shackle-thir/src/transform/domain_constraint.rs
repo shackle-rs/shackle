@@ -1241,13 +1241,12 @@ pub fn rewrite_domains<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<
 mod tests {
 	use expect_test::expect;
 
-	use super::rewrite_domains;
-	use crate::transform::tests::check;
+	use crate::transform::{Transform, tests::check};
 
 	#[test]
 	fn test_rewrite_struct_domains() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				tuple(var 1..3, var 2..4): x;
                 record(var 1..3: a, var 2..4: b): y;
@@ -1311,7 +1310,7 @@ mod tests {
 	#[test]
 	fn test_rewrite_struct_domains_par() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				tuple(1..3, 2..4): x;
                 record(1..3: a, 2..4: b): y;
@@ -1352,7 +1351,7 @@ mod tests {
 	#[test]
 	fn test_domain_constraints() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				tuple(var 1..3, var 2..4): x = (1, 2);
 				tuple(1..3, 2..4): y;
@@ -1402,7 +1401,7 @@ mod tests {
 	#[test]
 	fn test_non_domain_constraint() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				var 1..3: a;
 				var set of 1..3: b;
@@ -1437,7 +1436,7 @@ mod tests {
 	#[test]
 	fn test_return_type_inst() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				function 1..2: foo(1..3: x) = x;
 				function var 1..2: bar(var 1..3: x) = x;
@@ -1464,7 +1463,7 @@ mod tests {
 	#[test]
 	fn test_array_domain() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				array [1..3] of var int: x;
 				array [1..3] of var 1..3: y;
@@ -1497,7 +1496,7 @@ mod tests {
 	#[test]
 	fn test_bool_vars() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				tuple(var bool): a;
 				tuple(var bool, var bool): b;
@@ -1523,7 +1522,7 @@ mod tests {
 	#[test]
 	fn test_set_card() {
 		check(
-			rewrite_domains,
+			Transform::RewriteDomains,
 			r#"
 				var set(2..4) of 1..10: x;
 				constraint let {

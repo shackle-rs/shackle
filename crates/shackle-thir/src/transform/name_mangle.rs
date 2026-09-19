@@ -40,13 +40,12 @@ pub fn mangle_names<'db>(_db: &'db dyn Db, mut model: Model<'db>) -> Result<Mode
 mod tests {
 	use expect_test::expect;
 
-	use super::mangle_names;
-	use crate::transform::tests::check_no_stdlib;
+	use crate::transform::{Transform, tests::check_no_stdlib};
 
 	#[test]
 	fn test_name_mangling() {
 		check_no_stdlib(
-			mangle_names,
+			Transform::MangleNames,
 			r#"
                 function int: builtin(int: x);
                 function int: builtin(string: x);
