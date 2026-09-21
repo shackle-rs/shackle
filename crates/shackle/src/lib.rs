@@ -36,7 +36,9 @@ use shackle_hir::{
 	run_hir_phase,
 };
 use shackle_syntax::{InputLang, ast::AstNode, minizinc::Identifier};
-use shackle_thir::{db::final_thir, lower::lower_model, pretty_print::OldMiniZincPrinter};
+use shackle_thir::{
+	compat::OldMiniZincPrinter, db::final_thir, lower::lower_model, transform::Transformer,
+};
 // Export OptType enumeration used in [`Type`]
 pub use shackle_ty::OptType;
 use shackle_ty::{Ty, TyData};
@@ -52,6 +54,15 @@ pub mod error {
 /// Shackle warnings
 pub mod warning {
 	pub use shackle_diagnostics::warning::*;
+}
+
+/// Compile target
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CompileTarget {
+	/// Compile to MicroZinc
+	MicroZinc,
+	/// Compile to MiniZinc
+	MiniZinc,
 }
 
 /// Structure used to build a shackle model
@@ -86,6 +97,17 @@ impl Model {
 			.collect()
 	}
 
+	/// Set the compilation target
+	pub fn set_target(&mut self, target: CompileTarget) {
+		match target {
+			CompileTarget::MicroZinc => Transformer::set_transforms(
+				&mut self.db,
+				shackle_thir::transform::DEFAULT_TRANSFORMS.to_vec(),
+			),
+			CompileTarget::MiniZinc => Transformer::set_transforms(&mut self.db, []),
+		}
+	}
+
 	/// Compile current model into a [`Program`] that can be used by the Shackle interpreter
 	pub fn compile(self, slv: &Solver) -> Result<Program> {
 		let errors = self.check(slv, &[], false);
@@ -116,6 +138,7 @@ impl Model {
 			.unwrap());
 		}
 		let _ = final_thir(&self.db)?;
+		let print_input_files_only = Transformer::get_transforms(&self.db).is_empty();
 
 		Ok(Program {
 			db: self.db,
@@ -128,6 +151,7 @@ impl Model {
 			enable_stats: false,
 			time_limit: None,
 			minizinc_args: Vec::new(),
+			print_input_files_only,
 		})
 	}
 }
@@ -168,6 +192,7 @@ pub struct Program {
 	enable_stats: bool,
 	time_limit: Option<Duration>,
 	minizinc_args: Vec<OsString>,
+	print_input_files_only: bool,
 }
 
 /// Status of running and solving a [`Program`]
@@ -458,9 +483,7 @@ impl Program {
 
 	/// Output the [`Program`] using the given output interface, using the [`Write`] trait
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
-		let model = final_thir(&self.db).unwrap();
-		let printer = OldMiniZincPrinter::new(&self.db, model, true);
-		let code = printer.pretty_print();
+		let code = OldMiniZincPrinter::run(&self.db, self.print_input_files_only);
 		let formatted = format_str(
 			&code,
 			&MiniZincFormatOptions {

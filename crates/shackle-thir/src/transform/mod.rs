@@ -98,7 +98,7 @@ impl Transform {
 }
 
 /// Default transforms to run on a model
-const DEFAULT_TRANSFORMS: &[Transform] = &[
+pub const DEFAULT_TRANSFORMS: &[Transform] = &[
 	Transform::EliminateDeadCodeConservative,
 	Transform::GenerateOutput,
 	Transform::RewriteDomains,

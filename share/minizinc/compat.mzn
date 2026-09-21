@@ -189,6 +189,7 @@ function set of int: diff_internal_int(set of int: x, set of int: y) = x diff y;
 function set of float: diff_internal_float(set of float: x, set of float: y) = x diff y;
 
 function string: show_internal($T: x) = show(x);
+function string: show_json_internal($T: x) :: promise_total = showJSON(x);
 
 function array [int] of int: set_to_ranges_internal_int(set of int: S) = set_to_ranges(S);
 function array [int] of float: set_to_ranges_internal_float(set of float: S) = set_to_ranges(S);
