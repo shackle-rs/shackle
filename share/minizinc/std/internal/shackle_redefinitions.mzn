@@ -1032,8 +1032,8 @@ function $$E: arg_max_internal(array [$$E] of $T: xs) = arg_val(xs, max(xs));
 function $T: min($T: x, $T: y) = if x < y then x else y endif;
 function $T: max($T: x, $T: y) = if x < y then y else x endif;
 
-function $$E: min_internal(set of $$E: s) = mzn_element_internal(set2array(s), 1);
-function $$E: max_internal(set of $$E: s) = mzn_element_internal(set2array(s), card(s));
+function $$E: min_internal_set(set of $$E: s) = mzn_element_internal(set2array(s), 1);
+function $$E: max_internal_set(set of $$E: s) = mzn_element_internal(set2array(s), card(s));
 
 function $T: min_internal_array(array [$$E] of $T: x) =
 	let {

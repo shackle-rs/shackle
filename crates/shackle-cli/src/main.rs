@@ -20,7 +20,7 @@ use expect_test as _;
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, Report, Result};
-use shackle::{Error, Message, Model, Solver, Status, error::InternalError};
+use shackle::{CompileTarget, Error, Message, Model, Solver, Status, error::InternalError};
 use shackle_fmt::{MiniZincFormatOptions, check_format, format_files};
 #[cfg(test)]
 use tempfile as _;
@@ -125,7 +125,8 @@ impl Solve {
 		let slv = self.base.solver()?;
 
 		// Construct model, typecheck, and compile into program
-		let model = Model::from_file(model);
+		let mut model = Model::from_file(model);
+		model.set_target(self.base.target.into());
 		let mut program = model.compile(&slv)?;
 
 		program.add_data_files(data.iter().map(|f| f.deref()))?;
@@ -164,6 +165,7 @@ mod tests {
 		Compile {
 			solver: "gecode".to_owned(),
 			files: files.iter().map(PathBuf::from).collect(),
+			target: CompileTargetFlag::MiniZinc,
 		}
 	}
 
@@ -225,6 +227,7 @@ mod tests {
 		let compile = Compile {
 			solver: "test-solver".to_owned(),
 			files: vec![PathBuf::from("model.mzn")],
+			target: CompileTargetFlag::MiniZinc,
 		};
 
 		assert!(compile.solver().is_ok());
@@ -295,6 +298,9 @@ pub struct Compile {
 	solver: String,
 	#[arg(required = true)]
 	files: Vec<PathBuf>,
+	/// Compilation target
+	#[arg(long, default_value = "microzinc")]
+	target: CompileTargetFlag,
 }
 
 impl Compile {
@@ -351,7 +357,8 @@ impl Compile {
 		let filename = model.with_extension("shackle.mzn");
 
 		let slv = self.solver()?;
-		let model = Model::from_file(model);
+		let mut model = Model::from_file(model);
+		model.set_target(self.target.into());
 		let prg = model.compile(&slv)?;
 
 		let mut file = File::create(filename).into_diagnostic()?;
@@ -374,6 +381,25 @@ impl From<BooleanFlag> for bool {
 		match value {
 			BooleanFlag::On => true,
 			BooleanFlag::Off => false,
+		}
+	}
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum CompileTargetFlag {
+	/// Compile to MicroZinc
+	#[value(alias("uzn"), alias("microzinc"))]
+	MicroZinc,
+	/// Compile to MiniZinc
+	#[value(alias("mzn"), alias("minizinc"))]
+	MiniZinc,
+}
+
+impl From<CompileTargetFlag> for CompileTarget {
+	fn from(value: CompileTargetFlag) -> Self {
+		match value {
+			CompileTargetFlag::MicroZinc => CompileTarget::MicroZinc,
+			CompileTargetFlag::MiniZinc => CompileTarget::MiniZinc,
 		}
 	}
 }

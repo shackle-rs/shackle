@@ -9,6 +9,7 @@
 //! This representation is used to generate the MIR.
 
 pub mod analyse;
+pub mod compat;
 pub mod counts;
 pub mod db;
 pub mod lower;
