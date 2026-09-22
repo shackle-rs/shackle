@@ -277,6 +277,9 @@ mod compiler_settings {
 		/// The directory for the standard library.
 		pub stdlib_directory: Option<PathBuf>,
 
+		/// The directory for the upstream MiniZinc standard library.
+		pub minizinc_stdlib_directory: Option<PathBuf>,
+
 		/// The directory for the globals library.
 		pub globals_directory: Option<PathBuf>,
 
@@ -291,7 +294,7 @@ impl CompilerSettings {
 	/// Create default settings
 	pub(crate) fn default(db: &dyn Db) -> Self {
 		let mzn_stdlib_dir = std::env::var("MZN_STDLIB_DIR").ok().map(PathBuf::from);
-		Self::new(db, vec![], mzn_stdlib_dir, None, false)
+		Self::new(db, vec![], None, mzn_stdlib_dir, None, false)
 	}
 
 	/// Copy the compiler settings from one database to another.
@@ -299,6 +302,7 @@ impl CompilerSettings {
 		let source_settings = Self::get(source);
 		let search_directories = source_settings.search_directories(source).clone();
 		let stdlib_directory = source_settings.stdlib_directory(source).clone();
+		let minizinc_stdlib_directory = source_settings.minizinc_stdlib_directory(source).clone();
 		let globals_directory = source_settings.globals_directory(source).clone();
 		let ignore_stdlib = source_settings.ignore_stdlib(source);
 		let target_settings = Self::get(target);
@@ -309,6 +313,9 @@ impl CompilerSettings {
 			.set_stdlib_directory(target)
 			.to(stdlib_directory);
 		let _ = target_settings
+			.set_minizinc_stdlib_directory(target)
+			.to(minizinc_stdlib_directory);
+		let _ = target_settings
 			.set_globals_directory(target)
 			.to(globals_directory);
 		let _ = target_settings.set_ignore_stdlib(target).to(ignore_stdlib);
@@ -317,7 +324,7 @@ impl CompilerSettings {
 
 #[salsa::tracked]
 fn share_directory(db: &dyn Db) -> Option<PathBuf> {
-	if let Some(p) = CompilerSettings::get(db).stdlib_directory(db) {
+	if let Some(p) = CompilerSettings::get(db).minizinc_stdlib_directory(db) {
 		// If set with MZN_STDLIB_DIR then just use it
 		return Some(p.clone());
 	}
@@ -326,11 +333,17 @@ fn share_directory(db: &dyn Db) -> Option<PathBuf> {
 
 /// Get the shackle share directory
 #[salsa::tracked]
-pub fn shackle_share_directory(_db: &dyn Db) -> Option<PathBuf> {
+pub fn shackle_share_directory(db: &dyn Db) -> Option<PathBuf> {
+	if let Some(p) = CompilerSettings::get(db).stdlib_directory(db) {
+		return Some(p.clone());
+	}
 	if let Ok(p) = std::env::current_exe() {
 		// Otherwise find /share/minizinc/std from this executable
 		for path in p.ancestors() {
-			if path.join("share/minizinc/std/shackle.mzn").exists() {
+			if db
+				.file_handler()
+				.is_file(&path.join("share/minizinc/std/shackle.mzn"))
+			{
 				return Some(path.join("share/minizinc"));
 			}
 		}
@@ -340,14 +353,15 @@ pub fn shackle_share_directory(_db: &dyn Db) -> Option<PathBuf> {
 
 #[salsa::tracked]
 fn include_search_dirs(db: &dyn Db) -> Vec<PathBuf> {
+	let file_handler = db.file_handler();
 	let settings = CompilerSettings::get(db);
 	let mut include_dirs = settings.search_directories(db).clone();
 	if let Some(globals) = settings.globals_directory(db) {
-		if globals.is_absolute() || globals.exists() {
+		if globals.is_absolute() || file_handler.is_dir(globals) {
 			include_dirs.push((*globals).clone());
 		} else if let Some(share) = share_directory(db) {
 			let path = share.join(globals);
-			if path.exists() {
+			if file_handler.is_dir(&path) {
 				include_dirs.push(path);
 			}
 		}
@@ -431,6 +445,7 @@ fn model_source_file(db: &dyn Db, model_file: ModelFile) -> SourceFile {
 #[salsa::tracked]
 fn includes_for_file(db: &dyn Db, model_file: ModelFile) -> Vec<(Origin, ModelFile)> {
 	log::debug!("Resolving includes for {}", model_file);
+	let file_handler = db.file_handler();
 	let mut result = Vec::new();
 	let model = model_file.ast(db);
 	let ast = model.ast(db);
@@ -448,13 +463,15 @@ fn includes_for_file(db: &dyn Db, model_file: ModelFile) -> Vec<(Origin, ModelFi
 						// Resolve relative to search directories, then current file
 						let file_dir = model_file.base_directory(db);
 						let resolved = if included.starts_with("./") {
-							file_dir.map(|p| p.join(included)).filter(|p| p.exists())
+							file_dir
+								.map(|p| p.join(included))
+								.filter(|p| file_handler.is_file(p))
 						} else {
 							search_dirs
 								.iter()
 								.chain(file_dir.iter())
 								.map(|p| p.join(included))
-								.find(|p| p.exists())
+								.find(|p| file_handler.is_file(p))
 						};
 
 						match resolved {
@@ -511,10 +528,9 @@ pub fn auto_includes(db: &dyn Db) -> Vec<ModelFile> {
 	};
 
 	let minizinc_share_dir = share_directory(db).as_ref().unwrap_or(share_dir);
-	if !minizinc_share_dir.join("std/stdlib.mzn").is_file()
-		|| !minizinc_share_dir
-			.join("std/solver_redefinitions.mzn")
-			.is_file()
+	let file_handler = db.file_handler();
+	if !file_handler.is_file(&minizinc_share_dir.join("std/stdlib.mzn"))
+		|| !file_handler.is_file(&minizinc_share_dir.join("std/solver_redefinitions.mzn"))
 	{
 		Errors::add(db, ShackleError::MiniZincStandardLibraryNotFound);
 	}
@@ -670,7 +686,7 @@ mod tests {
 			.set_search_directories(&mut source)
 			.to(vec![PathBuf::from("search")]);
 		let _ = source_settings
-			.set_stdlib_directory(&mut source)
+			.set_minizinc_stdlib_directory(&mut source)
 			.to(Some(PathBuf::from("stdlib")));
 		let _ = source_settings
 			.set_globals_directory(&mut source)
@@ -686,7 +702,7 @@ mod tests {
 			&[PathBuf::from("search")]
 		);
 		assert_eq!(
-			target_settings.stdlib_directory(&target),
+			target_settings.minizinc_stdlib_directory(&target),
 			&Some(PathBuf::from("stdlib"))
 		);
 		assert_eq!(

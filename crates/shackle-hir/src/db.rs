@@ -66,6 +66,10 @@ impl Debug for CompilerDatabase {
 pub trait FileHandler: Send + Sync + RefUnwindSafe + 'static {
 	/// Read a file and return its contents.
 	fn read_file(&self, path: &Path) -> Result<String>;
+	/// Whether the given path is a directory.
+	fn is_dir(&self, path: &Path) -> bool;
+	/// Whether the given path is a file.
+	fn is_file(&self, path: &Path) -> bool;
 
 	/// Notification of resolved includes, allowing the handler to watch contents and update if required.
 	fn on_resolved_includes(&self, db: &dyn Db, files: &[ModelFile]);
@@ -85,6 +89,14 @@ impl FileHandler for DefaultFileHandler {
 			}
 			.into()
 		})
+	}
+
+	fn is_dir(&self, path: &Path) -> bool {
+		path.is_dir()
+	}
+
+	fn is_file(&self, path: &Path) -> bool {
+		path.is_file()
 	}
 
 	fn on_resolved_includes(&self, _db: &dyn Db, _files: &[ModelFile]) {}

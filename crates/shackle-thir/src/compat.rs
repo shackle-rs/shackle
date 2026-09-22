@@ -103,7 +103,9 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
 				.as_ref()
 				.expect("Shackle share directory should exist")
 				.join("compat.mzn");
-			let compat = std::fs::read_to_string(&compat_path)
+			let compat = db
+				.file_handler()
+				.read_file(&compat_path)
 				.unwrap_or_else(|err| panic!("failed to read {}: {err}", compat_path.display()));
 			writeln!(&mut buf, "{compat}").unwrap();
 		}
