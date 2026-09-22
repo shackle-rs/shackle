@@ -7,6 +7,10 @@ description = "Language server implementation for Shackle"
 name = "shackle-ls"
 version = "0.3.2"
 
+[lib]
+name = "shackle_ls"
+path = "src/lib.rs"
+
 [dependencies]
 crossbeam-channel = "0.5.8"
 env_logger = {workspace = true}

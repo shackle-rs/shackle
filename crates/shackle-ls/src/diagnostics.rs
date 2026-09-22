@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use lsp_types::notification::Notification;
 use miette::{Diagnostic, Severity, SourceCode, SourceSpan};
@@ -11,21 +11,15 @@ const WARNING: lsp_types::DiagnosticSeverity = lsp_types::DiagnosticSeverity::WA
 
 /// Whether the span name of a diagnostic refers to `path`.
 ///
-/// `SourceFile::name` is a display string: it strips the canonicalised working
-/// directory, so a diagnostic for a file inside the directory the server was
-/// started in is named relatively. Resolving it against the same base is what
-/// makes the comparison against the absolute `path` meaningful.
-fn span_name_is(name: &str, path: &Path, base: Option<&Path>) -> bool {
+/// `SourceFile::name` is a display string and may be relative to the server's
+/// current directory, so compare relative names against the path suffix.
+fn span_name_is(name: &str, path: &Path) -> bool {
 	let named = Path::new(name);
 	if named.is_absolute() {
 		named == path
 	} else {
-		base.is_some_and(|base| base.join(named) == path)
+		path.ends_with(named)
 	}
-}
-
-fn source_file_base() -> Option<PathBuf> {
-	std::env::current_dir().ok()?.canonicalize().ok()
 }
 
 /// Convert a diagnostic's span into an LSP range.
@@ -42,14 +36,12 @@ fn span_to_range(sc: &dyn SourceCode, span: &SourceSpan) -> Option<lsp_types::Ra
 }
 
 pub(crate) fn diagnostics_notification(db: &dyn Db, path: &Path) -> lsp_server::Notification {
-	let base = source_file_base();
-	let base = base.as_deref();
 	let mut diagnostics = Vec::new();
 	for d in all_errors(db) {
-		let _ = collect_diagnostic(path, base, ERROR, d, &mut diagnostics);
+		let _ = collect_diagnostic(path, ERROR, d, &mut diagnostics);
 	}
 	for d in all_warnings(db) {
-		let _ = collect_diagnostic(path, base, WARNING, d, &mut diagnostics);
+		let _ = collect_diagnostic(path, WARNING, d, &mut diagnostics);
 	}
 	publish(path, diagnostics)
 }
@@ -76,7 +68,6 @@ fn publish(path: &Path, diagnostics: Vec<lsp_types::Diagnostic>) -> lsp_server::
 
 fn collect_diagnostic(
 	path: &Path,
-	base: Option<&Path>,
 	default_severity: lsp_types::DiagnosticSeverity,
 	d: &dyn Diagnostic,
 	out: &mut Vec<lsp_types::Diagnostic>,
@@ -93,7 +84,7 @@ fn collect_diagnostic(
 	let (range, label, related_info) = match located {
 		Some((sc, first)) => {
 			let name = sc.read_span(first.inner(), 0, 0).ok()?;
-			if !span_name_is(name.name()?, path, base) {
+			if !span_name_is(name.name()?, path) {
 				return None;
 			}
 			let uri = path_to_uri(path);
@@ -159,7 +150,7 @@ fn collect_diagnostic(
 	});
 	if let Some(related) = d.related() {
 		for d in related {
-			let _ = collect_diagnostic(path, base, default_severity, d, out);
+			let _ = collect_diagnostic(path, default_severity, d, out);
 		}
 	}
 	Some(())
@@ -167,31 +158,36 @@ fn collect_diagnostic(
 
 #[cfg(test)]
 mod tests {
-	use std::path::{Path, PathBuf};
+	use std::path::Path;
 
 	use super::span_name_is;
 
 	#[test]
 	fn test_span_name_is() {
-		let base = PathBuf::from("/home/user/project");
 		let file = Path::new("/home/user/project/model.mzn");
 
 		// A file inside the working directory is named relatively.
-		assert!(span_name_is("model.mzn", file, Some(&base)));
+		assert!(span_name_is("model.mzn", file));
 		assert!(span_name_is(
 			"sub/model.mzn",
 			Path::new("/home/user/project/sub/model.mzn"),
-			Some(&base)
 		));
 		// One outside it keeps its absolute path.
 		assert!(span_name_is(
 			"/elsewhere/model.mzn",
 			Path::new("/elsewhere/model.mzn"),
-			Some(&base)
 		));
 
-		assert!(!span_name_is("other.mzn", file, Some(&base)));
-		assert!(!span_name_is("/elsewhere/model.mzn", file, Some(&base)));
-		assert!(!span_name_is("model.mzn", file, None));
+		assert!(!span_name_is("other.mzn", file));
+		assert!(!span_name_is("/elsewhere/model.mzn", file));
+		assert!(span_name_is("model.mzn", file));
+		assert!(span_name_is(
+			"test.mzn",
+			&Path::new("/home/jason/experiments/ls-test/test.mzn"),
+		));
+		assert!(span_name_is(
+			"nested/model.mzn",
+			&Path::new("/another/root/nested/model.mzn"),
+		));
 	}
 }

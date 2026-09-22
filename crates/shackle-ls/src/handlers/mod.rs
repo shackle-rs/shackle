@@ -121,6 +121,8 @@ pub(crate) mod tests {
 				// The mock model file below is registered under a relative path, so
 				// there is no workspace root it could sensibly be contained in.
 				workspace_uri: None,
+				close_documents: true,
+				publish_diagnostics_on_request: false,
 			},
 		};
 		let _ = CompilerSettings::get(&db.db)

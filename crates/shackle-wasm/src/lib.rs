@@ -16,6 +16,7 @@ use shackle_hir::{
 	input::{CompilerSettings, InputFiles, ModelFile, NamedModelFile},
 	run_hir_phase,
 };
+use shackle_ls::{Server, ServerConfig, vfs::Vfs};
 use shackle_syntax as _;
 use shackle_thir::{compat::OldMiniZincPrinter, transform::Transformer};
 use wasm_bindgen::prelude::*;
@@ -93,6 +94,57 @@ pub fn transpile(request: JsValue) -> Result<JsValue, JsValue> {
 	serde_wasm_bindgen::to_value(&response).map_err(|error| JsValue::from_str(&error.to_string()))
 }
 
+/// Persistent, Worker-hosted Shackle language server.
+#[derive(Debug)]
+#[wasm_bindgen]
+pub struct LanguageServer {
+	server: Server,
+}
+
+#[wasm_bindgen]
+impl LanguageServer {
+	/// Create a new language server
+	#[wasm_bindgen(constructor)]
+	pub fn new() -> Result<LanguageServer, JsValue> {
+		let packed = PACKED_FILES
+			.iter()
+			.map(|(path, text)| (PathBuf::from(path), (*text).to_owned()))
+			.collect();
+		let config = ServerConfig {
+			workspace_uri: "file:///workspace/"
+				.parse::<lsp_types::Uri>()
+				.map_err(|e| JsValue::from_str(&e.to_string()))?,
+			stdlib_directory: Some(PathBuf::from(SHACKLE_STDLIB)),
+			minizinc_stdlib_directory: Some(PathBuf::from(MINIZINC_STDLIB)),
+		};
+		Ok(Self {
+			server: Server::new(config, Arc::new(Vfs::with_packed_files(packed))),
+		})
+	}
+
+	/// Handle one JSON-RPC object and return generated objects.
+	pub fn handle(&mut self, message: JsValue) -> Result<JsValue, JsValue> {
+		let message: lsp_server::Message = serde_wasm_bindgen::from_value(message)
+			.map_err(|e| JsValue::from_str(&format!("invalid LSP message: {e}")))?;
+		json_rpc_output(self.server.handle(message))
+	}
+
+	/// Remove a project file. This is deliberately separate from `didClose`.
+	pub fn remove_project_file(&mut self, name: String) -> Result<JsValue, JsValue> {
+		let path = workspace_path(&name)
+			.ok_or_else(|| JsValue::from_str("project filename escapes workspace"))?;
+		json_rpc_output(self.server.remove_project_file(&path))
+	}
+}
+
+/// `lsp_server::Message` contains `serde_json::Value`. Converting that through
+/// serde-wasm-bindgen turns its JSON values into empty JS objects, so preserve
+/// JSON-RPC's wire representation and let JavaScript parse it instead.
+fn json_rpc_output(messages: Vec<lsp_server::Message>) -> Result<JsValue, JsValue> {
+	let json = serde_json::to_string(&messages).map_err(|e| JsValue::from_str(&e.to_string()))?;
+	js_sys::JSON::parse(&json).map_err(|e| e)
+}
+
 fn transpile_request(request: Request) -> Response {
 	let Some(entry) = workspace_path(&request.entry) else {
 		return Response::Failure(Failure {
@@ -123,9 +175,6 @@ fn transpile_request(request: Request) -> Response {
 	let _ = settings
 		.set_minizinc_stdlib_directory(&mut db)
 		.to(Some(PathBuf::from(MINIZINC_STDLIB)));
-	let _ = settings
-		.set_search_directories(&mut db)
-		.to(vec![PathBuf::from(WORKSPACE)]);
 	let input: ModelFile = NamedModelFile::new(&db, entry).into();
 	let _ = InputFiles::get(&db).set_files(&mut db).to(vec![input]);
 	let hir = run_hir_phase(&db);
@@ -265,6 +314,7 @@ impl PackedFileHandler {
 			project,
 		}
 	}
+
 	fn path(path: &Path) -> Option<PathBuf> {
 		normalize(path)
 	}
@@ -292,6 +342,7 @@ impl FileHandler for PackedFileHandler {
 				.into()
 			})
 	}
+
 	fn is_dir(&self, path: &Path) -> bool {
 		let Some(path) = Self::path(path) else {
 			return false;
@@ -301,12 +352,14 @@ impl FileHandler for PackedFileHandler {
 			.chain(self.files.keys())
 			.any(|file| file.starts_with(&path) && file != &path)
 	}
+
 	fn is_file(&self, path: &Path) -> bool {
 		let Some(path) = Self::path(path) else {
 			return false;
 		};
 		self.project.contains_key(&path) || self.files.contains_key(&path)
 	}
+
 	fn on_resolved_includes(&self, _db: &dyn Db, _files: &[ModelFile]) {}
 }
 

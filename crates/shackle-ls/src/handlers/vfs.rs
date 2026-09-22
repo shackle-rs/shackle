@@ -26,5 +26,5 @@ pub(crate) fn on_document_closed(
 	params: DidCloseTextDocumentParams,
 ) {
 	let file = uri_to_path(&params.text_document.uri);
-	db.unmanage_file(&file);
+	db.close_document(&file);
 }

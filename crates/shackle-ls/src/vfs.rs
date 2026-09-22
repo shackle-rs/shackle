@@ -1,3 +1,4 @@
+//! VFS for overriding file reads
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
@@ -11,15 +12,28 @@ use shackle_hir::db::FileHandler;
 ///
 /// Uses a mutex internally so can be cloned and used by immutable reference.
 #[derive(Debug)]
-pub(crate) struct Vfs {
+pub struct Vfs {
 	files: RwLock<HashMap<PathBuf, String>>,
+	packed: HashMap<PathBuf, String>,
+	strict: bool,
 }
 
 impl Vfs {
 	/// Create a new VFS
-	pub(crate) fn new() -> Self {
+	pub fn new() -> Self {
 		Self {
 			files: RwLock::new(HashMap::new()),
+			packed: HashMap::new(),
+			strict: false,
+		}
+	}
+
+	/// Create a filesystem-free VFS backed only by supplied packed files.
+	pub fn with_packed_files(files: HashMap<PathBuf, String>) -> Self {
+		Self {
+			files: RwLock::new(HashMap::new()),
+			packed: files,
+			strict: true,
 		}
 	}
 
@@ -42,6 +56,17 @@ impl FileHandler for Vfs {
 		if let Some(s) = guard.get(path) {
 			return Ok(s.clone());
 		}
+		if let Some(s) = self.packed.get(path) {
+			return Ok(s.clone());
+		}
+		if self.strict {
+			return Err(FileError {
+				file: path.to_path_buf(),
+				message: "file is not in the virtual filesystem".to_owned(),
+				other: vec![],
+			}
+			.into());
+		}
 
 		std::fs::read_to_string(path).map_err(|e| {
 			FileError {
@@ -54,11 +79,19 @@ impl FileHandler for Vfs {
 	}
 
 	fn is_dir(&self, path: &Path) -> bool {
-		path.is_dir()
+		self.files
+			.read()
+			.unwrap()
+			.keys()
+			.chain(self.packed.keys())
+			.any(|file| file.starts_with(path) && file != path)
+			|| (!self.strict && path.is_dir())
 	}
 
 	fn is_file(&self, path: &Path) -> bool {
-		path.is_file()
+		self.files.read().unwrap().contains_key(path)
+			|| self.packed.contains_key(path)
+			|| (!self.strict && path.is_file())
 	}
 
 	fn on_resolved_includes(

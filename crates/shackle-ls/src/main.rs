@@ -1,32 +1,18 @@
-//! The MiniZinc language server, providing IDE features such as go-to-definition, hover, and completions.
+//! Stdio host for the embeddable language-server core.
 use std::error::Error;
 
-use db::LanguageServerDatabase;
-use lsp_server::{Connection, ErrorCode, ExtractError, Message, Response};
-use lsp_types::{
-	CompletionOptions, HoverProviderCapability, InitializeParams, OneOf, PositionEncodingKind,
-	SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
-	SemanticTokensServerCapabilities, ServerCapabilities, SignatureHelpOptions,
-	TextDocumentSyncKind, Uri,
-	notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
+#[cfg(test)]
+use expect_test as _;
+use shackle_ls as _;
+// Dependencies are used by the library target; mark them as intentionally
+// shared for this deliberately thin binary host.
+use {
+	crossbeam_channel as _, log as _, lsp_server as _, lsp_types as _, miette as _,
+	serde_json as _, shackle_diagnostics as _, shackle_fmt as _, shackle_hir as _,
+	shackle_syntax as _, shackle_thir as _, shackle_ty as _, threadpool as _,
 };
 
-use crate::{
-	db::LanguageServerOptions,
-	dispatch::{DispatchNotification, DispatchRequest},
-	handlers::*,
-	utils::PositionEncoding,
-};
-
-mod db;
-mod diagnostics;
-mod dispatch;
-mod extensions;
-mod handlers;
-mod utils;
-mod vfs;
-
-fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
+fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 	env_logger::Builder::new()
 		.format_target(false)
 		.format_module_path(true)
@@ -35,178 +21,5 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
 		.filter_module("shackle", log::LevelFilter::Warn)
 		.parse_default_env()
 		.init();
-
-	log::info!("starting MiniZinc language server");
-	let (connection, io_threads) = Connection::stdio();
-
-	// Capabilities depend on the client's, so the handshake is driven manually
-	// rather than through `Connection::initialize`.
-	let (initialize_id, initialize_params) = connection.initialize_start()?;
-	let params: InitializeParams = serde_json::from_value(initialize_params)?;
-	let encoding = negotiate_position_encoding(&params);
-	log::info!("using {:?} position encoding", encoding);
-	utils::set_position_encoding(encoding);
-
-	let server_capabilities = serde_json::to_value(ServerCapabilities {
-		position_encoding: Some(encoding.into()),
-		definition_provider: Some(OneOf::Left(true)),
-		references_provider: Some(OneOf::Left(true)),
-		text_document_sync: Some(TextDocumentSyncKind::FULL.into()),
-		hover_provider: Some(HoverProviderCapability::Simple(true)),
-		signature_help_provider: Some(SignatureHelpOptions {
-			trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
-			..Default::default()
-		}),
-		inlay_hint_provider: Some(OneOf::Left(true)),
-		rename_provider: Some(OneOf::Left(true)),
-		completion_provider: Some(CompletionOptions {
-			trigger_characters: Some(vec![".".to_owned()]),
-			..Default::default()
-		}),
-		semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
-			SemanticTokensOptions {
-				full: Some(SemanticTokensFullOptions::Delta { delta: Some(false) }),
-				range: Some(false),
-				legend: SemanticTokensLegend {
-					token_types: TokenType::legend(),
-					token_modifiers: TokenModifier::legend(),
-				},
-				..Default::default()
-			},
-		)),
-		document_formatting_provider: Some(OneOf::Left(true)),
-		..Default::default()
-	})
-	.unwrap();
-	connection.initialize_finish(
-		initialize_id,
-		serde_json::json!({ "capabilities": server_capabilities }),
-	)?;
-	main_loop(connection, params)?;
-	io_threads.join()?;
-	log::info!("shutting down server");
-	Ok(())
-}
-
-/// Pick the encoding for `Position::character`.
-///
-/// UTF-8 avoids converting the byte offsets the compiler works in, but may only
-/// be chosen when the client offers it; UTF-16 is the protocol's default and is
-/// the only encoding some clients accept.
-fn negotiate_position_encoding(params: &InitializeParams) -> PositionEncoding {
-	let offered = params
-		.capabilities
-		.general
-		.as_ref()
-		.and_then(|general| general.position_encodings.as_ref());
-	match offered {
-		Some(encodings) if encodings.contains(&PositionEncodingKind::UTF8) => {
-			PositionEncoding::Utf8
-		}
-		_ => PositionEncoding::Utf16,
-	}
-}
-
-/// The workspace root.
-///
-/// A client may advertise workspace folder support and still send an empty
-/// list, and one without folder support sends only the deprecated `rootUri`.
-fn workspace_uri(params: &InitializeParams) -> Option<Uri> {
-	if let Some(folder) = params
-		.workspace_folders
-		.as_ref()
-		.and_then(|folders| folders.first())
-	{
-		return Some(folder.uri.clone());
-	}
-	#[allow(
-		deprecated,
-		reason = "rootUri is the only workspace root a client without folder support sends"
-	)]
-	params.root_uri.clone()
-}
-
-fn main_loop(
-	connection: Connection,
-	params: InitializeParams,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
-	let mut db = LanguageServerDatabase::new(
-		&connection,
-		LanguageServerOptions {
-			workspace_uri: workspace_uri(&params),
-		},
-	);
-	for msg in &connection.receiver {
-		match msg {
-			Message::Request(req) => {
-				if connection.handle_shutdown(&req)? {
-					return Ok(());
-				}
-
-				let id = req.id.clone();
-				let result = DispatchRequest::new(req, &mut db)
-					.on::<ViewCstHandler, _, _>()
-					.on::<ViewAstHandler, _, _>()
-					.on::<ViewFormatIrHandler, _, _>()
-					.on::<ViewHirHandler, _, _>()
-					.on::<ViewScopeHandler, _, _>()
-					.on::<ViewPrettyPrintHandler, _, _>()
-					.on::<ViewMirHandler, _, _>()
-					.on::<GotoDefinitionHandler, _, _>()
-					.on::<ReferencesHandler, _, _>()
-					.on::<RenameHandler, _, _>()
-					.on::<HoverHandler, _, _>()
-					.on::<SignatureHelpHandler, _, _>()
-					.on::<InlayHintHandler, _, _>()
-					.on::<CompletionsHandler, _, _>()
-					.on::<SemanticTokensHandler, _, _>()
-					.on::<FormatHandler, _, _>()
-					.finish();
-
-				// JSON-RPC requires a response for every request, so an
-				// unhandled or malformed one has to be reported as an error
-				// rather than dropped.
-				let error = match result {
-					Ok(_) => None,
-					Err(ExtractError::MethodMismatch(req)) => {
-						log::warn!("unhandled request {}", req.method);
-						Some((
-							req.id,
-							ErrorCode::MethodNotFound,
-							format!("Unhandled method {}", req.method),
-						))
-					}
-					Err(ExtractError::JsonError { method, error }) => {
-						log::error!("malformed params for {}: {}", method, error);
-						Some((id, ErrorCode::InvalidParams, error.to_string()))
-					}
-				};
-				if let Some((id, code, message)) = error {
-					connection.sender.send(Message::Response(Response::new_err(
-						id,
-						code as i32,
-						message,
-					)))?;
-				}
-			}
-			Message::Response(resp) => {
-				log::info!("got response: {:?}", resp);
-			}
-			Message::Notification(not) => {
-				let result = DispatchNotification::new(not, &mut db)
-					.on::<DidOpenTextDocument, _>(on_document_open)
-					.on::<DidChangeTextDocument, _>(on_document_changed)
-					.on::<DidCloseTextDocument, _>(on_document_closed)
-					.finish();
-				match result {
-					Ok(()) => (),
-					Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-					Err(ExtractError::MethodMismatch(not)) => {
-						log::warn!("unhandled {}", not.method)
-					}
-				}
-			}
-		}
-	}
-	Ok(())
+	shackle_ls::run_stdio()
 }
