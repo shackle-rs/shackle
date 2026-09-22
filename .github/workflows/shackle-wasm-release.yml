@@ -1,0 +1,46 @@
+name: Release shackle-wasm package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    if: startsWith(github.event.release.tag_name, 'shackle-wasm-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: ./.github/actions/setup-minizinc-edge
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+      - name: Build browser package
+        run: wasm-pack build crates/shackle-wasm --target web --out-dir "$GITHUB_WORKSPACE/pkg"
+      - name: Record packed MiniZinc version
+        run: minizinc --version > pkg/MINIZINC_EDGE_VERSION.txt
+      - name: Report browser asset size
+        run: |
+          set -euo pipefail
+          wasm_file="pkg/shackle_wasm_bg.wasm"
+          raw_bytes="$(stat --format=%s "$wasm_file")"
+          gzip_bytes="$(gzip --stdout --best "$wasm_file" | wc --bytes)"
+          {
+            echo '## shackle-wasm asset size'
+            echo
+            echo "- Raw WebAssembly: ${raw_bytes} bytes"
+            echo "- Gzip WebAssembly: ${gzip_bytes} bytes"
+            echo '- Packed MiniZinc version: `pkg/MINIZINC_EDGE_VERSION.txt`'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive package
+        run: tar -czf shackle-wasm-pkg.tar.gz pkg
+      - name: Attach browser package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" shackle-wasm-pkg.tar.gz --clobber

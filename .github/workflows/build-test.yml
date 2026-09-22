@@ -86,3 +86,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run clippy
         run: cargo clippy --tests --all-features -- -D warnings
+
+  wasm:
+    name: Check WebAssembly bridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: moonrepo/setup-rust@v1
+        with:
+          channel: ${{ env.RUST_CHANNEL }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Set up MiniZinc Edge
+        uses: ./.github/actions/setup-minizinc-edge
+      - name: Check WebAssembly target
+        run: cargo check -p shackle-wasm --target wasm32-unknown-unknown

@@ -15,6 +15,7 @@ build = "bindings/rust/build.rs"
 include = [
   "README.md",
   "bindings/rust/*",
+  "bindings/rust/wasm-include/*",
   "grammar.js",
   "queries/*",
   "src/*",

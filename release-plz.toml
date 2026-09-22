@@ -60,3 +60,8 @@ release = false
 [[package]]
 name = "tree-sitter-minizinc"
 release = false
+
+[[package]]
+name = "shackle-wasm"
+git_only = true
+publish = false
