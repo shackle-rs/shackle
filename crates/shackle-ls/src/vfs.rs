@@ -53,6 +53,14 @@ impl FileHandler for Vfs {
 		})
 	}
 
+	fn is_dir(&self, path: &Path) -> bool {
+		path.is_dir()
+	}
+
+	fn is_file(&self, path: &Path) -> bool {
+		path.is_file()
+	}
+
 	fn on_resolved_includes(
 		&self,
 		_db: &dyn shackle_hir::Db,
