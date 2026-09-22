@@ -12,12 +12,17 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 console_error_panic_hook = "0.1"
+js-sys = "0.3"
 miette = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 serde-wasm-bindgen = "0.6"
 shackle-diagnostics = { workspace = true }
 shackle-fmt = { workspace = true }
 shackle-hir = { workspace = true }
+shackle-ls = { path = "../shackle-ls" }
+lsp-server = "0.10.0"
+lsp-types = "0.97"
 shackle-syntax = { workspace = true }
 shackle-thir = { workspace = true }
 wasm-bindgen = "0.2"

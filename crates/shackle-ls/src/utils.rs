@@ -14,8 +14,10 @@ use shackle_hir::{db::Db, ids::NodeRef};
 /// back to, and the only encoding some clients accept; UTF-8 lets the byte
 /// offsets the compiler works in pass through untouched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PositionEncoding {
+pub enum PositionEncoding {
+	/// UTF-8 code units.
 	Utf8,
+	/// UTF-16 code units.
 	Utf16,
 }
 
