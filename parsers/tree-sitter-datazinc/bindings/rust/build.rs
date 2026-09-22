@@ -18,6 +18,7 @@ fn main() {
 
 	let mut c_config = cc::Build::new();
 	c_config.std("c11").include(src_dir);
+	configure_wasm_headers(&mut c_config);
 
 	#[cfg(target_env = "msvc")]
 	c_config.flag("-utf-8");
@@ -33,4 +34,27 @@ fn main() {
 	}
 
 	c_config.compile("tree-sitter-datazinc");
+}
+
+/// The `wasm32-unknown-unknown` target has no C sysroot. `tree-sitter-language`
+/// exposes the headers it ships for this target through Cargo build metadata;
+/// this crate supplies the remaining `stdbool.h` compatibility header.
+fn configure_wasm_headers(c_config: &mut cc::Build) {
+	let is_wasm = std::env::var("TARGET")
+		.map(|target| target.starts_with("wasm32-unknown"))
+		.unwrap_or(false);
+	if !is_wasm {
+		return;
+	}
+
+	let wasm_headers = std::env::var_os("DEP_TREE_SITTER_LANGUAGE_WASM_HEADERS")
+		.expect("tree-sitter-language did not provide WASM headers");
+	let compatibility_headers = std::path::Path::new("bindings/rust/wasm-include");
+	c_config
+		.include(compatibility_headers)
+		.include(wasm_headers);
+	println!(
+		"cargo:rerun-if-changed={}",
+		compatibility_headers.join("stdbool.h").display()
+	);
 }
