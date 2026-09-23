@@ -46,6 +46,211 @@ impl<'db> OldMiniZincPrinter<'db> {
 		}
 		.print_model(db, model)
 	}
+
+	/// Return the length and, when explicitly specified, the printed members of
+	/// an index array produced while lowering a 2-D literal.
+	fn print_2d_literal_dimension<T: Marker>(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		expression: &Expression<'db, T>,
+	) -> Option<(usize, Option<Vec<String>>)> {
+		if let ExpressionData::ArrayLiteral(items) = &**expression {
+			return Some((
+				items.len(),
+				Some(
+					items
+						.iter()
+						.map(|item| self.print_expression(db, model, item))
+						.collect(),
+				),
+			));
+		}
+
+		// A non-indexed dimension is lowered to `set2array(1..n)` (or
+		// `set2array({})`).  It has no index prefix in the 2-D literal syntax.
+		let ExpressionData::Call(set2array) = &**expression else {
+			return None;
+		};
+		let Callable::Function(set2array_fn) = &set2array.function else {
+			return None;
+		};
+		if model[*set2array_fn].name() != self.ids.functions.set2array
+			|| set2array.arguments.len() != 1
+		{
+			return None;
+		}
+		match &*set2array.arguments[0] {
+			ExpressionData::SetLiteral(items) if items.is_empty() => Some((0, None)),
+			ExpressionData::Call(range) => {
+				let Callable::Function(range_fn) = &range.function else {
+					return None;
+				};
+				if model[*range_fn].name() != self.ids.functions.dot_dot
+					|| range.arguments.len() != 2
+				{
+					return None;
+				}
+				let ExpressionData::IntegerLiteral(start) = &*range.arguments[0] else {
+					return None;
+				};
+				let ExpressionData::IntegerLiteral(end) = &*range.arguments[1] else {
+					return None;
+				};
+				(start.0 == 1 && end.0 >= 1).then_some((end.0 as usize, None))
+			}
+			_ => None,
+		}
+	}
+
+	/// Reconstruct MiniZinc syntax for calls synthesized by HIR-to-THIR
+	/// lowering.  This is only used when printing input files without the
+	/// Shackle compatibility library.
+	fn print_input_only_synthesized_call<T: Marker>(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		call: &crate::Call<'db, T>,
+	) -> Option<String> {
+		let Callable::Function(function) = &call.function else {
+			return None;
+		};
+		let name = model[*function].name();
+
+		if name == self.ids.functions.mzn_array_2d_literal && call.arguments.len() == 3 {
+			let (row_count, row_indices) =
+				self.print_2d_literal_dimension(db, model, &call.arguments[0])?;
+			let (column_count, column_indices) =
+				self.print_2d_literal_dimension(db, model, &call.arguments[1])?;
+			let ExpressionData::ArrayLiteral(values) = &*call.arguments[2] else {
+				return None;
+			};
+			if values.len() != row_count.checked_mul(column_count)? {
+				return None;
+			}
+			if column_count == 0 {
+				return (row_count == 0).then_some("[||]".to_owned());
+			}
+
+			let mut rows = Vec::with_capacity(row_count + usize::from(column_indices.is_some()));
+			if let Some(indices) = column_indices {
+				rows.push(format!("{}:", indices.join(": ")));
+			}
+			for (row, values) in values.chunks(column_count).enumerate() {
+				let prefix = row_indices
+					.as_ref()
+					.map(|indices| format!("{}: ", indices[row]))
+					.unwrap_or_default();
+				rows.push(format!(
+					"{}{}",
+					prefix,
+					values
+						.iter()
+						.map(|value| self.print_expression(db, model, value))
+						.collect::<Vec<_>>()
+						.join(", ")
+				));
+			}
+			return Some(format!("[| {} |]", rows.join(" | ")));
+		}
+
+		if name == self.ids.functions.mzn_start_indexed_array && call.arguments.len() == 2 {
+			let ExpressionData::ArrayLiteral(values) = &*call.arguments[1] else {
+				return None;
+			};
+			if values.is_empty() {
+				return None;
+			}
+			return Some(format!(
+				"[{}: {}]",
+				self.print_expression(db, model, &call.arguments[0]),
+				values
+					.iter()
+					.map(|value| self.print_expression(db, model, value))
+					.collect::<Vec<_>>()
+					.join(", ")
+			));
+		}
+
+		if name == self.ids.functions.mzn_indexed_array && call.arguments.len() == 1 {
+			let ExpressionData::ArrayLiteral(members) = &*call.arguments[0] else {
+				return None;
+			};
+			let members = members
+				.iter()
+				.map(|member| {
+					let ExpressionData::TupleLiteral(member) = &**member else {
+						return None;
+					};
+					(member.len() == 2).then(|| {
+						format!(
+							"{}: {}",
+							self.print_expression(db, model, &member[0]),
+							self.print_expression(db, model, &member[1]),
+						)
+					})
+				})
+				.collect::<Option<Vec<_>>>()?;
+			return Some(format!("[{}]", members.join(", ")));
+		}
+
+		// Slice lowering wraps mzn_slice in array<N>d to restore the output
+		// dimensions.  The original access syntax already has those dimensions,
+		// so print the entire pattern as one access.
+		let function_name = name.as_identifier(db).lookup(db);
+		if function_name
+			.strip_prefix("array")
+			.and_then(|rank| rank.strip_suffix('d'))
+			.and_then(|rank| rank.parse::<usize>().ok())
+			.is_some_and(|rank| rank == call.arguments.len() - 1)
+			&& let Some(slice) = call.arguments.last()
+			&& let ExpressionData::Call(slice) = &**slice
+			&& let Callable::Function(slice_fn) = &slice.function
+			&& model[*slice_fn].name() == self.ids.functions.mzn_slice
+			&& slice.arguments.len() == 2
+			&& let ExpressionData::TupleLiteral(indices) = &*slice.arguments[1]
+		{
+			let restored_indices = indices
+				.iter()
+				.map(|index| {
+					let was_slice = call.arguments[..call.arguments.len() - 1]
+						.iter()
+						.any(|argument| argument == index);
+					if was_slice {
+						Some(self.print_expression(db, model, index))
+					} else if let ExpressionData::SetLiteral(items) = &**index
+						&& items.len() == 1
+					{
+						Some(self.print_expression(db, model, &items[0]))
+					} else {
+						None
+					}
+				})
+				.collect::<Option<Vec<_>>>()?;
+			return Some(format!(
+				"({}[{}])",
+				self.print_expression(db, model, &slice.arguments[0]),
+				restored_indices.join(", ")
+			));
+		}
+
+		if name == self.ids.functions.mzn_slice
+			&& call.arguments.len() == 2
+			&& let ExpressionData::TupleLiteral(indices) = &*call.arguments[1]
+		{
+			return Some(format!(
+				"({}[{}])",
+				self.print_expression(db, model, &call.arguments[0]),
+				indices
+					.iter()
+					.map(|index| self.print_expression(db, model, index))
+					.collect::<Vec<_>>()
+					.join(", ")
+			));
+		}
+
+		None
+	}
 }
 
 impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
@@ -159,6 +364,12 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
 		model: &Model<'db, T>,
 		expression: &Expression<'db, T>,
 	) -> String {
+		if self.print_input_files_only
+			&& let ExpressionData::Call(call) = &**expression
+			&& let Some(printed) = self.print_input_only_synthesized_call(db, model, call)
+		{
+			return printed;
+		}
 		if let ExpressionData::Call(c) = &**expression
 			&& (c.arguments.len() == 1 || c.arguments.len() == 2)
 			&& let Callable::Function(f) = &c.function
@@ -308,5 +519,58 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
 		}
 
 		name.pretty_print(db)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::path::PathBuf;
+
+	use salsa::Setter;
+	use shackle_hir::{
+		CompilerDatabase,
+		input::{CompilerSettings, InlineModelFile, InputFiles},
+	};
+	use shackle_syntax::InputLang;
+
+	use super::OldMiniZincPrinter;
+	use crate::transform::Transformer;
+
+	#[test]
+	fn print_input_files_reconstructs_lowered_array_syntax() {
+		let mut db = CompilerDatabase::default();
+		let shackle_stdlib = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.join("../..")
+			.join("share/minizinc");
+		let _ = CompilerSettings::get(&db)
+			.set_stdlib_directory(&mut db)
+			.to(Some(shackle_stdlib));
+		Transformer::set_transforms(&mut db, []);
+		let source = r#"
+            array [int, int] of int: matrix = [| 1, 2 | 3, 4 |];
+            array [int] of int: offset = [3: 10, 20];
+            array [int] of int: sparse = [1: 10, 3: 20];
+			array [int, int] of int: sliced = matrix[1..2, 2..2];
+        "#;
+		let input = InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc).into();
+		let _ = InputFiles::get(&db).set_files(&mut db).to(vec![input]);
+
+		let printed = OldMiniZincPrinter::run(&db, true);
+
+		assert!(printed.contains("[| 1, 2 | 3, 4 |]"), "{printed}");
+		assert!(printed.contains("[3: 10, 20]"), "{printed}");
+		assert!(printed.contains("[1: 10, 3: 20]"), "{printed}");
+		assert!(printed.contains("matrix["), "{printed}");
+		for helper in [
+			"mzn_array_2d_literal",
+			"mzn_start_indexed_array",
+			"mzn_indexed_array",
+			"mzn_slice",
+		] {
+			assert!(
+				!printed.contains(helper),
+				"{helper} remained in:\n{printed}"
+			);
+		}
 	}
 }
