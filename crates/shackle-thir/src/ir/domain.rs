@@ -131,7 +131,7 @@ impl<'db, T: Marker> Domain<'db, T> {
 			.with_opt(db, opt);
 		Self {
 			ty,
-			data: DomainData::Set(Box::new(element), cardinality),
+			data: DomainData::Set(Box::new(element), cardinality.map(Box::new)),
 			origin: origin.into(),
 		}
 	}
@@ -271,7 +271,7 @@ pub enum DomainData<'db, T: Marker = ()> {
 	/// Array index sets and element domain
 	Array(Box<Domain<'db, T>>, Box<Domain<'db, T>>),
 	/// Set domain with an optional cardinality bound
-	Set(Box<Domain<'db, T>>, Option<Expression<'db, T>>),
+	Set(Box<Domain<'db, T>>, Option<Box<Expression<'db, T>>>),
 	/// Tuple domain
 	Tuple(Vec<Domain<'db, T>>),
 	/// Record domain
