@@ -61,26 +61,26 @@ impl Server {
 	/// Handle a message
 	pub fn handle(&mut self, message: Message) -> Vec<Message> {
 		if !self.initialized {
-			if let Message::Request(request) = message {
-				if request.method == "initialize" {
-					let id = request.id;
-					return match serde_json::from_value::<InitializeParams>(request.params) {
-						Ok(params) => {
-							let encoding = negotiate_position_encoding(&params);
-							utils::set_position_encoding(encoding);
-							self.initialized = true;
-							vec![Message::Response(Response::new_ok(
-								id,
-								serde_json::json!({"capabilities": capabilities(encoding)}),
-							))]
-						}
-						Err(e) => vec![Message::Response(Response::new_err(
+			if let Message::Request(request) = message
+				&& request.method == "initialize"
+			{
+				let id = request.id;
+				return match serde_json::from_value::<InitializeParams>(request.params) {
+					Ok(params) => {
+						let encoding = negotiate_position_encoding(&params);
+						utils::set_position_encoding(encoding);
+						self.initialized = true;
+						vec![Message::Response(Response::new_ok(
 							id,
-							ErrorCode::InvalidParams as i32,
-							e.to_string(),
-						))],
-					};
-				}
+							serde_json::json!({"capabilities": capabilities(encoding)}),
+						))]
+					}
+					Err(e) => vec![Message::Response(Response::new_err(
+						id,
+						ErrorCode::InvalidParams as i32,
+						e.to_string(),
+					))],
+				};
 			}
 			return Vec::new();
 		}
@@ -269,60 +269,6 @@ fn dispatch_notification(db: &mut LanguageServerDatabase, notification: lsp_serv
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use std::sync::Arc;
-
-	use lsp_server::{Message, Request, RequestId};
-	use lsp_types::WorkspaceFolder;
-
-	use super::{Server, ServerConfig};
-	use crate::vfs::Vfs;
-
-	#[test]
-	fn embedded_server_handles_shutdown() {
-		let workspace_uri: lsp_types::Uri = "file:///workspace/".parse().unwrap();
-		let mut server = Server::new(
-			ServerConfig {
-				workspace_uri,
-				stdlib_directory: None,
-				minizinc_stdlib_directory: None,
-			},
-			Arc::new(Vfs::new()),
-		);
-		let initialize = Request::new(
-			RequestId::from(1),
-			"initialize".to_owned(),
-			serde_json::to_value(lsp_types::InitializeParams::default()).unwrap(),
-		);
-		assert_eq!(server.handle(Message::Request(initialize)).len(), 1);
-
-		let output = server.handle(Message::Request(Request::new(
-			RequestId::from(2),
-			"shutdown".to_owned(),
-			serde_json::Value::Null,
-		)));
-		assert!(
-			matches!(output.as_slice(), [Message::Response(response)] if response.id == RequestId::from(2) && response.response_result.is_ok())
-		);
-	}
-
-	#[test]
-	fn workspace_folder_takes_precedence_over_root_uri() {
-		let mut params = lsp_types::InitializeParams::default();
-		#[allow(deprecated)]
-		{
-			params.root_uri = Some("file:///root/".parse().unwrap());
-		}
-		let workspace_uri: lsp_types::Uri = "file:///workspace/".parse().unwrap();
-		params.workspace_folders = Some(vec![WorkspaceFolder {
-			uri: workspace_uri.clone(),
-			name: "workspace".to_owned(),
-		}]);
-		assert_eq!(super::workspace_uri(&params), Some(workspace_uri));
-	}
-}
-
 /// Negociate position encoding method
 pub fn negotiate_position_encoding(params: &InitializeParams) -> PositionEncoding {
 	match params
@@ -369,5 +315,59 @@ pub fn capabilities(encoding: PositionEncoding) -> ServerCapabilities {
 		)),
 		document_formatting_provider: Some(OneOf::Left(true)),
 		..Default::default()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use lsp_server::{Message, Request, RequestId};
+	use lsp_types::WorkspaceFolder;
+
+	use super::{Server, ServerConfig};
+	use crate::vfs::Vfs;
+
+	#[test]
+	fn embedded_server_handles_shutdown() {
+		let workspace_uri: lsp_types::Uri = "file:///workspace/".parse().unwrap();
+		let mut server = Server::new(
+			ServerConfig {
+				workspace_uri,
+				stdlib_directory: None,
+				minizinc_stdlib_directory: None,
+			},
+			Arc::new(Vfs::default()),
+		);
+		let initialize = Request::new(
+			RequestId::from(1),
+			"initialize".to_owned(),
+			serde_json::to_value(lsp_types::InitializeParams::default()).unwrap(),
+		);
+		assert_eq!(server.handle(Message::Request(initialize)).len(), 1);
+
+		let output = server.handle(Message::Request(Request::new(
+			RequestId::from(2),
+			"shutdown".to_owned(),
+			serde_json::Value::Null,
+		)));
+		assert!(
+			matches!(output.as_slice(), [Message::Response(response)] if response.id == RequestId::from(2) && response.response_result.is_ok())
+		);
+	}
+
+	#[test]
+	fn workspace_folder_takes_precedence_over_root_uri() {
+		let mut params = lsp_types::InitializeParams::default();
+		#[allow(deprecated, reason = "tests precedence of options")]
+		{
+			params.root_uri = Some("file:///root/".parse().unwrap());
+		}
+		let workspace_uri: lsp_types::Uri = "file:///workspace/".parse().unwrap();
+		params.workspace_folders = Some(vec![WorkspaceFolder {
+			uri: workspace_uri.clone(),
+			name: "workspace".to_owned(),
+		}]);
+		assert_eq!(super::workspace_uri(&params), Some(workspace_uri));
 	}
 }

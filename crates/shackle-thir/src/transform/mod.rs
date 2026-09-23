@@ -236,7 +236,7 @@ pub(crate) mod tests {
 		let _ = InputFiles::get(&db).set_files(&mut db).to(vec![model_file]);
 		transform.set_transforms(&mut db);
 		let pretty = match final_thir(&db) {
-			Ok(mut result) => NameMapper::default().run(&db, model_file, &mut result),
+			Ok(result) => NameMapper::default().run(&db, model_file, result),
 			Err(e) => e.to_string(),
 		};
 		expected.assert_eq(&pretty);
@@ -254,7 +254,7 @@ pub(crate) mod tests {
 		let _ = InputFiles::get(&db).set_files(&mut db).to(vec![model_file]);
 		transform.set_transforms(&mut db);
 		let pretty = match final_thir(&db) {
-			Ok(result) => PrettyPrinter::new(&db, &result).pretty_print(),
+			Ok(result) => PrettyPrinter::new(&db, result).pretty_print(),
 			Err(e) => e.to_string(),
 		};
 		expected.assert_eq(&pretty);

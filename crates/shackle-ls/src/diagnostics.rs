@@ -183,11 +183,11 @@ mod tests {
 		assert!(span_name_is("model.mzn", file));
 		assert!(span_name_is(
 			"test.mzn",
-			&Path::new("/home/jason/experiments/ls-test/test.mzn"),
+			Path::new("/home/jason/experiments/ls-test/test.mzn"),
 		));
 		assert!(span_name_is(
 			"nested/model.mzn",
-			&Path::new("/another/root/nested/model.mzn"),
+			Path::new("/another/root/nested/model.mzn"),
 		));
 	}
 }

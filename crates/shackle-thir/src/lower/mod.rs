@@ -376,7 +376,8 @@ impl<'db> ItemCollector<'db> {
 			&& matches!(
 				&data[d.declared_type],
 				shackle_hir::Type::Set { .. } | shackle_hir::Type::Array { .. }
-			) && let Some(class_domain) = data[d.declared_type].get_new_class(data)
+			)
+			&& let Some(class_domain) = data[d.declared_type].get_new_class(data)
 		{
 			let class_pattern_ref = types.name_resolution(class_domain).unwrap();
 			if let Some(class_info) = collector

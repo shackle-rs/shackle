@@ -151,7 +151,8 @@ fn parameter_names_for_target<'db>(
 					constructor,
 					parameters,
 					..
-				}) = constructor && *constructor == target_pattern
+				}) = constructor
+					&& *constructor == target_pattern
 				{
 					return Some(parameter_names(
 						db,
@@ -169,7 +170,8 @@ fn parameter_names_for_target<'db>(
 					constructor,
 					parameters,
 					..
-				}) = constructor && *constructor == target_pattern
+				}) = constructor
+					&& *constructor == target_pattern
 				{
 					return Some(parameter_names(
 						db,

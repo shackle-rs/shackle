@@ -686,12 +686,13 @@ impl<'db> PolymorphicFunctionType<'db> {
 						add_instantiation,
 						*d1,
 						*d2,
-					) && PolymorphicFunctionType::collect_instantiations(
-					db,
-					add_instantiation,
-					*e1,
-					*e2,
-				)
+					)
+					&& PolymorphicFunctionType::collect_instantiations(
+						db,
+						add_instantiation,
+						*e1,
+						*e2,
+					)
 			}
 			(TyData::Set(i1, o1, e1), TyData::Set(i2, o2, e2)) => {
 				(*i1 == *i2 || *i1 == VarType::Par)
@@ -736,7 +737,8 @@ impl<'db> PolymorphicFunctionType<'db> {
 						add_instantiation,
 						f1.return_type,
 						f2.return_type,
-					) && f1.params.len() == f2.params.len()
+					)
+					&& f1.params.len() == f2.params.len()
 					&& f1.params.iter().zip(f2.params.iter()).all(|(t1, t2)| {
 						PolymorphicFunctionType::collect_instantiations(
 							db,

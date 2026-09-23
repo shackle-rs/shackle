@@ -467,7 +467,8 @@ impl<'db> ItemCollector<'db> {
 					| shackle_hir::Type::Set {
 						cardinality: None,
 						..
-					} | shackle_hir::Type::Array { .. }
+					}
+					| shackle_hir::Type::Array { .. }
 					| shackle_hir::Type::Tuple { .. }
 					| shackle_hir::Type::Record { .. }
 					| shackle_hir::Type::Any

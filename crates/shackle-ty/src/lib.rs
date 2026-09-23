@@ -316,7 +316,8 @@ impl<'db> Ty<'db> {
 				| TyData::Array {
 					opt: OptType::NonOpt,
 					..
-				} | TyData::Tuple(OptType::NonOpt, _)
+				}
+				| TyData::Tuple(OptType::NonOpt, _)
 				| TyData::Record(OptType::NonOpt, _)
 		)
 	}
@@ -421,7 +422,8 @@ impl<'db> Ty<'db> {
 					| TyData::Array {
 						opt: OptType::Opt,
 						..
-					} | TyData::Tuple(OptType::Opt, _)
+					}
+					| TyData::Tuple(OptType::Opt, _)
 					| TyData::Record(OptType::Opt, _)
 			)
 		})
@@ -479,7 +481,8 @@ impl<'db> Ty<'db> {
 					| TyData::Array {
 						opt: OptType::Opt,
 						..
-					} | TyData::Boolean(_, OptType::Opt)
+					}
+					| TyData::Boolean(_, OptType::Opt)
 					| TyData::Bottom(OptType::Opt)
 					| TyData::Enum(_, _, _)
 					| TyData::Float(_, OptType::Opt)

@@ -204,7 +204,8 @@ impl<'db> ItemCollector<'db> {
 			&& matches!(
 				local_domain_source,
 				LocalDomainSource::FlattenedChildCollection
-			) && attrib_path.is_empty()
+			)
+			&& attrib_path.is_empty()
 			&& object_field_constructors_available
 		{
 			return self.reconstructed_nested_flattened_contribution_expr(
@@ -242,7 +243,8 @@ impl<'db> ItemCollector<'db> {
 			&& matches!(
 				local_domain_source,
 				LocalDomainSource::FlattenedChildCollection | LocalDomainSource::OnePerParent
-			) && object_field_constructors_available
+			)
+			&& object_field_constructors_available
 		{
 			// An object-carrying class introduced ≥ 2 `new`-hops below a par
 			// root. The depth-1 builders above hardcode a 2-level generator

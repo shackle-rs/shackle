@@ -100,7 +100,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				// compare inst and opt as they go.
 				self.parent.model
 					[self.parent.objects.class_map[&class_pattern(*expected_class)].class_enum]
-					.enum_type() == *actual_enum
+					.enum_type()
+					== *actual_enum
 			}
 			(
 				TyData::Set(actual_inst, actual_opt, actual_element),
@@ -114,7 +115,8 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				};
 				self.parent.model
 					[self.parent.objects.class_map[&class_pattern(expected_class)].class_enum]
-					.enum_type() == actual_enum
+					.enum_type()
+					== actual_enum
 			}
 			_ => false,
 		}
