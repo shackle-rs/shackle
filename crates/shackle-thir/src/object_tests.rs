@@ -91,9 +91,9 @@ fn user_items_pretty(source: &str) -> String {
 	let model_file: ModelFile =
 		InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc).into();
 	let _ = InputFiles::get(&db).set_files(&mut db).to(vec![model_file]);
-	let mut model = lower_model(&db).take();
-	let pretty = NameMapper::default().run(&db, model_file, &mut model);
-	pretty
+	let model = lower_model(&db).take();
+
+	NameMapper::default().run(&db, model_file, &model)
 }
 
 // A par class with a computed (RHS) attribute (`int: y = x + 1`). The computed

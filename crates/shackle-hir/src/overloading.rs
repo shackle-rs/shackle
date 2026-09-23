@@ -325,8 +325,8 @@ pub fn check_overloading<'db>(db: &'db dyn Db, overloads: &[PatternRef<'db>]) ->
 			if let Ok((_, fta)) = a.overload.instantiate_ty_params(db, b.overload.params()) {
 				if b.overload
 					.instantiate_ty_params(db, a.overload.params())
-					.is_ok() && (a.has_body && b.has_body
-					|| fta.return_type != b.overload.return_type())
+					.is_ok()
+					&& (a.has_body && b.has_body || fta.return_type != b.overload.return_type())
 				{
 					// Cannot tell apart via positional call, so names must be able to disambiguate
 					if !a.can_call_using_names() || !b.can_call_using_names() {

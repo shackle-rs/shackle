@@ -464,7 +464,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
 					(_, None, o) => (Some(VarType::Par), o), // opt prefix means par opt
 					(_, i, None) => (i, Some(OptType::NonOpt)), // var prefix means var non-opt
-					(_, i, o) => (i, o),          // var opt means var opt
+					(_, i, o) => (i, o),                     // var opt means var opt
 				};
 				let _ = tiids
 					.tiids
@@ -515,7 +515,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 					(_, None, None) => (Some(VarType::Par), Some(OptType::NonOpt)), // No prefix means par non-opt
 					(_, None, o) => (Some(VarType::Par), o), // opt prefix means par opt
 					(_, i, None) => (i, Some(OptType::NonOpt)), // var prefix means var non-opt
-					(_, i, o) => (i, o),          // var opt means var opt
+					(_, i, o) => (i, o),                     // var opt means var opt
 				};
 				Type::Bounded {
 					inst,

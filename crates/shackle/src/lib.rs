@@ -362,7 +362,8 @@ impl Type {
 					opt: OptType::Opt,
 					dim: _,
 					element: _
-				} | Type::Set(OptType::Opt, _)
+				}
+				| Type::Set(OptType::Opt, _)
 				| Type::Tuple(OptType::Opt, _)
 				| Type::Record(OptType::Opt, _)
 		)

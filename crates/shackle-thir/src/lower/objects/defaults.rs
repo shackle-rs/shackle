@@ -376,17 +376,19 @@ impl<'db> ItemCollector<'db> {
 		if self
 			.model
 			.lookup_function(self.db, self.ids.functions.lb.into(), &[par_enum_ty])
-			.is_err() || self
-			.model
-			.lookup_function(self.db, self.ids.functions.enum2int.into(), &[par_enum_ty])
-			.is_err() || self
-			.model
-			.lookup_function(
-				self.db,
-				self.ids.functions.forall.into(),
-				&[Ty::array(self.db, par_int_ty, Ty::par_bool(self.db)).unwrap()],
-			)
 			.is_err()
+			|| self
+				.model
+				.lookup_function(self.db, self.ids.functions.enum2int.into(), &[par_enum_ty])
+				.is_err()
+			|| self
+				.model
+				.lookup_function(
+					self.db,
+					self.ids.functions.forall.into(),
+					&[Ty::array(self.db, par_int_ty, Ty::par_bool(self.db)).unwrap()],
+				)
+				.is_err()
 		{
 			return;
 		}

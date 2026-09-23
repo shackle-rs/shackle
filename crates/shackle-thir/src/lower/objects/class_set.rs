@@ -366,14 +366,15 @@ impl<'db> ItemCollector<'db> {
 				self.ids.functions.minus.into(),
 				&[par_int, par_int],
 			)
-			.is_err() || self
-			.model
-			.lookup_function(
-				self.db,
-				self.ids.functions.dot_dot.into(),
-				&[par_int, par_int],
-			)
 			.is_err()
+			|| self
+				.model
+				.lookup_function(
+					self.db,
+					self.ids.functions.dot_dot.into(),
+					&[par_int, par_int],
+				)
+				.is_err()
 		{
 			return None;
 		}

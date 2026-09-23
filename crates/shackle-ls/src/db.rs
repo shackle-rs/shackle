@@ -61,7 +61,7 @@ pub(crate) struct LanguageServerDatabase {
 
 impl LanguageServerDatabase {
 	pub(crate) fn new(connection: &Connection, options: LanguageServerOptions) -> Self {
-		let fs = Arc::new(Vfs::new());
+		let fs = Arc::new(Vfs::default());
 		Self::build(fs, connection.sender.clone(), options, true, None)
 	}
 
@@ -230,7 +230,7 @@ mod tests {
 	fn database(close_documents: bool) -> LanguageServerDatabase {
 		let (sender, _) = unbounded();
 		LanguageServerDatabase::build(
-			Arc::new(Vfs::new()),
+			Arc::new(Vfs::default()),
 			sender,
 			LanguageServerOptions {
 				workspace_uri: None,

@@ -11,7 +11,7 @@ use shackle_hir::db::FileHandler;
 /// Virtual filesystem allowing us to override file reads
 ///
 /// Uses a mutex internally so can be cloned and used by immutable reference.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Vfs {
 	files: RwLock<HashMap<PathBuf, String>>,
 	packed: HashMap<PathBuf, String>,
@@ -19,15 +19,6 @@ pub struct Vfs {
 }
 
 impl Vfs {
-	/// Create a new VFS
-	pub fn new() -> Self {
-		Self {
-			files: RwLock::new(HashMap::new()),
-			packed: HashMap::new(),
-			strict: false,
-		}
-	}
-
 	/// Create a filesystem-free VFS backed only by supplied packed files.
 	pub fn with_packed_files(files: HashMap<PathBuf, String>) -> Self {
 		Self {
