@@ -16,6 +16,24 @@ members = [
   "parsers/tree-sitter-eprime",
   "parsers/tree-sitter-minizinc",
 ]
+# WebAssembly bundles MiniZinc's standard library at build time and therefore
+# requires MZN_STDLIB_DIR. Keep it opt-in for ordinary native workspace builds.
+default-members = [
+  "crates/shackle",
+  "crates/shackle-cli",
+  "crates/shackle-diagnostics",
+  "crates/shackle-fmt",
+  "crates/shackle-hir",
+  "crates/shackle-ls",
+  "crates/shackle-syntax",
+  "crates/shackle-thir",
+  "crates/shackle-ty",
+  "crates/shackle-utils",
+  "crates/shackle-utils-derive",
+  "parsers/tree-sitter-datazinc",
+  "parsers/tree-sitter-eprime",
+  "parsers/tree-sitter-minizinc",
+]
 resolver = "2"
 
 [workspace.package]
@@ -35,24 +53,24 @@ log = "0.4.29"
 miette = "7.6.0"
 rustc-hash = "2.1.2"
 salsa = "0.28.1"
-serde = { version = "1.0", features = ["derive"] }
+serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
+shackle = {path = "crates/shackle", version = "0.1.0"}
+shackle-diagnostics = {path = "crates/shackle-diagnostics", version = "0.1.0"}
+shackle-fmt = {path = "crates/shackle-fmt", version = "0.1.0"}
+shackle-hir = {path = "crates/shackle-hir", version = "0.1.0"}
+shackle-syntax = {path = "crates/shackle-syntax", version = "0.1.0"}
+shackle-thir = {path = "crates/shackle-thir", version = "0.1.0"}
+shackle-ty = {path = "crates/shackle-ty", version = "0.1.0"}
+shackle-utils = {path = "crates/shackle-utils", version = "0.1.0"}
+shackle-utils-derive = {path = "crates/shackle-utils-derive", version = "0.1.0"}
 stacker = "0.1.24"
 streaming-iterator = "0.1.9"
 tree-sitter = "0.27.0"
+tree-sitter-datazinc = {path = "parsers/tree-sitter-datazinc", version = "0.1.0"}
+tree-sitter-eprime = {path = "parsers/tree-sitter-eprime", version = "0.1.0"}
 tree-sitter-language = "0.1.7"
-shackle = { path = "crates/shackle", version = "0.1.0" }
-shackle-diagnostics = { path = "crates/shackle-diagnostics", version = "0.1.0" }
-shackle-fmt = { path = "crates/shackle-fmt", version = "0.1.0" }
-shackle-hir = { path = "crates/shackle-hir", version = "0.1.0" }
-shackle-syntax = { path = "crates/shackle-syntax", version = "0.1.0" }
-shackle-thir = { path = "crates/shackle-thir", version = "0.1.0" }
-shackle-ty = { path = "crates/shackle-ty", version = "0.1.0" }
-shackle-utils = { path = "crates/shackle-utils", version = "0.1.0" }
-shackle-utils-derive = { path = "crates/shackle-utils-derive", version = "0.1.0" }
-tree-sitter-datazinc = { path = "parsers/tree-sitter-datazinc", version = "0.1.0" }
-tree-sitter-eprime = { path = "parsers/tree-sitter-eprime", version = "0.1.0" }
-tree-sitter-minizinc = { path = "parsers/tree-sitter-minizinc", version = "0.1.0" }
+tree-sitter-minizinc = {path = "parsers/tree-sitter-minizinc", version = "0.1.0"}
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
