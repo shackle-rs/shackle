@@ -157,6 +157,23 @@ impl<'db, Src: Marker, Dst: Marker> DispatchRewriter<'db, Dst, Src> {
 		)
 	}
 
+	fn and(
+		&self,
+		db: &'db dyn Db,
+		lhs: Expression<'db, Dst>,
+		rhs: Expression<'db, Dst>,
+	) -> Expression<'db, Dst> {
+		Expression::new(
+			db,
+			&self.model,
+			lhs.origin(),
+			LookupCall {
+				function: self.ids.functions.and.into(),
+				arguments: vec![lhs, rhs],
+			},
+		)
+	}
+
 	fn occurs(&self, db: &'db dyn Db, e: Expression<'db, Dst>) -> Expression<'db, Dst> {
 		Expression::new(
 			db,
@@ -240,16 +257,10 @@ impl<'db, Src: Marker, Dst: Marker> DispatchRewriter<'db, Dst, Src> {
 				// var opt T -> var U
 				let destruct_ce = self.call(db, self.ids.functions.mzn_destruct_opt, ce);
 				let destruct_ve = self.call(db, self.ids.functions.mzn_destruct_opt, ve);
-				condition.push(self.call(
-					db,
-					self.ids.functions.is_fixed,
-					self.occurs(db, destruct_ce.clone()),
-				));
-				condition.push(self.call(
-					db,
-					self.ids.functions.fix,
-					self.occurs(db, destruct_ce.clone()),
-				));
+				let occurs = self.occurs(db, destruct_ce.clone());
+				let occurs_is_fixed = self.call(db, self.ids.functions.is_fixed, occurs.clone());
+				let fix_occurs = self.call(db, self.ids.functions.fix, occurs);
+				condition.push(self.and(db, occurs_is_fixed, fix_occurs));
 				let deopt_ce = self.deopt(db, destruct_ce);
 				let deopt_ve = self.deopt(db, destruct_ve);
 				return self.dispatch_param(
@@ -661,7 +672,7 @@ mod tests {
             predicate foo(int: x) = true;
             "#,
 			expect!([r#"
-    function var bool: foo(var opt int: x) = if forall([is_fixed((mzn_destruct_opt(x)).1), fix((mzn_destruct_opt(x)).1)]) then foo((mzn_destruct_opt(x)).2) elseif is_fixed(mzn_destruct_opt(x)) then foo(mzn_construct_opt(fix(mzn_destruct_opt(x)))) else true endif;
+    function var bool: foo(var opt int: x) = if '/\'(is_fixed((mzn_destruct_opt(x)).1), fix((mzn_destruct_opt(x)).1)) then foo((mzn_destruct_opt(x)).2) elseif is_fixed(mzn_destruct_opt(x)) then foo(mzn_construct_opt(fix(mzn_destruct_opt(x)))) else true endif;
     function var bool: foo(var int: x) = if is_fixed(x) then foo(fix(x)) else true endif;
     function var bool: foo(opt int: x) = if (mzn_destruct_opt(x)).1 then foo((mzn_destruct_opt(x)).2) else true endif;
     function var bool: foo(int: x) = true;
