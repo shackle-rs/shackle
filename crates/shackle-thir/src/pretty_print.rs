@@ -386,29 +386,33 @@ pub fn print_enumeration<'db, T: Marker, P: Printer<'db, T> + ?Sized>(
 		write!(
 			&mut buf,
 			" = {}",
-			cases
-				.iter()
-				.enumerate()
-				.map(|(i, c)| {
-					let name = printer.print_enumeration_member_id(
-						db,
-						model,
-						EnumMemberId::new(idx, i as u32),
-					);
-					match &c.parameters {
-						Some(ps) => format!(
-							"{}({})",
-							name,
-							ps.iter()
-								.map(|d| printer.print_domain(db, model, model[*d].domain()))
-								.collect::<Vec<_>>()
-								.join(", ")
-						),
-						None => format!("{{ {} }}", name),
-					}
-				})
-				.collect::<Vec<_>>()
-				.join(" ++ ")
+			if cases.is_empty() {
+				"{}".to_owned()
+			} else {
+				cases
+					.iter()
+					.enumerate()
+					.map(|(i, c)| {
+						let name = printer.print_enumeration_member_id(
+							db,
+							model,
+							EnumMemberId::new(idx, i as u32),
+						);
+						match &c.parameters {
+							Some(ps) => format!(
+								"{}({})",
+								name,
+								ps.iter()
+									.map(|d| printer.print_domain(db, model, model[*d].domain()))
+									.collect::<Vec<_>>()
+									.join(", ")
+							),
+							None => format!("{{ {} }}", name),
+						}
+					})
+					.collect::<Vec<_>>()
+					.join(" ++ ")
+			}
 		)
 		.unwrap();
 	}

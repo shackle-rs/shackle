@@ -305,6 +305,13 @@ fn object_var_new_computed_class_attr_compiles() {
 	check_snapshot("var_new_computed_class_attr");
 }
 
+#[test]
+fn object_empty_class_and_var_new_output_annotations_compile() {
+	check_snapshot("empty_class");
+	check_snapshot("var_new_output");
+	check_snapshot("var_new_no_output");
+}
+
 /// A VAR-REACHED object-carrying class introduced two or more
 /// `new`-hops below a par root now lowers (the last cross-introduction fence is
 /// gone). The class is deep under a par root (so its data-supplied object

@@ -20,7 +20,7 @@ int: A_a_cs_ds_start = 1;
 int: A_a_cs_ds_end = '+'(A_a_cs_ds_start, '*'(card(C_potential), max('..'(1, 2))));
 array [int] of set of D_potential: A_a_cs_ds_potential = [_DECL_2: D_occ_2('..'('+'(1, '*'('-'(_DECL_2, 1), max('..'(1, 2)))), '*'(_DECL_2, max('..'(1, 2))))) | _DECL_2 in index_set(C_cs_objects)];
 array [int] of record(set of C_potential: cs): A_a_objects = [(cs: cs) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), cs = C_occ_1('..'('+'(1, sum([length(('[]'(A_a_inputs, q)).cs) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(A_a_inputs, q)).cs) | q in '..'(1, '-'(p, 1))]), length((input).cs))))];
-A_potential: a = A_occ_0(1);
+A_potential: a :: ('output') = A_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(C_cs_objects, _DECL_3)).ds), enum2int('[]'(A_a_cs_ds_potential, _DECL_3))) | _DECL_3 in index_set(C_cs_objects)]);
 constraint forall(['\/'('in'(x, D), '='(('[]'(D_objects, enum2int(x))).v, mzn_safe_default(('[]'(D_objects, enum2int(x))).v))) | x in D_potential]);
 solve satisfy;

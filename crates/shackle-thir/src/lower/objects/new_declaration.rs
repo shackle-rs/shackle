@@ -1810,6 +1810,15 @@ impl<'db> ItemCollector<'db> {
 				collector.parent.db,
 				format!("{}_storage", class_and_decl_name),
 			));
+			// This is lowering-private backing storage for the user-facing
+			// `var new` declaration below. It deliberately has no RHS, but
+			// must not become an implicit output variable as a consequence.
+			storage_decl.annotations_mut().push(Expression::new(
+				collector.parent.db,
+				&collector.parent.model,
+				item,
+				collector.parent.ids.annotations.no_output,
+			));
 			let storage_idx = collector
 				.parent
 				.model
@@ -2164,6 +2173,23 @@ impl<'db> ItemCollector<'db> {
 				Domain::unbounded(collector.parent.db, item, domain_ty),
 			);
 			domain_decl.set_definition(call_expr);
+			if !d.annotations.iter().any(|ann| {
+				matches!(
+					&data[*ann],
+					shackle_hir::Expression::Identifier(i)
+						if *i == collector.parent.ids.annotations.no_output
+				)
+			}) {
+				// A `var new` identity is definitionally its lone potential object.
+				// Keep it visible to MiniZinc's output generation despite that RHS:
+				// source-level it is a user-declared decision object.
+				domain_decl.annotations_mut().push(Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					collector.parent.ids.annotations.output,
+				));
+			}
 			(domain_decl, inputs_expr, None)
 		}
 	}

@@ -13,7 +13,7 @@ array [int] of set of D_potential: C_c_ds_potential = [_DECL_2: D_occ_1('..'('+'
 array [int] of record('..'(1, 3): ck, var set of D_potential: ds): C_c_objects = [(ck: ck, ds: ds) | p in index_set(C_c_inputs), input = '[]'(C_c_inputs, p), ck = (input).ck, ds = let {
   var set of D_potential: ds_init;
 } in ds_init];
-C_potential: c = C_occ_0(1);
+C_potential: c :: ('output') = C_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(C_c_objects, _DECL_3)).ds), enum2int('[]'(C_c_ds_potential, _DECL_3))) | _DECL_3 in index_set(C_c_objects)]);
 constraint forall(['\/'('in'(x, D), '='(('[]'(D_objects, enum2int(x))).v, mzn_safe_default(('[]'(D_objects, enum2int(x))).v))) | x in D_potential]);
 solve satisfy;

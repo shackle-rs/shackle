@@ -26,14 +26,14 @@ int: A_a_bs_cs_end = '+'(A_a_bs_cs_start, sum([length((j1).cs) | i in A_a_inputs
 int: A_a_bs_cs_ds_start = 1;
 int: A_a_bs_cs_ds_end = '+'(A_a_bs_cs_ds_start, sum([length((j2).ds) | i in A_a_inputs, j1 in (i).bs, j2 in (j1).cs]));
 array [int] of record(set of B_potential: bs): A_a_objects = [(bs: bs) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), bs = B_occ_1('..'('+'(1, sum([length(('[]'(A_a_inputs, q)).bs) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(A_a_inputs, q)).bs) | q in '..'(1, '-'(p, 1))]), length((input).bs))))];
-A_potential: a = A_occ_0(1);
-array [{1}] of record(var set of D_potential: ds): C_c2_storage;
+A_potential: a :: ('output') = A_occ_0(1);
+array [{1}] of record(var set of D_potential: ds): C_c2_storage :: (no_output);
 array [D_occ_5('..'(1, '*'(card(C_potential), max('..'(1, 1)))))] of record(var '..'(2, 3): v): D_ds_objects;
 int: C_c2_ds_start = A_a_bs_cs_ds_end;
 int: C_c2_ds_end = '+'(C_c2_ds_start, '*'(card(C_potential), max('..'(1, 1))));
 array [int] of set of D_potential: C_c2_ds_potential = [_DECL_2: D_occ_5('..'('+'(1, '*'('-'(_DECL_2, 1), max('..'(1, 1)))), '*'(_DECL_2, max('..'(1, 1))))) | _DECL_2 in index_set(C_c2_storage)];
 array [int] of record(var set of D_potential: ds): C_c2_objects = [(ds: ds) | p in index_set(C_c2_storage), input = '[]'(C_c2_storage, p), ds = (input).ds];
-C_potential: c2 = C_occ_4(1);
+C_potential: c2 :: ('output') = C_occ_4(1);
 constraint forall(['subset'(enum2int(('[]'(C_c2_objects, _DECL_3)).ds), enum2int('[]'(C_c2_ds_potential, _DECL_3))) | _DECL_3 in index_set(C_c2_objects)]);
 constraint forall(['\/'('in'(x, D), '='(('[]'(D_objects, enum2int(x))).v, mzn_safe_default(('[]'(D_objects, enum2int(x))).v))) | x in D_potential]);
 solve satisfy;
