@@ -5,7 +5,7 @@ enum A_potential = A_occ_0({1});
 array [int] of record(var set of B_potential: children): A_objects = A_a_objects;
 var set of A_potential: A;
 constraint forall(['in'(card(('[]'(A_objects, enum2int(this))).children), '..'(2, 2)) | this in A]);
-array [{1}] of record(var set of B_potential: children): A_a_storage;
+array [{1}] of record(var set of B_potential: children): A_a_storage :: (no_output);
 array [B_occ_1('..'(1, '*'(card(A_potential), max('..'(2, 2)))))] of record(var '..'(2, 3): x): B_children_objects;
 int: A_a_children_start = 1;
 int: A_a_children_end = '+'(A_a_children_start, '*'(card(A_potential), max('..'(2, 2))));

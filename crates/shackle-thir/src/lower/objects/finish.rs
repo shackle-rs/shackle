@@ -425,6 +425,38 @@ impl<'db> ItemCollector<'db> {
 			self.model[class_objects].set_definition(definition);
 		}
 
+		// A class with no introductions still has the three declarations made
+		// during predeclaration. Leave none of them as an uninitialised model
+		// input: its potential universe, actual set, and storage are all empty.
+		// Checking the enum is sufficient because every introduction registers
+		// its constructor before it can contribute storage or actual members.
+		let empty_classes = self
+			.objects
+			.class_map
+			.iter()
+			.filter_map(|(class_pattern, info)| {
+				self.model[info.class_enum]
+					.definition()
+					.is_none()
+					.then_some((*class_pattern, *info))
+			})
+			.collect::<Vec<_>>();
+		for (class_pattern, info) in empty_classes {
+			let item = class_pattern.item(self.db);
+			self.model[info.class_enum].set_definition([]);
+			let empty_set = Expression::new_unchecked(
+				self.model[info.class_set].ty(),
+				SetLiteral(vec![]),
+				item,
+			);
+			self.model[info.class_set].set_definition(empty_set);
+			let empty_storage = Expression::new_unchecked(
+				self.model[info.class_objects].ty(),
+				ArrayLiteral(vec![]),
+				item,
+			);
+			self.model[info.class_objects].set_definition(empty_storage);
+		}
 		// Gated forall-drop: a computed attribute's class-body forall
 		// `forall(this in <C>)(this.<attr> = <rhs>)` is redundant once EVERY
 		// contribution to <C> alias-defines its defined fields — the engine's

@@ -1,0 +1,4 @@
+enum Foo_potential = {};
+array [int] of record(int: x, int: y): Foo_objects = [];
+set of Foo_potential: Foo = {};
+solve satisfy;

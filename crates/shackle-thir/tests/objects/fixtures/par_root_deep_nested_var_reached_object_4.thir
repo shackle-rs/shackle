@@ -27,7 +27,7 @@ int: A_a_bs_cs_end = '+'(A_a_bs_cs_start, sum([length((j1).cs) | i in A_a_inputs
 int: A_a_bs_cs_ds_start = 1;
 int: A_a_bs_cs_ds_end = '+'(A_a_bs_cs_ds_start, sum([length((j2).ds) | i in A_a_inputs, j1 in (i).bs, j2 in (j1).cs]));
 array [int] of record(set of B_potential: bs): A_a_objects = [(bs: bs) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), bs = B_occ_1('..'('+'(1, sum([length(('[]'(A_a_inputs, q)).bs) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(A_a_inputs, q)).bs) | q in '..'(1, '-'(p, 1))]), length((input).bs))))];
-A_potential: a = A_occ_0(1);
+A_potential: a :: ('output') = A_occ_0(1);
 array ['..'(1, n)] of record(var set of D_potential: ds): C_cs2_storage;
 array [D_occ_5('..'(1, '*'(card(C_potential), max('..'(1, 2)))))] of record(var '..'(2, 3): v): D_ds_objects;
 int: C_cs2_ds_start = A_a_bs_cs_ds_end;
