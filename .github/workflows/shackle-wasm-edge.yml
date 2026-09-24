@@ -1,0 +1,82 @@
+name: Update shackle-wasm edge release
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Only one run may publish the moving tag at a time.  A newer push supersedes a
+# run that is still building an older develop revision.
+concurrency:
+  group: shackle-wasm-edge
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: ./.github/actions/setup-minizinc-edge
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+      - name: Build browser package
+        run: wasm-pack build crates/shackle-wasm --target web --out-dir "$GITHUB_WORKSPACE/pkg"
+      - name: Record packed MiniZinc version
+        run: minizinc --version > pkg/MINIZINC_EDGE_VERSION.txt
+      - name: Report browser asset size
+        run: |
+          set -euo pipefail
+          wasm_file="pkg/shackle_wasm_bg.wasm"
+          raw_bytes="$(stat --format=%s "$wasm_file")"
+          gzip_bytes="$(gzip --stdout --best "$wasm_file" | wc --bytes)"
+          {
+            echo '## shackle-wasm edge asset size'
+            echo
+            echo "- Commit: `${GITHUB_SHA}`"
+            echo "- Raw WebAssembly: ${raw_bytes} bytes"
+            echo "- Gzip WebAssembly: ${gzip_bytes} bytes"
+            echo '- Packed MiniZinc version: `pkg/MINIZINC_EDGE_VERSION.txt`'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive package
+        run: tar -czf shackle-wasm-pkg.tar.gz pkg
+      - name: Confirm this is still the tip of develop
+        id: develop
+        run: |
+          set -euo pipefail
+          git fetch origin +refs/heads/develop:refs/remotes/origin/develop
+          if [ "$(git rev-parse origin/develop)" = "$GITHUB_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Move edge tag to develop
+        if: steps.develop.outputs.current == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag --force --annotate shackle-wasm-edge "$GITHUB_SHA" --message 'shackle-wasm edge'
+          git push origin refs/tags/shackle-wasm-edge --force
+      - name: Create or update edge release
+        if: steps.develop.outputs.current == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view shackle-wasm-edge >/dev/null 2>&1; then
+            gh release create shackle-wasm-edge \
+              --title 'shackle-wasm edge' \
+              --notes 'Continuously updated build of `develop`.' \
+              --prerelease \
+              --latest=false
+          fi
+          gh release edit shackle-wasm-edge --title 'shackle-wasm edge' --prerelease
+          gh release upload shackle-wasm-edge shackle-wasm-pkg.tar.gz --clobber
