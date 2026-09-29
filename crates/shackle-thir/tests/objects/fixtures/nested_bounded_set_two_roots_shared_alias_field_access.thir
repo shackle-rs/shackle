@@ -29,6 +29,7 @@ constraint forall(['subset'(enum2int(('[]'(A_a2_objects, _DECL_6)).bs), enum2int
 var set of B_potential: bs = B;
 constraint forall(['>='(('[]'(B_objects, enum2int(b))).y, 0) | b in bs]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
+constraint 'subset'(enum2int(bs), enum2int(B));
 record(array [int] of record(string: id, int: y): bs, string: id): a1 :: (output_only) :: ('output') = (id: '[]'(A_ids, a1_ref), bs: [(id: '[]'(B_ids, _DECL_7), y: fix(('[]'(B_objects, enum2int(_DECL_7))).y)) | _DECL_7 in fix(('[]'(A_objects, enum2int(a1_ref))).bs)]);
 record(array [int] of record(string: id, int: y): bs, string: id): a2 :: (output_only) :: ('output') = (id: '[]'(A_ids, a2_ref), bs: [(id: '[]'(B_ids, _DECL_8), y: fix(('[]'(B_objects, enum2int(_DECL_8))).y)) | _DECL_8 in fix(('[]'(A_objects, enum2int(a2_ref))).bs)]);
 solve satisfy;
