@@ -166,20 +166,30 @@ impl<'db> ItemCollector<'db> {
 		declaration.definition().is_none() && !declaration.ty().known_par(self.db)
 	}
 
+	/// `expr` with the class types in its type relabelled to their potential
+	/// enums. The relabel is only a change of type: MiniZinc types the
+	/// printed expression from its declaration, whose values already range
+	/// over `<C>_potential`.
+	pub(in crate::lower) fn with_potential_enum_types(
+		&self,
+		expr: Expression<'db>,
+	) -> Expression<'db> {
+		if !ty_mentions_class(self.db, expr.ty()) {
+			return expr;
+		}
+		let ty = self.substitute_class_with_potential_enum(expr.ty());
+		let origin = expr.origin();
+		let mut relabelled = Expression::new_unchecked(ty, (*expr).clone(), origin);
+		relabelled
+			.annotations_mut()
+			.extend(expr.annotations().iter().cloned());
+		relabelled
+	}
+
 	/// The value of `expr` as seen in the output model: its class types
 	/// relabelled to their potential enums, and fixed if it is var.
 	fn output_value(&self, expr: Expression<'db>) -> Expression<'db> {
-		let expr = if ty_mentions_class(self.db, expr.ty()) {
-			let ty = self.substitute_class_with_potential_enum(expr.ty());
-			let origin = expr.origin();
-			let mut relabelled = Expression::new_unchecked(ty, (*expr).clone(), origin);
-			relabelled
-				.annotations_mut()
-				.extend(expr.annotations().iter().cloned());
-			relabelled
-		} else {
-			expr
-		};
+		let expr = self.with_potential_enum_types(expr);
 		if expr.ty().known_par(self.db) {
 			return expr;
 		}

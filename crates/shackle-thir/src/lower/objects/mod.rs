@@ -41,6 +41,7 @@ mod nested_storage;
 mod new_declaration;
 mod occurrence;
 mod output;
+mod references;
 mod storage;
 
 pub(in crate::lower) use output::{OutputCandidateKind, ty_mentions_class};

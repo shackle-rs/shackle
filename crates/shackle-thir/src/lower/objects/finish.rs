@@ -506,6 +506,10 @@ impl<'db> ItemCollector<'db> {
 			self.emit_unused_potential_default_constraints(class_pattern);
 		}
 
+		// References to classes whose existence is a decision may only refer
+		// to existing objects.
+		self.emit_reference_existence_constraints();
+
 		// Last, so the output declarations see every definition, and print
 		// after the rest of the model.
 		self.emit_object_outputs();

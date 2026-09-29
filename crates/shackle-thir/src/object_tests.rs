@@ -278,6 +278,13 @@ fn object_var_new_computed_class_attr_compiles() {
 	check_snapshot("var_new_computed_class_attr");
 }
 
+/// References to a class whose existence is a decision may only refer to
+/// existing objects.
+#[test]
+fn object_reference_existence_snapshot() {
+	check_snapshot("reference_existence");
+}
+
 /// Objects and references are output by their string ids: `::output_only`
 /// renderings named after the user's declarations replace the identities.
 #[test]

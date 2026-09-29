@@ -20,9 +20,13 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 	/// `var set of B_potential` by the field-only `array_union` recipe,
 	/// and MiniZinc rejects `var set of <var-set>` at type-check.
 	/// Mirrors the storage-record substitution applied by
-	/// `class_storage_fields_for_domain`. Outermost-class positions
-	/// (e.g. `A: a`, `var new A: a`) are unchanged because callers do
-	/// not route through this helper.
+	/// `class_storage_fields_for_domain`, including its bound: the domain is
+	/// the potential enum itself, since an unbounded enum-typed domain loses
+	/// its finiteness when enums are erased (`var set of int`). That the
+	/// reference is to an existing object is constrained separately (see
+	/// `objects/references.rs`). Outermost-class positions (e.g. `A: a`,
+	/// `var new A: a`) are unchanged because callers do not route through
+	/// this helper.
 	pub(in crate::lower) fn collect_element_domain(
 		&mut self,
 		t: shackle_hir::TypeId<'db>,
@@ -34,9 +38,10 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			&& let Some(class_pattern) = class_pattern_for(db, *class_ref)
 			&& self.parent.objects.class_map.contains_key(&class_pattern)
 		{
-			let substituted = self.parent.substitute_class_with_potential_enum(ty);
 			let origin = EntityRef::new(db, self.item, shackle_hir::ids::EntityId::from(t));
-			return Domain::unbounded(self.parent.db, origin, substituted);
+			return self
+				.parent
+				.substitute_class_with_potential_enum_domain(ty, origin);
 		}
 		self.collect_domain(t, ty, is_type_alias)
 	}
@@ -77,14 +82,16 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 						// A var-reached class used as an outermost domain (e.g.
 						// `var A: a`). Its actual set `A` is `var set of
 						// A_potential`, which MiniZinc rejects as a type-inst
-						// domain. Substitute to the par potential enum and emit
-						// an unbounded domain (`var A_potential: a`), mirroring
-						// `collect_element_domain` for nested class positions.
+						// domain. Bound it by the par potential enum instead
+						// (`var A_potential: a`), mirroring
+						// `collect_element_domain` for nested class positions;
+						// membership of the actual set is constrained separately.
 						PatternTy::ClassDecl { .. }
 							if self.parent.objects.plan.var_reached_classes.contains(&res) =>
 						{
-							let substituted = self.parent.substitute_class_with_potential_enum(ty);
-							return Domain::unbounded(self.parent.db, origin, substituted);
+							return self
+								.parent
+								.substitute_class_with_potential_enum_domain(ty, origin);
 						}
 						_ => (),
 					}

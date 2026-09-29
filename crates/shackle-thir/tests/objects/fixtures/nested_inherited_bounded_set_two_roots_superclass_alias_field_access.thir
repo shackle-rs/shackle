@@ -41,6 +41,7 @@ constraint forall(['>='(('[]'(A_objects, enum2int(a))).x, 0) | a in as]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).x, mzn_safe_default(('[]'(B_objects, enum2int(x))).x))) | x in B_potential]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
+constraint 'subset'(enum2int(as), enum2int(A));
 record(array [int] of record(string: id, int: x, int: y): bs, string: id): r1 :: (output_only) :: ('output') = (id: '[]'(Root_ids, r1_ref), bs: [(id: '[]'(B_ids, _DECL_9), x: fix(('[]'(B_objects, enum2int(_DECL_9))).x), y: fix(('[]'(B_objects, enum2int(_DECL_9))).y)) | _DECL_9 in fix(('[]'(Root_objects, enum2int(r1_ref))).bs)]);
 record(array [int] of record(string: id, int: x, int: y): bs, string: id): r2 :: (output_only) :: ('output') = (id: '[]'(Root_ids, r2_ref), bs: [(id: '[]'(B_ids, _DECL_10), x: fix(('[]'(B_objects, enum2int(_DECL_10))).x), y: fix(('[]'(B_objects, enum2int(_DECL_10))).y)) | _DECL_10 in fix(('[]'(Root_objects, enum2int(r2_ref))).bs)]);
 solve satisfy;
