@@ -395,7 +395,9 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 					if message.is_some() {
 						return Err(SerdeError::duplicate_field("message"));
 					}
-					message = Some(map.next_value::<&str>()?);
+					// Owned: a message containing a JSON escape (such as a
+					// quoted `\"`) cannot be borrowed from the input
+					message = Some(map.next_value::<String>()?);
 				}
 				"output" => {
 					if solution.is_some() {
@@ -732,5 +734,44 @@ impl Value {
 			}
 			_ => v,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use rustc_hash::FxHashMap;
+	use serde::Deserializer;
+
+	use super::{LegacyOutput, SerdeMessageVisitor};
+	use crate::Message;
+
+	fn parse(line: &str) -> LegacyOutput<'_> {
+		let output_types = FxHashMap::default();
+		serde_json::Deserializer::from_str(line)
+			.deserialize_map(SerdeMessageVisitor(&output_types))
+			.unwrap()
+	}
+
+	/// A message containing a JSON escape cannot be borrowed from the input,
+	/// and used to fail to parse, hiding the interpreter's actual error.
+	#[test]
+	fn error_message_with_escaped_quotes() {
+		let line = r#"{"type": "error", "what": "evaluation error", "message": "Abort: no A object with id \"x\" in the data"}"#;
+		let LegacyOutput::Error(err) = parse(line) else {
+			panic!("expected an error");
+		};
+		assert!(
+			format!("{err:?}").contains(r#"no A object with id \"x\" in the data"#),
+			"{err:?}"
+		);
+	}
+
+	#[test]
+	fn warning_message_with_escaped_quotes() {
+		let line = r#"{"type": "warning", "message": "the id \"x\" is unused"}"#;
+		let LegacyOutput::Msg(Message::Warning(msg)) = parse(line) else {
+			panic!("expected a warning");
+		};
+		assert_eq!(msg, r#"the id "x" is unused"#);
 	}
 }
