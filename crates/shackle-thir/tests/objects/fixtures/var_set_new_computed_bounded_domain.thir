@@ -1,12 +1,14 @@
 enum A_potential = A_occ_0('..'(1, 2));
 array [int] of record(var '..'(0, 2): x1, var '..'(0, 2): x2, var int: z): A_objects = A_as_objects;
-var set of A_potential: A = as;
+var set of A_potential: A = as_ref;
+array [A_potential] of string: A_ids = array1d(A_potential, ['++'('++'("as[", show(p)), "]") | p in '..'(1, card('..'(1, 2)))]);
 constraint forall(['in'(('[]'(A_objects, enum2int(this))).z, '..'(3, 4)) | this in A]);
 array ['..'(1, 2)] of record(var '..'(0, 2): x1, var '..'(0, 2): x2): A_as_storage;
 array [int] of record(var '..'(0, 2): x1, var '..'(0, 2): x2, var int: z): A_as_objects = [(x1: x1, x2: x2, z: z) | p in index_set(A_as_storage), input = '[]'(A_as_storage, p), x1 = (input).x1, x2 = (input).x2, z = '+'(x1, x2)];
-var set( '..'(0, 2) ) of  A_occ_0('..'(1, 2)): as;
-constraint '='(card(as), 0);
-output ["card=", show(card(fix(as))), "\n"];
+var set( '..'(0, 2) ) of  A_occ_0('..'(1, 2)): as_ref :: (no_output);
+constraint '='(card(as_ref), 0);
+output ["card=", show(card(fix(as_ref))), "\n"];
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x1, mzn_safe_default(('[]'(A_objects, enum2int(x))).x1))) | x in A_potential]);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x2, mzn_safe_default(('[]'(A_objects, enum2int(x))).x2))) | x in A_potential]);
+array [int] of record(string: id, int: x1, int: x2, int: z): as :: (output_only) :: ('output') = [(id: '[]'(A_ids, _DECL_1), x1: fix(('[]'(A_objects, enum2int(_DECL_1))).x1), x2: fix(('[]'(A_objects, enum2int(_DECL_1))).x2), z: fix(('[]'(A_objects, enum2int(_DECL_1))).z)) | _DECL_1 in fix(as_ref)];
 solve satisfy;

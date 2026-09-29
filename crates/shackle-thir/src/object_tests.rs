@@ -13,30 +13,16 @@ use expect_test::expect_file;
 use salsa::Setter;
 use shackle_hir::{
 	CompilerDatabase,
-	input::{CompilerSettings, InlineModelFile, InputFiles, ModelFile},
+	input::{InlineModelFile, InputFiles, ModelFile},
 	run_hir_phase,
 };
 use shackle_syntax::InputLang;
 
-use crate::{
-	db::final_thir, lower::lower_model, pretty_print::PrettyPrinter, transform::tests::NameMapper,
-};
+use crate::{db::final_thir, lower::lower_model, transform::tests::NameMapper};
 
 /// HIR-phase errors attributable to the test's own inline model.
 fn user_hir_errors(db: &CompilerDatabase) -> Vec<&shackle_diagnostics::Error> {
 	run_hir_phase(db).errors
-}
-
-fn db_for(source: &str) -> CompilerDatabase {
-	let mut db = CompilerDatabase::default();
-	let _ = CompilerSettings::get(&db)
-		.set_ignore_stdlib(&mut db)
-		.to(true);
-	let file = InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc);
-	let _ = InputFiles::get(&db)
-		.set_files(&mut db)
-		.to(vec![file.into()]);
-	db
 }
 
 fn db_for_with_stdlib(source: &str) -> CompilerDatabase {
@@ -64,19 +50,6 @@ fn check_snapshot(name: &str) {
 	let source = fs::read_to_string(dir.join(format!("{name}.mzn")))
 		.unwrap_or_else(|err| panic!("failed to read fixture {name}.mzn: {err}"));
 	expect_file![dir.join(format!("{name}.thir"))].assert_eq(&user_items_pretty(&source));
-}
-
-/// Like [`check_snapshot`] but lowers with the standard library disabled and
-/// pretty prints the whole lowered THIR (no user-item filtering). Pins the raw
-/// shape the object lowering emits for the few tests that need no stdlib items.
-fn check_snapshot_ignore_stdlib(name: &str) {
-	let dir = fixtures_dir();
-	let source = fs::read_to_string(dir.join(format!("{name}.mzn")))
-		.unwrap_or_else(|err| panic!("failed to read fixture {name}.mzn: {err}"));
-	let db = db_for(&source);
-	let model = lower_model(&db);
-	let pretty = PrettyPrinter::new(&db, model.get().as_ref()).pretty_print();
-	expect_file![dir.join(format!("{name}.thir"))].assert_eq(&pretty);
 }
 
 /// Pretty print the user model's own top-level items as produced by the
@@ -305,6 +278,15 @@ fn object_var_new_computed_class_attr_compiles() {
 	check_snapshot("var_new_computed_class_attr");
 }
 
+/// Objects and references are output by their string ids: `::output_only`
+/// renderings named after the user's declarations replace the identities.
+#[test]
+fn object_output_by_id_snapshot() {
+	check_snapshot("output_references");
+	check_snapshot("output_nested_objects");
+	check_snapshot("output_opt_new");
+}
+
 #[test]
 fn object_empty_class_and_var_new_output_annotations_compile() {
 	check_snapshot("empty_class");
@@ -422,7 +404,7 @@ fn object_thir_lowering_inheritance_snapshot() {
 
 #[test]
 fn object_thir_lowering_top_level_set_new_snapshot() {
-	check_snapshot_ignore_stdlib("top_level_set_new");
+	check_snapshot("top_level_set_new");
 }
 
 #[test]
@@ -432,7 +414,7 @@ fn object_thir_lowering_top_level_set_new_mixed_scalar_snapshot() {
 
 #[test]
 fn object_thir_lowering_empty_record_set_new_snapshot() {
-	check_snapshot_ignore_stdlib("empty_record_set_new");
+	check_snapshot("empty_record_set_new");
 }
 
 #[test]

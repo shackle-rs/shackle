@@ -173,3 +173,13 @@ fn solve_object_computed_cardset_attr() {
 fn solve_object_optimize_set_new() {
 	check_solve("objects/10_optimize_set_new", false);
 }
+
+#[test]
+fn solve_object_output_ids() {
+	check_solve("objects/11_output_ids", false);
+}
+
+#[test]
+fn solve_object_show_ids() {
+	check_solve("objects/12_show_ids", false);
+}

@@ -92,6 +92,7 @@ id_registry!(
 	Names,
 	objective: "_objective",
 	this: "this",
+	object_id: "id",
 );
 
 id_registry!(

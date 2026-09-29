@@ -1,9 +1,11 @@
 enum Leaf_potential = Leaf_occ_1('..'(1, sum([length((i).leaves) | i in Node_left_inputs]))) ++ Leaf_occ_3('..'(1, sum([length((i).leaves) | i in Node_right_inputs])));
 array [int] of record(int: value): Leaf_objects = '++'(Leaf_leaves_objects, Leaf_leaves_occ_1_objects);
 set of Leaf_potential: Leaf = array_union('++'([Leaf_occ_1('..'(1, '-'(Node_left_leaves_end, 1)))], [Leaf_occ_3('..'(1, '-'(Node_right_leaves_end, Node_left_leaves_end)))]));
+array [Leaf_potential] of string: Leaf_ids = array1d(Leaf_potential, '++'(['++'('++'("left.leaves[", show(p)), "]") | p in '..'(1, card('..'(1, sum([length((i).leaves) | i in Node_left_inputs]))))], ['++'('++'("right.leaves[", show(p)), "]") | p in '..'(1, card('..'(1, sum([length((i).leaves) | i in Node_right_inputs]))))]));
 enum Node_potential = Node_occ_0({1, 2}) ++ Node_occ_2('..'(Node_left_root_end, '-'(Node_right_root_end, 1)));
 array [int] of record(set of Leaf_potential: leaves): Node_objects = '++'(Node_left_objects, Node_right_objects);
 set of Node_potential: Node = array_union([left, right]);
+array [Node_potential] of string: Node_ids = array1d(Node_potential, '++'(['++'('++'("left[", show(p)), "]") | p in '..'(1, card({1, 2}))], ['++'('++'("right[", show(p)), "]") | p in '..'(1, card('..'(Node_left_root_end, '-'(Node_right_root_end, 1))))]));
 array [int] of record(array [int] of record(int: value): leaves): Node_left_inputs = [(leaves: [(value: 1), (value: 2)]), (leaves: [(value: 3)])];
 array [int] of record(int: value): Leaf_leaves_objects = [k | i in Node_left_inputs, k in (i).leaves];
 int: Node_left_leaves_start = 1;

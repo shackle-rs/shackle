@@ -1,9 +1,11 @@
 enum C_potential = C_occ_0({1});
 array [int] of record(var '..'(0, 9): b, var '..'(0, 10): c): C_objects = C_obj_objects;
 set of C_potential: C = C_occ_0({1});
+array [C_potential] of string: C_ids = array1d(C_potential, ["obj"]);
 array [{1}] of record(var '..'(0, 9): b): C_obj_storage :: (no_output);
 array [int] of record(var '..'(0, 9): b, var '..'(0, 10): c): C_obj_objects = [(b: b, c: c) | p in index_set(C_obj_storage), input = '[]'(C_obj_storage, p), b = (input).b, c = '+'(b, 1)];
-C_potential: obj :: ('output') = C_occ_0(1);
-constraint '='(('[]'(C_objects, enum2int(obj))).b, 4);
-output ["b=", show(fix(('[]'(C_objects, enum2int(obj))).b)), " c=", show(fix(('[]'(C_objects, enum2int(obj))).c)), "\n"];
+C_potential: obj_ref :: (no_output) = C_occ_0(1);
+constraint '='(('[]'(C_objects, enum2int(obj_ref))).b, 4);
+output ["b=", show(fix(('[]'(C_objects, enum2int(obj_ref))).b)), " c=", show(fix(('[]'(C_objects, enum2int(obj_ref))).c)), "\n"];
+record(int: b, int: c, string: id): obj :: (output_only) :: ('output') = (id: '[]'(C_ids, obj_ref), b: fix(('[]'(C_objects, enum2int(obj_ref))).b), c: fix(('[]'(C_objects, enum2int(obj_ref))).c));
 solve satisfy;

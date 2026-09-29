@@ -364,6 +364,22 @@ impl<'db> ItemCollector<'db> {
 			.add_declaration(DeclarationItem::new(decl, item));
 		let mut ids = vec![idx.into()];
 
+		// A top-level declaration referring to objects is shown by object ids
+		// in the output; `finish()` decides whether it is output at all.
+		if top_level && !output_only && objects::ty_mentions_class(db, ty) {
+			let kind = if uses_occurrence_lowering {
+				let class_domain = data[d.declared_type]
+					.get_new_class(data)
+					.expect("new declarations should have a class domain");
+				objects::OutputCandidateKind::Root {
+					class: types.name_resolution(class_domain).unwrap(),
+				}
+			} else {
+				objects::OutputCandidateKind::Reference
+			};
+			collector.parent.objects.output_candidates.push((idx, kind));
+		}
+
 		// Top-level set/array `new` introductions register their identity-set
 		// declaration as a contribution to the direct class's actual set;
 		// `finish()` then defines `<C>` as `array_union([decl_1, decl_2, ...])`

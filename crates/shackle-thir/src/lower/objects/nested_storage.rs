@@ -308,6 +308,25 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
+	/// The parameter domain (`<local-universe>`) of the class enum's
+	/// `contribution_index`-th constructor `<C>_occ_k(<local-universe>)`.
+	/// Returns `None` if the constructor is not yet present, is atomic, or has
+	/// no bounded parameter domain.
+	pub(in crate::lower) fn class_enum_constructor_domain(
+		&self,
+		class_enum: EnumerationId<'db>,
+		contribution_index: usize,
+	) -> Option<Expression<'db>> {
+		let constructors = self.model[class_enum].definition()?;
+		let constructor = constructors.get(contribution_index)?;
+		let parameters = constructor.parameters.as_ref()?;
+		let parameter_decl = *parameters.first()?;
+		match &**self.model[parameter_decl].domain() {
+			DomainData::Bounded(expr) => Some((**expr).clone()),
+			_ => None,
+		}
+	}
+
 	/// Build the set expression `<C>_occ_k(<local-universe>)` — the image
 	/// of the class enum's `contribution_index`-th constructor applied to
 	/// its full parameter domain. Returns `None` if the constructor is not
@@ -319,14 +338,7 @@ impl<'db> ItemCollector<'db> {
 		class_enum: EnumerationId<'db>,
 		contribution_index: usize,
 	) -> Option<Expression<'db>> {
-		let constructors = self.model[class_enum].definition()?;
-		let constructor = constructors.get(contribution_index)?;
-		let parameters = constructor.parameters.as_ref()?;
-		let parameter_decl = *parameters.first()?;
-		let range_expr = match &**self.model[parameter_decl].domain() {
-			DomainData::Bounded(expr) => (**expr).clone(),
-			_ => return None,
-		};
+		let range_expr = self.class_enum_constructor_domain(class_enum, contribution_index)?;
 		let member_id = EnumMemberId::new(class_enum, contribution_index as u32);
 		Some(Expression::new(
 			self.db,
