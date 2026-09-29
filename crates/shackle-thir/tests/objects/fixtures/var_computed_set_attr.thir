@@ -1,9 +1,11 @@
 enum A_potential = A_occ_0({1});
 array [int] of record(var '..'(0, 4): x, var set of int: z): A_objects = A_a_objects;
 set of A_potential: A = A_occ_0({1});
+array [A_potential] of string: A_ids = array1d(A_potential, ["a"]);
 array [{1}] of record(var '..'(0, 4): x): A_a_storage :: (no_output);
 array [int] of record(var '..'(0, 4): x, var set of int: z): A_a_objects = [(x: x, z: z) | p in index_set(A_a_storage), input = '[]'(A_a_storage, p), x = (input).x, z = {x, '*'(2, x)}];
-A_potential: a :: ('output') = A_occ_0(1);
-constraint '='(('[]'(A_objects, enum2int(a))).x, 3);
-output ["x=", show(fix(('[]'(A_objects, enum2int(a))).x)), " z=", show(fix(('[]'(A_objects, enum2int(a))).z)), "\n"];
+A_potential: a_ref :: (no_output) = A_occ_0(1);
+constraint '='(('[]'(A_objects, enum2int(a_ref))).x, 3);
+output ["x=", show(fix(('[]'(A_objects, enum2int(a_ref))).x)), " z=", show(fix(('[]'(A_objects, enum2int(a_ref))).z)), "\n"];
+record(string: id, int: x, set of int: z): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), x: fix(('[]'(A_objects, enum2int(a_ref))).x), z: fix(('[]'(A_objects, enum2int(a_ref))).z));
 solve satisfy;

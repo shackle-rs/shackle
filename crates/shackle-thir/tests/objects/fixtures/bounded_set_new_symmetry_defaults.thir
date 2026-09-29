@@ -1,12 +1,14 @@
 int: n;
 enum C_potential = C_occ_0('..'(1, n));
 array [int] of record(var bool: b, var '..'(5, 10): i, var opt int: o, var set of '..'(0, 3): s): C_objects = C_cs_objects;
-var set of C_potential: C = cs;
+var set of C_potential: C = cs_ref;
+array [C_potential] of string: C_ids = array1d(C_potential, ['++'('++'("cs[", show(p)), "]") | p in '..'(1, card('..'(1, n)))]);
 array ['..'(1, n)] of record(var bool: b, var '..'(5, 10): i, var opt int: o, var set of '..'(0, 3): s): C_cs_storage;
 array [int] of record(var bool: b, var '..'(5, 10): i, var opt int: o, var set of '..'(0, 3): s): C_cs_objects = [(b: b, i: i, o: o, s: s) | p in index_set(C_cs_storage), input = '[]'(C_cs_storage, p), i = (input).i, b = (input).b, o = (input).o, s = (input).s];
-var set( '..'(0, n) ) of  C_occ_0('..'(1, n)): cs;
+var set( '..'(0, n) ) of  C_occ_0('..'(1, n)): cs_ref :: (no_output);
 constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).b, lb(('[]'(C_objects, enum2int(x))).b))) | x in C_potential]);
 constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).i, mzn_safe_default(('[]'(C_objects, enum2int(x))).i))) | x in C_potential]);
 constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).o, <>)) | x in C_potential]);
 constraint forall(['\/'('in'(x, C), '='(('[]'(C_objects, enum2int(x))).s, lb(('[]'(C_objects, enum2int(x))).s))) | x in C_potential]);
+array [int] of record(bool: b, int: i, string: id, opt int: o, set of int: s): cs :: (output_only) :: ('output') = [(id: '[]'(C_ids, _DECL_1), b: fix(('[]'(C_objects, enum2int(_DECL_1))).b), i: fix(('[]'(C_objects, enum2int(_DECL_1))).i), o: fix(('[]'(C_objects, enum2int(_DECL_1))).o), s: fix(('[]'(C_objects, enum2int(_DECL_1))).s)) | _DECL_1 in fix(cs_ref)];
 solve satisfy;

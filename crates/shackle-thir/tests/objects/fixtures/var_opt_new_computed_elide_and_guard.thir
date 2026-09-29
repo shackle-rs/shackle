@@ -1,6 +1,7 @@
 enum A_potential = A_occ_0({1});
 array [int] of record(var int: s, var '..'(0, 5): x, var '..'(1, 6): y): A_objects = A_a_objects;
 var set of A_potential: A;
+array [A_potential] of string: A_ids = array1d(A_potential, ["a"]);
 array [{1}] of record(var '..'(0, 5): x): A_a_storage :: (no_output);
 var '..'(1, 6): A_a_y_unrealised_default;
 constraint '='(A_a_y_unrealised_default, mzn_safe_default(A_a_y_unrealised_default));

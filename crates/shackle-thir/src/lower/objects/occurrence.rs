@@ -73,12 +73,38 @@ impl<'db> ItemCollector<'db> {
 			LoweredIdentifier::ResolvedIdentifier(class_set_idx.into()),
 		);
 
+		// `array [<C>_potential] of string: <C>_ids`, defined in `finish()`
+		// once every constructor of the potential enum is known.
+		let ids_dim = Domain::bounded(
+			self.db,
+			item,
+			VarType::Par,
+			OptType::NonOpt,
+			Expression::new(self.db, &self.model, item, class_enum_idx),
+		);
+		let ids_domain = Domain::array(
+			self.db,
+			item,
+			OptType::NonOpt,
+			ids_dim,
+			Domain::unbounded(self.db, item, Ty::string(self.db)),
+		);
+		let mut class_ids_decl = Declaration::new(true, ids_domain);
+		class_ids_decl.set_name(Identifier::new(
+			self.db,
+			format!("{}_ids", class_name.lookup(self.db)),
+		));
+		let class_ids_idx = self
+			.model
+			.add_declaration(DeclarationItem::new(class_ids_decl, item));
+
 		let _ = self.objects.class_map.insert(
 			class_pattern,
 			ClassMapInfo {
 				class_enum: class_enum_idx,
 				class_objects: class_objects_idx,
 				class_set: class_set_idx,
+				class_ids: class_ids_idx,
 			},
 		);
 	}

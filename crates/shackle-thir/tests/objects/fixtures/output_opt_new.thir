@@ -1,0 +1,18 @@
+enum Handrail_potential = Handrail_occ_1('..'(1, '*'(card(Pole_potential), 1)));
+array [int] of record(var '..'(1, 3): len): Handrail_objects = array1d(Handrail_handrail_objects);
+var set of Handrail_potential: Handrail = array_union([if occurs(('[]'(Pole_pole_objects, _DECL_1)).handrail) then {Handrail_occ_1(_DECL_1)} else {} endif | _DECL_1 in index_set(Pole_pole_objects)]);
+array [Handrail_potential] of string: Handrail_ids = array1d(Handrail_potential, if '='(card('..'(1, '*'(card(Pole_potential), 1))), 1) then ["pole.handrail"] else ['++'('++'("pole.handrail[", show(p)), "]") | p in '..'(1, card('..'(1, '*'(card(Pole_potential), 1))))] endif);
+enum Pole_potential = Pole_occ_0({1});
+array [int] of record(var opt Handrail_potential: handrail): Pole_objects = Pole_pole_objects;
+set of Pole_potential: Pole = Pole_occ_0({1});
+array [Pole_potential] of string: Pole_ids = array1d(Pole_potential, ["pole"]);
+array [{1}] of record(var opt Handrail_potential: handrail): Pole_pole_storage :: (no_output);
+array [Handrail_occ_1('..'(1, '*'(card(Pole_potential), 1)))] of record(var '..'(1, 3): len): Handrail_handrail_objects;
+int: Pole_pole_handrail_start = 1;
+int: Pole_pole_handrail_end = '+'(Pole_pole_handrail_start, '*'(card(Pole_potential), 1));
+array [int] of record(var opt Handrail_potential: handrail): Pole_pole_objects = [(handrail: handrail) | p in index_set(Pole_pole_storage), input = '[]'(Pole_pole_storage, p), handrail = (input).handrail];
+Pole_potential: pole_ref :: (no_output) = Pole_occ_0(1);
+constraint forall(['->'(occurs(('[]'(Pole_pole_objects, _DECL_2)).handrail), '='(('[]'(Pole_pole_objects, _DECL_2)).handrail, Handrail_occ_1(_DECL_2))) | _DECL_2 in index_set(Pole_pole_objects)]);
+constraint forall(['\/'('in'(x, Handrail), '='(('[]'(Handrail_objects, enum2int(x))).len, mzn_safe_default(('[]'(Handrail_objects, enum2int(x))).len))) | x in Handrail_potential]);
+record(array [int] of record(string: id, int: len): handrail, string: id): pole :: (output_only) :: ('output') = (id: '[]'(Pole_ids, pole_ref), handrail: [(id: '[]'(Handrail_ids, deopt(_DECL_3)), len: fix(('[]'(Handrail_objects, enum2int(deopt(_DECL_3)))).len)) | _DECL_3 in [fix(('[]'(Pole_objects, enum2int(pole_ref))).handrail)] where occurs(_DECL_3)]);
+solve satisfy;
