@@ -181,3 +181,13 @@ fn solve_object_optimize_set_new() {
 fn solve_include_globals() {
 	check_solve("include_globals", false, true);
 }
+
+#[test]
+fn solve_object_output_ids() {
+	check_solve("objects/11_output_ids", false, false);
+}
+
+#[test]
+fn solve_object_show_ids() {
+	check_solve("objects/12_show_ids", false, false);
+}

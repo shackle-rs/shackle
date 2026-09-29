@@ -1,0 +1,2 @@
+pick="nodes.leaves[1]" w="w" seats=["w.seats[1]", "w.seats[2]"] leaves=["nodes.leaves[1]", "nodes.leaves[2]", "nodes.leaves[3]"]
+----------

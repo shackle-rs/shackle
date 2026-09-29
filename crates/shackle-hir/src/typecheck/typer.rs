@@ -1527,11 +1527,19 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 							InvalidFieldAccess {
 								src,
 								span,
-								msg: format!(
-									"No such field {} for '{}'",
-									field.pretty_print(db),
-									class_ref.pretty_print(db)
-								),
+								msg: if field == self.identifiers.names.object_id {
+									format!(
+										"The object id of '{}' is only used in data files and \
+										 solutions, and cannot be accessed in the model",
+										class_ref.pretty_print(db)
+									)
+								} else {
+									format!(
+										"No such field {} for '{}'",
+										field.pretty_print(db),
+										class_ref.pretty_print(db)
+									)
+								},
 							},
 						);
 						self.types.error

@@ -255,6 +255,23 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 			})
 			.collect::<Vec<_>>();
 
+		// `show` of an object reference prints the object's id, so show the
+		// ids in place of the identities (this also covers string
+		// interpolation, which desugars to `show`). The changed argument type
+		// makes the call re-dispatch below.
+		let is_show = matches!(
+			&self.data[c.function],
+			shackle_hir::Expression::Identifier(id)
+				if *id == self.parent.ids.functions.show
+					|| *id == self.parent.ids.functions.show_json
+		);
+		if is_show
+			&& let [argument] = arguments.as_mut_slice()
+			&& let Some(with_ids) = self.parent.show_argument_with_ids(argument)
+		{
+			*argument = with_ids;
+		}
+
 		let params = match &function {
 			Callable::Function(f) => Some(self.parent.model[*f].parameters()),
 			Callable::Annotation(a) => self.parent.model[*a].parameters.as_ref().map(|v| &v[..]),

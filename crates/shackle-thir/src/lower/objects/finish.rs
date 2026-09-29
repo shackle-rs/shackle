@@ -457,6 +457,9 @@ impl<'db> ItemCollector<'db> {
 			);
 			self.model[info.class_objects].set_definition(empty_storage);
 		}
+		// Every class now has its full potential enum, so its ids can be
+		// generated constructor by constructor.
+		self.define_class_ids();
 		// Gated forall-drop: a computed attribute's class-body forall
 		// `forall(this in <C>)(this.<attr> = <rhs>)` is redundant once EVERY
 		// contribution to <C> alias-defines its defined fields — the engine's
@@ -502,6 +505,10 @@ impl<'db> ItemCollector<'db> {
 		for class_pattern in var_reached {
 			self.emit_unused_potential_default_constraints(class_pattern);
 		}
+
+		// Last, so the output declarations see every definition, and print
+		// after the rest of the model.
+		self.emit_object_outputs();
 
 		self.model
 	}

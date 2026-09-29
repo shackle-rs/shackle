@@ -1,6 +1,7 @@
 enum A_potential = A_occ_0({1, 2});
 array [int] of record(int: x, int: y, int: z): A_objects = A_a_objects;
 set of A_potential: A = a;
+array [A_potential] of string: A_ids = array1d(A_potential, ['++'('++'("a[", show(p)), "]") | p in '..'(1, card({1, 2}))]);
 array [int] of record(int: x): A_a_inputs = [(x: 3), (x: 5)];
 int: A_a_root_start = 1;
 int: A_a_root_end = 3;

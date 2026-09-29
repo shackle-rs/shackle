@@ -67,6 +67,22 @@ impl TypeTester {
 		expected.assert_eq(&result);
 	}
 
+	/// Check that `model` reports exactly one error, whose title is `title`
+	/// and whose message contains `msg`.
+	fn check_error_message(&mut self, model: &str, title: &str, msg: &str) {
+		self.set_model("", model);
+		let errors = compute_types::accumulated::<Errors>(&self.db);
+		let [error] = errors.as_slice() else {
+			panic!("expected exactly one error, got {errors:#?}");
+		};
+		assert_eq!(error.to_string(), title);
+		let debug = format!("{error:?}");
+		assert!(
+			debug.contains(msg),
+			"error message does not contain '{msg}':\n{debug}"
+		);
+	}
+
 	fn type_expression(&mut self, preamble: &str, expr: &str) -> String {
 		self.set_model(preamble, &format!("any: _TEST_EXPR = {};", expr));
 		let lowered = self.file.hir(&self.db);
@@ -512,6 +528,48 @@ fn test_class_type_errors() {
 		expect!([r#"
     Type mismatch
     Type mismatch"#]),
+	);
+}
+
+/// `id` names an object in data files and solutions: a class cannot declare an
+/// attribute with that name, and the model cannot read it.
+#[test]
+fn test_class_reserved_object_id() {
+	let mut tester = TypeTester::new();
+	tester.check_error_message(
+		r#"
+		class A (1..10: id);
+		"#,
+		"Invalid declaration",
+		"'id' is reserved for the object id",
+	);
+	// Also when a subclass declares it
+	tester.check_error_message(
+		r#"
+		class A (1..10: x);
+		class B extends A (1..10: id);
+		"#,
+		"Invalid declaration",
+		"'id' is reserved for the object id",
+	);
+	tester.check_error_message(
+		r#"
+		class A (1..10: x);
+		new A: a = (x: 1);
+		string: s = a.id;
+		"#,
+		"Invalid field access",
+		"The object id of 'A' is only used in data files and solutions",
+	);
+	// Other missing attributes keep the generic message
+	tester.check_error_message(
+		r#"
+		class A (1..10: x);
+		new A: a = (x: 1);
+		int: s = a.nope;
+		"#,
+		"Invalid field access",
+		"No such field nope for 'A'",
 	);
 }
 

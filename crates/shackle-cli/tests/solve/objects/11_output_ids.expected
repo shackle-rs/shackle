@@ -1,0 +1,5 @@
+nodes = [(id: "nodes[1]", leaves: [(id: "nodes.leaves[1]", value: 1), (id: "nodes.leaves[2]", value: 2)]), (id: "nodes[2]", leaves: [(id: "nodes.leaves[3]", value: 3)])];
+Seat_seats_objects = [to_enum(Seat_potential, 1): (comfort: 1), to_enum(Seat_potential, 2): (comfort: 1)];
+pick = "nodes.leaves[1]";
+w = (id: "w", seats: [(comfort: 1, id: "w.seats[1]"), (comfort: 1, id: "w.seats[2]")]);
+----------
