@@ -183,3 +183,13 @@ fn solve_object_output_ids() {
 fn solve_object_show_ids() {
 	check_solve("objects/12_show_ids", false);
 }
+
+#[test]
+fn solve_object_reference_existence_unsat() {
+	check_solve("objects/13_reference_existence_unsat", false);
+}
+
+#[test]
+fn solve_object_reference_existence() {
+	check_solve("objects/14_reference_existence", false);
+}

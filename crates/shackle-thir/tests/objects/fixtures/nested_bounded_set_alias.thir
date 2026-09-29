@@ -18,5 +18,6 @@ A_potential: a_ref :: (no_output) = A_occ_0(1);
 constraint forall(['subset'(enum2int(('[]'(A_a_objects, _DECL_3)).bs), enum2int('[]'(A_a_bs_potential, _DECL_3))) | _DECL_3 in index_set(A_a_objects)]);
 var set of B_potential: bs = ('[]'(A_objects, enum2int(a_ref))).bs;
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
+constraint 'subset'(enum2int(bs), enum2int(B));
 record(array [int] of record(string: id, int: y): bs, string: id): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), bs: [(id: '[]'(B_ids, _DECL_4), y: fix(('[]'(B_objects, enum2int(_DECL_4))).y)) | _DECL_4 in fix(('[]'(A_objects, enum2int(a_ref))).bs)]);
 solve satisfy;
