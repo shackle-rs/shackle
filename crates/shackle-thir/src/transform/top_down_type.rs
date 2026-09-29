@@ -470,6 +470,19 @@ impl<'a, 'db, Src: Marker, Dst: Marker> TopDownTyper<'a, 'db, Dst, Src> {
 			ExpressionData::TupleLiteral(tl) => {
 				self.extend(db, tl.iter().zip(ty.fields(db).unwrap()))
 			}
+			ExpressionData::RecordLiteral(rl) => {
+				let fields = ty.record_fields(db).unwrap();
+				self.extend(
+					db,
+					rl.iter().map(|(name, e)| {
+						let (_, field_ty) = fields
+							.iter()
+							.find(|(field, _)| *field == name.0)
+							.expect("record literal field is in its type");
+						(e, *field_ty)
+					}),
+				)
+			}
 			ExpressionData::Let(l) => self.insert(db, &l.in_expression, ty),
 			ExpressionData::Call(c) => {
 				let params = match &c.function {
@@ -633,6 +646,32 @@ mod tests {
     } in let {
       opt int: _DECL_7 = ((<>, 1)).1;
     } in _DECL_7;
+    solve satisfy;
+"#]),
+		)
+	}
+
+	/// Record literal fields get their type from the record's type, as tuple
+	/// literal fields do, so a `<>` or `[]` field is typed in place. It used to
+	/// keep its bottom type inside a coercion `let` of the whole record, which
+	/// printed as `array [..] of ..` and made `erase_opt` panic on the `<>`.
+	#[test]
+	fn test_top_down_type_record_literal() {
+		check_no_stdlib(
+			Transform::TopDownType,
+			r#"
+					function opt $T: val2opt($T: x);
+					array [int] of record(int: a, opt int: o): r = [(a: 1, o: <>), (a: 2, o: 3)];
+					record(int: a, array [int] of int: b): s = (a: 1, b: []);
+					"#,
+			expect!([r#"
+    function opt $T: val2opt($T: x);
+    array [int] of record(int: a, opt int: o): r = [(a: 1, o: let {
+      opt int: _DECL_2 = <>;
+    } in _DECL_2), (a: 2, o: val2opt(3))];
+    record(int: a, array [int] of int: b): s = (a: 1, b: let {
+      array [int] of int: _DECL_4 = [];
+    } in _DECL_4);
     solve satisfy;
 "#]),
 		)
