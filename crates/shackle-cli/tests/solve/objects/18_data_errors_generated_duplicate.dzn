@@ -1,0 +1,3 @@
+leaves = [(id: "l1", v: 1), (id: "g", v: 2)];
+holders = [(id: "h1", pick: "l1")];
+top = "l1";

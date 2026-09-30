@@ -541,6 +541,31 @@ pub struct UnsupportedObjectFeature {
 	pub span: SourceSpan,
 }
 
+/// Objects in a data file that do not fit together: an unknown, empty or
+/// repeated object id.
+///
+/// Reported by the MiniZinc interpreter while it reads the data, so there is
+/// no source location.
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("Invalid object data: {msg}")]
+#[diagnostic(code(shackle::invalid_object_data))]
+pub struct InvalidObjectData {
+	/// The error message
+	pub msg: String,
+}
+
+/// A declaration that must be read from data has no value.
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq, Clone)]
+#[error("No value given for '{identifier}'")]
+#[diagnostic(
+	code(shackle::missing_data),
+	help("Assign '{identifier}' in the model or in a data file.")
+)]
+pub struct MissingData {
+	/// The name of the declaration
+	pub identifier: String,
+}
+
 /// Main Shackle error type
 #[derive(Error, Diagnostic, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
@@ -667,6 +692,14 @@ pub enum Error {
 	#[error(transparent)]
 	#[diagnostic(transparent)]
 	UnsupportedObjectFeature(#[from] UnsupportedObjectFeature),
+	/// Invalid object data
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	InvalidObjectData(#[from] InvalidObjectData),
+	/// Missing data
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	MissingData(#[from] MissingData),
 	/// An internal error
 	#[error("Internal Error - Please report this issue to the Shackle developers")]
 	InternalError(#[from] InternalError),

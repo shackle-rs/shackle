@@ -16,15 +16,18 @@
 //! - class attributes whose declared type contains `new` through a tuple,
 //!   record, array, or other unsupported shape;
 //! - attributes of var-reached classes that cannot be varified or declared
-//!   as free decisions.
+//!   as free decisions;
+//! - arrays indexed by a class in a declaration read from data, including
+//!   the attributes of objects read from data.
 
 use shackle_diagnostics::UnsupportedObjectFeature;
+use shackle_ty::{Ty, TyData};
 use shackle_utils::hash::{Map, Set};
 
 use crate::{
 	ClassMember, Db, Expression, ExpressionId, Identifier, Item, ItemData, Pattern, PatternTy,
 	PrimitiveType, Type, TypeId,
-	class_analysis::var_reached_classes,
+	class_analysis::{class_pattern_for, var_reached_classes},
 	diagnostics::Errors,
 	ids::{PatternRef, TypeRef},
 	lower::lower_models,
@@ -40,11 +43,22 @@ pub fn validate_object_lowering(db: &dyn Db) {
 
 	validate_ownership_cycles(db);
 
+	// Declarations that an assignment item defines are not read from data
+	let assigned: Set<PatternRef<'_>> = lower_models(db)
+		.iter()
+		.flat_map(|model| model.items(db).iter())
+		.filter_map(|item| match item {
+			Item::Assignment(a) => item.types(db).name_resolution(a.assignment(db).assignee),
+			_ => None,
+		})
+		.collect();
+
 	for model in lower_models(db).iter() {
 		for item in model.items(db).iter() {
 			match item {
 				Item::Declaration(d) => {
 					validate_root_decl(db, *item, *d);
+					validate_data_decl(db, *item, *d, &assigned);
 				}
 				Item::Class(c) => {
 					validate_class(db, *item, *c);
@@ -299,6 +313,98 @@ fn validate_root_decl<'db>(db: &'db dyn Db, item: Item<'db>, d: crate::Declarati
 	}
 }
 
+/// Validate a top-level declaration that is read from data: one that is par
+/// and defined neither by its own right-hand side nor by an assignment item.
+/// An array indexed by a class cannot be given in data, since its index set
+/// consists of objects. For a `new` root, the data holds its objects' input
+/// records, so their attributes are checked.
+fn validate_data_decl<'db>(
+	db: &'db dyn Db,
+	item: Item<'db>,
+	d: crate::DeclarationItem<'db>,
+	assigned: &Set<PatternRef<'db>>,
+) {
+	let decl = d.declaration(db);
+	let data = decl.data();
+	if decl.definition.is_some() || assigned.contains(&PatternRef::new(db, item, decl.pattern)) {
+		return;
+	}
+	let Some(name) = data[decl.pattern].identifier() else {
+		return;
+	};
+	let types = item.types(db);
+	let PatternTy::Variable(ty) = &types[decl.pattern] else {
+		return;
+	};
+	if !ty.known_par(db) {
+		return;
+	}
+	let is_new = data[decl.declared_type].is_new(data);
+	let data_ty = if is_new {
+		let Some(input_record_ty) = ty
+			.class_type(db)
+			.and_then(|class| class_pattern_for(db, class))
+			.and_then(|class| match &class.item(db).types(db)[class.pattern(db)] {
+				PatternTy::ClassDecl {
+					input_record_ty, ..
+				} => Some(*input_record_ty),
+				_ => None,
+			})
+		else {
+			return;
+		};
+		input_record_ty
+	} else {
+		*ty
+	};
+	let Some((path, class)) = class_indexed_array(db, data_ty) else {
+		return;
+	};
+	let name = name.lookup(db);
+	let class = class.pretty_print(db);
+	let msg = if path.is_empty() {
+		format!(
+			"`{name}` is read from data, but an array indexed by class `{class}` cannot be \
+			 given in data"
+		)
+	} else {
+		format!(
+			"`{name}` is read from data, but {} `{}` is an array indexed by class \
+			 `{class}`, which cannot be given in data",
+			if is_new { "the attribute" } else { "the field" },
+			path.join(".")
+		)
+	};
+	push_unsupported(db, item, decl.declared_type, &msg);
+}
+
+/// The first array in `ty` that is indexed by a class: the record fields
+/// leading to it, and the class.
+fn class_indexed_array<'db>(db: &'db dyn Db, ty: Ty<'db>) -> Option<(Vec<String>, Ty<'db>)> {
+	fn index_class<'db>(db: &'db dyn Db, dim: Ty<'db>) -> Option<Ty<'db>> {
+		match dim.lookup(db) {
+			TyData::Class(..) => Some(dim),
+			TyData::Tuple(_, dims) => dims.iter().find_map(|dim| index_class(db, *dim)),
+			_ => None,
+		}
+	}
+	match ty.lookup(db) {
+		TyData::Array { dim, element, .. } => index_class(db, *dim)
+			.map(|class| (Vec::new(), class))
+			.or_else(|| class_indexed_array(db, *element)),
+		TyData::Set(_, _, element) => class_indexed_array(db, *element),
+		TyData::Tuple(_, fields) => fields
+			.iter()
+			.find_map(|field| class_indexed_array(db, *field)),
+		TyData::Record(_, fields) => fields.iter().find_map(|(name, field)| {
+			let (mut path, class) = class_indexed_array(db, *field)?;
+			path.insert(0, name.lookup(db).to_owned());
+			Some((path, class))
+		}),
+		_ => None,
+	}
+}
+
 /// Validate each class declaration's attributes for unsupported shapes.
 ///
 /// Supported attribute shapes containing `new`:
@@ -440,14 +546,14 @@ fn validate_class<'db>(db: &'db dyn Db, item: Item<'db>, c: crate::ClassItem<'db
 			let unsupported_array_of_class = field_ty.walk(db).any(|t| {
 				matches!(
 					t.lookup(db),
-					shackle_ty::TyData::Array { dim, element, .. }
+					TyData::Array { dim, element, .. }
 						if element
 							.walk(db)
 							.any(|e| e.class_type(db).is_some())
 							&& (dim.is_tuple(db)
 								|| !matches!(
 									element.lookup(db),
-									shackle_ty::TyData::Class(_, _, _)
+									TyData::Class(_, _, _)
 								))
 				)
 			});
@@ -594,7 +700,7 @@ fn validate_class<'db>(db: &'db dyn Db, item: Item<'db>, c: crate::ClassItem<'db
 					// arrays keep this diagnostic.
 					let uniform_array = matches!(
 						field_ty.lookup(db),
-						shackle_ty::TyData::Array { dim, element, .. }
+						TyData::Array { dim, element, .. }
 							if !dim.is_tuple(db) && element.make_var(db).is_some()
 					);
 					if !uniform_array {
@@ -1859,5 +1965,84 @@ solve satisfy;
 				messages.join("\n---\n")
 			);
 		}
+	}
+
+	/// An array indexed by a class cannot be given in data, since its index
+	/// set consists of objects: rejected wherever a declaration read from data
+	/// would hold one.
+	#[test]
+	fn object_negative_class_indexed_array_in_data() {
+		check_unsupported_object_diagnostic(
+			r#"
+    class A ( int: x; );
+    set of new A: as = [(x: 1), (x: 2)];
+    array [A] of int: w;
+    "#,
+			"`w` is read from data, but an array indexed by class `A` cannot be given in data",
+		);
+		// Also as one dimension of several, and inside a record
+		check_unsupported_object_diagnostic(
+			r#"
+    class A ( int: x; );
+    set of new A: as = [(x: 1), (x: 2)];
+    array [1..2, A] of int: w;
+    "#,
+			"`w` is read from data, but an array indexed by class `A`",
+		);
+		check_unsupported_object_diagnostic(
+			r#"
+    class A ( int: x; );
+    set of new A: as = [(x: 1), (x: 2)];
+    record(int: n, array [A] of int: w): r;
+    "#,
+			"`r` is read from data, but the field `w` is an array indexed by class `A`",
+		);
+		// An attribute of objects read from data, directly or in an owned child
+		check_unsupported_object_diagnostic(
+			r#"
+    class A ( int: x; );
+    class H ( array [A] of int: w; );
+    set of new A: as = [(x: 1), (x: 2)];
+    set of new H: hs;
+    "#,
+			"`hs` is read from data, but the attribute `w` is an array indexed by class `A`",
+		);
+		check_unsupported_object_diagnostic(
+			r#"
+    class A ( int: x; );
+    class C ( array [A] of int: w; );
+    class H ( new C: c; );
+    set of new A: as = [(x: 1), (x: 2)];
+    new H: h;
+    "#,
+			"`h` is read from data, but the attribute `c.w` is an array indexed by class `A`",
+		);
+	}
+
+	/// A class-indexed array that is not read from data is not rejected: one
+	/// defined by its declaration or an assignment item, or a var one.
+	#[test]
+	fn object_class_indexed_array_not_from_data_is_allowed() {
+		let db = db_for_with_stdlib(
+			r#"
+    class A ( int: x; );
+    set of new A: as = [(x: 1), (x: 2)];
+    array [A] of int: defined = [a: a.x | a in as];
+    array [A] of int: assigned;
+    assigned = [a: a.x | a in as];
+    array [A] of var 0..3: decided;
+    "#,
+		);
+		let messages: Vec<String> = user_hir_errors(&db)
+			.iter()
+			.map(|e| format!("{e:?}"))
+			.collect();
+		assert!(
+			!messages
+				.iter()
+				.any(|m| m.contains("cannot be given in data")),
+			"class-indexed array not read from data was wrongly rejected:\n{}",
+			messages.join("\n---\n")
+		);
 	}
 }
