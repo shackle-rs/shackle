@@ -54,6 +54,43 @@ fn solve(model: &Path, data: &[PathBuf], all_solutions: bool, target_minizinc: b
 	String::from_utf8(output.stdout).unwrap()
 }
 
+/// Solve a model with the given data files, which must fail, and return the
+/// error report with its line wrapping undone
+fn solve_error(model: &Path, data: &[PathBuf]) -> String {
+	let output = Command::new(env!("CARGO_BIN_EXE_shackle"))
+		.arg("solve")
+		.arg(model)
+		.args(data)
+		.output()
+		.unwrap();
+	assert!(
+		!output.status.success(),
+		"solve succeeded\nstdout:\n{}",
+		String::from_utf8_lossy(&output.stdout),
+	);
+	String::from_utf8_lossy(&output.stderr)
+		.lines()
+		.filter(|line| !line.starts_with("[WARN ]"))
+		.flat_map(str::split_whitespace)
+		.filter(|word| *word != "│")
+		.collect::<Vec<_>>()
+		.join(" ")
+}
+
+/// Solve the `18_data_errors` model with the data file `data` (a fixture
+/// name), and check that it fails with an error report containing `expected`
+/// that does not blame Shackle itself
+fn check_object_data_error(data: &str, extension: &str, expected: &str) {
+	let error = solve_error(
+		&fixture("objects/18_data_errors", "mzn"),
+		&[fixture(data, extension)],
+	);
+	assert!(
+		error.contains(expected) && !error.contains("Internal Error"),
+		"expected an error containing\n{expected}\nbut got\n{error}"
+	);
+}
+
 /// A fresh directory for the files a test writes
 fn scratch_dir(name: &str) -> PathBuf {
 	let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -235,6 +272,61 @@ fn solve_object_data_json() {
 fn solve_object_data_mutual_references() {
 	let name = "objects/16_data_mutual_references";
 	check_solve_with_data(name, &[fixture(name, "dzn")], false, false);
+}
+
+#[test]
+fn solve_object_data_unknown_id_in_attribute() {
+	let expected = "Invalid object data: no Leaf object with id \"zz\" in the data, \
+	                referenced by pick of Holder \"h1\"";
+	let data = "objects/18_data_errors_unknown_attribute";
+	check_object_data_error(data, "dzn", expected);
+	check_object_data_error(data, "json", expected);
+}
+
+#[test]
+fn solve_object_data_unknown_id_in_reference() {
+	check_object_data_error(
+		"objects/18_data_errors_unknown_reference",
+		"dzn",
+		"Invalid object data: no Leaf object with id \"zz\" in the data, referenced by top",
+	);
+}
+
+#[test]
+fn solve_object_data_duplicate_id() {
+	check_object_data_error(
+		"objects/18_data_errors_duplicate",
+		"dzn",
+		"Invalid object data: more than one Leaf object has the id \"l2\"",
+	);
+}
+
+/// A data id may not repeat the generated id of an object the model creates
+#[test]
+fn solve_object_data_duplicate_generated_id() {
+	check_object_data_error(
+		"objects/18_data_errors_generated_duplicate",
+		"dzn",
+		"Invalid object data: more than one Leaf object has the id \"g\"",
+	);
+}
+
+#[test]
+fn solve_object_data_empty_id() {
+	check_object_data_error(
+		"objects/18_data_errors_empty_id",
+		"dzn",
+		"Invalid object data: object ids must not be empty, but a Leaf object in the data \
+		 has the id \"\"",
+	);
+}
+
+/// Every declaration left without a value is reported, under its own name
+#[test]
+fn solve_object_data_missing() {
+	let data = "objects/18_data_errors_missing";
+	check_object_data_error(data, "dzn", "No value given for 'holders'");
+	check_object_data_error(data, "dzn", "No value given for 'top'");
 }
 
 /// The compiled model itself reads data under the user's names, so plain

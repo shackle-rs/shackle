@@ -13,7 +13,10 @@ use serde::{
 	Deserializer,
 	de::{DeserializeSeed, Error as SerdeError, IgnoredAny, Visitor},
 };
-use shackle_diagnostics::{FileError, InternalError, SourceFile};
+use shackle_diagnostics::{
+	FileError, InternalError, SourceFile,
+	error::{InvalidObjectData, MissingData},
+};
 use tempfile::Builder;
 
 use crate::{
@@ -26,6 +29,28 @@ impl Program {
 	/// Run the program in the current state
 	/// Solutions are emitted to the callback, and the resulting status is returned.
 	pub fn run<F: Fn(&Message) -> Result<()>>(&mut self, msg_callback: F) -> Result<Status> {
+		// Every input needs a value, from the data or (when optional) absent
+		let mut missing = self
+			.input_types
+			.iter()
+			.filter(|(name, ty)| !ty.is_opt() && !self.input_data.contains_key(*name))
+			.map(|(name, _)| name.to_string())
+			.chain(
+				self.legacy_enums
+					.iter()
+					.filter(|e| e.state.lock().unwrap().deref() == &EnumInner::NoDefinition)
+					.map(|e| e.name().to_string()),
+			)
+			.collect::<Vec<_>>();
+		if !missing.is_empty() {
+			missing.sort();
+			let errors = missing
+				.into_iter()
+				.map(|identifier| MissingData { identifier }.into())
+				.collect::<Vec<Error>>();
+			return Err(Error::try_from(errors).unwrap());
+		}
+
 		// Create new (temporary) file used as input for the interpreter
 		let tmpfile = Builder::new().suffix(".shackle.mzn").tempfile();
 		let mut tmpfile = match tmpfile {
@@ -58,14 +83,12 @@ impl Program {
 			} else if ty.is_opt() {
 				&Value::Absent
 			} else {
-				todo!("add new error type - {} is not initialized", name)
+				unreachable!("missing inputs are reported above")
 			};
 			writeln!(file_mut, "{name} = {};", LegacyValue { val, ty }).map_err(write_err)?;
 		}
 		for e in &self.legacy_enums {
-			if e.state.lock().unwrap().deref() == &EnumInner::NoDefinition {
-				todo!("add new error type - {} is not initialized", e.name())
-			}
+			debug_assert!(e.state.lock().unwrap().deref() != &EnumInner::NoDefinition);
 			writeln!(file_mut, "{};", LegacyEnum(e)).map_err(write_err)?;
 		}
 
@@ -356,6 +379,31 @@ enum LegacyOutput<'a> {
 	Error(Error),
 }
 
+/// A frame of the evaluation stack of an interpreter error
+#[derive(serde::Deserialize)]
+struct StackFrame {
+	description: String,
+}
+
+/// Whether an interpreter error was raised by the check of the object ids given
+/// in data (see `std/internal/object.mzn`), rather than by the compiled model
+/// itself. Such an error is caused by the data. The MicroZinc target inlines
+/// the stdlib under decorated names (`shackle_mzn_object_from_id_root`), so the
+/// functions are matched by substring.
+fn in_object_id_check(stack: &[StackFrame]) -> bool {
+	stack.iter().any(|frame| {
+		frame
+			.description
+			.strip_prefix("call '")
+			.and_then(|call| call.strip_suffix('\''))
+			.is_some_and(|name| {
+				["mzn_object_from_id", "mzn_check_object_ids"]
+					.iter()
+					.any(|check| name.contains(check))
+			})
+	})
+}
+
 impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 	type Value = LegacyOutput<'de>;
 
@@ -382,6 +430,7 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 		let mut message = None;
 		let mut status = None;
 		let mut solution = None;
+		let mut stack = None;
 
 		while let Some(k) = map.next_key::<&str>()? {
 			match k {
@@ -450,7 +499,13 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 						}
 					})
 				}
-				"location" | "stack" | "sections" | "what" => {
+				"stack" => {
+					if stack.is_some() {
+						return Err(SerdeError::duplicate_field("stack"));
+					}
+					stack = Some(map.next_value::<Vec<StackFrame>>()?);
+				}
+				"location" | "sections" | "what" => {
 					map.next_value::<IgnoredAny>()?; // TODO: parse additional error/warning information
 				}
 				_ => return Err(SerdeError::unknown_field(k, FIELDS)),
@@ -471,6 +526,12 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 			},
 			Some("error") => match message {
 				None => Err(SerdeError::missing_field("message")),
+				Some(msg) if in_object_id_check(stack.as_deref().unwrap_or_default()) => {
+					// The MicroZinc target turns the check's `assert` into an
+					// `abort`, whose message MiniZinc prefixes
+					let msg = msg.strip_prefix("Abort: ").unwrap_or(&msg).to_owned();
+					Ok(LegacyOutput::Error(InvalidObjectData { msg }.into()))
+				}
 				Some(msg) => Ok(LegacyOutput::Error(
 					InternalError::new(format!("minizinc error: {msg}")).into(),
 				)),

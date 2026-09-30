@@ -376,10 +376,17 @@ impl<'db> ItemCollector<'db> {
 					.model
 					.add_declaration(DeclarationItem::new(data_decl, item));
 				let value = Expression::new(db, &collector.parent.model, item, data_idx);
+				let referrer = Expression::new(
+					db,
+					&collector.parent.model,
+					item,
+					StringLiteral::new(db, name.lookup(db)),
+				);
 				decl.set_definition(collector.parent.resolve_data_references(
 					item.into(),
 					value,
 					ty,
+					referrer,
 				));
 				let _ = collector
 					.parent

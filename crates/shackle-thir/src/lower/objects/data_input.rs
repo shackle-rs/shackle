@@ -11,7 +11,7 @@
 //! `<C>_data_objects`, the objects of `C` that came from data: data can only
 //! refer to objects given in the data. The ids themselves become the objects'
 //! entries in `<C>_ids`, and every class hierarchy with data objects checks
-//! that its ids are distinct.
+//! that its ids are non-empty and distinct.
 
 use rustc_hash::FxHashMap;
 use shackle_hir::{
@@ -141,12 +141,14 @@ impl<'db> ItemCollector<'db> {
 	}
 
 	/// `value`, in the data form of `ty` (see `references_as_ids_ty`), with
-	/// every id resolved to the object it names.
+	/// every id resolved to the object it names. `referrer`, a string, names
+	/// what holds the references in the error for an unknown id.
 	pub(in crate::lower) fn resolve_data_references(
 		&mut self,
 		origin: Origin<'db>,
 		value: Expression<'db>,
 		ty: Ty<'db>,
+		referrer: Expression<'db>,
 	) -> Expression<'db> {
 		let db = self.db;
 		if !ty_mentions_class(db, ty) {
@@ -155,7 +157,7 @@ impl<'db> ItemCollector<'db> {
 		match ty.lookup(db) {
 			TyData::Class(_, OptType::NonOpt, class) => {
 				let class = class_pattern_for(db, *class).expect("class item for class type");
-				self.object_from_id(origin, class, value)
+				self.object_from_id(origin, class, value, referrer)
 			}
 			TyData::Class(_, OptType::Opt, class) => {
 				let class = class_pattern_for(db, *class).expect("class item for class type");
@@ -177,7 +179,7 @@ impl<'db> ItemCollector<'db> {
 						arguments: vec![value],
 					},
 				);
-				let object = self.object_from_id(origin, class, deopt);
+				let object = self.object_from_id(origin, class, deopt, referrer);
 				let absent = Expression::new(db, &self.model, origin, Absent);
 				Expression::new(
 					db,
@@ -192,7 +194,8 @@ impl<'db> ItemCollector<'db> {
 			TyData::Set(_, _, element) => {
 				let element = *element;
 				let (generator, member) = self.member_generator(origin, value);
-				let template = self.resolve_data_references(origin, member, element);
+				let template =
+					self.resolve_data_references(origin, member, element, referrer.clone());
 				Expression::new(
 					db,
 					&self.model,
@@ -206,7 +209,8 @@ impl<'db> ItemCollector<'db> {
 			TyData::Array { element, .. } => {
 				let element = *element;
 				let (generator, member) = self.member_generator(origin, value.clone());
-				let template = self.resolve_data_references(origin, member, element);
+				let template =
+					self.resolve_data_references(origin, member, element, referrer.clone());
 				let resolved = Expression::new(
 					db,
 					&self.model,
@@ -239,7 +243,7 @@ impl<'db> ItemCollector<'db> {
 								field: IntegerLiteral(i as i64 + 1),
 							},
 						);
-						self.resolve_data_references(origin, field, field_ty)
+						self.resolve_data_references(origin, field, field_ty, referrer.clone())
 					})
 					.collect();
 				Expression::new(db, &self.model, origin, TupleLiteral(fields))
@@ -261,7 +265,12 @@ impl<'db> ItemCollector<'db> {
 						);
 						(
 							field,
-							self.resolve_data_references(origin, access, field_ty),
+							self.resolve_data_references(
+								origin,
+								access,
+								field_ty,
+								referrer.clone(),
+							),
 						)
 					})
 					.collect();
@@ -296,12 +305,13 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	/// `mzn_object_from_id(<C>_ids, <C>_data_objects, <id>, "<C>")`
+	/// `mzn_object_from_id(<C>_ids, <C>_data_objects, <id>, "<C>", <referrer>)`
 	fn object_from_id(
 		&mut self,
 		origin: Origin<'db>,
 		class: PatternRef<'db>,
 		id: Expression<'db>,
+		referrer: Expression<'db>,
 	) -> Expression<'db> {
 		let ids = Expression::new(
 			self.db,
@@ -328,9 +338,62 @@ impl<'db> ItemCollector<'db> {
 			origin,
 			LookupCall {
 				function: self.ids.functions.mzn_object_from_id.into(),
-				arguments: vec![ids, data_objects, id, class_name],
+				arguments: vec![ids, data_objects, id, class_name, referrer],
 			},
 		)
+	}
+
+	/// The referrer (see `resolve_data_references`) of the references that
+	/// attribute `field` of a `class` object holds, read from the data record
+	/// `input`: `"<field> of <C> \"" ++ input.id ++ "\""`.
+	pub(in crate::lower) fn attribute_referrer(
+		&mut self,
+		origin: Origin<'db>,
+		class: PatternRef<'db>,
+		field: Identifier<'db>,
+		input: &Expression<'db>,
+	) -> Expression<'db> {
+		let prefix = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			StringLiteral::new(
+				self.db,
+				format!(
+					"{} of {} \"",
+					field.lookup(self.db),
+					class.identifier(self.db).unwrap().lookup(self.db)
+				),
+			),
+		);
+		let id = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			RecordAccess {
+				record: Box::new(input.clone()),
+				field: self.ids.names.object_id,
+			},
+		);
+		let quote = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			StringLiteral::new(self.db, "\""),
+		);
+		let concat = |this: &Self, lhs: Expression<'db>, rhs: Expression<'db>| {
+			Expression::new(
+				this.db,
+				&this.model,
+				origin,
+				LookupCall {
+					function: this.ids.functions.plus_plus.into(),
+					arguments: vec![lhs, rhs],
+				},
+			)
+		};
+		let with_id = concat(self, prefix, id);
+		concat(self, with_id, quote)
 	}
 
 	/// `set of <C>_potential: <C>_data_objects`, the objects of `class` that
@@ -617,9 +680,10 @@ impl<'db> ItemCollector<'db> {
 			self.model[decl].set_definition(definition);
 		}
 
-		// Ids are unique per class hierarchy, and the table of a hierarchy's
-		// root class holds every object of the hierarchy. Generated ids are
-		// distinct by construction, so only hierarchies with data are checked.
+		// Ids are non-empty and unique per class hierarchy, and the table of a
+		// hierarchy's root class holds every object of the hierarchy. Generated
+		// ids are valid by construction, so only hierarchies with data are
+		// checked.
 		let mut roots: Vec<PatternRef<'db>> = data_classes
 			.into_iter()
 			.map(|class| self.hierarchy_root(class))
@@ -645,7 +709,7 @@ impl<'db> ItemCollector<'db> {
 				&self.model,
 				item,
 				LookupCall {
-					function: self.ids.functions.mzn_object_ids_distinct.into(),
+					function: self.ids.functions.mzn_check_object_ids.into(),
 					arguments: vec![ids, class_name],
 				},
 			);

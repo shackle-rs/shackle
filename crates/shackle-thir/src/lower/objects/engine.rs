@@ -408,7 +408,13 @@ impl<'db> ItemCollector<'db> {
 						field: field_ident,
 					},
 				);
-				self.resolve_data_references(item.into(), value, field_ty)
+				let referrer = self.attribute_referrer(
+					item.into(),
+					class_pattern,
+					field_ident,
+					&current_input,
+				);
+				self.resolve_data_references(item.into(), value, field_ty, referrer)
 			} else if field_ty.class_type(self.db).is_some() {
 				// Identity-or-read rule for class-typed fields (including `set
 				// of`/`array of` class fields): read the input through when it
