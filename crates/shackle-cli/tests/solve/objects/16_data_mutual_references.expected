@@ -1,0 +1,4 @@
+first_output = (b: "B_3", id: "first", x: 10);
+na = (b: "B_1", id: "na", x: 13);
+via_references = 12;
+----------
