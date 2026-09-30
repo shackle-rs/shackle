@@ -4,7 +4,7 @@
 
 use std::{
 	io::Read,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	process::{Command, Stdio},
 	sync::mpsc,
 	thread,
@@ -22,11 +22,20 @@ fn fixture(name: &str, extension: &str) -> PathBuf {
 
 /// Solve the given model fixture and compare the output with its expected file
 fn check_solve(name: &str, all_solutions: bool) {
-	let model = fixture(name, "mzn");
-	let expected_path = fixture(name, "expected");
+	check_solve_with_data(name, &[], all_solutions);
+}
 
+/// Solve the given model fixture with the given data files and compare the
+/// output with the model's expected file
+fn check_solve_with_data(name: &str, data: &[PathBuf], all_solutions: bool) {
+	let output = solve(&fixture(name, "mzn"), data, all_solutions);
+	expect_file![fixture(name, "expected")].assert_eq(&output);
+}
+
+/// Solve a model with the given data files and return the standard output
+fn solve(model: &Path, data: &[PathBuf], all_solutions: bool) -> String {
 	let mut cmd = Command::new(env!("CARGO_BIN_EXE_shackle"));
-	cmd.args(["solve", model.to_str().unwrap()]);
+	cmd.arg("solve").arg(model).args(data);
 	if all_solutions {
 		cmd.args(["--", "--all-solutions"]);
 	}
@@ -39,7 +48,15 @@ fn check_solve(name: &str, all_solutions: bool) {
 		String::from_utf8_lossy(&output.stdout),
 		String::from_utf8_lossy(&output.stderr),
 	);
-	expect_file![expected_path].assert_eq(&String::from_utf8(output.stdout).unwrap());
+	String::from_utf8(output.stdout).unwrap()
+}
+
+/// A fresh directory for the files a test writes
+fn scratch_dir(name: &str) -> PathBuf {
+	let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+	let _ = std::fs::remove_dir_all(&dir);
+	std::fs::create_dir_all(&dir).unwrap();
+	dir
 }
 
 #[test]
@@ -192,4 +209,83 @@ fn solve_object_reference_existence_unsat() {
 #[test]
 fn solve_object_reference_existence() {
 	check_solve("objects/14_reference_existence", false);
+}
+
+#[test]
+fn solve_object_data_dzn() {
+	let name = "objects/15_data_objects";
+	check_solve_with_data(name, &[fixture(name, "dzn")], false);
+}
+
+#[test]
+fn solve_object_data_json() {
+	let name = "objects/15_data_objects";
+	check_solve_with_data(name, &[fixture(name, "json")], false);
+}
+
+#[test]
+fn solve_object_data_mutual_references() {
+	let name = "objects/16_data_mutual_references";
+	check_solve_with_data(name, &[fixture(name, "dzn")], false);
+}
+
+/// The compiled model itself reads data under the user's names, so plain
+/// `minizinc` runs it. The object helpers are passed along until they are part
+/// of MiniZinc's standard library.
+#[test]
+fn compile_object_data_then_minizinc() {
+	let name = "objects/15_data_objects";
+	let dir = scratch_dir("compile_object_data_then_minizinc");
+	let model = dir.join("model.mzn");
+	std::fs::copy(fixture(name, "mzn"), &model).unwrap();
+
+	let output = Command::new(env!("CARGO_BIN_EXE_shackle"))
+		.args(["compile", "--target", "minizinc"])
+		.arg(&model)
+		.output()
+		.unwrap();
+	assert!(
+		output.status.success(),
+		"compile failed\nstderr:\n{}",
+		String::from_utf8_lossy(&output.stderr),
+	);
+
+	let helpers =
+		Path::new(env!("CARGO_MANIFEST_DIR")).join("../../share/minizinc/std/internal/object.mzn");
+	let output = Command::new("minizinc")
+		.args(["--solver", "gecode"])
+		.arg(dir.join("model.shackle.mzn"))
+		.arg(helpers)
+		.arg(fixture(name, "dzn"))
+		.output()
+		.unwrap();
+	assert!(
+		output.status.success(),
+		"minizinc failed\nstdout:\n{}\nstderr:\n{}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr),
+	);
+	expect_file![fixture("objects/15_data_objects_minizinc", "expected")]
+		.assert_eq(&String::from_utf8(output.stdout).unwrap());
+}
+
+/// A solution is printed in the data form, so it can be read back as data.
+#[test]
+fn solve_object_round_trip() {
+	let solution = solve(
+		&fixture("objects/17_round_trip_solution", "mzn"),
+		&[],
+		false,
+	);
+	expect_file![fixture("objects/17_round_trip_solution", "expected")].assert_eq(&solution);
+
+	let dir = scratch_dir("solve_object_round_trip");
+	let data = dir.join("solution.dzn");
+	let assignments = solution
+		.lines()
+		.filter(|line| !line.starts_with("---") && !line.starts_with("==="))
+		.collect::<Vec<_>>()
+		.join("\n");
+	std::fs::write(&data, assignments).unwrap();
+	check_solve_with_data("objects/17_round_trip_data", &[data], false);
 }

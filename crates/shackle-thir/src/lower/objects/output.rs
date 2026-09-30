@@ -64,7 +64,10 @@ impl<'db> ItemCollector<'db> {
 			if !self.is_output_declaration(decl) {
 				continue;
 			}
-			let Some(name) = self.model[decl].name() else {
+			// A declaration read from data has given its name to the data
+			// declaration, so its rendering is named `<name>_output`.
+			let data_input_name = self.objects.data_input_names.get(&decl).copied();
+			let Some(name) = data_input_name.or_else(|| self.model[decl].name()) else {
 				continue;
 			};
 			let origin = self.model[decl].origin();
@@ -86,7 +89,11 @@ impl<'db> ItemCollector<'db> {
 
 			let mut output =
 				Declaration::new(true, Domain::unbounded(self.db, origin, rendering.ty()));
-			output.set_name(name);
+			output.set_name(if data_input_name.is_some() {
+				Identifier::new(self.db, format!("{}_output", name.lookup(self.db)))
+			} else {
+				name
+			});
 			output.set_definition(rendering);
 			output.annotations_mut().push(Expression::new(
 				self.db,

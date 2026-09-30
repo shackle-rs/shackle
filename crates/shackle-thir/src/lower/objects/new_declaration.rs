@@ -90,6 +90,9 @@ struct NewRootContext<'db, 'a> {
 	enum_member_id: EnumMemberId<'db>,
 	/// `<Class>_<declName>`, the prefix for every decl this root introduces.
 	class_and_decl_name: String,
+	/// A par root the model leaves uninitialised: its objects are read from
+	/// data, in their data form, under the user's name (see `data_input.rs`).
+	data_root: bool,
 }
 
 impl<'db> ItemCollector<'db> {
@@ -137,7 +140,24 @@ impl<'db> ItemCollector<'db> {
 				.pretty_print(collector.parent.db)
 		);
 
+		let data_root = d.definition.is_none()
+			&& matches!(
+				item_ty,
+				shackle_hir::Type::New {
+					inst: VarType::Par,
+					opt: OptType::NonOpt,
+					..
+				} | shackle_hir::Type::Set {
+					inst: VarType::Par,
+					..
+				}
+			);
+		if data_root {
+			let _ = self.objects.data_input_patterns.insert(root_pattern);
+		}
+
 		let cx = NewRootContext {
+			data_root,
 			ty,
 			item,
 			top_level,
@@ -442,6 +462,7 @@ impl<'db> ItemCollector<'db> {
 			class_pattern_ref,
 			root_pattern,
 			root_occurrence,
+			data_root,
 			ref class_and_decl_name,
 			..
 		} = cx;
@@ -495,7 +516,9 @@ impl<'db> ItemCollector<'db> {
 				let (contribution_expr, contribution_determined) = if target_class
 					== class_pattern_ref
 				{
-					if has_object_fields || has_storage_only_field {
+					// A data record also carries the object's `id`, which storage
+					// does not hold.
+					if has_object_fields || has_storage_only_field || data_root {
 						// The engine reconstructs the direct contribution with
 						// per-field rules: computed attributes are *defined*
 						// (`n = card(children)`), class-typed fields are read
@@ -1726,7 +1749,9 @@ impl<'db> ItemCollector<'db> {
 			top_level,
 			class_pattern_ref,
 			root_occurrence,
+			root_pattern,
 			enum_member_id,
+			data_root,
 			ref class_and_decl_name,
 			..
 		} = cx;
@@ -1734,7 +1759,7 @@ impl<'db> ItemCollector<'db> {
 		let class_types = class_pattern_ref
 			.item(collector.parent.db)
 			.types(collector.parent.db);
-		let (input_record_ty, _storage_record_ty) =
+		let (inline_input_record_ty, _storage_record_ty) =
 			match &class_types[class_pattern_ref.pattern(collector.parent.db)] {
 				PatternTy::ClassDecl {
 					input_record_ty,
@@ -1743,6 +1768,13 @@ impl<'db> ItemCollector<'db> {
 				} => (*input_record_ty, *storage_record_ty),
 				_ => unreachable!(),
 			};
+		let input_record_ty = if data_root {
+			collector
+				.parent
+				.data_input_record_ty(class_pattern_ref, inline_input_record_ty)
+		} else {
+			inline_input_record_ty
+		};
 
 		let one_expr = Expression::new(
 			collector.parent.db,
@@ -1855,6 +1887,27 @@ impl<'db> ItemCollector<'db> {
 				} else {
 					collected
 				}
+			} else if data_root {
+				// The object record, read from data under the user's name.
+				let mut data_decl = Declaration::new(
+					true,
+					Domain::unbounded(collector.parent.db, item, lowered_input_record_ty),
+				);
+				data_decl.set_name(root_pattern.identifier(collector.parent.db).unwrap());
+				let data_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(data_decl, item));
+				let record = alloc_expression(data_idx, &collector, item);
+				collector.parent.register_data_id_blocks(
+					item.into(),
+					root_pattern,
+					class_pattern_ref,
+					Vec::new(),
+					Vec::new(),
+					record.clone(),
+				);
+				record
 			} else {
 				alloc_expression(DummyValue(lowered_input_record_ty), &collector, item)
 			};
@@ -2216,7 +2269,9 @@ impl<'db> ItemCollector<'db> {
 			d,
 			top_level,
 			class_pattern_ref,
+			root_pattern,
 			root_occurrence,
+			data_root,
 			ref class_and_decl_name,
 			..
 		} = cx;
@@ -2224,7 +2279,7 @@ impl<'db> ItemCollector<'db> {
 		let class_types = class_pattern_ref
 			.item(collector.parent.db)
 			.types(collector.parent.db);
-		let (input_record_ty, storage_record_ty) =
+		let (inline_input_record_ty, storage_record_ty) =
 			match &class_types[class_pattern_ref.pattern(collector.parent.db)] {
 				PatternTy::ClassDecl {
 					input_record_ty,
@@ -2233,6 +2288,13 @@ impl<'db> ItemCollector<'db> {
 				} => (*input_record_ty, *storage_record_ty),
 				_ => unreachable!(),
 			};
+		let input_record_ty = if data_root {
+			collector
+				.parent
+				.data_input_record_ty(class_pattern_ref, inline_input_record_ty)
+		} else {
+			inline_input_record_ty
+		};
 		let needs_reconstruction = input_record_ty != storage_record_ty;
 		let root_fields = collector.parent.class_storage_fields(class_pattern_ref);
 		let has_object_fields = root_fields.iter().any(|(_, field_ty)| {
@@ -2361,11 +2423,20 @@ impl<'db> ItemCollector<'db> {
 			);
 			let mut array_decl = Declaration::new(true, array_dom);
 			let array_name = if scalar_storage_only_var_root {
-				format!("{}_storage", class_and_decl_name)
+				Identifier::new(
+					collector.parent.db,
+					format!("{}_storage", class_and_decl_name),
+				)
+			} else if data_root {
+				// The object records, read from data under the user's name.
+				root_pattern.identifier(collector.parent.db).unwrap()
 			} else {
-				format!("{}_inputs", class_and_decl_name)
+				Identifier::new(
+					collector.parent.db,
+					format!("{}_inputs", class_and_decl_name),
+				)
 			};
-			array_decl.set_name(Identifier::new(collector.parent.db, array_name));
+			array_decl.set_name(array_name);
 			if matches!(inst, VarType::Par)
 				&& let Some(rhs) = d.definition
 			{
@@ -2440,6 +2511,39 @@ impl<'db> ItemCollector<'db> {
 				unreachable!("expected inputs or storage declaration")
 			}
 		};
+		if data_root {
+			let (generator, record) = {
+				let record_ty = inputs_expr
+					.ty()
+					.elem_ty(collector.parent.db)
+					.expect("root inputs are an array");
+				let mut record_decl = Declaration::new(
+					false,
+					Domain::unbounded(collector.parent.db, item, record_ty),
+				);
+				record_decl.set_name(Identifier::new(collector.parent.db, "r"));
+				let record_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(record_decl, item));
+				(
+					Generator::Iterator {
+						declarations: vec![record_idx],
+						collection: inputs_expr.clone(),
+						where_clause: None,
+					},
+					alloc_expression(record_idx, &collector, item),
+				)
+			};
+			collector.parent.register_data_id_blocks(
+				item.into(),
+				root_pattern,
+				class_pattern_ref,
+				Vec::new(),
+				vec![generator],
+				record,
+			);
+		}
 		let contribution_expr = storage_idx.map(|idx| alloc_expression(idx, &collector, item));
 		let nested_iteration_expr = contribution_expr.as_ref().map(|storage_expr| {
 			Expression::new(

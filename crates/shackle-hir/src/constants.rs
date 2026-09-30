@@ -216,6 +216,8 @@ id_registry!(
 	mzn_indexed_array,
 	mzn_infinite_range,
 	mzn_internal_check_debug_mode,
+	mzn_object_from_id,
+	mzn_object_ids_distinct,
 	mzn_trace_to_section,
 	mzn_opt_channel,
 	mzn_opt_domain,

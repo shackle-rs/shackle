@@ -48,7 +48,16 @@ impl<'db> ItemCollector<'db> {
 					.expect("object constructor has a bounded parameter domain");
 				let occurrence = occurrence_of[&(class, constructor_index)];
 				let prefix = self.objects.plan.occurrence_id_prefixes[&occurrence].clone();
-				let block = self.occurrence_ids_block(item, domain, &prefix);
+				let block = match self.objects.data_id_blocks.get(&occurrence).cloned() {
+					Some(data) => self.data_occurrence_ids_block(
+						item,
+						occurrence,
+						domain,
+						data,
+						|this, first, last| this.indexed_ids(item, &prefix.prefix, first, last),
+					),
+					None => self.occurrence_ids_block(item, domain, &prefix),
+				};
 				ids = Some(match ids {
 					None => block,
 					Some(ids) => Expression::new(
@@ -83,6 +92,7 @@ impl<'db> ItemCollector<'db> {
 			};
 			self.model[info.class_ids].set_definition(definition);
 		}
+		self.define_class_data_objects(&occurrence_of);
 	}
 
 	/// The ids of the potential objects of one constructor, whose parameter
@@ -112,66 +122,8 @@ impl<'db> ItemCollector<'db> {
 				arguments: vec![domain],
 			},
 		);
-
-		let mut position = Declaration::new(
-			false,
-			Domain::unbounded(self.db, item, Ty::par_int(self.db)),
-		);
-		position.set_name(Identifier::new(self.db, "p"));
-		let position_decl = self
-			.model
-			.add_declaration(DeclarationItem::new(position, item));
 		let one = Expression::new(self.db, &self.model, item, IntegerLiteral(1));
-		let positions = Expression::new(
-			self.db,
-			&self.model,
-			item,
-			LookupCall {
-				function: self.ids.functions.dot_dot.into(),
-				arguments: vec![one, count.clone()],
-			},
-		);
-		let position = Expression::new(self.db, &self.model, item, position_decl);
-		let shown_position = Expression::new(
-			self.db,
-			&self.model,
-			item,
-			LookupCall {
-				function: self.ids.functions.show.into(),
-				arguments: vec![position],
-			},
-		);
-		let id = [
-			self.string_literal(item, &format!("{}[", prefix.prefix)),
-			shown_position,
-			self.string_literal(item, "]"),
-		]
-		.into_iter()
-		.reduce(|acc, part| {
-			Expression::new(
-				self.db,
-				&self.model,
-				item,
-				LookupCall {
-					function: self.ids.functions.plus_plus.into(),
-					arguments: vec![acc, part],
-				},
-			)
-		})
-		.expect("id has parts");
-		let indexed = Expression::new(
-			self.db,
-			&self.model,
-			item,
-			ArrayComprehension::new(
-				[Generator::Iterator {
-					declarations: vec![position_decl],
-					collection: positions,
-					where_clause: None,
-				}],
-				id,
-			),
-		);
+		let indexed = self.indexed_ids(item, &prefix.prefix, one, count.clone());
 		if !prefix.singular {
 			return indexed;
 		}
@@ -199,6 +151,74 @@ impl<'db> ItemCollector<'db> {
 				branches: vec![Branch::new(is_single, single)],
 				else_result: Box::new(indexed),
 			},
+		)
+	}
+
+	/// `[<prefix> ++ "[" ++ show(p) ++ "]" | p in <first>..<last>]`
+	fn indexed_ids(
+		&mut self,
+		item: Item<'db>,
+		prefix: &str,
+		first: Expression<'db>,
+		last: Expression<'db>,
+	) -> Expression<'db> {
+		let mut position = Declaration::new(
+			false,
+			Domain::unbounded(self.db, item, Ty::par_int(self.db)),
+		);
+		position.set_name(Identifier::new(self.db, "p"));
+		let position_decl = self
+			.model
+			.add_declaration(DeclarationItem::new(position, item));
+		let positions = Expression::new(
+			self.db,
+			&self.model,
+			item,
+			LookupCall {
+				function: self.ids.functions.dot_dot.into(),
+				arguments: vec![first, last],
+			},
+		);
+		let position = Expression::new(self.db, &self.model, item, position_decl);
+		let shown_position = Expression::new(
+			self.db,
+			&self.model,
+			item,
+			LookupCall {
+				function: self.ids.functions.show.into(),
+				arguments: vec![position],
+			},
+		);
+		let id = [
+			self.string_literal(item, &format!("{prefix}[")),
+			shown_position,
+			self.string_literal(item, "]"),
+		]
+		.into_iter()
+		.reduce(|acc, part| {
+			Expression::new(
+				self.db,
+				&self.model,
+				item,
+				LookupCall {
+					function: self.ids.functions.plus_plus.into(),
+					arguments: vec![acc, part],
+				},
+			)
+		})
+		.expect("id has parts");
+		Expression::new(
+			self.db,
+			&self.model,
+			item,
+			ArrayComprehension::new(
+				[Generator::Iterator {
+					declarations: vec![position_decl],
+					collection: positions,
+					where_clause: None,
+				}],
+				id,
+			),
 		)
 	}
 

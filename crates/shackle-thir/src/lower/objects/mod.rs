@@ -30,6 +30,7 @@ use crate::*;
 mod class_item;
 mod class_set;
 mod contribution;
+mod data_input;
 mod defaults;
 mod engine;
 mod field_reconstruction;
@@ -135,6 +136,21 @@ pub(in crate::lower) struct ObjectState<'db> {
 	/// order. `finish()` replaces those that are output by a rendering of the
 	/// objects they refer to (see `output.rs`).
 	pub(in crate::lower) output_candidates: Vec<(DeclarationId<'db>, OutputCandidateKind<'db>)>,
+	/// Patterns that an assignment item in the model defines. Such a
+	/// declaration is initialised in the model, so it is not read from data.
+	pub(in crate::lower) assigned_patterns: FxHashSet<PatternRef<'db>>,
+	/// Top-level declarations read from data (see `data_input.rs`). The data
+	/// declaration takes the user's name, so `collect_declaration` renames the
+	/// internal one to `<name>_ref`.
+	pub(in crate::lower) data_input_patterns: FxHashSet<PatternRef<'db>>,
+	/// The internal declarations renamed for a data declaration, mapped to the
+	/// user's name.
+	pub(in crate::lower) data_input_names: FxHashMap<DeclarationId<'db>, Identifier<'db>>,
+	/// Per occurrence whose objects come from data, their data ids in slot
+	/// order. `define_class_ids` uses them instead of generated ids.
+	data_id_blocks: FxHashMap<OccurrenceId, Expression<'db>>,
+	/// `<C>_data_objects` for every class that data refers to.
+	class_data_objects: FxHashMap<PatternRef<'db>, DeclarationId<'db>>,
 }
 
 impl<'db> ObjectState<'db> {
@@ -153,6 +169,11 @@ impl<'db> ObjectState<'db> {
 			opt_free_subset_classes: FxHashSet::default(),
 			opt_contribution_slots: FxHashSet::default(),
 			output_candidates: Vec::new(),
+			assigned_patterns: FxHashSet::default(),
+			data_input_patterns: FxHashSet::default(),
+			data_input_names: FxHashMap::default(),
+			data_id_blocks: FxHashMap::default(),
+			class_data_objects: FxHashMap::default(),
 		}
 	}
 }

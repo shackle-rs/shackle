@@ -354,6 +354,38 @@ impl<'db> ItemCollector<'db> {
 			let mut decl = Declaration::new(top_level, domain);
 			if let Some(def) = d.definition {
 				decl.set_definition(collector.collect_expression_as(def, ty));
+			} else if top_level
+				&& !output_only
+				&& ty.known_par(db)
+				&& objects::ty_mentions_class(db, ty)
+				&& collector.parent.has_data_form(ty)
+				&& !collector
+					.parent
+					.objects
+					.assigned_patterns
+					.contains(&root_pattern)
+				&& let Some(name) = data[d.pattern].identifier()
+			{
+				// A reference read from data, as the id of the object it
+				// refers to, under the user's name.
+				let data_ty = collector.parent.references_as_ids_ty(ty);
+				let mut data_decl = Declaration::new(true, Domain::unbounded(db, item, data_ty));
+				data_decl.set_name(name);
+				let data_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(data_decl, item));
+				let value = Expression::new(db, &collector.parent.model, item, data_idx);
+				decl.set_definition(collector.parent.resolve_data_references(
+					item.into(),
+					value,
+					ty,
+				));
+				let _ = collector
+					.parent
+					.objects
+					.data_input_patterns
+					.insert(root_pattern);
 			}
 			decl
 		};
@@ -536,6 +568,18 @@ impl<'db> ItemCollector<'db> {
 			}
 		}
 		let decls = collector.collect_destructuring(idx, top_level, d.pattern);
+		if collector
+			.parent
+			.objects
+			.data_input_patterns
+			.contains(&root_pattern)
+			&& let Some(name) = collector.parent.model[idx].name()
+		{
+			// The data declaration has the user's name.
+			collector.parent.model[idx]
+				.set_name(Identifier::new(db, format!("{}_ref", name.lookup(db))));
+			let _ = collector.parent.objects.data_input_names.insert(idx, name);
+		}
 		collector.parent.model[idx]
 			.annotations_mut()
 			.reserve(d.annotations.len());
@@ -982,6 +1026,15 @@ pub fn lower_model<'db>(db: &'db dyn Db) -> Intermediate<Model<'db>> {
 		collector.ensure_class_predeclared(target_class);
 	}
 	collector.repair_predeclared_class_objects_domains();
+	// A declaration that an assignment item in the model defines is not read
+	// from data, even though its own declaration has no right-hand side.
+	for item in hir.items.iter() {
+		if let Item::Assignment(a) = item
+			&& let Some(pattern) = item.types(db).name_resolution(a.assignment(db).assignee)
+		{
+			let _ = collector.objects.assigned_patterns.insert(pattern);
+		}
+	}
 	for item in hir.items.iter() {
 		collector.collect_item(*item);
 	}

@@ -279,7 +279,13 @@ impl<'db> ItemCollector<'db> {
 		let all_fields_present = target_fields
 			.iter()
 			.all(|(field_ident, _)| self.record_ty_has_field(&contribution_input, *field_ident));
-		if !has_object_fields && all_fields_present {
+		// A record read from data also carries the object's `id`, which
+		// storage does not hold.
+		let no_extra_fields = contribution_input
+			.ty()
+			.record_fields(self.db)
+			.is_some_and(|fields| fields.len() == target_fields.len());
+		if !has_object_fields && all_fields_present && no_extra_fields {
 			return Expression::new(
 				self.db,
 				&self.model,
