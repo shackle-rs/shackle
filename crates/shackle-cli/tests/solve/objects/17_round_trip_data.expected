@@ -1,0 +1,4 @@
+one_output = (id: "one", next: "one", x: 1);
+two_output = (id: "two", next: "one", x: 2);
+total = 112;
+----------

@@ -1,9 +1,11 @@
 enum B_potential = B_occ_1('..'(1, sum([length((i).children) | i in A_as_inputs])));
 array [int] of record('..'(2, 3): x): B_objects = B_children_objects;
 set of B_potential: B = array_union([B_occ_1('..'(1, '-'(A_as_children_end, 1)))]);
+array [B_potential] of string: B_ids = array1d(B_potential, ['++'('++'("as.children[", show(p)), "]") | p in '..'(1, card('..'(1, sum([length((i).children) | i in A_as_inputs]))))]);
 enum A_potential = A_occ_0({1, 2});
 array [int] of record(set of B_potential: children, int: n): A_objects = A_as_objects;
 set of A_potential: A = as;
+array [A_potential] of string: A_ids = array1d(A_potential, ['++'('++'("as[", show(p)), "]") | p in '..'(1, card({1, 2}))]);
 array [int] of record(array [int] of record(int: x): children): A_as_inputs = [(children: [(x: 2)]), (children: [(x: 2), (x: 3)])];
 constraint forall(['in'(length((i).children), '..'(1, 2)) | i in A_as_inputs]);
 array [int] of record('..'(2, 3): x): B_children_objects = [k | i in A_as_inputs, k in (i).children];

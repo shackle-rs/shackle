@@ -9,6 +9,7 @@ include "internal/element_opt.mzn";
 include "internal/enum.mzn";
 include "internal/ite.mzn";
 include "internal/math.mzn";
+include "internal/object.mzn";
 include "internal/opt.mzn";
 include "internal/partiality.mzn";
 include "internal/random.mzn";

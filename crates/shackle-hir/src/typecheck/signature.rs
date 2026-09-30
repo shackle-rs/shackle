@@ -669,13 +669,33 @@ impl<'db> SignatureTypeContext<'db> {
 					let _ = typer.typecheck_expression(*ann, tys.ann);
 				}
 
+				let object_id = IdentifierRegistry::lookup(db).names.object_id;
 				let mut attributes = Vec::new();
 				for member in it.items.iter() {
 					if let ClassMember::Declaration(d) = member {
-						let mut typer = Typer::new(db, self, item, data);
-						let field_name = PatternRef::new(db, item, d.pattern)
+						let field_pattern = PatternRef::new(db, item, d.pattern);
+						let field_name = field_pattern
 							.identifier(db)
 							.expect("Class attribute must have identifier pattern");
+						// `id` names the object in data files and solutions, so a
+						// class cannot declare it. The attribute is still typed and
+						// recorded below, so its uses in the class body do not
+						// cascade into further errors.
+						if field_name == object_id {
+							let (src, span) = field_pattern.source_span(db);
+							self.add_diagnostic(
+								db,
+								item,
+								InvalidDeclaration {
+									src,
+									span,
+									msg: "'id' is reserved for the object id and cannot be \
+									      declared as a class attribute"
+										.to_owned(),
+								},
+							);
+						}
+						let mut typer = Typer::new(db, self, item, data);
 						let ty = typer.collect_declaration(d).ty;
 						// A computed attribute (`int: y = x + 1`) is part of the
 						// object's storage but is never supplied by the caller, so

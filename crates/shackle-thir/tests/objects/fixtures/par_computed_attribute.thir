@@ -1,7 +1,9 @@
 enum A_potential = A_occ_0({1});
 array [int] of record(int: x, int: y): A_objects = A_a_objects;
 set of A_potential: A = A_occ_0({1});
+array [A_potential] of string: A_ids = array1d(A_potential, ["a"]);
 array [int] of record(int: x): A_a_inputs = [(x: 1)];
 array [int] of record(int: x, int: y): A_a_objects = [(x: x, y: y) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), x = (input).x, y = '+'(x, 1)];
-A_potential: a :: ('output') = A_occ_0(1);
+A_potential: a_ref :: (no_output) = A_occ_0(1);
+record(string: id, int: x, int: y): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), x: ('[]'(A_objects, enum2int(a_ref))).x, y: ('[]'(A_objects, enum2int(a_ref))).y);
 solve satisfy;

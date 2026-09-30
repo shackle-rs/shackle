@@ -1,0 +1,3 @@
+one = (id: "one", next: "one", x: 1);
+two = (id: "two", next: "one", x: 2);
+----------

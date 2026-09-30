@@ -1,4 +1,5 @@
 enum Foo_potential = {};
 array [int] of record(int: x, int: y): Foo_objects = [];
 set of Foo_potential: Foo = {};
+array [Foo_potential] of string: Foo_ids = [];
 solve satisfy;

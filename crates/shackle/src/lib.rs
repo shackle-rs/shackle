@@ -421,7 +421,7 @@ pub enum Message<'a> {
 	/// Trace messages emitted during the shackle process
 	Trace(&'a str),
 	/// Warning messages emitted by shackle or the solver
-	Warning(&'a str),
+	Warning(String),
 }
 
 impl Display for Message<'_> {

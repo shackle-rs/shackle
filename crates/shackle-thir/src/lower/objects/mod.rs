@@ -30,16 +30,22 @@ use crate::*;
 mod class_item;
 mod class_set;
 mod contribution;
+mod data_input;
 mod defaults;
 mod engine;
 mod field_reconstruction;
 mod finish;
 mod guards;
+mod ids;
 mod nested_emission;
 mod nested_storage;
 mod new_declaration;
 mod occurrence;
+mod output;
+mod references;
 mod storage;
+
+pub(in crate::lower) use output::{OutputCandidateKind, ty_mentions_class};
 
 /// Everything the object lowering accumulates while collecting items,
 /// alongside the read-only occurrence plan it is driven by.
@@ -126,6 +132,25 @@ pub(in crate::lower) struct ObjectState<'db> {
 	/// lower-bound) union piece — its membership IS the decision, and its
 	/// superclass image is pinned by an occurs biconditional instead.
 	opt_contribution_slots: FxHashSet<(PatternRef<'db>, usize)>,
+	/// Top-level declarations whose type mentions a class, in collection
+	/// order. `finish()` replaces those that are output by a rendering of the
+	/// objects they refer to (see `output.rs`).
+	pub(in crate::lower) output_candidates: Vec<(DeclarationId<'db>, OutputCandidateKind<'db>)>,
+	/// Patterns that an assignment item in the model defines. Such a
+	/// declaration is initialised in the model, so it is not read from data.
+	pub(in crate::lower) assigned_patterns: FxHashSet<PatternRef<'db>>,
+	/// Top-level declarations read from data (see `data_input.rs`). The data
+	/// declaration takes the user's name, so `collect_declaration` renames the
+	/// internal one to `<name>_ref`.
+	pub(in crate::lower) data_input_patterns: FxHashSet<PatternRef<'db>>,
+	/// The internal declarations renamed for a data declaration, mapped to the
+	/// user's name.
+	pub(in crate::lower) data_input_names: FxHashMap<DeclarationId<'db>, Identifier<'db>>,
+	/// Per occurrence whose objects come from data, their data ids in slot
+	/// order. `define_class_ids` uses them instead of generated ids.
+	data_id_blocks: FxHashMap<OccurrenceId, Expression<'db>>,
+	/// `<C>_data_objects` for every class that data refers to.
+	class_data_objects: FxHashMap<PatternRef<'db>, DeclarationId<'db>>,
 }
 
 impl<'db> ObjectState<'db> {
@@ -143,6 +168,12 @@ impl<'db> ObjectState<'db> {
 			pending_class_definition_foralls: Vec::new(),
 			opt_free_subset_classes: FxHashSet::default(),
 			opt_contribution_slots: FxHashSet::default(),
+			output_candidates: Vec::new(),
+			assigned_patterns: FxHashSet::default(),
+			data_input_patterns: FxHashSet::default(),
+			data_input_names: FxHashMap::default(),
+			data_id_blocks: FxHashMap::default(),
+			class_data_objects: FxHashMap::default(),
 		}
 	}
 }
@@ -297,12 +328,32 @@ pub(in crate::lower) struct ClassMapInfo<'db> {
 	pub(in crate::lower) class_enum: EnumerationId<'db>,
 	pub(in crate::lower) class_objects: DeclarationId<'db>,
 	class_set: DeclarationId<'db>,
+	/// `array [<C>_potential] of string: <C>_ids`, the string id of every
+	/// potential object, used to identify objects in data and solutions.
+	pub(in crate::lower) class_ids: DeclarationId<'db>,
+}
+
+/// How the generated ids of one occurrence's potential objects are spelled.
+///
+/// An occurrence is one introduction site: a top-level root, or a `new`
+/// attribute reached from a root along an attribute path. Its objects are
+/// named after that site, `"<root>"` followed by `".<attribute>"` for each
+/// step of the path, and each object of the occurrence then gets its position
+/// in brackets (`"as[2]"`, `"as.c.ds[3]"`). A chain of singular objects
+/// (`var new A: na` with a `new C: c` attribute) gives each potential object
+/// its own name, so the position is left out (`"na"`, `"na.c"`).
+#[derive(Clone)]
+pub(in crate::lower) struct OccurrenceIdPrefix {
+	pub(in crate::lower) prefix: String,
+	pub(in crate::lower) singular: bool,
 }
 
 pub(in crate::lower) struct ObjectLoweringPlan<'db> {
 	pub(in crate::lower) top_level_occurrences: FxHashMap<PatternRef<'db>, OccurrenceId>,
 	nested_occurrences: FxHashMap<(PatternRef<'db>, Vec<Identifier<'db>>), OccurrenceId>,
 	local_domain_sources: FxHashMap<OccurrenceId, LocalDomainSource>,
+	/// How each occurrence's generated object ids are spelled.
+	pub(in crate::lower) occurrence_id_prefixes: FxHashMap<OccurrenceId, OccurrenceIdPrefix>,
 	pub(in crate::lower) contributions_by_occurrence:
 		FxHashMap<OccurrenceId, Vec<OccurrenceContribution<'db>>>,
 	pub(in crate::lower) var_reached_classes: FxHashSet<PatternRef<'db>>,
@@ -404,14 +455,38 @@ impl<'db> ObjectLoweringPlan<'db> {
 			}
 		}
 
+		let mut occurrence_id_prefixes = FxHashMap::default();
 		for occurrence in analysis.occurrences.iter() {
 			let mut root = occurrence;
-			while let Some(parent) = root.parent {
+			let mut singular = true;
+			loop {
+				singular &= matches!(
+					root.local_domain_source,
+					LocalDomainSource::SingleObject | LocalDomainSource::OnePerParent
+				);
+				let Some(parent) = root.parent else {
+					break;
+				};
 				root = &analysis.occurrences[parent.0 as usize];
 			}
 			if let OccurrenceSource::TopLevelDeclaration(pattern) = root.source {
 				let _ =
 					nested_occurrences.insert((pattern, occurrence.path.clone()), occurrence.id);
+				let mut prefix = pattern
+					.identifier(db)
+					.expect("top-level object declaration has an identifier")
+					.lookup(db)
+					.to_owned();
+				for attribute in occurrence.path.iter() {
+					prefix.push('.');
+					prefix.push_str(attribute.lookup(db));
+				}
+				// A singular chain has to start at a singular root: a `new`
+				// attribute of a collection member still has one child per member.
+				let singular =
+					singular && root.local_domain_source == LocalDomainSource::SingleObject;
+				let _ = occurrence_id_prefixes
+					.insert(occurrence.id, OccurrenceIdPrefix { prefix, singular });
 			}
 		}
 
@@ -552,6 +627,7 @@ impl<'db> ObjectLoweringPlan<'db> {
 			top_level_occurrences,
 			nested_occurrences,
 			local_domain_sources,
+			occurrence_id_prefixes,
 			contributions_by_occurrence,
 			var_reached_classes: analysis.var_reached_classes.iter().copied().collect(),
 			var_actual_set_classes: analysis.var_actual_set_classes.iter().copied().collect(),
