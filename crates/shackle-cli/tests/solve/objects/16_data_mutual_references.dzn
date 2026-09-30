@@ -1,0 +1,3 @@
+as = [(id: "A_1", x: 1, b: "B_2"), (id: "A_2", x: 2, b: "B_1")];
+bs = [(id: "B_1", y: false, a: "A_1"), (id: "B_2", y: true, a: "A_1"), (id: "B_3", y: true, a: "first")];
+first = (id: "first", x: 10, b: "B_3");

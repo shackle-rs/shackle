@@ -1,0 +1,3 @@
+nodes_output = [(fav: "l2", favs: ["l1", "m2"], id: "n1", leaves: [(id: "l1", w: 1), (id: "l2", w: 2)], main: (id: "m1", w: 10), pole: [(id: "p1", len: 100)]), (fav: "m1", favs: [], id: "n2", leaves: [], main: (id: "m2", w: 20), pole: [])];
+total = 1146;
+----------

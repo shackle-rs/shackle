@@ -404,6 +404,14 @@ fn object_thir_lowering_simple_class_reference_snapshot() {
 	check_snapshot("simple_class_reference");
 }
 
+/// Objects and references read from data: user-named data declarations in
+/// the data form, ids taken from the data, and ids resolved through
+/// `mzn_object_from_id`.
+#[test]
+fn object_thir_lowering_data_input_snapshot() {
+	check_snapshot("data_input");
+}
+
 #[test]
 fn object_thir_lowering_inheritance_snapshot() {
 	check_snapshot("inheritance");

@@ -396,6 +396,19 @@ impl<'db> ItemCollector<'db> {
 					}
 					_ => rhs,
 				}
+			} else if self.is_data_reference_field(&decl, field_ty, &current_input) {
+				// Data rule: a reference read from a data file holds the id of
+				// the object it refers to (see `data_input.rs`).
+				let value = Expression::new(
+					self.db,
+					&self.model,
+					item,
+					RecordAccess {
+						record: Box::new(current_input.clone()),
+						field: field_ident,
+					},
+				);
+				self.resolve_data_references(item.into(), value, field_ty)
 			} else if field_ty.class_type(self.db).is_some() {
 				// Identity-or-read rule for class-typed fields (including `set
 				// of`/`array of` class fields): read the input through when it
