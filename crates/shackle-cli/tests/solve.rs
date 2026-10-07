@@ -21,12 +21,15 @@ fn fixture(name: &str, extension: &str) -> PathBuf {
 }
 
 /// Solve the given model fixture and compare the output with its expected file
-fn check_solve(name: &str, all_solutions: bool) {
+fn check_solve(name: &str, all_solutions: bool, target_minizinc: bool) {
 	let model = fixture(name, "mzn");
 	let expected_path = fixture(name, "expected");
 
 	let mut cmd = Command::new(env!("CARGO_BIN_EXE_shackle"));
 	cmd.args(["solve", model.to_str().unwrap()]);
+	if target_minizinc {
+		cmd.args(["--target", "minizinc"]);
+	}
 	if all_solutions {
 		cmd.args(["--", "--all-solutions"]);
 	}
@@ -44,22 +47,22 @@ fn check_solve(name: &str, all_solutions: bool) {
 
 #[test]
 fn solve_basic_all_solutions() {
-	check_solve("basic", true);
+	check_solve("basic", true, false);
 }
 
 #[test]
 fn solve_output_item() {
-	check_solve("output_item", false);
+	check_solve("output_item", false, false);
 }
 
 #[test]
 fn solve_output_item_absent() {
-	check_solve("output_item_absent", false);
+	check_solve("output_item_absent", false, false);
 }
 
 #[test]
 fn solve_enum_members() {
-	check_solve("enum_members", true);
+	check_solve("enum_members", true, false);
 }
 
 /// Values of a type whose constructors take arguments cannot be named yet, so
@@ -67,12 +70,12 @@ fn solve_enum_members() {
 /// MiniZinc's `Bar(1)` when the constructor arguments can be resolved.
 #[test]
 fn solve_enum_constructor() {
-	check_solve("enum_constructor", true);
+	check_solve("enum_constructor", true, false);
 }
 
 #[test]
 fn solve_enum_constructor_index() {
-	check_solve("enum_constructor_index", true);
+	check_solve("enum_constructor_index", true, false);
 }
 
 /// The interpreter's output has to be read as it is produced, so a solution
@@ -126,50 +129,55 @@ fn solve_large_output() {
 
 #[test]
 fn solve_object_var_singular() {
-	check_solve("objects/01_var_singular", true);
+	check_solve("objects/01_var_singular", true, false);
 }
 
 #[test]
 fn solve_object_par_set_literal() {
-	check_solve("objects/02_par_set_literal", true);
+	check_solve("objects/02_par_set_literal", true, false);
 }
 
 #[test]
 fn solve_object_bounded_set_new_small() {
-	check_solve("objects/03_bounded_set_new_small", true);
+	check_solve("objects/03_bounded_set_new_small", true, false);
 }
 
 #[test]
 fn solve_object_nested_singular_object_par_only() {
-	check_solve("objects/04_nested_singular_object_par_only", true);
+	check_solve("objects/04_nested_singular_object_par_only", true, false);
 }
 
 #[test]
 fn solve_object_nested_singular_object_var_reach() {
-	check_solve("objects/05_nested_singular_object_var_reach", true);
+	check_solve("objects/05_nested_singular_object_var_reach", true, false);
 }
 
 #[test]
 fn solve_object_inheritance_bounded() {
-	check_solve("objects/06_inheritance_bounded", true);
+	check_solve("objects/06_inheritance_bounded", true, false);
 }
 
 #[test]
 fn solve_object_deep_nested_depth3() {
-	check_solve("objects/07_deep_nested_depth3", true);
+	check_solve("objects/07_deep_nested_depth3", true, false);
 }
 
 #[test]
 fn solve_object_mixed_par_var_children() {
-	check_solve("objects/08_mixed_par_var_children", true);
+	check_solve("objects/08_mixed_par_var_children", true, false);
 }
 
 #[test]
 fn solve_object_computed_cardset_attr() {
-	check_solve("objects/09_computed_cardset_attr", true);
+	check_solve("objects/09_computed_cardset_attr", true, false);
 }
 
 #[test]
 fn solve_object_optimize_set_new() {
-	check_solve("objects/10_optimize_set_new", false);
+	check_solve("objects/10_optimize_set_new", false, false);
+}
+
+#[test]
+fn solve_include_globals() {
+	check_solve("include_globals", false, true);
 }

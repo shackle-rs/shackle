@@ -1,7 +1,5 @@
 % Temporary redefinitions which may be baked into the interpreter in the future.
 
-include "arg_val.mzn";
-
 % Conjunction
 
 function bool: '/\'(bool: x, bool: y) :: mzn_inline_call_by_name =
@@ -115,9 +113,14 @@ function var bool: mzn_clause_t(array [int] of var bool: x, array [int] of var b
 
 function bool: 'not'(bool: x) :: mzn_inline_call_by_name = if x then false else true endif;
 
-function var bool: 'not'(var bool: x) = mzn_not(x);
+function var bool: 'not'(var bool: x) =
+	if mzn_in_root_context() then
+		let { constraint bool_clause([], [x]) } in true
+	else
+		mzn_not_t(x)
+	endif;
 
-function var bool: mzn_not(
+function var bool: mzn_not_t(
 	var bool: x,
 )
 	:: promise_total =
@@ -126,7 +129,7 @@ function var bool: mzn_not(
 		constraint bool_not(x, r);
 	} in r;
 
-predicate bool_not(var bool: b) = mzn_not(b);
+predicate bool_not(var bool: b) = mzn_not_t(b);
 
 % If and only if
 
@@ -1025,6 +1028,8 @@ function array [int] of any $T: '++'(array [$$X] of any $T: x, array [$$Y] of an
 		yy = array1d(y),
 		i in 1..length(x) + length(y),
 ];
+
+function $$E: arg_val(array [$$E] of $T: xs, $T: value);
 
 function $$E: arg_min_internal(array [$$E] of $T: xs) = arg_val(xs, min(xs));
 function $$E: arg_max_internal(array [$$E] of $T: xs) = arg_val(xs, max(xs));
