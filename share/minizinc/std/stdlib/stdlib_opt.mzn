@@ -74,3 +74,13 @@ function bool: had_zero(array [int] of var opt $$E: x) = exists (xi in x) (had_z
 function tuple(var bool, var float): opt_internal_float(var opt float: x) = mzn_destruct_opt(x);
 function var opt $T: reverse_map_var_opt(var bool: b, var $T: dx) :: output_only =
 	mzn_construct_opt((b, dx));
+
+/* Construct a var opt set that occurs iff \a b, with value \a s if it occurs. The value of \a s
+  must be a subset of \a u. */
+function var opt set of $$E: mzn_opt_set(var bool: b, var set of $$E: s, set of $$E: u)
+	:: promise_total =
+	let {
+		var opt set of u: r;
+		constraint occurs(r) = b;
+		constraint b -> deopt(r) = s;
+	} in r;
