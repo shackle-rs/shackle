@@ -192,10 +192,7 @@ impl<'a, 'db> Visitor<'a, 'db> for TotalityVisitor<'a, 'db> {
 	}
 
 	fn visit_callable(&mut self, model: &'a Model<'db>, callable: &'a Callable<'db>) {
-		if let Callable::Function(f) = callable
-			&& !self.in_bool_ctx
-		{
-			// This function is partial if the called function is partial
+		if let Callable::Function(f) = callable {
 			let _ = self.dependencies.insert(
 				*f,
 				Dependency {
@@ -309,6 +306,26 @@ mod tests {
 			expect![[r#"
     function int: foo(int: x) :: par_partial :: needs_root;
     function int: bar(int: x) :: par_partial :: needs_root;
+"#]],
+		);
+	}
+
+	#[test]
+	fn test_totality_analysis_bool_call() {
+		check_totality(
+			r#"
+            function int: foo(int: x) = let {
+                constraint false;
+            } in x;
+            test bar(int: x) = let {
+                int: f = foo(x);
+            } in false;
+			test qux(int: x) = false;
+            "#,
+			expect![[r#"
+    function int: foo(int: x) :: par_partial :: needs_root;
+    function bool: bar(int: x) :: total :: needs_root;
+    function bool: qux(int: x) :: total;
 "#]],
 		);
 	}
