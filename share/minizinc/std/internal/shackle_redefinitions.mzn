@@ -1,5 +1,21 @@
 % Temporary redefinitions which may be baked into the interpreter in the future.
 
+% MiniZinc's builtin first_duplicate and arg_val_weak on arrays of strings
+% return option types, which the interpreter represents differently from
+% Shackle. These call versions returning (occurs, value) tuples instead, which
+% are defined in compat.mzn. The index is returned as an int, since there is
+% no value of an arbitrary $$E to return when it is absent.
+
+function opt string: first_duplicate(array [$$E] of string: xs) =
+	mzn_construct_opt(first_duplicate_internal(xs));
+function tuple(bool, string): first_duplicate_internal(array [$$E] of string: xs);
+
+function opt $$E: arg_val_weak(array [$$E] of string: xs, string: value) =
+	let {
+		tuple(bool, int): found = arg_val_weak_internal(xs, value);
+	} in if found.1 then to_enum(index_set(xs), found.2) else <> endif;
+function tuple(bool, int): arg_val_weak_internal(array [$$E] of string: xs, string: value);
+
 % Conjunction
 
 function bool: '/\'(bool: x, bool: y) :: mzn_inline_call_by_name =

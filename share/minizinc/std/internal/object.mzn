@@ -1,6 +1,13 @@
 % Helpers for object string ids, used by the object lowering. Every potential
 % object of a class `C` has an id in `C_ids`; objects given in a data file take
-% the id written there. A builtin may replace these linear scans later.
+% the id written there. The lookups use MiniZinc's cached `arg_val_weak` and
+% `first_duplicate`, which build an index of `C_ids` once.
+
+% The builtins from MiniZinc's arg_val.mzn, declared here rather than included:
+% an include in a file that Shackle includes automatically stops the files it
+% reaches from being printed for the MiniZinc target.
+function opt $$E: arg_val_weak(array [$$E] of string: xs, string: value);
+function opt string: first_duplicate(array [$$E] of string: xs);
 
 % The object in `data` whose id in `ids` is `s`. Data can only refer to objects
 % that are given in the data, so objects outside `data` are never found. `from`
@@ -13,14 +20,15 @@ function $$E: mzn_object_from_id(
 	string: from,
 ) =
 	let {
-		any: found = [o | o in data where ids[o] = s];
+		opt string: duplicate = first_duplicate(ids);
+		any: found = arg_val_weak(ids, s);
 	} in assert(
-		length(found) > 0,
-		"no " ++ cls ++ " object with id \"" ++ s ++ "\" in the data, referenced by " ++ from,
+		absent(duplicate),
+		"more than one " ++ cls ++ " object has the id \"" ++ deopt(duplicate) ++ "\"",
 		assert(
-			length(found) = 1,
-			"more than one " ++ cls ++ " object has the id \"" ++ s ++ "\"",
-			found[1],
+			occurs(found) /\ deopt(found) in data,
+			"no " ++ cls ++ " object with id \"" ++ s ++ "\" in the data, referenced by " ++ from,
+			deopt(found),
 		),
 	);
 
@@ -29,6 +37,6 @@ function $$E: mzn_object_from_id(
 test mzn_check_object_ids(array [$$E] of string: ids, string: cls) =
 	forall (i in index_set(ids)) (
 		ids[i] != "" \/ abort("object ids must not be empty, but a " ++ cls ++ " object in the data has the id \"\"")
-	) /\ forall (i, j in index_set(ids) where i < j) (
-		ids[i] != ids[j] \/ abort("more than one " ++ cls ++ " object has the id \"" ++ ids[i] ++ "\"")
-	);
+	) /\ let {
+		opt string: duplicate = first_duplicate(ids);
+	} in absent(duplicate) \/ abort("more than one " ++ cls ++ " object has the id \"" ++ deopt(duplicate) ++ "\"");
