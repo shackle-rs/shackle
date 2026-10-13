@@ -183,6 +183,18 @@ function $T: max_internal_array(array [$U] of $T: x) = max(x);
 function $T: max_internal_set(set of $T: s) = max(s);
 function set of int: intersect_internal_int(set of int: x, set of int: y) = x intersect y;
 function set of float: intersect_internal_float(set of float: x, set of float: y) = x intersect y;
+
+% The builtin first_duplicate and arg_val_weak on arrays of strings, with their
+% option type results as (occurs, value) tuples
+include "arg_val.mzn";
+function tuple(bool, string): first_duplicate_internal(array [$$E] of string: xs) =
+	let {
+		opt string: duplicate = first_duplicate(xs);
+	} in if occurs(duplicate) then (true, deopt(duplicate)) else (false, "") endif;
+function tuple(bool, int): arg_val_weak_internal(array [$$E] of string: xs, string: value) =
+	let {
+		any: found = arg_val_weak(xs, value);
+	} in if occurs(found) then (true, enum2int(deopt(found))) else (false, 0) endif;
 function set of int: union_internal_int(set of int: x, set of int: y) = x union y;
 function set of float: union_internal_float(set of float: x, set of float: y) = x union y;
 function set of int: diff_internal_int(set of int: x, set of int: y) = x diff y;
