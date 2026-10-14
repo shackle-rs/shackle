@@ -71,7 +71,7 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 					element: expected_element,
 				},
 			) if actual_opt == expected_opt
-				&& actual_dim == expected_dim
+				&& self.lowered_ty_matches(*actual_dim, *expected_dim)
 				&& self.lowered_ty_matches(*actual_element, *expected_element) =>
 			{
 				// An `array [..] of <C>` attribute lowers its element to the
@@ -80,8 +80,22 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				// element while the HIR keeps the class element. Recurse on the
 				// element exactly as the Set arm does — the class/enum element
 				// arms below absorb the `<C>_potential`↔`Class<C>` equivalence.
-				// The dimension type is object-independent (a plain index set),
-				// so it must match exactly.
+				// The dimension recurses the same way: a class-indexed array
+				// (`array [A] of int`) lowers its index type to `A_potential`.
+				true
+			}
+			(
+				TyData::Tuple(actual_opt, actual_fields),
+				TyData::Tuple(expected_opt, expected_fields),
+			) if actual_opt == expected_opt
+				&& actual_fields.len() == expected_fields.len()
+				&& actual_fields
+					.iter()
+					.zip(expected_fields.iter())
+					.all(|(a, e)| self.lowered_ty_matches(*a, *e)) =>
+			{
+				// The dimensions of a multi-dimensional array, one of which may
+				// be a class (`array [A, 1..2] of int`).
 				true
 			}
 			(

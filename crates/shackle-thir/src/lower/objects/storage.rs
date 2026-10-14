@@ -18,6 +18,16 @@ use crate::{
 };
 
 impl<'db> ItemCollector<'db> {
+	/// Whether an array dimension type mentions a class, i.e. the array is
+	/// class-indexed (`array [A] of int`, `array [A, 1..2] of int`).
+	pub(in crate::lower) fn has_class_dim(&self, dim: Ty<'db>) -> bool {
+		match dim.lookup(self.db) {
+			TyData::Class(..) => true,
+			TyData::Tuple(_, fields) => fields.iter().any(|f| self.has_class_dim(*f)),
+			_ => false,
+		}
+	}
+
 	/// Replace any `Class<X>` element inside `ty` with `<X>_potential` (the
 	/// par enum representing that class's potential identity universe).
 	/// Used when building storage records so that `var set of new B: bs`
@@ -71,8 +81,11 @@ impl<'db> ItemCollector<'db> {
 					.with_opt(db, *opt)
 			}
 			TyData::Array { opt, dim, element } => {
+				// The dimension too: a class-indexed array is indexed by the
+				// class's potential universe.
+				let new_dim = self.substitute_class_with_potential_enum(*dim);
 				let new_element = self.substitute_class_with_potential_enum(*element);
-				Ty::array(db, *dim, new_element)
+				Ty::array(db, new_dim, new_element)
 					.unwrap_or(ty)
 					.with_opt(db, *opt)
 			}

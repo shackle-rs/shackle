@@ -295,6 +295,14 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 
 				Domain::bounded(db, origin, new_inst, new_opt, e)
 			}
+			// A class-indexed array without an ascribed type (`any: ys = [a: a.x
+			// | a in A]`) is indexed by the class's potential universe, which
+			// is what its definition lowers to.
+			(_, TyData::Array { dim, .. }) if self.parent.has_class_dim(*dim) => Domain::unbounded(
+				self.parent.db,
+				origin,
+				self.parent.substitute_class_with_potential_enum(ty),
+			),
 			_ => Domain::unbounded(self.parent.db, origin, ty),
 		}
 	}

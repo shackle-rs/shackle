@@ -760,6 +760,25 @@ fn object_thir_lowering_var_set_new_nested_card_snapshot() {
 	check_snapshot("var_set_new_nested_card");
 }
 
+/// Arrays indexed by a class (`array [A] of ..`) are indexed by its potential
+/// universe `A_potential`. Each fixture also runs the full transform pipeline,
+/// which is where an index type left as the class used to fail.
+#[test]
+fn object_class_indexed_array_snapshot() {
+	for name in [
+		"class_indexed_array_var_reached",
+		"class_indexed_array_par_definition",
+		"class_indexed_array_var_set",
+		"class_indexed_array_access",
+	] {
+		check_snapshot(name);
+		let source = fs::read_to_string(fixtures_dir().join(format!("{name}.mzn"))).unwrap();
+		if let Err(err) = lowering_gate(&source) {
+			panic!("{name} failed the full pipeline:\n{err}");
+		}
+	}
+}
+
 /// Parse, type-check and THIR-lower `source` through the full transform
 /// pipeline. Returns `Ok(())` on a clean run, or `Err(<diagnostic text>)`
 /// for HIR diagnostics, a THIR transform error, or a panic caught via
