@@ -52,6 +52,14 @@ fn globalize_pairwise_with_data() {
 	check("pairwise", &["pairwise.dzn"]);
 }
 
+/// The example from the MiniZinc Globalizer documentation, which reports
+/// `gcc(class, cars_in_class)` and `sliding_sum(0, max_per_block[p],
+/// block_size[p], used[_, p])`
+#[test]
+fn globalize_cars() {
+	check("cars", &["-M", "1", "cars.dzn"]);
+}
+
 #[test]
 fn globalize_queens() {
 	check("queens", &[]);

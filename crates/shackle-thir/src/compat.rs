@@ -12,7 +12,7 @@ use shackle_utils::{hash::Set, maybe_grow_stack};
 
 use crate::{
 	Callable, ConstraintId, DeclarationId, Expression, ExpressionData, FunctionId, Generator,
-	ItemId, Marker, Model,
+	ItemId, Let, LetItem, Marker, Model, ResolvedIdentifier,
 	db::final_thir,
 	pretty_print::{
 		Printer, print_declaration_id, print_expression, print_function, print_generator,
@@ -259,6 +259,74 @@ impl<'db> OldMiniZincPrinter<'db> {
 
 		None
 	}
+
+	/// Print `x[i, ..]` for the `let` that lowering creates for a slice with
+	/// non-literal indices. This is only used when printing input files.
+	fn print_lowered_slice<T: Marker>(
+		&self,
+		db: &'db dyn Db,
+		model: &Model<'db, T>,
+		l: &Let<'db, T>,
+	) -> Option<String> {
+		let ExpressionData::Call(outer) = &**l.in_expression else {
+			return None;
+		};
+		let ExpressionData::Call(slice) = &**outer.arguments.last()? else {
+			return None;
+		};
+		let Callable::Function(f) = &slice.function else {
+			return None;
+		};
+		if model[*f].name() != self.ids.functions.mzn_slice || slice.arguments.len() != 2 {
+			return None;
+		}
+		let ExpressionData::TupleLiteral(indices) = &*slice.arguments[1] else {
+			return None;
+		};
+		// The definition of a declaration of this `let`
+		let local = |e: &Expression<'db, T>| match &**e {
+			ExpressionData::Identifier(ResolvedIdentifier::Declaration(d))
+				if l.items.contains(&LetItem::Declaration(*d)) =>
+			{
+				model[*d].definition()
+			}
+			_ => None,
+		};
+		let collection = local(&slice.arguments[0]).unwrap_or(&slice.arguments[0]);
+		let printed = indices
+			.iter()
+			.map(|index| {
+				let definition = local(index)?;
+				let is_slice = outer.arguments[..outer.arguments.len() - 1].contains(index);
+				match &**definition {
+					// A scalar index `i` is lowered to the slice `{i}`
+					ExpressionData::SetLiteral(items) if !is_slice && items.len() == 1 => {
+						Some(self.print_expression(db, model, &items[0]))
+					}
+					// An infinite slice `..` is lowered to `'..'(index_set)`
+					ExpressionData::Call(c)
+						if is_slice
+							&& c.arguments.len() == 1
+							&& let Callable::Function(f) = &c.function
+							&& matches!(
+								model[*f].name().as_identifier(db).lookup(db),
+								".." | "<.." | "..<" | "<..<"
+							) =>
+					{
+						Some(model[*f].name().as_identifier(db).lookup(db).to_owned())
+					}
+					ExpressionData::TupleAccess(_) => None,
+					_ if is_slice => Some(self.print_expression(db, model, definition)),
+					_ => None,
+				}
+			})
+			.collect::<Option<Vec<_>>>()?;
+		Some(format!(
+			"({}[{}])",
+			self.print_expression(db, model, collection),
+			printed.join(", ")
+		))
+	}
 }
 
 impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
@@ -375,6 +443,12 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
 		if self.print_input_files_only
 			&& let ExpressionData::Call(call) = &**expression
 			&& let Some(printed) = self.print_input_only_synthesized_call(db, model, call)
+		{
+			return printed;
+		}
+		if self.print_input_files_only
+			&& let ExpressionData::Let(l) = &**expression
+			&& let Some(printed) = self.print_lowered_slice(db, model, l)
 		{
 			return printed;
 		}
@@ -559,6 +633,9 @@ mod tests {
             array [int] of int: offset = [3: 10, 20];
             array [int] of int: sparse = [1: 10, 3: 20];
 			array [int, int] of int: sliced = matrix[1..2, 2..2];
+			int: k = 2;
+			array [int] of int: row = matrix[k, ..];
+			array [int] of int: col = matrix[..<2, k];
         "#;
 		let input = InlineModelFile::new(&db, source.to_owned(), InputLang::MiniZinc).into();
 		let _ = InputFiles::get(&db).set_files(&mut db).to(vec![input]);
@@ -569,6 +646,9 @@ mod tests {
 		assert!(printed.contains("[3: 10, 20]"), "{printed}");
 		assert!(printed.contains("[1: 10, 3: 20]"), "{printed}");
 		assert!(printed.contains("matrix["), "{printed}");
+		assert!(printed.contains("(matrix[k, ..])"), "{printed}");
+		assert!(printed.contains("(matrix[(..<(2)), k])"), "{printed}");
+		assert!(!printed.contains("index_sets"), "{printed}");
 		for helper in [
 			"mzn_array_2d_literal",
 			"mzn_start_indexed_array",

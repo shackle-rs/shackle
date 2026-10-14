@@ -1,2 +1,2 @@
-sudoku.mzn|4|1|4|80 forall (r in 1..n) (all_different(x[r, ..]))
-sudoku.mzn|5|1|5|80 forall (c in 1..n) (all_different(x[.., c]))
+sudoku.mzn|4|1|4|80 [ ] forall (r in 1..n) (all_different(x[r, ..]))
+sudoku.mzn|5|1|5|80 [ ] forall (c in 1..n) (all_different(x[.., c]))

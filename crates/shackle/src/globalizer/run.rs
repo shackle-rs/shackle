@@ -5,10 +5,14 @@ use std::{
 	io::Write,
 	path::{Path, PathBuf},
 	process::{Command, Stdio},
-	sync::atomic::{AtomicUsize, Ordering},
+	sync::{
+		Mutex,
+		atomic::{AtomicUsize, Ordering},
+	},
 	time::Duration,
 };
 
+use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
 use shackle_diagnostics::{FileError, InternalError};
 use tempfile::Builder;
@@ -19,7 +23,7 @@ use crate::{Error, Result};
 pub(super) type Solution = Map<String, Value>;
 
 /// Result of one `minizinc` run
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Outcome {
 	/// Solutions in the order they were found
 	pub(super) solutions: Vec<Solution>,
@@ -29,6 +33,9 @@ pub(super) struct Outcome {
 	pub(super) error: Option<String>,
 }
 
+/// A run: submodel text, data file and number of solutions
+pub(super) type RunKey = (String, Option<PathBuf>, usize);
+
 /// Settings shared by all `minizinc` runs of one globalizer invocation
 #[derive(Debug)]
 pub(super) struct Runner {
@@ -37,11 +44,24 @@ pub(super) struct Runner {
 	pub(super) seed: u64,
 	/// Number of `minizinc` invocations (reported as `NUMCALLS`)
 	pub(super) calls: AtomicUsize,
+	/// Outcomes of earlier runs: variants and contexts often give the same
+	/// submodel
+	pub(super) cache: Mutex<FxHashMap<RunKey, Outcome>>,
 }
 
 impl Runner {
 	/// Ask for `n` solutions of `model` (with the optional data file)
 	pub(super) fn run(&self, model: &str, data: Option<&Path>, n: usize) -> Result<Outcome> {
+		let key = (model.to_owned(), data.map(Path::to_owned), n);
+		if let Some(outcome) = self.cache.lock().unwrap().get(&key) {
+			return Ok(outcome.clone());
+		}
+		let outcome = self.run_uncached(model, data, n)?;
+		self.cache.lock().unwrap().insert(key, outcome.clone());
+		Ok(outcome)
+	}
+
+	fn run_uncached(&self, model: &str, data: Option<&Path>, n: usize) -> Result<Outcome> {
 		self.calls.fetch_add(1, Ordering::Relaxed);
 		let mut file = Builder::new()
 			.prefix("globalize")

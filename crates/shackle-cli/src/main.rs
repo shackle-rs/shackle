@@ -317,6 +317,12 @@ struct Globalize {
 	/// Never suggest globals whose name contains one of these (comma separated)
 	#[arg(short = 'e', long, value_delimiter = ',')]
 	filter_ex: Vec<String>,
+	/// Skip a global if a group gives more argument lists for it
+	#[arg(long, default_value_t = 50_000)]
+	max_args: usize,
+	/// Do not abandon pairs of constraints where one implies the other
+	#[arg(long)]
+	no_implies_check: bool,
 	#[command(flatten)]
 	base: Compile,
 }
@@ -333,6 +339,8 @@ impl Globalize {
 			seed: self.seed,
 			include: self.filter_in.clone(),
 			exclude: self.filter_ex.clone(),
+			max_args: self.max_args,
+			implies_check: !self.no_implies_check,
 		};
 		let result = Model::from_file(model).globalize(&data, &options)?;
 		for finding in &result.findings {
