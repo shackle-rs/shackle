@@ -6,7 +6,9 @@
 //! CP 2013). It works on the THIR directly after type checking:
 //!
 //! 1. Split the constraints into *parts* (conjunctions, nested `forall`s).
-//! 2. Enumerate *groups* of up to `max_group` parts that share variables.
+//! 2. Enumerate *groups* of up to `max_group` parts that share variables, and
+//!    ways to *unroll* their loops: a loop variable becomes a *leader* that is
+//!    fixed to the first or the last value of its set.
 //! 3. Sample solutions of each group with `minizinc`, and evaluate every
 //!    candidate global on them in the same run (forward check).
 //! 4. Sample solutions of each surviving candidate and check that they satisfy
@@ -16,6 +18,7 @@
 //! not proofs.
 
 mod candidates;
+mod parts;
 mod run;
 
 use std::{
@@ -26,21 +29,23 @@ use std::{
 	time::Duration,
 };
 
+use itertools::Itertools;
 use rustc_hash::FxHashSet;
 use serde_json::Value;
+use shackle_fmt::{MiniZincFormatOptions, format_str};
 use shackle_hir::{Db, constants::IdentifierRegistry, input::InputFiles};
 use shackle_thir::{
-	Callable, DeclarationId, Expression, ExpressionData, Generator, ItemId, Model,
-	ResolvedIdentifier,
+	Callable, DeclarationId, Expression, ExpressionData, ItemId, Model, ResolvedIdentifier,
 	compat::OldMiniZincPrinter,
 	pretty_print::{Printer, print_item},
 	source::Origin,
-	traverse::{Visitor, visit_expression},
+	traverse::{Visitor, visit_call, visit_expression},
 };
 use shackle_ty::VarType;
 
 use self::{
 	candidates::{Arg, ArgType, Candidate, candidates},
+	parts::{Loop, LoopKind, Part, decl_refs, is_par_int, normalise, refs},
 	run::{Outcome, Runner, Solution},
 };
 use crate::Result;
@@ -102,123 +107,9 @@ pub struct Globalized {
 	pub calls: usize,
 }
 
-/// A constraint after normalisation: `forall(generators)(body)`
-struct Part<'a, 'db> {
-	origin: Origin<'db>,
-	generators: Vec<&'a Generator<'db>>,
-	body: &'a Expression<'db>,
-}
-
-/// Split the top-level constraints of `model` into parts
-fn normalise<'a, 'db>(
-	db: &'db dyn Db,
-	model: &'a Model<'db>,
-	is_user_item: impl Fn(Origin<'db>) -> bool,
-) -> Vec<Part<'a, 'db>> {
-	let ids = IdentifierRegistry::lookup(db);
-	let mut parts = Vec::new();
-	let mut todo = Vec::new();
-	for (_, c) in model.top_level_constraints() {
-		if is_user_item(c.origin()) {
-			todo.push((c.origin(), Vec::new(), c.expression()));
-		}
-	}
-	// Depth-first, so parts keep their source order
-	todo.reverse();
-	while let Some((origin, generators, e)) = todo.pop() {
-		let mut children = Vec::new();
-		match &**e {
-			ExpressionData::BooleanLiteral(b) if b.0 => continue,
-			ExpressionData::Call(c) => {
-				if let Callable::Function(f) = &c.function {
-					let name = model[*f].name();
-					if name == ids.functions.and && c.arguments.len() == 2 {
-						for a in &c.arguments {
-							children.push((a.origin(), generators.clone(), a));
-						}
-					} else if name == ids.functions.forall && c.arguments.len() == 1 {
-						match &*c.arguments[0] {
-							ExpressionData::ArrayComprehension(ac) if ac.indices.is_none() => {
-								let mut gens = generators.clone();
-								gens.extend(ac.generators.iter());
-								children.push((origin, gens, &*ac.template));
-							}
-							ExpressionData::ArrayLiteral(al) => {
-								for a in al.iter() {
-									children.push((a.origin(), generators.clone(), a));
-								}
-							}
-							_ => {}
-						}
-					}
-				}
-			}
-			_ => {}
-		}
-		if children.is_empty() {
-			parts.push(Part {
-				origin,
-				generators,
-				body: e,
-			});
-		} else {
-			todo.extend(children.into_iter().rev());
-		}
-	}
-	parts
-}
-
-/// Collects the top-level declarations an expression refers to
-struct DeclCollector<'db> {
-	decls: Vec<DeclarationId<'db>>,
-}
-
-impl<'a, 'db> Visitor<'a, 'db> for DeclCollector<'db> {
-	fn visit_identifier(&mut self, model: &'a Model<'db>, identifier: &'a ResolvedIdentifier<'db>) {
-		if let ResolvedIdentifier::Declaration(d) = identifier
-			&& model[*d].top_level()
-			&& !self.decls.contains(d)
-		{
-			self.decls.push(*d);
-		}
-	}
-}
-
-fn part_decls<'db>(model: &Model<'db>, part: &Part<'_, 'db>) -> Vec<DeclarationId<'db>> {
-	let mut collector = DeclCollector { decls: Vec::new() };
-	for g in &part.generators {
-		match g {
-			Generator::Iterator {
-				collection,
-				where_clause,
-				..
-			} => {
-				visit_expression(&mut collector, model, collection);
-				if let Some(w) = where_clause {
-					visit_expression(&mut collector, model, w);
-				}
-			}
-			Generator::Assignment {
-				assignment,
-				where_clause,
-			} => {
-				if let Some(d) = model[*assignment].definition() {
-					visit_expression(&mut collector, model, d);
-				}
-				if let Some(w) = where_clause {
-					visit_expression(&mut collector, model, w);
-				}
-			}
-		}
-	}
-	visit_expression(&mut collector, model, part.body);
-	collector.decls
-}
-
 /// Enumerate the groups of up to `max` parts (as sorted indices) whose
 /// variables connect them.
 fn groups<T: PartialEq>(vars: &[Vec<T>], max: usize) -> Vec<Vec<usize>> {
-	use itertools::Itertools;
 	let shares = |a: usize, b: usize| vars[a].iter().any(|v| vars[b].contains(v));
 	let mut result = Vec::new();
 	for size in 1..=max.min(vars.len()) {
@@ -259,6 +150,111 @@ fn location<'db>(db: &'db dyn Db, origin: Origin<'db>) -> String {
 	format!("{}|{l1}|{c1}|{l2}|{c2}", src.name())
 }
 
+/// Remove the redundant parentheses of printed THIR (on one line)
+fn tidy(text: String) -> String {
+	let options = MiniZincFormatOptions {
+		line_width: usize::MAX,
+		keep_parentheses: false,
+		..Default::default()
+	};
+	format_str(format!("constraint {text};"), &options)
+		.ok()
+		.and_then(|f| {
+			f.trim()
+				.strip_prefix("constraint ")?
+				.strip_suffix(';')
+				.map(str::to_owned)
+		})
+		.unwrap_or(text)
+}
+
+/// How a group is unrolled. Leader `m` is the loop `fixed[0][m]` of the
+/// first part, and `fixed[k][m]` is the matching loop of the `k`-th part.
+/// Each leader is set to the first or the last value of its set.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Variant {
+	fixed: Vec<Vec<usize>>,
+}
+
+/// One unrolled group: the parts of a group with a variant
+struct Unrolled<'g, 'a, 'db> {
+	parts: Vec<&'g Part<'a, 'db>>,
+	variant: &'g Variant,
+	/// Top-level declarations the parts use
+	decls: Vec<DeclarationId<'db>>,
+}
+
+impl<'a, 'db> Unrolled<'_, 'a, 'db> {
+	fn leaders(&self) -> usize {
+		self.variant.fixed[0].len()
+	}
+
+	/// The leader that a loop declaration of the group is fixed to
+	fn leader_of(&self, d: DeclarationId<'db>) -> Option<usize> {
+		self.parts
+			.iter()
+			.zip(&self.variant.fixed)
+			.find_map(|(p, f)| f.iter().position(|l| p.loops[*l].decl == d))
+	}
+
+	fn leader_loop(&self, m: usize) -> &Loop<'a, 'db> {
+		&self.parts[0].loops[self.variant.fixed[0][m]]
+	}
+}
+
+/// Finds array accesses `x[i, j]` whose indices are leaders or par integers
+struct AccessCollector<'u, 'g, 'a, 'db> {
+	db: &'db dyn Db,
+	unrolled: &'u Unrolled<'g, 'a, 'db>,
+	array_access: shackle_hir::Identifier<'db>,
+	/// For each array: the allowed indices (declaration, leader) per position
+	accesses: Vec<(DeclarationId<'db>, Vec<Vec<IndexChoice<'db>>>)>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct IndexChoice<'db> {
+	decl: DeclarationId<'db>,
+	leader: Option<usize>,
+}
+
+impl<'a, 'db> Visitor<'a, 'db> for AccessCollector<'_, '_, '_, 'db> {
+	fn visit_call(&mut self, model: &'a Model<'db>, call: &'a shackle_thir::Call<'db>) {
+		if let Callable::Function(f) = &call.function
+			&& model[*f].name() == self.array_access
+			&& call.arguments.len() == 2
+			&& let ExpressionData::Identifier(ResolvedIdentifier::Declaration(x)) =
+				&*call.arguments[0]
+			&& model[*x].top_level()
+		{
+			let indices = match &*call.arguments[1] {
+				ExpressionData::TupleLiteral(t) => t.iter().collect::<Vec<_>>(),
+				_ => vec![&call.arguments[1]],
+			};
+			let pos = match self.accesses.iter().position(|(d, _)| d == x) {
+				Some(pos) => pos,
+				None => {
+					self.accesses.push((*x, vec![Vec::new(); indices.len()]));
+					self.accesses.len() - 1
+				}
+			};
+			let choices = &mut self.accesses[pos].1;
+			for (i, idx) in indices.iter().enumerate() {
+				if let ExpressionData::Identifier(ResolvedIdentifier::Declaration(d)) = &***idx {
+					let leader = self.unrolled.leader_of(*d);
+					let choice = IndexChoice { decl: *d, leader };
+					if (leader.is_some() || is_par_int(self.db, &model[*d]))
+						&& i < choices.len()
+						&& !choices[i].contains(&choice)
+					{
+						choices[i].push(choice);
+					}
+				}
+			}
+		}
+		visit_call(self, model, call);
+	}
+}
+
 struct Globalizer<'a, 'db> {
 	db: &'db dyn Db,
 	model: &'a Model<'db>,
@@ -273,20 +269,140 @@ struct Globalizer<'a, 'db> {
 }
 
 impl<'a, 'db> Globalizer<'a, 'db> {
-	fn print_part(&self, part: &Part<'a, 'db>) -> String {
-		let body = self
-			.printer
-			.print_expression(self.db, self.model, part.body);
-		if part.generators.is_empty() {
-			return body;
+	fn print(&self, e: &Expression<'db>) -> String {
+		self.printer.print_expression(self.db, self.model, e)
+	}
+
+	fn name(&self, d: DeclarationId<'db>) -> String {
+		self.printer.print_declaration_id(self.db, self.model, d)
+	}
+
+	fn print_loop(&self, l: &Loop<'a, 'db>) -> String {
+		let mut s = match l.kind {
+			LoopKind::Iter(c) => format!("{} in {}", self.name(l.decl), self.print(c)),
+			LoopKind::Assign(e) => format!("{} = {}", self.name(l.decl), self.print(e)),
+		};
+		if let Some(w) = l.where_clause {
+			write!(s, " where {}", self.print(w)).unwrap();
 		}
-		let gens = part
-			.generators
+		s
+	}
+
+	#[cfg(test)]
+	fn print_part(&self, part: &Part<'a, 'db>) -> String {
+		self.print_unrolled(part, &[])
+	}
+
+	/// Print a part with the loops at `fixed` taken out. Their `where` clauses
+	/// become a condition.
+	fn print_unrolled(&self, part: &Part<'a, 'db>, fixed: &[usize]) -> String {
+		let body = self.print(part.body);
+		let loops = (0..part.loops.len())
+			.filter(|i| !fixed.contains(i))
+			.map(|i| self.print_loop(&part.loops[i]))
+			.collect::<Vec<_>>();
+		let inner = if loops.is_empty() {
+			body
+		} else {
+			format!("forall({})({body})", loops.join(", "))
+		};
+		let guards = fixed
 			.iter()
-			.map(|g| self.printer.print_generator(self.db, self.model, g))
-			.collect::<Vec<_>>()
-			.join(", ");
-		format!("forall({gens})({body})")
+			.filter_map(|i| part.loops[*i].where_clause)
+			.map(|w| format!("({})", self.print(w)))
+			.collect::<Vec<_>>();
+		if guards.is_empty() {
+			inner
+		} else {
+			format!("({}) -> ({inner})", guards.join(" /\\ "))
+		}
+	}
+
+	/// The ways to unroll a group (always including no unrolling)
+	fn variants(&self, group: &[usize]) -> Vec<Variant> {
+		let first = &self.parts[group[0]];
+		let mut result = Vec::new();
+		for subset in (0..first.loops.len()).powerset() {
+			if !first.can_fix(self.db, self.model, &subset) {
+				continue;
+			}
+			let sets = subset
+				.iter()
+				.map(|l| self.loop_set(&first.loops[*l]))
+				.collect::<Vec<_>>();
+			// Every other part must unroll loops over the same sets
+			let mut options = vec![vec![subset.clone()]];
+			for p in &group[1..] {
+				let part = &self.parts[*p];
+				let matches = (0..part.loops.len())
+					.permutations(subset.len())
+					.filter(|ls| {
+						ls.iter().zip(&sets).all(|(l, s)| {
+							matches!(part.loops[*l].kind, LoopKind::Iter(_))
+								&& self.loop_set(&part.loops[*l]) == *s
+						}) && part.can_fix(self.db, self.model, ls)
+					})
+					.collect::<Vec<_>>();
+				options.push(matches);
+			}
+			for fixed in options.into_iter().multi_cartesian_product() {
+				result.push(Variant { fixed });
+			}
+		}
+		result
+	}
+
+	fn loop_set(&self, l: &Loop<'a, 'db>) -> String {
+		match l.kind {
+			LoopKind::Iter(c) => self.print(c),
+			LoopKind::Assign(_) => String::new(),
+		}
+	}
+
+	/// Declarations of the leaders for one instantiation (`last[m]`: leader
+	/// `m` takes the last value of its set instead of the first)
+	fn print_leaders(&self, u: &Unrolled<'_, 'a, 'db>, last: &[bool]) -> String {
+		// ponytail: leaders keep the loop variable names, so a top-level
+		// declaration with the same name clashes; rename if that shows up.
+		let mut s = String::new();
+		for (m, last) in last.iter().enumerate() {
+			let l = u.leader_loop(m);
+			writeln!(
+				s,
+				"any: {} = {}({});",
+				self.name(l.decl),
+				if *last { "max" } else { "min" },
+				self.loop_set(l)
+			)
+			.unwrap();
+		}
+		for (part, fixed) in u.parts.iter().zip(&u.variant.fixed).skip(1) {
+			for (m, l) in fixed.iter().enumerate() {
+				let (name, leader) = (
+					self.name(part.loops[*l].decl),
+					self.name(u.leader_loop(m).decl),
+				);
+				if name != leader {
+					writeln!(s, "any: {name} = {leader};").unwrap();
+				}
+			}
+		}
+		s
+	}
+
+	fn print_group(&self, u: &Unrolled<'_, 'a, 'db>) -> Vec<String> {
+		u.parts
+			.iter()
+			.zip(&u.variant.fixed)
+			.map(|(p, f)| self.print_unrolled(p, f))
+			.collect()
+	}
+
+	/// All instantiations of the leaders
+	fn instantiations(u: &Unrolled<'_, 'a, 'db>) -> Vec<Vec<bool>> {
+		(0..1usize << u.leaders())
+			.map(|mask| (0..u.leaders()).map(|m| mask & (1 << m) != 0).collect())
+			.collect()
 	}
 
 	/// The model without constraints, solve and output items. Of the variables
@@ -296,9 +412,7 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		let mut needed = decls.to_vec();
 		let mut i = 0;
 		while i < needed.len() {
-			let mut collector = DeclCollector { decls: Vec::new() };
-			collector.visit_declaration(self.model, needed[i]);
-			for d in collector.decls {
+			for d in decl_refs(self.model, needed[i]) {
 				if !needed.contains(&d) {
 					needed.push(d);
 				}
@@ -314,23 +428,27 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		preamble
 	}
 
-	fn name(&self, d: DeclarationId<'db>) -> String {
-		self.printer.print_declaration_id(self.db, self.model, d)
-	}
-
-	/// Candidate arguments from the declarations used by a group
-	fn arguments(&self, decls: &[DeclarationId<'db>]) -> Vec<Arg> {
+	/// Candidate arguments: the group's int declarations, their slices and
+	/// accesses with leader or par indices, and its scalar variables as one
+	/// array
+	fn arguments(&self, u: &Unrolled<'_, 'a, 'db>) -> Vec<Arg> {
 		let db = self.db;
-		let mut args = Vec::new();
-		let mut scalars = Vec::new();
-		for &d in decls {
+		let int_ty = |d: DeclarationId<'db>| {
 			let ty = self.model[d].ty();
 			let elem = ty.elem_ty(db).filter(|_| ty.is_array(db)).unwrap_or(ty);
-			if !elem.is_int(db) || ty.opt(db) != Some(shackle_ty::OptType::NonOpt) {
+			(elem.is_int(db) && ty.opt(db) == Some(shackle_ty::OptType::NonOpt)).then(|| {
+				(
+					elem.inst(db) == Some(VarType::Var),
+					ty.dims(db).unwrap_or(0),
+				)
+			})
+		};
+		let mut args = Vec::new();
+		let mut scalars = Vec::new();
+		for &d in &u.decls {
+			let Some((var, dims)) = int_ty(d) else {
 				continue;
-			}
-			let var = elem.inst(db) == Some(VarType::Var);
-			let dims = ty.dims(db).unwrap_or(0);
+			};
 			if dims == 0 && var {
 				scalars.push(self.name(d));
 			}
@@ -338,6 +456,7 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				text: self.name(d),
 				var,
 				ty: ArgType::Int(dims),
+				leaders: Vec::new(),
 			});
 		}
 		// Scalar variables of the group as one array (e.g. `[a, b, c]`). Two
@@ -347,7 +466,59 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				text: format!("[{}]", scalars.join(", ")),
 				var: true,
 				ty: ArgType::Int(1),
+				leaders: Vec::new(),
 			});
+		}
+
+		let mut collector = AccessCollector {
+			db,
+			unrolled: u,
+			array_access: IdentifierRegistry::lookup(db).functions.array_access,
+			accesses: Vec::new(),
+		};
+		for part in &u.parts {
+			for e in part.loops.iter().flat_map(|l| l.exprs()).chain([part.body]) {
+				visit_expression(&mut collector, self.model, e);
+			}
+		}
+		for (x, positions) in &collector.accesses {
+			let Some((var, dims)) = int_ty(*x) else {
+				continue;
+			};
+			if dims != positions.len() {
+				continue;
+			}
+			// `None` is a slice `..`
+			let choices = positions.iter().map(|cs| {
+				std::iter::once(None)
+					.chain(cs.iter().map(Some))
+					.collect::<Vec<_>>()
+			});
+			for chosen in choices.multi_cartesian_product() {
+				if chosen.iter().all(Option::is_none) {
+					continue;
+				}
+				let indices = chosen
+					.iter()
+					.map(|c| match c {
+						None => "..".to_owned(),
+						Some(c) => match c.leader {
+							Some(m) => self.name(u.leader_loop(m).decl),
+							None => self.name(c.decl),
+						},
+					})
+					.collect::<Vec<_>>();
+				let text = format!("{}[{}]", self.name(*x), indices.join(", "));
+				if args.iter().any(|a| a.text == text) {
+					continue;
+				}
+				args.push(Arg {
+					text,
+					var,
+					ty: ArgType::Int(chosen.iter().filter(|c| c.is_none()).count()),
+					leaders: chosen.iter().flatten().filter_map(|c| c.leader).collect(),
+				});
+			}
 		}
 		args
 	}
@@ -389,8 +560,7 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	}
 
 	/// Sample solutions of `body`. Returns `None` if the sample is unusable:
-	/// an error, no solutions, or fewer than requested without a complete
-	/// search.
+	/// an error, or no solutions.
 	fn sample(
 		&self,
 		body: &str,
@@ -398,106 +568,141 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		data: Option<&Path>,
 	) -> Result<Option<Vec<Solution>>> {
 		let n = self.options.samples;
-		// Restarts give diverse samples, but can never prove completeness
-		let first = self
-			.runner
-			.run(&format!("{body}{}", self.search(decls, true)), data, n)?;
-		let usable = |o: Outcome| {
+		let usable = |o: &Outcome| {
 			if let Some(err) = &o.error {
 				log::info!("globalizer: skipping submodel: {err}");
-				return None;
+				return false;
 			}
-			(o.solutions.len() >= n || (o.complete && !o.solutions.is_empty()))
-				.then_some(o.solutions)
+			!o.solutions.is_empty()
 		};
-		if first.error.is_some() || first.solutions.len() >= n {
-			return Ok(usable(first));
-		}
-		let second = self
+		// A plain search proves completeness if there are few solutions
+		let plain = self
 			.runner
 			.run(&format!("{body}{}", self.search(decls, false)), data, n)?;
-		Ok(usable(second))
+		if !usable(&plain) {
+			return Ok(None);
+		}
+		if plain.complete {
+			return Ok(Some(plain.solutions));
+		}
+		// Restarts give more diverse samples, but can never prove completeness
+		let restart = self
+			.runner
+			.run(&format!("{body}{}", self.search(decls, true)), data, n)?;
+		Ok(Some(if usable(&restart) && restart.solutions.len() >= n {
+			restart.solutions
+		} else {
+			plain.solutions
+		}))
 	}
 
 	/// Candidates that hold on all samples of the group (forward check)
-	fn forward(&self, group: &[usize], decls: &[DeclarationId<'db>]) -> Result<Vec<Candidate>> {
+	fn forward(&self, u: &Unrolled<'_, 'a, 'db>) -> Result<Vec<Candidate>> {
 		let mut cands = candidates(
-			&self.arguments(decls),
+			&self.arguments(u),
 			&self.options.include,
 			&self.options.exclude,
 		);
 		// A group that already is the global is vacuous
-		if let [single] = group
-			&& let ExpressionData::Call(c) = &**self.parts[*single].body
+		if let [single] = &u.parts[..]
+			&& let ExpressionData::Call(c) = &**single.body
 			&& let Callable::Function(f) = &c.function
 		{
 			let name = self.model[*f].name().as_identifier(self.db).lookup(self.db);
 			cands.retain(|c| c.name != name);
 		}
+		let constraints = self.print_group(u);
 		for data in &self.data {
-			if cands.is_empty() {
-				break;
+			for last in Self::instantiations(u) {
+				if cands.is_empty() {
+					return Ok(cands);
+				}
+				let mut body = self.preamble(&u.decls);
+				body.push_str(&self.print_leaders(u, &last));
+				for c in &constraints {
+					writeln!(body, "constraint {c};").unwrap();
+				}
+				writeln!(
+					body,
+					"array[1..{}] of var bool: GZ_R :: output = [{}];",
+					cands.len(),
+					cands
+						.iter()
+						.map(Candidate::checked)
+						.collect::<Vec<_>>()
+						.join(", ")
+				)
+				.unwrap();
+				let Some(solutions) = self.sample(&body, &u.decls, *data)? else {
+					return Ok(Vec::new());
+				};
+				let mut k = 0;
+				cands.retain(|_| {
+					k += 1;
+					solutions
+						.iter()
+						.all(|s| s["GZ_R"].get(k - 1) == Some(&Value::Bool(true)))
+				});
 			}
-			let mut body = self.preamble(decls);
-			for p in group {
-				writeln!(body, "constraint {};", self.print_part(&self.parts[*p])).unwrap();
-			}
-			writeln!(
-				body,
-				"array[1..{}] of var bool: GZ_R :: output = [{}];",
-				cands.len(),
-				cands
-					.iter()
-					.map(Candidate::checked)
-					.collect::<Vec<_>>()
-					.join(", ")
-			)
-			.unwrap();
-			let Some(solutions) = self.sample(&body, decls, *data)? else {
-				return Ok(Vec::new());
-			};
-			let mut k = 0;
-			cands.retain(|_| {
-				k += 1;
-				solutions
-					.iter()
-					.all(|s| s["GZ_R"].get(k - 1) == Some(&Value::Bool(true)))
-			});
 		}
 		Ok(cands)
 	}
 
 	/// Whether all samples of the candidate satisfy the group (reverse check)
-	fn reverse(
-		&self,
-		group: &[usize],
-		decls: &[DeclarationId<'db>],
-		cand: &Candidate,
-	) -> Result<bool> {
+	fn reverse(&self, u: &Unrolled<'_, 'a, 'db>, cand: &Candidate) -> Result<bool> {
+		let conj = self
+			.print_group(u)
+			.iter()
+			.map(|c| format!("({c})"))
+			.collect::<Vec<_>>()
+			.join(" /\\ ");
 		for data in &self.data {
-			let mut body = self.preamble(decls);
-			writeln!(body, "constraint {};", cand.call()).unwrap();
-			let conj = group
-				.iter()
-				.map(|p| format!("({})", self.print_part(&self.parts[*p])))
-				.collect::<Vec<_>>()
-				.join(" /\\ ");
-			writeln!(body, "var bool: GZ_G :: output = {conj};").unwrap();
-			let Some(solutions) = self.sample(&body, decls, *data)? else {
-				return Ok(false);
-			};
-			if !solutions.iter().all(|s| s["GZ_G"] == Value::Bool(true)) {
-				return Ok(false);
+			for last in Self::instantiations(u) {
+				let mut body = self.preamble(&u.decls);
+				body.push_str(&self.print_leaders(u, &last));
+				writeln!(body, "constraint {};", cand.call()).unwrap();
+				writeln!(body, "var bool: GZ_G :: output = {conj};").unwrap();
+				let Some(solutions) = self.sample(&body, &u.decls, *data)? else {
+					return Ok(false);
+				};
+				if !solutions.iter().all(|s| s["GZ_G"] == Value::Bool(true)) {
+					return Ok(false);
+				}
 			}
 		}
 		Ok(true)
+	}
+
+	/// The replacement text: the call inside a `forall` over the leaders it
+	/// uses (and the leaders their sets depend on)
+	fn replacement(&self, u: &Unrolled<'_, 'a, 'db>, cand: &Candidate) -> String {
+		let mut used = cand.leaders.clone();
+		let mut i = 0;
+		while i < used.len() {
+			let deps = refs(self.model, true, u.leader_loop(used[i]).exprs());
+			for m in 0..u.leaders() {
+				if !used.contains(&m) && deps.contains(&u.leader_loop(m).decl) {
+					used.push(m);
+				}
+			}
+			i += 1;
+		}
+		if used.is_empty() {
+			return tidy(cand.call());
+		}
+		used.sort_unstable();
+		let gens = used
+			.iter()
+			.map(|m| self.print_loop(u.leader_loop(*m)))
+			.collect::<Vec<_>>();
+		tidy(format!("forall({})({})", gens.join(", "), cand.call()))
 	}
 
 	fn run(&self) -> Result<Vec<Finding>> {
 		let decls = self
 			.parts
 			.iter()
-			.map(|p| part_decls(self.model, p))
+			.map(|p| p.decls(self.model))
 			.collect::<Vec<_>>();
 		let vars = decls
 			.iter()
@@ -521,12 +726,19 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				.map(|p| location(self.db, self.parts[*p].origin))
 				.collect::<Vec<_>>();
 			locations.dedup();
-			for cand in self.forward(&group, &group_decls)? {
-				if self.reverse(&group, &group_decls, &cand)? {
-					findings.insert(Finding {
-						locations: locations.clone(),
-						replacement: cand.call(),
-					});
+			for variant in self.variants(&group) {
+				let u = Unrolled {
+					parts: group.iter().map(|p| &self.parts[*p]).collect(),
+					variant: &variant,
+					decls: group_decls.clone(),
+				};
+				for cand in self.forward(&u)? {
+					if self.reverse(&u, &cand)? {
+						findings.insert(Finding {
+							locations: locations.clone(),
+							replacement: self.replacement(&u, &cand),
+						});
+					}
 				}
 			}
 		}

@@ -53,6 +53,21 @@ fn globalize_pairwise_with_data() {
 }
 
 #[test]
+fn globalize_queens() {
+	check("queens", &[]);
+}
+
+#[test]
+fn globalize_sudoku() {
+	check("sudoku", &[]);
+}
+
+#[test]
+fn globalize_increasing() {
+	check("increasing", &[]);
+}
+
+#[test]
 fn globalize_no_global() {
 	check("no_global", &[]);
 }

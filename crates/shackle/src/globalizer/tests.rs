@@ -17,6 +17,41 @@ fn with<R>(src: &str, f: impl FnOnce(&Globalizer<'_, '_>) -> R) -> R {
 	with_globalizer(&model.db, &[], &GlobalizeOptions::default(), f)
 }
 
+/// Run `f` on the group without unrolling
+fn no_unrolling<R>(
+	g: &Globalizer<'_, '_>,
+	group: &[usize],
+	f: impl FnOnce(&Unrolled<'_, '_, '_>) -> R,
+) -> R {
+	unrolled(
+		g,
+		group,
+		&Variant {
+			fixed: vec![Vec::new(); group.len()],
+		},
+		f,
+	)
+}
+
+fn unrolled<R>(
+	g: &Globalizer<'_, '_>,
+	group: &[usize],
+	variant: &Variant,
+	f: impl FnOnce(&Unrolled<'_, '_, '_>) -> R,
+) -> R {
+	let mut decls = Vec::new();
+	for d in group.iter().flat_map(|p| g.parts[*p].decls(g.model)) {
+		if !decls.contains(&d) {
+			decls.push(d);
+		}
+	}
+	f(&Unrolled {
+		parts: group.iter().map(|p| &g.parts[*p]).collect(),
+		variant,
+		decls,
+	})
+}
+
 fn printed_parts(g: &Globalizer<'_, '_>) -> String {
 	g.parts
 		.iter()
@@ -70,15 +105,15 @@ fn normalise_keeps_disjunctions_and_exists() {
 }
 
 #[test]
-fn normalise_keeps_multi_variable_generators() {
+fn normalise_splits_multi_variable_generators() {
 	check_parts(
 		r#"
 		array[1..3] of var 1..3: x;
 		constraint forall(i, j in 1..3 where i < j)(x[i] != x[j]);
 		"#,
 		expect![[r#"
-            forall(i, j in ((1) .. (3)) where ((i) < (j)))((((x[i])) != ((x[j]))))
-        "#]],
+    forall(i in ((1) .. (3)), j in ((1) .. (3)) where ((i) < (j)))((((x[i])) != ((x[j]))))
+"#]],
 	);
 }
 
@@ -102,7 +137,7 @@ fn submodels_of_modern_models_parse_again() {
 		let all = (0..g.parts.len()).collect::<Vec<_>>();
 		let decls = all
 			.iter()
-			.flat_map(|p| part_decls(g.model, &g.parts[*p]))
+			.flat_map(|p| g.parts[*p].decls(g.model))
 			.collect::<Vec<_>>();
 		let mut text = g.preamble(&decls);
 		for p in &g.parts {
@@ -113,6 +148,201 @@ fn submodels_of_modern_models_parse_again() {
 	let again = Model::from_string(printed.clone(), InputLang::MiniZinc);
 	let errors = run_hir_phase(&again.db).errors;
 	assert!(errors.is_empty(), "{printed}\n{errors:?}");
+}
+
+/// Print the variants of a group as the fixed loop names of each part
+fn printed_variants(g: &Globalizer<'_, '_>, group: &[usize]) -> Vec<String> {
+	g.variants(group)
+		.iter()
+		.map(|v| {
+			v.fixed
+				.iter()
+				.zip(group)
+				.map(|(f, p)| {
+					let names = f
+						.iter()
+						.map(|l| g.name(g.parts[*p].loops[*l].decl))
+						.collect::<Vec<_>>();
+					format!("[{}]", names.join(" "))
+				})
+				.collect::<String>()
+		})
+		.collect()
+}
+
+#[test]
+fn variants_fix_subsets_of_set_loops() {
+	let src = r#"
+		int: n = 3;
+		array[1..n, 1..n] of var 1..n: x;
+		array[1..n] of int: p = [1, 2, 3];
+		constraint forall(r in 1..n, c in 1..n)(x[r, c] > 0);
+		constraint forall(i in 1..n, j in i + 1..n)(x[i, j] > 0);
+		constraint forall(v in p)(x[v, v] > 0);
+		constraint forall(i in 1..n, k = i + 1 where k <= n)(x[i, k] > 0);
+	"#;
+	let variants = with(src, |g| {
+		(0..4)
+			.map(|p| printed_variants(g, &[p]))
+			.collect::<Vec<_>>()
+	});
+	assert_eq!(variants[0], ["[]", "[r]", "[c]", "[r c]"]);
+	// `j` cannot be fixed while `i` is still a loop
+	assert_eq!(variants[1], ["[]", "[i]", "[i j]"]);
+	// Arrays and assignments are not sets
+	assert_eq!(variants[2], ["[]"]);
+	assert_eq!(variants[3], ["[]", "[i]"]);
+}
+
+#[test]
+fn variants_match_loops_of_other_parts_by_set() {
+	let src = r#"
+		int: n = 3;
+		array[1..n, 1..n] of var 1..n: x;
+		constraint forall(r in 1..n)(x[r, 1] > 0);
+		constraint forall(a in 1..n, b in 1..n)(x[a, b] != 2);
+		constraint forall(t in 1..2)(x[t, 2] > 0);
+	"#;
+	let variants = with(src, |g| {
+		(printed_variants(g, &[0, 1]), printed_variants(g, &[0, 2]))
+	});
+	assert_eq!(variants.0, ["[][]", "[r][a]", "[r][b]"]);
+	// `1..2` is not the same set as `1..n`
+	assert_eq!(variants.1, ["[][]"]);
+}
+
+#[test]
+fn unrolled_parts_and_leaders() {
+	let src = r#"
+		int: n = 3;
+		array[1..n, 1..n] of var 1..n: x;
+		constraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2)(x[r, c1] != x[r, c2]);
+		constraint forall(s in 1..n)(x[s, 1] > 0);
+	"#;
+	let printed = with(src, |g| {
+		// Fixing `c2` alone is invalid: its `where` clause uses `c1`
+		assert!(!g.parts[0].can_fix(g.db, g.model, &[2]));
+		[vec![vec![0], vec![0]], vec![vec![0, 1, 2], vec![0]]]
+			.into_iter()
+			.map(|fixed| {
+				let variant = Variant { fixed };
+				unrolled(g, &[0, 1], &variant, |u| {
+					let all = Globalizer::instantiations(u);
+					(
+						g.print_group(u),
+						g.print_leaders(u, &all[0]),
+						g.print_leaders(u, all.last().unwrap()),
+						all.len(),
+					)
+				})
+			})
+			.collect::<Vec<_>>()
+	});
+	expect![[r#"
+    [
+        (
+            [
+                "forall(c1 in ((1) .. (n)), c2 in ((1) .. (n)) where ((c1) < (c2)))((((x[r, c1])) != ((x[r, c2]))))",
+                "(((x[s, 1])) > (0))",
+            ],
+            "any: r = min(((1) .. (n)));\nany: s = r;\n",
+            "any: r = max(((1) .. (n)));\nany: s = r;\n",
+            2,
+        ),
+        (
+            [
+                "((((c1) < (c2)))) -> ((((x[r, c1])) != ((x[r, c2]))))",
+                "(((x[s, 1])) > (0))",
+            ],
+            "any: r = min(((1) .. (n)));\nany: c1 = min(((1) .. (n)));\nany: c2 = min(((1) .. (n)));\nany: s = r;\n",
+            "any: r = max(((1) .. (n)));\nany: c1 = max(((1) .. (n)));\nany: c2 = max(((1) .. (n)));\nany: s = r;\n",
+            8,
+        ),
+    ]
+"#]].assert_debug_eq(&printed);
+}
+
+#[test]
+fn arguments_use_leaders_and_par_indices() {
+	let src = r#"
+		int: n = 3;
+		int: k = 2;
+		array[1..n, 1..n] of var 1..n: x;
+		array[1..n] of int: w = [1, 2, 3];
+		constraint forall(r in 1..n, c in 1..n)(x[r, c] != x[k, c] + w[r]);
+	"#;
+	let args = with(src, |g| {
+		let variant = Variant {
+			fixed: vec![vec![0]],
+		};
+		unrolled(g, &[0], &variant, |u| {
+			g.arguments(u)
+				.iter()
+				.map(|a| format!("{} var={} {:?} {:?}", a.text, a.var, a.ty, a.leaders))
+				.collect::<Vec<_>>()
+		})
+	});
+	// `c` is still a loop, so it is never an index
+	assert_eq!(
+		args,
+		[
+			"n var=false Int(0) []",
+			"x var=true Int(2) []",
+			"k var=false Int(0) []",
+			"w var=false Int(1) []",
+			"x[r, ..] var=true Int(1) [0]",
+			"x[k, ..] var=true Int(1) []",
+			"w[r] var=false Int(0) [0]",
+		]
+	);
+}
+
+#[test]
+fn replacement_wraps_used_leaders_and_their_dependencies() {
+	let src = r#"
+		int: n = 3;
+		array[1..n, 1..n] of var 1..n: x;
+		constraint forall(i in 1..n, j in i + 1..n where j > 1)(x[i, j] > 0);
+	"#;
+	let replacements = with(src, |g| {
+		let variant = Variant {
+			fixed: vec![vec![0, 1]],
+		};
+		unrolled(g, &[0], &variant, |u| {
+			[vec![], vec![0], vec![1]]
+				.into_iter()
+				.map(|leaders| {
+					g.replacement(
+						u,
+						&Candidate {
+							name: "all_different",
+							args: vec!["x[i, ..]".to_owned()],
+							extra: None,
+							leaders,
+						},
+					)
+				})
+				.collect::<Vec<_>>()
+		})
+	});
+	assert_eq!(
+		replacements,
+		[
+			"all_different(x[i, ..])",
+			"forall (i in 1..n) (all_different(x[i, ..]))",
+			"forall (i in 1..n, j in i + 1..n where j > 1) (all_different(x[i, ..]))",
+		]
+	);
+}
+
+#[test]
+fn tidy_removes_parentheses() {
+	assert_eq!(
+		tidy("forall(r in ((1) .. (n)))(all_different(x[(r), ..]))".to_owned()),
+		"forall (r in 1..n) (all_different(x[r, ..]))"
+	);
+	// Not MiniZinc: returned unchanged
+	assert_eq!(tidy("((".to_owned()), "((");
 }
 
 #[test]
@@ -147,10 +377,7 @@ fn arguments_come_from_the_group() {
 		constraint x[1] + p[1] + m[1, 1] + a + b + c > f[1] + 1.0;
 		constraint o != 1;
 	"#;
-	let args = with(src, |g| {
-		let decls = part_decls(g.model, &g.parts[0]);
-		g.arguments(&decls)
-	});
+	let args = with(src, |g| no_unrolling(g, &[0], |u| g.arguments(u)));
 	let printed = args
 		.iter()
 		.map(|a| format!("{} var={} {:?}", a.text, a.var, a.ty))
@@ -180,7 +407,7 @@ fn preamble_declares_only_needed_variables() {
 		constraint s < double(n);
 		constraint unrelated > 1;
 	"#;
-	let preamble = with(src, |g| g.preamble(&part_decls(g.model, &g.parts[0])));
+	let preamble = with(src, |g| g.preamble(&g.parts[0].decls(g.model)));
 	expect![[r#"
         include "globals.mzn";
         int: n = 3;
@@ -200,7 +427,7 @@ fn search_annotation_uses_group_int_variables() {
 		constraint b -> x[1] != a;
 	"#;
 	let search = with(src, |g| {
-		let decls = part_decls(g.model, &g.parts[0]);
+		let decls = g.parts[0].decls(g.model);
 		(g.search(&decls, true), g.search(&decls, false))
 	});
 	assert_eq!(
@@ -338,6 +565,57 @@ fn solve_uses_data_files() {
 		constraint forall(i, j in 1..n where i < j)(x[i] != x[j]);
 	"#;
 	assert_eq!(solve(src, &["n = 4;"], group_of(1)), ["all_different(x)"]);
+}
+
+#[test]
+fn solve_rows_with_leaders() {
+	let src = r#"
+		int: n = 4;
+		array[1..n, 1..n] of var 1..n: x;
+		constraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2)(x[r, c1] != x[r, c2]);
+	"#;
+	assert_eq!(
+		solve(src, &[], group_of(1)),
+		["forall (r in 1..n) (all_different(x[r, ..]))"]
+	);
+}
+
+#[test]
+fn solve_rows_missing_a_pair_in_the_last_row() {
+	// Only the last row misses a pair, so only the last leader value fails
+	let src = r#"
+		int: n = 4;
+		array[1..n, 1..n] of var 1..n: x;
+		constraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2 /\ (r, c1, c2) != (n, 1, 2))(x[r, c1] != x[r, c2]);
+	"#;
+	assert!(solve(src, &[], group_of(1)).is_empty());
+}
+
+#[test]
+fn solve_increasing() {
+	let src = r#"
+		array[1..5] of var 1..9: x;
+		constraint forall(i in 1..4)(x[i] <= x[i + 1]);
+	"#;
+	assert_eq!(solve(src, &[], group_of(1)), ["increasing(x)"]);
+}
+
+#[test]
+fn solve_increasing_broken_chain() {
+	let src = r#"
+		array[1..5] of var 1..9: x;
+		constraint forall(i in 1..4 where i != 2)(x[i] <= x[i + 1]);
+	"#;
+	assert!(solve(src, &[], group_of(1)).is_empty());
+}
+
+#[test]
+fn solve_decreasing() {
+	let src = r#"
+		array[1..5] of var 1..9: x;
+		constraint forall(i in 1..4)(x[i] >= x[i + 1]);
+	"#;
+	assert_eq!(solve(src, &[], group_of(1)), ["decreasing(x)"]);
 }
 
 #[test]
