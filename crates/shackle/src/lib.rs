@@ -5,6 +5,7 @@
 #![warn(variant_size_differences)]
 
 mod data;
+mod globalizer;
 mod legacy;
 mod value;
 
@@ -45,6 +46,8 @@ use shackle_ty::{Ty, TyData};
 use shackle_utils::InternedString;
 use value::EnumInner;
 pub use value::{Enum, Value};
+
+pub use self::globalizer::{Finding, GlobalizeOptions, Globalized};
 
 /// Shackle errors
 pub mod error {
@@ -95,6 +98,20 @@ impl Model {
 			.into_iter()
 			.cloned()
 			.collect()
+	}
+
+	/// Suggest global constraints that can replace groups of constraints,
+	/// checked by sampling solutions on each data file
+	pub fn globalize(&self, data: &[PathBuf], options: &GlobalizeOptions) -> Result<Globalized> {
+		let errors: Vec<Error> = run_hir_phase(&self.db)
+			.errors
+			.into_iter()
+			.cloned()
+			.collect();
+		if !errors.is_empty() {
+			return Err(Error::try_from(errors).unwrap());
+		}
+		globalizer::globalize(&self.db, data, options)
 	}
 
 	/// Set the compilation target

@@ -1,0 +1,90 @@
+//! End-to-end tests for `shackle globalize`. They need `minizinc` with Gecode
+//! on `PATH`. The fixtures run from `tests/globalize`, so locations use
+//! relative file names, and the `NUMCALLS` line is left out.
+
+use std::{
+	path::Path,
+	process::{Command, Output},
+};
+
+use expect_test::expect_file;
+
+fn dir() -> &'static Path {
+	Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/globalize"))
+}
+
+fn globalize(args: &[&str]) -> Output {
+	Command::new(env!("CARGO_BIN_EXE_shackle"))
+		.current_dir(dir())
+		.args(["globalize", "--seed", "1"])
+		.args(args)
+		.output()
+		.unwrap()
+}
+
+/// Run on the fixture `name` (plus data files) and compare with `name.expected`
+fn check(name: &str, extra: &[&str]) {
+	let model = format!("{name}.mzn");
+	let output = globalize(&[extra, &[model.as_str()]].concat());
+	assert!(
+		output.status.success(),
+		"globalize failed\nstdout:\n{}\nstderr:\n{}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr),
+	);
+	let stdout = String::from_utf8(output.stdout).unwrap();
+	assert!(stdout.contains("% NUMCALLS: "), "{stdout}");
+	let findings: String = stdout
+		.lines()
+		.filter(|l| !l.starts_with("% NUMCALLS: "))
+		.map(|l| format!("{l}\n"))
+		.collect();
+	expect_file![dir().join(format!("{name}.expected"))].assert_eq(&findings);
+}
+
+#[test]
+fn globalize_scalars() {
+	check("scalars", &["-M", "3"]);
+}
+
+#[test]
+fn globalize_pairwise_with_data() {
+	check("pairwise", &["pairwise.dzn"]);
+}
+
+#[test]
+fn globalize_no_global() {
+	check("no_global", &[]);
+}
+
+#[test]
+fn globalize_filters_globals_by_name() {
+	let excluded = globalize(&["-e", "all_diff", "pairwise.mzn", "pairwise.dzn"]);
+	assert!(excluded.status.success());
+	assert!(!String::from_utf8_lossy(&excluded.stdout).contains("all_different"));
+	let included = globalize(&["-f", "different", "pairwise.mzn", "pairwise.dzn"]);
+	assert!(String::from_utf8_lossy(&included.stdout).contains("all_different(x)"));
+}
+
+#[test]
+fn globalize_rejects_unsupported_file_type() {
+	let output = globalize(&["pairwise.mzn", "notes.txt"]);
+	assert!(!output.status.success());
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(stderr.contains("unsupported file type"), "{stderr}");
+}
+
+#[test]
+fn globalize_reports_type_errors() {
+	let dir = tempfile::tempdir().unwrap();
+	let model = dir.path().join("bad.mzn");
+	std::fs::write(&model, "var 1..3: x;\nconstraint x = \"one\";\n").unwrap();
+	let output = globalize(&[model.to_str().unwrap()]);
+	assert!(!output.status.success());
+	assert!(output.stdout.is_empty());
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert!(
+		stderr.contains("Type mismatch") || stderr.contains("type"),
+		"{stderr}"
+	);
+}

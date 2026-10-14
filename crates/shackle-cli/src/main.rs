@@ -20,7 +20,9 @@ use expect_test as _;
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, Report, Result};
-use shackle::{CompileTarget, Error, Message, Model, Solver, Status, error::InternalError};
+use shackle::{
+	CompileTarget, Error, GlobalizeOptions, Message, Model, Solver, Status, error::InternalError,
+};
 use shackle_fmt::{MiniZincFormatOptions, check_format, format_files};
 #[cfg(test)]
 use tempfile as _;
@@ -72,6 +74,7 @@ fn main() -> Result<()> {
 		SubCommand::Solve(s) => s.dispatch(),
 		SubCommand::Check(c) => c.dispatch(),
 		SubCommand::Format(f) => f.dispatch(),
+		SubCommand::Globalize(g) => g.dispatch(),
 	}) {
 		Err(_) => Err(InternalError::new("Panic occurred during execution").into()),
 		Ok(res) => res,
@@ -101,6 +104,7 @@ enum SubCommand {
 	Solve(Box<Solve>),
 	Check(Box<Check>),
 	Format(Box<Format>),
+	Globalize(Box<Globalize>),
 }
 
 /// Solve the given model instance using the given solver
@@ -288,6 +292,54 @@ impl Check {
 		} else {
 			Err(Error::try_from(errors).unwrap().into())
 		}
+	}
+}
+
+/// Suggest global constraints that can replace groups of constraints in the
+/// model. Suggestions are checked by sampling solutions for each data file.
+#[derive(Args)]
+struct Globalize {
+	/// Maximum number of constraints in a group
+	#[arg(short = 'M', long, default_value_t = 2)]
+	max_group: usize,
+	/// Number of solutions sampled for each check
+	#[arg(short = 'N', long, default_value_t = 30)]
+	samples: usize,
+	/// Time limit for each MiniZinc run
+	#[arg(long, default_value = "1s")]
+	time_limit: Duration,
+	/// Random seed for the solver
+	#[arg(long, default_value_t = 0)]
+	seed: u64,
+	/// Only suggest globals whose name contains one of these (comma separated)
+	#[arg(short = 'f', long, value_delimiter = ',')]
+	filter_in: Vec<String>,
+	/// Never suggest globals whose name contains one of these (comma separated)
+	#[arg(short = 'e', long, value_delimiter = ',')]
+	filter_ex: Vec<String>,
+	#[command(flatten)]
+	base: Compile,
+}
+
+impl Globalize {
+	/// Run the globalizer and print one suggestion per line
+	pub fn dispatch(&self) -> Result<()> {
+		let (model, data) = self.base.sort_files()?;
+		let options = GlobalizeOptions {
+			solver: self.base.solver.clone(),
+			max_group: self.max_group,
+			samples: self.samples,
+			time_limit: self.time_limit.into(),
+			seed: self.seed,
+			include: self.filter_in.clone(),
+			exclude: self.filter_ex.clone(),
+		};
+		let result = Model::from_file(model).globalize(&data, &options)?;
+		for finding in &result.findings {
+			println!("{finding}");
+		}
+		println!("% NUMCALLS: {}", result.calls);
+		Ok(())
 	}
 }
 

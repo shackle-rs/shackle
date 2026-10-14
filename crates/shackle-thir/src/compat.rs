@@ -35,16 +35,24 @@ impl<'db> std::fmt::Debug for OldMiniZincPrinter<'db> {
 }
 
 impl<'db> OldMiniZincPrinter<'db> {
-	/// Run the printer
-	pub fn run(db: &'db dyn Db, print_input_files_only: bool) -> String {
-		let transforms = Transformer::get_transforms(db);
-		let model = final_thir(db).unwrap();
+	/// Create a printer for a model produced by the given transforms
+	pub fn new(
+		db: &'db dyn Db,
+		transforms: &'db [Transform],
+		print_input_files_only: bool,
+	) -> Self {
 		Self {
 			transforms,
 			ids: IdentifierRegistry::lookup(db),
 			print_input_files_only,
 		}
-		.print_model(db, model)
+	}
+
+	/// Run the printer
+	pub fn run(db: &'db dyn Db, print_input_files_only: bool) -> String {
+		let model = final_thir(db).unwrap();
+		Self::new(db, Transformer::get_transforms(db), print_input_files_only)
+			.print_model(db, model)
 	}
 
 	/// Return the length and, when explicitly specified, the printed members of
