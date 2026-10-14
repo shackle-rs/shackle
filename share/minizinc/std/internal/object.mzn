@@ -9,6 +9,14 @@
 function opt $$E: arg_val_weak(array [$$E] of string: xs, string: value);
 function opt string: first_duplicate(array [$$E] of string: xs);
 
+% The ids of the objects of one occurrence that are given in the data, in slot
+% order: the id given in the data, or the generated id of its slot (from
+% `generated`) for an object given without one.
+function array [int] of string: mzn_object_data_ids(
+	array [int] of opt string: given,
+	array [int] of string: generated,
+) = [if occurs(given[i]) then deopt(given[i]) else generated[i] endif | i in index_set(given)];
+
 % The object in `data` whose id in `ids` is `s`. Data can only refer to objects
 % that are given in the data, so objects outside `data` are never found. `from`
 % names what holds the reference, for the error message.

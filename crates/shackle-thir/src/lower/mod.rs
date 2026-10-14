@@ -380,7 +380,7 @@ impl<'db> ItemCollector<'db> {
 					db,
 					&collector.parent.model,
 					item,
-					StringLiteral::new(db, name.lookup(db)),
+					StringLiteral::new(db, format!("'{}'", name.lookup(db))),
 				);
 				decl.set_definition(collector.parent.resolve_data_references(
 					item.into(),

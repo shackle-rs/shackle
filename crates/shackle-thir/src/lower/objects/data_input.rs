@@ -3,15 +3,17 @@
 //! A `new` root or a reference that the model leaves uninitialised is read
 //! from a data file (`.dzn` or `.json`) under the user's own name. Its data
 //! form differs from the form an inline model literal takes: every object
-//! record carries an `id: string`, nested records included, and a reference is
+//! record has an `id: opt string`, nested records included, and a reference is
 //! written as the id of the object it refers to (a set of references as an
-//! array of ids, as MiniZinc has no `set of string`).
+//! array of ids, as MiniZinc has no `set of string`). A data file can leave the
+//! `id` out, as MiniZinc reads a missing optional field as `<>`.
 //!
 //! The reconstruction resolves those ids through `mzn_object_from_id` against
 //! `<C>_data_objects`, the objects of `C` that came from data: data can only
 //! refer to objects given in the data. The ids themselves become the objects'
-//! entries in `<C>_ids`, and every class hierarchy with data objects checks
-//! that its ids are non-empty and distinct.
+//! entries in `<C>_ids`, with a generated id for an object without one, and
+//! every class hierarchy with data objects checks that its ids are non-empty
+//! and distinct.
 
 use rustc_hash::FxHashMap;
 use shackle_hir::{
@@ -25,7 +27,7 @@ use super::{StorageFieldDecl, ty_mentions_class};
 use crate::{lower::ItemCollector, source::Origin, *};
 
 impl<'db> ItemCollector<'db> {
-	/// The data form of `inline`, the input record type of `class`: `id:
+	/// The data form of `inline`, the input record type of `class`: `id: opt
 	/// string` added, references replaced by ids, and the records of owned
 	/// children converted recursively.
 	pub(in crate::lower) fn data_input_record_ty(
@@ -38,7 +40,10 @@ impl<'db> ItemCollector<'db> {
 			unreachable!("object input type is a record")
 		};
 		let owned = self.owned_child_fields(class);
-		let mut data_fields = vec![(self.ids.names.object_id.0, Ty::string(db))];
+		let mut data_fields = vec![(
+			self.ids.names.object_id.0,
+			Ty::string(db).with_opt(db, OptType::Opt),
+		)];
 		for (name, ty) in fields.iter() {
 			let ty = match owned.iter().find(|(field, _)| field.0 == *name) {
 				Some((_, child)) => self.map_input_records(*ty, *child),
@@ -345,7 +350,9 @@ impl<'db> ItemCollector<'db> {
 
 	/// The referrer (see `resolve_data_references`) of the references that
 	/// attribute `field` of a `class` object holds, read from the data record
-	/// `input`: `"<field> of <C> \"" ++ input.id ++ "\""`.
+	/// `input`: `"attribute '<field>' of the <C> object \"" ++ deopt(input.id)
+	/// ++ "\""`, or `"attribute '<field>' of a <C> object without an id"` if the
+	/// record has no id.
 	pub(in crate::lower) fn attribute_referrer(
 		&mut self,
 		origin: Origin<'db>,
@@ -353,26 +360,51 @@ impl<'db> ItemCollector<'db> {
 		field: Identifier<'db>,
 		input: &Expression<'db>,
 	) -> Expression<'db> {
+		let field = field.lookup(self.db);
+		let class = class.identifier(self.db).unwrap().lookup(self.db);
 		let prefix = Expression::new(
 			self.db,
 			&self.model,
 			origin,
 			StringLiteral::new(
 				self.db,
-				format!(
-					"{} of {} \"",
-					field.lookup(self.db),
-					class.identifier(self.db).unwrap().lookup(self.db)
-				),
+				format!("attribute '{field}' of the {class} object \""),
 			),
 		);
-		let id = Expression::new(
+		let without_id = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			StringLiteral::new(
+				self.db,
+				format!("attribute '{field}' of a {class} object without an id"),
+			),
+		);
+		let given = Expression::new(
 			self.db,
 			&self.model,
 			origin,
 			RecordAccess {
 				record: Box::new(input.clone()),
 				field: self.ids.names.object_id,
+			},
+		);
+		let occurs = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			LookupCall {
+				function: self.ids.functions.occurs.into(),
+				arguments: vec![given.clone()],
+			},
+		);
+		let id = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			LookupCall {
+				function: self.ids.functions.deopt.into(),
+				arguments: vec![given],
 			},
 		);
 		let quote = Expression::new(
@@ -393,7 +425,16 @@ impl<'db> ItemCollector<'db> {
 			)
 		};
 		let with_id = concat(self, prefix, id);
-		concat(self, with_id, quote)
+		let named = concat(self, with_id, quote);
+		Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			IfThenElse {
+				branches: vec![Branch::new(occurs, named)],
+				else_result: Box::new(without_id),
+			},
+		)
 	}
 
 	/// `set of <C>_potential: <C>_data_objects`, the objects of `class` that
@@ -531,16 +572,17 @@ impl<'db> ItemCollector<'db> {
 	}
 
 	/// The ids of the objects of a constructor whose occurrence has data
-	/// objects: `data`, the data ids in slot order, followed by generated ids
-	/// for the slots that no data object fills. Only a singular nested child
-	/// has such slots: its constructor has one slot per potential object of
-	/// the parent class, whose other introductions give it children that never
-	/// exist.
+	/// objects: `data`, the ids of the data objects in slot order (`given`
+	/// completed with generated ids), followed by generated ids for the slots
+	/// that no data object fills. Only a singular nested child has such slots:
+	/// its constructor has one slot per potential object of the parent class,
+	/// whose other introductions give it children that never exist.
 	pub(in crate::lower) fn data_occurrence_ids_block(
 		&mut self,
 		item: Item<'db>,
 		occurrence: OccurrenceId,
 		domain: Expression<'db>,
+		given: Expression<'db>,
 		data: Expression<'db>,
 		unfilled: impl FnOnce(&mut Self, Expression<'db>, Expression<'db>) -> Expression<'db>,
 	) -> Expression<'db> {
@@ -553,7 +595,7 @@ impl<'db> ItemCollector<'db> {
 			item,
 			LookupCall {
 				function: self.ids.functions.length.into(),
-				arguments: vec![data.clone()],
+				arguments: vec![given],
 			},
 		);
 		let one = Expression::new(self.db, &self.model, item, IntegerLiteral(1));

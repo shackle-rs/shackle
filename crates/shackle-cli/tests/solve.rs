@@ -275,12 +275,29 @@ fn solve_object_data_mutual_references() {
 }
 
 #[test]
+fn solve_object_data_without_ids() {
+	let name = "objects/19_data_without_ids";
+	check_solve_with_data(name, &[fixture(name, "dzn")], false, false);
+	check_solve_with_data(name, &[fixture(name, "json")], false, false);
+}
+
+#[test]
 fn solve_object_data_unknown_id_in_attribute() {
 	let expected = "Invalid object data: no Leaf object with id \"zz\" in the data, \
-	                referenced by pick of Holder \"h1\"";
+	                referenced by attribute 'pick' of the Holder object \"h1\"";
 	let data = "objects/18_data_errors_unknown_attribute";
 	check_object_data_error(data, "dzn", expected);
 	check_object_data_error(data, "json", expected);
+}
+
+#[test]
+fn solve_object_data_unknown_id_in_attribute_without_id() {
+	check_object_data_error(
+		"objects/18_data_errors_unknown_attribute_without_id",
+		"dzn",
+		"Invalid object data: no Leaf object with id \"zz\" in the data, referenced by attribute \
+		 'pick' of a Holder object without an id",
+	);
 }
 
 #[test]
@@ -288,7 +305,7 @@ fn solve_object_data_unknown_id_in_reference() {
 	check_object_data_error(
 		"objects/18_data_errors_unknown_reference",
 		"dzn",
-		"Invalid object data: no Leaf object with id \"zz\" in the data, referenced by top",
+		"Invalid object data: no Leaf object with id \"zz\" in the data, referenced by 'top'",
 	);
 }
 

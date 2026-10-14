@@ -178,8 +178,12 @@ impl<'de> Visitor<'de> for SerdeValueVisitor<'_> {
 						map.next_value::<IgnoredAny>()?; // Ignore unknown
 					}
 				}
-				if !types.is_empty() {
-					let field = types.into_iter().next().unwrap().0.to_string();
+				// A key missing from the data is absent if its type is optional
+				let (absent, missing): (Vec<_>, Vec<_>) =
+					types.into_iter().partition(|(_, ty)| ty.is_opt());
+				rec.extend(absent.into_iter().map(|(k, _)| (k, ParserVal::Absent)));
+				if let Some((field, _)) = missing.into_iter().next() {
+					let field = field.to_string();
 					return Err(Error::missing_field(Box::leak(field.into_boxed_str()))); // TODO: Can we avoid leaking memory here?
 				}
 				rec.sort_by(|x, y| x.0.cmp(&y.0));
@@ -1196,6 +1200,33 @@ mod tests {
 			),
 			&expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
 		);
+	}
+
+	#[test]
+	fn test_parse_record_missing_opt_field() {
+		let ty = Type::Record(
+			OptType::NonOpt,
+			Arc::new([
+				("a".into(), Type::Integer(OptType::NonOpt)),
+				("b".into(), Type::String(OptType::Opt)),
+				("c".into(), Type::Integer(OptType::Opt)),
+			]),
+		);
+		check_serialization(r#"{"a": 1}"#, &ty, &expect!("(a: 1, b: <>, c: <>)"));
+		check_serialization(r#"{"c": 3, "a": 1}"#, &ty, &expect!("(a: 1, b: <>, c: 3)"));
+
+		let input_types = FxHashMap::from_iter([("x".into(), ty)]);
+		let enum_types = FxHashMap::default();
+		let src = SourceFile::unnamed(r#"{ "x": {"b": "x"} }"#.to_owned());
+		let err = serde_json::Deserializer::from_str(src.contents())
+			.deserialize_map(SerdeFileVisitor {
+				input_types: &input_types,
+				enum_types: &enum_types,
+			})
+			.map_err(|err| Error::from_serde_json(err, &src))
+			.expect_err("expected a missing field error");
+		let err = format!("{err:?}");
+		assert!(err.contains("missing field `a`"), "{err}");
 	}
 
 	#[test]

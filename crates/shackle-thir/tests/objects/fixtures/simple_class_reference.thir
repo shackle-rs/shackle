@@ -5,6 +5,6 @@ array [A_potential] of string: A_ids = [];
 constraint forall(['>='(('[]'(A_objects, enum2int(this))).x, 0) | this in A]);
 set of A_potential: A_data_objects = {};
 string: a;
-A: a_ref = mzn_object_from_id(A_ids, A_data_objects, a, "A", "a");
+A: a_ref = mzn_object_from_id(A_ids, A_data_objects, a, "A", "'a'");
 constraint '>='(('[]'(A_objects, enum2int(a_ref))).x, 0);
 solve satisfy;

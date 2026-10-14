@@ -101,35 +101,34 @@ pub(crate) fn collect_dzn_value(
 				// Assume that the list of types is already sorted based on the identifiers
 				debug_assert!(elem_tys.iter().tuple_windows().all(|(a, b)| a.0 <= b.0));
 				// Sort the AST record literal based on the identifiers
-				let exprs: Vec<RecordLiteralMember> = r
+				let mut exprs = r
 					.members()
 					.sorted_by_key(|x| x.name().name(file.contents()).to_string())
-					.collect();
-				// Now walk the types and expressions together, if there are less expressions or if
-				// the names do not match, then one of the keys is missing from the data
+					.peekable();
+				// Now walk the types and expressions together. A key missing from the data is
+				// absent if its type is optional, and an error otherwise.
 				let mut vals = Vec::with_capacity(elem_tys.len());
-				for i in 0..elem_tys.len() {
-					if exprs.len() <= i
-						|| exprs[i].name().name(file.contents()).as_ref() != elem_tys[i].0.as_ref()
-					{
-						return Err(TypeMismatch {
-							src: file.clone(),
-							msg: format!(
-								"Expected '{}', but key '{}' was not found",
-								ty, elem_tys[i].0
-							),
-							span: val.cst_node().as_ref().byte_range().into(),
+				for (name, elem_ty) in elem_tys.iter() {
+					let member = exprs.next_if(|expr| {
+						expr.name().name(file.contents()).as_ref() == name.as_ref()
+					});
+					let elem_val = match member {
+						Some(member) => collect_dzn_value(file, &member.value(), elem_ty)?,
+						None if elem_ty.is_opt() => ParserVal::Absent,
+						None => {
+							return Err(TypeMismatch {
+								src: file.clone(),
+								msg: format!("Expected '{}', but key '{}' was not found", ty, name),
+								span: val.cst_node().as_ref().byte_range().into(),
+							}
+							.into());
 						}
-						.into());
-					}
-					vals.push((
-						elem_tys[i].0.clone(),
-						collect_dzn_value(file, &exprs[i].value(), &elem_tys[i].1)?,
-					))
+					};
+					vals.push((name.clone(), elem_val));
 				}
 				// Check whether there are any additional remaining keys
-				if exprs.len() > elem_tys.len() {
-					let additional = &exprs[elem_tys.len()..exprs.len()];
+				let additional: Vec<RecordLiteralMember> = exprs.collect();
+				if !additional.is_empty() {
 					return Err(TypeMismatch {
 						src: file.clone(),
 						msg: format!(
@@ -929,6 +928,32 @@ mod tests {
 			),
 			&expect!("(a: 1, b: (c: 2, d: (e: 3, f: 4)))"),
 		);
+	}
+
+	#[test]
+	fn test_parse_record_missing_opt_field() {
+		let ty = Type::Record(
+			OptType::NonOpt,
+			Arc::new([
+				("a".into(), Type::Integer(OptType::NonOpt)),
+				("b".into(), Type::String(OptType::Opt)),
+				("c".into(), Type::Integer(OptType::Opt)),
+			]),
+		);
+		check_serialization("(a: 1)", &ty, &expect!("(a: 1, b: <>, c: <>)"));
+		check_serialization("(c: 3, a: 1)", &ty, &expect!("(a: 1, b: <>, c: 3)"));
+
+		let check_error = |input: &str, expected: &str| {
+			let src = SourceFile::unnamed(format!("x = {input};"));
+			let dzn = parse_dzn(&src).expect("unexpected syntax error");
+			let assignments = dzn.items().collect::<Vec<_>>();
+			let err = collect_dzn_value(&src, &assignments[0].definition(), &ty)
+				.expect_err("expected a type error");
+			let err = format!("{err:?}");
+			assert!(err.contains(expected), "{err}");
+		};
+		check_error("(b: \"x\")", "key 'a' was not found");
+		check_error("(a: 1, d: 2)", "found the addition key 'd'");
 	}
 
 	#[test]

@@ -49,13 +49,17 @@ impl<'db> ItemCollector<'db> {
 				let occurrence = occurrence_of[&(class, constructor_index)];
 				let prefix = self.objects.plan.occurrence_id_prefixes[&occurrence].clone();
 				let block = match self.objects.data_id_blocks.get(&occurrence).cloned() {
-					Some(data) => self.data_occurrence_ids_block(
-						item,
-						occurrence,
-						domain,
-						data,
-						|this, first, last| this.indexed_ids(item, &prefix.prefix, first, last),
-					),
+					Some(given) => {
+						let data = self.data_object_ids(item, given.clone(), &prefix);
+						self.data_occurrence_ids_block(
+							item,
+							occurrence,
+							domain,
+							given,
+							data,
+							|this, first, last| this.indexed_ids(item, &prefix.prefix, first, last),
+						)
+					}
 					None => self.occurrence_ids_block(item, domain, &prefix),
 				};
 				ids = Some(match ids {
@@ -150,6 +154,44 @@ impl<'db> ItemCollector<'db> {
 			IfThenElse {
 				branches: vec![Branch::new(is_single, single)],
 				else_result: Box::new(indexed),
+			},
+		)
+	}
+
+	/// The ids of the data objects of an occurrence, from `given`, their ids in
+	/// the data in slot order (`opt string`): `mzn_object_data_ids(<given>,
+	/// <generated>)`, so an object given without an id gets the id generated for
+	/// its slot.
+	fn data_object_ids(
+		&mut self,
+		item: Item<'db>,
+		given: Expression<'db>,
+		prefix: &OccurrenceIdPrefix,
+	) -> Expression<'db> {
+		let generated = if prefix.singular {
+			// A singular chain has a single data object.
+			let name = self.string_literal(item, &prefix.prefix);
+			Expression::new(self.db, &self.model, item, ArrayLiteral(vec![name]))
+		} else {
+			let one = Expression::new(self.db, &self.model, item, IntegerLiteral(1));
+			let count = Expression::new(
+				self.db,
+				&self.model,
+				item,
+				LookupCall {
+					function: self.ids.functions.length.into(),
+					arguments: vec![given.clone()],
+				},
+			);
+			self.indexed_ids(item, &prefix.prefix, one, count)
+		};
+		Expression::new(
+			self.db,
+			&self.model,
+			item,
+			LookupCall {
+				function: self.ids.functions.mzn_object_data_ids.into(),
+				arguments: vec![given, generated],
 			},
 		)
 	}
