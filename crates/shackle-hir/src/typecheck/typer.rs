@@ -697,8 +697,9 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 	) -> Ty<'db> {
 		let db = self.db;
 		let mut lift_to_opt = false;
+		let mut var_set_bindings = Vec::new();
 		for g in c.generators.iter() {
-			lift_to_opt |= self.collect_generator(expr, g);
+			lift_to_opt |= self.collect_generator(expr, g, &mut var_set_bindings);
 		}
 		let el = self.collect_expression(c.template);
 		let element = if lift_to_opt {
@@ -720,7 +721,10 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		};
 		let dim = c
 			.indices
-			.map(|i| self.collect_expression(i))
+			.map(|i| {
+				let ty = self.collect_expression(i);
+				self.par_class_index(i, ty, &var_set_bindings)
+			})
 			.unwrap_or(self.types.par_int);
 		Ty::array(db, dim, element).unwrap_or_else(|| {
 			let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
@@ -749,7 +753,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		let db = self.db;
 		let mut is_var = false;
 		for g in c.generators.iter() {
-			is_var |= self.collect_generator(expr, g);
+			is_var |= self.collect_generator(expr, g, &mut Vec::new());
 		}
 		let el = self.collect_expression(c.template);
 		if !is_var {
@@ -798,7 +802,16 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			})
 	}
 
-	fn collect_generator(&mut self, expr: ExpressionId<'db>, g: &Generator<'db>) -> bool {
+	/// Type a generator, returning whether it is var (iterates over a var set
+	/// or has a var where clause). The variables it binds as `var` objects
+	/// because they range over a var set of a class are added to
+	/// `var_set_bindings`.
+	fn collect_generator(
+		&mut self,
+		expr: ExpressionId<'db>,
+		g: &Generator<'db>,
+		var_set_bindings: &mut Vec<PatternId<'db>>,
+	) -> bool {
 		let db = self.db;
 		let mut is_var = false;
 		let where_clause = match g {
@@ -823,6 +836,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 						// iterating `a.bs` where `a` is a `var new A` must bind a
 						// `var` object.
 						if let TyData::Class(VarType::Par, _, _) = element.lookup(db) {
+							var_set_bindings.extend(patterns.iter().copied());
 							element.make_var(db).unwrap_or(*element)
 						} else {
 							*element
@@ -884,6 +898,43 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			}
 		}
 		is_var
+	}
+
+	/// The index type of an indexed array comprehension whose index (or a
+	/// component of a tuple index) is a variable bound by a generator over a
+	/// var set of a class (`[a: a.x | a in A]` where `A` is var). The variable
+	/// is a `var` object so that its attributes read as var, but the array is
+	/// indexed by every object the set can contain, whose type is the par
+	/// class. Any other var index is left to be rejected.
+	fn par_class_index(
+		&self,
+		index: ExpressionId<'db>,
+		ty: Ty<'db>,
+		var_set_bindings: &[PatternId<'db>],
+	) -> Ty<'db> {
+		let db = self.db;
+		match (&self.data[index], ty.lookup(db)) {
+			(Expression::Identifier(i), TyData::Class(VarType::Var, OptType::NonOpt, _))
+				if self.find_variable(index, *i).is_some_and(|p| {
+					p.item(db) == self.item && var_set_bindings.contains(&p.pattern(db))
+				}) =>
+			{
+				ty.make_par(db)
+			}
+			(Expression::TupleLiteral(t), TyData::Tuple(OptType::NonOpt, fields))
+				if t.fields.len() == fields.len() =>
+			{
+				Ty::tuple(
+					db,
+					t.fields
+						.iter()
+						.zip(fields.iter())
+						.map(|(f, ty)| self.par_class_index(*f, *ty, var_set_bindings))
+						.collect::<Vec<_>>(),
+				)
+			}
+			_ => ty,
+		}
 	}
 
 	fn collect_array_access(&mut self, expr: ExpressionId<'db>, aa: &ArrayAccess<'db>) -> Ty<'db> {

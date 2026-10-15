@@ -770,6 +770,7 @@ fn object_class_indexed_array_snapshot() {
 		"class_indexed_array_par_definition",
 		"class_indexed_array_var_set",
 		"class_indexed_array_access",
+		"class_indexed_array_var_set_comprehension",
 	] {
 		check_snapshot(name);
 		let source = fs::read_to_string(fixtures_dir().join(format!("{name}.mzn"))).unwrap();
