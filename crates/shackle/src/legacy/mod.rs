@@ -239,6 +239,9 @@ impl Display for LegacyValue<'_> {
 					)?;
 				}
 			}
+			Value::KeyedArray(_) => {
+				unreachable!("keyed arrays are only output, never input data")
+			}
 			Value::Set(s) => match s {
 				Set::Enum(s) => write!(
 					f,
@@ -676,6 +679,19 @@ impl Type {
 			Type::Enum(_, _) => Type::Integer(OptType::NonOpt),
 			Type::String(_) => Type::String(OptType::NonOpt),
 			Type::Annotation(_) => Type::Annotation(OptType::NonOpt),
+			// A keyed array is output as its (key, value) pairs
+			Type::Array {
+				opt: _,
+				dim,
+				element,
+			} if Type::is_keyed(dim) => Type::Array {
+				opt: OptType::NonOpt,
+				dim: [Type::Integer(OptType::NonOpt)].into(),
+				element: Box::new(Type::Tuple(
+					OptType::NonOpt,
+					Arc::new([Type::key(dim).type_erase(), element.type_erase()]),
+				)),
+			},
 			Type::Array {
 				opt: _,
 				dim,
@@ -728,6 +744,29 @@ impl Value {
 					panic!("expected integer value")
 				};
 				EnumValue::from_enum_and_pos(e.clone(), pos as usize).into()
+			}
+			Type::Array {
+				opt: _,
+				dim,
+				element,
+			} if Type::is_keyed(dim) => {
+				let Value::Array(x) = v else {
+					panic!("expected array");
+				};
+				let key = Type::key(dim);
+				Value::KeyedArray(
+					x.members
+						.into_iter()
+						.map(|pair| {
+							let Value::Tuple(pair) = pair else {
+								panic!("expected (key, value) tuple")
+							};
+							let [k, v] = <[Value; 2]>::try_from(pair)
+								.unwrap_or_else(|_| panic!("expected (key, value) tuple"));
+							(k.reverse_type_erase(&key), v.reverse_type_erase(element))
+						})
+						.collect(),
+				)
 			}
 			Type::Array {
 				opt: _,

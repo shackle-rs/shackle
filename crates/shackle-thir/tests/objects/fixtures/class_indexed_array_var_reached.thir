@@ -14,5 +14,5 @@ array [A_potential] of var '..'(0, 10): scores_ref :: (no_output);
 constraint forall(['<='('[]'(scores_ref, a), ('[]'(A_objects, enum2int(a))).x) | a in A]);
 record(string: id, int: x): a1 :: (output_only) :: ('output') = (id: '[]'(A_ids, a1_ref), x: fix(('[]'(A_objects, enum2int(a1_ref))).x));
 record(string: id, int: x): a2 :: (output_only) :: ('output') = (id: '[]'(A_ids, a2_ref), x: fix(('[]'(A_objects, enum2int(a2_ref))).x));
-array [A_potential] of int: scores :: (output_only) :: ('output') = fix(scores_ref);
+array [int] of tuple(string, int): scores :: (output_only) :: ('output') :: (mzn_output_keyed) = [('[]'(A_ids, _DECL_1), '[]'(fix(scores_ref), _DECL_1)) | _DECL_1 in A];
 solve satisfy;

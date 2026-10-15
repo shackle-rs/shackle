@@ -7,8 +7,8 @@ array [int] of record(var '..'(1, 3): x): A_as_objects = [(x: x) | p in index_se
 var set( '..'(1, 2) ) of  A_occ_0('..'(1, 2)): as_ref :: (no_output);
 array [A_potential] of var '..'(0, 10): scores_ref :: (no_output);
 constraint forall(['>='('[]'(scores_ref, a), ('[]'(A_objects, enum2int(a))).x) | a in A]);
-output [show(fix(scores_ref)), " ", show(['[]'(A_ids, _DECL_1) | _DECL_1 in fix(as_ref)])];
+output [concat(["[", join(", ", [concat([show('[]'(A_ids, _DECL_1)), ": ", show('[]'(fix(scores_ref), _DECL_1))]) | _DECL_1 in fix(A)]), "]"]), " ", show(['[]'(A_ids, _DECL_2) | _DECL_2 in fix(as_ref)])];
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
-array [int] of record(string: id, int: x): as :: (output_only) :: ('output') = [(id: '[]'(A_ids, _DECL_2), x: fix(('[]'(A_objects, enum2int(_DECL_2))).x)) | _DECL_2 in fix(as_ref)];
-array [A_potential] of int: scores :: (output_only) :: ('output') = fix(scores_ref);
+array [int] of record(string: id, int: x): as :: (output_only) :: ('output') = [(id: '[]'(A_ids, _DECL_3), x: fix(('[]'(A_objects, enum2int(_DECL_3))).x)) | _DECL_3 in fix(as_ref)];
+array [int] of tuple(string, int): scores :: (output_only) :: ('output') :: (mzn_output_keyed) = [('[]'(A_ids, _DECL_4), '[]'(fix(scores_ref), _DECL_4)) | _DECL_4 in fix(A)];
 solve satisfy;

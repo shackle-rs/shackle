@@ -33,6 +33,9 @@ pub enum Value {
 	/// An array of values
 	/// All values are of the same type
 	Array(Array),
+	/// An array indexed by keys that are not integers or enumerated values,
+	/// such as the ids of objects, as its (key, value) pairs
+	KeyedArray(Vec<(Value, Value)>),
 	/// A set of values
 	/// All values are of the same type and only occur once
 	Set(Set),
@@ -113,6 +116,15 @@ impl Display for Value {
 			}
 			Value::Array(arr) => {
 				write!(f, "{arr}")
+			}
+			Value::KeyedArray(pairs) => {
+				write!(
+					f,
+					"[{}]",
+					pairs
+						.iter()
+						.format_with(", ", |(k, v), f| f(&format_args!("{k}: {v}")))
+				)
 			}
 			Value::Set(v) => {
 				write!(f, "{v}")

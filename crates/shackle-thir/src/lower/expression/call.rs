@@ -265,11 +265,23 @@ impl<'db, 'a, 'b, 'c> ExpressionCollector<'db, 'a, 'b, 'c> {
 				if *id == self.parent.ids.functions.show
 					|| *id == self.parent.ids.functions.show_json
 		);
-		if is_show
-			&& let [argument] = arguments.as_mut_slice()
-			&& let Some(with_ids) = self.parent.show_argument_with_ids(argument)
-		{
-			*argument = with_ids;
+		if is_show && let [argument] = arguments.as_mut_slice() {
+			// A class-indexed array is shown keyed by the ids, which is not
+			// the `show` of any MiniZinc value, so the whole call is replaced.
+			let json = matches!(
+				&self.data[c.function],
+				shackle_hir::Expression::Identifier(id)
+					if *id == self.parent.ids.functions.show_json
+			);
+			if let Some(shown) = self
+				.parent
+				.show_class_indexed_array(origin.into(), argument, json)
+			{
+				return shown;
+			}
+			if let Some(with_ids) = self.parent.show_argument_with_ids(argument) {
+				*argument = with_ids;
+			}
 		}
 
 		let params = match &function {

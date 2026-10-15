@@ -356,6 +356,44 @@ impl Type {
 		}
 	}
 
+	/// The type of a declaration annotated `::mzn_output_keyed`, which holds
+	/// the (key, value) pairs `array [int] of tuple(<key>, <value>)` of an
+	/// array indexed by object ids: the array, whose dimensions are the
+	/// components of the key. The ids make string dimensions.
+	fn keyed_array(pairs: Type) -> Type {
+		let Type::Array { opt, element, .. } = pairs else {
+			unreachable!("keyed output is an array of pairs, not {pairs}")
+		};
+		let Type::Tuple(_, pair) = *element else {
+			unreachable!("keyed output is an array of pairs, not {element}")
+		};
+		let [key, element] = &pair[..] else {
+			unreachable!("keyed output is an array of pairs")
+		};
+		let dim = match key {
+			Type::Tuple(_, dims) => dims.iter().cloned().collect(),
+			key => Box::from([key.clone()]),
+		};
+		Type::Array {
+			opt,
+			dim,
+			element: Box::new(element.clone()),
+		}
+	}
+
+	/// Whether array dimensions make a keyed array (see [`Type::keyed_array`])
+	fn is_keyed(dim: &[Type]) -> bool {
+		dim.iter().any(|d| matches!(d, Type::String(_)))
+	}
+
+	/// The type of the keys of a keyed array with the dimensions `dim`
+	fn key(dim: &[Type]) -> Type {
+		match dim {
+			[key] => key.clone(),
+			dims => Type::Tuple(OptType::NonOpt, dims.iter().cloned().collect()),
+		}
+	}
+
 	fn is_opt(&self) -> bool {
 		matches!(
 			self,
@@ -691,6 +729,7 @@ impl ModelIoInterface {
 		let reg = IdentifierRegistry::lookup(db);
 		let output_ann = reg.annotations.output;
 		let no_output_ann = reg.annotations.no_output;
+		let keyed_ann = reg.annotations.mzn_output_keyed;
 
 		// Determine input and output from declarations
 		let mut input = FxHashMap::default();
@@ -734,6 +773,11 @@ impl ModelIoInterface {
 					&enums,
 					decl.domain().ty(),
 				);
+				let ty = if decl.annotations().has(model, keyed_ann) {
+					crate::Type::keyed_array(ty)
+				} else {
+					ty
+				};
 				output.insert(name, ty);
 			}
 		}

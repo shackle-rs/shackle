@@ -12,7 +12,7 @@ array [int] of record(int: x): A_a2_objects = A_a2_inputs;
 A_potential: a2_ref :: (no_output) = A_occ_1(1);
 array [A_potential] of int: ys = [a: ('[]'(A_objects, enum2int(a))).x | a in A];
 array [A_potential] of int: zs = [a: '+'(('[]'(A_objects, enum2int(a))).x, 1) | a in A];
-output [show(ys), " ", show(zs), " ", show('[]'(ys, a2_ref))];
+output [concat(["[", join(", ", [concat([show('[]'(A_ids, _DECL_1)), ": ", show('[]'(ys, _DECL_1))]) | _DECL_1 in A]), "]"]), " ", concat(["[", join(", ", [concat([show('[]'(A_ids, _DECL_2)), ": ", show('[]'(zs, _DECL_2))]) | _DECL_2 in A]), "]"]), " ", show('[]'(ys, a2_ref))];
 record(string: id, int: x): a1 :: (output_only) :: ('output') = (id: '[]'(A_ids, a1_ref), x: ('[]'(A_objects, enum2int(a1_ref))).x);
 record(string: id, int: x): a2 :: (output_only) :: ('output') = (id: '[]'(A_ids, a2_ref), x: ('[]'(A_objects, enum2int(a2_ref))).x);
 solve satisfy;
