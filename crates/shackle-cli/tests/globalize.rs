@@ -1,7 +1,9 @@
 //! End-to-end tests for `shackle globalize`. They need `MZN_STDLIB_DIR` and
 //! `minizinc` with Gecode on `PATH`. Each test uses two worker threads. The
-//! fixtures run from `tests/globalize`, so locations use relative file names,
-//! and the `NUMCALLS` line is left out.
+//! fixtures run from `tests/globalize` with `--json`, so locations use
+//! relative file names. The expected files show one finding per line
+//! (`file|line|col|line|col [ context ] replacement`), without the number of
+//! MiniZinc runs.
 
 use std::{
 	path::Path,
@@ -9,6 +11,7 @@ use std::{
 };
 
 use expect_test::expect_file;
+use serde_json::Value;
 
 fn dir() -> &'static Path {
 	Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/globalize"))
@@ -26,21 +29,44 @@ fn globalize(args: &[&str]) -> Output {
 /// Run on the fixture `name` (plus data files) and compare with `name.expected`
 fn check(name: &str, extra: &[&str]) {
 	let model = format!("{name}.mzn");
-	let output = globalize(&[extra, &[model.as_str()]].concat());
+	let output = globalize(&[&["--json"], extra, &[model.as_str()]].concat());
 	assert!(
 		output.status.success(),
 		"globalize failed\nstdout:\n{}\nstderr:\n{}",
 		String::from_utf8_lossy(&output.stdout),
 		String::from_utf8_lossy(&output.stderr),
 	);
-	let stdout = String::from_utf8(output.stdout).unwrap();
-	assert!(stdout.contains("% NUMCALLS: "), "{stdout}");
-	let findings: String = stdout
-		.lines()
-		.filter(|l| !l.starts_with("% NUMCALLS: "))
-		.map(|l| format!("{l}\n"))
-		.collect();
-	expect_file![dir().join(format!("{name}.expected"))].assert_eq(&findings);
+	let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert!(json["calls"].as_u64().is_some(), "{json}");
+	let mut lines = String::new();
+	for v in json["viewpoints"].as_array().unwrap() {
+		lines += &format!("% viewpoint: {}\n", v["replacement"].as_str().unwrap());
+	}
+	for f in json["findings"].as_array().unwrap() {
+		let locations = f["locations"].as_array().unwrap().iter().map(location);
+		let context = match &f["context"] {
+			Value::Null => String::new(),
+			c => format!("{} ", location(c)),
+		};
+		lines += &format!(
+			"{} [ {context}] {}\n",
+			locations.collect::<Vec<_>>().join(";"),
+			f["replacement"].as_str().unwrap()
+		);
+	}
+	expect_file![dir().join(format!("{name}.expected"))].assert_eq(&lines);
+}
+
+/// `file|line|col|line|col`
+fn location(l: &Value) -> String {
+	format!(
+		"{}|{}|{}|{}|{}",
+		l["filename"].as_str().unwrap(),
+		l["firstLine"],
+		l["firstColumn"],
+		l["lastLine"],
+		l["lastColumn"]
+	)
 }
 
 #[test]
@@ -88,6 +114,25 @@ fn globalize_increasing() {
 #[test]
 fn globalize_no_global() {
 	check("no_global", &[]);
+}
+
+#[test]
+fn globalize_prints_diagnostics() {
+	let output = Command::new(env!("CARGO_BIN_EXE_shackle"))
+		.current_dir(dir())
+		.env("NO_COLOR", "1")
+		.args(["globalize", "--seed", "1", "--jobs", "2", "-M", "3"])
+		.arg("scalars.mzn")
+		.output()
+		.unwrap();
+	assert!(output.status.success());
+	let stdout = String::from_utf8(output.stdout).unwrap();
+	assert!(
+		stdout.contains("replace with `all_different([a, b, c])`"),
+		"{stdout}"
+	);
+	assert!(stdout.contains("scalars.mzn:"), "{stdout}");
+	assert!(stdout.contains("Suggestions: 1, viewpoints: 0"), "{stdout}");
 }
 
 #[test]

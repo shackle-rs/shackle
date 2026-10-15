@@ -153,15 +153,24 @@ impl<'a> Checker<'a> {
 		if plain.complete || plain.error.is_some() || plain.solutions.is_empty() {
 			return Ok(Sample::from(plain));
 		}
-		// Restarts give more diverse samples, but can never prove completeness
+		// Restarts give more diverse samples, but can never prove completeness.
+		// The plain samples often share the first variables, so both are used.
 		let restart = self
 			.runner
 			.run(&format!("{body}{}", search[1]), data, n, cache)?;
-		if restart.error.is_none() && restart.solutions.len() >= n {
-			Ok(Sample::from(restart))
-		} else {
-			Ok(Sample::from(plain))
+		if restart.error.is_some() {
+			return Ok(Sample::from(plain));
 		}
+		Ok(Sample::from(Arc::new(Outcome {
+			solutions: plain
+				.solutions
+				.iter()
+				.chain(&restart.solutions)
+				.cloned()
+				.collect(),
+			complete: false,
+			error: None,
+		})))
 	}
 
 	/// The data files and leader instantiations of a plan, with the preamble

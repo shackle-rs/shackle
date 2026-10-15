@@ -19,10 +19,10 @@ use env_logger::{Builder, fmt::TimestampPrecision};
 use expect_test as _;
 use humantime::Duration;
 use log::warn;
-use miette::{IntoDiagnostic, Report, Result};
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, Result, Severity};
 use shackle::{CompileTarget, Error, Message, Model, Solver, Status, error::InternalError};
 use shackle_fmt::{MiniZincFormatOptions, check_format, format_files};
-use shackle_globalizer::{GlobalizeOptions, globalize};
+use shackle_globalizer::{Finding, GlobalizeOptions, Location, globalize};
 #[cfg(test)]
 use tempfile as _;
 
@@ -334,13 +334,16 @@ struct Globalize {
 	/// represent integers
 	#[arg(long)]
 	no_initial_pass: bool,
+	/// Print the suggestions as one JSON object, not as diagnostics
+	#[arg(long)]
+	json: bool,
 	/// The model file and data files
 	#[arg(required = true)]
 	files: Vec<PathBuf>,
 }
 
 impl Globalize {
-	/// Run the globalizer and print one suggestion per line
+	/// Run the globalizer and print its suggestions
 	pub fn dispatch(&self) -> Result<()> {
 		let (model, data) = sort_files(&self.files)?;
 		let options = GlobalizeOptions {
@@ -357,15 +360,103 @@ impl Globalize {
 			jobs: self.jobs,
 		};
 		let result = globalize(&Model::from_file(model), &data, &options)?;
+		if self.json {
+			let findings = |fs: &[Finding]| fs.iter().map(finding_json).collect::<Vec<_>>();
+			let json = serde_json::json!({
+				"viewpoints": findings(&result.viewpoints),
+				"findings": findings(&result.findings),
+				"calls": result.calls,
+			});
+			println!("{json}");
+			return Ok(());
+		}
 		for viewpoint in &result.viewpoints {
-			println!("% viewpoint: {viewpoint}");
+			let help = format!("add the viewpoint: {}", viewpoint.replacement);
+			let message = "This 0/1 array represents an integer array";
+			println!("{:?}", suggestion(viewpoint, message, help));
 		}
 		for finding in &result.findings {
-			println!("{finding}");
+			let one = finding.locations.len() == 1;
+			let report = if finding.replacement == "true" {
+				let message = if one {
+					"This constraint is redundant"
+				} else {
+					"These constraints are redundant"
+				};
+				let help =
+					"remove it, or mark it with `redundant_constraint` if it helps the solver";
+				suggestion(finding, message, help)
+			} else {
+				let message = if one {
+					"This constraint can be replaced by a global constraint"
+				} else {
+					"These constraints can be replaced by a global constraint"
+				};
+				let help = format!("replace with `{}`", finding.replacement);
+				suggestion(finding, message, help)
+			};
+			println!("{report:?}");
 		}
-		println!("% NUMCALLS: {}", result.calls);
+		println!(
+			"Suggestions: {}, viewpoints: {}, MiniZinc runs: {}",
+			result.findings.len(),
+			result.viewpoints.len(),
+			result.calls
+		);
 		Ok(())
 	}
+}
+
+/// A finding as JSON, with locations as in MiniZinc's JSON messages
+fn finding_json(finding: &Finding) -> serde_json::Value {
+	let location = |loc: &Location| {
+		let ((l1, c1), (l2, c2)) = (loc.start(), loc.end());
+		serde_json::json!({
+			"filename": loc.src.name(),
+			"firstLine": l1,
+			"firstColumn": c1,
+			"lastLine": l2,
+			"lastColumn": c2,
+		})
+	};
+	serde_json::json!({
+		"locations": finding.locations.iter().map(location).collect::<Vec<_>>(),
+		"context": finding.context.as_ref().map(location),
+		"replacement": finding.replacement,
+	})
+}
+
+/// A finding as a miette diagnostic. Labels mark the locations in the file of
+/// the first one, and the help lists the others.
+fn suggestion(finding: &Finding, message: &str, help: impl Into<String>) -> Report {
+	let src = &finding.locations[0].src;
+	let mut labels = Vec::new();
+	let mut elsewhere = Vec::new();
+	for loc in &finding.locations {
+		if loc.src == *src {
+			labels.push(LabeledSpan::new_with_span(None, loc.span));
+		} else {
+			elsewhere.push(loc.to_string());
+		}
+	}
+	if let Some(context) = &finding.context {
+		let text = Some("needed for this".to_owned());
+		if context.src == *src {
+			labels.push(LabeledSpan::new_with_span(text, context.span));
+		} else {
+			elsewhere.push(format!("{context} (needed for this)"));
+		}
+	}
+	let mut help = help.into();
+	if !elsewhere.is_empty() {
+		help = format!("{help}\nalso at: {}", elsewhere.join(", "));
+	}
+	let diagnostic = MietteDiagnostic::new(message)
+		.with_code("shackle::globalize")
+		.with_severity(Severity::Advice)
+		.with_labels(labels)
+		.with_help(help);
+	Report::new(diagnostic).with_source_code(src.clone())
 }
 
 /// Compile the given model to a shackle intermediate format

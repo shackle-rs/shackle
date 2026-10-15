@@ -42,7 +42,7 @@ use std::{
 
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
-use shackle_diagnostics::{Error, Result};
+use shackle_diagnostics::{Error, Result, SourceFile, SourceSpan};
 use shackle_fmt::{MiniZincFormatOptions, format_str};
 use shackle_hir::{
 	Db,
@@ -112,14 +112,75 @@ impl Default for GlobalizeOptions {
 	}
 }
 
-/// A suggested replacement for a group of constraints
+/// A source range in a model file
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Location {
+	/// The file
+	pub src: SourceFile,
+	/// The range in the file
+	pub span: SourceSpan,
+}
+
+impl Location {
+	fn new(db: &dyn Db, origin: Origin<'_>) -> Self {
+		let (src, span) = origin.source_span(db);
+		Location { src, span }
+	}
+
+	/// Line and column (from 1, in characters) of a byte offset
+	fn position(&self, offset: usize) -> (usize, usize) {
+		let before = &self.src.contents()[..offset];
+		let line = before.matches('\n').count() + 1;
+		let line_start = before.rfind('\n').map_or(0, |i| i + 1);
+		(line, before[line_start..].chars().count() + 1)
+	}
+
+	/// Line and column of the first character (from 1)
+	pub fn start(&self) -> (usize, usize) {
+		self.position(self.span.offset())
+	}
+
+	/// Line and column of the last character (from 1)
+	pub fn end(&self) -> (usize, usize) {
+		self.position(self.span.offset() + self.span.len().saturating_sub(1))
+	}
+
+	fn key(&self) -> (Option<&std::path::Path>, usize, usize) {
+		(self.src.path(), self.span.offset(), self.span.len())
+	}
+}
+
+impl PartialOrd for Location {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for Location {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		self.key().cmp(&other.key())
+	}
+}
+
+/// The globalizer's text format: `file|l1|c1|l2|c2` (lines and columns
+/// from 1, columns in characters, both ends inclusive)
+impl Display for Location {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let ((l1, c1), (l2, c2)) = (self.start(), self.end());
+		write!(f, "{}|{l1}|{c1}|{l2}|{c2}", self.src.name())
+	}
+}
+
+/// A suggested replacement for a group of constraints, or a viewpoint
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Finding {
-	/// Source locations of the replaced constraints (`file|l1|c1|l2|c2`)
-	pub locations: Vec<String>,
-	/// Location of the constraint that is needed for the replacement to hold
-	pub context: Option<String>,
-	/// The global constraint call that can replace them
+	/// The replaced constraints (for a viewpoint: the 0/1 array)
+	pub locations: Vec<Location>,
+	/// The constraint that is needed for the replacement to hold
+	pub context: Option<Location>,
+	/// The global constraint call that can replace them (`true` if they are
+	/// redundant), or the viewpoint declaration with its channelling
+	/// constraint
 	pub replacement: String,
 }
 
@@ -128,7 +189,7 @@ impl Display for Finding {
 		write!(
 			f,
 			"{} [ {}] {}",
-			self.locations.join(";"),
+			self.locations.iter().join(";"),
 			self.context
 				.as_ref()
 				.map(|c| format!("{c} "))
@@ -143,7 +204,7 @@ impl Display for Finding {
 pub struct Globalized {
 	/// New integer arrays (with their channelling constraint) that some
 	/// findings use, found by the initial pass
-	pub viewpoints: Vec<String>,
+	pub viewpoints: Vec<Finding>,
 	/// Suggestions, sorted by location (redundant groups have `true`)
 	pub findings: Vec<Finding>,
 	/// Number of `minizinc` runs
@@ -220,21 +281,6 @@ fn closure<T: PartialEq, I: IntoIterator<Item = T>>(
 		i += 1;
 	}
 	all
-}
-
-/// Format a source location as `file|l1|c1|l2|c2` (1-based, inclusive end)
-fn location<'db>(db: &'db dyn Db, origin: Origin<'db>) -> String {
-	let (src, span) = origin.source_span(db);
-	let position = |offset: usize| {
-		let before = &src.contents()[..offset];
-		let line = before.matches('\n').count() + 1;
-		let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-		let col = before[line_start..].chars().count() + 1;
-		(line, col)
-	};
-	let (l1, c1) = position(span.offset());
-	let (l2, c2) = position(span.offset() + span.len().saturating_sub(1));
-	format!("{}|{l1}|{c1}|{l2}|{c2}", src.name())
 }
 
 /// Remove the redundant parentheses of printed THIR (on one line)
@@ -351,12 +397,14 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		let mut locations = raw
 			.group
 			.iter()
-			.map(|p| location(self.db, self.parts[*p].origin))
+			.map(|p| Location::new(self.db, self.parts[*p].origin))
 			.collect::<Vec<_>>();
 		locations.dedup();
 		Finding {
 			locations,
-			context: raw.context.map(|c| location(self.db, self.parts[c].origin)),
+			context: raw
+				.context
+				.map(|c| Location::new(self.db, self.parts[c].origin)),
 			replacement: raw.replacement.clone(),
 		}
 	}
@@ -403,7 +451,11 @@ pub fn globalize(
 			viewpoints: globalizer
 				.viewpoints
 				.iter()
-				.map(|vp| vp.text.clone())
+				.map(|vp| Finding {
+					locations: vec![Location::new(db, globalizer.model[vp.array].origin())],
+					context: None,
+					replacement: vp.text.clone(),
+				})
 				.collect(),
 			findings: findings.into_iter().collect(),
 			calls: globalizer.checker.runner.calls.load(Ordering::Relaxed),

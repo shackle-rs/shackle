@@ -62,7 +62,10 @@ fn submodel(g: &Globalizer<'_, '_>, u: &Unrolled<'_, '_, '_>) -> (String, [Strin
 /// The locations of the parts of `src`
 fn locations(src: &str) -> Vec<String> {
 	with(src, |g| {
-		g.parts.iter().map(|p| location(g.db, p.origin)).collect()
+		g.parts
+			.iter()
+			.map(|p| Location::new(g.db, p.origin).to_string())
+			.collect()
 	})
 }
 
@@ -654,9 +657,9 @@ fn viewpoint_texts() {
 	});
 	expect![[r#"
     [
-        "b_3a\narray [index_set_2of3(b), index_set_3of3(b)] of var index_set_1of3(b): b_3a; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3a[j, k] = i);\narray [index_set_2of3(b), index_set_3of3(b)] of var int: b_3a = array2d(index_set_2of3(b), index_set_3of3(b), [sum (i in index_set_1of3(b)) (i * b[i, j, k]) | j in index_set_2of3(b), k in index_set_3of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3a[j, k] = i);",
-        "b_3b\narray [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);\narray [index_set_1of3(b), index_set_3of3(b)] of var int: b_3b = array2d(index_set_1of3(b), index_set_3of3(b), [sum (j in index_set_2of3(b)) (j * b[i, j, k]) | i in index_set_1of3(b), k in index_set_3of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);",
-        "b_3c\narray [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);\narray [index_set_1of3(b), index_set_2of3(b)] of var int: b_3c = array2d(index_set_1of3(b), index_set_2of3(b), [sum (k in index_set_3of3(b)) (k * b[i, j, k]) | i in index_set_1of3(b), j in index_set_2of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);",
+        "b_3a\narray [index_set_2of3(b), index_set_3of3(b)] of var index_set_1of3(b): b_3a; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3a[j, k] = i);\narray [index_set_2of3(b), index_set_3of3(b)] of var int: b_3a = array2d(index_set_2of3(b), index_set_3of3(b), [sum (i in index_set_1of3(b)) (i * b[i, j, k]) | j in index_set_2of3(b), k in index_set_3of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3a[j, k] = i);\nconstraint forall (v in array1d(b_3a)) (v in index_set_1of3(b));",
+        "b_3b\narray [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);\narray [index_set_1of3(b), index_set_3of3(b)] of var int: b_3b = array2d(index_set_1of3(b), index_set_3of3(b), [sum (j in index_set_2of3(b)) (j * b[i, j, k]) | i in index_set_1of3(b), k in index_set_3of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);\nconstraint forall (v in array1d(b_3b)) (v in index_set_2of3(b));",
+        "b_3c\narray [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);\narray [index_set_1of3(b), index_set_2of3(b)] of var int: b_3c = array2d(index_set_1of3(b), index_set_2of3(b), [sum (k in index_set_3of3(b)) (k * b[i, j, k]) | i in index_set_1of3(b), j in index_set_2of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);\nconstraint forall (v in array1d(b_3c)) (v in index_set_3of3(b));",
     ]
 "#]].assert_debug_eq(&texts);
 }
@@ -689,8 +692,13 @@ fn shadowed_findings_are_hidden() {
 
 #[test]
 fn finding_display() {
+	let src = SourceFile::new("m.mzn".into(), "aaaaa\nbbbbb\nccccc\n".to_owned());
+	let line = |l: usize| Location {
+		src: src.clone(),
+		span: SourceSpan::new((6 * l).into(), 5),
+	};
 	let mut finding = Finding {
-		locations: vec!["m.mzn|1|1|1|5".to_owned(), "m.mzn|2|1|2|5".to_owned()],
+		locations: vec![line(0), line(1)],
 		context: None,
 		replacement: "all_different(x)".to_owned(),
 	};
@@ -698,7 +706,7 @@ fn finding_display() {
 		finding.to_string(),
 		"m.mzn|1|1|1|5;m.mzn|2|1|2|5 [ ] all_different(x)"
 	);
-	finding.context = Some("m.mzn|3|1|3|5".to_owned());
+	finding.context = Some(line(2));
 	assert_eq!(
 		finding.to_string(),
 		"m.mzn|1|1|1|5;m.mzn|2|1|2|5 [ m.mzn|3|1|3|5 ] all_different(x)"
@@ -788,8 +796,6 @@ fn solve_test_templates_match_the_globals() {
 			"value_precede(1, 2, x)",
 			"forall (i in index_set(x)) (x[i] = 2 -> exists (j in index_set(x) where j < i) (x[j] = 1))",
 		),
-		("maximum(m, x)", "m = max(x)"),
-		("minimum(m, x)", "m = min(x)"),
 	];
 	let options = GlobalizeOptions::default();
 	let runner = Runner::new(&options);
@@ -972,7 +978,7 @@ fn solve_initial_pass_finds_viewpoints() {
 	let declarations = result
 		.viewpoints
 		.iter()
-		.map(|v| v.split(';').next().unwrap())
+		.map(|v| v.replacement.split(';').next().unwrap())
 		.collect::<Vec<_>>();
 	assert_eq!(
 		declarations,
@@ -1065,7 +1071,7 @@ global_test!(
 	solve_bin_packing_load,
 	"bin_packing_load",
 	1,
-	"bin_packing_load(load, bin, w)",
+	"bin_packing_load(bin, w) = load",
 	"array[1..3] of int: w = [2, 3, 4];\narray[1..3] of var 1..2: bin;\narray[1..2] of var 0..9: load;\n",
 	"constraint forall(b in 1..2)(load[b] = sum(i in 1..3)(w[i] * (bin[i] = b)));",
 	"constraint forall(b in 1..2)(load[b] = sum(i in 1..2)(w[i] * (bin[i] = b)));",
@@ -1075,10 +1081,30 @@ global_test!(
 	solve_count,
 	"count",
 	1,
-	"count(x, v, c)",
+	"count (i in index_set(x)) (x[i] = v) = c",
 	"int: v = 2;\nint: c = 2;\narray[1..4] of var 1..3: x;\n",
 	"constraint sum(i in 1..4)(x[i] = v) = c;",
 	"constraint sum(i in 1..4)(x[i] = v) <= c;",
+);
+
+global_test!(
+	solve_count_leq,
+	"count",
+	1,
+	"count (i in index_set(x)) (x[i] = v) <= c",
+	"int: v = 2;\nint: c = 2;\narray[1..4] of var 1..3: x;\n",
+	"constraint sum(i in 1..4)(x[i] = v) <= c;",
+	"constraint sum(i in 1..3)(x[i] = v) <= c;",
+);
+
+global_test!(
+	solve_count_geq,
+	"count",
+	1,
+	"count (i in index_set(x)) (x[i] = v) >= c",
+	"int: v = 2;\nint: c = 2;\narray[1..4] of var 1..3: x;\n",
+	"constraint sum(i in 1..4)(x[i] = v) >= c;",
+	"constraint sum(i in 1..3)(x[i] = v) >= c;",
 );
 
 global_test!(
@@ -1125,7 +1151,7 @@ global_test!(
 	solve_distribute,
 	"distribute",
 	1,
-	"distribute(card, value, base)",
+	"distribute(value, base) = card",
 	"array[1..2] of int: value = [1, 3];\narray[1..4] of var 1..3: base;\narray[1..2] of var 0..4: card;\n",
 	"constraint forall(i in 1..2)(card[i] = sum(j in 1..4)(base[j] = value[i]));",
 	"constraint forall(i in 1..2)(card[i] = sum(j in 1..3)(base[j] = value[i]));",
@@ -1135,18 +1161,29 @@ global_test!(
 	solve_global_cardinality,
 	"global_cardinality",
 	1,
-	"global_cardinality(x, set2array(index_set(c)), c)",
+	"global_cardinality_closed(x, set2array(index_set(c))) = c",
 	"",
 	"array[1..3] of int: c = [1, 1, 2];\narray[1..4] of var 1..3: x;\nconstraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) = c[v]);",
 	// Counts of at most 2 can vary
 	"array[1..3] of int: c = [2, 2, 2];\narray[1..4] of var 1..3: x;\nconstraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) <= c[v]);",
 );
 
+// The value 4 is not counted
+global_test!(
+	solve_global_cardinality_open,
+	"global_cardinality",
+	1,
+	"global_cardinality(x, set2array(index_set(c))) = c",
+	"array[1..3] of int: c = [1, 1, 1];\narray[1..4] of var 1..4: x;\n",
+	"constraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) = c[v]);",
+	"constraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) <= c[v]);",
+);
+
 global_test!(
 	solve_global_cardinality_counts_from_samples,
 	"global_cardinality",
 	3,
-	"global_cardinality(x, [1, 2, 3], [1, 1, 2])",
+	"global_cardinality_closed(x, [1, 2, 3]) = [1, 1, 2]",
 	"array[1..4] of var 1..3: x;\n",
 	"constraint sum(i in 1..4)(x[i] = 1) = 1 /\\ sum(i in 1..4)(x[i] = 2) = 1 /\\ sum(i in 1..4)(x[i] = 3) = 2;",
 	"constraint sum(i in 1..4)(x[i] = 1) = 1 /\\ sum(i in 1..4)(x[i] = 2) <= 1;",
@@ -1166,7 +1203,7 @@ global_test!(
 	solve_inverse,
 	"inverse",
 	1,
-	"inverse(f, g)",
+	"inverse(f) = g",
 	"array[1..3] of var 1..3: f;\narray[1..3] of var 1..3: g;\n",
 	"constraint forall(i, j in 1..3)(f[i] = j <-> g[j] = i);",
 	"constraint forall(i, j in 1..3 where i != 3)(f[i] = j <-> g[j] = i);",
@@ -1206,7 +1243,7 @@ global_test!(
 	solve_maximum,
 	"maximum",
 	2,
-	"maximum(m, x)",
+	"max(x) = m",
 	"array[1..3] of var 1..4: x;\nvar 1..4: m;\n",
 	"constraint forall(i in 1..3)(m >= x[i]);\nconstraint exists(i in 1..3)(m = x[i]);",
 	// `m` can be larger than all of `x`
@@ -1217,7 +1254,7 @@ global_test!(
 	solve_maximum_from_samples,
 	"maximum",
 	2,
-	"maximum(7, x)",
+	"max(x) = 7",
 	"array[1..3] of var 1..9: x;\n",
 	"constraint exists(i in 1..3)(x[i] = 7) /\\ forall(i in 1..3)(x[i] <= 7);",
 	"constraint forall(i in 1..3)(x[i] <= 7);",
@@ -1227,7 +1264,7 @@ global_test!(
 	solve_minimum,
 	"minimum",
 	2,
-	"minimum(m, x)",
+	"min(x) = m",
 	"array[1..3] of var 1..4: x;\nvar 1..4: m;\n",
 	"constraint forall(i in 1..3)(m <= x[i]);\nconstraint exists(i in 1..3)(m = x[i]);",
 	"constraint forall(i in 1..3)(m <= x[i]);",
@@ -1237,7 +1274,7 @@ global_test!(
 	solve_nvalue,
 	"nvalue",
 	1,
-	"nvalue(n, x)",
+	"nvalue(x) = n",
 	"array[1..4] of var 1..3: x;\nvar 0..4: n;\n",
 	"constraint n = sum(v in 1..3)(exists(i in 1..4)(x[i] = v));",
 	"constraint n = sum(v in 1..2)(exists(i in 1..4)(x[i] = v));",
@@ -1257,7 +1294,7 @@ global_test!(
 	solve_sort,
 	"sort",
 	2,
-	"sort(x, y)",
+	"sort(x) = y",
 	"include \"globals.mzn\";\narray[1..3] of var 1..3: x;\narray[1..3] of var 1..3: y;\nconstraint increasing(y);\n",
 	"constraint forall(v in 1..3)(count(x, v) = count(y, v));",
 	"constraint y[1] <= x[1];",
@@ -1272,3 +1309,92 @@ global_test!(
 	"constraint forall(i in 1..4)(x[i] = t -> exists(j in 1..i - 1)(x[j] = s));",
 	"constraint forall(i in 1..4)(x[i] = s -> exists(j in 1..i - 1)(x[j] = t));",
 );
+
+global_test!(
+	solve_arg_max,
+	"arg_max",
+	2,
+	"arg_max(x) = i",
+	"array[1..3] of var 1..4: x;\nvar 1..3: i;\n",
+	"constraint forall(j in 1..3)(x[i] >= x[j]);\nconstraint forall(j in 1..3)(j < i -> x[j] < x[i]);",
+	// Ties do not pick the first index
+	"constraint forall(j in 1..3)(x[i] >= x[j]);",
+);
+
+global_test!(
+	solve_element,
+	"element",
+	1,
+	"x[i] = y",
+	"array[1..3] of var 1..4: x;\nvar 1..3: i;\nvar 1..4: y;\n",
+	"constraint forall(j in 1..3)(i = j -> y = x[j]);",
+	"constraint forall(j in 1..2)(i = j -> y = x[j]);",
+);
+
+global_test!(
+	solve_lex_chain_less,
+	"lex_chain",
+	1,
+	"lex_chain_less(m)",
+	"array[1..2, 1..3] of var 0..1: m;\n",
+	"constraint forall(j in 1..2)(lex_less(m[.., j], m[.., j + 1]));",
+	"constraint forall(j in 1..2)(lex_lesseq(m[.., j], m[.., j + 1]));",
+);
+
+global_test!(
+	solve_member,
+	"member",
+	1,
+	"member(x, y)",
+	"array[1..3] of var 1..4: x;\nvar 1..4: y;\n",
+	"constraint exists(i in 1..3)(x[i] = y);",
+	"constraint exists(i in 1..2)(x[i] = y);",
+);
+
+global_test!(
+	solve_strictly_increasing,
+	"increasing",
+	1,
+	"strictly_increasing(x)",
+	"array[1..4] of var 1..6: x;\n",
+	"constraint forall(i in 1..3)(x[i] < x[i + 1]);",
+	"constraint forall(i in 1..3)(x[i] <= x[i + 1]);",
+);
+
+global_test!(
+	solve_symmetric_all_different,
+	"symmetric",
+	1,
+	"symmetric_all_different(x)",
+	"array[1..4] of var 1..4: x;\n",
+	"constraint forall(i, j in 1..4)(x[i] = j <-> x[j] = i);",
+	"constraint forall(i, j in 1..4 where i < j)(x[i] = j -> x[j] = i);",
+);
+
+global_test!(
+	solve_all_different_of_enums,
+	"all_different",
+	1,
+	"all_different(x)",
+	"enum C = {R, G, B};\narray[1..3] of var C: x;\n",
+	"constraint forall(i, j in 1..3 where i < j)(x[i] != x[j]);",
+	"constraint forall(i in 1..2)(x[i] != x[i + 1]);",
+);
+
+#[test]
+fn solve_forms_the_group_already_uses_are_not_suggested() {
+	let max = "array[1..3] of var 1..4: x;\nvar 1..4: m;\nconstraint m = max(x);";
+	assert_eq!(solve(max, 1, &["maximum"]), Vec::<String>::new());
+	let element = "array[1..3] of var 1..4: x;\nvar 1..3: i;\nvar 1..4: y;\nconstraint y = x[i];";
+	assert_eq!(solve(element, 1, &["element"]), Vec::<String>::new());
+}
+
+#[test]
+fn solve_subcircuit_of_three_values_is_all_different() {
+	let found = solve(
+		"array[1..3] of var 1..3: x;\nconstraint forall(i, j in 1..3 where i < j)(x[i] != x[j]);",
+		1,
+		&["circuit", "all_different"],
+	);
+	assert_eq!(found, ["all_different(x)"]);
+}

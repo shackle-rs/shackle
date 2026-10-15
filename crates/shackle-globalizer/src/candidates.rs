@@ -68,15 +68,31 @@ pub(super) struct Candidate {
 	pub(super) dominated_by: Option<(&'static str, usize)>,
 }
 
-/// `global_cardinality` with an explicit cover (`{2}`), for filled counts
-const COVERED_GCC: &str = "global_cardinality({0}, {2}, {1})";
+/// `global_cardinality_closed` with an explicit cover (`{2}`), for filled
+/// counts: they count every value of the array
+const COVERED_GCC: &str = "global_cardinality_closed({0}, {2}) = {1}";
+const COVERED_GCC_TEST: &str = "global_cardinality_closed({0}, {2}, {1})";
 
 impl Candidate {
+	/// Fill in the arguments (`{i}`) and a loop variable (`{v}`) that no
+	/// argument uses
 	fn instantiate(&self, template: &str) -> String {
+		let used = |name: &str| {
+			self.args.iter().any(|a| {
+				a.split(|c: char| !c.is_alphanumeric() && c != '_')
+					.any(|w| w == name)
+			})
+		};
+		let v = ["i", "j", "k", "l"]
+			.into_iter()
+			.map(str::to_owned)
+			.chain((1..).map(|n| format!("i{n}")))
+			.find(|v| !used(v))
+			.unwrap();
 		self.args
 			.iter()
 			.enumerate()
-			.fold(template.to_owned(), |s, (i, a)| {
+			.fold(template.replace("{v}", &v), |s, (i, a)| {
 				s.replace(&format!("{{{i}}}"), a)
 			})
 	}
@@ -152,6 +168,7 @@ impl Candidate {
 				let hi = lo + counts.len() as i64 - 1;
 				self.args.push(format!("[{}]", (*lo..=hi).join(", ")));
 				self.template = Some(COVERED_GCC);
+				self.test = Some(COVERED_GCC_TEST);
 				format!("[{}]", counts.iter().join(", "))
 			}
 			_ => return false,
@@ -166,6 +183,9 @@ type Cond = fn(&[&Arg]) -> Option<String>;
 
 struct Global {
 	name: &'static str,
+	/// The function that a group calls if it already is this global
+	/// (`element` for an access with a variable index)
+	uses: &'static str,
 	kind: Kind,
 	/// Number of array dimensions of each integer argument
 	signature: &'static [usize],
@@ -202,6 +222,7 @@ predicate gz_subcircuit(array [int] of var int: x) =
 const fn global(name: &'static str, signature: &'static [usize]) -> Global {
 	Global {
 		name,
+		uses: name,
 		kind: Kind::Normal,
 		signature,
 		check: |_| true,
@@ -288,6 +309,18 @@ const GLOBALS: &[Global] = &[
 		..global("alldifferent_except_0", &[1])
 	},
 	Global {
+		check: |a| a[1].var,
+		extra: |a| Some(format!("length({}) > 1", a[1].text)),
+		template: Some("arg_max({1}) = {0}"),
+		..global("arg_max", &[0, 1])
+	},
+	Global {
+		check: |a| a[1].var,
+		extra: |a| Some(format!("length({}) > 1", a[1].text)),
+		template: Some("arg_min({1}) = {0}"),
+		..global("arg_min", &[0, 1])
+	},
+	Global {
 		check: |a| !a[0].var && a[1].var && !a[2].var,
 		guard: |a| {
 			Some(format!(
@@ -306,6 +339,8 @@ const GLOBALS: &[Global] = &[
 	Global {
 		check: |a| a[0].var && a[1].var && !a[2].var,
 		guard: |a| Some(same_index_set(a[1], a[2])),
+		template: Some("bin_packing_load({1}, {2}) = {0}"),
+		test: Some("bin_packing_load({0}, {1}, {2})"),
 		..global("bin_packing_load", &[1, 1, 1])
 	},
 	Global {
@@ -316,7 +351,38 @@ const GLOBALS: &[Global] = &[
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("{} > 0", a[2].text)),
+		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) = {2}"),
+		uses: "count",
 		..global("count", &[1, 0, 0])
+	},
+	// The other comparisons, where they are not trivially true
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} < length({})", a[2].text, a[0].text)),
+		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) <= {2}"),
+		uses: "count",
+		..global("count_leq", &[1, 0, 0])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} <= length({})", a[2].text, a[0].text)),
+		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) < {2}"),
+		uses: "count",
+		..global("count_lt", &[1, 0, 0])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} > 0", a[2].text)),
+		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) >= {2}"),
+		uses: "count",
+		..global("count_geq", &[1, 0, 0])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} >= 0", a[2].text)),
+		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) > {2}"),
+		uses: "count",
+		..global("count_gt", &[1, 0, 0])
 	},
 	Global {
 		check: |a| !a[1].var && !a[2].var,
@@ -345,15 +411,33 @@ const GLOBALS: &[Global] = &[
 		guard: same_length,
 		..global("disjunctive", &[1, 1])
 	},
+	// `x[i]` with a variable index
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[1].text)),
+		template: Some("{1}[{0}] = {2}"),
+		..global("element", &[0, 1, 0])
+	},
 	Global {
 		guard: |a| same_length(&a[..2]),
+		template: Some("distribute({1}, {2}) = {0}"),
+		test: Some("distribute({0}, {1}, {2})"),
 		..global("distribute", &[1, 1, 1])
 	},
 	Global {
 		check: |a| a[0].var,
 		blank: Some((1, Blank::Counts(0))),
-		template: Some("global_cardinality({0}, set2array(index_set({1})), {1})"),
+		template: Some("global_cardinality({0}, set2array(index_set({1}))) = {1}"),
+		test: Some("global_cardinality({0}, set2array(index_set({1})), {1})"),
+		dominated_by: Some(("global_cardinality_closed", 0)),
 		..global("global_cardinality", &[1, 1])
+	},
+	// No other values occur
+	Global {
+		check: |a| a[0].var,
+		template: Some("global_cardinality_closed({0}, set2array(index_set({1}))) = {1}"),
+		test: Some("global_cardinality_closed({0}, set2array(index_set({1})), {1})"),
+		..global("global_cardinality_closed", &[1, 1])
 	},
 	Global {
 		check: |a| a[0].var,
@@ -362,6 +446,8 @@ const GLOBALS: &[Global] = &[
 	},
 	Global {
 		guard: same_length,
+		template: Some("inverse({0}) = {1}"),
+		test: Some("inverse({0}, {1})"),
 		..global("inverse", &[1, 1])
 	},
 	Global {
@@ -377,17 +463,34 @@ const GLOBALS: &[Global] = &[
 		..global("lex2", &[2])
 	},
 	Global {
+		check: |a| a[0].var,
+		..global("lex_chain_less", &[2])
+	},
+	Global {
+		check: |a| a[0].var,
+		..global("lex_chain_lesseq", &[2])
+	},
+	Global {
 		blank: Some((0, Blank::Max(1))),
-		test: Some("{0} = max({1})"),
+		template: Some("max({1}) = {0}"),
+		uses: "max",
 		..global("maximum", &[0, 1])
 	},
 	Global {
-		test: Some("{0} = min({1})"),
+		check: |a| a[1].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("member", &[1, 0])
+	},
+	Global {
+		template: Some("min({1}) = {0}"),
+		uses: "min",
 		..global("minimum", &[0, 1])
 	},
 	Global {
 		extra: |a| Some(format!("{} <= length({})", a[0].text, a[1].text)),
 		dominated_by: Some(("all_different", 1)),
+		template: Some("nvalue({1}) = {0}"),
+		test: Some("nvalue({0}, {1})"),
 		..global("nvalue", &[0, 1])
 	},
 	Global {
@@ -405,6 +508,8 @@ const GLOBALS: &[Global] = &[
 	},
 	Global {
 		guard: same_length,
+		template: Some("sort({0}) = {1}"),
+		test: Some("sort({0}, {1})"),
 		..global("sort", &[1, 1])
 	},
 	Global {
@@ -413,8 +518,25 @@ const GLOBALS: &[Global] = &[
 	},
 	Global {
 		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 2", a[0].text)),
+		..global("strictly_decreasing", &[1])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 2", a[0].text)),
+		..global("strictly_increasing", &[1])
+	},
+	Global {
+		check: |a| a[0].var,
 		test: Some("gz_subcircuit({0})"),
+		// Both hold if every permutation has at most one cycle (e.g. 3 values)
+		dominated_by: Some(("all_different", 0)),
 		..global("subcircuit", &[1])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("symmetric_all_different", &[1])
 	},
 	// The group is implied by the declarations (and the context)
 	Global {
@@ -448,12 +570,12 @@ pub(super) fn selected(name: &str, include: &[String], exclude: &[String]) -> bo
 		&& !exclude.iter().any(|f| name.contains(f.as_str()))
 }
 
-/// All candidate calls of the globals that `select` (name, kind) accepts that
-/// can be built from `args`. A global with more than `max_args` argument
-/// lists is skipped.
+/// All candidate calls of the globals that `select` (name, the function it
+/// uses, kind) accepts that can be built from `args`. A global with more than
+/// `max_args` argument lists is skipped.
 pub(super) fn candidates(
 	args: &[Arg],
-	select: impl Fn(&str, Kind) -> bool,
+	select: impl Fn(&str, &str, Kind) -> bool,
 	max_args: usize,
 ) -> Vec<Candidate> {
 	let blank_arg = Arg {
@@ -464,7 +586,7 @@ pub(super) fn candidates(
 	};
 	let mut result = Vec::new();
 	for global in GLOBALS {
-		if !select(global.name, global.kind) {
+		if !select(global.name, global.uses, global.kind) {
 			continue;
 		}
 		let slots = global
@@ -581,7 +703,11 @@ mod tests {
 	) -> Vec<Candidate> {
 		let include = include.iter().map(|s| s.to_string()).collect::<Vec<_>>();
 		let exclude = exclude.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-		candidates(args, |name, _| selected(name, &include, &exclude), max_args)
+		candidates(
+			args,
+			|name, _, _| selected(name, &include, &exclude),
+			max_args,
+		)
 	}
 
 	fn checked(args: &[Arg], name: &str) -> Vec<String> {
@@ -636,7 +762,10 @@ mod tests {
 				.map(|c| c.name)
 				.collect::<Vec<_>>()
 		};
-		assert_eq!(names(&["all_diff"], &[]), ["all_different"]);
+		assert_eq!(
+			names(&["all_diff"], &[]),
+			["all_different", "symmetric_all_different"]
+		);
 		assert!(names(&["lex2"], &[]).is_empty());
 		assert!(!names(&[], &["all_diff"]).contains(&"all_different"));
 		assert!(names(&[], &[]).contains(&"true"));
@@ -676,7 +805,10 @@ mod tests {
 				.to_owned()
 		));
 		let args = [arg("x", true, 1), arg("v", false, 0), arg("c", true, 0)];
-		assert!(checked(&args, "count").contains(&"(c > 0) /\\ (count(x, v, c))".to_owned()));
+		assert!(
+			checked(&args, "count")
+				.contains(&"(c > 0) /\\ (count(i in index_set(x)) (x[i] = v) = c)".to_owned())
+		);
 		let args = [arg("x", true, 1)];
 		assert_eq!(
 			checked(&args, "alldifferent_except_0"),
@@ -698,8 +830,10 @@ mod tests {
 			arg("q", false, 1),
 			arg("m", true, 2),
 		];
-		let mut calls = filtered(&args, &[], &[], usize::MAX)
+		// The first argument list of each global
+		let calls = filtered(&args, &[], &[], usize::MAX)
 			.into_iter()
+			.dedup_by(|a, b| a.name == b.name && a.blank.is_some() == b.blank.is_some())
 			.map(|c| {
 				if c.blank.is_some() {
 					format!("{} (blank)", c.name)
@@ -708,39 +842,51 @@ mod tests {
 				}
 			})
 			.collect::<Vec<_>>();
-		// The first argument list of each global
-		calls.dedup_by(|a, b| a.split('(').next() == b.split('(').next());
 		expect_test::expect![[r#"
     [
         "all_different(x)",
         "all_equal(x)",
         "alldifferent_except_0(x)",
+        "arg_max(x) = a",
+        "arg_min(x) = a",
         "bin_packing(b, x, p)",
         "bin_packing_capa(p, x, q)",
-        "bin_packing_load(x, y, p)",
+        "bin_packing_load(y, p) = x",
         "circuit(x)",
-        "count(x, a, b)",
+        "count(i in index_set(x)) (x[i] = a) = b",
+        "count(i in index_set(x)) (x[i] = a) <= b",
+        "count(i in index_set(x)) (x[i] = a) < b",
+        "count(i in index_set(x)) (x[i] = a) >= b",
+        "count(i in index_set(x)) (x[i] = a) > b",
         "cumulative(x, p, q, a)",
         "decreasing(x)",
         "diffn(x, y, p, q)",
         "disjunctive(x, p)",
-        "distribute(x, p, y)",
-        "global_cardinality(x, set2array(index_set(p)), p)",
+        "x[a] = b",
+        "distribute(p, y) = x",
+        "global_cardinality(x, set2array(index_set(p))) = p",
         "global_cardinality (blank)",
-        "global_cardinality(y, set2array(index_set(x)), x)",
+        "global_cardinality(y, set2array(index_set(x))) = x",
         "global_cardinality (blank)",
+        "global_cardinality_closed(x, set2array(index_set(p))) = p",
         "increasing(x)",
-        "inverse(x, p)",
+        "inverse(x) = p",
         "lex_less(x, p)",
         "lex_lesseq(x, p)",
         "lex2(m)",
-        "maximum(a, x)",
+        "lex_chain_less(m)",
+        "lex_chain_lesseq(m)",
+        "max(x) = a",
         "maximum (blank)",
-        "minimum(a, x)",
-        "nvalue(a, x)",
-        "sort(x, p)",
+        "member(x, a)",
+        "min(x) = a",
+        "nvalue(x) = a",
+        "sort(x) = p",
         "strict_lex2(m)",
+        "strictly_decreasing(x)",
+        "strictly_increasing(x)",
         "subcircuit(x)",
+        "symmetric_all_different(x)",
         "true",
     ]
 "#]]
@@ -781,13 +927,23 @@ mod tests {
 		assert!(from_zero.fill(&[vec![0, 2, 0, 1]]));
 		assert_eq!(
 			from_zero.call(),
-			"global_cardinality(x, [0, 1, 2], [2, 0, 1])"
+			"global_cardinality_closed(x, [0, 1, 2]) = [2, 0, 1]"
 		);
-		assert_eq!(from_zero.dominated_by, None);
+		assert_eq!(
+			from_zero.dominated_by,
+			Some(("global_cardinality_closed", 0))
+		);
+		assert_eq!(
+			from_zero.checked(),
+			"(global_cardinality_closed(x, [0, 1, 2], [2, 0, 1]))"
+		);
 		// Values that never occur at the ends are left out
 		let mut trimmed = gcc.clone();
 		assert!(trimmed.fill(&[vec![0, 0, 1, 1, 0]]));
-		assert_eq!(trimmed.call(), "global_cardinality(x, [1, 2], [1, 1])");
+		assert_eq!(
+			trimmed.call(),
+			"global_cardinality_closed(x, [1, 2]) = [1, 1]"
+		);
 		assert_eq!(trimmed.dominated_by, Some(("all_different", 0)));
 		let mut ones = gcc.clone();
 		assert!(ones.fill(&[vec![1, 1, 1]]));
@@ -795,11 +951,11 @@ mod tests {
 		assert!(!gcc.clone().fill(&[vec![1, 0, 0]]));
 		assert!(gcc.fill(&[vec![1, 2, 1], vec![1, 2, 1]]));
 		assert!(gcc.filled == Some(1) && gcc.blank.is_none());
-		assert_eq!(gcc.call(), "global_cardinality(x, [1, 2], [2, 1])");
+		assert_eq!(gcc.call(), "global_cardinality_closed(x, [1, 2]) = [2, 1]");
 
 		let mut max = filtered(&args, &["maximum"], &[], usize::MAX);
 		assert_eq!(max[0].feature().unwrap(), "[max(x)]");
 		assert!(max[0].fill(&[vec![7], vec![7]]));
-		assert_eq!(max[0].call(), "maximum(7, x)");
+		assert_eq!(max[0].call(), "max(x) = 7");
 	}
 }

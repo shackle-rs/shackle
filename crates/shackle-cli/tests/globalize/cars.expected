@@ -1,2 +1,2 @@
 cars.mzn|27|1|30|20 [ ] forall (p in options) (sliding_sum(0, max_per_block[p], block_size[p], used[.., p]))
-cars.mzn|33|1|33|68 [ ] global_cardinality(class, set2array(index_set(cars_in_class)), cars_in_class)
+cars.mzn|33|1|33|68 [ ] global_cardinality_closed(class, set2array(index_set(cars_in_class))) = cars_in_class

@@ -132,9 +132,9 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 		d: &Declaration<'db, Src>,
 	) -> Declaration<'db, Dst> {
 		let mut folded = fold_declaration(self, db, model, d);
-		// ponytail: user functions keep their names so analysis output stays
-		// readable. A local name equal to a name in the call arguments is
-		// captured; rename to a fresh readable name if that shows up.
+		// TODO: user functions keep their names so analysis output stays
+		// readable, but a local name equal to a name in the call arguments is
+		// captured. Rename such locals to a fresh readable name.
 		if !self.map.is_empty() && matches!(self.mode, Mode::Annotated) {
 			// Alpha rename for safety when inlining
 			folded.remove_name();

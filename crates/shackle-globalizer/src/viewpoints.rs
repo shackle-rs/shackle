@@ -16,7 +16,8 @@ pub(super) struct Viewpoint<'db> {
 	/// Definition as a function of the 0/1 array that does not constrain it,
 	/// so it does not change the samples of a group
 	pub(super) definition: String,
-	/// The channelling constraint
+	/// The channelling constraint, with the domain of the declaration (the
+	/// definition has none)
 	pub(super) channel: String,
 }
 
@@ -59,9 +60,12 @@ impl<'db> Viewpoint<'db> {
 			array,
 			axis,
 			text: format!("{declaration} {channel}"),
+			channel: format!(
+				"{channel}\nconstraint forall (v in array1d({name})) (v in {});",
+				set(axis)
+			),
 			name,
 			definition,
-			channel,
 		}
 	}
 }

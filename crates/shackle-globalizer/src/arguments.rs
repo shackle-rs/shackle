@@ -64,13 +64,17 @@ impl<'a, 'db> Visitor<'a, 'db> for AccessCollector<'_, '_, '_, 'db> {
 }
 
 impl<'a, 'db> Globalizer<'a, 'db> {
-	/// For a (non-opt) integer declaration or array of them: whether it is a
-	/// variable, and its number of dimensions
+	/// For a (non-opt) integer or enum declaration or array of them: whether
+	/// it is a variable, and its number of dimensions
 	pub(super) fn int_decl(&self, d: DeclarationId<'db>) -> Option<(bool, usize)> {
 		let db = self.db;
 		let ty = self.model[d].ty();
 		let elem = ty.elem_ty(db).filter(|_| ty.is_array(db)).unwrap_or(ty);
-		(elem.is_int(db) && elem.opt(db) == Some(OptType::NonOpt)).then(|| {
+		// TODO: candidates that mix enums and integers rely on MiniZinc's
+		// implicit enum2int coercion, which is deprecated. Track the enum of
+		// each argument and add `enum2int` before that coercion is removed.
+		let int = elem.is_int(db) || elem.is_enum(db);
+		(int && elem.opt(db) == Some(OptType::NonOpt)).then(|| {
 			(
 				elem.inst(db) == Some(VarType::Var),
 				ty.dims(db).unwrap_or(0),

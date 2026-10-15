@@ -4,7 +4,8 @@ use std::fmt::Write;
 
 use itertools::Itertools;
 use rustc_hash::FxHashSet;
-use shackle_thir::{Callable, DeclarationId, ExpressionData};
+use shackle_hir::constants::IdentifierRegistry;
+use shackle_thir::{Callable, DeclarationId, Expression, ExpressionData};
 
 use super::{
 	Globalizer, Pass,
@@ -67,8 +68,8 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	/// Declarations of the leaders for one instantiation (see
 	/// [`Unrolled::instantiations`])
 	pub(super) fn print_leaders(&self, u: &Unrolled<'_, 'a, 'db>, last: &[bool]) -> String {
-		// ponytail: leaders keep the loop variable names, so a top-level
-		// declaration with the same name clashes; rename if that shows up.
+		// TODO: leaders keep the loop variable names, so a top-level
+		// declaration with the same name clashes. Rename such leaders.
 		let mut s = String::new();
 		for (m, last) in last.iter().enumerate() {
 			let l = u.leader_loop(m);
@@ -161,25 +162,47 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		[plain, format!("{solve} :: restart_luby(1) satisfy;\n")]
 	}
 
+	/// The functions that a constraint is a call of, or that a comparison
+	/// compares, with `element` for an access with a variable index (e.g.
+	/// `=` and `max` for `m = max(x)`, and `=` and `element` for `y = x[i]`)
+	fn uses(&self, e: &Expression<'db>) -> Vec<&str> {
+		let ids = IdentifierRegistry::lookup(self.db);
+		let name = |e: &Expression<'db>| {
+			let ExpressionData::Call(c) = &**e else {
+				return None;
+			};
+			let Callable::Function(f) = &c.function else {
+				return None;
+			};
+			let name = self.model[*f].name();
+			if name == ids.functions.array_access {
+				return (c.arguments.len() == 2 && !c.arguments[1].ty().known_par(self.db))
+					.then_some("element");
+			}
+			Some(name.as_identifier(self.db).lookup(self.db))
+		};
+		let mut uses = name(e).into_iter().collect::<Vec<_>>();
+		if let ExpressionData::Call(c) = &**e {
+			uses.extend(c.arguments.iter().filter_map(name));
+		}
+		uses
+	}
+
 	/// Print an unrolled group with its candidates (`None` if there are no
 	/// candidates)
 	pub(super) fn plan(&self, u: &Unrolled<'_, 'a, 'db>, pass: Pass) -> Option<Plan> {
 		let options = self.options;
 		// A group that already is the global is vacuous
-		let existing = if let [single] = &u.parts[..]
-			&& let ExpressionData::Call(c) = &**single.body
-			&& let Callable::Function(f) = &c.function
-		{
-			Some(self.model[*f].name().as_identifier(self.db).lookup(self.db))
-		} else {
-			None
+		let existing = match &u.parts[..] {
+			[single] => self.uses(single.body),
+			_ => Vec::new(),
 		};
-		let select = |name: &str, kind: Kind| {
+		let select = |name: &str, uses: &str, kind: Kind| {
 			pass.checks(kind)
 				// Leaders only check the first and last iteration: too weak to
 				// call the whole constraint redundant
 				&& !(kind == Kind::Redundant && u.leaders() > 0)
-				&& existing != Some(name)
+				&& !existing.contains(&uses)
 				// The name filters of the user only apply to the full pass
 				&& (pass == Pass::Initial || selected(name, &options.include, &options.exclude))
 		};
