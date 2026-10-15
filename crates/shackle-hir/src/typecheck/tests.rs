@@ -496,6 +496,55 @@ fn test_class_set_attribute_input() {
 	);
 }
 
+/// An indexed comprehension over a class is indexed by the par class, also
+/// when it iterates over a var set of the class, whose generator binds `var`
+/// objects so that their attributes read as var.
+#[test]
+fn test_class_indexed_comprehension() {
+	let mut tester = TypeTester::new();
+	tester.check_expression_preamble(
+		"class A (1..3: x); set of new A: as = [(x: 1), (x: 2)];",
+		"[a: a.x | a in A]",
+		expect!("array [A] of int"),
+	);
+	tester.check_expression_preamble(
+		"class A (1..3: x); var set(1..2) of new A: as;",
+		"[a: a.x | a in A]",
+		expect!("array [A] of var opt int"),
+	);
+	tester.check_expression_preamble(
+		"class A (1..3: x); var set(1..2) of new A: as;",
+		"[a: a.x | a in A where a.x > 1]",
+		expect!("array [A] of var opt int"),
+	);
+	tester.check_expression_preamble(
+		"class A (1..3: x); var set(1..2) of new A: as;",
+		"[(a, j): a.x + j | a in A, j in 1..2]",
+		expect!("array [A, int] of var opt int"),
+	);
+	// Only the variable bound by the generator indexes by the par class: a
+	// var object is not an index
+	tester.check_error(
+		r#"
+		class A (1..3: x);
+		var set(1..2) of new A: as;
+		var A: chosen;
+		any: ys = [chosen: 1 | i in 1..1];
+		"#,
+		expect!("Illegal type"),
+	);
+	tester.check_error(
+		r#"
+		class A (1..3: x);
+		class B (A: r);
+		var set(1..2) of new A: as;
+		var new B: b;
+		any: ys = [b.r: 1 | i in 1..1];
+		"#,
+		expect!("Illegal type"),
+	);
+}
+
 #[test]
 fn test_class_type_errors() {
 	let mut tester = TypeTester::new();

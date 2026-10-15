@@ -1,0 +1,16 @@
+enum A_potential = A_occ_0('..'(1, 2));
+array [int] of record(var '..'(1, 3): x): A_objects = A_as_objects;
+var set of A_potential: A = as_ref;
+array [A_potential] of string: A_ids = array1d(A_potential, ['++'('++'("as[", show(p)), "]") | p in '..'(1, card('..'(1, 2)))]);
+array ['..'(1, 2)] of record(var '..'(1, 3): x): A_as_storage;
+array [int] of record(var '..'(1, 3): x): A_as_objects = [(x: x) | p in index_set(A_as_storage), input = '[]'(A_as_storage, p), x = (input).x];
+var set( '..'(1, 2) ) of  A_occ_0('..'(1, 2)): as_ref :: (no_output);
+array [A_potential] of var opt int: ys = [a: ('[]'(A_objects, enum2int(a))).x | a in A];
+array [A_potential] of var opt int: zs = [a: ('[]'(A_objects, enum2int(a))).x | a in A where '>'(('[]'(A_objects, enum2int(a))).x, 1)];
+constraint '='(card(as_ref), 2);
+constraint '='(sum([if occurs(y) then deopt(y) else 0 endif | y in ys]), 5);
+constraint '='(sum([bool2int(occurs(z)) | z in zs]), 1);
+output [show(['[]'(A_ids, _DECL_1) | _DECL_1 in fix(as_ref)])];
+constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).x, mzn_safe_default(('[]'(A_objects, enum2int(x))).x))) | x in A_potential]);
+array [int] of record(string: id, int: x): as :: (output_only) :: ('output') = [(id: '[]'(A_ids, _DECL_2), x: fix(('[]'(A_objects, enum2int(_DECL_2))).x)) | _DECL_2 in fix(as_ref)];
+solve satisfy;
