@@ -262,6 +262,16 @@ fn solve_object_reference_existence() {
 }
 
 #[test]
+fn solve_object_class_indexed_output() {
+	check_solve("objects/20_class_indexed_output", false, false);
+}
+
+#[test]
+fn solve_object_class_indexed_show() {
+	check_solve("objects/21_class_indexed_show", false, false);
+}
+
+#[test]
 fn solve_object_data_dzn() {
 	let name = "objects/15_data_objects";
 	check_solve_with_data(name, &[fixture(name, "dzn")], false, false);

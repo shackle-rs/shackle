@@ -4,7 +4,10 @@
 //! Solutions show it by its string id instead (see `ids.rs`): a reference is
 //! rendered as the id of the object it refers to, and the objects introduced by
 //! a `new` root are rendered as records `(id: .., <field>: .., ...)`, with owned
-//! children nested inside their parent's record.
+//! children nested inside their parent's record. An array indexed by a class
+//! is shown keyed by the ids of its existing objects (`["a1": 0, "a2": 3]`),
+//! which no MiniZinc value prints as: it is output as its (id, value) pairs,
+//! which `shackle solve` shows keyed, and `show` of it is built as a string.
 //!
 //! An identity-valued declaration that would be output is renamed
 //! `<name>_ref`, marked `::no_output`, and replaced in the output by an
@@ -78,11 +81,15 @@ impl<'db> ItemCollector<'db> {
 				ResolvedIdentifier::Declaration(decl),
 			);
 			let value = self.output_value(value);
-			let rendering = match kind {
-				OutputCandidateKind::Root { class } => {
+			let class_dims = self.class_dims(&potential_classes, value.ty());
+			let rendering = match (kind, &class_dims) {
+				(OutputCandidateKind::Root { class }, _) => {
 					self.render_introduced_objects(origin, &potential_classes, class, value)
 				}
-				OutputCandidateKind::Reference => {
+				(OutputCandidateKind::Reference, Some(dims)) => {
+					self.render_class_indexed_array(origin, &potential_classes, dims, value)
+				}
+				(OutputCandidateKind::Reference, None) => {
 					self.render_references(origin, &potential_classes, value)
 				}
 			};
@@ -107,6 +114,14 @@ impl<'db> ItemCollector<'db> {
 				origin,
 				self.ids.annotations.output,
 			));
+			if class_dims.is_some() {
+				output.annotations_mut().push(Expression::new(
+					self.db,
+					&self.model,
+					origin,
+					self.ids.annotations.mzn_output_keyed,
+				));
+			}
 
 			let renamed = Identifier::new(self.db, format!("{}_ref", name.lookup(self.db)));
 			let no_output =
@@ -141,6 +156,88 @@ impl<'db> ItemCollector<'db> {
 		let origin = argument.origin();
 		let rendered = self.render_references(origin, &potential_classes, relabelled);
 		(rendered.ty() != argument.ty()).then_some(rendered)
+	}
+
+	/// `show` (or with `json`, `showJSON`) of a class-indexed array, keyed by
+	/// the ids of the existing objects: `["a1": 0, "a2": 3]`, or `{"a1": 0,
+	/// "a2": 3}` in JSON. `None` if the argument is not a fixed class-indexed
+	/// array, or for JSON, has more than one dimension, as JSON keys are
+	/// strings.
+	pub(in crate::lower) fn show_class_indexed_array(
+		&mut self,
+		origin: Origin<'db>,
+		argument: &Expression<'db>,
+		json: bool,
+	) -> Option<Expression<'db>> {
+		if !argument.ty().known_par(self.db) {
+			return None;
+		}
+		let potential_classes = self.potential_classes();
+		let value = self.output_value(argument.clone());
+		let dims = self.class_dims(&potential_classes, value.ty())?;
+		if json && dims.len() > 1 {
+			return None;
+		}
+		let show = if json {
+			self.ids.functions.show_json
+		} else {
+			self.ids.functions.show
+		};
+		let entries = self.map_class_indexed_array(origin, &dims, value, |this, key, element| {
+			let element = this.render_references(origin, &potential_classes, element);
+			let [key, element] = [key, element].map(|value| {
+				Expression::new(
+					this.db,
+					&this.model,
+					origin,
+					LookupCall {
+						function: show.into(),
+						arguments: vec![value],
+					},
+				)
+			});
+			let separator = Expression::new(
+				this.db,
+				&this.model,
+				origin,
+				StringLiteral::new(this.db, ": "),
+			);
+			this.concat_strings(origin, vec![key, separator, element])
+		});
+		let [open, comma, close] = [
+			if json { "{" } else { "[" },
+			", ",
+			if json { "}" } else { "]" },
+		]
+		.map(|s| Expression::new(self.db, &self.model, origin, StringLiteral::new(self.db, s)));
+		let joined = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			LookupCall {
+				function: self.ids.functions.join.into(),
+				arguments: vec![comma, entries],
+			},
+		);
+		Some(self.concat_strings(origin, vec![open, joined, close]))
+	}
+
+	/// `concat([<strings>])`
+	fn concat_strings(
+		&self,
+		origin: Origin<'db>,
+		strings: Vec<Expression<'db>>,
+	) -> Expression<'db> {
+		let strings = Expression::new(self.db, &self.model, origin, ArrayLiteral(strings));
+		Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			LookupCall {
+				function: self.ids.functions.concat.into(),
+				arguments: vec![strings],
+			},
+		)
 	}
 
 	/// The class whose objects each `<C>_potential` enum enumerates.
@@ -464,6 +561,145 @@ impl<'db> ItemCollector<'db> {
 			}
 			_ => value,
 		}
+	}
+
+	/// For an array indexed by a class, the class whose objects index each
+	/// dimension (`None` for a dimension that is not a class). `None` if the
+	/// type is not an array, or no dimension is a class.
+	fn class_dims(
+		&self,
+		potential_classes: &FxHashMap<EnumRef<'db>, PatternRef<'db>>,
+		ty: Ty<'db>,
+	) -> Option<Vec<Option<PatternRef<'db>>>> {
+		let TyData::Array { dim, .. } = ty.lookup(self.db) else {
+			return None;
+		};
+		let dims = match dim.lookup(self.db) {
+			TyData::Tuple(_, fields) => fields.to_vec(),
+			_ => vec![*dim],
+		};
+		let classes = dims
+			.into_iter()
+			.map(|dim| match dim.lookup(self.db) {
+				TyData::Enum(_, _, e) => potential_classes.get(e).copied(),
+				_ => None,
+			})
+			.collect::<Vec<_>>();
+		classes.iter().any(Option::is_some).then_some(classes)
+	}
+
+	/// Render the (par) class-indexed array `value` as the pairs `[(<key>,
+	/// <element>), ...]` of its existing objects, whose key is the id of the
+	/// object indexing it (or the tuple of indices, with ids for the class
+	/// dimensions). The declaration showing it is annotated
+	/// `::mzn_output_keyed`, so it is shown as an array indexed by the keys.
+	fn render_class_indexed_array(
+		&mut self,
+		origin: Origin<'db>,
+		potential_classes: &FxHashMap<EnumRef<'db>, PatternRef<'db>>,
+		dims: &[Option<PatternRef<'db>>],
+		value: Expression<'db>,
+	) -> Expression<'db> {
+		self.map_class_indexed_array(origin, dims, value, |this, key, element| {
+			let element = this.render_references(origin, potential_classes, element);
+			Expression::new(
+				this.db,
+				&this.model,
+				origin,
+				TupleLiteral(vec![key, element]),
+			)
+		})
+	}
+
+	/// `[<f(key, value[index])> | index in <indices>]` over the indices of the
+	/// (par) class-indexed array `value` whose objects exist. The array covers
+	/// every potential object, but only the existing ones are shown. `key` is
+	/// the index with every object replaced by its id.
+	fn map_class_indexed_array(
+		&mut self,
+		origin: Origin<'db>,
+		dims: &[Option<PatternRef<'db>>],
+		value: Expression<'db>,
+		f: impl FnOnce(&mut Self, Expression<'db>, Expression<'db>) -> Expression<'db>,
+	) -> Expression<'db> {
+		let index_sets = dims.iter().any(Option::is_none).then(|| {
+			Expression::new(
+				self.db,
+				&self.model,
+				origin,
+				LookupCall {
+					function: self.ids.functions.index_sets.into(),
+					arguments: vec![value.clone()],
+				},
+			)
+		});
+		let mut generators = Vec::with_capacity(dims.len());
+		let mut indices = Vec::with_capacity(dims.len());
+		let mut keys = Vec::with_capacity(dims.len());
+		for (i, class) in dims.iter().enumerate() {
+			let collection = match class {
+				Some(class) => {
+					let actual_set = Expression::new(
+						self.db,
+						&self.model,
+						origin,
+						ResolvedIdentifier::Declaration(self.objects.class_map[class].class_set),
+					);
+					self.output_value(actual_set)
+				}
+				None => Expression::new(
+					self.db,
+					&self.model,
+					origin,
+					TupleAccess {
+						tuple: Box::new(index_sets.clone().expect("index sets of the array")),
+						field: IntegerLiteral(i as i64 + 1),
+					},
+				),
+			};
+			let index_ty = collection
+				.ty()
+				.elem_ty(self.db)
+				.expect("index set has an element type");
+			let index_decl = self.model.add_declaration(DeclarationItem::new(
+				Declaration::new(false, Domain::unbounded(self.db, origin, index_ty)),
+				origin,
+			));
+			let index = Expression::new(self.db, &self.model, origin, index_decl);
+			keys.push(match class {
+				Some(class) => self.object_id(origin, *class, index.clone()),
+				None => index.clone(),
+			});
+			indices.push(index);
+			generators.push(Generator::Iterator {
+				declarations: vec![index_decl],
+				collection,
+				where_clause: None,
+			});
+		}
+		let [index, key] = [indices, keys].map(|mut parts| {
+			if parts.len() == 1 {
+				parts.pop().unwrap()
+			} else {
+				Expression::new(self.db, &self.model, origin, TupleLiteral(parts))
+			}
+		});
+		let element = Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			LookupCall {
+				function: self.ids.functions.array_access.into(),
+				arguments: vec![value, index],
+			},
+		);
+		let template = f(self, key, element);
+		Expression::new(
+			self.db,
+			&self.model,
+			origin,
+			ArrayComprehension::new(generators, template),
+		)
 	}
 
 	/// `<C>_ids[<identity>]`

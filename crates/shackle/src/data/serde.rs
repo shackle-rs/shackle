@@ -723,6 +723,13 @@ impl Serialize for Value {
 			Value::Enum(v) => v.serialize(serializer),
 			Value::Ann(_, _) => todo!(),
 			Value::Array(v) => v.serialize(serializer),
+			Value::KeyedArray(pairs) => {
+				let mut map = serializer.serialize_map(Some(pairs.len()))?;
+				for (k, v) in pairs {
+					map.serialize_entry(k, v)?;
+				}
+				map.end()
+			}
 			Value::Set(v) => v.serialize(serializer),
 			Value::Tuple(v) => {
 				let mut seq = serializer.serialize_seq(Some(v.len()))?;
