@@ -1,4 +1,4 @@
-% Car sequencing, the example from the MiniZinc Globalizer documentation
+% Car sequencing
 include "globals.mzn";
 
 int: n_cars; int: n_options; int: n_classes;

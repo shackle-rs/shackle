@@ -23,7 +23,8 @@ use crate::{
 
 /// Pretty print the final THIR to be compatible with the old MiniZinc compiler
 pub struct OldMiniZincPrinter<'db> {
-	transforms: &'db [Transform],
+	/// Whether the model was totalised (its functions are total)
+	totalised: bool,
 	ids: &'db IdentifierRegistry<'db>,
 	print_input_files_only: bool,
 }
@@ -35,14 +36,10 @@ impl<'db> std::fmt::Debug for OldMiniZincPrinter<'db> {
 }
 
 impl<'db> OldMiniZincPrinter<'db> {
-	/// Create a printer for a model produced by the given transforms
-	pub fn new(
-		db: &'db dyn Db,
-		transforms: &'db [Transform],
-		print_input_files_only: bool,
-	) -> Self {
+	/// Create a printer (for a model that may have been totalised)
+	pub fn new(db: &'db dyn Db, totalised: bool, print_input_files_only: bool) -> Self {
 		Self {
-			transforms,
+			totalised,
 			ids: IdentifierRegistry::lookup(db),
 			print_input_files_only,
 		}
@@ -51,8 +48,8 @@ impl<'db> OldMiniZincPrinter<'db> {
 	/// Run the printer
 	pub fn run(db: &'db dyn Db, print_input_files_only: bool) -> String {
 		let model = final_thir(db).unwrap();
-		Self::new(db, Transformer::get_transforms(db), print_input_files_only)
-			.print_model(db, model)
+		let totalised = Transformer::get_transforms(db).contains(&Transform::Totalise);
+		Self::new(db, totalised, print_input_files_only).print_model(db, model)
 	}
 
 	/// Return the length and, when explicitly specified, the printed members of
@@ -308,12 +305,10 @@ impl<'db> OldMiniZincPrinter<'db> {
 						if is_slice
 							&& c.arguments.len() == 1
 							&& let Callable::Function(f) = &c.function
-							&& matches!(
-								model[*f].name().as_identifier(db).lookup(db),
-								".." | "<.." | "..<" | "<..<"
-							) =>
+							&& let name = model[*f].name().as_identifier(db).lookup(db)
+							&& matches!(name, ".." | "<.." | "..<" | "<..<") =>
 					{
-						Some(model[*f].name().as_identifier(db).lookup(db).to_owned())
+						Some(name.to_owned())
 					}
 					ExpressionData::TupleAccess(_) => None,
 					_ if is_slice => Some(self.print_expression(db, model, definition)),
@@ -425,7 +420,7 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
 		signature_only: bool,
 	) -> String {
 		let mut buf = print_function(self, db, model, idx, true);
-		if self.transforms.contains(&Transform::Totalise) {
+		if self.totalised {
 			buf.push_str(" :: promise_total");
 		}
 		if !signature_only && let Some(body) = model[idx].body() {

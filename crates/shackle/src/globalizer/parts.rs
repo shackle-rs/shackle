@@ -3,10 +3,10 @@
 
 use shackle_hir::{Db, constants::IdentifierRegistry};
 use shackle_thir::{
-	Callable, Declaration, DeclarationId, Expression, ExpressionData, Generator, Model,
+	Callable, Declaration, DeclarationId, Expression, ExpressionData, FunctionId, Generator, Model,
 	ResolvedIdentifier,
 	source::Origin,
-	traverse::{Visitor, visit_expression},
+	traverse::{Visitor, visit_callable, visit_expression},
 };
 
 /// What a loop variable ranges over
@@ -80,6 +80,20 @@ pub(super) fn normalise<'a, 'db>(
 			todo.push((c.origin(), Vec::new(), c.expression()));
 		}
 	}
+	// A part of an inlined function keeps the location of the call
+	let inside = |child: Origin<'db>, parent: Origin<'db>| {
+		let ((cf, cs), (pf, ps)) = (child.source_span(db), parent.source_span(db));
+		cf == pf
+			&& ps.offset() <= cs.offset()
+			&& cs.offset() + cs.len() <= ps.offset() + ps.len()
+	};
+	let child_origin = |child: &Expression<'db>, parent: Origin<'db>| {
+		if inside(child.origin(), parent) {
+			child.origin()
+		} else {
+			parent
+		}
+	};
 	// Depth-first, so parts keep their source order
 	todo.reverse();
 	while let Some((origin, outer, e)) = todo.pop() {
@@ -91,7 +105,7 @@ pub(super) fn normalise<'a, 'db>(
 					let name = model[*f].name();
 					if name == ids.functions.and && c.arguments.len() == 2 {
 						for a in &c.arguments {
-							children.push((a.origin(), outer.clone(), a));
+							children.push((child_origin(a, origin), outer.clone(), a));
 						}
 					} else if name == ids.functions.forall && c.arguments.len() == 1 {
 						match &*c.arguments[0] {
@@ -104,7 +118,7 @@ pub(super) fn normalise<'a, 'db>(
 							}
 							ExpressionData::ArrayLiteral(al) => {
 								for a in al.iter() {
-									children.push((a.origin(), outer.clone(), a));
+									children.push((child_origin(a, origin), outer.clone(), a));
 								}
 							}
 							_ => {}
@@ -128,6 +142,7 @@ pub(super) fn normalise<'a, 'db>(
 }
 
 /// Collects the declarations an expression refers to
+#[derive(Default)]
 pub(super) struct DeclCollector<'db> {
 	/// Also collect local declarations (e.g. loop variables)
 	pub(super) local: bool,
@@ -142,6 +157,23 @@ impl<'a, 'db> Visitor<'a, 'db> for DeclCollector<'db> {
 		{
 			self.decls.push(*d);
 		}
+	}
+}
+
+/// Collects the functions that are called
+#[derive(Default)]
+pub(super) struct CallCollector<'db> {
+	pub(super) functions: Vec<FunctionId<'db>>,
+}
+
+impl<'a, 'db> Visitor<'a, 'db> for CallCollector<'db> {
+	fn visit_callable(&mut self, model: &'a Model<'db>, callable: &'a Callable<'db>) {
+		if let Callable::Function(f) = callable
+			&& !self.functions.contains(f)
+		{
+			self.functions.push(*f);
+		}
+		visit_callable(self, model, callable);
 	}
 }
 

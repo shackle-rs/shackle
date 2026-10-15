@@ -103,11 +103,11 @@ impl Model {
 	/// Suggest global constraints that can replace groups of constraints,
 	/// checked by sampling solutions on each data file
 	pub fn globalize(&self, data: &[PathBuf], options: &GlobalizeOptions) -> Result<Globalized> {
-		let errors: Vec<Error> = run_hir_phase(&self.db)
+		let errors = run_hir_phase(&self.db)
 			.errors
 			.into_iter()
 			.cloned()
-			.collect();
+			.collect::<Vec<_>>();
 		if !errors.is_empty() {
 			return Err(Error::try_from(errors).unwrap());
 		}

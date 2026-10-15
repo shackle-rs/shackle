@@ -11,8 +11,8 @@ use shackle_hir::constants::IdentifierRegistry;
 use shackle_utils::maybe_grow_stack;
 
 use crate::{
-	Callable, Db, Declaration, DeclarationId, Domain, Expression, ExpressionData, FunctionId, Item,
-	Let, LetItem, Marker, Model, ResolvedIdentifier,
+	Callable, Db, Declaration, DeclarationId, Domain, Expression, ExpressionData, FunctionId,
+	Identifier, Item, Let, LetItem, Marker, Model, ResolvedIdentifier,
 	pretty_print::PrettyPrinter,
 	traverse::{
 		Folder, ReplacementMap, add_function, fold_declaration, fold_expression,
@@ -26,22 +26,68 @@ struct Inliner<'db, Dst: Marker, Src: Marker = ()> {
 	ids: &'db IdentifierRegistry<'db>,
 	map: FxHashMap<DeclarationId<'db, Src>, Expression<'db, Dst>>,
 	depth: u16,
-	/// Only inline these functions (by name), and keep their items
-	only: Option<FxHashSet<FunctionId<'db, Src>>>,
+	mode: Mode<'db, Src>,
 	/// Functions being inlined (to leave recursive calls alone)
 	inlining: Vec<FunctionId<'db, Src>>,
 }
 
+/// Which functions are inlined
+enum Mode<'db, Src: Marker> {
+	/// Functions annotated with `mzn_inline_call_by_name` (by name), and with
+	/// `mzn_inline` or a macro body (by value). Their items are removed.
+	Annotated,
+	/// Only these functions (by name). Their items are kept.
+	Only(FxHashSet<FunctionId<'db, Src>>),
+}
+
 impl<'db, Dst: Marker, Src: Marker> Inliner<'db, Dst, Src> {
+	fn new(db: &'db dyn Db, model: &Model<'db, Src>, mode: Mode<'db, Src>) -> Self {
+		Inliner {
+			replacement_map: ReplacementMap::default(),
+			model: Model::with_capacities(&model.item_counts()),
+			ids: IdentifierRegistry::lookup(db),
+			map: FxHashMap::default(),
+			depth: 0,
+			mode,
+			inlining: Vec::new(),
+		}
+	}
+
+	fn annotated(
+		&self,
+		model: &Model<'db, Src>,
+		f: FunctionId<'db, Src>,
+		ann: Identifier<'db>,
+	) -> bool {
+		model[f].annotations().has(model, ann)
+	}
+
 	/// Whether the function item is removed because all calls are inlined
 	fn removed(&self, model: &Model<'db, Src>, f: FunctionId<'db, Src>) -> bool {
-		self.only.is_none()
-			&& (model[f]
-				.annotations()
-				.has(model, self.ids.annotations.mzn_inline_call_by_name)
-				|| model[f]
-					.annotations()
-					.has(model, self.ids.annotations.mzn_inline))
+		matches!(self.mode, Mode::Annotated)
+			&& (self.annotated(model, f, self.ids.annotations.mzn_inline_call_by_name)
+				|| self.annotated(model, f, self.ids.annotations.mzn_inline))
+	}
+
+	/// Whether calls to `f` (with the given body) are inlined by value
+	fn by_value(
+		&self,
+		model: &Model<'db, Src>,
+		f: FunctionId<'db, Src>,
+		body: &Expression<'db, Src>,
+	) -> bool {
+		matches!(self.mode, Mode::Annotated)
+			&& (self.annotated(model, f, self.ids.annotations.mzn_inline) || is_macro_call(body))
+	}
+
+	/// Whether calls to `f` are inlined by name
+	fn by_name(&self, model: &Model<'db, Src>, f: FunctionId<'db, Src>) -> bool {
+		match &self.mode {
+			Mode::Annotated => {
+				self.annotated(model, f, self.ids.annotations.mzn_inline_call_by_name)
+			}
+			Mode::Only(only) => only.contains(&f) && !self.inlining.contains(&f),
+		}
 	}
 }
 
@@ -89,7 +135,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 		// ponytail: user functions keep their names so analysis output stays
 		// readable. A local name equal to a name in the call arguments is
 		// captured; rename to a fresh readable name if that shows up.
-		if !self.map.is_empty() && self.only.is_none() {
+		if !self.map.is_empty() && matches!(self.mode, Mode::Annotated) {
 			// Alpha rename for safety when inlining
 			folded.remove_name();
 		}
@@ -113,12 +159,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 					if let Callable::Function(f) = &c.function
 						&& let Some(body) = model[*f].body()
 					{
-						if self.only.is_none()
-							&& (model[*f]
-								.annotations()
-								.has(model, self.ids.annotations.mzn_inline)
-								|| is_macro_call(body))
-						{
+						if self.by_value(model, *f, body) {
 							log::debug!(
 								"Inlining {} at {} using call by value semantics",
 								PrettyPrinter::new(db, model).pretty_print_signature((*f).into()),
@@ -185,13 +226,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 								)
 							};
 						}
-						let by_name = match &self.only {
-							Some(only) => only.contains(f) && !self.inlining.contains(f),
-							None => model[*f]
-								.annotations()
-								.has(model, self.ids.annotations.mzn_inline_call_by_name),
-						};
-						if by_name {
+						if self.by_name(model, *f) {
 							log::debug!(
 								"Inlining {} at {} using call by name semantics",
 								PrettyPrinter::new(db, model).pretty_print_signature((*f).into()),
@@ -251,15 +286,7 @@ fn is_macro_call<T: Marker>(expression: &Expression<T>) -> bool {
 /// `:: mzn_inline_call_by_name`.
 pub fn inline_functions<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db>> {
 	log::info!("Inlining functions");
-	let mut inliner = Inliner {
-		replacement_map: ReplacementMap::default(),
-		model: Model::with_capacities(&model.item_counts()),
-		ids: IdentifierRegistry::lookup(db),
-		map: FxHashMap::default(),
-		depth: 0,
-		only: None,
-		inlining: Vec::new(),
-	};
+	let mut inliner = Inliner::new(db, &model, Mode::Annotated);
 	inliner.add_model(db, &model);
 	Ok(inliner.model)
 }
@@ -269,19 +296,14 @@ pub fn inline_functions<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model
 /// are kept.
 pub fn inline_user_functions<'db>(
 	db: &'db dyn Db,
-	model: &Model<'db>,
+	model: Model<'db>,
 	functions: FxHashSet<FunctionId<'db>>,
 ) -> Model<'db> {
-	let mut inliner = Inliner {
-		replacement_map: ReplacementMap::default(),
-		model: Model::with_capacities(&model.item_counts()),
-		ids: IdentifierRegistry::lookup(db),
-		map: FxHashMap::default(),
-		depth: 0,
-		only: Some(functions),
-		inlining: Vec::new(),
-	};
-	inliner.add_model(db, model);
+	if functions.is_empty() {
+		return model;
+	}
+	let mut inliner = Inliner::new(db, &model, Mode::Only(functions));
+	inliner.add_model(db, &model);
 	inliner.model
 }
 

@@ -2,14 +2,14 @@
 //! sampled solutions from its JSON stream.
 
 use std::{
+	hash::{DefaultHasher, Hash, Hasher},
 	io::Write,
 	path::{Path, PathBuf},
 	process::{Command, Stdio},
 	sync::{
-		Mutex,
+		Arc, Mutex,
 		atomic::{AtomicUsize, Ordering},
 	},
-	time::Duration,
 };
 
 use rustc_hash::FxHashMap;
@@ -17,6 +17,7 @@ use serde_json::{Map, Value};
 use shackle_diagnostics::{FileError, InternalError};
 use tempfile::Builder;
 
+use super::GlobalizeOptions;
 use crate::{Error, Result};
 
 /// A solution: the JSON object of all output variables
@@ -33,31 +34,50 @@ pub(super) struct Outcome {
 	pub(super) error: Option<String>,
 }
 
-/// A run: submodel text, data file and number of solutions
-pub(super) type RunKey = (String, Option<PathBuf>, usize);
-
-/// Settings shared by all `minizinc` runs of one globalizer invocation
+/// Runs `minizinc` for one globalizer invocation (shared by all workers)
 #[derive(Debug)]
-pub(super) struct Runner {
-	pub(super) solver: String,
-	pub(super) time_limit: Duration,
-	pub(super) seed: u64,
+pub(super) struct Runner<'a> {
+	pub(super) options: &'a GlobalizeOptions,
 	/// Number of `minizinc` invocations (reported as `NUMCALLS`)
 	pub(super) calls: AtomicUsize,
-	/// Outcomes of earlier runs: variants and contexts often give the same
-	/// submodel
-	pub(super) cache: Mutex<FxHashMap<RunKey, Outcome>>,
+	/// Outcomes of earlier runs, by a 128-bit hash of the submodel text, data
+	/// file and number of solutions: variants and contexts often give the
+	/// same submodel
+	pub(super) cache: Mutex<FxHashMap<(u64, u64), Arc<Outcome>>>,
 }
 
-impl Runner {
-	/// Ask for `n` solutions of `model` (with the optional data file)
-	pub(super) fn run(&self, model: &str, data: Option<&Path>, n: usize) -> Result<Outcome> {
-		let key = (model.to_owned(), data.map(Path::to_owned), n);
+impl<'a> Runner<'a> {
+	pub(super) fn new(options: &'a GlobalizeOptions) -> Self {
+		Runner {
+			options,
+			calls: AtomicUsize::new(0),
+			cache: Mutex::default(),
+		}
+	}
+
+	/// Ask for `n` solutions of `model` (with the optional data file). The
+	/// outcome is cached if `cache` is true.
+	pub(super) fn run(
+		&self,
+		model: &str,
+		data: Option<&Path>,
+		n: usize,
+		cache: bool,
+	) -> Result<Arc<Outcome>> {
+		if !cache {
+			return Ok(Arc::new(self.run_uncached(model, data, n)?));
+		}
+		let hash = |salt: u8| {
+			let mut hasher = DefaultHasher::new();
+			(salt, model, data, n).hash(&mut hasher);
+			hasher.finish()
+		};
+		let key = (hash(0), hash(1));
 		if let Some(outcome) = self.cache.lock().unwrap().get(&key) {
 			return Ok(outcome.clone());
 		}
-		let outcome = self.run_uncached(model, data, n)?;
-		self.cache.lock().unwrap().insert(key, outcome.clone());
+		let outcome = Arc::new(self.run_uncached(model, data, n)?);
+		let _ = self.cache.lock().unwrap().insert(key, outcome.clone());
 		Ok(outcome)
 	}
 
@@ -76,14 +96,14 @@ impl Runner {
 		let mut cmd = Command::new("minizinc");
 		cmd.stdin(Stdio::null())
 			.arg("--solver")
-			.arg(&self.solver)
+			.arg(&self.options.solver)
 			.args(["--output-mode", "json", "--json-stream"])
 			.arg("-n")
 			.arg(n.to_string())
 			.arg("-r")
-			.arg(self.seed.to_string())
+			.arg(self.options.seed.to_string())
 			.arg("--time-limit")
-			.arg(self.time_limit.as_millis().to_string())
+			.arg(self.options.time_limit.as_millis().to_string())
 			.arg(file.path());
 		if let Some(data) = data {
 			cmd.arg(data);

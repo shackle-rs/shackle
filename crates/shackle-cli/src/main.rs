@@ -299,17 +299,21 @@ impl Check {
 /// model. Suggestions are checked by sampling solutions for each data file.
 #[derive(Args)]
 struct Globalize {
-	/// Maximum number of constraints in a group
-	#[arg(short = 'M', long, default_value_t = 2)]
+	/// MiniZinc solver used to sample solutions
+	#[arg(long, default_value_t = GlobalizeOptions::default().solver)]
+	solver: String,
+	/// Maximum number of constraint parts in a group (conjunctions and
+	/// `forall`s are split into parts)
+	#[arg(short = 'M', long, default_value_t = GlobalizeOptions::default().max_group)]
 	max_group: usize,
 	/// Number of solutions sampled for each check
-	#[arg(short = 'N', long, default_value_t = 30)]
+	#[arg(short = 'N', long, default_value_t = GlobalizeOptions::default().samples)]
 	samples: usize,
 	/// Time limit for each MiniZinc run
-	#[arg(long, default_value = "1s")]
+	#[arg(long, default_value_t = GlobalizeOptions::default().time_limit.into())]
 	time_limit: Duration,
 	/// Random seed for the solver
-	#[arg(long, default_value_t = 0)]
+	#[arg(long, default_value_t = GlobalizeOptions::default().seed)]
 	seed: u64,
 	/// Only suggest globals whose name contains one of these (comma separated)
 	#[arg(short = 'f', long, value_delimiter = ',')]
@@ -318,28 +322,30 @@ struct Globalize {
 	#[arg(short = 'e', long, value_delimiter = ',')]
 	filter_ex: Vec<String>,
 	/// Skip a global if a group gives more argument lists for it
-	#[arg(long, default_value_t = 50_000)]
+	#[arg(long, default_value_t = GlobalizeOptions::default().max_args)]
 	max_args: usize,
-	/// Do not abandon pairs of constraints where one implies the other
+	/// Do not abandon pairs of constraints where one implies the other on the
+	/// samples
 	#[arg(long)]
 	no_implies_check: bool,
-	/// Number of MiniZinc runs at the same time (default: number of CPUs)
-	#[arg(short = 'p', long)]
-	jobs: Option<usize>,
+	/// Number of MiniZinc runs at the same time
+	#[arg(short = 'p', long, default_value_t = GlobalizeOptions::default().jobs)]
+	jobs: usize,
 	/// Skip the pass that finds redundant constraints and 0/1 arrays that
 	/// represent integers
 	#[arg(long)]
 	no_initial_pass: bool,
-	#[command(flatten)]
-	base: Compile,
+	/// The model file and data files
+	#[arg(required = true)]
+	files: Vec<PathBuf>,
 }
 
 impl Globalize {
 	/// Run the globalizer and print one suggestion per line
 	pub fn dispatch(&self) -> Result<()> {
-		let (model, data) = self.base.sort_files()?;
-		let mut options = GlobalizeOptions {
-			solver: self.base.solver.clone(),
+		let (model, data) = sort_files(&self.files)?;
+		let options = GlobalizeOptions {
+			solver: self.solver.clone(),
 			max_group: self.max_group,
 			samples: self.samples,
 			time_limit: self.time_limit.into(),
@@ -349,11 +355,8 @@ impl Globalize {
 			max_args: self.max_args,
 			implies_check: !self.no_implies_check,
 			initial_pass: !self.no_initial_pass,
-			..Default::default()
+			jobs: self.jobs,
 		};
-		if let Some(jobs) = self.jobs {
-			options.jobs = jobs;
-		}
 		let result = Model::from_file(model).globalize(&data, &options)?;
 		for viewpoint in &result.viewpoints {
 			println!("% viewpoint: {viewpoint}");
@@ -382,35 +385,7 @@ impl Compile {
 	/// Sort through the files in the command line arguments and split the model
 	/// from the data
 	pub fn sort_files(&self) -> Result<(PathBuf, Vec<PathBuf>)> {
-		let mut model_file: Option<PathBuf> = None;
-		let mut data = Vec::with_capacity(self.files.len() - 1);
-		for f in self.files.iter() {
-			match f.extension().and_then(OsStr::to_str) {
-				Some("mzn") | Some("eprime") => {
-					if let Some(other) = model_file {
-						return Err(Report::msg(format!(
-							"detected multiple model files: `{}' and `{}'",
-							other.display(),
-							f.display()
-						)));
-					} else {
-						model_file = Some(f.clone())
-					}
-				}
-				Some("json") | Some("dzn") => data.push(f.clone()),
-				_ => {
-					return Err(Report::msg(format!(
-						"file `{}' has an unsupported file type",
-						f.to_str().unwrap_or_default()
-					)));
-				}
-			}
-		}
-		if let Some(f) = model_file {
-			Ok((f, data))
-		} else {
-			Err(Report::msg("no model file detected"))
-		}
+		sort_files(&self.files)
 	}
 
 	/// Resolve shackle [`Solver`] from the solver command line flag
@@ -538,5 +513,39 @@ impl Format {
 			format_files(self.files.iter(), &options)?;
 		}
 		Ok(())
+	}
+}
+
+/// Sort through the files in the command line arguments and split the model
+/// from the data
+fn sort_files(files: &[PathBuf]) -> Result<(PathBuf, Vec<PathBuf>)> {
+	let mut model_file: Option<PathBuf> = None;
+	let mut data = Vec::with_capacity(files.len().saturating_sub(1));
+	for f in files.iter() {
+		match f.extension().and_then(OsStr::to_str) {
+			Some("mzn") | Some("eprime") => {
+				if let Some(other) = model_file {
+					return Err(Report::msg(format!(
+						"detected multiple model files: `{}' and `{}'",
+						other.display(),
+						f.display()
+					)));
+				} else {
+					model_file = Some(f.clone())
+				}
+			}
+			Some("json") | Some("dzn") => data.push(f.clone()),
+			_ => {
+				return Err(Report::msg(format!(
+					"file `{}' has an unsupported file type",
+					f.to_str().unwrap_or_default()
+				)));
+			}
+		}
+	}
+	if let Some(f) = model_file {
+		Ok((f, data))
+	} else {
+		Err(Report::msg("no model file detected"))
 	}
 }

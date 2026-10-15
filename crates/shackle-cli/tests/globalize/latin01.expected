@@ -1,6 +1,8 @@
 % viewpoint: array [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);
 % viewpoint: array [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);
+latin01.mzn|5|1|5|63 [ ] forall (i in 1..n, j in 1..n) (global_cardinality(b[i, j, ..], [0, 1], [2, 1]))
 latin01.mzn|5|1|5|63 [ latin01.mzn|6|1|6|63 ] forall (i in 1..n) (all_different(b_3b[i, ..]))
 latin01.mzn|5|1|5|63 [ latin01.mzn|6|1|6|63 ] forall (i in 1..n) (subcircuit(b_3b[i, ..]))
+latin01.mzn|6|1|6|63 [ ] forall (i in 1..n, k in 1..n) (global_cardinality(b[i, .., k], [0, 1], [2, 1]))
 latin01.mzn|6|1|6|63 [ latin01.mzn|5|1|5|63 ] forall (i in 1..n) (all_different(b_3c[i, ..]))
 latin01.mzn|6|1|6|63 [ latin01.mzn|5|1|5|63 ] forall (i in 1..n) (subcircuit(b_3c[i, ..]))

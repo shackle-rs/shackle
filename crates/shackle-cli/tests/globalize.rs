@@ -1,6 +1,7 @@
-//! End-to-end tests for `shackle globalize`. They need `minizinc` with Gecode
-//! on `PATH`. Each test uses two worker threads. The fixtures run from `tests/globalize`, so locations use
-//! relative file names, and the `NUMCALLS` line is left out.
+//! End-to-end tests for `shackle globalize`. They need `MZN_STDLIB_DIR` and
+//! `minizinc` with Gecode on `PATH`. Each test uses two worker threads. The
+//! fixtures run from `tests/globalize`, so locations use relative file names,
+//! and the `NUMCALLS` line is left out.
 
 use std::{
 	path::Path,
@@ -52,9 +53,8 @@ fn globalize_pairwise_with_data() {
 	check("pairwise", &["pairwise.dzn"]);
 }
 
-/// The example from the MiniZinc Globalizer documentation, which reports
-/// `gcc(class, cars_in_class)` and `sliding_sum(0, max_per_block[p],
-/// block_size[p], used[_, p])`
+/// Car sequencing, with a `global_cardinality` on the class counts and a
+/// `sliding_sum` for each option
 #[test]
 fn globalize_cars() {
 	check("cars", &["-M", "1", "cars.dzn"]);
@@ -117,7 +117,7 @@ fn globalize_reports_type_errors() {
 	assert!(output.stdout.is_empty());
 	let stderr = String::from_utf8_lossy(&output.stderr);
 	assert!(
-		stderr.contains("Type mismatch") || stderr.contains("type"),
+		stderr.contains("No function '='(var int, string) could be found"),
 		"{stderr}"
 	);
 }

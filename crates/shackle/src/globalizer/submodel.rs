@@ -1,0 +1,250 @@
+//! Printing groups as MiniZinc submodels
+
+use std::fmt::Write;
+
+use itertools::Itertools;
+use rustc_hash::FxHashSet;
+use shackle_thir::{Callable, DeclarationId, ExpressionData};
+
+use super::{
+	Globalizer, Pass,
+	candidates::{self, Kind, candidates, selected},
+	check::{Job, Plan, Search},
+	closure,
+	groups::{Unrolled, Variant},
+	parts::{Loop, LoopKind, Part, refs},
+};
+
+impl<'a, 'db> Globalizer<'a, 'db> {
+	pub(super) fn print_loop(&self, l: &Loop<'a, 'db>) -> String {
+		let mut s = match l.kind {
+			LoopKind::Iter(c) => format!("{} in {}", self.name(l.decl), self.print(c)),
+			LoopKind::Assign(e) => format!("{} = {}", self.name(l.decl), self.print(e)),
+		};
+		if let Some(w) = l.where_clause {
+			write!(s, " where {}", self.print(w)).unwrap();
+		}
+		s
+	}
+
+	pub(super) fn print_part(&self, part: &Part<'a, 'db>) -> String {
+		self.print_unrolled(part, &[])
+	}
+
+	/// Print a part with the loops at `fixed` taken out. Their `where` clauses
+	/// become a condition.
+	pub(super) fn print_unrolled(&self, part: &Part<'a, 'db>, fixed: &[usize]) -> String {
+		let body = self.print(part.body);
+		let loops = (0..part.loops.len())
+			.filter(|i| !fixed.contains(i))
+			.map(|i| self.print_loop(&part.loops[i]))
+			.collect::<Vec<_>>();
+		let inner = if loops.is_empty() {
+			body
+		} else {
+			format!("forall({})({body})", loops.join(", "))
+		};
+		let guards = fixed
+			.iter()
+			.filter_map(|i| part.loops[*i].where_clause)
+			.map(|w| format!("({})", self.print(w)))
+			.collect::<Vec<_>>();
+		if guards.is_empty() {
+			inner
+		} else {
+			format!("({}) -> ({inner})", guards.join(" /\\ "))
+		}
+	}
+
+	pub(super) fn print_group(&self, u: &Unrolled<'_, 'a, 'db>) -> Vec<String> {
+		u.parts
+			.iter()
+			.zip(&u.variant.fixed)
+			.map(|(p, f)| self.print_unrolled(p, f))
+			.collect()
+	}
+
+	/// Declarations of the leaders for one instantiation (see
+	/// [`Unrolled::instantiations`])
+	pub(super) fn print_leaders(&self, u: &Unrolled<'_, 'a, 'db>, last: &[bool]) -> String {
+		// ponytail: leaders keep the loop variable names, so a top-level
+		// declaration with the same name clashes; rename if that shows up.
+		let mut s = String::new();
+		for (m, last) in last.iter().enumerate() {
+			let l = u.leader_loop(m);
+			writeln!(
+				s,
+				"any: {} = {}({});",
+				self.name(l.decl),
+				if *last { "max" } else { "min" },
+				self.loop_set(l)
+			)
+			.unwrap();
+		}
+		// The matched loops of the other parts are aliases of the leaders (each
+		// name once, see `Globalizer::variants`)
+		let aliases = u
+			.parts
+			.iter()
+			.zip(&u.variant.fixed)
+			.skip(1)
+			.flat_map(|(part, fixed)| {
+				fixed.iter().enumerate().map(|(m, l)| {
+					(
+						self.name(part.loops[*l].decl),
+						self.name(u.leader_loop(m).decl),
+					)
+				})
+			})
+			.filter(|(name, leader)| name != leader)
+			.unique();
+		for (name, leader) in aliases {
+			writeln!(s, "any: {name} = {leader};").unwrap();
+		}
+		// An instantiation outside the `where` clauses says nothing about the
+		// group: it makes the submodel unsatisfiable, and is skipped
+		for (part, fixed) in u.parts.iter().zip(&u.variant.fixed) {
+			for w in fixed.iter().filter_map(|l| part.loops[*l].where_clause) {
+				writeln!(s, "constraint {};", self.print(w)).unwrap();
+			}
+		}
+		s
+	}
+
+	/// The model without constraints, solve and output items. Of the variables
+	/// it only declares those that `decls` and the par items (transitively)
+	/// depend on, so the solver does not enumerate unrelated variables.
+	pub(super) fn preamble(&self, decls: &[DeclarationId<'db>]) -> String {
+		let mut needed = closure(decls.iter().copied(), |d| {
+			self.decl_refs.get(d).cloned().unwrap_or_default()
+		})
+		.into_iter()
+		.collect::<FxHashSet<_>>();
+		needed.extend(&self.always_needed);
+		let mut preamble = format!("include \"globals.mzn\";{}", candidates::LIBRARY);
+		for (decl, text) in &self.items {
+			if decl.is_none_or(|d| needed.contains(&d)) {
+				writeln!(preamble, "{text};").unwrap();
+			}
+		}
+		for vp in &self.viewpoints {
+			if needed.contains(&vp.array) {
+				writeln!(preamble, "{}", vp.definition).unwrap();
+			}
+		}
+		preamble
+	}
+
+	/// Search annotation that picks random values for the group's variables
+	pub(super) fn search(&self, decls: &[DeclarationId<'db>]) -> Search {
+		let vars = decls
+			.iter()
+			.filter(|d| self.int_decl(**d).is_some_and(|(var, _)| var))
+			.map(|d| {
+				if self.model[*d].ty().is_array(self.db) {
+					format!("array1d({})", self.name(*d))
+				} else {
+					format!("[{}]", self.name(*d))
+				}
+			})
+			.collect::<Vec<_>>();
+		let mut solve = "solve".to_owned();
+		if !vars.is_empty() {
+			write!(
+				solve,
+				" :: int_search({}, input_order, indomain_random)",
+				vars.join(" ++ ")
+			)
+			.unwrap();
+		}
+		let plain = format!("{solve} satisfy;\n");
+		[plain, format!("{solve} :: restart_luby(1) satisfy;\n")]
+	}
+
+	/// Print an unrolled group with its candidates (`None` if there are no
+	/// candidates)
+	pub(super) fn plan(&self, u: &Unrolled<'_, 'a, 'db>, pass: Pass) -> Option<Plan> {
+		let options = self.options;
+		// A group that already is the global is vacuous
+		let existing = if let [single] = &u.parts[..]
+			&& let ExpressionData::Call(c) = &**single.body
+			&& let Callable::Function(f) = &c.function
+		{
+			Some(self.model[*f].name().as_identifier(self.db).lookup(self.db))
+		} else {
+			None
+		};
+		let select = |name: &str, kind: Kind| {
+			pass.checks(kind)
+				// Leaders only check the first and last iteration: too weak to
+				// call the whole constraint redundant
+				&& !(kind == Kind::Redundant && u.leaders() > 0)
+				&& existing != Some(name)
+				// The name filters of the user only apply to the full pass
+				&& (pass == Pass::Initial || selected(name, &options.include, &options.exclude))
+		};
+		let cands = candidates(&self.arguments(u), select, options.max_args);
+		if cands.is_empty() {
+			return None;
+		}
+		let wrap = (0..u.leaders())
+			.map(|m| {
+				let deps = refs(self.model, true, u.leader_loop(m).exprs());
+				let depends = (0..u.leaders())
+					.filter(|k| *k != m && deps.contains(&u.leader_loop(*k).decl))
+					.collect();
+				(self.print_loop(u.leader_loop(m)), depends)
+			})
+			.collect();
+		Some(Plan {
+			leaders: u
+				.instantiations()
+				.iter()
+				.map(|last| self.print_leaders(u, last))
+				.collect(),
+			group: self.print_group(u),
+			candidates: cands,
+			wrap,
+		})
+	}
+
+	/// All variants of a group with a context, printed (`None` if none of
+	/// them has candidates)
+	pub(super) fn job(
+		&self,
+		group: &[usize],
+		context: Option<usize>,
+		variants: &[Variant],
+		decls: &[DeclarationId<'db>],
+		pass: Pass,
+	) -> Option<Job> {
+		let plans = variants
+			.iter()
+			.filter_map(|variant| {
+				let u = Unrolled {
+					parts: group.iter().map(|p| &self.parts[*p]).collect(),
+					variant,
+					decls,
+				};
+				self.plan(&u, pass)
+			})
+			.collect_vec();
+		if plans.is_empty() {
+			return None;
+		}
+		Some(Job {
+			group: group.to_vec(),
+			context,
+			preamble: self.preamble(decls),
+			search: self.search(decls),
+			context_text: context.map(|c| self.print_part(&self.parts[c])),
+			channels: self
+				.viewpoints
+				.iter()
+				.filter(|vp| decls.contains(&vp.array))
+				.map(|vp| (vp.name.clone(), vp.channel.clone()))
+				.collect(),
+			plans,
+		})
+	}
+}
