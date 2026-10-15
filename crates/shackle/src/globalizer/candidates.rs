@@ -55,6 +55,8 @@ pub(super) struct Candidate {
 	pub(super) filled: bool,
 	/// Leaders the arguments use (sorted)
 	pub(super) leaders: Vec<usize>,
+	/// Integer that must be positive on some sample
+	pub(super) witness: Option<String>,
 }
 
 impl Candidate {
@@ -151,6 +153,9 @@ struct Global {
 	template: Option<&'static str>,
 	/// Check on the samples if the global cannot be used in a reified context
 	test: Option<&'static str>,
+	/// Integer that must be positive on some sample, else the global is
+	/// trivially true there
+	witness: Cond,
 }
 
 /// Checks used by `test` templates, included in every submodel (like the
@@ -170,6 +175,7 @@ predicate gz_subcircuit(array [int] of var int: x) =
 const I0: ArgType = ArgType::Int(0);
 const I1: ArgType = ArgType::Int(1);
 const I2: ArgType = ArgType::Int(2);
+const I3: ArgType = ArgType::Int(3);
 
 const fn global(name: &'static str, signature: &'static [ArgType]) -> Global {
 	Global {
@@ -181,6 +187,7 @@ const fn global(name: &'static str, signature: &'static [ArgType]) -> Global {
 		blank: None,
 		template: None,
 		test: None,
+		witness: |_| None,
 	}
 }
 
@@ -202,6 +209,32 @@ fn same_index_set(x: &Arg, y: &Arg) -> String {
 }
 
 const GLOBALS: &[Global] = &[
+	// A 0/1 array whose sums along one axis are 1 represents a 2D integer
+	// array (used by the initial pass to add a viewpoint)
+	Global {
+		check: |a| a[0].var,
+		guard: |a| Some(format!("dom_array({}) subset 0..1", a[0].text)),
+		template: Some(
+			"forall (j in index_set_2of3({0}), k in index_set_3of3({0})) (sum (i in index_set_1of3({0})) ({0}[i, j, k]) = 1)",
+		),
+		..global("binaries_represent_int_3A", &[I3])
+	},
+	Global {
+		check: |a| a[0].var,
+		guard: |a| Some(format!("dom_array({}) subset 0..1", a[0].text)),
+		template: Some(
+			"forall (i in index_set_1of3({0}), k in index_set_3of3({0})) (sum (j in index_set_2of3({0})) ({0}[i, j, k]) = 1)",
+		),
+		..global("binaries_represent_int_3B", &[I3])
+	},
+	Global {
+		check: |a| a[0].var,
+		guard: |a| Some(format!("dom_array({}) subset 0..1", a[0].text)),
+		template: Some(
+			"forall (i in index_set_1of3({0}), j in index_set_2of3({0})) (sum (k in index_set_3of3({0})) ({0}[i, j, k]) = 1)",
+		),
+		..global("binaries_represent_int_3C", &[I3])
+	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 1", a[0].text)),
@@ -334,10 +367,6 @@ const GLOBALS: &[Global] = &[
 				vs = a[3].text
 			))
 		},
-		// The reified stdlib decomposition is wrong: `b` is not tied to the sums
-		test: Some(
-			"forall (i in index_set({3}) where i + {2} - 1 <= max(index_set({3}))) (sum (j in i..i + {2} - 1) ({3}[j]) in {0}..{1})",
-		),
 		..global("sliding_sum", &[I0, I0, I0, I1])
 	},
 	Global {
@@ -360,6 +389,8 @@ const GLOBALS: &[Global] = &[
 	},
 	Global {
 		check: |a| !a[0].var && !a[1].var && a[2].var,
+		// `t` must occur
+		witness: |a| Some(format!("count({}, {})", a[2].text, a[1].text)),
 		// Both values must be possible
 		guard: |a| {
 			Some(format!(
@@ -458,6 +489,11 @@ pub(super) fn candidates(
 				args: chosen.iter().map(|a| a.text.clone()).collect(),
 				template: global.template,
 				test: global.test,
+				witness: if blank.is_some() {
+					None
+				} else {
+					(global.witness)(&chosen)
+				},
 				guard,
 				extra,
 				blank,
@@ -483,6 +519,7 @@ impl Candidate {
 			blank: None,
 			filled: false,
 			leaders: Vec::new(),
+			witness: None,
 		}
 	}
 }
@@ -589,9 +626,8 @@ mod tests {
 			arg("b", false, I0),
 			arg("x", true, I1),
 		];
-		// Checked with its test template
 		assert!(checked(&args, "sliding_sum").contains(
-			&"if 0 <= u /\\ 1 < b /\\ b <= length(x) then (forall (i in index_set(x) where i + b - 1 <= max(index_set(x))) (sum (j in i..i + b - 1) (x[j]) in 0..u)) else false endif"
+			&"if 0 <= u /\\ 1 < b /\\ b <= length(x) then (sliding_sum(0, u, b, x)) else false endif"
 				.to_owned()
 		));
 		let args = [arg("x", true, I1), arg("v", false, I0), arg("c", true, I0)];

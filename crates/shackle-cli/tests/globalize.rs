@@ -66,6 +66,11 @@ fn globalize_bin_packing_with_data() {
 }
 
 #[test]
+fn globalize_latin_square_viewpoints() {
+	check("latin01", &["-M", "1"]);
+}
+
+#[test]
 fn globalize_queens() {
 	check("queens", &[]);
 }

@@ -49,7 +49,7 @@ use shackle_thir::{
 use shackle_ty::VarType;
 
 use self::{
-	candidates::{Arg, ArgType, candidates},
+	candidates::{Arg, ArgType, Candidate, candidates},
 	check::{Checker, Job, Plan},
 	parts::{Loop, LoopKind, Part, decl_refs, is_par_int, normalise, refs},
 	run::Runner,
@@ -79,6 +79,8 @@ pub struct GlobalizeOptions {
 	pub implies_check: bool,
 	/// Number of worker threads that run `minizinc`
 	pub jobs: usize,
+	/// First find redundant groups and 0/1 arrays that represent integers
+	pub initial_pass: bool,
 }
 
 impl Default for GlobalizeOptions {
@@ -94,6 +96,7 @@ impl Default for GlobalizeOptions {
 			max_args: 50_000,
 			implies_check: true,
 			jobs: std::thread::available_parallelism().map_or(1, |n| n.get()),
+			initial_pass: true,
 		}
 	}
 }
@@ -127,7 +130,10 @@ impl Display for Finding {
 /// Result of [`crate::Model::globalize`]
 #[derive(Clone, Debug)]
 pub struct Globalized {
-	/// Suggestions, sorted by location
+	/// New integer arrays (with their channelling constraint) that some
+	/// findings use, found by the initial pass
+	pub viewpoints: Vec<String>,
+	/// Suggestions, sorted by location (redundant groups have `true`)
 	pub findings: Vec<Finding>,
 	/// Number of `minizinc` runs
 	pub calls: usize,
@@ -192,6 +198,80 @@ fn tidy(text: String) -> String {
 				.map(str::to_owned)
 		})
 		.unwrap_or(text)
+}
+
+/// Which candidates a pass checks
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pass {
+	/// Only `true` (redundant groups) and `binaries_represent_int`
+	Initial,
+	/// All other candidates
+	Full,
+}
+
+impl Pass {
+	fn checks(self, name: &str) -> bool {
+		let initial = name == "true" || name.starts_with("binaries_represent_int");
+		initial == (self == Pass::Initial)
+	}
+}
+
+/// A 2D integer array that represents a 3D 0/1 array `array`, which has
+/// exactly one 1 along `axis`
+#[derive(Clone, Debug)]
+struct Viewpoint<'db> {
+	array: DeclarationId<'db>,
+	axis: usize,
+	name: String,
+	/// Declaration and channelling constraint (as suggested to the user)
+	text: String,
+	/// Definition as a function of the 0/1 array that does not constrain it,
+	/// so it does not change the samples of a group
+	definition: String,
+	/// The channelling constraint
+	channel: String,
+}
+
+impl<'db> Viewpoint<'db> {
+	fn new(array: DeclarationId<'db>, x: &str, axis: usize) -> Self {
+		let name = format!("{x}_3{}", ["a", "b", "c"][axis]);
+		let set = |k: usize| format!("index_set_{}of3({x})", k + 1);
+		let others = (0..3).filter(|k| *k != axis).collect::<Vec<_>>();
+		let idx = ["i", "j", "k"];
+		let declaration = format!(
+			"array [{}, {}] of var {}: {name};",
+			set(others[0]),
+			set(others[1]),
+			set(axis)
+		);
+		let channel = format!(
+			"constraint forall (i in {}, j in {}, k in {}) ({x}[i, j, k] = 1 <-> {name}[{}, {}] = {});",
+			set(0),
+			set(1),
+			set(2),
+			idx[others[0]],
+			idx[others[1]],
+			idx[axis],
+		);
+		let definition = format!(
+			"array [{b}, {c}] of var int: {name} = array2d({b}, {c}, [sum ({} in {}) ({} * {x}[i, j, k]) | {} in {b}, {} in {c}]);",
+			idx[axis],
+			set(axis),
+			idx[axis],
+			idx[others[0]],
+			idx[others[1]],
+			b = set(others[0]),
+			c = set(others[1]),
+		);
+		Viewpoint {
+			array,
+			axis,
+			text: format!("{declaration} {channel}"),
+			name,
+			definition,
+			channel,
+		}
+	}
 }
 
 /// How a group is unrolled. Leader `m` is the loop `fixed[0][m]` of the
@@ -293,6 +373,8 @@ struct Globalizer<'a, 'db> {
 	items: Vec<(Option<DeclarationId<'db>>, String)>,
 	options: &'a GlobalizeOptions,
 	checker: Checker,
+	/// Integer viewpoints found by the initial pass
+	viewpoints: Vec<Viewpoint<'db>>,
 }
 
 impl<'a, 'db> Globalizer<'a, 'db> {
@@ -458,6 +540,11 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				writeln!(preamble, "{text};").unwrap();
 			}
 		}
+		for vp in &self.viewpoints {
+			if needed.contains(&vp.array) {
+				writeln!(preamble, "{}", vp.definition).unwrap();
+			}
+		}
 		preamble
 	}
 
@@ -498,6 +585,18 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				leaders: Vec::new(),
 			});
 		}
+		for vp in self
+			.viewpoints
+			.iter()
+			.filter(|vp| u.decls.contains(&vp.array))
+		{
+			args.push(Arg {
+				text: vp.name.clone(),
+				var: true,
+				ty: ArgType::Int(2),
+				leaders: Vec::new(),
+			});
+		}
 		// Scalar variables of the group as one array (e.g. `[a, b, c]`). Two
 		// variables are left out: such a global is just a binary constraint.
 		scalars.sort();
@@ -521,14 +620,9 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				visit_expression(&mut collector, self.model, e);
 			}
 		}
-		for (x, positions) in &collector.accesses {
-			let Some((var, dims)) = int_ty(*x) else {
-				continue;
-			};
-			if dims != positions.len() {
-				continue;
-			}
-			// `None` is a slice `..`
+		// Accesses of `array` with one index (or a slice `..`, as `None`) per
+		// position
+		let mut slices = |array: String, var: bool, positions: Vec<&Vec<IndexChoice<'db>>>| {
 			let choices = positions.iter().map(|cs| {
 				std::iter::once(None)
 					.chain(cs.iter().map(Some))
@@ -548,7 +642,7 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 						},
 					})
 					.collect::<Vec<_>>();
-				let text = format!("{}[{}]", self.name(*x), indices.join(", "));
+				let text = format!("{array}[{}]", indices.join(", "));
 				if args.iter().any(|a| a.text == text) {
 					continue;
 				}
@@ -558,6 +652,23 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 					ty: ArgType::Int(chosen.iter().filter(|c| c.is_none()).count()),
 					leaders: chosen.iter().flatten().filter_map(|c| c.leader).collect(),
 				});
+			}
+		};
+		for (x, positions) in &collector.accesses {
+			let Some((var, dims)) = int_ty(*x) else {
+				continue;
+			};
+			if dims != positions.len() {
+				continue;
+			}
+			slices(self.name(*x), var, positions.iter().collect());
+			// The viewpoint has the indices of the other two axes
+			for vp in self.viewpoints.iter().filter(|vp| vp.array == *x) {
+				let other = (0..3)
+					.filter(|k| *k != vp.axis)
+					.map(|k| &positions[k])
+					.collect();
+				slices(vp.name.clone(), true, other);
 			}
 		}
 		args
@@ -600,14 +711,15 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	}
 
 	/// Print an unrolled group with its candidates
-	fn plan(&self, u: &Unrolled<'_, 'a, 'db>) -> Plan {
+	fn plan(&self, u: &Unrolled<'_, 'a, 'db>, pass: Pass) -> Plan {
 		let options = self.options;
-		let mut cands = candidates(
-			&self.arguments(u),
-			&options.include,
-			&options.exclude,
-			options.max_args,
-		);
+		// The name filters of the user only apply to the full pass
+		let (include, exclude) = match pass {
+			Pass::Initial => (&[][..], &[][..]),
+			Pass::Full => (&options.include[..], &options.exclude[..]),
+		};
+		let mut cands = candidates(&self.arguments(u), include, exclude, options.max_args);
+		cands.retain(|c| pass.checks(c.name));
 		// A group that already is the global is vacuous
 		if let [single] = &u.parts[..]
 			&& let ExpressionData::Call(c) = &**single.body
@@ -641,21 +753,34 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 			context: u.context.map(|c| self.print_part(c)),
 			candidates: cands,
 			wrap,
+			channels: self
+				.viewpoints
+				.iter()
+				.filter(|vp| u.decls.contains(&vp.array))
+				.map(|vp| (vp.name.clone(), vp.channel.clone()))
+				.collect(),
 		}
 	}
 
 	/// All variants of a group with a context, printed
-	fn job(&self, group: &[usize], context: Option<usize>, decls: &[DeclarationId<'db>]) -> Job {
+	fn job(
+		&self,
+		group: &[usize],
+		context: Option<usize>,
+		decls: &[DeclarationId<'db>],
+		pass: Pass,
+	) -> Job {
 		let plans = self
 			.variants(group)
 			.iter()
 			.map(|variant| {
-				self.plan(&Unrolled {
+				let u = Unrolled {
 					parts: group.iter().map(|p| &self.parts[*p]).collect(),
 					variant,
 					context: context.map(|c| &self.parts[c]),
 					decls: decls.to_vec(),
-				})
+				};
+				self.plan(&u, pass)
 			})
 			.collect();
 		Job {
@@ -666,8 +791,8 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	}
 
 	/// Print the jobs on this thread (it owns the compiler database), and
-	/// check them on `jobs` worker threads
-	fn run(&self) -> Result<Vec<Finding>> {
+	/// check them on `jobs` worker threads. Groups in `skip` are left out.
+	fn run(&self, pass: Pass, skip: &[Vec<usize>]) -> Result<Vec<RawFinding>> {
 		let decls = self
 			.parts
 			.iter()
@@ -696,17 +821,25 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 							break;
 						};
 						match checker.check_job(&job) {
-							Ok(replacements) => found.lock().unwrap().extend(
-								replacements
-									.into_iter()
-									.map(|r| (job.group.clone(), job.context, r)),
-							),
+							Ok(replacements) => {
+								found.lock().unwrap().extend(replacements.into_iter().map(
+									|(replacement, candidate)| RawFinding {
+										group: job.group.clone(),
+										context: job.context,
+										replacement,
+										candidate,
+									},
+								))
+							}
 							Err(err) => *failure.lock().unwrap() = Some(err),
 						}
 					}
 				});
 			}
 			for group in groups(&vars, self.options.max_group) {
+				if skip.contains(&group) {
+					continue;
+				}
 				let group_vars = group.iter().flat_map(|p| &vars[*p]).collect::<Vec<_>>();
 				// No context, or one other part that shares variables with the group
 				let contexts = std::iter::once(None).chain(
@@ -723,7 +856,7 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 							group_decls.push(*d);
 						}
 					}
-					let _ = send.send(self.job(&group, context, &group_decls));
+					let _ = send.send(self.job(&group, context, &group_decls, pass));
 				}
 			}
 			// Let the workers stop when the queue is empty
@@ -733,28 +866,62 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 			return Err(err);
 		}
 		let found = found.into_inner().unwrap();
-		Ok(shadow(&found)
-			.into_iter()
-			.map(|(group, context, replacement)| {
-				let mut locations = group
+		Ok(shadow(&found).into_iter().cloned().collect())
+	}
+
+	fn finding(&self, raw: &RawFinding) -> Finding {
+		let mut locations = raw
+			.group
+			.iter()
+			.map(|p| location(self.db, self.parts[*p].origin))
+			.collect::<Vec<_>>();
+		locations.dedup();
+		Finding {
+			locations,
+			context: raw.context.map(|c| location(self.db, self.parts[c].origin)),
+			replacement: raw.replacement.clone(),
+		}
+	}
+
+	/// The viewpoints for the `binaries_represent_int` findings
+	fn viewpoints(&self, found: &[RawFinding]) -> Vec<Viewpoint<'db>> {
+		let mut viewpoints = Vec::<Viewpoint<'db>>::new();
+		for raw in found {
+			let c = &raw.candidate;
+			let Some(axis) = c
+				.name
+				.strip_prefix("binaries_represent_int_3")
+				.and_then(|a| "ABC".find(a))
+			else {
+				continue;
+			};
+			let array = self
+				.model
+				.top_level_declarations()
+				.map(|(d, _)| d)
+				.find(|d| self.name(*d) == c.args[0]);
+			if let Some(array) = array
+				&& !viewpoints
 					.iter()
-					.map(|p| location(self.db, self.parts[*p].origin))
-					.collect::<Vec<_>>();
-				locations.dedup();
-				Finding {
-					locations,
-					context: context.map(|c| location(self.db, self.parts[c].origin)),
-					replacement: replacement.clone(),
-				}
-			})
-			.collect::<BTreeSet<_>>()
-			.into_iter()
-			.collect())
+					.any(|vp| vp.array == array && vp.axis == axis)
+			{
+				viewpoints.push(Viewpoint::new(array, &c.args[0], axis));
+			}
+		}
+		// The workers find them in any order
+		viewpoints.sort_by(|a, b| a.name.cmp(&b.name));
+		viewpoints
 	}
 }
 
-/// A finding before formatting: group, context and replacement
-type RawFinding = (Vec<usize>, Option<usize>, String);
+/// A finding before formatting
+#[derive(Clone, Debug)]
+struct RawFinding {
+	group: Vec<usize>,
+	context: Option<usize>,
+	replacement: String,
+	candidate: Candidate,
+}
 
 /// Drop findings whose replacement is also found for a smaller group (a
 /// subset of the parts, or the same parts without a context), and findings
@@ -763,8 +930,10 @@ type RawFinding = (Vec<usize>, Option<usize>, String);
 fn shadow(found: &[RawFinding]) -> Vec<&RawFinding> {
 	found
 		.iter()
-		.filter(|(group, context, replacement)| {
-			!found.iter().any(|(g, c, r)| {
+		.filter(|f| {
+			let (group, context, replacement) = (&f.group, &f.context, &f.replacement);
+			!found.iter().any(|other| {
+				let (g, c, r) = (&other.group, &other.context, &other.replacement);
 				r == replacement
 					&& ((g.iter().all(|p| group.contains(p))
 						&& (c.is_none() || c == context)
@@ -784,9 +953,36 @@ pub(crate) fn globalize(
 	options: &GlobalizeOptions,
 ) -> Result<Globalized> {
 	with_globalizer(db, data, options, |globalizer| {
-		let findings = globalizer.run()?;
+		// The initial pass finds redundant groups (left out of the full pass)
+		// and 0/1 arrays that represent integers (viewpoints for the full pass)
+		let initial = if options.initial_pass {
+			globalizer.run(Pass::Initial, &[])?
+		} else {
+			Vec::new()
+		};
+		let redundant = initial
+			.iter()
+			.filter(|f| f.candidate.name == "true")
+			.collect::<Vec<_>>();
+		let skip = redundant
+			.iter()
+			.filter(|f| f.context.is_none())
+			.map(|f| f.group.clone())
+			.collect::<Vec<_>>();
+		globalizer.viewpoints = globalizer.viewpoints(&initial);
+		let full = globalizer.run(Pass::Full, &skip)?;
+		let findings = redundant
+			.into_iter()
+			.chain(&full)
+			.map(|f| globalizer.finding(f))
+			.collect::<BTreeSet<_>>();
 		Ok(Globalized {
-			findings,
+			viewpoints: globalizer
+				.viewpoints
+				.iter()
+				.map(|vp| vp.text.clone())
+				.collect(),
+			findings: findings.into_iter().collect(),
 			calls: globalizer.checker.runner.calls.load(Ordering::Relaxed),
 		})
 	})
@@ -797,7 +993,7 @@ fn with_globalizer<R>(
 	db: &dyn Db,
 	data: &[PathBuf],
 	options: &GlobalizeOptions,
-	f: impl FnOnce(&Globalizer<'_, '_>) -> R,
+	f: impl FnOnce(&mut Globalizer<'_, '_>) -> R,
 ) -> R {
 	let model = shackle_thir::lower::lower_model(db).take();
 	let user_files = FxHashSet::from_iter(InputFiles::get(db).files(db));
@@ -832,7 +1028,7 @@ fn with_globalizer<R>(
 		items.push((var, print_item(&printer, db, &model, item)));
 	}
 
-	let globalizer = Globalizer {
+	let mut globalizer = Globalizer {
 		db,
 		model: &model,
 		printer,
@@ -854,8 +1050,9 @@ fn with_globalizer<R>(
 			},
 			options: options.clone(),
 		},
+		viewpoints: Vec::new(),
 	};
-	f(&globalizer)
+	f(&mut globalizer)
 }
 
 #[cfg(test)]

@@ -31,6 +31,8 @@ pub(super) struct Plan {
 	pub(super) candidates: Vec<Candidate>,
 	/// For each leader: its generator, and the leaders its set depends on
 	pub(super) wrap: Vec<(String, Vec<usize>)>,
+	/// Viewpoints (name and channelling constraint) the candidates can use
+	pub(super) channels: Vec<(String, String)>,
 }
 
 /// All variants of one group with one context
@@ -115,6 +117,9 @@ impl Checker {
 				)
 				.unwrap();
 			}
+			if let Some(witness) = &c.witness {
+				writeln!(body, "var int: GZ_W{k} :: output = {witness};").unwrap();
+			}
 		}
 		let solutions = match self.sample(&body, plan, data)? {
 			Sample::Solutions(s) => s,
@@ -149,7 +154,14 @@ impl Checker {
 						.unwrap_or_default()
 				})
 				.collect::<Vec<_>>();
-			holds && c.fill(&features)
+			// The witness shows that the candidate is not trivially true
+			let witnessed = c.witness.is_none()
+				|| solutions.iter().any(|s| {
+					s.get(&format!("GZ_W{}", k - 1))
+						.and_then(Value::as_i64)
+						.is_some_and(|w| w > 0)
+				});
+			holds && witnessed && c.fill(&features)
 		});
 		Ok(Some(cands))
 	}
@@ -173,6 +185,10 @@ impl Checker {
 	/// Candidates that hold on all samples of the group (forward check)
 	fn forward(&self, plan: &Plan) -> Result<Vec<Candidate>> {
 		let mut cands = plan.candidates.clone();
+		// `true` holds on any sample: only the reverse check matters
+		if cands.iter().all(|c| c.name == "true") {
+			return Ok(cands);
+		}
 		let constraints = plan.group.iter().chain(&plan.context).collect::<Vec<_>>();
 		let mut tested = false;
 		for data in &self.data {
@@ -233,11 +249,32 @@ impl Checker {
 		for data in &self.data {
 			for leaders in &plan.leaders {
 				let mut body = format!("{}{leaders}", plan.preamble);
-				writeln!(body, "constraint {};", cand.call()).unwrap();
 				if let Some(c) = &plan.context {
 					writeln!(body, "constraint {c};").unwrap();
 				}
 				writeln!(body, "var bool: GZ_G :: output = {conj};").unwrap();
+				// A viewpoint comes with its channelling constraint. The channels
+				// must not imply the group without the candidate.
+				let channels = plan
+					.channels
+					.iter()
+					.filter(|(name, _)| {
+						cand.args.iter().any(|a| {
+							a.strip_prefix(name.as_str())
+								.is_some_and(|rest| rest.is_empty() || rest.starts_with('['))
+						})
+					})
+					.map(|(_, channel)| channel.as_str())
+					.collect::<Vec<_>>();
+				if !channels.is_empty() {
+					writeln!(body, "{}", channels.join("\n")).unwrap();
+					if let Sample::Solutions(s) = self.sample(&body, plan, data)?
+						&& s.iter().all(|s| s["GZ_G"] == Value::Bool(true))
+					{
+						return Ok(false);
+					}
+				}
+				writeln!(body, "constraint {};", cand.call()).unwrap();
 				match self.sample(&body, plan, data)? {
 					Sample::Solutions(solutions) => {
 						if !solutions.iter().all(|s| s["GZ_G"] == Value::Bool(true)) {
@@ -275,8 +312,8 @@ impl Checker {
 		tidy(format!("forall({gens})({})", cand.call()))
 	}
 
-	/// The replacements found for one group with one context
-	pub(super) fn check_job(&self, job: &Job) -> Result<Vec<String>> {
+	/// The replacements (and candidates) found for one group with one context
+	pub(super) fn check_job(&self, job: &Job) -> Result<Vec<(String, Candidate)>> {
 		let mut found = Vec::new();
 		for plan in &job.plans {
 			for cand in self.vacuous(plan, self.forward(plan)?)? {
@@ -297,6 +334,7 @@ impl Checker {
 			.collect::<Vec<_>>();
 		found.retain(|(_, c)| match c.name {
 			"nvalue" => !different.contains(&c.args[1]),
+			"alldifferent_except_0" => !different.contains(&c.args[0]),
 			"global_cardinality" if c.filled => {
 				!(different.contains(&c.args[0])
 					&& c.args[1]
@@ -323,6 +361,6 @@ impl Checker {
 							<= 1
 				})
 		});
-		Ok(found.into_iter().map(|(r, _)| r).unique().collect())
+		Ok(found.into_iter().unique_by(|(r, _)| r.clone()).collect())
 	}
 }

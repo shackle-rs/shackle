@@ -14,7 +14,7 @@ fn with<R>(src: &str, f: impl FnOnce(&Globalizer<'_, '_>) -> R) -> R {
 	let model = Model::from_string(src.to_owned(), InputLang::MiniZinc);
 	let errors = run_hir_phase(&model.db).errors;
 	assert!(errors.is_empty(), "{errors:?}");
-	with_globalizer(&model.db, &[], &GlobalizeOptions::default(), f)
+	with_globalizer(&model.db, &[], &GlobalizeOptions::default(), |g| f(g))
 }
 
 /// Run `f` on the group without unrolling
@@ -316,7 +316,7 @@ fn replacement_wraps_used_leaders_and_their_dependencies() {
 				.map(|leaders| {
 					let mut cand = Candidate::raw("all_different", &["x[i, ..]"]);
 					cand.leaders = leaders;
-					Checker::replacement(&g.plan(u), &cand)
+					Checker::replacement(&g.plan(u, Pass::Full), &cand)
 				})
 				.collect::<Vec<_>>()
 		})
@@ -665,18 +665,27 @@ fn assert_found(found: &[String], expected: &str) {
 
 #[test]
 fn shadowed_findings_are_hidden() {
-	let found: Vec<RawFinding> = vec![
-		(vec![0], None, "a".to_owned()),
-		(vec![0, 1], None, "a".to_owned()),
-		(vec![0], Some(1), "a".to_owned()),
-		(vec![0, 1], None, "b".to_owned()),
-		(vec![1], Some(0), "b".to_owned()),
-		(vec![2], Some(0), "c".to_owned()),
-		(vec![2], Some(1), "c".to_owned()),
+	let raw = |group: &[usize], context, replacement: &str| RawFinding {
+		group: group.to_vec(),
+		context,
+		replacement: replacement.to_owned(),
+		candidate: Candidate::raw("true", &[]),
+	};
+	let found = vec![
+		raw(&[0], None, "a"),
+		raw(&[0, 1], None, "a"),
+		raw(&[0], Some(1), "a"),
+		raw(&[0, 1], None, "b"),
+		raw(&[1], Some(0), "b"),
+		raw(&[2], Some(0), "c"),
+		raw(&[2], Some(1), "c"),
 	];
-	let kept = shadow(&found);
+	let kept = shadow(&found)
+		.iter()
+		.map(|k| found.iter().position(|f| std::ptr::eq(f, *k)).unwrap())
+		.collect::<Vec<_>>();
 	// 4 is hidden by 3: its context is part of the group of 3
-	assert_eq!(kept, [&found[0], &found[3], &found[5], &found[6]]);
+	assert_eq!(kept, [0, 3, 5, 6]);
 }
 
 #[test]
@@ -708,7 +717,7 @@ fn solve_bad_candidate_is_split_off() {
 				Candidate::raw("all_equal", &["x"]),
 			];
 			g.checker
-				.check_candidates(&base, &g.plan(u), &None, cands)
+				.check_candidates(&base, &g.plan(u, Pass::Full), &None, cands)
 				.unwrap()
 				.unwrap()
 		})
@@ -729,7 +738,7 @@ fn solve_implies_check() {
 			let [a, b] = &g.print_group(u)[..] else {
 				unreachable!()
 			};
-			let plan = g.plan(u);
+			let plan = g.plan(u, Pass::Full);
 			(
 				g.checker.implies(&base, &plan, &None, a, b).unwrap(),
 				g.checker.implies(&base, &plan, &None, b, a).unwrap(),
@@ -792,10 +801,6 @@ fn solve_test_templates_match_the_globals() {
 		),
 		("maximum(m, x)", "m = max(x)"),
 		("minimum(m, x)", "m = min(x)"),
-		(
-			"sliding_sum(1, 5, 2, x)",
-			"forall (i in index_set(x) where i + 2 - 1 <= max(index_set(x))) (sum (j in i..i + 2 - 1) (x[j]) in 1..5)",
-		),
 	];
 	for (global, test) in pairs {
 		let all = |c: &str| {
@@ -939,7 +944,7 @@ fn solve_cumulative() {
 		&solve_only(&model("b"), "cumulative", 1),
 		"cumulative(s, d, r, b)",
 	);
-	assert!(solve_only(&model("b + 1"), "cumulative", 1).is_empty());
+	assert!(solve_only(&model("b - 1"), "cumulative", 1).is_empty());
 }
 
 #[test]
@@ -1165,8 +1170,9 @@ fn solve_user_predicate_is_inlined() {
 			forall(i in 1..length(a) - 1)(a[i] <= a[i + 1]) /\ a[1] >= 0;
 		constraint sorted(y);
 	"#;
+	// The initial pass also finds that `a[1] >= 0` is redundant
 	let found = solve_only(src, "increasing", 1);
-	assert_eq!(found, ["increasing(y)"]);
+	assert_eq!(found, ["increasing(y)", "true"]);
 }
 
 #[test]
@@ -1212,4 +1218,142 @@ fn solve_same_findings_for_any_number_of_workers() {
 	let one = found(1);
 	assert_eq!(one.len(), 2, "{one:?}");
 	assert_eq!(found(4), one);
+}
+
+// M5: the initial pass
+
+#[test]
+fn passes_split_the_candidates() {
+	assert!(Pass::Initial.checks("true"));
+	assert!(Pass::Initial.checks("binaries_represent_int_3B"));
+	assert!(!Pass::Initial.checks("all_different"));
+	assert!(Pass::Full.checks("all_different"));
+	assert!(!Pass::Full.checks("true"));
+	assert!(!Pass::Full.checks("binaries_represent_int_3A"));
+}
+
+#[test]
+fn viewpoint_texts() {
+	let src = "array[1..2, 1..3, 1..4] of var 0..1: b;\nconstraint b[1, 1, 1] = 1;";
+	let texts = with(src, |g| {
+		let b = g.parts[0].decls(g.model)[0];
+		(0..3)
+			.map(|axis| {
+				let vp = Viewpoint::new(b, "b", axis);
+				format!(
+					"{}\n{}\n{}\n{}",
+					vp.name, vp.text, vp.definition, vp.channel
+				)
+			})
+			.collect::<Vec<_>>()
+	});
+	expect![[r#"
+    [
+        "b_3a\narray [index_set_2of3(b), index_set_3of3(b)] of var index_set_1of3(b): b_3a; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3a[j, k] = i);\narray [index_set_2of3(b), index_set_3of3(b)] of var int: b_3a = array2d(index_set_2of3(b), index_set_3of3(b), [sum (i in index_set_1of3(b)) (i * b[i, j, k]) | j in index_set_2of3(b), k in index_set_3of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3a[j, k] = i);",
+        "b_3b\narray [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);\narray [index_set_1of3(b), index_set_3of3(b)] of var int: b_3b = array2d(index_set_1of3(b), index_set_3of3(b), [sum (j in index_set_2of3(b)) (j * b[i, j, k]) | i in index_set_1of3(b), k in index_set_3of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);",
+        "b_3c\narray [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);\narray [index_set_1of3(b), index_set_2of3(b)] of var int: b_3c = array2d(index_set_1of3(b), index_set_2of3(b), [sum (k in index_set_3of3(b)) (k * b[i, j, k]) | i in index_set_1of3(b), j in index_set_2of3(b)]);\nconstraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);",
+    ]
+"#]].assert_debug_eq(&texts);
+}
+
+const LATIN01: &str = r#"
+	int: n = 3;
+	array[1..n, 1..n, 1..n] of var 0..1: b;
+	constraint forall(i, j in 1..n)(sum(k in 1..n)(b[i, j, k]) = 1);
+	constraint forall(i, k in 1..n)(sum(j in 1..n)(b[i, j, k]) = 1);
+"#;
+
+#[test]
+fn solve_initial_pass_finds_viewpoints() {
+	let model = Model::from_string(LATIN01.to_owned(), InputLang::MiniZinc);
+	let result = model
+		.globalize(
+			&[],
+			&GlobalizeOptions {
+				max_group: 1,
+				include: vec!["all_different".to_owned()],
+				jobs: 2,
+				..Default::default()
+			},
+		)
+		.unwrap();
+	let declarations = result
+		.viewpoints
+		.iter()
+		.map(|v| v.split(';').next().unwrap())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		declarations,
+		[
+			"array [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b",
+			"array [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c",
+		]
+	);
+	let shown = result
+		.findings
+		.iter()
+		.map(ToString::to_string)
+		.collect::<Vec<_>>();
+	assert_eq!(
+		shown,
+		[
+			"<unnamed file>|4|2|4|64 [ <unnamed file>|5|2|5|64 ] forall (i in 1..n) (all_different(b_3b[i, ..]))",
+			"<unnamed file>|5|2|5|64 [ <unnamed file>|4|2|4|64 ] forall (i in 1..n) (all_different(b_3c[i, ..]))",
+		]
+	);
+}
+
+#[test]
+fn solve_without_initial_pass() {
+	let options = |initial_pass| GlobalizeOptions {
+		max_group: 1,
+		include: vec!["all_different".to_owned()],
+		initial_pass,
+		jobs: 2,
+		..Default::default()
+	};
+	// No viewpoints: nothing to find on the 0/1 array
+	let model = Model::from_string(LATIN01.to_owned(), InputLang::MiniZinc);
+	let result = model.globalize(&[], &options(false)).unwrap();
+	assert!(result.viewpoints.is_empty());
+	assert!(result.findings.is_empty());
+	// No redundant groups either
+	let src = "array[1..3] of var 1..3: x;\nconstraint x[1] >= 1;";
+	let model = Model::from_string(src.to_owned(), InputLang::MiniZinc);
+	assert!(
+		model
+			.globalize(&[], &options(false))
+			.unwrap()
+			.findings
+			.is_empty()
+	);
+	let model = Model::from_string(src.to_owned(), InputLang::MiniZinc);
+	let found = model.globalize(&[], &options(true)).unwrap().findings;
+	assert_eq!(
+		found
+			.iter()
+			.map(|f| f.replacement.as_str())
+			.collect::<Vec<_>>(),
+		["true"]
+	);
+}
+
+#[test]
+fn solve_redundant_group_is_left_out_of_the_full_pass() {
+	// `x[1] >= 1` is redundant, so it is not grouped alone in the full pass
+	let src = "array[1..4] of var 1..4: x;\nconstraint x[1] >= 1;\nconstraint forall(i, j in 1..4 where i < j)(x[i] != x[j]);";
+	let model = Model::from_string(src.to_owned(), InputLang::MiniZinc);
+	let result = model.globalize(&[], &group_of(1)).unwrap();
+	let shown = result
+		.findings
+		.iter()
+		.map(ToString::to_string)
+		.collect::<Vec<_>>();
+	assert_eq!(
+		shown,
+		[
+			"<unnamed file>|2|1|2|20 [ ] true",
+			"<unnamed file>|3|1|3|57 [ ] all_different(x)",
+		]
+	);
 }

@@ -326,6 +326,10 @@ struct Globalize {
 	/// Number of MiniZinc runs at the same time (default: number of CPUs)
 	#[arg(short = 'p', long)]
 	jobs: Option<usize>,
+	/// Skip the pass that finds redundant constraints and 0/1 arrays that
+	/// represent integers
+	#[arg(long)]
+	no_initial_pass: bool,
 	#[command(flatten)]
 	base: Compile,
 }
@@ -344,12 +348,16 @@ impl Globalize {
 			exclude: self.filter_ex.clone(),
 			max_args: self.max_args,
 			implies_check: !self.no_implies_check,
+			initial_pass: !self.no_initial_pass,
 			..Default::default()
 		};
 		if let Some(jobs) = self.jobs {
 			options.jobs = jobs;
 		}
 		let result = Model::from_file(model).globalize(&data, &options)?;
+		for viewpoint in &result.viewpoints {
+			println!("% viewpoint: {viewpoint}");
+		}
 		for finding in &result.findings {
 			println!("{finding}");
 		}
