@@ -6,9 +6,14 @@ use shackle_thir::{
 	Call, Callable, DeclarationId, ExpressionData, Model, ResolvedIdentifier,
 	traverse::{Visitor, visit_call, visit_expression},
 };
-use shackle_ty::{OptType, VarType};
+use shackle_ty::{OptType, Ty, VarType};
 
-use super::{Globalizer, candidates::Arg, groups::Unrolled, parts::is_par_int};
+use super::{
+	Globalizer,
+	candidates::{Arg, Elem},
+	groups::Unrolled,
+	parts::is_par_int,
+};
 
 /// Finds array accesses `x[i, j]` whose indices are leaders or par integers
 struct AccessCollector<'u, 'g, 'a, 'db> {
@@ -64,63 +69,83 @@ impl<'a, 'db> Visitor<'a, 'db> for AccessCollector<'_, '_, '_, 'db> {
 }
 
 impl<'a, 'db> Globalizer<'a, 'db> {
-	/// For a (non-opt) integer or enum declaration or array of them: whether
-	/// it is a variable, and its number of dimensions
-	pub(super) fn int_decl(&self, d: DeclarationId<'db>) -> Option<(bool, usize)> {
+	/// For a declaration that can be an argument (an integer, enum, opt
+	/// integer, Boolean or integer set, or an array of them): whether it is a
+	/// variable, its number of dimensions and its element type
+	pub(super) fn arg_decl(&self, d: DeclarationId<'db>) -> Option<(bool, usize, Elem)> {
 		let db = self.db;
 		let ty = self.model[d].ty();
 		let elem = ty.elem_ty(db).filter(|_| ty.is_array(db)).unwrap_or(ty);
 		// TODO: candidates that mix enums and integers rely on MiniZinc's
 		// implicit enum2int coercion, which is deprecated. Track the enum of
 		// each argument and add `enum2int` before that coercion is removed.
-		let int = elem.is_int(db) || elem.is_enum(db);
-		(int && elem.opt(db) == Some(OptType::NonOpt)).then(|| {
-			(
-				elem.inst(db) == Some(VarType::Var),
-				ty.dims(db).unwrap_or(0),
-			)
-		})
+		let int = |t: Ty<'db>| t.is_int(db) || t.is_enum(db);
+		let opt = elem.opt(db) == Some(OptType::Opt);
+		let kind = if int(elem) {
+			if opt { Elem::OptInt } else { Elem::Int }
+		} else if elem.is_bool(db) && !opt {
+			Elem::Bool
+		} else if elem.is_set(db)
+			&& elem
+				.elem_ty(db)
+				.is_some_and(|e| int(e) && e.opt(db) == Some(OptType::NonOpt))
+		{
+			Elem::Set
+		} else {
+			return None;
+		};
+		Some((
+			elem.inst(db) == Some(VarType::Var),
+			ty.dims(db).unwrap_or(0),
+			kind,
+		))
 	}
 
 	/// Candidate arguments: the group's int declarations, their slices and
 	/// accesses with leader or par indices, the viewpoints of its 0/1 arrays,
 	/// and its scalar variables as one array
 	pub(super) fn arguments(&self, u: &Unrolled<'_, 'a, 'db>) -> Vec<Arg> {
-		let arg = |text: String, var, dims, leaders| Arg {
+		let arg = |text: String, var, dims, elem, leaders| Arg {
 			text,
 			var,
 			dims,
+			elem,
 			leaders,
 		};
 		// The literal 0 (e.g. a lower bound)
-		let mut args = vec![arg("0".to_owned(), false, 0, Vec::new())];
-		let mut scalars = Vec::new();
+		let mut args = vec![arg("0".to_owned(), false, 0, Elem::Int, Vec::new())];
+		let mut scalars = Vec::<(Elem, String)>::new();
 		for &d in u.decls {
-			let Some((var, dims)) = self.int_decl(d) else {
+			let Some((var, dims, elem)) = self.arg_decl(d) else {
 				continue;
 			};
 			if dims == 0 && var {
-				scalars.push(self.name(d));
+				scalars.push((elem, self.name(d)));
 			}
-			args.push(arg(self.name(d), var, dims, Vec::new()));
+			args.push(arg(self.name(d), var, dims, elem, Vec::new()));
 		}
 		for vp in self
 			.viewpoints
 			.iter()
 			.filter(|vp| u.decls.contains(&vp.array))
 		{
-			args.push(arg(vp.name.clone(), true, 2, Vec::new()));
+			args.push(arg(vp.name.clone(), true, 2, Elem::Int, Vec::new()));
 		}
-		// Scalar variables of the group as one array (e.g. `[a, b, c]`). Two
-		// variables are left out: such a global is just a binary constraint.
+		// Scalar variables of the group of one type as one array (e.g.
+		// `[a, b, c]`). Two variables are left out: such a global is just a
+		// binary constraint.
 		scalars.sort();
-		if scalars.len() > 2 {
-			args.push(arg(
-				format!("[{}]", scalars.join(", ")),
-				true,
-				1,
-				Vec::new(),
-			));
+		for (elem, names) in &scalars.into_iter().chunk_by(|(e, _)| *e) {
+			let names = names.map(|(_, n)| n).collect::<Vec<_>>();
+			if names.len() > 2 {
+				args.push(arg(
+					format!("[{}]", names.join(", ")),
+					true,
+					1,
+					elem,
+					Vec::new(),
+				));
+			}
 		}
 
 		let mut collector = AccessCollector {
@@ -136,50 +161,51 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		}
 		// Accesses of `array` with one index (or a slice `..`, as `None`) per
 		// position
-		let mut slices = |array: String, var: bool, positions: Vec<&Vec<IndexChoice<'db>>>| {
-			let choices = positions.iter().map(|cs| {
-				std::iter::once(None)
-					.chain(cs.iter().map(Some))
-					.collect::<Vec<_>>()
-			});
-			for chosen in choices.multi_cartesian_product() {
-				if chosen.iter().all(Option::is_none) {
-					continue;
+		let mut slices =
+			|array: String, var: bool, elem: Elem, positions: Vec<&Vec<IndexChoice<'db>>>| {
+				let choices = positions.iter().map(|cs| {
+					std::iter::once(None)
+						.chain(cs.iter().map(Some))
+						.collect::<Vec<_>>()
+				});
+				for chosen in choices.multi_cartesian_product() {
+					if chosen.iter().all(Option::is_none) {
+						continue;
+					}
+					let indices = chosen
+						.iter()
+						.map(|c| match c {
+							None => "..".to_owned(),
+							Some(c) => match c.leader {
+								Some(m) => self.name(u.leader_loop(m).decl),
+								None => self.name(c.decl),
+							},
+						})
+						.join(", ");
+					let text = format!("{array}[{indices}]");
+					if args.iter().any(|a| a.text == text) {
+						continue;
+					}
+					let dims = chosen.iter().filter(|c| c.is_none()).count();
+					let leaders = chosen.iter().flatten().filter_map(|c| c.leader).collect();
+					args.push(arg(text, var, dims, elem, leaders));
 				}
-				let indices = chosen
-					.iter()
-					.map(|c| match c {
-						None => "..".to_owned(),
-						Some(c) => match c.leader {
-							Some(m) => self.name(u.leader_loop(m).decl),
-							None => self.name(c.decl),
-						},
-					})
-					.join(", ");
-				let text = format!("{array}[{indices}]");
-				if args.iter().any(|a| a.text == text) {
-					continue;
-				}
-				let dims = chosen.iter().filter(|c| c.is_none()).count();
-				let leaders = chosen.iter().flatten().filter_map(|c| c.leader).collect();
-				args.push(arg(text, var, dims, leaders));
-			}
-		};
+			};
 		for (x, positions) in &collector.accesses {
-			let Some((var, dims)) = self.int_decl(*x) else {
+			let Some((var, dims, elem)) = self.arg_decl(*x) else {
 				continue;
 			};
 			if dims != positions.len() {
 				continue;
 			}
-			slices(self.name(*x), var, positions.iter().collect());
+			slices(self.name(*x), var, elem, positions.iter().collect());
 			// The viewpoint has the indices of the other two axes
 			for vp in self.viewpoints.iter().filter(|vp| vp.array == *x) {
 				let other = (0..3)
 					.filter(|k| *k != vp.axis)
 					.map(|k| &positions[k])
 					.collect();
-				slices(vp.name.clone(), true, other);
+				slices(vp.name.clone(), true, Elem::Int, other);
 			}
 		}
 		args

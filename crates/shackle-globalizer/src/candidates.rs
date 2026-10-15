@@ -17,6 +17,31 @@ pub(super) enum Kind {
 	Viewpoint(usize),
 }
 
+/// The element type of an argument (integers include enums)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(super) enum Elem {
+	Int,
+	OptInt,
+	Bool,
+	Set,
+}
+
+/// The type of a parameter: number of array dimensions (0 for a scalar) and
+/// element type
+type Param = (usize, Elem);
+
+const INT: Param = (0, Elem::Int);
+const INTS: Param = (1, Elem::Int);
+const INTS2: Param = (2, Elem::Int);
+const INTS3: Param = (3, Elem::Int);
+const OPT_INT: Param = (0, Elem::OptInt);
+const OPT_INTS: Param = (1, Elem::OptInt);
+const BOOL: Param = (0, Elem::Bool);
+const BOOLS: Param = (1, Elem::Bool);
+const BOOLS2: Param = (2, Elem::Bool);
+const SET: Param = (0, Elem::Set);
+const SETS: Param = (1, Elem::Set);
+
 /// A possible argument for a candidate global
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) struct Arg {
@@ -24,8 +49,9 @@ pub(super) struct Arg {
 	pub(super) text: String,
 	/// Whether the argument contains decision variables
 	pub(super) var: bool,
-	/// Number of array dimensions of the integer argument (0 for a scalar)
+	/// Number of array dimensions (0 for a scalar)
 	pub(super) dims: usize,
+	pub(super) elem: Elem,
 	/// Leaders (indices into the variant's leaders) the argument uses
 	pub(super) leaders: Vec<usize>,
 }
@@ -37,6 +63,9 @@ pub(super) enum Blank {
 	Max(usize),
 	/// The value counts of the argument in the given slot
 	Counts(usize),
+	/// The largest number of true values of the Boolean argument in the
+	/// given slot over all samples
+	MostTrue(usize),
 }
 
 /// A global constraint call to check against the samples
@@ -131,6 +160,7 @@ impl Candidate {
 		let (_, blank) = self.blank?;
 		Some(match blank {
 			Blank::Max(i) => format!("[max({})]", self.args[i]),
+			Blank::MostTrue(i) => format!("[sum({})]", self.args[i]),
 			Blank::Counts(i) => {
 				let x = &self.args[i];
 				format!("[lb_array({x})] ++ [count({x}, v) | v in lb_array({x})..ub_array({x})]")
@@ -139,7 +169,7 @@ impl Candidate {
 	}
 
 	/// Fill the blank from the feature values of all samples. Fails if the
-	/// samples do not agree.
+	/// samples do not agree (except for the largest number of true values).
 	pub(super) fn fill(&mut self, values: &[Vec<i64>]) -> bool {
 		let Some((slot, blank)) = self.blank else {
 			return true;
@@ -147,6 +177,15 @@ impl Candidate {
 		let Some(first) = values.first() else {
 			return false;
 		};
+		if let Blank::MostTrue(_) = blank {
+			let Some(most) = values.iter().filter_map(|v| v.first()).max() else {
+				return false;
+			};
+			self.args[slot] = most.to_string();
+			self.blank = None;
+			self.filled = Some(slot);
+			return true;
+		}
 		if values.iter().any(|v| v != first) {
 			return false;
 		}
@@ -187,8 +226,8 @@ struct Global {
 	/// (`element` for an access with a variable index)
 	uses: &'static str,
 	kind: Kind,
-	/// Number of array dimensions of each integer argument
-	signature: &'static [usize],
+	/// The type of each argument
+	signature: &'static [Param],
 	/// Rejects argument lists the global is not useful for
 	check: fn(&[&Arg]) -> bool,
 	guard: Cond,
@@ -217,9 +256,15 @@ predicate gz_subcircuit(array [int] of var int: x) =
   let { var int: m = sum (i in index_set(x)) (x[i] != i) } in
   all_different(x) /\ forall (i in index_set(x), k in 1..length(x) - 1) (
     x[i] != i /\ gz_succ(x, k, i) = i -> k >= m);
+predicate gz_value_precede(int: s, int: t, array [int] of var int: x) =
+  forall (i in index_set(x)) (
+    x[i] = t -> exists (j in index_set(x) where j < i) (x[j] = s));
+predicate gz_sliding_among(int: lo, int: hi, int: n, array [int] of var int: x, set of int: v) =
+  forall (i in min(index_set(x))..max(index_set(x)) - n + 1) (
+    lo <= sum (j in i..i + n - 1) (x[j] in v) /\ sum (j in i..i + n - 1) (x[j] in v) <= hi);
 "#;
 
-const fn global(name: &'static str, signature: &'static [usize]) -> Global {
+const fn global(name: &'static str, signature: &'static [Param]) -> Global {
 	Global {
 		name,
 		uses: name,
@@ -244,7 +289,7 @@ const fn binaries(name: &'static str, axis: usize, check: &'static str) -> Globa
 		check: |a| a[0].var,
 		guard: |a| Some(format!("dom_array({}) subset 0..1", a[0].text)),
 		template: Some(check),
-		..global(name, &[3])
+		..global(name, &[INTS3])
 	}
 }
 
@@ -291,12 +336,12 @@ const GLOBALS: &[Global] = &[
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 1", a[0].text)),
-		..global("all_different", &[1])
+		..global("all_different", &[INTS])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 1", a[0].text)),
-		..global("all_equal", &[1])
+		..global("all_equal", &[INTS])
 	},
 	Global {
 		check: |a| a[0].var,
@@ -306,19 +351,19 @@ const GLOBALS: &[Global] = &[
 			Some(format!("length({x}) > 2 /\\ 0 in dom_array({x})"))
 		},
 		dominated_by: Some(("all_different", 0)),
-		..global("alldifferent_except_0", &[1])
+		..global("alldifferent_except_0", &[INTS])
 	},
 	Global {
 		check: |a| a[1].var,
 		extra: |a| Some(format!("length({}) > 1", a[1].text)),
 		template: Some("arg_max({1}) = {0}"),
-		..global("arg_max", &[0, 1])
+		..global("arg_max", &[INT, INTS])
 	},
 	Global {
 		check: |a| a[1].var,
 		extra: |a| Some(format!("length({}) > 1", a[1].text)),
 		template: Some("arg_min({1}) = {0}"),
-		..global("arg_min", &[0, 1])
+		..global("arg_min", &[INT, INTS])
 	},
 	Global {
 		check: |a| !a[0].var && a[1].var && !a[2].var,
@@ -329,31 +374,31 @@ const GLOBALS: &[Global] = &[
 				b = a[1].text
 			))
 		},
-		..global("bin_packing", &[0, 1, 1])
+		..global("bin_packing", &[INT, INTS, INTS])
 	},
 	Global {
 		check: |a| !a[0].var && a[1].var && !a[2].var,
 		guard: |a| Some(same_index_set(a[1], a[2])),
-		..global("bin_packing_capa", &[1, 1, 1])
+		..global("bin_packing_capa", &[INTS, INTS, INTS])
 	},
 	Global {
 		check: |a| a[0].var && a[1].var && !a[2].var,
 		guard: |a| Some(same_index_set(a[1], a[2])),
 		template: Some("bin_packing_load({1}, {2}) = {0}"),
 		test: Some("bin_packing_load({0}, {1}, {2})"),
-		..global("bin_packing_load", &[1, 1, 1])
+		..global("bin_packing_load", &[INTS, INTS, INTS])
 	},
 	Global {
 		check: |a| a[0].var,
 		test: Some("gz_circuit({0})"),
-		..global("circuit", &[1])
+		..global("circuit", &[INTS])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("{} > 0", a[2].text)),
 		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) = {2}"),
 		uses: "count",
-		..global("count", &[1, 0, 0])
+		..global("count", &[INTS, INT, INT])
 	},
 	// The other comparisons, where they are not trivially true
 	Global {
@@ -361,28 +406,28 @@ const GLOBALS: &[Global] = &[
 		extra: |a| Some(format!("{} < length({})", a[2].text, a[0].text)),
 		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) <= {2}"),
 		uses: "count",
-		..global("count_leq", &[1, 0, 0])
+		..global("count_leq", &[INTS, INT, INT])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("{} <= length({})", a[2].text, a[0].text)),
 		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) < {2}"),
 		uses: "count",
-		..global("count_lt", &[1, 0, 0])
+		..global("count_lt", &[INTS, INT, INT])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("{} > 0", a[2].text)),
 		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) >= {2}"),
 		uses: "count",
-		..global("count_geq", &[1, 0, 0])
+		..global("count_geq", &[INTS, INT, INT])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("{} >= 0", a[2].text)),
 		template: Some("count({v} in index_set({0})) ({0}[{v}] = {1}) > {2}"),
 		uses: "count",
-		..global("count_gt", &[1, 0, 0])
+		..global("count_gt", &[INTS, INT, INT])
 	},
 	Global {
 		check: |a| !a[1].var && !a[2].var,
@@ -395,34 +440,34 @@ const GLOBALS: &[Global] = &[
 			))
 		},
 		extra: |a| Some(format!("length({}) > 1 /\\ {} > 0", a[0].text, a[3].text)),
-		..global("cumulative", &[1, 1, 1, 0])
+		..global("cumulative", &[INTS, INTS, INTS, INT])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 2", a[0].text)),
-		..global("decreasing", &[1])
+		..global("decreasing", &[INTS])
 	},
 	Global {
 		check: |a| (a[0].var && a[1].var) || (a[2].var && a[3].var),
 		guard: same_length,
-		..global("diffn", &[1, 1, 1, 1])
+		..global("diffn", &[INTS, INTS, INTS, INTS])
 	},
 	Global {
 		guard: same_length,
-		..global("disjunctive", &[1, 1])
+		..global("disjunctive", &[INTS, INTS])
 	},
 	// `x[i]` with a variable index
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 1", a[1].text)),
 		template: Some("{1}[{0}] = {2}"),
-		..global("element", &[0, 1, 0])
+		..global("element", &[INT, INTS, INT])
 	},
 	Global {
 		guard: |a| same_length(&a[..2]),
 		template: Some("distribute({1}, {2}) = {0}"),
 		test: Some("distribute({0}, {1}, {2})"),
-		..global("distribute", &[1, 1, 1])
+		..global("distribute", &[INTS, INTS, INTS])
 	},
 	Global {
 		check: |a| a[0].var,
@@ -430,68 +475,68 @@ const GLOBALS: &[Global] = &[
 		template: Some("global_cardinality({0}, set2array(index_set({1}))) = {1}"),
 		test: Some("global_cardinality({0}, set2array(index_set({1})), {1})"),
 		dominated_by: Some(("global_cardinality_closed", 0)),
-		..global("global_cardinality", &[1, 1])
+		..global("global_cardinality", &[INTS, INTS])
 	},
 	// No other values occur
 	Global {
 		check: |a| a[0].var,
 		template: Some("global_cardinality_closed({0}, set2array(index_set({1}))) = {1}"),
 		test: Some("global_cardinality_closed({0}, set2array(index_set({1})), {1})"),
-		..global("global_cardinality_closed", &[1, 1])
+		..global("global_cardinality_closed", &[INTS, INTS])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 2", a[0].text)),
-		..global("increasing", &[1])
+		..global("increasing", &[INTS])
 	},
 	Global {
 		guard: same_length,
 		template: Some("inverse({0}) = {1}"),
 		test: Some("inverse({0}, {1})"),
-		..global("inverse", &[1, 1])
+		..global("inverse", &[INTS, INTS])
 	},
 	Global {
 		guard: lex_guard,
-		..global("lex_less", &[1, 1])
+		..global("lex_less", &[INTS, INTS])
 	},
 	Global {
 		guard: lex_guard,
-		..global("lex_lesseq", &[1, 1])
+		..global("lex_lesseq", &[INTS, INTS])
 	},
 	Global {
 		check: |a| a[0].var,
-		..global("lex2", &[2])
+		..global("lex2", &[INTS2])
 	},
 	Global {
 		check: |a| a[0].var,
-		..global("lex_chain_less", &[2])
+		..global("lex_chain_less", &[INTS2])
 	},
 	Global {
 		check: |a| a[0].var,
-		..global("lex_chain_lesseq", &[2])
+		..global("lex_chain_lesseq", &[INTS2])
 	},
 	Global {
 		blank: Some((0, Blank::Max(1))),
 		template: Some("max({1}) = {0}"),
 		uses: "max",
-		..global("maximum", &[0, 1])
+		..global("maximum", &[INT, INTS])
 	},
 	Global {
 		check: |a| a[1].var,
 		extra: |a| Some(format!("length({}) > 1", a[0].text)),
-		..global("member", &[1, 0])
+		..global("member", &[INTS, INT])
 	},
 	Global {
 		template: Some("min({1}) = {0}"),
 		uses: "min",
-		..global("minimum", &[0, 1])
+		..global("minimum", &[INT, INTS])
 	},
 	Global {
 		extra: |a| Some(format!("{} <= length({})", a[0].text, a[1].text)),
 		dominated_by: Some(("all_different", 1)),
 		template: Some("nvalue({1}) = {0}"),
 		test: Some("nvalue({0}, {1})"),
-		..global("nvalue", &[0, 1])
+		..global("nvalue", &[INT, INTS])
 	},
 	Global {
 		check: |a| !a[0].var && !a[1].var && !a[2].var && a[3].var,
@@ -504,39 +549,369 @@ const GLOBALS: &[Global] = &[
 				vs = a[3].text
 			))
 		},
-		..global("sliding_sum", &[0, 0, 0, 1])
+		..global("sliding_sum", &[INT, INT, INT, INTS])
 	},
 	Global {
 		guard: same_length,
 		template: Some("sort({0}) = {1}"),
 		test: Some("sort({0}, {1})"),
-		..global("sort", &[1, 1])
+		..global("sort", &[INTS, INTS])
 	},
 	Global {
 		check: |a| a[0].var,
-		..global("strict_lex2", &[2])
-	},
-	Global {
-		check: |a| a[0].var,
-		extra: |a| Some(format!("length({}) > 2", a[0].text)),
-		..global("strictly_decreasing", &[1])
+		..global("lex2_strict", &[INTS2])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 2", a[0].text)),
-		..global("strictly_increasing", &[1])
+		..global("strictly_decreasing", &[INTS])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 2", a[0].text)),
+		..global("strictly_increasing", &[INTS])
 	},
 	Global {
 		check: |a| a[0].var,
 		test: Some("gz_subcircuit({0})"),
 		// Both hold if every permutation has at most one cycle (e.g. 3 values)
 		dominated_by: Some(("all_different", 0)),
-		..global("subcircuit", &[1])
+		..global("subcircuit", &[INTS])
 	},
 	Global {
 		check: |a| a[0].var,
 		extra: |a| Some(format!("length({}) > 1", a[0].text)),
-		..global("symmetric_all_different", &[1])
+		..global("symmetric_all_different", &[INTS])
+	},
+	// The first index of `v` in `x` (`v` must occur)
+	Global {
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		template: Some("arg_val({0}, {1}) = {2}"),
+		// The function forces `v` to occur in a reified context too
+		test: Some(
+			"{2} in index_set({0}) /\\ {0}[{2}] = {1} /\\ forall ({v} in index_set({0}) where {v} < {2}) ({0}[{v}] != {1})",
+		),
+		uses: "arg_val",
+		..global("arg_val", &[INTS, INT, INT])
+	},
+	// The first index of `v` in `x`, absent if `v` does not occur
+	Global {
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		template: Some("arg_val_weak({0}, {1}) = {2}"),
+		..global("arg_val_weak", &[INTS, INT, OPT_INT])
+	},
+	Global {
+		check: |a| a[1].var,
+		guard: same_length,
+		template: Some("arg_sort({0}) = {1}"),
+		test: Some("arg_sort({0}, {1})"),
+		..global("arg_sort", &[INTS, INTS])
+	},
+	Global {
+		check: |a| (a[0].var && a[1].var) || (a[2].var && a[3].var),
+		guard: same_length,
+		..global("diffn_nonstrict", &[INTS, INTS, INTS, INTS])
+	},
+	Global {
+		check: |a| a[0].var,
+		guard: |a| {
+			Some(format!(
+				"index_set_1of2({0}) = index_set_1of2({1}) /\\ index_set_2of2({0}) = index_set_2of2({1})",
+				a[0].text, a[1].text
+			))
+		},
+		..global("diffn_k", &[INTS2, INTS2])
+	},
+	Global {
+		check: |a| a[0].var,
+		guard: |a| {
+			Some(format!(
+				"index_set_1of2({0}) = index_set_1of2({1}) /\\ index_set_2of2({0}) = index_set_2of2({1})",
+				a[0].text, a[1].text
+			))
+		},
+		..global("diffn_nonstrict_k", &[INTS2, INTS2])
+	},
+	Global {
+		guard: same_length,
+		..global("disjunctive_strict", &[INTS, INTS])
+	},
+	// Counts between bounds
+	Global {
+		check: |a| a[0].var && !a[1].var && !a[2].var,
+		guard: |a| Some(same_index_set(a[1], a[2])),
+		template: Some("global_cardinality({0}, set2array(index_set({1})), {1}, {2})"),
+		uses: "global_cardinality",
+		dominated_by: Some(("global_cardinality_closed", 0)),
+		..global("global_cardinality_bounds", &[INTS, INTS, INTS])
+	},
+	Global {
+		check: |a| a[0].var && !a[1].var && !a[2].var,
+		guard: |a| Some(same_index_set(a[1], a[2])),
+		template: Some("global_cardinality_closed({0}, set2array(index_set({1})), {1}, {2})"),
+		uses: "global_cardinality_closed",
+		..global("global_cardinality_closed_bounds", &[INTS, INTS, INTS])
+	},
+	Global {
+		guard: same_length,
+		..global("inverse_in_range", &[INTS, INTS])
+	},
+	Global {
+		check: |a| !a[0].var && !a[1].var && a[2].var,
+		guard: |a| {
+			Some(format!(
+				"{} /\\ {}",
+				same_index_set(a[0], a[2]),
+				same_index_set(a[1], a[2])
+			))
+		},
+		..global("knapsack", &[INTS, INTS, INTS, INT, INT])
+	},
+	Global {
+		check: |a| !a[0].var && !a[1].var && !a[2].var && a[3].var && !a[4].var,
+		guard: |a| {
+			Some(format!(
+				"{l} <= {u} /\\ 1 < {n} /\\ {n} <= length({vs}) /\\ card(dom_array({vs})) > 2",
+				l = a[0].text,
+				u = a[1].text,
+				n = a[2].text,
+				vs = a[3].text
+			))
+		},
+		test: Some("gz_sliding_among({0}, {1}, {2}, {3}, {4})"),
+		..global("sliding_among", &[INT, INT, INT, INTS, SET])
+	},
+	Global {
+		check: |a| a[0].var && !a[1].var,
+		guard: |a| {
+			Some(format!(
+				"index_set_2of2({}) = index_set({})",
+				a[1].text, a[0].text
+			))
+		},
+		..global("table", &[INTS, INTS2])
+	},
+	// Boolean arguments
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("all_equal", &[BOOLS])
+	},
+	Global {
+		check: |a| a[0].var && !a[1].var,
+		guard: |a| {
+			Some(format!(
+				"index_set_2of2({}) = index_set({})",
+				a[1].text, a[0].text
+			))
+		},
+		..global("table", &[BOOLS, BOOLS2])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} > 0", a[1].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}]) = {1}"),
+		uses: "count",
+		..global("count", &[BOOLS, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} < length({})", a[1].text, a[0].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}]) <= {1}"),
+		uses: "count",
+		// At most k (e.g. at most one) from the samples
+		blank: Some((1, Blank::MostTrue(0))),
+		..global("count_leq", &[BOOLS, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} <= length({})", a[1].text, a[0].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}]) < {1}"),
+		uses: "count",
+		..global("count_lt", &[BOOLS, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} > 0", a[1].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}]) >= {1}"),
+		uses: "count",
+		..global("count_geq", &[BOOLS, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} >= 0", a[1].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}]) > {1}"),
+		uses: "count",
+		..global("count_gt", &[BOOLS, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[1].text)),
+		template: Some("{1}[{0}] = {2}"),
+		..global("element", &[INT, BOOLS, BOOL])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 2", a[0].text)),
+		..global("decreasing", &[BOOLS])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 2", a[0].text)),
+		..global("increasing", &[BOOLS])
+	},
+	Global {
+		guard: lex_guard,
+		..global("lex_less", &[BOOLS, BOOLS])
+	},
+	Global {
+		guard: lex_guard,
+		..global("lex_lesseq", &[BOOLS, BOOLS])
+	},
+	Global {
+		check: |a| a[0].var,
+		..global("lex_chain_less", &[BOOLS2])
+	},
+	Global {
+		check: |a| a[0].var,
+		..global("lex_chain_lesseq", &[BOOLS2])
+	},
+	// Set arguments
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("all_equal", &[SETS])
+	},
+	Global {
+		..global("inverse_set", &[SETS, SETS])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("all_different", &[SETS])
+	},
+	Global {
+		check: |a| a[0].var && !a[1].var,
+		extra: |a| Some(format!("length({}) > 2", a[0].text)),
+		dominated_by: Some(("all_different", 0)),
+		..global("all_different_except", &[INTS, SET])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("all_disjoint", &[SETS])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} > 0", a[2].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}] in {1}) = {2}"),
+		uses: "count",
+		// For a 0/1 array this is a count of one value
+		guard: |a| Some(format!("card(dom_array({})) > 2", a[0].text)),
+		..global("among", &[INTS, SET, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} < length({})", a[2].text, a[0].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}] in {1}) <= {2}"),
+		uses: "count",
+		// For a 0/1 array this is a count of one value
+		guard: |a| Some(format!("card(dom_array({})) > 2", a[0].text)),
+		..global("among_leq", &[INTS, SET, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} <= length({})", a[2].text, a[0].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}] in {1}) < {2}"),
+		uses: "count",
+		// For a 0/1 array this is a count of one value
+		guard: |a| Some(format!("card(dom_array({})) > 2", a[0].text)),
+		..global("among_lt", &[INTS, SET, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} > 0", a[2].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}] in {1}) >= {2}"),
+		uses: "count",
+		// For a 0/1 array this is a count of one value
+		guard: |a| Some(format!("card(dom_array({})) > 2", a[0].text)),
+		..global("among_geq", &[INTS, SET, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("{} >= 0", a[2].text)),
+		template: Some("count ({v} in index_set({0})) ({0}[{v}] in {1}) > {2}"),
+		uses: "count",
+		// For a 0/1 array this is a count of one value
+		guard: |a| Some(format!("card(dom_array({})) > 2", a[0].text)),
+		..global("among_gt", &[INTS, SET, INT])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("at_most1", &[SETS])
+	},
+	Global {
+		..global("disjoint", &[SET, SET])
+	},
+	Global {
+		..global("int_set_channel", &[INTS, SETS])
+	},
+	Global {
+		..global("link_set_to_booleans", &[SET, BOOLS])
+	},
+	Global {
+		check: |a| a[0].var,
+		..global("partition_set", &[SETS, SET])
+	},
+	Global {
+		template: Some("range({0}, {1}) = {2}"),
+		test: Some("range({0}, {1}, {2})"),
+		..global("range", &[INTS, SET, SET])
+	},
+	Global {
+		template: Some("roots({0}, {2}) = {1}"),
+		test: Some("roots({0}, {1}, {2})"),
+		..global("roots", &[INTS, SET, SET])
+	},
+	// Opt arguments (absent values are left out)
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		..global("all_different", &[OPT_INTS])
+	},
+	Global {
+		check: |a| !a[1].var && !a[2].var,
+		guard: |a| {
+			Some(format!(
+				"{} /\\ min({}) > 0 /\\ min({}) > 0",
+				same_length(&a[..3])?,
+				a[1].text,
+				a[2].text
+			))
+		},
+		extra: |a| Some(format!("length({}) > 1 /\\ {} > 0", a[0].text, a[3].text)),
+		..global("cumulative", &[OPT_INTS, INTS, INTS, INT])
+	},
+	Global {
+		guard: same_length,
+		..global("disjunctive", &[OPT_INTS, INTS])
+	},
+	Global {
+		guard: same_length,
+		..global("disjunctive_strict", &[OPT_INTS, INTS])
+	},
+	// The optional task is scheduled exactly when one of the tasks is
+	Global {
+		check: |a| a[0].var,
+		guard: |a| same_length(&a[2..]),
+		..global("alternative", &[OPT_INT, INT, OPT_INTS, INTS])
+	},
+	// The optional task spans the tasks that are scheduled
+	Global {
+		check: |a| a[0].var,
+		guard: |a| same_length(&a[2..]),
+		..global("span", &[OPT_INT, INT, OPT_INTS, INTS])
 	},
 	// The group is implied by the declarations (and the context)
 	Global {
@@ -557,10 +932,22 @@ const GLOBALS: &[Global] = &[
 				x = a[2].text
 			))
 		},
+		test: Some("gz_value_precede({0}, {1}, {2})"),
+		..global("value_precede", &[INT, INT, INTS])
+	},
+	Global {
+		check: |a| !a[0].var && a[1].var,
+		guard: |a| Some(format!("length({}) > 1", a[0].text)),
 		test: Some(
-			"forall (i in index_set({2})) ({2}[i] = {1} -> exists (j in index_set({2}) where j < i) ({2}[j] = {0}))",
+			"forall ({v} in index_set({0}) where {v} < max(index_set({0}))) (gz_value_precede({0}[{v}], {0}[{v} + 1], {1}))",
 		),
-		..global("value_precede", &[0, 0, 1])
+		..global("value_precede_chain", &[INTS, INTS])
+	},
+	Global {
+		check: |a| a[0].var,
+		extra: |a| Some(format!("length({}) > 1", a[0].text)),
+		test: Some("forall ({v} in 1..ub_array({0}) - 1) (gz_value_precede({v}, {v} + 1, {0}))"),
+		..global("seq_precede_chain", &[INTS])
 	},
 ];
 
@@ -582,6 +969,7 @@ pub(super) fn candidates(
 		text: String::new(),
 		var: false,
 		dims: 0,
+		elem: Elem::Int,
 		leaders: Vec::new(),
 	};
 	let mut result = Vec::new();
@@ -593,8 +981,11 @@ pub(super) fn candidates(
 			.signature
 			.iter()
 			.enumerate()
-			.map(|(i, dims)| {
-				let mut slot = args.iter().filter(|a| a.dims == *dims).collect::<Vec<_>>();
+			.map(|(i, (dims, elem))| {
+				let mut slot = args
+					.iter()
+					.filter(|a| a.dims == *dims && a.elem == *elem)
+					.collect::<Vec<_>>();
 				if global.blank.is_some_and(|(b, _)| b == i) {
 					slot.push(&blank_arg);
 				}
@@ -686,10 +1077,15 @@ mod tests {
 	use super::*;
 
 	fn arg(text: &str, var: bool, dims: usize) -> Arg {
+		typed(text, var, dims, Elem::Int)
+	}
+
+	fn typed(text: &str, var: bool, dims: usize, elem: Elem) -> Arg {
 		Arg {
 			text: text.to_owned(),
 			var,
 			dims,
+			elem,
 			leaders: Vec::new(),
 		}
 	}
@@ -829,6 +1225,12 @@ mod tests {
 			arg("y", true, 1),
 			arg("q", false, 1),
 			arg("m", true, 2),
+			typed("o", true, 1, Elem::OptInt),
+			typed("t", true, 0, Elem::Bool),
+			typed("bs", true, 1, Elem::Bool),
+			typed("bm", true, 2, Elem::Bool),
+			typed("s", true, 0, Elem::Set),
+			typed("ss", true, 1, Elem::Set),
 		];
 		// The first argument list of each global
 		let calls = filtered(&args, &[], &[], usize::MAX)
@@ -882,12 +1284,50 @@ mod tests {
         "min(x) = a",
         "nvalue(x) = a",
         "sort(x) = p",
-        "strict_lex2(m)",
+        "lex2_strict(m)",
         "strictly_decreasing(x)",
         "strictly_increasing(x)",
         "subcircuit(x)",
         "symmetric_all_different(x)",
+        "arg_val(x, a) = b",
+        "arg_sort(x) = y",
+        "diffn_nonstrict(x, y, p, q)",
+        "disjunctive_strict(x, p)",
+        "global_cardinality(x, set2array(index_set(p)), p, q)",
+        "global_cardinality_closed(x, set2array(index_set(p)), p, q)",
+        "inverse_in_range(x, p)",
+        "knapsack(p, q, x, a, b)",
+        "all_equal(bs)",
+        "count (i in index_set(bs)) (bs[i]) = a",
+        "count (i in index_set(bs)) (bs[i]) <= a",
+        "count_leq (blank)",
+        "count (i in index_set(bs)) (bs[i]) < a",
+        "count (i in index_set(bs)) (bs[i]) >= a",
+        "count (i in index_set(bs)) (bs[i]) > a",
+        "bs[a] = t",
+        "decreasing(bs)",
+        "increasing(bs)",
+        "lex_chain_less(bm)",
+        "lex_chain_lesseq(bm)",
+        "all_equal(ss)",
+        "all_different(ss)",
+        "all_disjoint(ss)",
+        "count (i in index_set(x)) (x[i] in s) = a",
+        "count (i in index_set(x)) (x[i] in s) <= a",
+        "count (i in index_set(x)) (x[i] in s) < a",
+        "count (i in index_set(x)) (x[i] in s) >= a",
+        "count (i in index_set(x)) (x[i] in s) > a",
+        "at_most1(ss)",
+        "int_set_channel(x, ss)",
+        "link_set_to_booleans(s, bs)",
+        "partition_set(ss, s)",
+        "all_different(o)",
+        "cumulative(o, p, q, a)",
+        "disjunctive(o, x)",
+        "disjunctive_strict(o, x)",
         "true",
+        "value_precede_chain(p, x)",
+        "seq_precede_chain(x)",
     ]
 "#]]
 		.assert_debug_eq(&calls);

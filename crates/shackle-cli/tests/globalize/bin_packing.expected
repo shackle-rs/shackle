@@ -1,1 +1,18 @@
-bin_packing.mzn|7|1|7|91 [ ] bin_packing_load(bin, weight) = load
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "bin_packing.mzn",
+          "firstColumn": 1,
+          "firstLine": 7,
+          "lastColumn": 91,
+          "lastLine": 7
+        }
+      ],
+      "replacement": "bin_packing_load(bin, weight) = load"
+    }
+  ],
+  "viewpoints": []
+}

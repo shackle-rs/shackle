@@ -1,1 +1,32 @@
-scalars.mzn|5|1|5|17;scalars.mzn|6|1|6|17;scalars.mzn|7|1|7|17 [ ] all_different([a, b, c])
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "scalars.mzn",
+          "firstColumn": 1,
+          "firstLine": 5,
+          "lastColumn": 17,
+          "lastLine": 5
+        },
+        {
+          "filename": "scalars.mzn",
+          "firstColumn": 1,
+          "firstLine": 6,
+          "lastColumn": 17,
+          "lastLine": 6
+        },
+        {
+          "filename": "scalars.mzn",
+          "firstColumn": 1,
+          "firstLine": 7,
+          "lastColumn": 17,
+          "lastLine": 7
+        }
+      ],
+      "replacement": "all_different([a, b, c])"
+    }
+  ],
+  "viewpoints": []
+}

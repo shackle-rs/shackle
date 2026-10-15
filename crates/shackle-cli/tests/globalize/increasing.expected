@@ -1,1 +1,18 @@
-increasing.mzn|4|1|4|50 [ ] increasing(x)
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "increasing.mzn",
+          "firstColumn": 1,
+          "firstLine": 4,
+          "lastColumn": 50,
+          "lastLine": 4
+        }
+      ],
+      "replacement": "increasing(x)"
+    }
+  ],
+  "viewpoints": []
+}

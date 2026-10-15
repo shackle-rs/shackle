@@ -1,1 +1,18 @@
-pairwise.mzn|4|1|4|57 [ ] all_different(x)
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "pairwise.mzn",
+          "firstColumn": 1,
+          "firstLine": 4,
+          "lastColumn": 57,
+          "lastLine": 4
+        }
+      ],
+      "replacement": "all_different(x)"
+    }
+  ],
+  "viewpoints": []
+}

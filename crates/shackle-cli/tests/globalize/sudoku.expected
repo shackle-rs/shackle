@@ -1,2 +1,31 @@
-sudoku.mzn|4|1|4|80 [ ] forall (r in 1..n) (all_different(x[r, ..]))
-sudoku.mzn|5|1|5|80 [ ] forall (c in 1..n) (all_different(x[.., c]))
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "sudoku.mzn",
+          "firstColumn": 1,
+          "firstLine": 4,
+          "lastColumn": 80,
+          "lastLine": 4
+        }
+      ],
+      "replacement": "forall (r in 1..n) (all_different(x[r, ..]))"
+    },
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "sudoku.mzn",
+          "firstColumn": 1,
+          "firstLine": 5,
+          "lastColumn": 80,
+          "lastLine": 5
+        }
+      ],
+      "replacement": "forall (c in 1..n) (all_different(x[.., c]))"
+    }
+  ],
+  "viewpoints": []
+}

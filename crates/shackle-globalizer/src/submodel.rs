@@ -9,7 +9,7 @@ use shackle_thir::{Callable, DeclarationId, Expression, ExpressionData};
 
 use super::{
 	Globalizer, Pass,
-	candidates::{self, Kind, candidates, selected},
+	candidates::{self, Elem, Kind, candidates, selected},
 	check::{Job, Plan, Search},
 	closure,
 	groups::{Unrolled, Variant},
@@ -137,29 +137,48 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	}
 
 	/// Search annotation that picks random values for the group's variables
+	/// (for a set: random members)
 	pub(super) fn search(&self, decls: &[DeclarationId<'db>]) -> Search {
-		let vars = decls
-			.iter()
-			.filter(|d| self.int_decl(**d).is_some_and(|(var, _)| var))
-			.map(|d| {
-				if self.model[*d].ty().is_array(self.db) {
-					format!("array1d({})", self.name(*d))
-				} else {
-					format!("[{}]", self.name(*d))
-				}
-			})
-			.collect::<Vec<_>>();
-		let mut solve = "solve".to_owned();
-		if !vars.is_empty() {
-			write!(
-				solve,
-				" :: int_search({}, input_order, indomain_random)",
-				vars.join(" ++ ")
-			)
-			.unwrap();
-		}
+		let vars = |elem: Elem| {
+			decls
+				.iter()
+				.filter(|d| self.arg_decl(**d) == Some((true, self.dims(**d), elem)))
+				.map(|d| {
+					if self.model[*d].ty().is_array(self.db) {
+						format!("array1d({})", self.name(*d))
+					} else {
+						format!("[{}]", self.name(*d))
+					}
+				})
+				.join(" ++ ")
+		};
+		let searches = [
+			(vars(Elem::Int), "int_search"),
+			(vars(Elem::OptInt), "int_search"),
+			(vars(Elem::Bool), "bool_search"),
+			(
+				Some(vars(Elem::Set))
+					.filter(|s| !s.is_empty())
+					.map(|s| format!("[gz_e in gz_s | gz_s in {s}, gz_e in ub(gz_s)]"))
+					.unwrap_or_default(),
+				"bool_search",
+			),
+		]
+		.into_iter()
+		.filter(|(vars, _)| !vars.is_empty())
+		.map(|(vars, search)| format!("{search}({vars}, input_order, indomain_random)"))
+		.collect::<Vec<_>>();
+		let solve = match &searches[..] {
+			[] => "solve".to_owned(),
+			[one] => format!("solve :: {one}"),
+			_ => format!("solve :: seq_search([{}])", searches.join(", ")),
+		};
 		let plain = format!("{solve} satisfy;\n");
 		[plain, format!("{solve} :: restart_luby(1) satisfy;\n")]
+	}
+
+	fn dims(&self, d: DeclarationId<'db>) -> usize {
+		self.model[d].ty().dims(self.db).unwrap_or(0)
 	}
 
 	/// The functions that a constraint is a call of, or that a comparison

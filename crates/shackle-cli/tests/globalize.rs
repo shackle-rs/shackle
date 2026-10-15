@@ -1,9 +1,8 @@
 //! End-to-end tests for `shackle globalize`. They need `MZN_STDLIB_DIR` and
 //! `minizinc` with Gecode on `PATH`. Each test uses two worker threads. The
 //! fixtures run from `tests/globalize` with `--json`, so locations use
-//! relative file names. The expected files show one finding per line
-//! (`file|line|col|line|col [ context ] replacement`), without the number of
-//! MiniZinc runs.
+//! relative file names. The expected files hold the JSON output without the
+//! number of MiniZinc runs.
 
 use std::{
 	path::Path,
@@ -36,37 +35,12 @@ fn check(name: &str, extra: &[&str]) {
 		String::from_utf8_lossy(&output.stdout),
 		String::from_utf8_lossy(&output.stderr),
 	);
-	let json: Value = serde_json::from_slice(&output.stdout).unwrap();
-	assert!(json["calls"].as_u64().is_some(), "{json}");
-	let mut lines = String::new();
-	for v in json["viewpoints"].as_array().unwrap() {
-		lines += &format!("% viewpoint: {}\n", v["replacement"].as_str().unwrap());
-	}
-	for f in json["findings"].as_array().unwrap() {
-		let locations = f["locations"].as_array().unwrap().iter().map(location);
-		let context = match &f["context"] {
-			Value::Null => String::new(),
-			c => format!("{} ", location(c)),
-		};
-		lines += &format!(
-			"{} [ {context}] {}\n",
-			locations.collect::<Vec<_>>().join(";"),
-			f["replacement"].as_str().unwrap()
-		);
-	}
-	expect_file![dir().join(format!("{name}.expected"))].assert_eq(&lines);
-}
-
-/// `file|line|col|line|col`
-fn location(l: &Value) -> String {
-	format!(
-		"{}|{}|{}|{}|{}",
-		l["filename"].as_str().unwrap(),
-		l["firstLine"],
-		l["firstColumn"],
-		l["lastLine"],
-		l["lastColumn"]
-	)
+	let mut json: Value = serde_json::from_slice(&output.stdout).unwrap();
+	// The number of MiniZinc runs changes with the timing of the workers
+	let calls = json.as_object_mut().unwrap().remove("calls");
+	assert!(calls.is_some_and(|c| c.is_u64()), "{json}");
+	let expected = serde_json::to_string_pretty(&json).unwrap() + "\n";
+	expect_file![dir().join(format!("{name}.expected"))].assert_eq(&expected);
 }
 
 #[test]

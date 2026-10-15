@@ -1,1 +1,18 @@
-queens.mzn|6|3|6|14 [ ] all_different(q)
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "queens.mzn",
+          "firstColumn": 3,
+          "firstLine": 6,
+          "lastColumn": 14,
+          "lastLine": 6
+        }
+      ],
+      "replacement": "all_different(q)"
+    }
+  ],
+  "viewpoints": []
+}

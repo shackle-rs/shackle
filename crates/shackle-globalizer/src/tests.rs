@@ -471,6 +471,7 @@ fn arguments_come_from_the_group() {
 			"a var=true dims=0 []",
 			"b var=true dims=0 []",
 			"c var=true dims=0 []",
+			"xo var=true dims=1 []",
 			"[a, b, c] var=true dims=1 []",
 		]
 	);
@@ -530,6 +531,12 @@ fn preamble_declares_only_needed_variables() {
       let { var int: m = sum (i in index_set(x)) (x[i] != i) } in
       all_different(x) /\ forall (i in index_set(x), k in 1..length(x) - 1) (
         x[i] != i /\ gz_succ(x, k, i) = i -> k >= m);
+    predicate gz_value_precede(int: s, int: t, array [int] of var int: x) =
+      forall (i in index_set(x)) (
+        x[i] = t -> exists (j in index_set(x) where j < i) (x[j] = s));
+    predicate gz_sliding_among(int: lo, int: hi, int: n, array [int] of var int: x, set of int: v) =
+      forall (i in min(index_set(x))..max(index_set(x)) - n + 1) (
+        lo <= sum (j in i..i + n - 1) (x[j] in v) /\ sum (j in i..i + n - 1) (x[j] in v) <= hi);
     int: n = 3;
     array [((1) .. (n))] of var ((1) .. (3)): x;
     var int: s = sum(x);
@@ -569,23 +576,25 @@ fn local_includes_are_user_files() {
 }
 
 #[test]
-fn search_annotation_uses_group_int_variables() {
+fn search_annotation_covers_every_argument_type() {
 	let src = r#"
 		array[1..2] of var 1..3: x;
 		array[1..2] of var opt 1..3: xo;
 		var 1..3: a;
 		var bool: b;
-		constraint b -> x[1] != a /\ xo[1] != 1;
+		var set of 1..3: s;
+		constraint b -> x[1] != a /\ xo[1] != 1 /\ 1 in s;
 	"#;
 	let search = with(src, |g| {
 		let decls = g.parts[0].decls(g.model);
 		g.search(&decls)
 	});
+	let solve = "solve :: seq_search([int_search(array1d(x) ++ [a], input_order, indomain_random), int_search(array1d(xo), input_order, indomain_random), bool_search([b], input_order, indomain_random), bool_search([gz_e in gz_s | gz_s in [s], gz_e in ub(gz_s)], input_order, indomain_random)])";
 	assert_eq!(
 		search,
 		[
-			"solve :: int_search(array1d(x) ++ [a], input_order, indomain_random) satisfy;\n",
-			"solve :: int_search(array1d(x) ++ [a], input_order, indomain_random) :: restart_luby(1) satisfy;\n",
+			format!("{solve} satisfy;\n"),
+			format!("{solve} :: restart_luby(1) satisfy;\n"),
 		]
 	);
 }
@@ -792,16 +801,25 @@ fn solve_test_templates_match_the_globals() {
 	let pairs = [
 		("circuit(x)", "gz_circuit(x)"),
 		("subcircuit(x)", "gz_subcircuit(x)"),
+		("value_precede(1, 2, x)", "gz_value_precede(1, 2, x)"),
 		(
-			"value_precede(1, 2, x)",
-			"forall (i in index_set(x)) (x[i] = 2 -> exists (j in index_set(x) where j < i) (x[j] = 1))",
+			"value_precede_chain([1, 2, 3], x)",
+			"forall (i in index_set([1, 2, 3]) where i < max(index_set([1, 2, 3]))) (gz_value_precede([1, 2, 3][i], [1, 2, 3][i + 1], x))",
+		),
+		(
+			"seq_precede_chain(x)",
+			"forall (i in 1..ub_array(x) - 1) (gz_value_precede(i, i + 1, x))",
+		),
+		(
+			"sliding_among(1, 2, 2, x, {1, 2})",
+			"gz_sliding_among(1, 2, 2, x, {1, 2})",
 		),
 	];
 	let options = GlobalizeOptions::default();
 	let runner = Runner::new(&options);
 	let all = |c: &str| {
 		let src = format!(
-			"include \"globals.mzn\";{}\narray[1..4] of var 1..4: x;\nvar 1..4: m;\nconstraint {c};\nsolve satisfy;\n",
+			"include \"globals.mzn\";{}\narray[1..4] of var 1..4: x;\nconstraint {c};\nsolve satisfy;\n",
 			candidates::LIBRARY
 		);
 		let outcome = runner.run(&src, None, 1000, false).unwrap();
@@ -1398,3 +1416,184 @@ fn solve_subcircuit_of_three_values_is_all_different() {
 	);
 	assert_eq!(found, ["all_different(x)"]);
 }
+
+global_test!(
+	solve_at_most_one_of_bools,
+	"count",
+	1,
+	"count (i in index_set(b)) (b[i]) <= 1",
+	"array[1..4] of var bool: b;\n",
+	"constraint forall(i, j in 1..4 where i < j)(not b[i] \\/ not b[j]);",
+	"constraint forall(i in 1..3)(not b[i] \\/ not b[i + 1]);",
+);
+
+global_test!(
+	solve_all_disjoint_sets,
+	"disjoint",
+	1,
+	"all_disjoint(s)",
+	"array[1..3] of var set of 1..4: s;\n",
+	"constraint forall(i, j in 1..3 where i < j)(s[i] intersect s[j] = {});",
+	"constraint forall(i in 1..2)(s[i] intersect s[i + 1] = {});",
+);
+
+global_test!(
+	solve_link_set_to_booleans,
+	"link",
+	1,
+	"link_set_to_booleans(s, b)",
+	"var set of 1..3: s;\narray[1..3] of var bool: b;\n",
+	"constraint forall(i in 1..3)(b[i] <-> i in s);",
+	"constraint forall(i in 1..2)(b[i] <-> i in s);",
+);
+
+global_test!(
+	solve_int_set_channel,
+	"channel",
+	1,
+	"int_set_channel(x, s)",
+	"array[1..3] of var 1..2: x;\narray[1..2] of var set of 1..3: s;\n",
+	"constraint forall(i in 1..3, j in 1..2)(x[i] = j <-> i in s[j]);",
+	"constraint forall(i in 1..3, j in 1..2)(x[i] = j -> i in s[j]);",
+);
+
+global_test!(
+	solve_among,
+	"among",
+	1,
+	"count (i in index_set(x)) (x[i] in S) = k",
+	"set of int: S = {1, 2};\nint: k = 2;\narray[1..4] of var 1..4: x;\n",
+	"constraint sum(i in 1..4)(x[i] in S) = k;",
+	"constraint sum(i in 1..3)(x[i] in S) = k;",
+);
+
+global_test!(
+	solve_all_different_except,
+	"except",
+	1,
+	"all_different_except(x, S)",
+	"set of int: S = {0, 1};\narray[1..4] of var 0..4: x;\n",
+	"constraint forall(i, j in 1..4 where i < j)(x[i] in S \\/ x[i] != x[j]);",
+	"constraint forall(i, j in 1..4 where i < j)(x[i] = 0 \\/ x[i] != x[j]);",
+);
+
+global_test!(
+	solve_all_different_of_opt,
+	"all_different",
+	1,
+	"all_different(x)",
+	"array[1..3] of var opt 1..3: x;\n",
+	"constraint forall(i, j in 1..3 where i < j)(occurs(x[i]) /\\ occurs(x[j]) -> deopt(x[i]) != deopt(x[j]));",
+	"constraint forall(i in 1..2)(occurs(x[i]) /\\ occurs(x[i + 1]) -> deopt(x[i]) != deopt(x[i + 1]));",
+);
+
+global_test!(
+	solve_arg_sort,
+	"arg_sort",
+	2,
+	"arg_sort(x) = p",
+	"include \"all_different.mzn\";\narray[1..3] of var 1..4: x;\narray[1..3] of var 1..3: p;\n",
+	"constraint all_different(p);\nconstraint forall(i in 1..2)(x[p[i]] < x[p[i + 1]] \\/ x[p[i]] = x[p[i + 1]] /\\ p[i] < p[i + 1]);",
+	// Ties in any order
+	"constraint all_different(p);\nconstraint forall(i in 1..2)(x[p[i]] <= x[p[i + 1]]);",
+);
+
+global_test!(
+	solve_table,
+	"table",
+	1,
+	"table(x, t)",
+	"array[1..2, 1..3] of int: t = [|1, 2, 3|3, 2, 1|];\narray[1..3] of var 1..3: x;\n",
+	"constraint exists(r in 1..2)(forall(j in 1..3)(x[j] = t[r, j]));",
+	"constraint exists(r in 1..2)(forall(j in 1..2)(x[j] = t[r, j]));",
+);
+
+global_test!(
+	solve_knapsack,
+	"knapsack",
+	2,
+	"knapsack(w, p, x, tw, tp)",
+	"array[1..3] of int: w = [2, 3, 4];\narray[1..3] of int: p = [1, 5, 2];\narray[1..3] of var 0..2: x;\nvar 0..20: tw;\nvar 0..20: tp;\n",
+	"constraint tw = sum(i in 1..3)(w[i] * x[i]);\nconstraint tp = sum(i in 1..3)(p[i] * x[i]);",
+	"constraint tw = sum(i in 1..3)(w[i] * x[i]);\nconstraint tp >= sum(i in 1..3)(p[i] * x[i]);",
+);
+
+global_test!(
+	solve_value_precede_chain,
+	"precede_chain",
+	1,
+	"value_precede_chain(c, x)",
+	"array[1..3] of int: c = [1, 2, 3];\narray[1..4] of var 1..3: x;\n",
+	"constraint forall(k in 1..2, i in 1..4)(x[i] = c[k + 1] -> exists(j in 1..i - 1)(x[j] = c[k]));",
+	"constraint forall(k in 1..1, i in 1..4)(x[i] = c[k + 1] -> exists(j in 1..i - 1)(x[j] = c[k]));",
+);
+
+global_test!(
+	solve_seq_precede_chain,
+	"seq_precede",
+	1,
+	"seq_precede_chain(x)",
+	"array[1..4] of var 1..3: x;\n",
+	"constraint forall(k in 1..2, i in 1..4)(x[i] = k + 1 -> exists(j in 1..i - 1)(x[j] = k));",
+	"constraint forall(k in 1..1, i in 1..4)(x[i] = k + 1 -> exists(j in 1..i - 1)(x[j] = k));",
+);
+
+global_test!(
+	solve_sliding_among,
+	"sliding_among",
+	1,
+	"sliding_among(lo, hi, n, x, S)",
+	"int: lo = 1;\nint: hi = 1;\nint: n = 2;\nset of int: S = {1};\narray[1..5] of var 1..3: x;\n",
+	"constraint forall(i in 1..5 - n + 1)(sum(j in i..i + n - 1)(x[j] in S) in lo..hi);",
+	"constraint forall(i in 1..5 - n)(sum(j in i..i + n - 1)(x[j] in S) in lo..hi);",
+);
+
+global_test!(
+	solve_disjunctive_strict,
+	"disjunctive",
+	1,
+	"disjunctive_strict(s, d)",
+	"array[1..3] of int: d = [0, 2, 1];\narray[1..3] of var 0..4: s;\n",
+	"constraint forall(i, j in 1..3 where i < j)(s[i] + d[i] <= s[j] \\/ s[j] + d[j] <= s[i]);",
+	"constraint forall(i, j in 1..3 where i < j)(d[i] = 0 \\/ d[j] = 0 \\/ s[i] + d[i] <= s[j] \\/ s[j] + d[j] <= s[i]);",
+);
+
+global_test!(
+	solve_global_cardinality_between_bounds,
+	"global_cardinality",
+	1,
+	"global_cardinality(x, set2array(index_set(lb)), lb, ub)",
+	"array[1..3] of int: lb = [1, 0, 1];\narray[1..3] of int: ub = [2, 1, 2];\narray[1..4] of var 1..4: x;\n",
+	"constraint forall(v in 1..3)(lb[v] <= sum(i in 1..4)(x[i] = v) /\\ sum(i in 1..4)(x[i] = v) <= ub[v]);",
+	"constraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) <= ub[v]);",
+);
+
+global_test!(
+	solve_all_equal_bools,
+	"all_equal",
+	1,
+	"all_equal(b)",
+	"array[1..4] of var bool: b;\n",
+	"constraint forall(i in 1..3)(b[i] = b[i + 1]);",
+	"constraint forall(i in 1..2)(b[i] = b[i + 1]);",
+);
+
+global_test!(
+	solve_arg_val,
+	"arg_val",
+	2,
+	"arg_val(x, v) = i",
+	"array[1..3] of var 1..3: x;\nvar 1..3: v;\nvar 1..3: i;\n",
+	"constraint x[i] = v /\\ forall(j in 1..3)(j < i -> x[j] != v);",
+	"constraint x[i] = v;",
+);
+
+global_test!(
+	solve_arg_val_weak,
+	"arg_val",
+	1,
+	"arg_val_weak(x, v) = o",
+	"array[1..3] of var 1..3: x;\nvar 1..3: v;\nvar opt 1..3: o;\n",
+	"constraint if exists(j in 1..3)(x[j] = v) then occurs(o) /\\ x[deopt(o)] = v /\\ forall(j in 1..3)(j < deopt(o) -> x[j] != v) else absent(o) endif;",
+	"constraint occurs(o) -> x[deopt(o)] = v;",
+);
