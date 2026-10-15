@@ -1,0 +1,28 @@
+[package]
+authors = {workspace = true}
+edition = {workspace = true}
+license = {workspace = true}
+repository = {workspace = true}
+description = "Suggests global constraints for MiniZinc models"
+name = "shackle-globalizer"
+version = "0.1.0"
+
+[dependencies]
+itertools = "0.15.0"
+log = {workspace = true}
+rustc-hash = {workspace = true}
+serde_json = {workspace = true}
+shackle = {workspace = true}
+shackle-diagnostics = {workspace = true}
+shackle-fmt = {workspace = true}
+shackle-hir = {workspace = true}
+shackle-thir = {workspace = true}
+shackle-ty = {workspace = true}
+tempfile = "3.5.0"
+
+[dev-dependencies]
+expect-test = {workspace = true}
+shackle-syntax = {workspace = true}
+
+[lints]
+workspace = true

@@ -13,6 +13,7 @@ use std::{
 
 use itertools::Itertools;
 use serde_json::Value;
+use shackle_diagnostics::{Error, Result};
 
 use super::{
 	GlobalizeOptions, RawFinding,
@@ -21,7 +22,6 @@ use super::{
 	run::{Outcome, Runner, Solution},
 	tidy,
 };
-use crate::{Error, Result};
 
 /// One unrolled group (a variant), printed
 #[derive(Debug)]
@@ -450,7 +450,7 @@ impl<'a> Checker<'a> {
 			// The workers own the receiver: if they all stop, `send` fails
 			let receive = Arc::new(Mutex::new(receive));
 			for _ in 0..jobs {
-				let receive = receive.clone();
+				let receive = Arc::clone(&receive);
 				let (found, failure, stop) = (&found, &failure, &stop);
 				let _ = scope.spawn(move || {
 					while !stop.load(Ordering::Relaxed) {

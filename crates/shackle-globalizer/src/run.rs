@@ -14,11 +14,10 @@ use std::{
 
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
-use shackle_diagnostics::{FileError, InternalError};
+use shackle_diagnostics::{Error, FileError, InternalError, Result};
 use tempfile::Builder;
 
 use super::GlobalizeOptions;
-use crate::{Error, Result};
 
 /// A solution: the JSON object of all output variables
 pub(super) type Solution = Map<String, Value>;
@@ -74,15 +73,15 @@ impl<'a> Runner<'a> {
 		};
 		let key = (hash(0), hash(1));
 		if let Some(outcome) = self.cache.lock().unwrap().get(&key) {
-			return Ok(outcome.clone());
+			return Ok(Arc::clone(outcome));
 		}
 		let outcome = Arc::new(self.run_uncached(model, data, n)?);
-		let _ = self.cache.lock().unwrap().insert(key, outcome.clone());
+		let _ = self.cache.lock().unwrap().insert(key, Arc::clone(&outcome));
 		Ok(outcome)
 	}
 
 	fn run_uncached(&self, model: &str, data: Option<&Path>, n: usize) -> Result<Outcome> {
-		self.calls.fetch_add(1, Ordering::Relaxed);
+		let _ = self.calls.fetch_add(1, Ordering::Relaxed);
 		let mut file = Builder::new()
 			.prefix("globalize")
 			.suffix(".mzn")
@@ -93,8 +92,8 @@ impl<'a> Runner<'a> {
 			.map_err(|err| file_error(file.path().to_owned(), err))?;
 		log::debug!("globalizer submodel:\n{model}");
 
-		let mut cmd = Command::new("minizinc");
-		cmd.stdin(Stdio::null())
+		let output = Command::new("minizinc")
+			.stdin(Stdio::null())
 			.arg("--solver")
 			.arg(&self.options.solver)
 			.args(["--output-mode", "json", "--json-stream"])
@@ -104,15 +103,14 @@ impl<'a> Runner<'a> {
 			.arg(self.options.seed.to_string())
 			.arg("--time-limit")
 			.arg(self.options.time_limit.as_millis().to_string())
-			.arg(file.path());
-		if let Some(data) = data {
-			cmd.arg(data);
-		}
-		let output = cmd.output().map_err(|err| {
-			Error::from(InternalError::new(format!(
-				"unable to run `minizinc` (is it on PATH?): {err}"
-			)))
-		})?;
+			.arg(file.path())
+			.args(data)
+			.output()
+			.map_err(|err| {
+				Error::from(InternalError::new(format!(
+					"unable to run `minizinc` (is it on PATH?): {err}"
+				)))
+			})?;
 		let mut outcome = parse(&String::from_utf8_lossy(&output.stdout));
 		log::debug!(
 			"globalizer run: {} solutions, complete: {}, error: {:?}",

@@ -71,7 +71,7 @@ impl<'a, 'db> Unrolled<'_, 'a, 'db> {
 	/// All instantiations of the leaders (`last[m]`: leader `m` takes the last
 	/// value of its set instead of the first)
 	pub(super) fn instantiations(&self) -> Vec<Vec<bool>> {
-		(0..1usize << self.leaders())
+		(0..1_usize << self.leaders())
 			.map(|mask| (0..self.leaders()).map(|m| mask & (1 << m) != 0).collect())
 			.collect()
 	}

@@ -42,10 +42,12 @@ use std::{
 
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
+use shackle_diagnostics::{Error, Result};
 use shackle_fmt::{MiniZincFormatOptions, format_str};
 use shackle_hir::{
 	Db,
 	input::{CompilerSettings, ModelFile, shackle_share_directory},
+	run_hir_phase,
 };
 use shackle_thir::{
 	DeclarationId, Expression, ItemId, Model,
@@ -64,9 +66,8 @@ use self::{
 	run::Runner,
 	viewpoints::Viewpoint,
 };
-use crate::Result;
 
-/// Options for [`crate::Model::globalize`]
+/// Options for [`globalize`]
 #[derive(Clone, Debug)]
 pub struct GlobalizeOptions {
 	/// MiniZinc solver used to sample solutions
@@ -137,7 +138,7 @@ impl Display for Finding {
 	}
 }
 
-/// Result of [`crate::Model::globalize`]
+/// Result of [`globalize`]
 #[derive(Clone, Debug)]
 pub struct Globalized {
 	/// New integer arrays (with their channelling constraint) that some
@@ -361,12 +362,22 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	}
 }
 
-/// Run the globalizer on the (type checked) model in `db`
-pub(crate) fn globalize(
-	db: &dyn Db,
+/// Suggest global constraints that can replace groups of constraints in
+/// `model`, checked by sampling solutions on each data file
+pub fn globalize(
+	model: &shackle::Model,
 	data: &[PathBuf],
 	options: &GlobalizeOptions,
 ) -> Result<Globalized> {
+	let db = model.db();
+	let errors = run_hir_phase(db)
+		.errors
+		.into_iter()
+		.cloned()
+		.collect::<Vec<_>>();
+	if !errors.is_empty() {
+		return Err(Error::try_from(errors).unwrap());
+	}
 	with_globalizer(db, data, options, |globalizer| {
 		let initial = if options.initial_pass {
 			globalizer.run(Pass::Initial, &FxHashSet::default())?

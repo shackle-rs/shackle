@@ -20,10 +20,9 @@ use expect_test as _;
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, Report, Result};
-use shackle::{
-	CompileTarget, Error, GlobalizeOptions, Message, Model, Solver, Status, error::InternalError,
-};
+use shackle::{CompileTarget, Error, Message, Model, Solver, Status, error::InternalError};
 use shackle_fmt::{MiniZincFormatOptions, check_format, format_files};
+use shackle_globalizer::{GlobalizeOptions, globalize};
 #[cfg(test)]
 use tempfile as _;
 
@@ -357,7 +356,7 @@ impl Globalize {
 			initial_pass: !self.no_initial_pass,
 			jobs: self.jobs,
 		};
-		let result = Model::from_file(model).globalize(&data, &options)?;
+		let result = globalize(&Model::from_file(model), &data, &options)?;
 		for viewpoint in &result.viewpoints {
 			println!("% viewpoint: {viewpoint}");
 		}

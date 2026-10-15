@@ -4,6 +4,7 @@
 use std::fmt::Write as _;
 
 use expect_test::{Expect, expect};
+use shackle::Model;
 use shackle_hir::run_hir_phase;
 use shackle_syntax::InputLang;
 
@@ -12,15 +13,14 @@ use super::{
 	groups::{Unrolled, Variant},
 	*,
 };
-use crate::Model;
 
 // Helpers
 
 fn with<R>(src: &str, f: impl FnOnce(&Globalizer<'_, '_>) -> R) -> R {
 	let model = Model::from_string(src.to_owned(), InputLang::MiniZinc);
-	let errors = run_hir_phase(&model.db).errors;
+	let errors = run_hir_phase(model.db()).errors;
 	assert!(errors.is_empty(), "{errors:?}");
-	with_globalizer(&model.db, &[], &GlobalizeOptions::default(), |g| f(g))
+	with_globalizer(model.db(), &[], &GlobalizeOptions::default(), |g| f(g))
 }
 
 /// Run `f` on the group with the given variant
@@ -98,9 +98,12 @@ fn globalize(src: &str, data: &[&str], options: &GlobalizeOptions) -> Globalized
 			path
 		})
 		.collect::<Vec<_>>();
-	Model::from_string(src.to_owned(), InputLang::MiniZinc)
-		.globalize(&data, options)
-		.unwrap()
+	crate::globalize(
+		&Model::from_string(src.to_owned(), InputLang::MiniZinc),
+		&data,
+		options,
+	)
+	.unwrap()
 }
 
 /// The findings as printed
@@ -261,7 +264,7 @@ fn submodels_of_modern_models_parse_again() {
 		text
 	});
 	let again = Model::from_string(printed.clone(), InputLang::MiniZinc);
-	let errors = run_hir_phase(&again.db).errors;
+	let errors = run_hir_phase(again.db()).errors;
 	assert!(errors.is_empty(), "{printed}\n{errors:?}");
 }
 
@@ -556,7 +559,7 @@ fn local_includes_are_user_files() {
 	let main = dir.path().join("main.mzn");
 	std::fs::write(&main, "include \"helper.mzn\";\nconstraint pairwise(x);\n").unwrap();
 	let model = Model::from_file(main);
-	let preamble = with_globalizer(&model.db, &[], &GlobalizeOptions::default(), |g| {
+	let preamble = with_globalizer(model.db(), &[], &GlobalizeOptions::default(), |g| {
 		g.preamble(&g.parts[0].decls(g.model))
 	});
 	assert!(preamble.contains(": x;"), "{preamble}");

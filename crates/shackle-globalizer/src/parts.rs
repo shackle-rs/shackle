@@ -83,9 +83,7 @@ pub(super) fn normalise<'a, 'db>(
 	// A part of an inlined function keeps the location of the call
 	let inside = |child: Origin<'db>, parent: Origin<'db>| {
 		let ((cf, cs), (pf, ps)) = (child.source_span(db), parent.source_span(db));
-		cf == pf
-			&& ps.offset() <= cs.offset()
-			&& cs.offset() + cs.len() <= ps.offset() + ps.len()
+		cf == pf && ps.offset() <= cs.offset() && cs.offset() + cs.len() <= ps.offset() + ps.len()
 	};
 	let child_origin = |child: &Expression<'db>, parent: Origin<'db>| {
 		if inside(child.origin(), parent) {
