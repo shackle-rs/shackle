@@ -1,0 +1,1 @@
+bin_packing.mzn|7|1|7|91 [ ] bin_packing_load(load, bin, weight)

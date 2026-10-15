@@ -18,20 +18,24 @@
 //! not proofs.
 
 mod candidates;
+mod check;
 mod parts;
 mod run;
 
 use std::{
 	collections::BTreeSet,
 	fmt::{self, Display, Write},
-	path::{Path, PathBuf},
-	sync::atomic::{AtomicUsize, Ordering},
+	path::PathBuf,
+	sync::{
+		Mutex,
+		atomic::{AtomicUsize, Ordering},
+		mpsc,
+	},
 	time::Duration,
 };
 
 use itertools::Itertools;
 use rustc_hash::FxHashSet;
-use serde_json::Value;
 use shackle_fmt::{MiniZincFormatOptions, format_str};
 use shackle_hir::{Db, constants::IdentifierRegistry, input::InputFiles};
 use shackle_thir::{
@@ -39,14 +43,16 @@ use shackle_thir::{
 	compat::OldMiniZincPrinter,
 	pretty_print::{Printer, print_item},
 	source::Origin,
+	transform::inlining::inline_user_functions,
 	traverse::{Visitor, visit_call, visit_expression},
 };
 use shackle_ty::VarType;
 
 use self::{
-	candidates::{Arg, ArgType, Candidate, candidates},
+	candidates::{Arg, ArgType, candidates},
+	check::{Checker, Job, Plan},
 	parts::{Loop, LoopKind, Part, decl_refs, is_par_int, normalise, refs},
-	run::{Outcome, Runner, Solution},
+	run::Runner,
 };
 use crate::Result;
 
@@ -71,6 +77,8 @@ pub struct GlobalizeOptions {
 	pub max_args: usize,
 	/// Abandon a pair of constraints if one implies the other on the samples
 	pub implies_check: bool,
+	/// Number of worker threads that run `minizinc`
+	pub jobs: usize,
 }
 
 impl Default for GlobalizeOptions {
@@ -85,6 +93,7 @@ impl Default for GlobalizeOptions {
 			exclude: Vec::new(),
 			max_args: 50_000,
 			implies_check: true,
+			jobs: std::thread::available_parallelism().map_or(1, |n| n.get()),
 		}
 	}
 }
@@ -282,9 +291,8 @@ struct Globalizer<'a, 'db> {
 	/// Printed declarations, functions etc. for the submodels, with the
 	/// declaration if it is a variable (only printed when a group needs it)
 	items: Vec<(Option<DeclarationId<'db>>, String)>,
-	data: Vec<Option<&'a Path>>,
 	options: &'a GlobalizeOptions,
-	runner: Runner,
+	checker: Checker,
 }
 
 impl<'a, 'db> Globalizer<'a, 'db> {
@@ -591,127 +599,14 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		solve
 	}
 
-	/// Sample solutions of `body`
-	fn sample(
-		&self,
-		body: &str,
-		decls: &[DeclarationId<'db>],
-		data: Option<&Path>,
-	) -> Result<Sample> {
-		let n = self.options.samples;
-		let check = |o: Outcome| match o.error {
-			Some(err) => {
-				log::info!("globalizer: submodel failed: {err}");
-				Sample::Error
-			}
-			None if o.solutions.is_empty() => Sample::Unsat,
-			None => Sample::Solutions(o.solutions),
-		};
-		// A plain search proves completeness if there are few solutions
-		let plain = self
-			.runner
-			.run(&format!("{body}{}", self.search(decls, false)), data, n)?;
-		if plain.complete || plain.error.is_some() || plain.solutions.is_empty() {
-			return Ok(check(plain));
-		}
-		// Restarts give more diverse samples, but can never prove completeness
-		let restart = self
-			.runner
-			.run(&format!("{body}{}", self.search(decls, true)), data, n)?;
-		if restart.error.is_none() && restart.solutions.len() >= n {
-			Ok(check(restart))
-		} else {
-			Ok(check(plain))
-		}
-	}
-
-	/// Keep the candidates that hold on all samples of `base`, and fill their
-	/// blanks. Returns `None` if the submodel has no samples.
-	fn check_candidates(
-		&self,
-		base: &str,
-		u: &Unrolled<'_, 'a, 'db>,
-		data: Option<&Path>,
-		mut cands: Vec<Candidate>,
-	) -> Result<Option<Vec<Candidate>>> {
-		let mut body = base.to_owned();
-		writeln!(
-			body,
-			"array[1..{}] of var bool: GZ_R :: output = [{}];",
-			cands.len(),
-			cands.iter().map(Candidate::checked).join(", ")
-		)
-		.unwrap();
-		for (k, c) in cands.iter().enumerate() {
-			if let Some(feature) = c.feature() {
-				writeln!(
-					body,
-					"array[int] of var int: GZ_F{k} :: output = {feature};"
-				)
-				.unwrap();
-			}
-		}
-		let solutions = match self.sample(&body, &u.decls, data)? {
-			Sample::Solutions(s) => s,
-			Sample::Unsat => return Ok(None),
-			// One bad candidate (e.g. a failed assertion) fails the whole run:
-			// split the candidates to find it
-			Sample::Error if cands.len() > 1 => {
-				let second = cands.split_off(cands.len() / 2);
-				let Some(mut first) = self.check_candidates(base, u, data, cands)? else {
-					return Ok(None);
-				};
-				let Some(second) = self.check_candidates(base, u, data, second)? else {
-					return Ok(None);
-				};
-				first.extend(second);
-				return Ok(Some(first));
-			}
-			Sample::Error => return Ok(Some(Vec::new())),
-		};
-		let mut k = 0;
-		cands.retain_mut(|c| {
-			k += 1;
-			let holds = solutions
-				.iter()
-				.all(|s| s["GZ_R"].get(k - 1) == Some(&Value::Bool(true)));
-			let features = solutions
-				.iter()
-				.map(|s| {
-					s.get(&format!("GZ_F{}", k - 1))
-						.and_then(Value::as_array)
-						.map(|a| a.iter().filter_map(Value::as_i64).collect::<Vec<_>>())
-						.unwrap_or_default()
-				})
-				.collect::<Vec<_>>();
-			holds && c.fill(&features)
-		});
-		Ok(Some(cands))
-	}
-
-	/// Whether `a` implies `b` on the samples of `a`
-	fn implies(
-		&self,
-		base: &str,
-		u: &Unrolled<'_, 'a, 'db>,
-		data: Option<&Path>,
-		a: &str,
-		b: &str,
-	) -> Result<bool> {
-		let body = format!("{base}constraint {a};\nvar bool: GZ_I :: output = {b};\n");
-		Ok(match self.sample(&body, &u.decls, data)? {
-			Sample::Solutions(s) => s.iter().all(|s| s["GZ_I"] == Value::Bool(true)),
-			_ => false,
-		})
-	}
-
-	/// Candidates that hold on all samples of the group (forward check)
-	fn forward(&self, u: &Unrolled<'_, 'a, 'db>) -> Result<Vec<Candidate>> {
+	/// Print an unrolled group with its candidates
+	fn plan(&self, u: &Unrolled<'_, 'a, 'db>) -> Plan {
+		let options = self.options;
 		let mut cands = candidates(
 			&self.arguments(u),
-			&self.options.include,
-			&self.options.exclude,
-			self.options.max_args,
+			&options.include,
+			&options.exclude,
+			options.max_args,
 		);
 		// A group that already is the global is vacuous
 		if let [single] = &u.parts[..]
@@ -726,181 +621,52 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		if u.leaders() > 0 {
 			cands.retain(|c| c.name != "true");
 		}
-		let mut constraints = self.print_group(u);
-		constraints.extend(u.context.map(|c| self.print_part(c)));
-		let mut tested = false;
-		for data in &self.data {
-			for last in Self::instantiations(u) {
-				if cands.is_empty() {
-					return Ok(cands);
-				}
-				let mut base = self.preamble(&u.decls);
-				base.push_str(&self.print_leaders(u, &last));
-				// Abandon a pair if one constraint implies the other
-				if let [a, b] = &constraints[..]
-					&& self.options.implies_check
-					&& (self.implies(&base, u, *data, a, b)?
-						|| self.implies(&base, u, *data, b, a)?)
-				{
-					return Ok(Vec::new());
-				}
-				for c in &constraints {
-					writeln!(base, "constraint {c};").unwrap();
-				}
-				// Without samples, skip the instantiation (see `print_leaders`)
-				let Some(kept) = self.check_candidates(&base, u, *data, cands.clone())? else {
-					continue;
-				};
-				cands = kept;
-				tested = true;
-			}
+		let wrap = (0..u.leaders())
+			.map(|m| {
+				let deps = refs(self.model, true, u.leader_loop(m).exprs());
+				let depends = (0..u.leaders())
+					.filter(|k| *k != m && deps.contains(&u.leader_loop(*k).decl))
+					.collect();
+				(self.print_loop(u.leader_loop(m)), depends)
+			})
+			.collect();
+		Plan {
+			preamble: self.preamble(&u.decls),
+			search: [self.search(&u.decls, false), self.search(&u.decls, true)],
+			leaders: Self::instantiations(u)
+				.iter()
+				.map(|last| self.print_leaders(u, last))
+				.collect(),
+			group: self.print_group(u),
+			context: u.context.map(|c| self.print_part(c)),
+			candidates: cands,
+			wrap,
 		}
-		Ok(if tested { cands } else { Vec::new() })
 	}
 
-	/// Drop candidates that hold without the group (on the samples of the
-	/// declarations and the context). Such a candidate can only pass the
-	/// reverse check if the group is redundant, and then only `true` is
-	/// reported. This saves a reverse check for each of them.
-	fn vacuous(&self, u: &Unrolled<'_, 'a, 'db>, cands: Vec<Candidate>) -> Result<Vec<Candidate>> {
-		let (trivial, mut cands): (Vec<_>, Vec<_>) =
-			cands.into_iter().partition(|c| c.name == "true");
-		if cands.is_empty() {
-			return Ok(trivial);
-		}
-		let mut base = self.preamble(&u.decls);
-		base.push_str(&self.print_leaders(u, &Self::instantiations(u)[0]));
-		if let Some(c) = u.context {
-			writeln!(base, "constraint {};", self.print_part(c)).unwrap();
-		}
-		if let Some(implied) = self.check_candidates(&base, u, self.data[0], cands.clone())? {
-			cands.retain(|c| !implied.contains(c));
-		}
-		cands.extend(trivial);
-		Ok(cands)
-	}
-
-	/// Whether all samples of the candidate (with the context) satisfy the
-	/// group (reverse check)
-	fn reverse(&self, u: &Unrolled<'_, 'a, 'db>, cand: &Candidate) -> Result<bool> {
-		let conj = self
-			.print_group(u)
+	/// All variants of a group with a context, printed
+	fn job(&self, group: &[usize], context: Option<usize>, decls: &[DeclarationId<'db>]) -> Job {
+		let plans = self
+			.variants(group)
 			.iter()
-			.map(|c| format!("({c})"))
-			.join(" /\\ ");
-		let mut tested = false;
-		for data in &self.data {
-			for last in Self::instantiations(u) {
-				let mut body = self.preamble(&u.decls);
-				body.push_str(&self.print_leaders(u, &last));
-				writeln!(body, "constraint {};", cand.call()).unwrap();
-				if let Some(c) = u.context {
-					writeln!(body, "constraint {};", self.print_part(c)).unwrap();
-				}
-				writeln!(body, "var bool: GZ_G :: output = {conj};").unwrap();
-				match self.sample(&body, &u.decls, *data)? {
-					Sample::Solutions(solutions) => {
-						if !solutions.iter().all(|s| s["GZ_G"] == Value::Bool(true)) {
-							return Ok(false);
-						}
-						tested = true;
-					}
-					// Outside the `where` clauses (see `print_leaders`)
-					Sample::Unsat => {}
-					Sample::Error => return Ok(false),
-				}
-			}
-		}
-		Ok(tested)
-	}
-
-	/// The replacement text: the call inside a `forall` over the leaders it
-	/// uses (and the leaders their sets depend on)
-	fn replacement(&self, u: &Unrolled<'_, 'a, 'db>, cand: &Candidate) -> String {
-		let mut used = cand.leaders.clone();
-		let mut i = 0;
-		while i < used.len() {
-			let deps = refs(self.model, true, u.leader_loop(used[i]).exprs());
-			for m in 0..u.leaders() {
-				if !used.contains(&m) && deps.contains(&u.leader_loop(m).decl) {
-					used.push(m);
-				}
-			}
-			i += 1;
-		}
-		if used.is_empty() {
-			return tidy(cand.call());
-		}
-		used.sort_unstable();
-		let gens = used
-			.iter()
-			.map(|m| self.print_loop(u.leader_loop(*m)))
-			.collect::<Vec<_>>();
-		tidy(format!("forall({})({})", gens.join(", "), cand.call()))
-	}
-
-	/// The checked candidates of one group with one context, over all variants
-	fn check_group(
-		&self,
-		group: &[usize],
-		context: Option<usize>,
-		decls: Vec<DeclarationId<'db>>,
-	) -> Result<Vec<String>> {
-		let mut found = Vec::new();
-		for variant in self.variants(group) {
-			let u = Unrolled {
-				parts: group.iter().map(|p| &self.parts[*p]).collect(),
-				variant: &variant,
-				context: context.map(|c| &self.parts[c]),
-				decls: decls.clone(),
-			};
-			for cand in self.vacuous(&u, self.forward(&u)?)? {
-				if self.reverse(&u, &cand)? {
-					found.push((self.replacement(&u, &cand), cand));
-				}
-			}
-		}
-		// A redundant group needs no global
-		if found.iter().any(|(_, c)| c.name == "true") {
-			found.retain(|(_, c)| c.name == "true");
-		}
-		// `all_different(x)` is the clearest of its equivalent forms
-		let different = found
-			.iter()
-			.filter(|(_, c)| c.name == "all_different")
-			.map(|(_, c)| c.args[0].clone())
-			.collect::<Vec<_>>();
-		found.retain(|(_, c)| match c.name {
-			"nvalue" => !different.contains(&c.args[1]),
-			"global_cardinality" if c.filled => {
-				!(different.contains(&c.args[0])
-					&& c.args[1]
-						.trim_matches(['[', ']'])
-						.split(", ")
-						.all(|n| n == "1"))
-			}
-			_ => true,
-		});
-		// Prefer arguments of the model over values filled from the samples
-		let given = found
-			.iter()
-			.filter(|(_, c)| !c.filled)
-			.map(|(_, c)| c.clone())
-			.collect::<Vec<_>>();
-		found.retain(|(_, c)| {
-			!c.filled
-				|| !given.iter().any(|g| {
-					g.name == c.name
-						&& g.args.len() == c.args.len()
-						&& (0..g.args.len())
-							.filter(|i| g.args[*i] != c.args[*i])
-							.count()
-							<= 1
+			.map(|variant| {
+				self.plan(&Unrolled {
+					parts: group.iter().map(|p| &self.parts[*p]).collect(),
+					variant,
+					context: context.map(|c| &self.parts[c]),
+					decls: decls.to_vec(),
 				})
-		});
-		Ok(found.into_iter().map(|(r, _)| r).unique().collect())
+			})
+			.collect();
+		Job {
+			group: group.to_vec(),
+			context,
+			plans,
+		}
 	}
 
+	/// Print the jobs on this thread (it owns the compiler database), and
+	/// check them on `jobs` worker threads
 	fn run(&self) -> Result<Vec<Finding>> {
 		let decls = self
 			.parts
@@ -916,29 +682,57 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 					.collect::<Vec<_>>()
 			})
 			.collect::<Vec<_>>();
-		let mut found = Vec::new();
-		for group in groups(&vars, self.options.max_group) {
-			let group_vars = group.iter().flat_map(|p| &vars[*p]).collect::<Vec<_>>();
-			// No context, or one other part that shares variables with the group
-			let contexts = std::iter::once(None).chain(
-				(0..self.parts.len())
-					.filter(|c| {
-						!group.contains(c) && vars[*c].iter().any(|v| group_vars.contains(&v))
-					})
-					.map(Some),
-			);
-			for context in contexts {
-				let mut group_decls = Vec::new();
-				for d in group.iter().chain(&context).flat_map(|p| &decls[*p]) {
-					if !group_decls.contains(d) {
-						group_decls.push(*d);
+		let workers = self.options.jobs.max(1);
+		let checker = &self.checker;
+		let found = Mutex::new(Vec::new());
+		let failure = Mutex::new(None);
+		let (send, receive) = mpsc::sync_channel::<Job>(workers);
+		let receive = Mutex::new(receive);
+		std::thread::scope(|scope| {
+			for _ in 0..workers {
+				scope.spawn(|| {
+					loop {
+						let Ok(job) = receive.lock().unwrap().recv() else {
+							break;
+						};
+						match checker.check_job(&job) {
+							Ok(replacements) => found.lock().unwrap().extend(
+								replacements
+									.into_iter()
+									.map(|r| (job.group.clone(), job.context, r)),
+							),
+							Err(err) => *failure.lock().unwrap() = Some(err),
+						}
 					}
-				}
-				for replacement in self.check_group(&group, context, group_decls)? {
-					found.push((group.clone(), context, replacement));
+				});
+			}
+			for group in groups(&vars, self.options.max_group) {
+				let group_vars = group.iter().flat_map(|p| &vars[*p]).collect::<Vec<_>>();
+				// No context, or one other part that shares variables with the group
+				let contexts = std::iter::once(None).chain(
+					(0..self.parts.len())
+						.filter(|c| {
+							!group.contains(c) && vars[*c].iter().any(|v| group_vars.contains(&v))
+						})
+						.map(Some),
+				);
+				for context in contexts {
+					let mut group_decls = Vec::new();
+					for d in group.iter().chain(&context).flat_map(|p| &decls[*p]) {
+						if !group_decls.contains(d) {
+							group_decls.push(*d);
+						}
+					}
+					let _ = send.send(self.job(&group, context, &group_decls));
 				}
 			}
+			// Let the workers stop when the queue is empty
+			drop(send);
+		});
+		if let Some(err) = failure.into_inner().unwrap() {
+			return Err(err);
 		}
+		let found = found.into_inner().unwrap();
 		Ok(shadow(&found)
 			.into_iter()
 			.map(|(group, context, replacement)| {
@@ -957,15 +751,6 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 			.into_iter()
 			.collect())
 	}
-}
-
-/// Result of sampling a submodel
-enum Sample {
-	Solutions(Vec<Solution>),
-	/// No solutions (or none found within the time limit)
-	Unsat,
-	/// `minizinc` failed
-	Error,
 }
 
 /// A finding before formatting: group, context and replacement
@@ -1002,7 +787,7 @@ pub(crate) fn globalize(
 		let findings = globalizer.run()?;
 		Ok(Globalized {
 			findings,
-			calls: globalizer.runner.calls.load(Ordering::Relaxed),
+			calls: globalizer.checker.runner.calls.load(Ordering::Relaxed),
 		})
 	})
 }
@@ -1020,6 +805,14 @@ fn with_globalizer<R>(
 		o.node()
 			.is_some_and(|n| user_files.contains(&n.model_file(db)))
 	};
+	// Inline the user's predicates and functions, so their constraints can be
+	// split into parts
+	let user_functions = model
+		.top_level_functions()
+		.filter(|(_, f)| f.body().is_some() && is_user_item(f.origin()))
+		.map(|(f, _)| f)
+		.collect::<FxHashSet<_>>();
+	let model = inline_user_functions(db, &model, user_functions);
 
 	// The THIR is printed before any transforms
 	let printer = OldMiniZincPrinter::new(db, &[], true);
@@ -1045,18 +838,21 @@ fn with_globalizer<R>(
 		printer,
 		parts: normalise(db, &model, is_user_item),
 		items,
-		data: if data.is_empty() {
-			vec![None]
-		} else {
-			data.iter().map(|d| Some(d.as_path())).collect()
-		},
 		options,
-		runner: Runner {
-			solver: options.solver.clone(),
-			time_limit: options.time_limit,
-			seed: options.seed,
-			calls: AtomicUsize::new(0),
-			cache: Default::default(),
+		checker: Checker {
+			runner: Runner {
+				solver: options.solver.clone(),
+				time_limit: options.time_limit,
+				seed: options.seed,
+				calls: AtomicUsize::new(0),
+				cache: Default::default(),
+			},
+			data: if data.is_empty() {
+				vec![None]
+			} else {
+				data.iter().cloned().map(Some).collect()
+			},
+			options: options.clone(),
 		},
 	};
 	f(&globalizer)

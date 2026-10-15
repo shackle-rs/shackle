@@ -323,6 +323,9 @@ struct Globalize {
 	/// Do not abandon pairs of constraints where one implies the other
 	#[arg(long)]
 	no_implies_check: bool,
+	/// Number of MiniZinc runs at the same time (default: number of CPUs)
+	#[arg(short = 'p', long)]
+	jobs: Option<usize>,
 	#[command(flatten)]
 	base: Compile,
 }
@@ -331,7 +334,7 @@ impl Globalize {
 	/// Run the globalizer and print one suggestion per line
 	pub fn dispatch(&self) -> Result<()> {
 		let (model, data) = self.base.sort_files()?;
-		let options = GlobalizeOptions {
+		let mut options = GlobalizeOptions {
 			solver: self.base.solver.clone(),
 			max_group: self.max_group,
 			samples: self.samples,
@@ -341,7 +344,11 @@ impl Globalize {
 			exclude: self.filter_ex.clone(),
 			max_args: self.max_args,
 			implies_check: !self.no_implies_check,
+			..Default::default()
 		};
+		if let Some(jobs) = self.jobs {
+			options.jobs = jobs;
+		}
 		let result = Model::from_file(model).globalize(&data, &options)?;
 		for finding in &result.findings {
 			println!("{finding}");

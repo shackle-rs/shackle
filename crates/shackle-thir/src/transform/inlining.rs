@@ -1,8 +1,11 @@
 //! Performs inlining of `:: mzn_inline_call_by_name` functions.
 //! - Replaces calls with the bodies of functions
 //! - Replaces references to parameters with the corresponding call argument
+//!
+//! [`inline_user_functions`] instead inlines a given set of functions by
+//! name (e.g. the user's predicates, for analysis).
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use shackle_diagnostics::Result;
 use shackle_hir::constants::IdentifierRegistry;
 use shackle_utils::maybe_grow_stack;
@@ -23,6 +26,23 @@ struct Inliner<'db, Dst: Marker, Src: Marker = ()> {
 	ids: &'db IdentifierRegistry<'db>,
 	map: FxHashMap<DeclarationId<'db, Src>, Expression<'db, Dst>>,
 	depth: u16,
+	/// Only inline these functions (by name), and keep their items
+	only: Option<FxHashSet<FunctionId<'db, Src>>>,
+	/// Functions being inlined (to leave recursive calls alone)
+	inlining: Vec<FunctionId<'db, Src>>,
+}
+
+impl<'db, Dst: Marker, Src: Marker> Inliner<'db, Dst, Src> {
+	/// Whether the function item is removed because all calls are inlined
+	fn removed(&self, model: &Model<'db, Src>, f: FunctionId<'db, Src>) -> bool {
+		self.only.is_none()
+			&& (model[f]
+				.annotations()
+				.has(model, self.ids.annotations.mzn_inline_call_by_name)
+				|| model[f]
+					.annotations()
+					.has(model, self.ids.annotations.mzn_inline))
+	}
 }
 
 impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, Dst, Src> {
@@ -35,13 +55,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 	}
 
 	fn add_function(&mut self, db: &'db dyn Db, model: &Model<'db, Src>, f: FunctionId<'db, Src>) {
-		if model[f]
-			.annotations()
-			.has(model, self.ids.annotations.mzn_inline_call_by_name)
-			|| model[f]
-				.annotations()
-				.has(model, self.ids.annotations.mzn_inline)
-		{
+		if self.removed(model, f) {
 			// Remove inlined function
 			return;
 		}
@@ -58,13 +72,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 		model: &Model<'db, Src>,
 		f: FunctionId<'db, Src>,
 	) {
-		if model[f]
-			.annotations()
-			.has(model, self.ids.annotations.mzn_inline_call_by_name)
-			|| model[f]
-				.annotations()
-				.has(model, self.ids.annotations.mzn_inline)
-		{
+		if self.removed(model, f) {
 			// Remove inlined function
 			return;
 		}
@@ -78,7 +86,10 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 		d: &Declaration<'db, Src>,
 	) -> Declaration<'db, Dst> {
 		let mut folded = fold_declaration(self, db, model, d);
-		if !self.map.is_empty() {
+		// ponytail: user functions keep their names so analysis output stays
+		// readable. A local name equal to a name in the call arguments is
+		// captured; rename to a fresh readable name if that shows up.
+		if !self.map.is_empty() && self.only.is_none() {
 			// Alpha rename for safety when inlining
 			folded.remove_name();
 		}
@@ -102,10 +113,11 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 					if let Callable::Function(f) = &c.function
 						&& let Some(body) = model[*f].body()
 					{
-						if model[*f]
-							.annotations()
-							.has(model, self.ids.annotations.mzn_inline)
-							|| is_macro_call(body)
+						if self.only.is_none()
+							&& (model[*f]
+								.annotations()
+								.has(model, self.ids.annotations.mzn_inline)
+								|| is_macro_call(body))
 						{
 							log::debug!(
 								"Inlining {} at {} using call by value semantics",
@@ -173,10 +185,13 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 								)
 							};
 						}
-						if model[*f]
-							.annotations()
-							.has(model, self.ids.annotations.mzn_inline_call_by_name)
-						{
+						let by_name = match &self.only {
+							Some(only) => only.contains(f) && !self.inlining.contains(f),
+							None => model[*f]
+								.annotations()
+								.has(model, self.ids.annotations.mzn_inline_call_by_name),
+						};
+						if by_name {
 							log::debug!(
 								"Inlining {} at {} using call by name semantics",
 								PrettyPrinter::new(db, model).pretty_print_signature((*f).into()),
@@ -191,6 +206,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 								"Exceeded maximum inlining depth, likely due to infinite recursion"
 							);
 
+							self.inlining.push(*f);
 							let mut restore = Vec::with_capacity(c.arguments.len());
 							for (param, arg) in
 								model[*f].parameters().iter().zip(c.arguments.iter())
@@ -200,6 +216,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 							}
 							let mut inlined = self.fold_expression(db, model, body);
 							inlined.set_origin(expression.origin());
+							let _ = self.inlining.pop();
 							for (param, prev) in model[*f].parameters().iter().zip(restore) {
 								if let Some(prev) = prev {
 									let _ = self.map.insert(*param, prev);
@@ -240,9 +257,32 @@ pub fn inline_functions<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model
 		ids: IdentifierRegistry::lookup(db),
 		map: FxHashMap::default(),
 		depth: 0,
+		only: None,
+		inlining: Vec::new(),
 	};
 	inliner.add_model(db, &model);
 	Ok(inliner.model)
+}
+
+/// Inline all calls to `functions` (which must have bodies) using call by
+/// name semantics. Recursive calls are left as calls, and the function items
+/// are kept.
+pub fn inline_user_functions<'db>(
+	db: &'db dyn Db,
+	model: &Model<'db>,
+	functions: FxHashSet<FunctionId<'db>>,
+) -> Model<'db> {
+	let mut inliner = Inliner {
+		replacement_map: ReplacementMap::default(),
+		model: Model::with_capacities(&model.item_counts()),
+		ids: IdentifierRegistry::lookup(db),
+		map: FxHashMap::default(),
+		depth: 0,
+		only: Some(functions),
+		inlining: Vec::new(),
+	};
+	inliner.add_model(db, model);
+	inliner.model
 }
 
 #[cfg(test)]

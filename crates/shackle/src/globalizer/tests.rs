@@ -7,7 +7,7 @@ use expect_test::{Expect, expect};
 use shackle_hir::run_hir_phase;
 use shackle_syntax::InputLang;
 
-use super::*;
+use super::{candidates::Candidate, *};
 use crate::Model;
 
 fn with<R>(src: &str, f: impl FnOnce(&Globalizer<'_, '_>) -> R) -> R {
@@ -316,7 +316,7 @@ fn replacement_wraps_used_leaders_and_their_dependencies() {
 				.map(|leaders| {
 					let mut cand = Candidate::raw("all_different", &["x[i, ..]"]);
 					cand.leaders = leaders;
-					g.replacement(u, &cand)
+					Checker::replacement(&g.plan(u), &cand)
 				})
 				.collect::<Vec<_>>()
 		})
@@ -507,6 +507,7 @@ fn solve(src: &str, data: &[&str], options: GlobalizeOptions) -> Vec<String> {
 fn group_of(max_group: usize) -> GlobalizeOptions {
 	GlobalizeOptions {
 		max_group,
+		jobs: 2,
 		..Default::default()
 	}
 }
@@ -649,6 +650,7 @@ fn solve_only(src: &str, filter: &str, max_group: usize) -> Vec<String> {
 		GlobalizeOptions {
 			max_group,
 			include: vec![filter.to_owned()],
+			jobs: 2,
 			..Default::default()
 		},
 	)
@@ -705,7 +707,10 @@ fn solve_bad_candidate_is_split_off() {
 				Candidate::raw("increasing", &["x"]),
 				Candidate::raw("all_equal", &["x"]),
 			];
-			g.check_candidates(&base, u, None, cands).unwrap().unwrap()
+			g.checker
+				.check_candidates(&base, &g.plan(u), &None, cands)
+				.unwrap()
+				.unwrap()
 		})
 	});
 	assert_eq!(kept, [Candidate::raw("all_different", &["x"])]);
@@ -724,9 +729,10 @@ fn solve_implies_check() {
 			let [a, b] = &g.print_group(u)[..] else {
 				unreachable!()
 			};
+			let plan = g.plan(u);
 			(
-				g.implies(&base, u, None, a, b).unwrap(),
-				g.implies(&base, u, None, b, a).unwrap(),
+				g.checker.implies(&base, &plan, &None, a, b).unwrap(),
+				g.checker.implies(&base, &plan, &None, b, a).unwrap(),
 			)
 		})
 	});
@@ -1118,4 +1124,92 @@ fn solve_leaders_never_give_true() {
 	// For i = 1 and j = 8 the diagonal is rarely violated on samples
 	let src = "int: n = 8;\narray[1..n] of var 1..n: q;\nconstraint forall(i, j in 1..n where i < j)(q[i] + i != q[j] + j);";
 	assert!(!solve_only(src, "true", 1).contains(&"true".to_owned()));
+}
+
+// M4: inlining, data files and workers
+
+#[test]
+fn normalise_inlines_user_predicates() {
+	check_parts(
+		r#"
+		include "all_different.mzn";
+		array[1..3] of var 1..3: x;
+		predicate pairwise(array[int] of var int: a) =
+			forall(i, j in index_set(a) where i < j)(a[i] != a[j]);
+		predicate both(var int: p, var int: q) = p > 0 /\ q > 0;
+		predicate opaque(var int: p);
+		predicate rec(int: k, var int: p) = if k = 0 then p > 0 else rec(k - 1, p) endif;
+		constraint pairwise(x);
+		constraint both(x[1], x[2]);
+		constraint opaque(x[3]);
+		constraint rec(2, x[3]);
+		constraint all_different(x);
+		"#,
+		expect![[r#"
+    forall(i in index_set(x), j in index_set(x) where ((i) < (j)))((((x[i])) != ((x[j]))))
+    (((x[1])) > (0))
+    (((x[2])) > (0))
+    opaque((x[3]))
+    if ((2) = (0)) then (((x[3])) > (0)) else rec(((2) - (1)), (x[3])) endif
+    all_different(x, {})
+"#]],
+	);
+}
+
+#[test]
+fn solve_user_predicate_is_inlined() {
+	let src = r#"
+		int: n = 4;
+		array[1..n] of var 0..9: y;
+		predicate sorted(array[int] of var int: a) =
+			forall(i in 1..length(a) - 1)(a[i] <= a[i + 1]) /\ a[1] >= 0;
+		constraint sorted(y);
+	"#;
+	let found = solve_only(src, "increasing", 1);
+	assert_eq!(found, ["increasing(y)"]);
+}
+
+#[test]
+fn solve_global_must_hold_for_every_data_file() {
+	let src = r#"
+		int: n;
+		array[1..n] of var 1..n: x;
+		constraint forall(i in 1..n - 1)(x[i] <= x[i + 1] \/ n > 4);
+	"#;
+	let options = || GlobalizeOptions {
+		max_group: 1,
+		include: vec!["increasing".to_owned()],
+		jobs: 2,
+		..Default::default()
+	};
+	assert_eq!(solve(src, &["n = 4;"], options()), ["increasing(x)"]);
+	assert!(solve(src, &["n = 4;", "n = 5;"], options()).is_empty());
+}
+
+#[test]
+fn solve_same_findings_for_any_number_of_workers() {
+	let src = r#"
+		int: n = 4;
+		array[1..n, 1..n] of var 1..n: x;
+		constraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2)(x[r, c1] != x[r, c2]);
+		constraint forall(c in 1..n, r1, r2 in 1..n where r1 < r2)(x[r1, c] != x[r2, c]);
+	"#;
+	let found = |jobs| {
+		let model = Model::from_string(src.to_owned(), InputLang::MiniZinc);
+		model
+			.globalize(
+				&[],
+				&GlobalizeOptions {
+					max_group: 1,
+					include: vec!["all_".to_owned()],
+					jobs,
+					..Default::default()
+				},
+			)
+			.unwrap()
+			.findings
+	};
+	let one = found(1);
+	assert_eq!(one.len(), 2, "{one:?}");
+	assert_eq!(found(4), one);
 }

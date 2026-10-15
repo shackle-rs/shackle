@@ -1,5 +1,5 @@
 //! End-to-end tests for `shackle globalize`. They need `minizinc` with Gecode
-//! on `PATH`. The fixtures run from `tests/globalize`, so locations use
+//! on `PATH`. Each test uses two worker threads. The fixtures run from `tests/globalize`, so locations use
 //! relative file names, and the `NUMCALLS` line is left out.
 
 use std::{
@@ -16,7 +16,7 @@ fn dir() -> &'static Path {
 fn globalize(args: &[&str]) -> Output {
 	Command::new(env!("CARGO_BIN_EXE_shackle"))
 		.current_dir(dir())
-		.args(["globalize", "--seed", "1"])
+		.args(["globalize", "--seed", "1", "--jobs", "2"])
 		.args(args)
 		.output()
 		.unwrap()
@@ -58,6 +58,11 @@ fn globalize_pairwise_with_data() {
 #[test]
 fn globalize_cars() {
 	check("cars", &["-M", "1", "cars.dzn"]);
+}
+
+#[test]
+fn globalize_bin_packing_with_data() {
+	check("bin_packing", &["-M", "1", "bin_packing.dzn"]);
 }
 
 #[test]
