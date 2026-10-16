@@ -979,6 +979,15 @@ pub(super) fn candidates(
 
 #[cfg(test)]
 impl Candidate {
+	/// The par guard, and the expression checked on the samples if it is not
+	/// the call itself
+	pub(super) fn guard_and_test(&self) -> (Option<&str>, Option<String>) {
+		(
+			self.guard.as_deref(),
+			self.test.map(|t| self.instantiate(t)),
+		)
+	}
+
 	/// A plain call `name(args)` for tests
 	pub(super) fn raw(name: &'static str, args: &[&str]) -> Self {
 		Candidate {

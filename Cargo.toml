@@ -75,6 +75,11 @@ tree-sitter-eprime = {path = "parsers/tree-sitter-eprime", version = "0.1.0"}
 tree-sitter-language = "0.1.7"
 tree-sitter-minizinc = {path = "parsers/tree-sitter-minizinc", version = "0.1.0"}
 
+# Type checking the standard library takes seconds without optimisation,
+# and every test that builds a model does it
+[profile.dev]
+opt-level = 2
+
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
 missing_docs = "warn"

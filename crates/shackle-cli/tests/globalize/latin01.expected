@@ -1,32 +1,5 @@
 {
-  "findings": [
-    {
-      "context": null,
-      "locations": [
-        {
-          "filename": "latin01.mzn",
-          "firstColumn": 1,
-          "firstLine": 5,
-          "lastColumn": 63,
-          "lastLine": 5
-        }
-      ],
-      "replacement": "forall (i in 1..n, j in 1..n) (global_cardinality_closed(b[i, j, ..], [0, 1]) = [2, 1])"
-    },
-    {
-      "context": null,
-      "locations": [
-        {
-          "filename": "latin01.mzn",
-          "firstColumn": 1,
-          "firstLine": 6,
-          "lastColumn": 63,
-          "lastLine": 6
-        }
-      ],
-      "replacement": "forall (i in 1..n, k in 1..n) (global_cardinality_closed(b[i, .., k], [0, 1]) = [2, 1])"
-    }
-  ],
+  "findings": [],
   "viewpoints": [
     {
       "context": null,

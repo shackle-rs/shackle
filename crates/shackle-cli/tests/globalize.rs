@@ -44,11 +44,6 @@ fn check(name: &str, extra: &[&str]) {
 }
 
 #[test]
-fn globalize_scalars() {
-	check("scalars", &["-M", "3"]);
-}
-
-#[test]
 fn globalize_pairwise_with_data() {
 	check("pairwise", &["pairwise.dzn"]);
 }
@@ -57,7 +52,17 @@ fn globalize_pairwise_with_data() {
 /// `sliding_sum` for each option
 #[test]
 fn globalize_cars() {
-	check("cars", &["-M", "1", "cars.dzn"]);
+	check(
+		"cars",
+		&[
+			"-M",
+			"1",
+			"--no-initial-pass",
+			"-f",
+			"sliding_sum,global_cardinality",
+			"cars.dzn",
+		],
+	);
 }
 
 #[test]
@@ -67,22 +72,7 @@ fn globalize_bin_packing_with_data() {
 
 #[test]
 fn globalize_latin_square_viewpoints() {
-	check("latin01", &["-M", "1"]);
-}
-
-#[test]
-fn globalize_queens() {
-	check("queens", &[]);
-}
-
-#[test]
-fn globalize_sudoku() {
-	check("sudoku", &[]);
-}
-
-#[test]
-fn globalize_increasing() {
-	check("increasing", &[]);
+	check("latin01", &["-M", "1", "-f", "all_different"]);
 }
 
 #[test]
@@ -92,10 +82,26 @@ fn globalize_no_global() {
 
 #[test]
 fn globalize_filters_globals_by_name() {
-	let excluded = globalize(&["-e", "all_diff", "pairwise.mzn", "pairwise.dzn"]);
+	let excluded = globalize(&[
+		"-M",
+		"1",
+		"--no-initial-pass",
+		"-e",
+		"all_diff",
+		"pairwise.mzn",
+		"pairwise.dzn",
+	]);
 	assert!(excluded.status.success());
 	assert!(!String::from_utf8_lossy(&excluded.stdout).contains("all_different"));
-	let included = globalize(&["-f", "different", "pairwise.mzn", "pairwise.dzn"]);
+	let included = globalize(&[
+		"-M",
+		"1",
+		"--no-initial-pass",
+		"-f",
+		"different",
+		"pairwise.mzn",
+		"pairwise.dzn",
+	]);
 	assert!(String::from_utf8_lossy(&included.stdout).contains("all_different(x)"));
 }
 

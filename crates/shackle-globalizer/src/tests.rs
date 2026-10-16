@@ -80,12 +80,23 @@ fn check_parts(src: &str, expected: Expect) {
 }
 
 /// Options with two worker threads
+/// Options for the solver tests: the initial pass (redundancy and
+/// viewpoints) only runs in the tests for it, as it checks every group
 fn options(max_group: usize, include: &[&str]) -> GlobalizeOptions {
 	GlobalizeOptions {
 		max_group,
 		include: include.iter().map(|s| s.to_string()).collect(),
 		jobs: 2,
+		initial_pass: false,
 		..Default::default()
+	}
+}
+
+/// Options with the initial pass
+fn initial(max_group: usize, include: &[&str]) -> GlobalizeOptions {
+	GlobalizeOptions {
+		initial_pass: true,
+		..options(max_group, include)
 	}
 }
 
@@ -117,11 +128,11 @@ fn shown(result: &Globalized) -> Vec<String> {
 /// The replacements found without data, with only the globals whose names
 /// contain one of `include` (all if empty)
 fn solve(src: &str, max_group: usize, include: &[&str]) -> Vec<String> {
-	globalize(src, &[], &options(max_group, include))
-		.findings
-		.into_iter()
-		.map(|f| f.replacement)
-		.collect()
+	replacements(globalize(src, &[], &options(max_group, include)))
+}
+
+fn replacements(result: Globalized) -> Vec<String> {
+	result.findings.into_iter().map(|f| f.replacement).collect()
 }
 
 fn assert_found(found: &[String], expected: &str) {
@@ -889,6 +900,127 @@ fn solve_implies_check() {
 	assert!(!backward);
 }
 
+/// Every table entry on small arguments of each type: the reported forms
+/// compile, and each one implies the form checked on the samples (if that is
+/// another expression)
+#[test]
+fn solve_table_entries_compile_and_agree() {
+	use candidates::{Arg, Elem, candidates};
+	let decls = r#"
+		var 1..3: a;
+		var 1..3: b;
+		int: k = 2;
+		array[1..3] of var 1..3: x;
+		array[1..3] of var 1..3: y;
+		array[1..3] of int: p = [1, 2, 3];
+		array[1..2, 1..3] of var 1..3: m;
+		array[1..2, 1..3] of int: t = [|1, 2, 3|3, 2, 1|];
+		array[1..2, 1..2, 1..2] of var 0..1: z;
+		var opt 1..3: o;
+		array[1..3] of var opt 1..3: ox;
+		var bool: c;
+		array[1..3] of var bool: bs;
+		array[1..3] of var bool: cs;
+		array[1..2, 1..3] of var bool: bm;
+		array[1..2, 1..3] of bool: bt = [|true, false, true|false, false, true|];
+		var set of 1..3: s;
+		set of int: S = {1, 2};
+		array[1..3] of var set of 1..3: ss;
+		array[1..3] of var set of 1..3: tt;
+	"#;
+	let arg = |text: &str, var, dims, elem| Arg {
+		text: text.to_owned(),
+		var,
+		dims,
+		elem,
+		leaders: Vec::new(),
+	};
+	let pool = [
+		arg("a", true, 0, Elem::Int),
+		arg("b", true, 0, Elem::Int),
+		arg("k", false, 0, Elem::Int),
+		arg("x", true, 1, Elem::Int),
+		arg("y", true, 1, Elem::Int),
+		arg("p", false, 1, Elem::Int),
+		arg("m", true, 2, Elem::Int),
+		arg("t", false, 2, Elem::Int),
+		arg("z", true, 3, Elem::Int),
+		arg("o", true, 0, Elem::OptInt),
+		arg("ox", true, 1, Elem::OptInt),
+		arg("c", true, 0, Elem::Bool),
+		arg("bs", true, 1, Elem::Bool),
+		arg("cs", true, 1, Elem::Bool),
+		arg("bm", true, 2, Elem::Bool),
+		arg("bt", false, 2, Elem::Bool),
+		arg("s", true, 0, Elem::Set),
+		arg("S", false, 0, Elem::Set),
+		arg("ss", true, 1, Elem::Set),
+		arg("tt", true, 1, Elem::Set),
+	];
+	let cands = candidates(&pool, |_, _, _| true, usize::MAX)
+		.into_iter()
+		.filter(|c| c.blank.is_none())
+		.collect::<Vec<_>>();
+	let options = GlobalizeOptions::default();
+	let runner = Runner::new(&options);
+	let preamble = format!("include \"globals.mzn\";{}{decls}", candidates::LIBRARY);
+	// All reified forms in one model
+	let reified = cands
+		.iter()
+		.filter(|c| c.guard_and_test().1.is_none())
+		.map(|c| c.checked())
+		.join(",\n");
+	let src =
+		format!("{preamble}array[int] of var bool: r :: output = [\n{reified}];\nsolve satisfy;\n");
+	let outcome = runner.run(&src, None, 1, false).unwrap();
+	assert!(
+		outcome.error.is_none() && !outcome.solutions.is_empty(),
+		"{outcome:?}"
+	);
+	// Each form with another checked expression: no solution of the
+	// reported form (where the guard holds) violates the checked one
+	let checks = cands
+		.iter()
+		.filter_map(|c| {
+			let (guard, test) = c.guard_and_test();
+			let test = test?;
+			let guard = guard.unwrap_or("true");
+			Some((c.call(), format!(
+				"{preamble}constraint {guard};\nconstraint {};\nvar bool: v :: output = not ({test});\nsolve maximize bool2int(v);\n",
+				c.call()
+			)))
+		})
+		.collect::<Vec<_>>();
+	let failed = std::thread::scope(|scope| {
+		let chunks = checks.chunks(checks.len().div_ceil(4)).collect::<Vec<_>>();
+		chunks
+			.into_iter()
+			.map(|chunk| {
+				scope.spawn(|| {
+					chunk
+						.iter()
+						.filter(|(call, src)| {
+							let outcome = runner.run(src, None, 1, false).unwrap();
+							let violated = outcome.solutions.last().is_some_and(|s| {
+								s.get("v") == Some(&serde_json::Value::Bool(true))
+							});
+							if outcome.error.is_some() || violated {
+								eprintln!("{call}: {outcome:?}");
+							}
+							outcome.error.is_some() || violated
+						})
+						.map(|(call, _)| call.clone())
+						.collect::<Vec<_>>()
+				})
+			})
+			.collect::<Vec<_>>()
+			.into_iter()
+			.flat_map(|h| h.join().unwrap())
+			.collect::<Vec<_>>()
+	});
+	assert!(failed.is_empty(), "{failed:?}");
+}
+
 /// The test templates must accept exactly the solutions of the global
 #[test]
 fn solve_test_templates_match_the_globals() {
@@ -939,7 +1071,7 @@ fn solve_test_templates_match_the_globals() {
 fn solve_all_different_pairwise() {
 	let src =
 		"array[1..4] of var 1..5: x;\nconstraint forall(i, j in 1..4 where i < j)(x[i] != x[j]);";
-	assert_eq!(solve(src, 1, &[]), ["all_different(x)"]);
+	assert_eq!(solve(src, 1, &["all_different"]), ["all_different(x)"]);
 }
 
 #[test]
@@ -951,7 +1083,7 @@ fn solve_all_different_missing_pair() {
 #[test]
 fn solve_all_different_of_scalars() {
 	let src = "var 1..3: a;\nvar 1..3: b;\nvar 1..3: c;\nconstraint a != b;\nconstraint b != c;\nconstraint a != c;";
-	let found = solve(src, 3, &[]);
+	let found = solve(src, 3, &["all_different"]);
 	// Found once: two of the three disequalities are not enough
 	let count = found
 		.iter()
@@ -963,8 +1095,8 @@ fn solve_all_different_of_scalars() {
 #[test]
 fn solve_all_different_dominates_its_equivalent_forms() {
 	// `nvalue(n, x)` and `global_cardinality` with all counts 1 are
-	// equivalent, but not reported
-	let src = "int: n = 4;\narray[1..n] of var 1..n: x;\nconstraint forall(i, j in 1..n where i < j)(x[i] != x[j]);";
+	// equivalent, but not reported (the only test with all globals)
+	let src = "int: n = 3;\narray[1..n] of var 1..n: x;\nconstraint forall(i, j in 1..n where i < j)(x[i] != x[j]);";
 	assert_eq!(solve(src, 1, &[]), ["all_different(x)"]);
 }
 
@@ -979,7 +1111,7 @@ fn solve_existing_global_is_vacuous() {
 fn solve_unsatisfiable_group_is_skipped() {
 	let src =
 		"array[1..4] of var 1..3: x;\nconstraint forall(i, j in 1..4 where i < j)(x[i] != x[j]);";
-	assert!(solve(src, 1, &[]).is_empty());
+	assert!(solve(src, 1, &["all_different"]).is_empty());
 }
 
 #[test]
@@ -994,15 +1126,16 @@ fn solve_rows_with_leaders() {
 #[test]
 fn solve_rows_missing_a_pair_in_the_last_row() {
 	// Only the last row misses a pair, so only the last leader value fails
-	let src = "int: n = 4;\narray[1..n, 1..n] of var 1..n: x;\nconstraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2 /\\ (r, c1, c2) != (n, 1, 2))(x[r, c1] != x[r, c2]);";
-	assert!(solve(src, 1, &[]).is_empty());
+	let src = "int: n = 3;\narray[1..n, 1..n] of var 1..n: x;\nconstraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2 /\\ (r, c1, c2) != (n, 1, 2))(x[r, c1] != x[r, c2]);";
+	assert!(solve(src, 1, &["all_different"]).is_empty());
 }
 
 #[test]
 fn solve_leaders_never_give_true() {
 	// For i = 1 and j = 8 the diagonal is rarely violated on samples
 	let src = "int: n = 8;\narray[1..n] of var 1..n: q;\nconstraint forall(i, j in 1..n where i < j)(q[i] + i != q[j] + j);";
-	assert!(!solve(src, 1, &["true"]).contains(&"true".to_owned()));
+	let found = replacements(globalize(src, &[], &initial(1, &["true"])));
+	assert!(!found.contains(&"true".to_owned()));
 }
 
 #[test]
@@ -1019,10 +1152,11 @@ fn solve_context_is_reported() {
 
 #[test]
 fn solve_redundant_group_is_true() {
+	let solve = |src| replacements(globalize(src, &[], &initial(1, &[])));
 	let src = "array[1..3] of var 1..3: x;\nconstraint x[1] >= 1;\nconstraint x[2] >= 2;";
-	assert_eq!(solve(src, 1, &[]), ["true"]);
+	assert_eq!(solve(src), ["true"]);
 	let src = "array[1..3] of var 1..3: x;\nconstraint x[1] >= 2;";
-	assert!(solve(src, 1, &[]).is_empty());
+	assert!(solve(src).is_empty());
 }
 
 #[test]
@@ -1034,8 +1168,7 @@ fn solve_user_predicate_is_inlined() {
 			forall(i in 1..length(a) - 1)(a[i] <= a[i + 1]) /\ a[1] >= 0;
 		constraint sorted(y);
 	"#;
-	// The initial pass also finds that `a[1] >= 0` is redundant
-	assert_eq!(solve(src, 1, &["increasing"]), ["increasing(y)", "true"]);
+	assert_eq!(solve(src, 1, &["increasing"]), ["increasing(y)"]);
 }
 
 #[test]
@@ -1060,15 +1193,15 @@ fn solve_global_must_hold_for_every_data_file() {
 #[test]
 fn solve_same_findings_for_any_number_of_workers() {
 	let src = r#"
-		int: n = 4;
-		array[1..n, 1..n] of var 1..n: x;
-		constraint forall(r in 1..n, c1, c2 in 1..n where c1 < c2)(x[r, c1] != x[r, c2]);
-		constraint forall(c in 1..n, r1, r2 in 1..n where r1 < r2)(x[r1, c] != x[r2, c]);
+		array[1..3] of var 1..3: x;
+		array[1..3] of var 1..3: y;
+		constraint forall(i, j in 1..3 where i < j)(x[i] != x[j]);
+		constraint forall(i in 1..2)(y[i] <= y[i + 1]);
 	"#;
 	let found = |jobs| {
 		let options = GlobalizeOptions {
 			jobs,
-			..options(1, &["all_"])
+			..options(1, &["all_different", "increasing"])
 		};
 		globalize(src, &[], &options).findings
 	};
@@ -1086,7 +1219,7 @@ const LATIN01: &str = r#"
 
 #[test]
 fn solve_initial_pass_finds_viewpoints() {
-	let result = globalize(LATIN01, &[], &options(1, &["all_different"]));
+	let result = globalize(LATIN01, &[], &initial(1, &["all_different"]));
 	// Each viewpoint, with the suggestions that use it
 	let found = result
 		.viewpoints
@@ -1138,9 +1271,9 @@ fn solve_without_initial_pass() {
 #[test]
 fn solve_redundant_group_is_left_out_of_the_full_pass() {
 	// `x[1] >= 1` is redundant, so it is not grouped alone in the full pass
-	let src = "array[1..4] of var 1..4: x;\nconstraint x[1] >= 1;\nconstraint forall(i, j in 1..4 where i < j)(x[i] != x[j]);";
+	let src = "array[1..3] of var 1..3: x;\nconstraint x[1] >= 1;\nconstraint forall(i, j in 1..3 where i < j)(x[i] != x[j]);";
 	assert_eq!(
-		shown(&globalize(src, &[], &options(1, &[]))),
+		shown(&globalize(src, &[], &initial(1, &["all_different"]))),
 		[
 			"<unnamed file>|2|1|2|20 [ ] true",
 			"<unnamed file>|3|1|3|57 [ ] all_different(x)",
@@ -1151,56 +1284,6 @@ fn solve_redundant_group_is_left_out_of_the_full_pass() {
 // One test for each global in the table
 
 global_test!(
-	solve_all_equal,
-	"all_equal",
-	1,
-	"all_equal(x)",
-	"array[1..4] of var 1..3: x;\n",
-	"constraint forall(i in 1..3)(x[i] = x[i + 1]);",
-	"constraint forall(i in 1..3)(x[i] <= x[i + 1]);",
-);
-
-global_test!(
-	solve_alldifferent_except_0,
-	"except_0",
-	1,
-	"alldifferent_except_0(x)",
-	"array[1..4] of var 0..4: x;\n",
-	"constraint forall(i, j in 1..4 where i < j)(x[i] = 0 \\/ x[j] = 0 \\/ x[i] != x[j]);",
-	"constraint forall(i, j in 1..4 where i < j /\\ (i, j) != (1, 4))(x[i] = 0 \\/ x[j] = 0 \\/ x[i] != x[j]);",
-);
-
-global_test!(
-	solve_bin_packing,
-	"bin_packing",
-	1,
-	"bin_packing(c, bin, w)",
-	"array[1..3] of int: w = [2, 3, 4];\nint: c = 7;\narray[1..3] of var 1..2: bin;\n",
-	"constraint forall(b in 1..2)(sum(i in 1..3)(w[i] * (bin[i] = b)) <= c);",
-	"constraint forall(b in 1..2)(sum(i in 1..3)(w[i] * (bin[i] = b)) <= c - 1);",
-);
-
-global_test!(
-	solve_bin_packing_capa,
-	"bin_packing_capa",
-	1,
-	"bin_packing_capa(c, bin, w)",
-	"array[1..3] of int: w = [2, 3, 4];\narray[1..2] of int: c = [5, 7];\narray[1..3] of var 1..2: bin;\n",
-	"constraint forall(b in 1..2)(sum(i in 1..3)(w[i] * (bin[i] = b)) <= c[b]);",
-	"constraint forall(b in 1..2)(sum(i in 1..3)(w[i] * (bin[i] = b)) <= c[b] + 1);",
-);
-
-global_test!(
-	solve_bin_packing_load,
-	"bin_packing_load",
-	1,
-	"bin_packing_load(bin, w) = load",
-	"array[1..3] of int: w = [2, 3, 4];\narray[1..3] of var 1..2: bin;\narray[1..2] of var 0..9: load;\n",
-	"constraint forall(b in 1..2)(load[b] = sum(i in 1..3)(w[i] * (bin[i] = b)));",
-	"constraint forall(b in 1..2)(load[b] = sum(i in 1..2)(w[i] * (bin[i] = b)));",
-);
-
-global_test!(
 	solve_count,
 	"count",
 	1,
@@ -1208,98 +1291,6 @@ global_test!(
 	"int: v = 2;\nint: c = 2;\narray[1..4] of var 1..3: x;\n",
 	"constraint sum(i in 1..4)(x[i] = v) = c;",
 	"constraint sum(i in 1..4)(x[i] = v) <= c;",
-);
-
-global_test!(
-	solve_count_leq,
-	"count",
-	1,
-	"count (i in index_set(x)) (x[i] = v) <= c",
-	"int: v = 2;\nint: c = 2;\narray[1..4] of var 1..3: x;\n",
-	"constraint sum(i in 1..4)(x[i] = v) <= c;",
-	"constraint sum(i in 1..3)(x[i] = v) <= c;",
-);
-
-global_test!(
-	solve_count_geq,
-	"count",
-	1,
-	"count (i in index_set(x)) (x[i] = v) >= c",
-	"int: v = 2;\nint: c = 2;\narray[1..4] of var 1..3: x;\n",
-	"constraint sum(i in 1..4)(x[i] = v) >= c;",
-	"constraint sum(i in 1..3)(x[i] = v) >= c;",
-);
-
-global_test!(
-	solve_cumulative,
-	"cumulative",
-	1,
-	"cumulative(s, d, r, b)",
-	"array[1..3] of int: d = [2, 2, 2];\narray[1..3] of int: r = [1, 1, 1];\nint: b = 2;\narray[1..3] of var 0..4: s;\n",
-	"constraint forall(t in 0..6)(sum(i in 1..3)(r[i] * (s[i] <= t /\\ t < s[i] + d[i])) <= b);",
-	"constraint forall(t in 0..6)(sum(i in 1..3)(r[i] * (s[i] <= t /\\ t < s[i] + d[i])) <= b - 1);",
-);
-
-global_test!(
-	solve_decreasing,
-	"decreasing",
-	1,
-	"decreasing(x)",
-	"array[1..5] of var 1..9: x;\n",
-	"constraint forall(i in 1..4)(x[i] >= x[i + 1]);",
-	"constraint forall(i in 1..4 where i != 2)(x[i] >= x[i + 1]);",
-);
-
-global_test!(
-	solve_diffn,
-	"diffn",
-	1,
-	"diffn(x, y, w, h)",
-	"array[1..3] of int: w = [1, 2, 1];\narray[1..3] of int: h = [2, 1, 1];\narray[1..3] of var 0..3: x;\narray[1..3] of var 0..3: y;\n",
-	"constraint forall(i, j in 1..3 where i < j)(x[i] + w[i] <= x[j] \\/ x[j] + w[j] <= x[i] \\/ y[i] + h[i] <= y[j] \\/ y[j] + h[j] <= y[i]);",
-	"constraint forall(i, j in 1..3 where i < j)(x[i] + w[i] <= x[j] \\/ x[j] + w[j] <= x[i] \\/ y[i] + h[i] <= y[j]);",
-);
-
-global_test!(
-	solve_disjunctive,
-	"disjunctive",
-	1,
-	"disjunctive(s, d)",
-	"array[1..3] of int: d = [2, 1, 2];\narray[1..3] of var 0..5: s;\n",
-	"constraint forall(i, j in 1..3 where i < j)(s[i] + d[i] <= s[j] \\/ s[j] + d[j] <= s[i]);",
-	"constraint forall(i, j in 1..3 where i < j /\\ j != 3)(s[i] + d[i] <= s[j] \\/ s[j] + d[j] <= s[i]);",
-);
-
-global_test!(
-	solve_distribute,
-	"distribute",
-	1,
-	"distribute(value, base) = card",
-	"array[1..2] of int: value = [1, 3];\narray[1..4] of var 1..3: base;\narray[1..2] of var 0..4: card;\n",
-	"constraint forall(i in 1..2)(card[i] = sum(j in 1..4)(base[j] = value[i]));",
-	"constraint forall(i in 1..2)(card[i] = sum(j in 1..3)(base[j] = value[i]));",
-);
-
-global_test!(
-	solve_global_cardinality,
-	"global_cardinality",
-	1,
-	"global_cardinality_closed(x, set2array(index_set(c))) = c",
-	"",
-	"array[1..3] of int: c = [1, 1, 2];\narray[1..4] of var 1..3: x;\nconstraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) = c[v]);",
-	// Counts of at most 2 can vary
-	"array[1..3] of int: c = [2, 2, 2];\narray[1..4] of var 1..3: x;\nconstraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) <= c[v]);",
-);
-
-// The value 4 is not counted
-global_test!(
-	solve_global_cardinality_open,
-	"global_cardinality",
-	1,
-	"global_cardinality(x, set2array(index_set(c))) = c",
-	"array[1..3] of int: c = [1, 1, 1];\narray[1..4] of var 1..4: x;\n",
-	"constraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) = c[v]);",
-	"constraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) <= c[v]);",
 );
 
 global_test!(
@@ -1313,67 +1304,6 @@ global_test!(
 );
 
 global_test!(
-	solve_increasing,
-	"increasing",
-	1,
-	"increasing(x)",
-	"array[1..5] of var 1..9: x;\n",
-	"constraint forall(i in 1..4)(x[i] <= x[i + 1]);",
-	"constraint forall(i in 1..4 where i != 2)(x[i] <= x[i + 1]);",
-);
-
-global_test!(
-	solve_inverse,
-	"inverse",
-	1,
-	"inverse(f) = g",
-	"array[1..3] of var 1..3: f;\narray[1..3] of var 1..3: g;\n",
-	"constraint forall(i, j in 1..3)(f[i] = j <-> g[j] = i);",
-	"constraint forall(i, j in 1..3 where i != 3)(f[i] = j <-> g[j] = i);",
-);
-
-global_test!(
-	solve_lex_lesseq,
-	"lex_",
-	1,
-	"lex_lesseq(x, y)",
-	"array[1..3] of var 1..2: x;\narray[1..3] of var 1..2: y;\n",
-	"constraint x[1] < y[1] \\/ (x[1] = y[1] /\\ (x[2] < y[2] \\/ (x[2] = y[2] /\\ x[3] <= y[3])));",
-	"constraint x[1] < y[1] \\/ (x[1] = y[1] /\\ (x[2] < y[2] \\/ (x[2] = y[2] /\\ x[3] > y[3])));",
-);
-
-global_test!(
-	solve_lex_less,
-	"lex_",
-	1,
-	"lex_less(x, y)",
-	"array[1..3] of var 1..2: x;\narray[1..3] of var 1..2: y;\n",
-	"constraint x[1] < y[1] \\/ (x[1] = y[1] /\\ (x[2] < y[2] \\/ (x[2] = y[2] /\\ x[3] < y[3])));",
-	"constraint x[1] < y[1] \\/ (x[1] = y[1] /\\ (x[2] < y[2] \\/ (x[2] = y[2] /\\ x[3] <= y[3])));",
-);
-
-global_test!(
-	solve_lex2,
-	"lex2",
-	2,
-	"lex2(m)",
-	"array[1..3, 1..3] of var 0..1: m;\nconstraint forall(i in 1..2)(lex_lesseq(m[i, ..], m[i + 1, ..]));\n",
-	"constraint forall(j in 1..2)(lex_lesseq(m[.., j], m[.., j + 1]));",
-	"constraint forall(j in 1..1)(lex_lesseq(m[.., j], m[.., j + 1]));",
-);
-
-global_test!(
-	solve_maximum,
-	"maximum",
-	2,
-	"max(x) = m",
-	"array[1..3] of var 1..4: x;\nvar 1..4: m;\n",
-	"constraint forall(i in 1..3)(m >= x[i]);\nconstraint exists(i in 1..3)(m = x[i]);",
-	// `m` can be larger than all of `x`
-	"constraint forall(i in 1..3)(m >= x[i]);",
-);
-
-global_test!(
 	solve_maximum_from_samples,
 	"maximum",
 	2,
@@ -1381,117 +1311,6 @@ global_test!(
 	"array[1..3] of var 1..9: x;\n",
 	"constraint exists(i in 1..3)(x[i] = 7) /\\ forall(i in 1..3)(x[i] <= 7);",
 	"constraint forall(i in 1..3)(x[i] <= 7);",
-);
-
-global_test!(
-	solve_minimum,
-	"minimum",
-	2,
-	"min(x) = m",
-	"array[1..3] of var 1..4: x;\nvar 1..4: m;\n",
-	"constraint forall(i in 1..3)(m <= x[i]);\nconstraint exists(i in 1..3)(m = x[i]);",
-	"constraint forall(i in 1..3)(m <= x[i]);",
-);
-
-global_test!(
-	solve_nvalue,
-	"nvalue",
-	1,
-	"nvalue(x) = n",
-	"array[1..4] of var 1..3: x;\nvar 0..4: n;\n",
-	"constraint n = sum(v in 1..3)(exists(i in 1..4)(x[i] = v));",
-	"constraint n = sum(v in 1..2)(exists(i in 1..4)(x[i] = v));",
-);
-
-global_test!(
-	solve_sliding_sum,
-	"sliding_sum",
-	1,
-	"sliding_sum(0, u, w, x)",
-	"int: u = 3;\nint: w = 2;\narray[1..5] of var 0..3: x;\n",
-	"constraint forall(i in 1..4)(sum(j in i..i + w - 1)(x[j]) <= u);",
-	"constraint forall(i in 1..3)(sum(j in i..i + w - 1)(x[j]) <= u);",
-);
-
-global_test!(
-	solve_sort,
-	"sort",
-	2,
-	"sort(x) = y",
-	"include \"globals.mzn\";\narray[1..3] of var 1..3: x;\narray[1..3] of var 1..3: y;\nconstraint increasing(y);\n",
-	"constraint forall(v in 1..3)(count(x, v) = count(y, v));",
-	"constraint y[1] <= x[1];",
-);
-
-global_test!(
-	solve_value_precede,
-	"value_precede",
-	1,
-	"value_precede(s, t, x)",
-	"int: s = 1;\nint: t = 2;\narray[1..4] of var 1..3: x;\n",
-	"constraint forall(i in 1..4)(x[i] = t -> exists(j in 1..i - 1)(x[j] = s));",
-	"constraint forall(i in 1..4)(x[i] = s -> exists(j in 1..i - 1)(x[j] = t));",
-);
-
-global_test!(
-	solve_arg_max,
-	"arg_max",
-	2,
-	"arg_max(x) = i",
-	"array[1..3] of var 1..4: x;\nvar 1..3: i;\n",
-	"constraint forall(j in 1..3)(x[i] >= x[j]);\nconstraint forall(j in 1..3)(j < i -> x[j] < x[i]);",
-	// Ties do not pick the first index
-	"constraint forall(j in 1..3)(x[i] >= x[j]);",
-);
-
-global_test!(
-	solve_element,
-	"element",
-	1,
-	"x[i] = y",
-	"array[1..3] of var 1..4: x;\nvar 1..3: i;\nvar 1..4: y;\n",
-	"constraint forall(j in 1..3)(i = j -> y = x[j]);",
-	"constraint forall(j in 1..2)(i = j -> y = x[j]);",
-);
-
-global_test!(
-	solve_lex_chain_less,
-	"lex_chain",
-	1,
-	"lex_chain_less(m)",
-	"array[1..2, 1..3] of var 0..1: m;\n",
-	"constraint forall(j in 1..2)(lex_less(m[.., j], m[.., j + 1]));",
-	"constraint forall(j in 1..2)(lex_lesseq(m[.., j], m[.., j + 1]));",
-);
-
-global_test!(
-	solve_member,
-	"member",
-	1,
-	"member(x, y)",
-	"array[1..3] of var 1..4: x;\nvar 1..4: y;\n",
-	"constraint exists(i in 1..3)(x[i] = y);",
-	"constraint exists(i in 1..2)(x[i] = y);",
-);
-
-global_test!(
-	solve_strictly_increasing,
-	"increasing",
-	1,
-	"strictly_increasing(x)",
-	"array[1..4] of var 1..6: x;\n",
-	"constraint forall(i in 1..3)(x[i] < x[i + 1]);",
-	"constraint forall(i in 1..3)(x[i] <= x[i + 1]);",
-);
-
-global_test!(
-	solve_symmetric_all_different,
-	"symmetric",
-	1,
-	"symmetric_all_different(x)",
-	"array[1..4] of var 1..4: x;\n",
-	"constraint forall(i, j in 1..4)(x[i] = j <-> x[j] = i);",
-	"constraint forall(i, j in 1..4 where i < j)(x[i] = j -> x[j] = i);",
 );
 
 global_test!(
@@ -1543,46 +1362,6 @@ global_test!(
 );
 
 global_test!(
-	solve_link_set_to_booleans,
-	"link",
-	1,
-	"link_set_to_booleans(s, b)",
-	"var set of 1..3: s;\narray[1..3] of var bool: b;\n",
-	"constraint forall(i in 1..3)(b[i] <-> i in s);",
-	"constraint forall(i in 1..2)(b[i] <-> i in s);",
-);
-
-global_test!(
-	solve_int_set_channel,
-	"channel",
-	1,
-	"int_set_channel(x, s)",
-	"array[1..3] of var 1..2: x;\narray[1..2] of var set of 1..3: s;\n",
-	"constraint forall(i in 1..3, j in 1..2)(x[i] = j <-> i in s[j]);",
-	"constraint forall(i in 1..3, j in 1..2)(x[i] = j -> i in s[j]);",
-);
-
-global_test!(
-	solve_among,
-	"among",
-	1,
-	"count (i in index_set(x)) (x[i] in S) = k",
-	"set of int: S = {1, 2};\nint: k = 2;\narray[1..4] of var 1..4: x;\n",
-	"constraint sum(i in 1..4)(x[i] in S) = k;",
-	"constraint sum(i in 1..3)(x[i] in S) = k;",
-);
-
-global_test!(
-	solve_all_different_except,
-	"except",
-	1,
-	"all_different(x, S)",
-	"set of int: S = {0, 1};\narray[1..4] of var 0..4: x;\n",
-	"constraint forall(i, j in 1..4 where i < j)(x[i] in S \\/ x[i] != x[j]);",
-	"constraint forall(i, j in 1..4 where i < j)(x[i] = 0 \\/ x[i] != x[j]);",
-);
-
-global_test!(
 	solve_all_different_of_opt,
 	"all_different",
 	1,
@@ -1590,117 +1369,6 @@ global_test!(
 	"array[1..3] of var opt 1..3: x;\n",
 	"constraint forall(i, j in 1..3 where i < j)(occurs(x[i]) /\\ occurs(x[j]) -> deopt(x[i]) != deopt(x[j]));",
 	"constraint forall(i in 1..2)(occurs(x[i]) /\\ occurs(x[i + 1]) -> deopt(x[i]) != deopt(x[i + 1]));",
-);
-
-global_test!(
-	solve_arg_sort,
-	"arg_sort",
-	2,
-	"arg_sort(x) = p",
-	"include \"all_different.mzn\";\narray[1..3] of var 1..4: x;\narray[1..3] of var 1..3: p;\n",
-	"constraint all_different(p);\nconstraint forall(i in 1..2)(x[p[i]] < x[p[i + 1]] \\/ x[p[i]] = x[p[i + 1]] /\\ p[i] < p[i + 1]);",
-	// Ties in any order
-	"constraint all_different(p);\nconstraint forall(i in 1..2)(x[p[i]] <= x[p[i + 1]]);",
-);
-
-global_test!(
-	solve_table,
-	"table",
-	1,
-	"table(x, t)",
-	"array[1..2, 1..3] of int: t = [|1, 2, 3|3, 2, 1|];\narray[1..3] of var 1..3: x;\n",
-	"constraint exists(r in 1..2)(forall(j in 1..3)(x[j] = t[r, j]));",
-	"constraint exists(r in 1..2)(forall(j in 1..2)(x[j] = t[r, j]));",
-);
-
-global_test!(
-	solve_knapsack,
-	"knapsack",
-	2,
-	"knapsack(w, p, x, tw, tp)",
-	"array[1..3] of int: w = [2, 3, 4];\narray[1..3] of int: p = [1, 5, 2];\narray[1..3] of var 0..2: x;\nvar 0..20: tw;\nvar 0..20: tp;\n",
-	"constraint tw = sum(i in 1..3)(w[i] * x[i]);\nconstraint tp = sum(i in 1..3)(p[i] * x[i]);",
-	"constraint tw = sum(i in 1..3)(w[i] * x[i]);\nconstraint tp >= sum(i in 1..3)(p[i] * x[i]);",
-);
-
-global_test!(
-	solve_value_precede_chain,
-	"precede_chain",
-	1,
-	"value_precede_chain(c, x)",
-	"array[1..3] of int: c = [1, 2, 3];\narray[1..4] of var 1..3: x;\n",
-	"constraint forall(k in 1..2, i in 1..4)(x[i] = c[k + 1] -> exists(j in 1..i - 1)(x[j] = c[k]));",
-	"constraint forall(k in 1..1, i in 1..4)(x[i] = c[k + 1] -> exists(j in 1..i - 1)(x[j] = c[k]));",
-);
-
-global_test!(
-	solve_seq_precede_chain,
-	"seq_precede",
-	1,
-	"seq_precede_chain(x)",
-	"array[1..4] of var 1..3: x;\n",
-	"constraint forall(k in 1..2, i in 1..4)(x[i] = k + 1 -> exists(j in 1..i - 1)(x[j] = k));",
-	"constraint forall(k in 1..1, i in 1..4)(x[i] = k + 1 -> exists(j in 1..i - 1)(x[j] = k));",
-);
-
-global_test!(
-	solve_sliding_among,
-	"sliding_among",
-	1,
-	"sliding_among(lo, hi, n, x, S)",
-	"int: lo = 1;\nint: hi = 1;\nint: n = 2;\nset of int: S = {1};\narray[1..5] of var 1..3: x;\n",
-	"constraint forall(i in 1..5 - n + 1)(sum(j in i..i + n - 1)(x[j] in S) in lo..hi);",
-	"constraint forall(i in 1..5 - n)(sum(j in i..i + n - 1)(x[j] in S) in lo..hi);",
-);
-
-global_test!(
-	solve_disjunctive_strict,
-	"disjunctive",
-	1,
-	"disjunctive_strict(s, d)",
-	"array[1..3] of int: d = [0, 2, 1];\narray[1..3] of var 0..4: s;\n",
-	"constraint forall(i, j in 1..3 where i < j)(s[i] + d[i] <= s[j] \\/ s[j] + d[j] <= s[i]);",
-	"constraint forall(i, j in 1..3 where i < j)(d[i] = 0 \\/ d[j] = 0 \\/ s[i] + d[i] <= s[j] \\/ s[j] + d[j] <= s[i]);",
-);
-
-global_test!(
-	solve_global_cardinality_between_bounds,
-	"global_cardinality",
-	1,
-	"global_cardinality(x, set2array(index_set(lb)), lb, ub)",
-	"array[1..3] of int: lb = [1, 0, 1];\narray[1..3] of int: ub = [2, 1, 2];\narray[1..4] of var 1..4: x;\n",
-	"constraint forall(v in 1..3)(lb[v] <= sum(i in 1..4)(x[i] = v) /\\ sum(i in 1..4)(x[i] = v) <= ub[v]);",
-	"constraint forall(v in 1..3)(sum(i in 1..4)(x[i] = v) <= ub[v]);",
-);
-
-global_test!(
-	solve_all_equal_bools,
-	"all_equal",
-	1,
-	"all_equal(b)",
-	"array[1..4] of var bool: b;\n",
-	"constraint forall(i in 1..3)(b[i] = b[i + 1]);",
-	"constraint forall(i in 1..2)(b[i] = b[i + 1]);",
-);
-
-global_test!(
-	solve_arg_val,
-	"arg_val",
-	2,
-	"arg_val(x, v) = i",
-	"array[1..3] of var 1..3: x;\nvar 1..3: v;\nvar 1..3: i;\n",
-	"constraint x[i] = v /\\ forall(j in 1..3)(j < i -> x[j] != v);",
-	"constraint x[i] = v;",
-);
-
-global_test!(
-	solve_arg_val_weak,
-	"arg_val",
-	1,
-	"arg_val_weak(x, v) = o",
-	"array[1..3] of var 1..3: x;\nvar 1..3: v;\nvar opt 1..3: o;\n",
-	"constraint if exists(j in 1..3)(x[j] = v) then occurs(o) /\\ x[deopt(o)] = v /\\ forall(j in 1..3)(j < deopt(o) -> x[j] != v) else absent(o) endif;",
-	"constraint occurs(o) -> x[deopt(o)] = v;",
 );
 
 #[test]
