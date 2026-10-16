@@ -19,9 +19,6 @@ use tempfile::Builder;
 
 use super::GlobalizeOptions;
 
-/// A solution: the JSON object of all output variables
-pub(super) type Solution = Map<String, Value>;
-
 /// Result of one `minizinc` run
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Outcome {
@@ -43,6 +40,53 @@ pub(super) struct Runner<'a> {
 	/// file and number of solutions: variants and contexts often give the
 	/// same submodel
 	pub(super) cache: Mutex<FxHashMap<(u64, u64), Arc<Outcome>>>,
+}
+
+/// A solution: the JSON object of all output variables
+pub(super) type Solution = Map<String, Value>;
+
+fn file_error(file: PathBuf, err: std::io::Error) -> Error {
+	FileError {
+		file,
+		message: format!("unable to write globalizer submodel: {err}"),
+		other: Vec::new(),
+	}
+	.into()
+}
+
+/// Parse the `--json-stream` output of `minizinc`
+pub(super) fn parse(stdout: &str) -> Outcome {
+	let mut outcome = Outcome::default();
+	for line in stdout.lines() {
+		let Ok(msg) = serde_json::from_str::<Value>(line) else {
+			continue;
+		};
+		match msg.get("type").and_then(Value::as_str) {
+			Some("solution") => {
+				if let Some(Value::Object(sol)) = msg.pointer("/output/json") {
+					outcome.solutions.push(sol.clone());
+				}
+			}
+			Some("status") => match msg.get("status").and_then(Value::as_str) {
+				// Unsatisfiable is complete with zero solutions
+				Some("ALL_SOLUTIONS" | "OPTIMAL_SOLUTION" | "UNSATISFIABLE") => {
+					outcome.complete = true
+				}
+				Some("ERROR") => outcome.error = Some("minizinc reported ERROR".to_owned()),
+				_ => {}
+			},
+			Some("error") => {
+				outcome.error = Some(
+					msg.get("message")
+						.and_then(Value::as_str)
+						.unwrap_or("unknown minizinc error")
+						.to_owned(),
+				)
+			}
+			_ => {}
+		}
+	}
+	outcome
 }
 
 impl<'a> Runner<'a> {
@@ -131,50 +175,6 @@ impl<'a> Runner<'a> {
 	}
 }
 
-fn file_error(file: PathBuf, err: std::io::Error) -> Error {
-	FileError {
-		file,
-		message: format!("unable to write globalizer submodel: {err}"),
-		other: Vec::new(),
-	}
-	.into()
-}
-
-/// Parse the `--json-stream` output of `minizinc`
-pub(super) fn parse(stdout: &str) -> Outcome {
-	let mut outcome = Outcome::default();
-	for line in stdout.lines() {
-		let Ok(msg) = serde_json::from_str::<Value>(line) else {
-			continue;
-		};
-		match msg.get("type").and_then(Value::as_str) {
-			Some("solution") => {
-				if let Some(Value::Object(sol)) = msg.pointer("/output/json") {
-					outcome.solutions.push(sol.clone());
-				}
-			}
-			Some("status") => match msg.get("status").and_then(Value::as_str) {
-				// Unsatisfiable is complete with zero solutions
-				Some("ALL_SOLUTIONS" | "OPTIMAL_SOLUTION" | "UNSATISFIABLE") => {
-					outcome.complete = true
-				}
-				Some("ERROR") => outcome.error = Some("minizinc reported ERROR".to_owned()),
-				_ => {}
-			},
-			Some("error") => {
-				outcome.error = Some(
-					msg.get("message")
-						.and_then(Value::as_str)
-						.unwrap_or("unknown minizinc error")
-						.to_owned(),
-				)
-			}
-			_ => {}
-		}
-	}
-	outcome
-}
-
 #[cfg(test)]
 mod tests {
 	use super::parse;
@@ -182,27 +182,11 @@ mod tests {
 	const SOL: &str = r#"{"type": "solution", "output": {"json": {  "x" : [1, 2],  "GZ_R" : [true, false]}}, "sections": ["json"]}"#;
 
 	#[test]
-	fn parses_solutions_without_status() {
-		let out = parse(&format!("{SOL}\n{SOL}\n"));
-		assert_eq!(out.solutions.len(), 2);
-		assert_eq!(out.solutions[0]["GZ_R"][1], false);
-		assert!(!out.complete);
-		assert!(out.error.is_none());
-	}
-
-	#[test]
 	fn all_solutions_is_complete() {
 		let out = parse(&format!(
 			"{SOL}\n{{\"type\": \"status\", \"status\": \"ALL_SOLUTIONS\"}}\n"
 		));
 		assert_eq!(out.solutions.len(), 1);
-		assert!(out.complete);
-	}
-
-	#[test]
-	fn unsatisfiable_is_complete_and_empty() {
-		let out = parse("{\"type\": \"status\", \"status\": \"UNSATISFIABLE\"}\n");
-		assert!(out.solutions.is_empty());
 		assert!(out.complete);
 	}
 
@@ -218,5 +202,21 @@ mod tests {
 	fn garbage_lines_are_ignored() {
 		let out = parse("% comment\nnot json\n");
 		assert_eq!(out, Default::default());
+	}
+
+	#[test]
+	fn parses_solutions_without_status() {
+		let out = parse(&format!("{SOL}\n{SOL}\n"));
+		assert_eq!(out.solutions.len(), 2);
+		assert_eq!(out.solutions[0]["GZ_R"][1], false);
+		assert!(!out.complete);
+		assert!(out.error.is_none());
+	}
+
+	#[test]
+	fn unsatisfiable_is_complete_and_empty() {
+		let out = parse("{\"type\": \"status\", \"status\": \"UNSATISFIABLE\"}\n");
+		assert!(out.solutions.is_empty());
+		assert!(out.complete);
 	}
 }

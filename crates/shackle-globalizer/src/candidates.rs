@@ -5,352 +5,16 @@
 
 use itertools::Itertools;
 
-/// What a candidate means when it holds
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(super) enum Kind {
-	/// A global that can replace the group
-	Normal,
-	/// `true`: the group is redundant
-	Redundant,
-	/// The 3D 0/1 argument has exactly one 1 along the given axis, so it
-	/// represents a 2D integer array (a viewpoint)
-	Viewpoint(usize),
-}
-
-/// The element type of an argument (integers include enums)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(super) enum Elem {
-	Int,
-	OptInt,
-	Bool,
-	Set,
-}
-
-/// The type of a parameter: number of array dimensions (0 for a scalar) and
-/// element type
-type Param = (usize, Elem);
-
-const INT: Param = (0, Elem::Int);
-const INTS: Param = (1, Elem::Int);
-const INTS2: Param = (2, Elem::Int);
-const INTS3: Param = (3, Elem::Int);
-const OPT_INT: Param = (0, Elem::OptInt);
-const OPT_INTS: Param = (1, Elem::OptInt);
+/// For a 0/1 array this is a count of one value
+const AMONG: &str = "card(dom_array({0})) > 2";
 const BOOL: Param = (0, Elem::Bool);
 const BOOLS: Param = (1, Elem::Bool);
 const BOOLS2: Param = (2, Elem::Bool);
-const SET: Param = (0, Elem::Set);
-const SETS: Param = (1, Elem::Set);
-
-/// A possible argument for a candidate global
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) struct Arg {
-	/// MiniZinc text of the argument
-	pub(super) text: String,
-	/// Whether the argument contains decision variables
-	pub(super) var: bool,
-	/// Number of array dimensions (0 for a scalar)
-	pub(super) dims: usize,
-	pub(super) elem: Elem,
-	/// Leaders (indices into the variant's leaders) the argument uses
-	pub(super) leaders: Vec<usize>,
-}
-
-/// An argument computed from the samples instead of taken from the model
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(super) enum Blank {
-	/// The maximum of the argument in the given slot
-	Max(usize),
-	/// The value counts of the argument in the given slot
-	Counts(usize),
-	/// The largest number of true values of the Boolean argument in the
-	/// given slot over all samples
-	MostTrue(usize),
-}
-
-/// A global constraint call to check against the samples
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) struct Candidate {
-	pub(super) name: &'static str,
-	pub(super) kind: Kind,
-	/// Argument texts. A blank slot is empty until it is filled.
-	pub(super) args: Vec<String>,
-	template: Option<&'static str>,
-	/// Expression used instead of the call on the samples
-	test: Option<&'static str>,
-	/// Par condition: if false the candidate is rejected without evaluating it
-	guard: Option<String>,
-	/// Side condition that must hold on every sample (makes the candidate
-	/// non-trivial)
-	extra: Option<String>,
-	/// Unfilled blank: its slot and how to compute it
-	pub(super) blank: Option<(usize, Blank)>,
-	/// The slot of the blank, once it is filled
-	pub(super) filled: Option<usize>,
-	/// Leaders the arguments use (sorted)
-	pub(super) leaders: Vec<usize>,
-	/// Integer that must be positive on some sample
-	pub(super) witness: Option<String>,
-	/// This is a less clear form of another global (name), whose first
-	/// argument is the argument in the given slot: report only the other one
-	/// if both hold
-	pub(super) dominated_by: Option<(&'static str, usize)>,
-}
 
 /// `global_cardinality_closed` with an explicit cover (`{2}`), for filled
 /// counts: they count every value of the array
 const COVERED_GCC: &str = "global_cardinality_closed({0}, {2}) = {1}";
 const COVERED_GCC_TEST: &str = "global_cardinality_closed({0}, {2}, {1})";
-
-/// Fill in the arguments (`{i}`) and fresh loop variable names (`{v}`, `{w}`,
-/// `{u}`, distinct and not used by any argument), in one pass (so an argument
-/// text is never rewritten)
-fn instantiate(template: &str, args: &[impl AsRef<str>]) -> String {
-	let used = |name: &str| {
-		args.iter().any(|a| {
-			a.as_ref()
-				.split(|c: char| !c.is_alphanumeric() && c != '_')
-				.any(|w| w == name)
-		})
-	};
-	let mut fresh = ["i", "j", "k", "l"]
-		.into_iter()
-		.map(str::to_owned)
-		.chain((1..).map(|n| format!("i{n}")))
-		.filter(|v| !used(v));
-	let loops: [String; 3] = std::array::from_fn(|_| fresh.next().unwrap());
-	let mut result = String::with_capacity(template.len());
-	let mut rest = template;
-	while let Some(open) = rest.find('{') {
-		result.push_str(&rest[..open]);
-		rest = &rest[open..];
-		let Some(close) = rest.find('}') else {
-			break;
-		};
-		match &rest[1..close] {
-			"v" => result.push_str(&loops[0]),
-			"w" => result.push_str(&loops[1]),
-			"u" => result.push_str(&loops[2]),
-			i => match i.parse::<usize>().ok().and_then(|i| args.get(i)) {
-				Some(arg) => result.push_str(arg.as_ref()),
-				None => result.push_str(&rest[..=close]),
-			},
-		}
-		rest = &rest[close + 1..];
-	}
-	result.push_str(rest);
-	result
-}
-
-impl Candidate {
-	fn instantiate(&self, template: &str) -> String {
-		instantiate(template, &self.args)
-	}
-
-	/// The global call, e.g. `all_different(x)`
-	pub(super) fn call(&self) -> String {
-		match self.template {
-			Some(t) => self.instantiate(t),
-			None => format!("{}({})", self.name, self.args.join(", ")),
-		}
-	}
-
-	/// Boolean expression to evaluate on the samples. For an unfilled blank
-	/// only the conditions are checked.
-	pub(super) fn checked(&self) -> String {
-		let mut body = self.extra.iter().cloned().collect::<Vec<_>>();
-		if self.blank.is_none() {
-			body.push(match self.test {
-				Some(t) => self.instantiate(t),
-				None => self.call(),
-			});
-		}
-		let body = if body.is_empty() {
-			"true".to_owned()
-		} else {
-			body.iter().map(|b| format!("({b})")).join(" /\\ ")
-		};
-		match &self.guard {
-			Some(guard) => format!("if {guard} then {body} else false endif"),
-			None => body,
-		}
-	}
-
-	/// Integer array to output so the blank can be filled from the samples
-	pub(super) fn feature(&self) -> Option<String> {
-		let (_, blank) = self.blank?;
-		Some(match blank {
-			Blank::Max(i) => format!("[max({})]", self.args[i]),
-			Blank::MostTrue(i) => format!("[sum({x}), length({x})]", x = self.args[i]),
-			// At most 101 values, so the suggested arrays stay readable (else
-			// nothing, and the blank is not filled)
-			Blank::Counts(i) => instantiate(
-				"if ub_array({0}) - lb_array({0}) <= 100 then [lb_array({0})] ++ [count({0}, {v}) | {v} in lb_array({0})..ub_array({0})] else [] endif",
-				&[&self.args[i]],
-			),
-		})
-	}
-
-	/// Fill the blank from the feature values of all samples. Fails if the
-	/// samples do not agree (except for the largest number of true values).
-	pub(super) fn fill(&mut self, values: &[Vec<i64>]) -> bool {
-		let Some((slot, blank)) = self.blank else {
-			return true;
-		};
-		let Some(first) = values.first() else {
-			return false;
-		};
-		let agree = values.iter().all(|v| v == first);
-		self.args[slot] = match (blank, &first[..]) {
-			// Fewer than the number of elements, else the bound is trivially true
-			(Blank::MostTrue(_), [_, length]) => {
-				if values.iter().any(|v| v.get(1) != Some(length)) {
-					return false;
-				}
-				let most = values.iter().map(|v| v[0]).max().unwrap();
-				if most >= *length {
-					return false;
-				}
-				most.to_string()
-			}
-			(Blank::Max(_), [m]) if agree => m.to_string(),
-			(Blank::Counts(source), [lo, counts @ ..]) if agree => {
-				// Values that never occur at the ends are left out (the reverse
-				// check shows whether that is still equivalent)
-				let Some(start) = counts.iter().position(|c| *c != 0) else {
-					return false;
-				};
-				let end = counts.iter().rposition(|c| *c != 0).unwrap() + 1;
-				let (lo, counts) = (lo + start as i64, &counts[start..end]);
-				if counts.iter().all(|c| *c == 1) {
-					self.dominated_by = Some(("all_different", source));
-				}
-				let hi = lo + counts.len() as i64 - 1;
-				self.args.push(format!("[{}]", (lo..=hi).join(", ")));
-				self.template = Some(COVERED_GCC);
-				self.test = Some(COVERED_GCC_TEST);
-				format!("[{}]", counts.iter().join(", "))
-			}
-			_ => return false,
-		};
-		self.blank = None;
-		self.filled = Some(slot);
-		true
-	}
-}
-
-struct Global {
-	name: &'static str,
-	/// The function that a group calls if it already is this global
-	/// (`element` for an access with a variable index)
-	uses: &'static str,
-	kind: Kind,
-	/// The type of each argument
-	signature: &'static [Param],
-	/// Rejects argument lists the global is not useful for
-	check: fn(&[&Arg]) -> bool,
-	/// Par condition (with `{i}` for argument `i`), see [`Candidate::guard`]
-	guard: Option<&'static str>,
-	/// Sample condition, see [`Candidate::extra`]
-	extra: Option<&'static str>,
-	/// Slot that may be computed from the samples instead
-	blank: Option<(usize, Blank)>,
-	/// Call text with `{i}` for argument `i` and `{v}`, `{w}`, `{u}` for loop
-	/// variables (see `instantiate`; default: `name(args)`)
-	template: Option<&'static str>,
-	/// Expression checked on the samples instead of the call (e.g. the
-	/// predicate form of a functional template, or a global that cannot be
-	/// reified)
-	test: Option<&'static str>,
-	/// Integer that must be positive on some sample, else the global is
-	/// trivially true there
-	witness: Option<&'static str>,
-	/// See [`Candidate::dominated_by`]
-	dominated_by: Option<(&'static str, usize)>,
-}
-
-/// Checks used by `test` templates, included in every submodel
-pub(super) const LIBRARY: &str = r#"
-function var int: gz_succ(array [int] of var int: x, int: k, var int: s) =
-  if k = 0 then s else gz_succ(x, k - 1, x[s]) endif;
-predicate gz_circuit(array [int] of var int: x) =
-  all_different(x) /\ forall (k in 1..length(x) - 1) (
-    gz_succ(x, k, min(index_set(x))) != min(index_set(x)));
-predicate gz_subcircuit(array [int] of var int: x) =
-  let { var int: m = sum (i in index_set(x)) (x[i] != i) } in
-  all_different(x) /\ forall (i in index_set(x), k in 1..length(x) - 1) (
-    x[i] != i /\ gz_succ(x, k, i) = i -> k >= m);
-predicate gz_value_precede(int: s, int: t, array [int] of var int: x) =
-  forall (i in index_set(x)) (
-    x[i] = t -> exists (j in index_set(x) where j < i) (x[j] = s));
-predicate gz_sliding_among(int: lo, int: hi, int: n, array [int] of var int: x, set of int: v) =
-  forall (i in min(index_set(x))..max(index_set(x)) - n + 1) (
-    lo <= sum (j in i..i + n - 1) (x[j] in v) /\ sum (j in i..i + n - 1) (x[j] in v) <= hi);
-"#;
-
-const fn global(name: &'static str, signature: &'static [Param]) -> Global {
-	Global {
-		name,
-		uses: name,
-		kind: Kind::Normal,
-		signature,
-		check: |_| true,
-		guard: None,
-		extra: None,
-		blank: None,
-		template: None,
-		test: None,
-		witness: None,
-		dominated_by: None,
-	}
-}
-
-/// The 3D 0/1 argument has exactly one 1 along `axis` (`sums` checks the sum
-/// along that axis)
-const fn binaries(name: &'static str, axis: usize, sums: &'static str) -> Global {
-	Global {
-		kind: Kind::Viewpoint(axis),
-		check: |a| a[0].var,
-		guard: Some("dom_array({0}) subset 0..1"),
-		template: Some(sums),
-		..global(name, &[INTS3])
-	}
-}
-
-/// A global whose first argument must be a variable
-const fn on_vars(name: &'static str, signature: &'static [Param]) -> Global {
-	Global {
-		check: |a| a[0].var,
-		..global(name, signature)
-	}
-}
-
-/// A comparison of a count over the first argument (written as
-/// `count (i in index_set(x)) (...)`)
-const fn counting(
-	name: &'static str,
-	signature: &'static [Param],
-	template: &'static str,
-	extra: &'static str,
-) -> Global {
-	Global {
-		extra: Some(extra),
-		template: Some(template),
-		uses: "count",
-		..on_vars(name, signature)
-	}
-}
-
-const LONGER_THAN_1: &str = "length({0}) > 1";
-const LONGER_THAN_2: &str = "length({0}) > 2";
-const SAME_LENGTH: &str = "length({0}) = length({1})";
-const LEX: &str = "length({0}) = length({1}) /\\ length({0}) > 1";
-/// The arrays have the same index sets (the globals assert this)
-const SAME_INDEX: &str = "index_sets_agree({0}, {1})";
-const SAME_INDEX_12: &str = "index_sets_agree({1}, {2})";
-const SAME_INDEX_23: &str = "index_sets_agree({2}, {3})";
-const SAME_INDEX_4: &str =
-	"index_sets_agree({0}, {1}) /\\ index_sets_agree({0}, {2}) /\\ index_sets_agree({0}, {3})";
 const CUMULATIVE: Global = Global {
 	check: |a| !a[1].var && !a[2].var,
 	guard: Some(
@@ -359,12 +23,6 @@ const CUMULATIVE: Global = Global {
 	extra: Some("length({0}) > 1 /\\ {3} > 0"),
 	..global("cumulative", &[INTS, INTS, INTS, INT])
 };
-/// The rows of the par table have one value per variable
-const TABLE: &str = "index_set_2of2({1}) = index_set({0})";
-/// More than one column to order
-const LEX_CHAIN: &str = "card(index_set_2of2({0})) > 1";
-/// For a 0/1 array this is a count of one value
-const AMONG: &str = "card(dom_array({0})) > 2";
 
 const GLOBALS: &[Global] = &[
 	// A 0/1 array whose sums along one axis are 1 represents a 2D integer
@@ -882,10 +540,169 @@ const GLOBALS: &[Global] = &[
 	},
 ];
 
-/// Whether `name` passes the include/exclude substring filters
-pub(super) fn selected(name: &str, include: &[String], exclude: &[String]) -> bool {
-	(include.is_empty() || include.iter().any(|f| name.contains(f.as_str())))
-		&& !exclude.iter().any(|f| name.contains(f.as_str()))
+const INT: Param = (0, Elem::Int);
+const INTS: Param = (1, Elem::Int);
+const INTS2: Param = (2, Elem::Int);
+const INTS3: Param = (3, Elem::Int);
+const LEX: &str = "length({0}) = length({1}) /\\ length({0}) > 1";
+/// More than one column to order
+const LEX_CHAIN: &str = "card(index_set_2of2({0})) > 1";
+
+/// Checks used by `test` templates, included in every submodel
+pub(super) const LIBRARY: &str = r#"
+function var int: gz_succ(array [int] of var int: x, int: k, var int: s) =
+  if k = 0 then s else gz_succ(x, k - 1, x[s]) endif;
+predicate gz_circuit(array [int] of var int: x) =
+  all_different(x) /\ forall (k in 1..length(x) - 1) (
+    gz_succ(x, k, min(index_set(x))) != min(index_set(x)));
+predicate gz_subcircuit(array [int] of var int: x) =
+  let { var int: m = sum (i in index_set(x)) (x[i] != i) } in
+  all_different(x) /\ forall (i in index_set(x), k in 1..length(x) - 1) (
+    x[i] != i /\ gz_succ(x, k, i) = i -> k >= m);
+predicate gz_value_precede(int: s, int: t, array [int] of var int: x) =
+  forall (i in index_set(x)) (
+    x[i] = t -> exists (j in index_set(x) where j < i) (x[j] = s));
+predicate gz_sliding_among(int: lo, int: hi, int: n, array [int] of var int: x, set of int: v) =
+  forall (i in min(index_set(x))..max(index_set(x)) - n + 1) (
+    lo <= sum (j in i..i + n - 1) (x[j] in v) /\ sum (j in i..i + n - 1) (x[j] in v) <= hi);
+"#;
+
+const LONGER_THAN_1: &str = "length({0}) > 1";
+const LONGER_THAN_2: &str = "length({0}) > 2";
+const OPT_INT: Param = (0, Elem::OptInt);
+const OPT_INTS: Param = (1, Elem::OptInt);
+/// The arrays have the same index sets (the globals assert this)
+const SAME_INDEX: &str = "index_sets_agree({0}, {1})";
+const SAME_INDEX_4: &str =
+	"index_sets_agree({0}, {1}) /\\ index_sets_agree({0}, {2}) /\\ index_sets_agree({0}, {3})";
+const SAME_INDEX_12: &str = "index_sets_agree({1}, {2})";
+const SAME_INDEX_23: &str = "index_sets_agree({2}, {3})";
+const SAME_LENGTH: &str = "length({0}) = length({1})";
+const SET: Param = (0, Elem::Set);
+const SETS: Param = (1, Elem::Set);
+/// The rows of the par table have one value per variable
+const TABLE: &str = "index_set_2of2({1}) = index_set({0})";
+
+/// A possible argument for a candidate global
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) struct Arg {
+	/// MiniZinc text of the argument
+	pub(super) text: String,
+	/// Whether the argument contains decision variables
+	pub(super) var: bool,
+	/// Number of array dimensions (0 for a scalar)
+	pub(super) dims: usize,
+	pub(super) elem: Elem,
+	/// Leaders (indices into the variant's leaders) the argument uses
+	pub(super) leaders: Vec<usize>,
+}
+
+/// An argument computed from the samples instead of taken from the model
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) enum Blank {
+	/// The maximum of the argument in the given slot
+	Max(usize),
+	/// The value counts of the argument in the given slot
+	Counts(usize),
+	/// The largest number of true values of the Boolean argument in the
+	/// given slot over all samples
+	MostTrue(usize),
+}
+
+/// A global constraint call to check against the samples
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) struct Candidate {
+	pub(super) name: &'static str,
+	pub(super) kind: Kind,
+	/// Argument texts. A blank slot is empty until it is filled.
+	pub(super) args: Vec<String>,
+	template: Option<&'static str>,
+	/// Expression used instead of the call on the samples
+	test: Option<&'static str>,
+	/// Par condition: if false the candidate is rejected without evaluating it
+	guard: Option<String>,
+	/// Side condition that must hold on every sample (makes the candidate
+	/// non-trivial)
+	extra: Option<String>,
+	/// Unfilled blank: its slot and how to compute it
+	pub(super) blank: Option<(usize, Blank)>,
+	/// The slot of the blank, once it is filled
+	pub(super) filled: Option<usize>,
+	/// Leaders the arguments use (sorted)
+	pub(super) leaders: Vec<usize>,
+	/// Integer that must be positive on some sample
+	pub(super) witness: Option<String>,
+	/// This is a less clear form of another global (name), whose first
+	/// argument is the argument in the given slot: report only the other one
+	/// if both hold
+	pub(super) dominated_by: Option<(&'static str, usize)>,
+}
+
+/// The element type of an argument (integers include enums)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(super) enum Elem {
+	Int,
+	OptInt,
+	Bool,
+	Set,
+}
+
+struct Global {
+	name: &'static str,
+	/// The function that a group calls if it already is this global
+	/// (`element` for an access with a variable index)
+	uses: &'static str,
+	kind: Kind,
+	/// The type of each argument
+	signature: &'static [Param],
+	/// Rejects argument lists the global is not useful for
+	check: fn(&[&Arg]) -> bool,
+	/// Par condition (with `{i}` for argument `i`), see [`Candidate::guard`]
+	guard: Option<&'static str>,
+	/// Sample condition, see [`Candidate::extra`]
+	extra: Option<&'static str>,
+	/// Slot that may be computed from the samples instead
+	blank: Option<(usize, Blank)>,
+	/// Call text with `{i}` for argument `i` and `{v}`, `{w}`, `{u}` for loop
+	/// variables (see `instantiate`; default: `name(args)`)
+	template: Option<&'static str>,
+	/// Expression checked on the samples instead of the call (e.g. the
+	/// predicate form of a functional template, or a global that cannot be
+	/// reified)
+	test: Option<&'static str>,
+	/// Integer that must be positive on some sample, else the global is
+	/// trivially true there
+	witness: Option<&'static str>,
+	/// See [`Candidate::dominated_by`]
+	dominated_by: Option<(&'static str, usize)>,
+}
+
+/// What a candidate means when it holds
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(super) enum Kind {
+	/// A global that can replace the group
+	Normal,
+	/// `true`: the group is redundant
+	Redundant,
+	/// The 3D 0/1 argument has exactly one 1 along the given axis, so it
+	/// represents a 2D integer array (a viewpoint)
+	Viewpoint(usize),
+}
+
+/// The type of a parameter: number of array dimensions (0 for a scalar) and
+/// element type
+type Param = (usize, Elem);
+
+/// The 3D 0/1 argument has exactly one 1 along `axis` (`sums` checks the sum
+/// along that axis)
+const fn binaries(name: &'static str, axis: usize, sums: &'static str) -> Global {
+	Global {
+		kind: Kind::Viewpoint(axis),
+		check: |a| a[0].var,
+		guard: Some("dom_array({0}) subset 0..1"),
+		template: Some(sums),
+		..global(name, &[INTS3])
+	}
 }
 
 /// All candidate calls of the globals that `select` (name, the function it
@@ -977,6 +794,190 @@ pub(super) fn candidates(
 	result
 }
 
+/// A comparison of a count over the first argument (written as
+/// `count (i in index_set(x)) (...)`)
+const fn counting(
+	name: &'static str,
+	signature: &'static [Param],
+	template: &'static str,
+	extra: &'static str,
+) -> Global {
+	Global {
+		extra: Some(extra),
+		template: Some(template),
+		uses: "count",
+		..on_vars(name, signature)
+	}
+}
+
+const fn global(name: &'static str, signature: &'static [Param]) -> Global {
+	Global {
+		name,
+		uses: name,
+		kind: Kind::Normal,
+		signature,
+		check: |_| true,
+		guard: None,
+		extra: None,
+		blank: None,
+		template: None,
+		test: None,
+		witness: None,
+		dominated_by: None,
+	}
+}
+
+/// Fill in the arguments (`{i}`) and fresh loop variable names (`{v}`, `{w}`,
+/// `{u}`, distinct and not used by any argument), in one pass (so an argument
+/// text is never rewritten)
+fn instantiate(template: &str, args: &[impl AsRef<str>]) -> String {
+	let used = |name: &str| {
+		args.iter().any(|a| {
+			a.as_ref()
+				.split(|c: char| !c.is_alphanumeric() && c != '_')
+				.any(|w| w == name)
+		})
+	};
+	let mut fresh = ["i", "j", "k", "l"]
+		.into_iter()
+		.map(str::to_owned)
+		.chain((1..).map(|n| format!("i{n}")))
+		.filter(|v| !used(v));
+	let loops: [String; 3] = std::array::from_fn(|_| fresh.next().unwrap());
+	let mut result = String::with_capacity(template.len());
+	let mut rest = template;
+	while let Some(open) = rest.find('{') {
+		result.push_str(&rest[..open]);
+		rest = &rest[open..];
+		let Some(close) = rest.find('}') else {
+			break;
+		};
+		match &rest[1..close] {
+			"v" => result.push_str(&loops[0]),
+			"w" => result.push_str(&loops[1]),
+			"u" => result.push_str(&loops[2]),
+			i => match i.parse::<usize>().ok().and_then(|i| args.get(i)) {
+				Some(arg) => result.push_str(arg.as_ref()),
+				None => result.push_str(&rest[..=close]),
+			},
+		}
+		rest = &rest[close + 1..];
+	}
+	result.push_str(rest);
+	result
+}
+
+/// A global whose first argument must be a variable
+const fn on_vars(name: &'static str, signature: &'static [Param]) -> Global {
+	Global {
+		check: |a| a[0].var,
+		..global(name, signature)
+	}
+}
+
+/// Whether `name` passes the include/exclude substring filters
+pub(super) fn selected(name: &str, include: &[String], exclude: &[String]) -> bool {
+	(include.is_empty() || include.iter().any(|f| name.contains(f.as_str())))
+		&& !exclude.iter().any(|f| name.contains(f.as_str()))
+}
+
+impl Candidate {
+	/// The global call, e.g. `all_different(x)`
+	pub(super) fn call(&self) -> String {
+		match self.template {
+			Some(t) => self.instantiate(t),
+			None => format!("{}({})", self.name, self.args.join(", ")),
+		}
+	}
+
+	/// Boolean expression to evaluate on the samples. For an unfilled blank
+	/// only the conditions are checked.
+	pub(super) fn checked(&self) -> String {
+		let mut body = self.extra.iter().cloned().collect::<Vec<_>>();
+		if self.blank.is_none() {
+			body.push(match self.test {
+				Some(t) => self.instantiate(t),
+				None => self.call(),
+			});
+		}
+		let body = if body.is_empty() {
+			"true".to_owned()
+		} else {
+			body.iter().map(|b| format!("({b})")).join(" /\\ ")
+		};
+		match &self.guard {
+			Some(guard) => format!("if {guard} then {body} else false endif"),
+			None => body,
+		}
+	}
+
+	/// Integer array to output so the blank can be filled from the samples
+	pub(super) fn feature(&self) -> Option<String> {
+		let (_, blank) = self.blank?;
+		Some(match blank {
+			Blank::Max(i) => format!("[max({})]", self.args[i]),
+			Blank::MostTrue(i) => format!("[sum({x}), length({x})]", x = self.args[i]),
+			// At most 101 values, so the suggested arrays stay readable (else
+			// nothing, and the blank is not filled)
+			Blank::Counts(i) => instantiate(
+				"if ub_array({0}) - lb_array({0}) <= 100 then [lb_array({0})] ++ [count({0}, {v}) | {v} in lb_array({0})..ub_array({0})] else [] endif",
+				&[&self.args[i]],
+			),
+		})
+	}
+
+	/// Fill the blank from the feature values of all samples. Fails if the
+	/// samples do not agree (except for the largest number of true values).
+	pub(super) fn fill(&mut self, values: &[Vec<i64>]) -> bool {
+		let Some((slot, blank)) = self.blank else {
+			return true;
+		};
+		let Some(first) = values.first() else {
+			return false;
+		};
+		let agree = values.iter().all(|v| v == first);
+		self.args[slot] = match (blank, &first[..]) {
+			// Fewer than the number of elements, else the bound is trivially true
+			(Blank::MostTrue(_), [_, length]) => {
+				if values.iter().any(|v| v.get(1) != Some(length)) {
+					return false;
+				}
+				let most = values.iter().map(|v| v[0]).max().unwrap();
+				if most >= *length {
+					return false;
+				}
+				most.to_string()
+			}
+			(Blank::Max(_), [m]) if agree => m.to_string(),
+			(Blank::Counts(source), [lo, counts @ ..]) if agree => {
+				// Values that never occur at the ends are left out (the reverse
+				// check shows whether that is still equivalent)
+				let Some(start) = counts.iter().position(|c| *c != 0) else {
+					return false;
+				};
+				let end = counts.iter().rposition(|c| *c != 0).unwrap() + 1;
+				let (lo, counts) = (lo + start as i64, &counts[start..end]);
+				if counts.iter().all(|c| *c == 1) {
+					self.dominated_by = Some(("all_different", source));
+				}
+				let hi = lo + counts.len() as i64 - 1;
+				self.args.push(format!("[{}]", (lo..=hi).join(", ")));
+				self.template = Some(COVERED_GCC);
+				self.test = Some(COVERED_GCC_TEST);
+				format!("[{}]", counts.iter().join(", "))
+			}
+			_ => return false,
+		};
+		self.blank = None;
+		self.filled = Some(slot);
+		true
+	}
+
+	fn instantiate(&self, template: &str) -> String {
+		instantiate(template, &self.args)
+	}
+}
+
 #[cfg(test)]
 impl Candidate {
 	/// The par guard, and the expression checked on the samples if it is not
@@ -1016,34 +1017,110 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn instantiate_fills_arguments_once_and_picks_a_free_loop_variable() {
-		// An argument with braces is not rewritten
-		assert_eq!(instantiate("f({0}, {1})", &["{1}", "x"]), "f({1}, x)");
+	fn all_different_needs_a_var_array() {
+		let args = [
+			arg("x", true, 1),
+			arg("p", false, 1),
+			arg("y", true, 0),
+			arg("m", true, 2),
+		];
 		assert_eq!(
-			instantiate("count ({v} in S) ({0}[{v}])", &["i"]),
-			"count (j in S) (i[j])"
+			checked(&args, "all_different"),
+			["(length(x) > 1) /\\ (all_different(x))"]
 		);
-		// Distinct loop variables, none of them in an argument
-		assert_eq!(
-			instantiate("sum ({v} in S) ({0}[{v}, {w}, {u}])", &["x[i, ..]"]),
-			"sum (j in S) (x[i, ..][j, k, l])"
-		);
-		// Unknown placeholders are kept
-		assert_eq!(instantiate("{} {2}", &["a"]), "{} {2}");
 	}
 
 	fn arg(text: &str, var: bool, dims: usize) -> Arg {
 		typed(text, var, dims, Elem::Int)
 	}
 
-	fn typed(text: &str, var: bool, dims: usize, elem: Elem) -> Arg {
-		Arg {
-			text: text.to_owned(),
-			var,
-			dims,
-			elem,
-			leaders: Vec::new(),
-		}
+	#[test]
+	fn arguments_must_differ() {
+		let args = [arg("x", true, 1)];
+		assert!(checked(&args, "lex_lesseq").is_empty());
+		let args = [arg("x", true, 1), arg("y", true, 1)];
+		assert_eq!(
+			checked(&args, "lex_lesseq"),
+			[
+				"if length(x) = length(y) /\\ length(x) > 1 then (lex_lesseq(x, y)) else false endif",
+				"if length(y) = length(x) /\\ length(y) > 1 then (lex_lesseq(y, x)) else false endif",
+			]
+		);
+	}
+
+	#[test]
+	fn blanks_are_filled_from_samples() {
+		let args = [arg("x", true, 1)];
+		let mut found = filtered(&args, &["global_card"], &[], usize::MAX);
+		assert_eq!(found.len(), 1);
+		let gcc = &mut found[0];
+		assert_eq!(gcc.checked(), "true");
+		assert_eq!(
+			gcc.feature().unwrap(),
+			"if ub_array(x) - lb_array(x) <= 100 then [lb_array(x)] ++ [count(x, i) | i in lb_array(x)..ub_array(x)] else [] endif"
+		);
+		// Samples disagree
+		assert!(!gcc.clone().fill(&[vec![1, 2, 0], vec![1, 1, 1]]));
+		// Values from 0 get an explicit cover
+		let mut from_zero = gcc.clone();
+		assert!(from_zero.fill(&[vec![0, 2, 0, 1]]));
+		assert_eq!(
+			from_zero.call(),
+			"global_cardinality_closed(x, [0, 1, 2]) = [2, 0, 1]"
+		);
+		assert_eq!(
+			from_zero.dominated_by,
+			Some(("global_cardinality_closed", 0))
+		);
+		assert_eq!(
+			from_zero.checked(),
+			"(global_cardinality_closed(x, [0, 1, 2], [2, 0, 1]))"
+		);
+		// Values that never occur at the ends are left out
+		let mut trimmed = gcc.clone();
+		assert!(trimmed.fill(&[vec![0, 0, 1, 1, 0]]));
+		assert_eq!(
+			trimmed.call(),
+			"global_cardinality_closed(x, [1, 2]) = [1, 1]"
+		);
+		assert_eq!(trimmed.dominated_by, Some(("all_different", 0)));
+		let mut ones = gcc.clone();
+		assert!(ones.fill(&[vec![1, 1, 1]]));
+		assert_eq!(ones.dominated_by, Some(("all_different", 0)));
+		assert!(!gcc.clone().fill(&[vec![1, 0, 0]]));
+		assert!(gcc.fill(&[vec![1, 2, 1], vec![1, 2, 1]]));
+		assert!(gcc.filled == Some(1) && gcc.blank.is_none());
+		assert_eq!(gcc.call(), "global_cardinality_closed(x, [1, 2]) = [2, 1]");
+
+		let mut max = filtered(&args, &["maximum"], &[], usize::MAX);
+		assert_eq!(max[0].feature().unwrap(), "[max(x)]");
+		assert!(max[0].fill(&[vec![7], vec![7]]));
+		assert_eq!(max[0].call(), "max(x) = 7");
+
+		let bools = [typed("b", true, 1, Elem::Bool)];
+		let mut most = filtered(&bools, &["count_leq"], &[], usize::MAX);
+		assert_eq!(most[0].feature().unwrap(), "[sum(b), length(b)]");
+		// At most all of them is trivially true, and a missing value fails
+		assert!(!most[0].clone().fill(&[vec![1, 3], vec![3, 3]]));
+		assert!(!most[0].clone().fill(&[vec![1, 3], vec![]]));
+		assert!(most[0].fill(&[vec![0, 3], vec![1, 3]]));
+		assert_eq!(most[0].call(), "count (i in index_set(b)) (b[i]) <= 1");
+	}
+
+	#[test]
+	fn candidates_collect_leaders_of_their_arguments() {
+		let mut row = arg("x[i, ..]", true, 1);
+		row.leaders = vec![1, 0, 1];
+		let found = filtered(&[row], &["all_different"], &[], usize::MAX);
+		assert_eq!(found[0].leaders, [0, 1]);
+	}
+
+	fn checked(args: &[Arg], name: &str) -> Vec<String> {
+		filtered(args, &[name], &[], usize::MAX)
+			.iter()
+			.filter(|c| c.name == name)
+			.map(Candidate::checked)
+			.collect()
 	}
 
 	/// The candidates of the globals that pass the name filters
@@ -1062,49 +1139,6 @@ mod tests {
 		)
 	}
 
-	fn checked(args: &[Arg], name: &str) -> Vec<String> {
-		filtered(args, &[name], &[], usize::MAX)
-			.iter()
-			.filter(|c| c.name == name)
-			.map(Candidate::checked)
-			.collect()
-	}
-
-	#[test]
-	fn all_different_needs_a_var_array() {
-		let args = [
-			arg("x", true, 1),
-			arg("p", false, 1),
-			arg("y", true, 0),
-			arg("m", true, 2),
-		];
-		assert_eq!(
-			checked(&args, "all_different"),
-			["(length(x) > 1) /\\ (all_different(x))"]
-		);
-	}
-
-	#[test]
-	fn increasing_and_decreasing_need_three_elements() {
-		let args = [arg("x", true, 1), arg("p", false, 1)];
-		assert_eq!(
-			checked(&args, "increasing"),
-			["(length(x) > 2) /\\ (increasing(x))"]
-		);
-		assert_eq!(
-			checked(&args, "decreasing"),
-			["(length(x) > 2) /\\ (decreasing(x))"]
-		);
-	}
-
-	#[test]
-	fn candidates_collect_leaders_of_their_arguments() {
-		let mut row = arg("x[i, ..]", true, 1);
-		row.leaders = vec![1, 0, 1];
-		let found = filtered(&[row], &["all_different"], &[], usize::MAX);
-		assert_eq!(found[0].leaders, [0, 1]);
-	}
-
 	#[test]
 	fn filters_by_name() {
 		let args = [arg("x", true, 1)];
@@ -1121,27 +1155,6 @@ mod tests {
 		assert!(names(&["lex2"], &[]).is_empty());
 		assert!(!names(&[], &["all_diff"]).contains(&"all_different"));
 		assert!(names(&[], &[]).contains(&"true"));
-	}
-
-	#[test]
-	fn some_argument_must_be_a_variable() {
-		let args = [arg("p", false, 1), arg("q", false, 1)];
-		let found = filtered(&args, &[], &[], usize::MAX);
-		assert_eq!(found.iter().map(|c| c.name).collect::<Vec<_>>(), ["true"]);
-	}
-
-	#[test]
-	fn arguments_must_differ() {
-		let args = [arg("x", true, 1)];
-		assert!(checked(&args, "lex_lesseq").is_empty());
-		let args = [arg("x", true, 1), arg("y", true, 1)];
-		assert_eq!(
-			checked(&args, "lex_lesseq"),
-			[
-				"if length(x) = length(y) /\\ length(x) > 1 then (lex_lesseq(x, y)) else false endif",
-				"if length(y) = length(x) /\\ length(y) > 1 then (lex_lesseq(y, x)) else false endif",
-			]
-		);
 	}
 
 	#[test]
@@ -1168,6 +1181,52 @@ mod tests {
 				"if length(x) > 2 /\\ 0 in dom_array(x) then (alldifferent_except_0(x)) else false endif"
 			]
 		);
+	}
+
+	#[test]
+	fn increasing_and_decreasing_need_three_elements() {
+		let args = [arg("x", true, 1), arg("p", false, 1)];
+		assert_eq!(
+			checked(&args, "increasing"),
+			["(length(x) > 2) /\\ (increasing(x))"]
+		);
+		assert_eq!(
+			checked(&args, "decreasing"),
+			["(length(x) > 2) /\\ (decreasing(x))"]
+		);
+	}
+
+	#[test]
+	fn instantiate_fills_arguments_once_and_picks_a_free_loop_variable() {
+		// An argument with braces is not rewritten
+		assert_eq!(instantiate("f({0}, {1})", &["{1}", "x"]), "f({1}, x)");
+		assert_eq!(
+			instantiate("count ({v} in S) ({0}[{v}])", &["i"]),
+			"count (j in S) (i[j])"
+		);
+		// Distinct loop variables, none of them in an argument
+		assert_eq!(
+			instantiate("sum ({v} in S) ({0}[{v}, {w}, {u}])", &["x[i, ..]"]),
+			"sum (j in S) (x[i, ..][j, k, l])"
+		);
+		// Unknown placeholders are kept
+		assert_eq!(instantiate("{} {2}", &["a"]), "{} {2}");
+	}
+
+	#[test]
+	fn max_args_skips_big_globals() {
+		let args = (0..10)
+			.map(|i| arg(&format!("x{i}"), true, 1))
+			.collect::<Vec<_>>();
+		let names = filtered(&args, &[], &[], 100)
+			.into_iter()
+			.map(|c| c.name)
+			.unique()
+			.collect::<Vec<_>>();
+		// 10^2 lists for two arrays, 10^3 for three, 10^4 for four
+		assert!(names.contains(&"inverse"));
+		assert!(!names.contains(&"distribute"));
+		assert!(!names.contains(&"diffn"));
 	}
 
 	#[test]
@@ -1289,77 +1348,19 @@ mod tests {
 	}
 
 	#[test]
-	fn max_args_skips_big_globals() {
-		let args = (0..10)
-			.map(|i| arg(&format!("x{i}"), true, 1))
-			.collect::<Vec<_>>();
-		let names = filtered(&args, &[], &[], 100)
-			.into_iter()
-			.map(|c| c.name)
-			.unique()
-			.collect::<Vec<_>>();
-		// 10^2 lists for two arrays, 10^3 for three, 10^4 for four
-		assert!(names.contains(&"inverse"));
-		assert!(!names.contains(&"distribute"));
-		assert!(!names.contains(&"diffn"));
+	fn some_argument_must_be_a_variable() {
+		let args = [arg("p", false, 1), arg("q", false, 1)];
+		let found = filtered(&args, &[], &[], usize::MAX);
+		assert_eq!(found.iter().map(|c| c.name).collect::<Vec<_>>(), ["true"]);
 	}
 
-	#[test]
-	fn blanks_are_filled_from_samples() {
-		let args = [arg("x", true, 1)];
-		let mut found = filtered(&args, &["global_card"], &[], usize::MAX);
-		assert_eq!(found.len(), 1);
-		let gcc = &mut found[0];
-		assert_eq!(gcc.checked(), "true");
-		assert_eq!(
-			gcc.feature().unwrap(),
-			"if ub_array(x) - lb_array(x) <= 100 then [lb_array(x)] ++ [count(x, i) | i in lb_array(x)..ub_array(x)] else [] endif"
-		);
-		// Samples disagree
-		assert!(!gcc.clone().fill(&[vec![1, 2, 0], vec![1, 1, 1]]));
-		// Values from 0 get an explicit cover
-		let mut from_zero = gcc.clone();
-		assert!(from_zero.fill(&[vec![0, 2, 0, 1]]));
-		assert_eq!(
-			from_zero.call(),
-			"global_cardinality_closed(x, [0, 1, 2]) = [2, 0, 1]"
-		);
-		assert_eq!(
-			from_zero.dominated_by,
-			Some(("global_cardinality_closed", 0))
-		);
-		assert_eq!(
-			from_zero.checked(),
-			"(global_cardinality_closed(x, [0, 1, 2], [2, 0, 1]))"
-		);
-		// Values that never occur at the ends are left out
-		let mut trimmed = gcc.clone();
-		assert!(trimmed.fill(&[vec![0, 0, 1, 1, 0]]));
-		assert_eq!(
-			trimmed.call(),
-			"global_cardinality_closed(x, [1, 2]) = [1, 1]"
-		);
-		assert_eq!(trimmed.dominated_by, Some(("all_different", 0)));
-		let mut ones = gcc.clone();
-		assert!(ones.fill(&[vec![1, 1, 1]]));
-		assert_eq!(ones.dominated_by, Some(("all_different", 0)));
-		assert!(!gcc.clone().fill(&[vec![1, 0, 0]]));
-		assert!(gcc.fill(&[vec![1, 2, 1], vec![1, 2, 1]]));
-		assert!(gcc.filled == Some(1) && gcc.blank.is_none());
-		assert_eq!(gcc.call(), "global_cardinality_closed(x, [1, 2]) = [2, 1]");
-
-		let mut max = filtered(&args, &["maximum"], &[], usize::MAX);
-		assert_eq!(max[0].feature().unwrap(), "[max(x)]");
-		assert!(max[0].fill(&[vec![7], vec![7]]));
-		assert_eq!(max[0].call(), "max(x) = 7");
-
-		let bools = [typed("b", true, 1, Elem::Bool)];
-		let mut most = filtered(&bools, &["count_leq"], &[], usize::MAX);
-		assert_eq!(most[0].feature().unwrap(), "[sum(b), length(b)]");
-		// At most all of them is trivially true, and a missing value fails
-		assert!(!most[0].clone().fill(&[vec![1, 3], vec![3, 3]]));
-		assert!(!most[0].clone().fill(&[vec![1, 3], vec![]]));
-		assert!(most[0].fill(&[vec![0, 3], vec![1, 3]]));
-		assert_eq!(most[0].call(), "count (i in index_set(b)) (b[i]) <= 1");
+	fn typed(text: &str, var: bool, dims: usize, elem: Elem) -> Arg {
+		Arg {
+			text: text.to_owned(),
+			var,
+			dims,
+			elem,
+			leaders: Vec::new(),
+		}
 	}
 }

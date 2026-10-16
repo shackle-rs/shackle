@@ -9,6 +9,22 @@ use super::{
 	parts::{Loop, LoopKind, Part},
 };
 
+/// One unrolled group: the parts of a group with a variant
+pub(super) struct Unrolled<'g, 'a, 'db> {
+	pub(super) parts: Vec<&'g Part<'a, 'db>>,
+	pub(super) variant: &'g Variant,
+	/// Top-level declarations the parts and the context use
+	pub(super) decls: &'g [DeclarationId<'db>],
+}
+
+/// How a group is unrolled. Leader `m` is the loop `fixed[0][m]` of the
+/// first part, and `fixed[k][m]` is the matching loop of the `k`-th part.
+/// Each leader is set to the first or the last value of its set.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Variant {
+	pub(super) fixed: Vec<Vec<usize>>,
+}
+
 /// Enumerate the groups of up to `max` parts (as sorted indices) whose
 /// variables connect them.
 pub(super) fn groups<T: PartialEq>(vars: &[Vec<T>], max: usize) -> Vec<Vec<usize>> {
@@ -35,49 +51,41 @@ pub(super) fn groups<T: PartialEq>(vars: &[Vec<T>], max: usize) -> Vec<Vec<usize
 	result
 }
 
-/// How a group is unrolled. Leader `m` is the loop `fixed[0][m]` of the
-/// first part, and `fixed[k][m]` is the matching loop of the `k`-th part.
-/// Each leader is set to the first or the last value of its set.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Variant {
-	pub(super) fixed: Vec<Vec<usize>>,
-}
-
-/// One unrolled group: the parts of a group with a variant
-pub(super) struct Unrolled<'g, 'a, 'db> {
-	pub(super) parts: Vec<&'g Part<'a, 'db>>,
-	pub(super) variant: &'g Variant,
-	/// Top-level declarations the parts and the context use
-	pub(super) decls: &'g [DeclarationId<'db>],
-}
-
-impl<'a, 'db> Unrolled<'_, 'a, 'db> {
-	pub(super) fn leaders(&self) -> usize {
-		self.variant.fixed[0].len()
+/// Replace the identifiers `from` by `to` in printed MiniZinc
+fn rename(text: &str, renaming: &[(String, String)]) -> String {
+	let mut result = String::with_capacity(text.len());
+	let mut chars = text.char_indices().peekable();
+	while let Some((start, c)) = chars.next() {
+		if c.is_alphabetic() || c == '_' {
+			let mut end = start + c.len_utf8();
+			while let Some((i, c)) = chars.next_if(|(_, c)| c.is_alphanumeric() || *c == '_') {
+				end = i + c.len_utf8();
+			}
+			let word = &text[start..end];
+			match renaming.iter().find(|(from, _)| from == word) {
+				Some((_, to)) => result.push_str(to),
+				None => result.push_str(word),
+			}
+		} else {
+			result.push(c);
+		}
 	}
-
-	/// The leader that a loop declaration of the group is fixed to
-	pub(super) fn leader_of(&self, d: DeclarationId<'db>) -> Option<usize> {
-		self.parts
-			.iter()
-			.zip(&self.variant.fixed)
-			.find_map(|(p, f)| f.iter().position(|l| p.loops[*l].decl == d))
-	}
-
-	pub(super) fn leader_loop(&self, m: usize) -> &Loop<'a, 'db> {
-		&self.parts[0].loops[self.variant.fixed[0][m]]
-	}
-
-	/// All instantiations of the leaders (`last[m]`: leader `m` takes the last
-	/// value of its set instead of the first)
-	pub(super) fn instantiations(&self) -> Vec<Vec<bool>> {
-		(0..1_usize << self.leaders())
-			.map(|mask| (0..self.leaders()).map(|m| mask & (1 << m) != 0).collect())
-			.collect()
-	}
+	result
 }
 
 impl<'a, 'db> Globalizer<'a, 'db> {
+	/// Whether no loop name is fixed to two different leaders: each fixed loop
+	/// is declared at the top level of the submodel
+	fn consistent_names(&self, group: &[usize], variant: &Variant) -> bool {
+		let mut leader_of = FxHashMap::default();
+		group.iter().zip(&variant.fixed).all(|(p, fixed)| {
+			fixed.iter().enumerate().all(|(m, l)| {
+				let name = self.name(self.parts[*p].loops[*l].decl);
+				*leader_of.entry(name).or_insert(m) == m
+			})
+		})
+	}
+
 	pub(super) fn loop_set(&self, l: &Loop<'a, 'db>) -> String {
 		match l.kind {
 			LoopKind::Iter(c) => self.print(c),
@@ -131,38 +139,30 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		}
 		result
 	}
-
-	/// Whether no loop name is fixed to two different leaders: each fixed loop
-	/// is declared at the top level of the submodel
-	fn consistent_names(&self, group: &[usize], variant: &Variant) -> bool {
-		let mut leader_of = FxHashMap::default();
-		group.iter().zip(&variant.fixed).all(|(p, fixed)| {
-			fixed.iter().enumerate().all(|(m, l)| {
-				let name = self.name(self.parts[*p].loops[*l].decl);
-				*leader_of.entry(name).or_insert(m) == m
-			})
-		})
-	}
 }
 
-/// Replace the identifiers `from` by `to` in printed MiniZinc
-fn rename(text: &str, renaming: &[(String, String)]) -> String {
-	let mut result = String::with_capacity(text.len());
-	let mut chars = text.char_indices().peekable();
-	while let Some((start, c)) = chars.next() {
-		if c.is_alphabetic() || c == '_' {
-			let mut end = start + c.len_utf8();
-			while let Some((i, c)) = chars.next_if(|(_, c)| c.is_alphanumeric() || *c == '_') {
-				end = i + c.len_utf8();
-			}
-			let word = &text[start..end];
-			match renaming.iter().find(|(from, _)| from == word) {
-				Some((_, to)) => result.push_str(to),
-				None => result.push_str(word),
-			}
-		} else {
-			result.push(c);
-		}
+impl<'a, 'db> Unrolled<'_, 'a, 'db> {
+	/// All instantiations of the leaders (`last[m]`: leader `m` takes the last
+	/// value of its set instead of the first)
+	pub(super) fn instantiations(&self) -> Vec<Vec<bool>> {
+		(0..1_usize << self.leaders())
+			.map(|mask| (0..self.leaders()).map(|m| mask & (1 << m) != 0).collect())
+			.collect()
 	}
-	result
+
+	pub(super) fn leader_loop(&self, m: usize) -> &Loop<'a, 'db> {
+		&self.parts[0].loops[self.variant.fixed[0][m]]
+	}
+
+	/// The leader that a loop declaration of the group is fixed to
+	pub(super) fn leader_of(&self, d: DeclarationId<'db>) -> Option<usize> {
+		self.parts
+			.iter()
+			.zip(&self.variant.fixed)
+			.find_map(|(p, f)| f.iter().position(|l| p.loops[*l].decl == d))
+	}
+
+	pub(super) fn leaders(&self) -> usize {
+		self.variant.fixed[0].len()
+	}
 }

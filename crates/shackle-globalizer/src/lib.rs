@@ -30,6 +30,9 @@ mod groups;
 mod parts;
 mod run;
 mod submodel;
+
+#[cfg(test)]
+mod tests;
 mod viewpoints;
 
 use std::{
@@ -67,6 +70,19 @@ use self::{
 	viewpoints::Viewpoint,
 };
 
+/// A suggested replacement for a group of constraints, or a viewpoint
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Finding {
+	/// The replaced constraints (for a viewpoint: the 0/1 array)
+	pub locations: Vec<Location>,
+	/// The constraint that is needed for the replacement to hold
+	pub context: Option<Location>,
+	/// The global constraint call that can replace them (`true` if they are
+	/// redundant), or the viewpoint declaration with its channelling
+	/// constraint
+	pub replacement: String,
+}
+
 /// Options for [`globalize`]
 #[derive(Clone, Debug)]
 pub struct GlobalizeOptions {
@@ -95,22 +111,35 @@ pub struct GlobalizeOptions {
 	pub initial_pass: bool,
 }
 
-impl Default for GlobalizeOptions {
-	fn default() -> Self {
-		Self {
-			solver: "gecode".to_owned(),
-			max_group: 2,
-			samples: 30,
-			time_limit: Duration::from_secs(1),
-			seed: 0,
-			include: Vec::new(),
-			exclude: Vec::new(),
-			max_args: 50_000,
-			implies_check: true,
-			jobs: std::thread::available_parallelism().map_or(1, |n| n.get()),
-			initial_pass: true,
-		}
-	}
+/// Result of [`globalize`]
+#[derive(Clone, Debug)]
+pub struct Globalized {
+	/// Viewpoints with the suggestions that use them
+	pub viewpoints: Vec<SuggestedViewpoint>,
+	/// The other suggestions, sorted by location (redundant groups have
+	/// `true`)
+	pub findings: Vec<Finding>,
+	/// Number of `minizinc` runs
+	pub calls: usize,
+}
+
+struct Globalizer<'a, 'db> {
+	db: &'db dyn Db,
+	model: &'a Model<'db>,
+	printer: OldMiniZincPrinter<'db>,
+	parts: Vec<Part<'a, 'db>>,
+	/// Printed declarations, functions etc. for the submodels, with the
+	/// declaration if it is a variable (only printed when a group needs it)
+	items: Vec<(Option<DeclarationId<'db>>, String)>,
+	/// The declarations each user declaration refers to
+	decl_refs: FxHashMap<DeclarationId<'db>, Vec<DeclarationId<'db>>>,
+	/// Declarations that the items printed in every submodel (transitively)
+	/// refer to
+	always_needed: FxHashSet<DeclarationId<'db>>,
+	options: &'a GlobalizeOptions,
+	checker: Checker<'a>,
+	/// Integer viewpoints found by the initial pass
+	viewpoints: Vec<Viewpoint<'db>>,
 }
 
 /// A source range in a model file
@@ -122,97 +151,22 @@ pub struct Location {
 	pub span: SourceSpan,
 }
 
-impl Location {
-	fn new(db: &dyn Db, origin: Origin<'_>) -> Self {
-		let (src, span) = origin.source_span(db);
-		Location { src, span }
-	}
-
-	/// Line and column (from 1, in characters) of a byte offset
-	fn position(&self, offset: usize) -> (usize, usize) {
-		let before = &self.src.contents()[..offset];
-		let line = before.matches('\n').count() + 1;
-		let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-		(line, before[line_start..].chars().count() + 1)
-	}
-
-	/// Line and column of the first character (from 1)
-	pub fn start(&self) -> (usize, usize) {
-		self.position(self.span.offset())
-	}
-
-	/// Line and column of the last character (from 1)
-	pub fn end(&self) -> (usize, usize) {
-		let (start, end) = (self.span.offset(), self.span.offset() + self.span.len());
-		let last = self.src.contents()[start..end]
-			.char_indices()
-			.next_back()
-			.map_or(0, |(i, _)| i);
-		self.position(start + last)
-	}
-
-	/// Locations are ordered and compared by file path and range (a model
-	/// has at most one source without a path)
-	fn key(&self) -> (Option<&std::path::Path>, usize, usize) {
-		(self.src.path(), self.span.offset(), self.span.len())
-	}
+/// Which candidates a pass checks
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pass {
+	/// Only redundancy (`true`) and viewpoints (`binaries_represent_int`)
+	Initial,
+	/// All other candidates
+	Full,
 }
 
-impl PartialEq for Location {
-	fn eq(&self, other: &Self) -> bool {
-		self.key() == other.key()
-	}
-}
-
-impl Eq for Location {}
-
-impl PartialOrd for Location {
-	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl Ord for Location {
-	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		self.key().cmp(&other.key())
-	}
-}
-
-/// The globalizer's text format: `file|l1|c1|l2|c2` (lines and columns
-/// from 1, columns in characters, both ends inclusive)
-impl Display for Location {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let ((l1, c1), (l2, c2)) = (self.start(), self.end());
-		write!(f, "{}|{l1}|{c1}|{l2}|{c2}", self.src.name())
-	}
-}
-
-/// A suggested replacement for a group of constraints, or a viewpoint
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Finding {
-	/// The replaced constraints (for a viewpoint: the 0/1 array)
-	pub locations: Vec<Location>,
-	/// The constraint that is needed for the replacement to hold
-	pub context: Option<Location>,
-	/// The global constraint call that can replace them (`true` if they are
-	/// redundant), or the viewpoint declaration with its channelling
-	/// constraint
-	pub replacement: String,
-}
-
-impl Display for Finding {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"{} [ {}] {}",
-			self.locations.iter().join(";"),
-			self.context
-				.as_ref()
-				.map(|c| format!("{c} "))
-				.unwrap_or_default(),
-			self.replacement
-		)
-	}
+/// A finding before formatting
+#[derive(Clone, Debug)]
+struct RawFinding {
+	group: Vec<usize>,
+	context: Option<usize>,
+	replacement: String,
+	candidate: Candidate,
 }
 
 /// A new integer array that represents a 0/1 array, found by the initial
@@ -226,65 +180,6 @@ pub struct SuggestedViewpoint {
 	pub suggestion: Finding,
 	/// Suggestions that use the new array, sorted by location
 	pub findings: Vec<Finding>,
-}
-
-/// Result of [`globalize`]
-#[derive(Clone, Debug)]
-pub struct Globalized {
-	/// Viewpoints with the suggestions that use them
-	pub viewpoints: Vec<SuggestedViewpoint>,
-	/// The other suggestions, sorted by location (redundant groups have
-	/// `true`)
-	pub findings: Vec<Finding>,
-	/// Number of `minizinc` runs
-	pub calls: usize,
-}
-
-/// Which candidates a pass checks
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Pass {
-	/// Only redundancy (`true`) and viewpoints (`binaries_represent_int`)
-	Initial,
-	/// All other candidates
-	Full,
-}
-
-impl Pass {
-	fn checks(self, kind: Kind) -> bool {
-		(kind != Kind::Normal) == (self == Pass::Initial)
-	}
-}
-
-/// A finding before formatting
-#[derive(Clone, Debug)]
-struct RawFinding {
-	group: Vec<usize>,
-	context: Option<usize>,
-	replacement: String,
-	candidate: Candidate,
-}
-
-/// Which findings to keep: drop a finding whose replacement is also found for
-/// a smaller group (a subset of the parts, or the same parts without a
-/// context), and a finding with a context whose replacement is found for a
-/// group that also contains the context
-fn shadow(found: &[RawFinding]) -> Vec<bool> {
-	found
-		.iter()
-		.map(|f| {
-			let (group, context, replacement) = (&f.group, &f.context, &f.replacement);
-			!found.iter().any(|other| {
-				let (g, c, r) = (&other.group, &other.context, &other.replacement);
-				r == replacement
-					&& ((g.iter().all(|p| group.contains(p))
-						&& (c.is_none() || c == context)
-						&& (g.len() < group.len() || (c.is_none() && context.is_some())))
-						|| (c.is_none()
-							&& context.is_some_and(|ctx| g.contains(&ctx))
-							&& group.iter().all(|p| g.contains(p))))
-			})
-		})
-		.collect()
 }
 
 /// `seed` extended with everything `next` gives for its elements, until
@@ -310,133 +205,6 @@ fn closure<T: PartialEq, I: IntoIterator<Item = T>>(
 		i += 1;
 	}
 	all
-}
-
-/// Remove the redundant parentheses of printed THIR (on one line)
-fn tidy(text: String) -> String {
-	let options = MiniZincFormatOptions {
-		line_width: usize::MAX,
-		keep_parentheses: false,
-		..Default::default()
-	};
-	format_str(format!("constraint {text};"), &options)
-		.ok()
-		.and_then(|f| {
-			f.trim()
-				.strip_prefix("constraint ")?
-				.strip_suffix(';')
-				.map(str::to_owned)
-		})
-		.unwrap_or(text)
-}
-
-struct Globalizer<'a, 'db> {
-	db: &'db dyn Db,
-	model: &'a Model<'db>,
-	printer: OldMiniZincPrinter<'db>,
-	parts: Vec<Part<'a, 'db>>,
-	/// Printed declarations, functions etc. for the submodels, with the
-	/// declaration if it is a variable (only printed when a group needs it)
-	items: Vec<(Option<DeclarationId<'db>>, String)>,
-	/// The declarations each user declaration refers to
-	decl_refs: FxHashMap<DeclarationId<'db>, Vec<DeclarationId<'db>>>,
-	/// Declarations that the items printed in every submodel (transitively)
-	/// refer to
-	always_needed: FxHashSet<DeclarationId<'db>>,
-	options: &'a GlobalizeOptions,
-	checker: Checker<'a>,
-	/// Integer viewpoints found by the initial pass
-	viewpoints: Vec<Viewpoint<'db>>,
-}
-
-impl<'a, 'db> Globalizer<'a, 'db> {
-	fn print(&self, e: &Expression<'db>) -> String {
-		self.printer.print_expression(self.db, self.model, e)
-	}
-
-	fn name(&self, d: DeclarationId<'db>) -> String {
-		self.printer.print_declaration_id(self.db, self.model, d)
-	}
-
-	/// Print the jobs for all groups and contexts, except those in `skip` (a
-	/// group without context in `skip` stands for all its contexts), and
-	/// check them
-	fn run(
-		&self,
-		pass: Pass,
-		skip: &FxHashSet<(Vec<usize>, Option<usize>)>,
-	) -> Result<Vec<RawFinding>> {
-		let decls = self
-			.parts
-			.iter()
-			.map(|p| p.decls(self.model))
-			.collect::<Vec<_>>();
-		let vars = decls
-			.iter()
-			.map(|ds| {
-				ds.iter()
-					.copied()
-					.filter(|d| !self.model[*d].ty().known_par(self.db))
-					.collect::<Vec<_>>()
-			})
-			.collect::<Vec<_>>();
-		let found = self.checker.check_all(self.options.jobs.max(1), |send| {
-			for group in groups(&vars, self.options.max_group) {
-				if skip.contains(&(group.clone(), None)) {
-					continue;
-				}
-				let variants = self.variants(&group);
-				let group_vars = group.iter().flat_map(|p| &vars[*p]).collect::<Vec<_>>();
-				// No context, or one other part that shares variables with the
-				// group
-				let contexts = std::iter::once(None).chain(
-					(0..self.parts.len())
-						.filter(|c| {
-							!group.contains(c) && vars[*c].iter().any(|v| group_vars.contains(&v))
-						})
-						.map(Some),
-				);
-				for context in contexts {
-					if skip.contains(&(group.clone(), context)) {
-						continue;
-					}
-					let group_decls = group
-						.iter()
-						.chain(&context)
-						.flat_map(|p| decls[*p].iter().copied())
-						.unique()
-						.collect::<Vec<_>>();
-					if let Some(job) = self.job(&group, context, &variants, &group_decls, pass)
-						&& !send(job)
-					{
-						return;
-					}
-				}
-			}
-		})?;
-		let keep = shadow(&found);
-		Ok(found
-			.into_iter()
-			.zip(keep)
-			.filter_map(|(f, keep)| keep.then_some(f))
-			.collect())
-	}
-
-	fn finding(&self, raw: &RawFinding) -> Finding {
-		let mut locations = raw
-			.group
-			.iter()
-			.map(|p| Location::new(self.db, self.parts[*p].origin))
-			.collect::<Vec<_>>();
-		locations.dedup();
-		Finding {
-			locations,
-			context: raw
-				.context
-				.map(|c| Location::new(self.db, self.parts[c].origin)),
-			replacement: raw.replacement.clone(),
-		}
-	}
 }
 
 /// Suggest global constraints that can replace groups of constraints in
@@ -523,6 +291,47 @@ fn is_user_file(db: &dyn Db, file: ModelFile) -> bool {
 			.clone(),
 	];
 	!libraries.iter().flatten().any(|lib| path.starts_with(lib))
+}
+
+/// Which findings to keep: drop a finding whose replacement is also found for
+/// a smaller group (a subset of the parts, or the same parts without a
+/// context), and a finding with a context whose replacement is found for a
+/// group that also contains the context
+fn shadow(found: &[RawFinding]) -> Vec<bool> {
+	found
+		.iter()
+		.map(|f| {
+			let (group, context, replacement) = (&f.group, &f.context, &f.replacement);
+			!found.iter().any(|other| {
+				let (g, c, r) = (&other.group, &other.context, &other.replacement);
+				r == replacement
+					&& ((g.iter().all(|p| group.contains(p))
+						&& (c.is_none() || c == context)
+						&& (g.len() < group.len() || (c.is_none() && context.is_some())))
+						|| (c.is_none()
+							&& context.is_some_and(|ctx| g.contains(&ctx))
+							&& group.iter().all(|p| g.contains(p))))
+			})
+		})
+		.collect()
+}
+
+/// Remove the redundant parentheses of printed THIR (on one line)
+fn tidy(text: String) -> String {
+	let options = MiniZincFormatOptions {
+		line_width: usize::MAX,
+		keep_parentheses: false,
+		..Default::default()
+	};
+	format_str(format!("constraint {text};"), &options)
+		.ok()
+		.and_then(|f| {
+			f.trim()
+				.strip_prefix("constraint ")?
+				.strip_suffix(';')
+				.map(str::to_owned)
+		})
+		.unwrap_or(text)
 }
 
 /// Set up a [`Globalizer`] for the model in `db` and pass it to `f`
@@ -621,5 +430,196 @@ fn with_globalizer<R>(
 	f(&mut globalizer)
 }
 
-#[cfg(test)]
-mod tests;
+impl Display for Finding {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"{} [ {}] {}",
+			self.locations.iter().join(";"),
+			self.context
+				.as_ref()
+				.map(|c| format!("{c} "))
+				.unwrap_or_default(),
+			self.replacement
+		)
+	}
+}
+
+impl Default for GlobalizeOptions {
+	fn default() -> Self {
+		Self {
+			solver: "gecode".to_owned(),
+			max_group: 2,
+			samples: 30,
+			time_limit: Duration::from_secs(1),
+			seed: 0,
+			include: Vec::new(),
+			exclude: Vec::new(),
+			max_args: 50_000,
+			implies_check: true,
+			jobs: std::thread::available_parallelism().map_or(1, |n| n.get()),
+			initial_pass: true,
+		}
+	}
+}
+
+impl<'a, 'db> Globalizer<'a, 'db> {
+	fn finding(&self, raw: &RawFinding) -> Finding {
+		let mut locations = raw
+			.group
+			.iter()
+			.map(|p| Location::new(self.db, self.parts[*p].origin))
+			.collect::<Vec<_>>();
+		locations.dedup();
+		Finding {
+			locations,
+			context: raw
+				.context
+				.map(|c| Location::new(self.db, self.parts[c].origin)),
+			replacement: raw.replacement.clone(),
+		}
+	}
+
+	fn name(&self, d: DeclarationId<'db>) -> String {
+		self.printer.print_declaration_id(self.db, self.model, d)
+	}
+
+	fn print(&self, e: &Expression<'db>) -> String {
+		self.printer.print_expression(self.db, self.model, e)
+	}
+
+	/// Print the jobs for all groups and contexts, except those in `skip` (a
+	/// group without context in `skip` stands for all its contexts), and
+	/// check them
+	fn run(
+		&self,
+		pass: Pass,
+		skip: &FxHashSet<(Vec<usize>, Option<usize>)>,
+	) -> Result<Vec<RawFinding>> {
+		let decls = self
+			.parts
+			.iter()
+			.map(|p| p.decls(self.model))
+			.collect::<Vec<_>>();
+		let vars = decls
+			.iter()
+			.map(|ds| {
+				ds.iter()
+					.copied()
+					.filter(|d| !self.model[*d].ty().known_par(self.db))
+					.collect::<Vec<_>>()
+			})
+			.collect::<Vec<_>>();
+		let found = self.checker.check_all(self.options.jobs.max(1), |send| {
+			for group in groups(&vars, self.options.max_group) {
+				if skip.contains(&(group.clone(), None)) {
+					continue;
+				}
+				let variants = self.variants(&group);
+				let group_vars = group.iter().flat_map(|p| &vars[*p]).collect::<Vec<_>>();
+				// No context, or one other part that shares variables with the
+				// group
+				let contexts = std::iter::once(None).chain(
+					(0..self.parts.len())
+						.filter(|c| {
+							!group.contains(c) && vars[*c].iter().any(|v| group_vars.contains(&v))
+						})
+						.map(Some),
+				);
+				for context in contexts {
+					if skip.contains(&(group.clone(), context)) {
+						continue;
+					}
+					let group_decls = group
+						.iter()
+						.chain(&context)
+						.flat_map(|p| decls[*p].iter().copied())
+						.unique()
+						.collect::<Vec<_>>();
+					if let Some(job) = self.job(&group, context, &variants, &group_decls, pass)
+						&& !send(job)
+					{
+						return;
+					}
+				}
+			}
+		})?;
+		let keep = shadow(&found);
+		Ok(found
+			.into_iter()
+			.zip(keep)
+			.filter_map(|(f, keep)| keep.then_some(f))
+			.collect())
+	}
+}
+
+impl Location {
+	/// Line and column of the last character (from 1)
+	pub fn end(&self) -> (usize, usize) {
+		let (start, end) = (self.span.offset(), self.span.offset() + self.span.len());
+		let last = self.src.contents()[start..end]
+			.char_indices()
+			.next_back()
+			.map_or(0, |(i, _)| i);
+		self.position(start + last)
+	}
+
+	/// Locations are ordered and compared by file path and range (a model
+	/// has at most one source without a path)
+	fn key(&self) -> (Option<&std::path::Path>, usize, usize) {
+		(self.src.path(), self.span.offset(), self.span.len())
+	}
+
+	fn new(db: &dyn Db, origin: Origin<'_>) -> Self {
+		let (src, span) = origin.source_span(db);
+		Location { src, span }
+	}
+
+	/// Line and column (from 1, in characters) of a byte offset
+	fn position(&self, offset: usize) -> (usize, usize) {
+		let before = &self.src.contents()[..offset];
+		let line = before.matches('\n').count() + 1;
+		let line_start = before.rfind('\n').map_or(0, |i| i + 1);
+		(line, before[line_start..].chars().count() + 1)
+	}
+
+	/// Line and column of the first character (from 1)
+	pub fn start(&self) -> (usize, usize) {
+		self.position(self.span.offset())
+	}
+}
+
+/// The globalizer's text format: `file|l1|c1|l2|c2` (lines and columns
+/// from 1, columns in characters, both ends inclusive)
+impl Display for Location {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let ((l1, c1), (l2, c2)) = (self.start(), self.end());
+		write!(f, "{}|{l1}|{c1}|{l2}|{c2}", self.src.name())
+	}
+}
+
+impl Eq for Location {}
+
+impl Ord for Location {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		self.key().cmp(&other.key())
+	}
+}
+
+impl PartialEq for Location {
+	fn eq(&self, other: &Self) -> bool {
+		self.key() == other.key()
+	}
+}
+
+impl PartialOrd for Location {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Pass {
+	fn checks(self, kind: Kind) -> bool {
+		(kind != Kind::Normal) == (self == Pass::Initial)
+	}
+}

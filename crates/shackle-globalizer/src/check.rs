@@ -22,17 +22,12 @@ use super::{
 	tidy,
 };
 
-/// One unrolled group (a variant), printed
+/// Runs the checks (shared by all worker threads)
 #[derive(Debug)]
-pub(super) struct Plan {
-	/// Leader declarations, one for each instantiation (one empty string if
-	/// there are no leaders)
-	pub(super) leaders: Vec<String>,
-	/// The unrolled parts of the group
-	pub(super) group: Vec<String>,
-	pub(super) candidates: Vec<Candidate>,
-	/// For each leader: its generator
-	pub(super) wrap: Vec<String>,
+pub(super) struct Checker<'a> {
+	pub(super) runner: Runner<'a>,
+	/// The data files, or one `None` if there are none
+	pub(super) data: Vec<Option<PathBuf>>,
 }
 
 /// All variants of one group with one context, printed
@@ -51,6 +46,19 @@ pub(super) struct Job {
 	pub(super) plans: Vec<Plan>,
 }
 
+/// One unrolled group (a variant), printed
+#[derive(Debug)]
+pub(super) struct Plan {
+	/// Leader declarations, one for each instantiation (one empty string if
+	/// there are no leaders)
+	pub(super) leaders: Vec<String>,
+	/// The unrolled parts of the group
+	pub(super) group: Vec<String>,
+	pub(super) candidates: Vec<Candidate>,
+	/// For each leader: its generator
+	pub(super) wrap: Vec<String>,
+}
+
 /// Result of sampling a submodel
 pub(super) enum Sample {
 	/// The outcome of the run, which has solutions
@@ -63,18 +71,14 @@ pub(super) enum Sample {
 	Error,
 }
 
-impl From<Arc<Outcome>> for Sample {
-	fn from(outcome: Arc<Outcome>) -> Self {
-		match &outcome.error {
-			Some(err) => {
-				log::info!("globalizer: submodel failed: {err}");
-				Sample::Error
-			}
-			None if outcome.solutions.is_empty() && outcome.complete => Sample::Unsat,
-			None if outcome.solutions.is_empty() => Sample::Unknown,
-			None => Sample::Solutions(outcome),
-		}
-	}
+/// Solve items: plain search, and search with restarts
+pub(super) type Search = [String; 2];
+
+/// Whether the boolean output `name` is true in every solution
+fn all_true(solutions: &[Solution], name: &str) -> bool {
+	solutions
+		.iter()
+		.all(|s| s.get(name) == Some(&Value::Bool(true)))
 }
 
 /// The replacements of one group to report, from all that were found (with
@@ -113,84 +117,56 @@ pub(super) fn rank(mut found: Vec<(String, Candidate)>) -> Vec<(String, Candidat
 	found.into_iter().unique_by(|(r, _)| r.clone()).collect()
 }
 
-/// Whether the boolean output `name` is true in every solution
-fn all_true(solutions: &[Solution], name: &str) -> bool {
-	solutions
-		.iter()
-		.all(|s| s.get(name) == Some(&Value::Bool(true)))
-}
-
-/// Runs the checks (shared by all worker threads)
-#[derive(Debug)]
-pub(super) struct Checker<'a> {
-	pub(super) runner: Runner<'a>,
-	/// The data files, or one `None` if there are none
-	pub(super) data: Vec<Option<PathBuf>>,
-}
-
-/// Solve items: plain search, and search with restarts
-pub(super) type Search = [String; 2];
-
 impl<'a> Checker<'a> {
-	fn options(&self) -> &'a GlobalizeOptions {
-		self.runner.options
-	}
-
-	/// Sample solutions of `body` (a submodel without solve item). Outcomes
-	/// are cached, unless `cache` is false (for runs that are unlikely to
-	/// repeat).
-	pub(super) fn sample(
+	/// Check the jobs that `produce` sends, on `jobs` worker threads. The
+	/// producer runs on this thread (it owns the compiler database). Its
+	/// `send` returns `false` once checking has stopped (after an error).
+	pub(super) fn check_all(
 		&self,
-		body: &str,
-		search: &Search,
-		data: &Option<PathBuf>,
-		cache: bool,
-	) -> Result<Sample> {
-		let n = self.options().samples;
-		let data = data.as_deref();
-		// A plain search proves completeness if there are few solutions
-		let plain = self
-			.runner
-			.run(&format!("{body}{}", search[0]), data, n, cache)?;
-		if plain.complete || plain.error.is_some() {
-			return Ok(Sample::from(plain));
+		jobs: usize,
+		produce: impl FnOnce(&mut dyn FnMut(Job) -> bool),
+	) -> Result<Vec<RawFinding>> {
+		let found = Mutex::new(Vec::new());
+		let failure = Mutex::new(None::<Error>);
+		let stop = AtomicBool::new(false);
+		std::thread::scope(|scope| {
+			let (send, receive) = mpsc::sync_channel::<Job>(jobs);
+			// The workers own the receiver: if they all stop, `send` fails
+			let receive = Arc::new(Mutex::new(receive));
+			for _ in 0..jobs {
+				let receive = Arc::clone(&receive);
+				let (found, failure, stop) = (&found, &failure, &stop);
+				let _ = scope.spawn(move || {
+					while !stop.load(Ordering::Relaxed) {
+						let Ok(job) = receive.lock().unwrap().recv() else {
+							break;
+						};
+						match self.check_job(&job) {
+							Ok(replacements) => {
+								found.lock().unwrap().extend(replacements.into_iter().map(
+									|(replacement, candidate)| RawFinding {
+										group: job.group.clone(),
+										context: job.context,
+										replacement,
+										candidate,
+									},
+								))
+							}
+							Err(err) => {
+								stop.store(true, Ordering::Relaxed);
+								let _ = failure.lock().unwrap().get_or_insert(err);
+							}
+						}
+					}
+				});
+			}
+			drop(receive);
+			produce(&mut |job| !stop.load(Ordering::Relaxed) && send.send(job).is_ok());
+		});
+		match failure.into_inner().unwrap() {
+			Some(err) => Err(err),
+			None => Ok(found.into_inner().unwrap()),
 		}
-		// Restarts give more diverse samples, but cannot prove that a set of
-		// solutions is complete. The plain samples often share the first
-		// variables, so both are used.
-		let restart = self
-			.runner
-			.run(&format!("{body}{}", search[1]), data, n, cache)?;
-		if restart.error.is_some() {
-			return Ok(Sample::from(plain));
-		}
-		if restart.complete && restart.solutions.is_empty() {
-			return Ok(Sample::Unsat);
-		}
-		Ok(Sample::from(Arc::new(Outcome {
-			solutions: plain
-				.solutions
-				.iter()
-				.chain(&restart.solutions)
-				.cloned()
-				.collect(),
-			complete: false,
-			error: None,
-		})))
-	}
-
-	/// The data files and leader instantiations of a plan, with the preamble
-	/// and the leader declarations of each
-	fn instances<'j>(
-		&'j self,
-		job: &'j Job,
-		plan: &'j Plan,
-	) -> impl Iterator<Item = (&'j Option<PathBuf>, String)> {
-		self.data.iter().flat_map(move |data| {
-			plan.leaders
-				.iter()
-				.map(move |leaders| (data, format!("{}{leaders}", job.preamble)))
-		})
 	}
 
 	/// Keep the candidates that hold on all samples of `base`, and fill their
@@ -288,20 +264,18 @@ impl<'a> Checker<'a> {
 		Ok(Some(cands))
 	}
 
-	/// Whether `a` implies `b` on the samples of `a`
-	pub(super) fn implies(
-		&self,
-		base: &str,
-		search: &Search,
-		data: &Option<PathBuf>,
-		a: &str,
-		b: &str,
-	) -> Result<bool> {
-		let body = format!("{base}constraint {a};\nvar bool: GZ_I :: output = {b};\n");
-		Ok(match self.sample(&body, search, data, true)? {
-			Sample::Solutions(o) => all_true(&o.solutions, "GZ_I"),
-			_ => false,
-		})
+	/// The replacements (and candidates) found for one group with one context
+	pub(super) fn check_job(&self, job: &Job) -> Result<Vec<(String, Candidate)>> {
+		let mut found = Vec::new();
+		for plan in &job.plans {
+			let forward = self.forward(job, plan)?;
+			for cand in self.vacuous(job, plan, forward)? {
+				if self.reverse(job, plan, &cand)? {
+					found.push((Self::replacement(plan, &cand), cand));
+				}
+			}
+		}
+		Ok(rank(found))
 	}
 
 	/// Candidates that hold on all samples of the group (forward check)
@@ -337,22 +311,6 @@ impl<'a> Checker<'a> {
 		Ok(cands)
 	}
 
-	/// Drop candidates that hold without the group (on the samples of the
-	/// declarations and the context) for every data file and instantiation
-	/// with samples. Such a candidate can only pass the reverse check if the
-	/// group is redundant, and then only `true` is reported. This saves a
-	/// reverse check for each of them.
-	fn vacuous(&self, job: &Job, plan: &Plan, cands: Vec<Candidate>) -> Result<Vec<Candidate>> {
-		let (trivial, mut cands): (Vec<_>, Vec<_>) =
-			cands.into_iter().partition(|c| c.kind == Kind::Redundant);
-		let context = job.context_text.iter().collect::<Vec<_>>();
-		if let Some(implied) = self.holding(job, plan, &context, cands.clone())? {
-			cands.retain(|c| !implied.contains(c));
-		}
-		cands.extend(trivial);
-		Ok(cands)
-	}
-
 	/// The candidates that hold on the samples with `constraints`, for every
 	/// data file and instantiation that has samples (the others are outside
 	/// the `where` clauses of the leaders). `None` if none has samples.
@@ -377,6 +335,49 @@ impl<'a> Checker<'a> {
 			}
 		}
 		Ok(sampled.then_some(cands))
+	}
+
+	/// Whether `a` implies `b` on the samples of `a`
+	pub(super) fn implies(
+		&self,
+		base: &str,
+		search: &Search,
+		data: &Option<PathBuf>,
+		a: &str,
+		b: &str,
+	) -> Result<bool> {
+		let body = format!("{base}constraint {a};\nvar bool: GZ_I :: output = {b};\n");
+		Ok(match self.sample(&body, search, data, true)? {
+			Sample::Solutions(o) => all_true(&o.solutions, "GZ_I"),
+			_ => false,
+		})
+	}
+
+	/// The data files and leader instantiations of a plan, with the preamble
+	/// and the leader declarations of each
+	fn instances<'j>(
+		&'j self,
+		job: &'j Job,
+		plan: &'j Plan,
+	) -> impl Iterator<Item = (&'j Option<PathBuf>, String)> {
+		self.data.iter().flat_map(move |data| {
+			plan.leaders
+				.iter()
+				.map(move |leaders| (data, format!("{}{leaders}", job.preamble)))
+		})
+	}
+
+	fn options(&self) -> &'a GlobalizeOptions {
+		self.runner.options
+	}
+
+	/// The replacement text: the call inside a `forall` over the leaders (a
+	/// candidate loops over all of them, see `plan`)
+	pub(super) fn replacement(plan: &Plan, cand: &Candidate) -> String {
+		if plan.wrap.is_empty() {
+			return tidy(cand.call());
+		}
+		tidy(format!("forall({})({})", plan.wrap.join(", "), cand.call()))
 	}
 
 	/// Whether all samples of the candidate (with the context) satisfy the
@@ -426,77 +427,76 @@ impl<'a> Checker<'a> {
 		Ok(tested)
 	}
 
-	/// The replacement text: the call inside a `forall` over the leaders (a
-	/// candidate loops over all of them, see `plan`)
-	pub(super) fn replacement(plan: &Plan, cand: &Candidate) -> String {
-		if plan.wrap.is_empty() {
-			return tidy(cand.call());
-		}
-		tidy(format!("forall({})({})", plan.wrap.join(", "), cand.call()))
-	}
-
-	/// The replacements (and candidates) found for one group with one context
-	pub(super) fn check_job(&self, job: &Job) -> Result<Vec<(String, Candidate)>> {
-		let mut found = Vec::new();
-		for plan in &job.plans {
-			let forward = self.forward(job, plan)?;
-			for cand in self.vacuous(job, plan, forward)? {
-				if self.reverse(job, plan, &cand)? {
-					found.push((Self::replacement(plan, &cand), cand));
-				}
-			}
-		}
-		Ok(rank(found))
-	}
-
-	/// Check the jobs that `produce` sends, on `jobs` worker threads. The
-	/// producer runs on this thread (it owns the compiler database). Its
-	/// `send` returns `false` once checking has stopped (after an error).
-	pub(super) fn check_all(
+	/// Sample solutions of `body` (a submodel without solve item). Outcomes
+	/// are cached, unless `cache` is false (for runs that are unlikely to
+	/// repeat).
+	pub(super) fn sample(
 		&self,
-		jobs: usize,
-		produce: impl FnOnce(&mut dyn FnMut(Job) -> bool),
-	) -> Result<Vec<RawFinding>> {
-		let found = Mutex::new(Vec::new());
-		let failure = Mutex::new(None::<Error>);
-		let stop = AtomicBool::new(false);
-		std::thread::scope(|scope| {
-			let (send, receive) = mpsc::sync_channel::<Job>(jobs);
-			// The workers own the receiver: if they all stop, `send` fails
-			let receive = Arc::new(Mutex::new(receive));
-			for _ in 0..jobs {
-				let receive = Arc::clone(&receive);
-				let (found, failure, stop) = (&found, &failure, &stop);
-				let _ = scope.spawn(move || {
-					while !stop.load(Ordering::Relaxed) {
-						let Ok(job) = receive.lock().unwrap().recv() else {
-							break;
-						};
-						match self.check_job(&job) {
-							Ok(replacements) => {
-								found.lock().unwrap().extend(replacements.into_iter().map(
-									|(replacement, candidate)| RawFinding {
-										group: job.group.clone(),
-										context: job.context,
-										replacement,
-										candidate,
-									},
-								))
-							}
-							Err(err) => {
-								stop.store(true, Ordering::Relaxed);
-								let _ = failure.lock().unwrap().get_or_insert(err);
-							}
-						}
-					}
-				});
+		body: &str,
+		search: &Search,
+		data: &Option<PathBuf>,
+		cache: bool,
+	) -> Result<Sample> {
+		let n = self.options().samples;
+		let data = data.as_deref();
+		// A plain search proves completeness if there are few solutions
+		let plain = self
+			.runner
+			.run(&format!("{body}{}", search[0]), data, n, cache)?;
+		if plain.complete || plain.error.is_some() {
+			return Ok(Sample::from(plain));
+		}
+		// Restarts give more diverse samples, but cannot prove that a set of
+		// solutions is complete. The plain samples often share the first
+		// variables, so both are used.
+		let restart = self
+			.runner
+			.run(&format!("{body}{}", search[1]), data, n, cache)?;
+		if restart.error.is_some() {
+			return Ok(Sample::from(plain));
+		}
+		if restart.complete && restart.solutions.is_empty() {
+			return Ok(Sample::Unsat);
+		}
+		Ok(Sample::from(Arc::new(Outcome {
+			solutions: plain
+				.solutions
+				.iter()
+				.chain(&restart.solutions)
+				.cloned()
+				.collect(),
+			complete: false,
+			error: None,
+		})))
+	}
+
+	/// Drop candidates that hold without the group (on the samples of the
+	/// declarations and the context) for every data file and instantiation
+	/// with samples. Such a candidate can only pass the reverse check if the
+	/// group is redundant, and then only `true` is reported. This saves a
+	/// reverse check for each of them.
+	fn vacuous(&self, job: &Job, plan: &Plan, cands: Vec<Candidate>) -> Result<Vec<Candidate>> {
+		let (trivial, mut cands): (Vec<_>, Vec<_>) =
+			cands.into_iter().partition(|c| c.kind == Kind::Redundant);
+		let context = job.context_text.iter().collect::<Vec<_>>();
+		if let Some(implied) = self.holding(job, plan, &context, cands.clone())? {
+			cands.retain(|c| !implied.contains(c));
+		}
+		cands.extend(trivial);
+		Ok(cands)
+	}
+}
+
+impl From<Arc<Outcome>> for Sample {
+	fn from(outcome: Arc<Outcome>) -> Self {
+		match &outcome.error {
+			Some(err) => {
+				log::info!("globalizer: submodel failed: {err}");
+				Sample::Error
 			}
-			drop(receive);
-			produce(&mut |job| !stop.load(Ordering::Relaxed) && send.send(job).is_ok());
-		});
-		match failure.into_inner().unwrap() {
-			Some(err) => Err(err),
-			None => Ok(found.into_inner().unwrap()),
+			None if outcome.solutions.is_empty() && outcome.complete => Sample::Unsat,
+			None if outcome.solutions.is_empty() => Sample::Unknown,
+			None => Sample::Solutions(outcome),
 		}
 	}
 }

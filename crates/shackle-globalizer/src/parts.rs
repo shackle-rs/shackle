@@ -9,13 +9,18 @@ use shackle_thir::{
 	traverse::{Visitor, visit_callable, visit_expression},
 };
 
-/// What a loop variable ranges over
-#[derive(Clone, Copy)]
-pub(super) enum LoopKind<'a, 'db> {
-	/// `i in collection`
-	Iter(&'a Expression<'db>),
-	/// `i = definition`
-	Assign(&'a Expression<'db>),
+/// Collects the functions that are called
+#[derive(Default)]
+pub(super) struct CallCollector<'db> {
+	pub(super) functions: Vec<FunctionId<'db>>,
+}
+
+/// Collects the declarations an expression refers to
+#[derive(Default)]
+pub(super) struct DeclCollector<'db> {
+	/// Also collect local declarations (e.g. loop variables)
+	pub(super) local: bool,
+	pub(super) decls: Vec<DeclarationId<'db>>,
 }
 
 /// One loop variable of a part. A `where` clause belongs to the last
@@ -27,11 +32,36 @@ pub(super) struct Loop<'a, 'db> {
 	pub(super) where_clause: Option<&'a Expression<'db>>,
 }
 
+/// What a loop variable ranges over
+#[derive(Clone, Copy)]
+pub(super) enum LoopKind<'a, 'db> {
+	/// `i in collection`
+	Iter(&'a Expression<'db>),
+	/// `i = definition`
+	Assign(&'a Expression<'db>),
+}
+
 /// A constraint after normalisation: `forall(loops)(body)`
 pub(super) struct Part<'a, 'db> {
 	pub(super) origin: Origin<'db>,
 	pub(super) loops: Vec<Loop<'a, 'db>>,
 	pub(super) body: &'a Expression<'db>,
+}
+
+/// The declarations a declaration item refers to (domain and definition)
+pub(super) fn decl_refs<'db>(model: &Model<'db>, d: DeclarationId<'db>) -> Vec<DeclarationId<'db>> {
+	let mut collector = DeclCollector {
+		local: false,
+		decls: Vec::new(),
+	};
+	collector.visit_declaration(model, d);
+	collector.decls
+}
+
+/// Whether a declaration is a top-level par integer (allowed as an index)
+pub(super) fn is_par_int(db: &dyn Db, decl: &Declaration<'_>) -> bool {
+	let ty = decl.ty();
+	decl.top_level() && ty.known_par(db) && (ty.is_int(db) || ty.is_enum(db))
 }
 
 fn loops<'a, 'db>(model: &'a Model<'db>, g: &'a Generator<'db>) -> Vec<Loop<'a, 'db>> {
@@ -139,42 +169,6 @@ pub(super) fn normalise<'a, 'db>(
 	parts
 }
 
-/// Collects the declarations an expression refers to
-#[derive(Default)]
-pub(super) struct DeclCollector<'db> {
-	/// Also collect local declarations (e.g. loop variables)
-	pub(super) local: bool,
-	pub(super) decls: Vec<DeclarationId<'db>>,
-}
-
-impl<'a, 'db> Visitor<'a, 'db> for DeclCollector<'db> {
-	fn visit_identifier(&mut self, model: &'a Model<'db>, identifier: &'a ResolvedIdentifier<'db>) {
-		if let ResolvedIdentifier::Declaration(d) = identifier
-			&& (self.local || model[*d].top_level())
-			&& !self.decls.contains(d)
-		{
-			self.decls.push(*d);
-		}
-	}
-}
-
-/// Collects the functions that are called
-#[derive(Default)]
-pub(super) struct CallCollector<'db> {
-	pub(super) functions: Vec<FunctionId<'db>>,
-}
-
-impl<'a, 'db> Visitor<'a, 'db> for CallCollector<'db> {
-	fn visit_callable(&mut self, model: &'a Model<'db>, callable: &'a Callable<'db>) {
-		if let Callable::Function(f) = callable
-			&& !self.functions.contains(f)
-		{
-			self.functions.push(*f);
-		}
-		visit_callable(self, model, callable);
-	}
-}
-
 /// The declarations the expressions refer to
 pub(super) fn refs<'a, 'db>(
 	model: &'a Model<'db>,
@@ -191,14 +185,26 @@ pub(super) fn refs<'a, 'db>(
 	collector.decls
 }
 
-/// The declarations a declaration item refers to (domain and definition)
-pub(super) fn decl_refs<'db>(model: &Model<'db>, d: DeclarationId<'db>) -> Vec<DeclarationId<'db>> {
-	let mut collector = DeclCollector {
-		local: false,
-		decls: Vec::new(),
-	};
-	collector.visit_declaration(model, d);
-	collector.decls
+impl<'a, 'db> Visitor<'a, 'db> for CallCollector<'db> {
+	fn visit_callable(&mut self, model: &'a Model<'db>, callable: &'a Callable<'db>) {
+		if let Callable::Function(f) = callable
+			&& !self.functions.contains(f)
+		{
+			self.functions.push(*f);
+		}
+		visit_callable(self, model, callable);
+	}
+}
+
+impl<'a, 'db> Visitor<'a, 'db> for DeclCollector<'db> {
+	fn visit_identifier(&mut self, model: &'a Model<'db>, identifier: &'a ResolvedIdentifier<'db>) {
+		if let ResolvedIdentifier::Declaration(d) = identifier
+			&& (self.local || model[*d].top_level())
+			&& !self.decls.contains(d)
+		{
+			self.decls.push(*d);
+		}
+	}
 }
 
 impl<'a, 'db> Loop<'a, 'db> {
@@ -212,15 +218,6 @@ impl<'a, 'db> Loop<'a, 'db> {
 }
 
 impl<'a, 'db> Part<'a, 'db> {
-	/// The top-level declarations the part refers to
-	pub(super) fn decls(&self, model: &'a Model<'db>) -> Vec<DeclarationId<'db>> {
-		refs(
-			model,
-			false,
-			self.loops.iter().flat_map(|l| l.exprs()).chain([self.body]),
-		)
-	}
-
 	/// Whether the loops at `fixed` can be leaders: they iterate over sets, and
 	/// their headers only use top-level declarations and other leaders.
 	pub(super) fn can_fix(&self, db: &'db dyn Db, model: &'a Model<'db>, fixed: &[usize]) -> bool {
@@ -237,10 +234,13 @@ impl<'a, 'db> Part<'a, 'db> {
 					.all(|d| !loop_decls.contains(d) || fixed_decls.contains(d))
 		})
 	}
-}
 
-/// Whether a declaration is a top-level par integer (allowed as an index)
-pub(super) fn is_par_int(db: &dyn Db, decl: &Declaration<'_>) -> bool {
-	let ty = decl.ty();
-	decl.top_level() && ty.known_par(db) && (ty.is_int(db) || ty.is_enum(db))
+	/// The top-level declarations the part refers to
+	pub(super) fn decls(&self, model: &'a Model<'db>) -> Vec<DeclarationId<'db>> {
+		refs(
+			model,
+			false,
+			self.loops.iter().flat_map(|l| l.exprs()).chain([self.body]),
+		)
+	}
 }

@@ -21,6 +21,40 @@ pub(super) struct Viewpoint<'db> {
 	pub(super) channel: String,
 }
 
+impl<'db> Globalizer<'_, 'db> {
+	/// The viewpoints for the `binaries_represent_int` findings, sorted by
+	/// name (the workers find them in any order)
+	pub(super) fn viewpoints(&self, found: &[RawFinding]) -> Vec<Viewpoint<'db>> {
+		let mut viewpoints = Vec::<Viewpoint<'db>>::new();
+		for raw in found {
+			let c = &raw.candidate;
+			let Kind::Viewpoint(axis) = c.kind else {
+				continue;
+			};
+			let array = self
+				.model
+				.top_level_declarations()
+				.map(|(d, _)| d)
+				.find(|d| self.name(*d) == c.args[0]);
+			// A model identifier with the viewpoint's name would clash
+			let name = Viewpoint::name(&c.args[0], axis);
+			if let Some(array) = array
+				&& !self
+					.model
+					.top_level_declarations()
+					.any(|(d, _)| self.name(d) == name)
+				&& !viewpoints
+					.iter()
+					.any(|vp| vp.array == array && vp.axis == axis)
+			{
+				viewpoints.push(Viewpoint::new(array, &c.args[0], axis));
+			}
+		}
+		viewpoints.sort_by(|a, b| a.name.cmp(&b.name));
+		viewpoints
+	}
+}
+
 impl<'db> Viewpoint<'db> {
 	fn name(x: &str, axis: usize) -> String {
 		format!("{x}_3{}", ["a", "b", "c"][axis])
@@ -67,39 +101,5 @@ impl<'db> Viewpoint<'db> {
 			name,
 			definition,
 		}
-	}
-}
-
-impl<'db> Globalizer<'_, 'db> {
-	/// The viewpoints for the `binaries_represent_int` findings, sorted by
-	/// name (the workers find them in any order)
-	pub(super) fn viewpoints(&self, found: &[RawFinding]) -> Vec<Viewpoint<'db>> {
-		let mut viewpoints = Vec::<Viewpoint<'db>>::new();
-		for raw in found {
-			let c = &raw.candidate;
-			let Kind::Viewpoint(axis) = c.kind else {
-				continue;
-			};
-			let array = self
-				.model
-				.top_level_declarations()
-				.map(|(d, _)| d)
-				.find(|d| self.name(*d) == c.args[0]);
-			// A model identifier with the viewpoint's name would clash
-			let name = Viewpoint::name(&c.args[0], axis);
-			if let Some(array) = array
-				&& !self
-					.model
-					.top_level_declarations()
-					.any(|(d, _)| self.name(d) == name)
-				&& !viewpoints
-					.iter()
-					.any(|vp| vp.array == array && vp.axis == axis)
-			{
-				viewpoints.push(Viewpoint::new(array, &c.args[0], axis));
-			}
-		}
-		viewpoints.sort_by(|a, b| a.name.cmp(&b.name));
-		viewpoints
 	}
 }

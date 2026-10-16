@@ -17,44 +17,123 @@ use super::{
 };
 
 impl<'a, 'db> Globalizer<'a, 'db> {
-	pub(super) fn print_loop(&self, l: &Loop<'a, 'db>) -> String {
-		let mut s = match l.kind {
-			LoopKind::Iter(c) => format!("{} in {}", self.name(l.decl), self.print(c)),
-			LoopKind::Assign(e) => format!("{} = {}", self.name(l.decl), self.print(e)),
-		};
-		if let Some(w) = l.where_clause {
-			write!(s, " where {}", self.print(w)).unwrap();
-		}
-		s
-	}
-
-	pub(super) fn print_part(&self, part: &Part<'a, 'db>) -> String {
-		self.print_unrolled(part, &[])
-	}
-
-	/// Print a part with the loops at `fixed` taken out. Their `where` clauses
-	/// become a condition.
-	pub(super) fn print_unrolled(&self, part: &Part<'a, 'db>, fixed: &[usize]) -> String {
-		let body = self.print(part.body);
-		let loops = (0..part.loops.len())
-			.filter(|i| !fixed.contains(i))
-			.map(|i| self.print_loop(&part.loops[i]))
-			.collect::<Vec<_>>();
-		let inner = if loops.is_empty() {
-			body
-		} else {
-			format!("forall({})({body})", loops.join(", "))
-		};
-		let guards = fixed
+	/// All variants of a group with a context, printed (`None` if none of
+	/// them has candidates)
+	pub(super) fn job(
+		&self,
+		group: &[usize],
+		context: Option<usize>,
+		variants: &[Variant],
+		decls: &[DeclarationId<'db>],
+		pass: Pass,
+	) -> Option<Job> {
+		let plans = variants
 			.iter()
-			.filter_map(|i| part.loops[*i].where_clause)
-			.map(|w| format!("({})", self.print(w)))
-			.collect::<Vec<_>>();
-		if guards.is_empty() {
-			inner
-		} else {
-			format!("({}) -> ({inner})", guards.join(" /\\ "))
+			.filter_map(|variant| {
+				let u = Unrolled {
+					parts: group.iter().map(|p| &self.parts[*p]).collect(),
+					variant,
+					decls,
+				};
+				self.plan(&u, pass)
+			})
+			.collect_vec();
+		if plans.is_empty() {
+			return None;
 		}
+		Some(Job {
+			group: group.to_vec(),
+			context,
+			preamble: self.preamble(decls),
+			search: self.search(decls),
+			context_text: context.map(|c| self.print_part(&self.parts[c])),
+			channels: self
+				.viewpoints
+				.iter()
+				.filter(|vp| decls.contains(&vp.array))
+				.map(|vp| (vp.name.clone(), vp.channel.clone()))
+				.collect(),
+			plans,
+		})
+	}
+
+	/// Print an unrolled group with its candidates (`None` if there are no
+	/// candidates)
+	pub(super) fn plan(&self, u: &Unrolled<'_, 'a, 'db>, pass: Pass) -> Option<Plan> {
+		let options = self.options;
+		// A group that already is the global is vacuous
+		let existing = match &u.parts[..] {
+			[single] => self.uses(single.body),
+			_ => Vec::new(),
+		};
+		let select = |name: &str, uses: &str, kind: Kind| {
+			pass.checks(kind)
+				// Leaders only check the first and last iteration: too weak to
+				// call the whole constraint redundant
+				&& !(kind == Kind::Redundant && u.leaders() > 0)
+				&& !existing.contains(&uses)
+				// The name filters of the user only apply to the full pass
+				&& (pass == Pass::Initial || selected(name, &options.include, &options.exclude))
+		};
+		let mut cands = candidates(&self.arguments(u), select, options.max_args);
+		if cands.is_empty() {
+			return None;
+		}
+		// For each leader: the leaders its set depends on
+		let depends = (0..u.leaders())
+			.map(|m| {
+				let deps = refs(self.model, true, u.leader_loop(m).exprs());
+				(0..u.leaders())
+					.filter(|k| *k != m && deps.contains(&u.leader_loop(*k).decl))
+					.collect::<Vec<_>>()
+			})
+			.collect::<Vec<_>>();
+		// The replacement must loop over every leader: only the first and last
+		// iteration of a leader are checked, so a call outside its loop would
+		// also replace the iterations in between. Such a call is checked by
+		// the variant without that leader.
+		cands.retain(|c| {
+			closure(c.leaders.iter().copied(), |m| depends[*m].iter().copied()).len() == u.leaders()
+		});
+		if cands.is_empty() {
+			return None;
+		}
+		Some(Plan {
+			leaders: u
+				.instantiations()
+				.iter()
+				.map(|last| self.print_leaders(u, last))
+				.collect(),
+			group: self.print_group(u),
+			candidates: cands,
+			wrap: (0..u.leaders())
+				.map(|m| self.print_loop(u.leader_loop(m)))
+				.collect(),
+		})
+	}
+
+	/// The model without constraints, solve and output items. Of the variables
+	/// it only declares those that `decls` and the par items (transitively)
+	/// depend on, so the solver does not enumerate unrelated variables.
+	pub(super) fn preamble(&self, decls: &[DeclarationId<'db>]) -> String {
+		let mut needed = closure(decls.iter().copied(), |d| {
+			self.decl_refs.get(d).cloned().unwrap_or_default()
+		})
+		.into_iter()
+		.collect::<FxHashSet<_>>();
+		needed.extend(&self.always_needed);
+		let mut preamble = format!("include \"globals.mzn\";{}", candidates::LIBRARY);
+		for (decl, text) in &self.items {
+			if decl.is_none_or(|d| needed.contains(&d)) {
+				writeln!(preamble, "{text};").unwrap();
+			}
+		}
+		for vp in &self.viewpoints {
+			if needed.contains(&vp.array) {
+				writeln!(preamble, "{}", vp.definition).unwrap();
+			}
+		}
+		preamble
 	}
 
 	pub(super) fn print_group(&self, u: &Unrolled<'_, 'a, 'db>) -> Vec<String> {
@@ -112,28 +191,44 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		s
 	}
 
-	/// The model without constraints, solve and output items. Of the variables
-	/// it only declares those that `decls` and the par items (transitively)
-	/// depend on, so the solver does not enumerate unrelated variables.
-	pub(super) fn preamble(&self, decls: &[DeclarationId<'db>]) -> String {
-		let mut needed = closure(decls.iter().copied(), |d| {
-			self.decl_refs.get(d).cloned().unwrap_or_default()
-		})
-		.into_iter()
-		.collect::<FxHashSet<_>>();
-		needed.extend(&self.always_needed);
-		let mut preamble = format!("include \"globals.mzn\";{}", candidates::LIBRARY);
-		for (decl, text) in &self.items {
-			if decl.is_none_or(|d| needed.contains(&d)) {
-				writeln!(preamble, "{text};").unwrap();
-			}
+	pub(super) fn print_loop(&self, l: &Loop<'a, 'db>) -> String {
+		let mut s = match l.kind {
+			LoopKind::Iter(c) => format!("{} in {}", self.name(l.decl), self.print(c)),
+			LoopKind::Assign(e) => format!("{} = {}", self.name(l.decl), self.print(e)),
+		};
+		if let Some(w) = l.where_clause {
+			write!(s, " where {}", self.print(w)).unwrap();
 		}
-		for vp in &self.viewpoints {
-			if needed.contains(&vp.array) {
-				writeln!(preamble, "{}", vp.definition).unwrap();
-			}
+		s
+	}
+
+	pub(super) fn print_part(&self, part: &Part<'a, 'db>) -> String {
+		self.print_unrolled(part, &[])
+	}
+
+	/// Print a part with the loops at `fixed` taken out. Their `where` clauses
+	/// become a condition.
+	pub(super) fn print_unrolled(&self, part: &Part<'a, 'db>, fixed: &[usize]) -> String {
+		let body = self.print(part.body);
+		let loops = (0..part.loops.len())
+			.filter(|i| !fixed.contains(i))
+			.map(|i| self.print_loop(&part.loops[i]))
+			.collect::<Vec<_>>();
+		let inner = if loops.is_empty() {
+			body
+		} else {
+			format!("forall({})({body})", loops.join(", "))
+		};
+		let guards = fixed
+			.iter()
+			.filter_map(|i| part.loops[*i].where_clause)
+			.map(|w| format!("({})", self.print(w)))
+			.collect::<Vec<_>>();
+		if guards.is_empty() {
+			inner
+		} else {
+			format!("({}) -> ({inner})", guards.join(" /\\ "))
 		}
-		preamble
 	}
 
 	/// Search annotation that picks random values for the group's variables
@@ -235,100 +330,5 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 			uses.extend(c.arguments.iter().filter_map(name));
 		}
 		uses
-	}
-
-	/// Print an unrolled group with its candidates (`None` if there are no
-	/// candidates)
-	pub(super) fn plan(&self, u: &Unrolled<'_, 'a, 'db>, pass: Pass) -> Option<Plan> {
-		let options = self.options;
-		// A group that already is the global is vacuous
-		let existing = match &u.parts[..] {
-			[single] => self.uses(single.body),
-			_ => Vec::new(),
-		};
-		let select = |name: &str, uses: &str, kind: Kind| {
-			pass.checks(kind)
-				// Leaders only check the first and last iteration: too weak to
-				// call the whole constraint redundant
-				&& !(kind == Kind::Redundant && u.leaders() > 0)
-				&& !existing.contains(&uses)
-				// The name filters of the user only apply to the full pass
-				&& (pass == Pass::Initial || selected(name, &options.include, &options.exclude))
-		};
-		let mut cands = candidates(&self.arguments(u), select, options.max_args);
-		if cands.is_empty() {
-			return None;
-		}
-		// For each leader: the leaders its set depends on
-		let depends = (0..u.leaders())
-			.map(|m| {
-				let deps = refs(self.model, true, u.leader_loop(m).exprs());
-				(0..u.leaders())
-					.filter(|k| *k != m && deps.contains(&u.leader_loop(*k).decl))
-					.collect::<Vec<_>>()
-			})
-			.collect::<Vec<_>>();
-		// The replacement must loop over every leader: only the first and last
-		// iteration of a leader are checked, so a call outside its loop would
-		// also replace the iterations in between. Such a call is checked by
-		// the variant without that leader.
-		cands.retain(|c| {
-			closure(c.leaders.iter().copied(), |m| depends[*m].iter().copied()).len() == u.leaders()
-		});
-		if cands.is_empty() {
-			return None;
-		}
-		Some(Plan {
-			leaders: u
-				.instantiations()
-				.iter()
-				.map(|last| self.print_leaders(u, last))
-				.collect(),
-			group: self.print_group(u),
-			candidates: cands,
-			wrap: (0..u.leaders())
-				.map(|m| self.print_loop(u.leader_loop(m)))
-				.collect(),
-		})
-	}
-
-	/// All variants of a group with a context, printed (`None` if none of
-	/// them has candidates)
-	pub(super) fn job(
-		&self,
-		group: &[usize],
-		context: Option<usize>,
-		variants: &[Variant],
-		decls: &[DeclarationId<'db>],
-		pass: Pass,
-	) -> Option<Job> {
-		let plans = variants
-			.iter()
-			.filter_map(|variant| {
-				let u = Unrolled {
-					parts: group.iter().map(|p| &self.parts[*p]).collect(),
-					variant,
-					decls,
-				};
-				self.plan(&u, pass)
-			})
-			.collect_vec();
-		if plans.is_empty() {
-			return None;
-		}
-		Some(Job {
-			group: group.to_vec(),
-			context,
-			preamble: self.preamble(decls),
-			search: self.search(decls),
-			context_text: context.map(|c| self.print_part(&self.parts[c])),
-			channels: self
-				.viewpoints
-				.iter()
-				.filter(|vp| decls.contains(&vp.array))
-				.map(|vp| (vp.name.clone(), vp.channel.clone()))
-				.collect(),
-			plans,
-		})
 	}
 }
