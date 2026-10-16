@@ -1087,25 +1087,36 @@ const LATIN01: &str = r#"
 #[test]
 fn solve_initial_pass_finds_viewpoints() {
 	let result = globalize(LATIN01, &[], &options(1, &["all_different"]));
-	let declarations = result
+	// Each viewpoint, with the suggestions that use it
+	let found = result
 		.viewpoints
 		.iter()
-		.map(|v| v.replacement.split(';').next().unwrap())
+		.map(|v| {
+			let declaration = v.suggestion.replacement.split(';').next().unwrap();
+			let uses = v
+				.findings
+				.iter()
+				.map(ToString::to_string)
+				.collect::<Vec<_>>();
+			(v.name.as_str(), declaration, uses)
+		})
 		.collect::<Vec<_>>();
 	assert_eq!(
-		declarations,
+		found,
 		[
-			"array [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b",
-			"array [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c",
+			(
+				"b_3b",
+				"array [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b",
+				vec!["<unnamed file>|4|2|4|64 [ <unnamed file>|5|2|5|64 ] forall (i in 1..n) (all_different(b_3b[i, ..]))".to_owned()],
+			),
+			(
+				"b_3c",
+				"array [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c",
+				vec!["<unnamed file>|5|2|5|64 [ <unnamed file>|4|2|4|64 ] forall (i in 1..n) (all_different(b_3c[i, ..]))".to_owned()],
+			),
 		]
 	);
-	assert_eq!(
-		shown(&result),
-		[
-			"<unnamed file>|4|2|4|64 [ <unnamed file>|5|2|5|64 ] forall (i in 1..n) (all_different(b_3b[i, ..]))",
-			"<unnamed file>|5|2|5|64 [ <unnamed file>|4|2|4|64 ] forall (i in 1..n) (all_different(b_3c[i, ..]))",
-		]
-	);
+	assert!(result.findings.is_empty());
 }
 
 #[test]

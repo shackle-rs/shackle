@@ -14,25 +14,6 @@
       "replacement": "forall (i in 1..n, j in 1..n) (global_cardinality_closed(b[i, j, ..], [0, 1]) = [2, 1])"
     },
     {
-      "context": {
-        "filename": "latin01.mzn",
-        "firstColumn": 1,
-        "firstLine": 6,
-        "lastColumn": 63,
-        "lastLine": 6
-      },
-      "locations": [
-        {
-          "filename": "latin01.mzn",
-          "firstColumn": 1,
-          "firstLine": 5,
-          "lastColumn": 63,
-          "lastLine": 5
-        }
-      ],
-      "replacement": "forall (i in 1..n) (all_different(b_3b[i, ..]))"
-    },
-    {
       "context": null,
       "locations": [
         {
@@ -44,30 +25,32 @@
         }
       ],
       "replacement": "forall (i in 1..n, k in 1..n) (global_cardinality_closed(b[i, .., k], [0, 1]) = [2, 1])"
-    },
-    {
-      "context": {
-        "filename": "latin01.mzn",
-        "firstColumn": 1,
-        "firstLine": 5,
-        "lastColumn": 63,
-        "lastLine": 5
-      },
-      "locations": [
-        {
-          "filename": "latin01.mzn",
-          "firstColumn": 1,
-          "firstLine": 6,
-          "lastColumn": 63,
-          "lastLine": 6
-        }
-      ],
-      "replacement": "forall (i in 1..n) (all_different(b_3c[i, ..]))"
     }
   ],
   "viewpoints": [
     {
       "context": null,
+      "findings": [
+        {
+          "context": {
+            "filename": "latin01.mzn",
+            "firstColumn": 1,
+            "firstLine": 6,
+            "lastColumn": 63,
+            "lastLine": 6
+          },
+          "locations": [
+            {
+              "filename": "latin01.mzn",
+              "firstColumn": 1,
+              "firstLine": 5,
+              "lastColumn": 63,
+              "lastLine": 5
+            }
+          ],
+          "replacement": "forall (i in 1..n) (all_different(b_3b[i, ..]))"
+        }
+      ],
       "locations": [
         {
           "filename": "latin01.mzn",
@@ -77,10 +60,32 @@
           "lastLine": 4
         }
       ],
+      "name": "b_3b",
       "replacement": "array [index_set_1of3(b), index_set_3of3(b)] of var index_set_2of3(b): b_3b; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3b[i, k] = j);"
     },
     {
       "context": null,
+      "findings": [
+        {
+          "context": {
+            "filename": "latin01.mzn",
+            "firstColumn": 1,
+            "firstLine": 5,
+            "lastColumn": 63,
+            "lastLine": 5
+          },
+          "locations": [
+            {
+              "filename": "latin01.mzn",
+              "firstColumn": 1,
+              "firstLine": 6,
+              "lastColumn": 63,
+              "lastLine": 6
+            }
+          ],
+          "replacement": "forall (i in 1..n) (all_different(b_3c[i, ..]))"
+        }
+      ],
       "locations": [
         {
           "filename": "latin01.mzn",
@@ -90,6 +95,7 @@
           "lastLine": 4
         }
       ],
+      "name": "b_3c",
       "replacement": "array [index_set_1of3(b), index_set_2of3(b)] of var index_set_3of3(b): b_3c; constraint forall (i in index_set_1of3(b), j in index_set_2of3(b), k in index_set_3of3(b)) (b[i, j, k] = 1 <-> b_3c[i, j] = k);"
     }
   ]

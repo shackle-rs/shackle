@@ -19,7 +19,7 @@ use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, Result, Severity};
 use shackle::{CompileTarget, Error, Message, Model, Solver, Status, error::InternalError};
-use shackle_fmt::{MiniZincFormatOptions, check_format, format_files};
+use shackle_fmt::{MiniZincFormatOptions, check_format, format_files, format_str};
 use shackle_globalizer::{Finding, GlobalizeOptions, Location, globalize};
 #[cfg(test)]
 use tempfile as _;
@@ -443,25 +443,50 @@ impl Globalize {
 		let result = globalize(&Model::from_file(model), &data, &options)?;
 		if self.json {
 			let findings = |fs: &[Finding]| fs.iter().map(finding_json).collect::<Vec<_>>();
+			let viewpoints = result
+				.viewpoints
+				.iter()
+				.map(|vp| {
+					let mut json = finding_json(&vp.suggestion);
+					json["name"] = vp.name.clone().into();
+					json["findings"] = findings(&vp.findings).into();
+					json
+				})
+				.collect::<Vec<_>>();
 			let json = serde_json::json!({
-				"viewpoints": findings(&result.viewpoints),
+				"viewpoints": viewpoints,
 				"findings": findings(&result.findings),
 				"calls": result.calls,
 			});
 			println!("{json}");
 			return Ok(());
 		}
-		for viewpoint in &result.viewpoints {
-			let help = format!("add the viewpoint: {}", viewpoint.replacement);
+		// In the order of the model: a viewpoint (at its 0/1 array) with the
+		// suggestions that use it, and the other suggestions
+		let mut reports = result
+			.findings
+			.iter()
+			.map(|f| (&f.locations[0], vec![finding_report(f)]))
+			.collect::<Vec<_>>();
+		for vp in &result.viewpoints {
+			let help = format!("add the viewpoint:\n{}", code(&vp.suggestion.replacement));
 			let message = "This 0/1 array represents an integer array";
-			println!("{:?}", suggestion(viewpoint, message, help));
+			let mut block = vec![suggestion(&vp.suggestion, message, help)];
+			block.extend(vp.findings.iter().map(finding_report));
+			reports.push((&vp.suggestion.locations[0], block));
 		}
-		for finding in &result.findings {
-			println!("{:?}", finding_report(finding));
+		reports.sort_by(|a, b| a.0.cmp(b.0));
+		for report in reports.into_iter().flat_map(|(_, block)| block) {
+			println!("{report:?}");
 		}
 		println!(
 			"Suggestions: {}, viewpoints: {}, MiniZinc runs: {}",
-			result.findings.len(),
+			result.findings.len()
+				+ result
+					.viewpoints
+					.iter()
+					.map(|vp| vp.findings.len())
+					.sum::<usize>(),
 			result.viewpoints.len(),
 			result.calls
 		);
@@ -486,10 +511,24 @@ fn finding_report(finding: &Finding) -> Report {
 	} else {
 		(
 			format!("{these} can be replaced by a global constraint"),
-			format!("replace with `{}`", finding.replacement),
+			format!(
+				"replace with:\n{}",
+				code(&format!("constraint {};", finding.replacement))
+			),
 		)
 	};
 	suggestion(finding, &message, help)
+}
+
+/// MiniZinc items formatted for a help message
+fn code(items: &str) -> String {
+	let options = MiniZincFormatOptions {
+		line_width: 72,
+		use_tabs: false,
+		indent_size: 2,
+		..Default::default()
+	};
+	format_str(items, &options).map_or_else(|_| items.to_owned(), |f| f.trim_end().to_owned())
 }
 
 /// A finding as JSON, with locations as in MiniZinc's JSON messages

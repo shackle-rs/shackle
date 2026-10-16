@@ -215,13 +215,26 @@ impl Display for Finding {
 	}
 }
 
+/// A new integer array that represents a 0/1 array, found by the initial
+/// pass, with the suggestions that use it
+#[derive(Clone, Debug)]
+pub struct SuggestedViewpoint {
+	/// The name of the new array
+	pub name: String,
+	/// The 0/1 array, and the declaration of the new array with its
+	/// channelling constraint
+	pub suggestion: Finding,
+	/// Suggestions that use the new array, sorted by location
+	pub findings: Vec<Finding>,
+}
+
 /// Result of [`globalize`]
 #[derive(Clone, Debug)]
 pub struct Globalized {
-	/// New integer arrays (with their channelling constraint) that some
-	/// findings use, found by the initial pass
-	pub viewpoints: Vec<Finding>,
-	/// Suggestions, sorted by location (redundant groups have `true`)
+	/// Viewpoints with the suggestions that use them
+	pub viewpoints: Vec<SuggestedViewpoint>,
+	/// The other suggestions, sorted by location (redundant groups have
+	/// `true`)
 	pub findings: Vec<Finding>,
 	/// Number of `minizinc` runs
 	pub calls: usize,
@@ -458,21 +471,38 @@ pub fn globalize(
 			.collect();
 		globalizer.viewpoints = globalizer.viewpoints(&initial);
 		let full = globalizer.run(Pass::Full, &skip)?;
-		let findings = redundant
+		let mut findings = redundant
 			.into_iter()
 			.chain(&full)
 			.map(|f| globalizer.finding(f))
 			.collect::<BTreeSet<_>>();
+		// A suggestion that uses a viewpoint goes with it
+		let viewpoints = globalizer
+			.viewpoints
+			.iter()
+			.map(|vp| {
+				let (with, without) =
+					std::mem::take(&mut findings)
+						.into_iter()
+						.partition(|f: &Finding| {
+							f.replacement
+								.split(|c: char| !c.is_alphanumeric() && c != '_')
+								.any(|w| w == vp.name)
+						});
+				findings = without;
+				SuggestedViewpoint {
+					name: vp.name.clone(),
+					suggestion: Finding {
+						locations: vec![Location::new(db, globalizer.model[vp.array].origin())],
+						context: None,
+						replacement: vp.text.clone(),
+					},
+					findings: with.into_iter().collect(),
+				}
+			})
+			.collect();
 		Ok(Globalized {
-			viewpoints: globalizer
-				.viewpoints
-				.iter()
-				.map(|vp| Finding {
-					locations: vec![Location::new(db, globalizer.model[vp.array].origin())],
-					context: None,
-					replacement: vp.text.clone(),
-				})
-				.collect(),
+			viewpoints,
 			findings: findings.into_iter().collect(),
 			calls: globalizer.checker.runner.calls.load(Ordering::Relaxed),
 		})
