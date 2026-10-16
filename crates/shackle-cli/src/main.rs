@@ -15,8 +15,6 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum, crate_version};
 use env_logger::{Builder, fmt::TimestampPrecision};
-#[cfg(test)]
-use expect_test as _;
 use humantime::Duration;
 use log::warn;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, Result, Severity};
@@ -162,7 +160,89 @@ impl Solve {
 
 #[cfg(test)]
 mod tests {
+	use miette::{GraphicalReportHandler, GraphicalTheme};
+	use shackle::SourceFile;
+
 	use super::*;
+
+	#[test]
+	fn finding_reports_match_the_number_of_constraints() {
+		let src = SourceFile::new("m.mzn".into(), "constraint a != b;\n".to_owned());
+		let at = Location {
+			src,
+			span: (0, 17).into(),
+		};
+		let finding = |n, replacement: &str| Finding {
+			locations: vec![at.clone(); n],
+			context: None,
+			replacement: replacement.to_owned(),
+		};
+		let text = |f: &Finding| {
+			let report = finding_report(f);
+			(report.to_string(), report.help().unwrap().to_string())
+		};
+		assert_eq!(
+			text(&finding(1, "true")),
+			(
+				"This constraint is redundant".to_owned(),
+				"remove it, or mark it with `redundant_constraint` if it helps the solver"
+					.to_owned()
+			)
+		);
+		assert_eq!(
+			text(&finding(2, "true")),
+			(
+				"These constraints are redundant".to_owned(),
+				"remove them, or mark them with `redundant_constraint` if they help the solver"
+					.to_owned()
+			)
+		);
+		assert_eq!(
+			text(&finding(2, "all_different(x)")).0,
+			"These constraints can be replaced by a global constraint"
+		);
+	}
+
+	#[test]
+	fn suggestion_marks_the_constraints_and_the_context() {
+		let src = SourceFile::new(
+			"m.mzn".into(),
+			"constraint a != b;\nconstraint b != c;\n".to_owned(),
+		);
+		let at = |offset: usize| Location {
+			src: src.clone(),
+			span: (offset, 17).into(),
+		};
+		let finding = Finding {
+			locations: vec![at(0)],
+			context: Some(at(19)),
+			replacement: "all_different([a, b, c])".to_owned(),
+		};
+		let report = suggestion(
+			&finding,
+			"This constraint can be replaced",
+			"replace with it",
+		);
+		let mut out = String::new();
+		GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
+			.with_width(80)
+			.render_report(&mut out, report.as_ref())
+			.unwrap();
+		expect_test::expect![[r#"
+    shackle::globalize
+
+      ☞ This constraint can be replaced
+       ╭─[m.mzn:1:1]
+     1 │ constraint a != b;
+       · ─────────────────
+     2 │ constraint b != c;
+       · ────────┬────────
+       ·         ╰── needed for this
+       ╰────
+      help: replace with it
+"#]]
+		.assert_eq(&out);
+	}
 
 	fn compile_args(files: &[&str]) -> Compile {
 		Compile {
@@ -308,7 +388,8 @@ struct Globalize {
 	/// Number of solutions sampled for each check
 	#[arg(short = 'N', long, default_value_t = GlobalizeOptions::default().samples)]
 	samples: usize,
-	/// Time limit for each MiniZinc run
+	/// Time limit for the solver in each MiniZinc run (a run is stopped
+	/// after 10 times this limit)
 	#[arg(long, default_value_t = GlobalizeOptions::default().time_limit.into())]
 	time_limit: Duration,
 	/// Random seed for the solver
@@ -376,26 +457,7 @@ impl Globalize {
 			println!("{:?}", suggestion(viewpoint, message, help));
 		}
 		for finding in &result.findings {
-			let one = finding.locations.len() == 1;
-			let report = if finding.replacement == "true" {
-				let message = if one {
-					"This constraint is redundant"
-				} else {
-					"These constraints are redundant"
-				};
-				let help =
-					"remove it, or mark it with `redundant_constraint` if it helps the solver";
-				suggestion(finding, message, help)
-			} else {
-				let message = if one {
-					"This constraint can be replaced by a global constraint"
-				} else {
-					"These constraints can be replaced by a global constraint"
-				};
-				let help = format!("replace with `{}`", finding.replacement);
-				suggestion(finding, message, help)
-			};
-			println!("{report:?}");
+			println!("{:?}", finding_report(finding));
 		}
 		println!(
 			"Suggestions: {}, viewpoints: {}, MiniZinc runs: {}",
@@ -405,6 +467,29 @@ impl Globalize {
 		);
 		Ok(())
 	}
+}
+
+/// A suggested replacement (or redundant constraints) as a diagnostic
+fn finding_report(finding: &Finding) -> Report {
+	let (these, are, them, they_help) = if finding.locations.len() == 1 {
+		("This constraint", "is", "it", "it helps")
+	} else {
+		("These constraints", "are", "them", "they help")
+	};
+	let (message, help) = if finding.replacement == "true" {
+		(
+			format!("{these} {are} redundant"),
+			format!(
+				"remove {them}, or mark {them} with `redundant_constraint` if {they_help} the solver"
+			),
+		)
+	} else {
+		(
+			format!("{these} can be replaced by a global constraint"),
+			format!("replace with `{}`", finding.replacement),
+		)
+	};
+	suggestion(finding, &message, help)
 }
 
 /// A finding as JSON, with locations as in MiniZinc's JSON messages

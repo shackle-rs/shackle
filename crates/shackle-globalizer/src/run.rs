@@ -101,8 +101,14 @@ impl<'a> Runner<'a> {
 			.arg(n.to_string())
 			.arg("-r")
 			.arg(self.options.seed.to_string())
-			.arg("--time-limit")
+			// The limit is for the solver, so a slow compilation (e.g. on a busy
+			// machine) does not leave it without time. The overall limit stops a
+			// run whose compilation does not end, or whose solver does not
+			// support a solver limit.
+			.arg("--solver-time-limit")
 			.arg(self.options.time_limit.as_millis().to_string())
+			.arg("--time-limit")
+			.arg((10 * self.options.time_limit.as_millis()).to_string())
 			.arg(file.path())
 			.args(data)
 			.output()

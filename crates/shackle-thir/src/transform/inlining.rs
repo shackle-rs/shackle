@@ -11,12 +11,13 @@ use shackle_hir::constants::IdentifierRegistry;
 use shackle_utils::maybe_grow_stack;
 
 use crate::{
-	Callable, Db, Declaration, DeclarationId, Domain, Expression, ExpressionData, FunctionId,
-	Identifier, Item, Let, LetItem, Marker, Model, ResolvedIdentifier,
+	AnnotationId, Callable, Db, Declaration, DeclarationId, Domain, EnumerationId, Expression,
+	ExpressionData, FunctionId, Identifier, Item, Let, LetItem, Marker, Model, ResolvedIdentifier,
 	pretty_print::PrettyPrinter,
 	traverse::{
-		Folder, ReplacementMap, add_function, fold_declaration, fold_expression,
-		fold_function_body, fold_function_id,
+		Folder, ReplacementMap, Visitor, add_function, fold_declaration, fold_expression,
+		fold_function_body, fold_function_id, visit_annotation, visit_declaration,
+		visit_enumeration,
 	},
 };
 
@@ -29,6 +30,97 @@ struct Inliner<'db, Dst: Marker, Src: Marker = ()> {
 	mode: Mode<'db, Src>,
 	/// Functions being inlined (to leave recursive calls alone)
 	inlining: Vec<FunctionId<'db, Src>>,
+	/// Names that a local would capture, so it is renamed: the top-level,
+	/// enum and annotation names, and the free names in the arguments of the
+	/// calls being inlined by name
+	captured: Vec<Identifier<'db>>,
+	/// Names that a renamed local must not take: all names outside the
+	/// library functions. Locals with the same name get the same new name,
+	/// so they shadow each other in the same way.
+	used: FxHashSet<Identifier<'db>>,
+	/// Whether a library function (not one of the inlined functions) is being
+	/// folded: its parameters and locals keep their names
+	in_library: bool,
+}
+
+/// The declarations that a part of a model declares and refers to, and the
+/// names of the enums, enum members and annotations it defines or refers to
+/// (function items are skipped)
+struct Names<'db, T: Marker> {
+	declared: Vec<DeclarationId<'db, T>>,
+	referenced: Vec<DeclarationId<'db, T>>,
+	/// Enums, enum members and annotations that are defined
+	defined: Vec<Identifier<'db>>,
+	/// Enums, enum members and annotations that are referred to
+	atoms: Vec<Identifier<'db>>,
+}
+
+impl<'db, T: Marker> Names<'db, T> {
+	fn new() -> Self {
+		Names {
+			declared: Vec::new(),
+			referenced: Vec::new(),
+			defined: Vec::new(),
+			atoms: Vec::new(),
+		}
+	}
+
+	/// All these names
+	fn all(&self, model: &Model<'db, T>) -> impl Iterator<Item = Identifier<'db>> {
+		self.declared
+			.iter()
+			.chain(&self.referenced)
+			.filter_map(|d| model[*d].name())
+			.chain(self.defined.iter().copied())
+			.chain(self.atoms.iter().copied())
+	}
+
+	/// The names that are not declared here
+	fn free(&self, model: &Model<'db, T>) -> Vec<Identifier<'db>> {
+		self.referenced
+			.iter()
+			.filter(|d| !self.declared.contains(d))
+			.filter_map(|d| model[*d].name())
+			.chain(self.atoms.iter().copied())
+			.collect()
+	}
+}
+
+impl<'a, 'db, T: Marker> Visitor<'a, 'db, T> for Names<'db, T> {
+	fn visit_function(&mut self, _model: &'a Model<'db, T>, _function: FunctionId<'db, T>) {}
+
+	fn visit_enumeration(&mut self, model: &'a Model<'db, T>, enumeration: EnumerationId<'db, T>) {
+		let e = &model[enumeration];
+		self.defined.push(Identifier(e.enum_type().name()));
+		self.defined
+			.extend(e.definition().into_iter().flatten().filter_map(|c| c.name));
+		visit_enumeration(self, model, enumeration);
+	}
+
+	fn visit_annotation(&mut self, model: &'a Model<'db, T>, annotation: AnnotationId<'db, T>) {
+		self.defined.extend(model[annotation].name);
+		visit_annotation(self, model, annotation);
+	}
+
+	fn visit_declaration(&mut self, model: &'a Model<'db, T>, declaration: DeclarationId<'db, T>) {
+		self.declared.push(declaration);
+		visit_declaration(self, model, declaration);
+	}
+
+	fn visit_identifier(
+		&mut self,
+		model: &'a Model<'db, T>,
+		identifier: &'a ResolvedIdentifier<'db, T>,
+	) {
+		match identifier {
+			ResolvedIdentifier::Declaration(d) => self.referenced.push(*d),
+			ResolvedIdentifier::Annotation(a) => self.atoms.extend(model[*a].name),
+			ResolvedIdentifier::EnumerationMember(m) => self.atoms.extend(model[*m].name),
+			ResolvedIdentifier::Enumeration(e) => {
+				self.atoms.push(Identifier(model[*e].enum_type().name()));
+			}
+		}
+	}
 }
 
 /// Which functions are inlined
@@ -42,6 +134,28 @@ enum Mode<'db, Src: Marker> {
 
 impl<'db, Dst: Marker, Src: Marker> Inliner<'db, Dst, Src> {
 	fn new(db: &'db dyn Db, model: &Model<'db, Src>, mode: Mode<'db, Src>) -> Self {
+		// Inlining of annotated functions removes the names of locals instead
+		let (used, captured) = match &mode {
+			Mode::Only(functions) => {
+				let mut names = Names::new();
+				for f in functions {
+					for p in model[*f].parameters() {
+						names.visit_declaration(model, *p);
+					}
+					if let Some(body) = model[*f].body() {
+						names.visit_expression(model, body);
+					}
+				}
+				names.visit_model(model);
+				let captured = model
+					.top_level_declarations()
+					.filter_map(|(_, d)| d.name())
+					.chain(names.defined.iter().copied())
+					.collect();
+				(names.all(model).collect(), captured)
+			}
+			Mode::Annotated => Default::default(),
+		};
 		Inliner {
 			replacement_map: ReplacementMap::default(),
 			model: Model::with_capacities(&model.item_counts()),
@@ -50,6 +164,9 @@ impl<'db, Dst: Marker, Src: Marker> Inliner<'db, Dst, Src> {
 			depth: 0,
 			mode,
 			inlining: Vec::new(),
+			captured,
+			used,
+			in_library: false,
 		}
 	}
 
@@ -80,6 +197,15 @@ impl<'db, Dst: Marker, Src: Marker> Inliner<'db, Dst, Src> {
 			&& (self.annotated(model, f, self.ids.annotations.mzn_inline) || is_macro_call(body))
 	}
 
+	/// Run `fold` on (a part of) the function `f`, keeping the names of its
+	/// locals if it is a library function
+	fn in_function(&mut self, f: FunctionId<'db, Src>, fold: impl FnOnce(&mut Self)) {
+		let library = matches!(&self.mode, Mode::Only(functions) if !functions.contains(&f));
+		let outer = std::mem::replace(&mut self.in_library, library);
+		fold(self);
+		self.in_library = outer;
+	}
+
 	/// Whether calls to `f` are inlined by name
 	fn by_name(&self, model: &Model<'db, Src>, f: FunctionId<'db, Src>) -> bool {
 		match &self.mode {
@@ -105,11 +231,14 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 			// Remove inlined function
 			return;
 		}
-		if model[f].top_level() {
-			let _ = fold_function_id(self, db, model, f);
-		} else {
-			let _ = add_function(self, db, model, f);
-		}
+		// The parameters of a library function keep their names too
+		self.in_function(f, |inliner| {
+			if model[f].top_level() {
+				let _ = fold_function_id(inliner, db, model, f);
+			} else {
+				let _ = add_function(inliner, db, model, f);
+			}
+		});
 	}
 
 	fn fold_function_body(
@@ -122,7 +251,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 			// Remove inlined function
 			return;
 		}
-		fold_function_body(self, db, model, f)
+		self.in_function(f, |inliner| fold_function_body(inliner, db, model, f));
 	}
 
 	fn fold_declaration(
@@ -132,12 +261,21 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 		d: &Declaration<'db, Src>,
 	) -> Declaration<'db, Dst> {
 		let mut folded = fold_declaration(self, db, model, d);
-		// TODO: user functions keep their names so analysis output stays
-		// readable, but a local name equal to a name in the call arguments is
-		// captured. Rename such locals to a fresh readable name.
 		if !self.map.is_empty() && matches!(self.mode, Mode::Annotated) {
 			// Alpha rename for safety when inlining
 			folded.remove_name();
+		}
+		// Rename locals that would capture or clash with a name (see `captured`)
+		if let Some(name) = folded.name()
+			&& !folded.top_level()
+			&& !self.in_library
+			&& self.captured.contains(&name)
+		{
+			let fresh = (1..)
+				.map(|n| Identifier::new(db, format!("{}{n}", name.lookup(db))))
+				.find(|n| !self.captured.contains(n) && !self.used.contains(n))
+				.unwrap();
+			folded.set_name(fresh);
 		}
 		folded
 	}
@@ -242,15 +380,23 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 							);
 
 							self.inlining.push(*f);
+							let captured = self.captured.len();
 							let mut restore = Vec::with_capacity(c.arguments.len());
 							for (param, arg) in
 								model[*f].parameters().iter().zip(c.arguments.iter())
 							{
 								let e = self.fold_expression(db, model, arg);
+								// Annotated inlining removes the names of locals
+								if matches!(self.mode, Mode::Only(_)) {
+									let mut names = Names::new();
+									names.visit_expression(&self.model, &e);
+									self.captured.extend(names.free(&self.model));
+								}
 								restore.push(self.map.insert(*param, e));
 							}
 							let mut inlined = self.fold_expression(db, model, body);
 							inlined.set_origin(expression.origin());
+							self.captured.truncate(captured);
 							let _ = self.inlining.pop();
 							for (param, prev) in model[*f].parameters().iter().zip(restore) {
 								if let Some(prev) = prev {
@@ -293,15 +439,14 @@ pub fn inline_functions<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model
 
 /// Inline all calls to `functions` (which must have bodies) using call by
 /// name semantics. Recursive calls are left as calls, and the function items
-/// are kept.
+/// are kept. Locals outside the library functions that have a top-level, enum
+/// or annotation name, or that would capture a name in an inlined argument,
+/// are renamed, so the model still means the same when it is printed.
 pub fn inline_user_functions<'db>(
 	db: &'db dyn Db,
 	model: Model<'db>,
 	functions: FxHashSet<FunctionId<'db>>,
 ) -> Model<'db> {
-	if functions.is_empty() {
-		return model;
-	}
 	let mut inliner = Inliner::new(db, &model, Mode::Only(functions));
 	inliner.add_model(db, &model);
 	inliner.model

@@ -91,25 +91,6 @@ fn globalize_no_global() {
 }
 
 #[test]
-fn globalize_prints_diagnostics() {
-	let output = Command::new(env!("CARGO_BIN_EXE_shackle"))
-		.current_dir(dir())
-		.env("NO_COLOR", "1")
-		.args(["globalize", "--seed", "1", "--jobs", "2", "-M", "3"])
-		.arg("scalars.mzn")
-		.output()
-		.unwrap();
-	assert!(output.status.success());
-	let stdout = String::from_utf8(output.stdout).unwrap();
-	assert!(
-		stdout.contains("replace with `all_different([a, b, c])`"),
-		"{stdout}"
-	);
-	assert!(stdout.contains("scalars.mzn:"), "{stdout}");
-	assert!(stdout.contains("Suggestions: 1, viewpoints: 0"), "{stdout}");
-}
-
-#[test]
 fn globalize_filters_globals_by_name() {
 	let excluded = globalize(&["-e", "all_diff", "pairwise.mzn", "pairwise.dzn"]);
 	assert!(excluded.status.success());

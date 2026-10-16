@@ -76,7 +76,8 @@ pub struct GlobalizeOptions {
 	pub max_group: usize,
 	/// Number of solutions sampled per check
 	pub samples: usize,
-	/// Time limit for each `minizinc` run
+	/// Time limit for the solver in each `minizinc` run (a run is stopped
+	/// after 10 times this limit)
 	pub time_limit: Duration,
 	/// Random seed passed to the solver
 	pub seed: u64,
@@ -113,7 +114,7 @@ impl Default for GlobalizeOptions {
 }
 
 /// A source range in a model file
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Location {
 	/// The file
 	pub src: SourceFile,
@@ -142,13 +143,28 @@ impl Location {
 
 	/// Line and column of the last character (from 1)
 	pub fn end(&self) -> (usize, usize) {
-		self.position(self.span.offset() + self.span.len().saturating_sub(1))
+		let (start, end) = (self.span.offset(), self.span.offset() + self.span.len());
+		let last = self.src.contents()[start..end]
+			.char_indices()
+			.next_back()
+			.map_or(0, |(i, _)| i);
+		self.position(start + last)
 	}
 
+	/// Locations are ordered and compared by file path and range (a model
+	/// has at most one source without a path)
 	fn key(&self) -> (Option<&std::path::Path>, usize, usize) {
 		(self.src.path(), self.span.offset(), self.span.len())
 	}
 }
+
+impl PartialEq for Location {
+	fn eq(&self, other: &Self) -> bool {
+		self.key() == other.key()
+	}
+}
+
+impl Eq for Location {}
 
 impl PartialOrd for Location {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {

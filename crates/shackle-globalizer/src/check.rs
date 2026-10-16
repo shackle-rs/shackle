@@ -18,7 +18,6 @@ use shackle_diagnostics::{Error, Result};
 use super::{
 	GlobalizeOptions, RawFinding,
 	candidates::{Candidate, Kind},
-	closure,
 	run::{Outcome, Runner, Solution},
 	tidy,
 };
@@ -32,8 +31,8 @@ pub(super) struct Plan {
 	/// The unrolled parts of the group
 	pub(super) group: Vec<String>,
 	pub(super) candidates: Vec<Candidate>,
-	/// For each leader: its generator, and the leaders its set depends on
-	pub(super) wrap: Vec<(String, Vec<usize>)>,
+	/// For each leader: its generator
+	pub(super) wrap: Vec<String>,
 }
 
 /// All variants of one group with one context, printed
@@ -56,8 +55,10 @@ pub(super) struct Job {
 pub(super) enum Sample {
 	/// The outcome of the run, which has solutions
 	Solutions(Arc<Outcome>),
-	/// No solutions (or none found within the time limit)
+	/// No solutions
 	Unsat,
+	/// No solutions found within the time limit
+	Unknown,
 	/// `minizinc` failed
 	Error,
 }
@@ -69,7 +70,8 @@ impl From<Arc<Outcome>> for Sample {
 				log::info!("globalizer: submodel failed: {err}");
 				Sample::Error
 			}
-			None if outcome.solutions.is_empty() => Sample::Unsat,
+			None if outcome.solutions.is_empty() && outcome.complete => Sample::Unsat,
+			None if outcome.solutions.is_empty() => Sample::Unknown,
 			None => Sample::Solutions(outcome),
 		}
 	}
@@ -150,16 +152,20 @@ impl<'a> Checker<'a> {
 		let plain = self
 			.runner
 			.run(&format!("{body}{}", search[0]), data, n, cache)?;
-		if plain.complete || plain.error.is_some() || plain.solutions.is_empty() {
+		if plain.complete || plain.error.is_some() {
 			return Ok(Sample::from(plain));
 		}
-		// Restarts give more diverse samples, but can never prove completeness.
-		// The plain samples often share the first variables, so both are used.
+		// Restarts give more diverse samples, but cannot prove that a set of
+		// solutions is complete. The plain samples often share the first
+		// variables, so both are used.
 		let restart = self
 			.runner
 			.run(&format!("{body}{}", search[1]), data, n, cache)?;
 		if restart.error.is_some() {
 			return Ok(Sample::from(plain));
+		}
+		if restart.complete && restart.solutions.is_empty() {
+			return Ok(Sample::Unsat);
 		}
 		Ok(Sample::from(Arc::new(Outcome {
 			solutions: plain
@@ -221,6 +227,9 @@ impl<'a> Checker<'a> {
 		let outcome = match self.sample(&body, search, data, false)? {
 			Sample::Solutions(outcome) => outcome,
 			Sample::Unsat => return Ok(None),
+			// The candidates cannot be checked on this instance, so none of
+			// them is suggested: a time out can hide a counterexample
+			Sample::Unknown => return Ok(Some(Vec::new())),
 			// Without the candidates the run may still fail (e.g. a leader
 			// outside its set): then the instance has no samples
 			Sample::Error if matches!(self.sample(base, search, data, true)?, Sample::Error) => {
@@ -411,22 +420,19 @@ impl<'a> Checker<'a> {
 				}
 				// Outside the `where` clauses of the leaders
 				Sample::Unsat => {}
-				Sample::Error => return Ok(false),
+				Sample::Unknown | Sample::Error => return Ok(false),
 			}
 		}
 		Ok(tested)
 	}
 
-	/// The replacement text: the call inside a `forall` over the leaders it
-	/// uses (and the leaders their sets depend on)
+	/// The replacement text: the call inside a `forall` over the leaders (a
+	/// candidate loops over all of them, see `plan`)
 	pub(super) fn replacement(plan: &Plan, cand: &Candidate) -> String {
-		let mut used = closure(cand.leaders.clone(), |m| plan.wrap[*m].1.clone());
-		if used.is_empty() {
+		if plan.wrap.is_empty() {
 			return tidy(cand.call());
 		}
-		used.sort_unstable();
-		let gens = used.iter().map(|m| plan.wrap[*m].0.as_str()).join(", ");
-		tidy(format!("forall({gens})({})", cand.call()))
+		tidy(format!("forall({})({})", plan.wrap.join(", "), cand.call()))
 	}
 
 	/// The replacements (and candidates) found for one group with one context

@@ -211,6 +211,96 @@ fn normalise_splits_multi_variable_generators() {
 }
 
 #[test]
+fn renames_avoid_capture_of_argument_names() {
+	check_parts(
+		r#"
+		int: i1 = 1;
+		array[1..2, 1..3] of var 1..3: m;
+		predicate pos(array[int] of var int: r) = forall(i in index_set(r))(r[i] > i1);
+		constraint forall(i in 1..2)(pos(m[i, ..]));
+		"#,
+		expect![[r#"
+    forall(i in ((1) .. (2)), i2 in index_set((m[i, ..])))(((((m[i, ..])[i2])) > (i1)))
+"#]],
+	);
+}
+
+#[test]
+fn renames_avoid_capture_in_definitions_and_lets() {
+	let src = r#"
+		int: n = 1;
+		array[1..2, 1..3] of var 1..3: m;
+		array[1..3] of var 1..3: x;
+		predicate pos(array[int] of var int: r) = forall(j in index_set(r))(r[j] > n);
+		predicate low(array[int] of var int: r) = forall(k in index_set(r))(r[k] < 3);
+		var bool: b = forall(n in 1..2)(pos(m[n, ..]));
+		constraint b;
+		constraint let { constraint forall(n in 1..2)(pos(m[n, ..])) } in true;
+		constraint low([x[k] | k in 1..3]);
+	"#;
+	let printed = with(src, |g| {
+		let decls = g.parts[0].decls(g.model);
+		// The definition of `b`, and the parts
+		let b = g
+			.preamble(&decls)
+			.lines()
+			.filter(|l| l.contains(" b ="))
+			.map(|l| format!("{l}\n"))
+			.collect::<String>();
+		let parts = g.parts.iter().map(|p| format!("{}\n", g.print_part(p)));
+		std::iter::once(b).chain(parts).collect::<String>()
+	});
+	// The loop variables that would capture `n` are renamed, and `k` in the
+	// argument is bound there, so the body keeps its name
+	expect![[r#"
+    var bool: b = forall([forall([((((m[n1, ..])[j])) > (n)) | j in index_set((m[n1, ..]))]) | n1 in ((1) .. (2))]);
+    b
+    let {
+      constraint forall([forall([((((m[n1, ..])[j])) > (n)) | j in index_set((m[n1, ..]))]) | n1 in ((1) .. (2))]);
+    } in true
+    forall(k in index_set([(x[k]) | k in ((1) .. (3))]))(((([(x[k]) | k in ((1) .. (3))][k])) < (3)))
+"#]].assert_eq(&printed);
+}
+
+#[test]
+fn renames_avoid_enum_members_and_top_level_names() {
+	check_parts(
+		r#"
+		enum E = {a, n1};
+		enum F = {u};
+		int: n = 1;
+		array[1..2, 1..3] of var 1..3: m;
+		array[E] of var 1..3: y;
+		predicate pos(array[int] of var int: r) = forall(j in index_set(r))(r[j] > n);
+		predicate p(var int: v) = exists(a in 1..3)(v = a);
+		constraint forall(n in 1..2)(pos(m[n, ..]) /\ y[n1] > 1);
+		constraint p(y[a]);
+		constraint forall(u in 1..2)(m[u, 1] > 0);
+		"#,
+		expect![[r#"
+    forall(n2 in ((1) .. (2)), j in index_set((m[n2, ..])))(((((m[n2, ..])[j])) > (n)))
+    forall(n2 in ((1) .. (2)))((((y[n1])) > (1)))
+    exists([(((y[a])) = (a1)) | a1 in ((1) .. (3))])
+    forall(u1 in ((1) .. (2)))((((m[u1, 1])) > (0)))
+"#]],
+	);
+}
+
+#[test]
+fn renamed_parameters_stay_distinct() {
+	let src = r#"
+		int: n = 1;
+		function int: f(int: n, int: n1) = if n = 0 then 0 else f(n - 1, n1) endif;
+		var 0..3: y;
+		constraint y = f(2, 0);
+	"#;
+	let preamble = with(src, |g| g.preamble(&g.parts[0].decls(g.model)));
+	// `n` has a top-level name, so it is renamed, skipping `n1`, which the
+	// other parameter has
+	assert!(preamble.contains("int: n2, int: n1"), "{preamble}");
+}
+
+#[test]
 fn normalise_inlines_user_predicates() {
 	check_parts(
 		r#"
@@ -589,7 +679,7 @@ fn search_annotation_covers_every_argument_type() {
 		let decls = g.parts[0].decls(g.model);
 		g.search(&decls)
 	});
-	let solve = "solve :: seq_search([int_search(array1d(x) ++ [a], input_order, indomain_random), int_search(array1d(xo), input_order, indomain_random), bool_search([b], input_order, indomain_random), bool_search([gz_e in gz_s | gz_s in [s], gz_e in ub(gz_s)], input_order, indomain_random)])";
+	let solve = "solve :: seq_search([int_search(array1d(x) ++ [a], input_order, indomain_random), bool_search([occurs(gz_e) | gz_e in array1d(xo)], input_order, indomain_random), int_search(array1d(xo), input_order, indomain_random), bool_search([b], input_order, indomain_random), bool_search([gz_e in gz_s | gz_s in [s], gz_e in ub(gz_s)], input_order, indomain_random)])";
 	assert_eq!(
 		search,
 		[
@@ -600,32 +690,29 @@ fn search_annotation_covers_every_argument_type() {
 }
 
 #[test]
-fn replacement_wraps_used_leaders_and_their_dependencies() {
+fn replacements_loop_over_every_leader() {
 	let src = r#"
 		int: n = 3;
 		array[1..n, 1..n] of var 1..n: x;
 		constraint forall(i in 1..n, j in i + 1..n where j > 1)(x[i, j] > 0);
 	"#;
-	let replacements = with(src, |g| {
+	let (kept, replacement) = with(src, |g| {
 		let variant = Variant {
 			fixed: vec![vec![0, 1]],
 		};
 		unrolled(g, &[0], &variant, |u| {
 			let plan = g.plan(u, Pass::Full).unwrap();
-			[vec![], vec![0], vec![1]].map(|leaders| {
-				let mut cand = Candidate::raw("all_different", &["x[i, ..]"]);
-				cand.leaders = leaders;
-				Checker::replacement(&plan, &cand)
-			})
+			// The set of `j` depends on `i`, so a candidate that uses `j`
+			// loops over both
+			let kept = plan.candidates.iter().all(|c| c.leaders.contains(&1));
+			let cand = Candidate::raw("all_different", &["x[i, ..]"]);
+			(kept, Checker::replacement(&plan, &cand))
 		})
 	});
+	assert!(kept);
 	assert_eq!(
-		replacements,
-		[
-			"all_different(x[i, ..])",
-			"forall (i in 1..n) (all_different(x[i, ..]))",
-			"forall (i in 1..n, j in i + 1..n where j > 1) (all_different(x[i, ..]))",
-		]
+		replacement,
+		"forall (i in 1..n, j in i + 1..n where j > 1) (all_different(x[i, ..]))"
 	);
 }
 
@@ -697,6 +784,13 @@ fn shadowed_findings_are_hidden() {
 		shadow(&found),
 		[true, false, false, true, false, true, true]
 	);
+}
+
+#[test]
+fn location_ends_at_the_last_character() {
+	let src = SourceFile::new("m.mzn".into(), "x < yé;\n".to_owned());
+	let span = SourceSpan::new(0.into(), "x < yé".len());
+	assert_eq!(Location { src, span }.to_string(), "m.mzn|1|1|1|6");
 }
 
 #[test]
@@ -1471,7 +1565,7 @@ global_test!(
 	solve_all_different_except,
 	"except",
 	1,
-	"all_different_except(x, S)",
+	"all_different(x, S)",
 	"set of int: S = {0, 1};\narray[1..4] of var 0..4: x;\n",
 	"constraint forall(i, j in 1..4 where i < j)(x[i] in S \\/ x[i] != x[j]);",
 	"constraint forall(i, j in 1..4 where i < j)(x[i] = 0 \\/ x[i] != x[j]);",
@@ -1597,3 +1691,18 @@ global_test!(
 	"constraint if exists(j in 1..3)(x[j] = v) then occurs(o) /\\ x[deopt(o)] = v /\\ forall(j in 1..3)(j < deopt(o) -> x[j] != v) else absent(o) endif;",
 	"constraint occurs(o) -> x[deopt(o)] = v;",
 );
+
+#[test]
+fn solve_all_different_with_unused_exceptions() {
+	// No value of `x` is in `S`, so this is `all_different(x)`
+	let src = "include \"all_different.mzn\";\nset of int: S = {9};\narray[1..3] of var 1..3: x;\nconstraint all_different(x, S);";
+	assert_eq!(solve(src, 1, &["all_different"]), ["all_different(x)"]);
+}
+
+#[test]
+fn solve_other_names_of_the_same_global_are_not_suggested() {
+	let except_0 = "include \"all_different.mzn\";\narray[1..4] of var 0..4: x;\nconstraint all_different(x, {0});";
+	assert_eq!(solve(except_0, 1, &["all"]), Vec::<String>::new());
+	let greater = "include \"lex_greater.mzn\";\narray[1..3] of var 1..3: x;\narray[1..3] of var 1..3: y;\nconstraint lex_greater(x, y);";
+	assert_eq!(solve(greater, 1, &["lex"]), Vec::<String>::new());
+}

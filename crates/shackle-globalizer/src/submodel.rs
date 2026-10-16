@@ -3,9 +3,9 @@
 use std::fmt::Write;
 
 use itertools::Itertools;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use shackle_hir::constants::IdentifierRegistry;
-use shackle_thir::{Callable, DeclarationId, Expression, ExpressionData};
+use shackle_thir::{Callable, DeclarationId, Expression, ExpressionData, IntegerLiteral};
 
 use super::{
 	Globalizer, Pass,
@@ -68,8 +68,8 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	/// Declarations of the leaders for one instantiation (see
 	/// [`Unrolled::instantiations`])
 	pub(super) fn print_leaders(&self, u: &Unrolled<'_, 'a, 'db>, last: &[bool]) -> String {
-		// TODO: leaders keep the loop variable names, so a top-level
-		// declaration with the same name clashes. Rename such leaders.
+		// Leaders keep the loop variable names (a loop variable never has a
+		// top-level, enum or annotation name, see `inline_user_functions`)
 		let mut s = String::new();
 		for (m, last) in last.iter().enumerate() {
 			let l = u.leader_loop(m);
@@ -139,35 +139,40 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 	/// Search annotation that picks random values for the group's variables
 	/// (for a set: random members)
 	pub(super) fn search(&self, decls: &[DeclarationId<'db>]) -> Search {
-		let vars = |elem: Elem| {
-			decls
-				.iter()
-				.filter(|d| self.arg_decl(**d) == Some((true, self.dims(**d), elem)))
-				.map(|d| {
-					if self.model[*d].ty().is_array(self.db) {
-						format!("array1d({})", self.name(*d))
+		// The variables of each element type, as one array
+		let mut vars = FxHashMap::<Elem, Vec<String>>::default();
+		for d in decls {
+			if let Some((true, _, elem)) = self.arg_decl(*d) {
+				let name = self.name(*d);
+				vars.entry(elem)
+					.or_default()
+					.push(if self.model[*d].ty().is_array(self.db) {
+						format!("array1d({name})")
 					} else {
-						format!("[{}]", self.name(*d))
-					}
-				})
-				.join(" ++ ")
-		};
-		let searches = [
-			(vars(Elem::Int), "int_search"),
-			(vars(Elem::OptInt), "int_search"),
-			(vars(Elem::Bool), "bool_search"),
-			(
-				Some(vars(Elem::Set))
-					.filter(|s| !s.is_empty())
-					.map(|s| format!("[gz_e in gz_s | gz_s in {s}, gz_e in ub(gz_s)]"))
-					.unwrap_or_default(),
-				"bool_search",
-			),
-		]
-		.into_iter()
-		.filter(|(vars, _)| !vars.is_empty())
-		.map(|(vars, search)| format!("{search}({vars}, input_order, indomain_random)"))
-		.collect::<Vec<_>>();
+						format!("[{name}]")
+					});
+			}
+		}
+		let search =
+			|kind: &str, vars: &str| format!("{kind}({vars}, input_order, indomain_random)");
+		let searches = [Elem::Int, Elem::OptInt, Elem::Bool, Elem::Set]
+			.into_iter()
+			.filter_map(|elem| Some((elem, vars.get(&elem)?.join(" ++ "))))
+			.flat_map(|(elem, vars)| match elem {
+				Elem::Int => vec![search("int_search", &vars)],
+				// Whether each value occurs, then its value
+				Elem::OptInt => vec![
+					search("bool_search", &format!("[occurs(gz_e) | gz_e in {vars}]")),
+					search("int_search", &vars),
+				],
+				Elem::Bool => vec![search("bool_search", &vars)],
+				// Whether each possible member is in the set
+				Elem::Set => vec![search(
+					"bool_search",
+					&format!("[gz_e in gz_s | gz_s in {vars}, gz_e in ub(gz_s)]"),
+				)],
+			})
+			.collect::<Vec<_>>();
 		let solve = match &searches[..] {
 			[] => "solve".to_owned(),
 			[one] => format!("solve :: {one}"),
@@ -177,15 +182,14 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 		[plain, format!("{solve} :: restart_luby(1) satisfy;\n")]
 	}
 
-	fn dims(&self, d: DeclarationId<'db>) -> usize {
-		self.model[d].ty().dims(self.db).unwrap_or(0)
-	}
-
-	/// The functions that a constraint is a call of, or that a comparison
-	/// compares, with `element` for an access with a variable index (e.g.
-	/// `=` and `max` for `m = max(x)`, and `=` and `element` for `y = x[i]`)
+	/// The candidate names (see `Global::uses`) of the functions that a
+	/// constraint is a call of, or that a comparison compares, with `element`
+	/// for an access with a variable index (e.g. `=` and `max` for
+	/// `m = max(x)`, and `=` and `element` for `y = x[i]`)
 	fn uses(&self, e: &Expression<'db>) -> Vec<&str> {
 		let ids = IdentifierRegistry::lookup(self.db);
+		let zero =
+			|m: &Expression<'db>| matches!(&**m, ExpressionData::IntegerLiteral(IntegerLiteral(0)));
 		let name = |e: &Expression<'db>| {
 			let ExpressionData::Call(c) = &**e else {
 				return None;
@@ -198,7 +202,33 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				return (c.arguments.len() == 2 && !c.arguments[1].ty().known_par(self.db))
 					.then_some("element");
 			}
-			Some(name.as_identifier(self.db).lookup(self.db))
+			// Other stdlib names of the same globals (`all_different(x, S)` is
+			// the one with exceptions, `{0}` gives `alldifferent_except_0`)
+			Some(match name.as_identifier(self.db).lookup(self.db) {
+				"all_different" | "alldifferent" | "alldifferent_except"
+					if c.arguments.len() == 2 =>
+				{
+					match &*c.arguments[1] {
+						ExpressionData::SetLiteral(members) if members.is_empty() => {
+							"all_different"
+						}
+						ExpressionData::SetLiteral(members) if matches!(&members[..], [m] if zero(m)) => {
+							"alldifferent_except_0"
+						}
+						_ => "all_different_except",
+					}
+				}
+				"alldifferent" => "all_different",
+				"all_different_except_0" => "alldifferent_except_0",
+				"atmost1" => "at_most1",
+				"strict_lex2" => "lex2_strict",
+				"lex_lt" => "lex_less",
+				"lex_leq" => "lex_lesseq",
+				// With the arguments swapped
+				"lex_greater" => "lex_less",
+				"lex_greatereq" => "lex_lesseq",
+				name => name,
+			})
 		};
 		let mut uses = name(e).into_iter().collect::<Vec<_>>();
 		if let ExpressionData::Call(c) = &**e {
@@ -225,19 +255,29 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				// The name filters of the user only apply to the full pass
 				&& (pass == Pass::Initial || selected(name, &options.include, &options.exclude))
 		};
-		let cands = candidates(&self.arguments(u), select, options.max_args);
+		let mut cands = candidates(&self.arguments(u), select, options.max_args);
 		if cands.is_empty() {
 			return None;
 		}
-		let wrap = (0..u.leaders())
+		// For each leader: the leaders its set depends on
+		let depends = (0..u.leaders())
 			.map(|m| {
 				let deps = refs(self.model, true, u.leader_loop(m).exprs());
-				let depends = (0..u.leaders())
+				(0..u.leaders())
 					.filter(|k| *k != m && deps.contains(&u.leader_loop(*k).decl))
-					.collect();
-				(self.print_loop(u.leader_loop(m)), depends)
+					.collect::<Vec<_>>()
 			})
-			.collect();
+			.collect::<Vec<_>>();
+		// The replacement must loop over every leader: only the first and last
+		// iteration of a leader are checked, so a call outside its loop would
+		// also replace the iterations in between. Such a call is checked by
+		// the variant without that leader.
+		cands.retain(|c| {
+			closure(c.leaders.iter().copied(), |m| depends[*m].iter().copied()).len() == u.leaders()
+		});
+		if cands.is_empty() {
+			return None;
+		}
 		Some(Plan {
 			leaders: u
 				.instantiations()
@@ -246,7 +286,9 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 				.collect(),
 			group: self.print_group(u),
 			candidates: cands,
-			wrap,
+			wrap: (0..u.leaders())
+				.map(|m| self.print_loop(u.leader_loop(m)))
+				.collect(),
 		})
 	}
 

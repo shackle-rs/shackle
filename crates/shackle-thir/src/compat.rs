@@ -202,12 +202,7 @@ impl<'db> OldMiniZincPrinter<'db> {
 		// Slice lowering wraps mzn_slice in array<N>d to restore the output
 		// dimensions.  The original access syntax already has those dimensions,
 		// so print the entire pattern as one access.
-		let function_name = name.as_identifier(db).lookup(db);
-		if function_name
-			.strip_prefix("array")
-			.and_then(|rank| rank.strip_suffix('d'))
-			.and_then(|rank| rank.parse::<usize>().ok())
-			.is_some_and(|rank| rank == call.arguments.len() - 1)
+		if restores_dimensions(name.as_identifier(db).lookup(db), call.arguments.len())
 			&& let Some(slice) = call.arguments.last()
 			&& let ExpressionData::Call(slice) = &**slice
 			&& let Callable::Function(slice_fn) = &slice.function
@@ -268,6 +263,13 @@ impl<'db> OldMiniZincPrinter<'db> {
 		let ExpressionData::Call(outer) = &**l.in_expression else {
 			return None;
 		};
+		let Callable::Function(outer_fn) = &outer.function else {
+			return None;
+		};
+		let outer_name = model[*outer_fn].name().as_identifier(db).lookup(db);
+		if !restores_dimensions(outer_name, outer.arguments.len()) {
+			return None;
+		}
 		let ExpressionData::Call(slice) = &**outer.arguments.last()? else {
 			return None;
 		};
@@ -597,6 +599,15 @@ impl<'db, T: Marker> Printer<'db, T> for OldMiniZincPrinter<'db> {
 
 		name.pretty_print(db)
 	}
+}
+
+/// Whether a call of `name` with `arguments` arguments is `array<N>d(s_1, ...,
+/// s_N, x)`, which slice lowering uses to restore the dimensions of a slice
+fn restores_dimensions(name: &str, arguments: usize) -> bool {
+	name.strip_prefix("array")
+		.and_then(|rank| rank.strip_suffix('d'))
+		.and_then(|rank| rank.parse::<usize>().ok())
+		.is_some_and(|rank| rank + 1 == arguments)
 }
 
 #[cfg(test)]
