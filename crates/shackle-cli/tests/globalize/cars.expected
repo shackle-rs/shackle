@@ -1,0 +1,31 @@
+{
+  "findings": [
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "cars.mzn",
+          "firstColumn": 1,
+          "firstLine": 27,
+          "lastColumn": 20,
+          "lastLine": 30
+        }
+      ],
+      "replacement": "forall (p in options) (sliding_sum(0, max_per_block[p], block_size[p], used[.., p]))"
+    },
+    {
+      "context": null,
+      "locations": [
+        {
+          "filename": "cars.mzn",
+          "firstColumn": 1,
+          "firstLine": 33,
+          "lastColumn": 68,
+          "lastLine": 33
+        }
+      ],
+      "replacement": "global_cardinality_closed(class, set2array(index_set(cars_in_class))) = cars_in_class"
+    }
+  ],
+  "viewpoints": []
+}

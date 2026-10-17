@@ -97,6 +97,12 @@ impl Model {
 			.collect()
 	}
 
+	/// The compiler database of the model, for tools that work on its
+	/// intermediate representations
+	pub fn db(&self) -> &dyn Db {
+		&self.db
+	}
+
 	/// Set the compilation target
 	pub fn set_target(&mut self, target: CompileTarget) {
 		match target {

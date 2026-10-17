@@ -4,6 +4,7 @@ members = [
   "crates/shackle-cli",
   "crates/shackle-diagnostics",
   "crates/shackle-fmt",
+  "crates/shackle-globalizer",
   "crates/shackle-hir",
   "crates/shackle-ls",
   "crates/shackle-syntax",
@@ -23,6 +24,7 @@ default-members = [
   "crates/shackle-cli",
   "crates/shackle-diagnostics",
   "crates/shackle-fmt",
+  "crates/shackle-globalizer",
   "crates/shackle-hir",
   "crates/shackle-ls",
   "crates/shackle-syntax",
@@ -58,6 +60,7 @@ serde_json = "1.0"
 shackle = {path = "crates/shackle", version = "0.1.0"}
 shackle-diagnostics = {path = "crates/shackle-diagnostics", version = "0.1.0"}
 shackle-fmt = {path = "crates/shackle-fmt", version = "0.1.0"}
+shackle-globalizer = {path = "crates/shackle-globalizer", version = "0.1.0"}
 shackle-hir = {path = "crates/shackle-hir", version = "0.1.0"}
 shackle-syntax = {path = "crates/shackle-syntax", version = "0.1.0"}
 shackle-thir = {path = "crates/shackle-thir", version = "0.1.0"}
@@ -71,6 +74,11 @@ tree-sitter-datazinc = {path = "parsers/tree-sitter-datazinc", version = "0.1.0"
 tree-sitter-eprime = {path = "parsers/tree-sitter-eprime", version = "0.1.0"}
 tree-sitter-language = "0.1.7"
 tree-sitter-minizinc = {path = "parsers/tree-sitter-minizinc", version = "0.1.0"}
+
+# Type checking the standard library takes seconds without optimisation,
+# and every test that builds a model does it
+[profile.dev]
+opt-level = 2
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
