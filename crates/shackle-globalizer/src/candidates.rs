@@ -911,16 +911,20 @@ impl Candidate {
 		}
 	}
 
-	/// Integer array to output so the blank can be filled from the samples
+	/// Integer array to output so the blank can be filled from the samples.
+	/// It is defined for empty arrays (else the run of the whole batch fails).
 	pub(super) fn feature(&self) -> Option<String> {
 		let (_, blank) = self.blank?;
 		Some(match blank {
-			Blank::Max(i) => format!("[max({})]", self.args[i]),
+			Blank::Max(i) => format!(
+				"if length({x}) > 0 then [max({x})] else [] endif",
+				x = self.args[i]
+			),
 			Blank::MostTrue(i) => format!("[sum({x}), length({x})]", x = self.args[i]),
 			// At most 101 values, so the suggested arrays stay readable (else
 			// nothing, and the blank is not filled)
 			Blank::Counts(i) => instantiate(
-				"if ub_array({0}) - lb_array({0}) <= 100 then [lb_array({0})] ++ [count({0}, {v}) | {v} in lb_array({0})..ub_array({0})] else [] endif",
+				"if length({0}) > 0 /\\ ub_array({0}) - lb_array({0}) <= 100 then [lb_array({0})] ++ [count({0}, {v}) | {v} in lb_array({0})..ub_array({0})] else [] endif",
 				&[&self.args[i]],
 			),
 		})
@@ -1057,7 +1061,7 @@ mod tests {
 		assert_eq!(gcc.checked(), "true");
 		assert_eq!(
 			gcc.feature().unwrap(),
-			"if ub_array(x) - lb_array(x) <= 100 then [lb_array(x)] ++ [count(x, i) | i in lb_array(x)..ub_array(x)] else [] endif"
+			"if length(x) > 0 /\\ ub_array(x) - lb_array(x) <= 100 then [lb_array(x)] ++ [count(x, i) | i in lb_array(x)..ub_array(x)] else [] endif"
 		);
 		// Samples disagree
 		assert!(!gcc.clone().fill(&[vec![1, 2, 0], vec![1, 1, 1]]));
@@ -1093,7 +1097,10 @@ mod tests {
 		assert_eq!(gcc.call(), "global_cardinality_closed(x, [1, 2]) = [2, 1]");
 
 		let mut max = filtered(&args, &["maximum"], &[], usize::MAX);
-		assert_eq!(max[0].feature().unwrap(), "[max(x)]");
+		assert_eq!(
+			max[0].feature().unwrap(),
+			"if length(x) > 0 then [max(x)] else [] endif"
+		);
 		assert!(max[0].fill(&[vec![7], vec![7]]));
 		assert_eq!(max[0].call(), "max(x) = 7");
 

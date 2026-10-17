@@ -371,15 +371,6 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 								expression.origin().pretty_print(db)
 							);
 
-							let old_depth = self.depth;
-							self.depth += 1;
-
-							assert!(
-								self.depth < 100,
-								"Exceeded maximum inlining depth, likely due to infinite recursion"
-							);
-
-							self.inlining.push(*f);
 							let captured = self.captured.len();
 							let mut restore = Vec::with_capacity(c.arguments.len());
 							for (param, arg) in
@@ -394,6 +385,15 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for Inliner<'db, D
 								}
 								restore.push(self.map.insert(*param, e));
 							}
+							// After the arguments, so `f(f(x))` inlines both calls
+							self.inlining.push(*f);
+							let old_depth = self.depth;
+							self.depth += 1;
+
+							assert!(
+								self.depth < 100,
+								"Exceeded maximum inlining depth, likely due to infinite recursion"
+							);
 							let mut inlined = self.fold_expression(db, model, body);
 							inlined.set_origin(expression.origin());
 							self.captured.truncate(captured);

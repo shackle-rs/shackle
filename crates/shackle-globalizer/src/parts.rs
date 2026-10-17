@@ -218,8 +218,9 @@ impl<'a, 'db> Loop<'a, 'db> {
 }
 
 impl<'a, 'db> Part<'a, 'db> {
-	/// Whether the loops at `fixed` can be leaders: they iterate over sets, and
-	/// their headers only use top-level declarations and other leaders.
+	/// Whether the loops at `fixed` can be leaders: they iterate over par sets,
+	/// with par `where` clauses, and their headers only use top-level
+	/// declarations and other leaders.
 	pub(super) fn can_fix(&self, db: &'db dyn Db, model: &'a Model<'db>, fixed: &[usize]) -> bool {
 		let fixed_decls = fixed
 			.iter()
@@ -229,6 +230,7 @@ impl<'a, 'db> Part<'a, 'db> {
 		fixed.iter().all(|i| {
 			let l = &self.loops[*i];
 			matches!(l.kind, LoopKind::Iter(c) if c.ty().is_set(db))
+				&& l.exprs().all(|e| e.ty().known_par(db))
 				&& refs(model, true, l.exprs())
 					.iter()
 					.all(|d| !loop_decls.contains(d) || fixed_decls.contains(d))

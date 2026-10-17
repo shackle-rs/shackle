@@ -53,7 +53,8 @@ use shackle_hir::{
 	run_hir_phase,
 };
 use shackle_thir::{
-	DeclarationId, Expression, ItemId, Model,
+	DeclarationId, Domain, DomainData, Expression, ExpressionData, ItemId, Model,
+	ResolvedIdentifier,
 	compat::OldMiniZincPrinter,
 	pretty_print::{Printer, print_item},
 	source::Origin,
@@ -182,6 +183,22 @@ pub struct SuggestedViewpoint {
 	pub findings: Vec<Finding>,
 }
 
+/// Whether `domain` restricts its values more than its type does. An enum is
+/// implied by the type, and a wrong index set aborts.
+fn bounded(domain: &Domain<'_>) -> bool {
+	match &**domain {
+		DomainData::Unbounded => false,
+		DomainData::Array(_, elem) => bounded(elem),
+		DomainData::Set(elem, card) => card.is_some() || bounded(elem),
+		DomainData::Tuple(fields) => fields.iter().any(bounded),
+		DomainData::Record(fields) => fields.iter().any(|(_, d)| bounded(d)),
+		DomainData::Bounded(e) => !matches!(
+			&***e,
+			ExpressionData::Identifier(ResolvedIdentifier::Enumeration(_))
+		),
+	}
+}
+
 /// `seed` extended with everything `next` gives for its elements, until
 /// nothing is new (without duplicates, in the order first found)
 fn closure<T: PartialEq, I: IntoIterator<Item = T>>(
@@ -229,19 +246,17 @@ pub fn globalize(
 		} else {
 			Vec::new()
 		};
-		let redundant = initial
-			.iter()
+		globalizer.viewpoints = globalizer.viewpoints(&initial);
+		// The full pass can use a context that the initial pass removes
+		let mut found = initial
+			.into_iter()
 			.filter(|f| f.candidate.kind == Kind::Redundant)
 			.collect::<Vec<_>>();
-		let skip = redundant
+		let skip = found.iter().map(|f| (f.group.clone(), f.context)).collect();
+		found.extend(globalizer.run(Pass::Full, &skip)?);
+		removable(&mut found);
+		let mut findings = found
 			.iter()
-			.map(|f| (f.group.clone(), f.context))
-			.collect();
-		globalizer.viewpoints = globalizer.viewpoints(&initial);
-		let full = globalizer.run(Pass::Full, &skip)?;
-		let mut findings = redundant
-			.into_iter()
-			.chain(&full)
 			.map(|f| globalizer.finding(f))
 			.collect::<BTreeSet<_>>();
 		// A suggestion that uses a viewpoint goes with it
@@ -291,6 +306,34 @@ fn is_user_file(db: &dyn Db, file: ModelFile) -> bool {
 			.clone(),
 	];
 	!libraries.iter().flatten().any(|lib| path.starts_with(lib))
+}
+
+/// Drop the findings that would be wrong after the redundant groups before
+/// them are removed: removing a redundant group must not remove the context
+/// that implies another one (e.g. of two copies of a constraint, only one is
+/// redundant), or the context of a replacement. Keeps the first in model
+/// order.
+///
+/// TODO: two replacements can each use the group of the other as context
+/// (e.g. the rows and columns of a Latin square). They are reported as
+/// alternatives, although applying both can lose constraints in general.
+fn removable(found: &mut Vec<RawFinding>) {
+	found.sort_by(|a, b| (&a.group, a.context).cmp(&(&b.group, b.context)));
+	let mut removed = Vec::new();
+	found.retain(|f| {
+		if f.candidate.kind != Kind::Redundant {
+			return true;
+		}
+		if f.context.is_some_and(|c| removed.contains(&c)) {
+			return false;
+		}
+		removed.extend(&f.group);
+		true
+	});
+	// The replacements, once all removed groups are known
+	found.retain(|f| {
+		f.candidate.kind == Kind::Redundant || !f.context.is_some_and(|c| removed.contains(&c))
+	});
 }
 
 /// Which findings to keep: drop a finding whose replacement is also found for
@@ -343,10 +386,17 @@ fn with_globalizer<R>(
 ) -> R {
 	let is_user_item = |o: Origin<'_>| o.node().is_some_and(|n| is_user_file(db, n.model_file(db)));
 	let model = shackle_thir::lower::lower_model(db).take();
-	// Inline the user's functions, so their constraints are split into parts
+	// Inline the user's functions, so their constraints are split into parts.
+	// Inlining drops the parameter and return domains, so a function with a
+	// bounded one stays a call.
 	let user_functions = model
 		.top_level_functions()
-		.filter(|(_, f)| f.body().is_some() && is_user_item(f.origin()))
+		.filter(|(_, f)| {
+			f.body().is_some()
+				&& is_user_item(f.origin())
+				&& !bounded(f.domain())
+				&& !f.parameters().iter().any(|p| bounded(model[*p].domain()))
+		})
 		.map(|(f, _)| f)
 		.collect::<FxHashSet<_>>();
 	let model = inline_user_functions(db, model, user_functions);
@@ -465,12 +515,14 @@ impl Default for GlobalizeOptions {
 
 impl<'a, 'db> Globalizer<'a, 'db> {
 	fn finding(&self, raw: &RawFinding) -> Finding {
-		let mut locations = raw
-			.group
-			.iter()
-			.map(|p| Location::new(self.db, self.parts[*p].origin))
-			.collect::<Vec<_>>();
-		locations.dedup();
+		// Parts of one inlined call share its location
+		let mut locations = Vec::new();
+		for p in &raw.group {
+			let l = Location::new(self.db, self.parts[*p].origin);
+			if !locations.contains(&l) {
+				locations.push(l);
+			}
+		}
 		Finding {
 			locations,
 			context: raw
@@ -545,11 +597,13 @@ impl<'a, 'db> Globalizer<'a, 'db> {
 			}
 		})?;
 		let keep = shadow(&found);
-		Ok(found
+		let mut found = found
 			.into_iter()
 			.zip(keep)
 			.filter_map(|(f, keep)| keep.then_some(f))
-			.collect())
+			.collect::<Vec<_>>();
+		removable(&mut found);
+		Ok(found)
 	}
 }
 

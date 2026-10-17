@@ -82,16 +82,16 @@ fn all_true(solutions: &[Solution], name: &str) -> bool {
 }
 
 /// The replacements of one group to report, from all that were found (with
-/// their candidates)
-pub(super) fn rank(mut found: Vec<(String, Candidate)>) -> Vec<(String, Candidate)> {
+/// their candidates, and anything else `T` carries)
+pub(super) fn rank<T>(mut found: Vec<(String, Candidate, T)>) -> Vec<(String, Candidate, T)> {
 	// A redundant group needs no global
-	if found.iter().any(|(_, c)| c.kind == Kind::Redundant) {
-		found.retain(|(_, c)| c.kind == Kind::Redundant);
+	if found.iter().any(|(_, c, _)| c.kind == Kind::Redundant) {
+		found.retain(|(_, c, _)| c.kind == Kind::Redundant);
 	}
 	// Drop a candidate that is an equivalent but less clear form of another
 	// one that holds (e.g. `nvalue(n, x)` of `all_different(x)`)
-	let held = found.iter().map(|(_, c)| c.clone()).collect::<Vec<_>>();
-	found.retain(|(_, c)| {
+	let held = found.iter().map(|(_, c, _)| c.clone()).collect::<Vec<_>>();
+	found.retain(|(_, c, _)| {
 		!c.dominated_by.is_some_and(|(name, slot)| {
 			held.iter()
 				.any(|h| h.name == name && h.args.first() == c.args.get(slot))
@@ -102,10 +102,10 @@ pub(super) fn rank(mut found: Vec<(String, Candidate)>) -> Vec<(String, Candidat
 	// arguments (a filled blank can add arguments, e.g. a cover)
 	let given = found
 		.iter()
-		.filter(|(_, c)| c.filled.is_none())
-		.map(|(_, c)| c.clone())
+		.filter(|(_, c, _)| c.filled.is_none())
+		.map(|(_, c, _)| c.clone())
 		.collect::<Vec<_>>();
-	found.retain(|(_, c)| {
+	found.retain(|(_, c, _)| {
 		let Some(slot) = c.filled else {
 			return true;
 		};
@@ -114,10 +114,24 @@ pub(super) fn rank(mut found: Vec<(String, Candidate)>) -> Vec<(String, Candidat
 				&& (0..g.args.len()).all(|i| i == slot || c.args.get(i) == Some(&g.args[i]))
 		})
 	});
-	found.into_iter().unique_by(|(r, _)| r.clone()).collect()
+	found.into_iter().unique_by(|(r, _, _)| r.clone()).collect()
 }
 
 impl<'a> Checker<'a> {
+	/// The channelling constraints of the viewpoints that `cand` uses
+	fn channels(&self, job: &Job, cand: &Candidate) -> String {
+		job.channels
+			.iter()
+			.filter(|(name, _)| {
+				cand.args.iter().any(|a| {
+					a.strip_prefix(name.as_str())
+						.is_some_and(|rest| rest.is_empty() || rest.starts_with('['))
+				})
+			})
+			.map(|(_, channel)| channel.as_str())
+			.join("\n")
+	}
+
 	/// Check the jobs that `produce` sends, on `jobs` worker threads. The
 	/// producer runs on this thread (it owns the compiler database). Its
 	/// `send` returns `false` once checking has stopped (after an error).
@@ -271,11 +285,71 @@ impl<'a> Checker<'a> {
 			let forward = self.forward(job, plan)?;
 			for cand in self.vacuous(job, plan, forward)? {
 				if self.reverse(job, plan, &cand)? {
-					found.push((Self::replacement(plan, &cand), cand));
+					found.push((Self::replacement(plan, &cand), cand, plan));
 				}
 			}
 		}
-		Ok(rank(found))
+		// Search for counterexamples only for the replacements to report (the
+		// costly runs). If one is found, rank the others again: a dropped
+		// candidate can be the one that hid them (the runs are cached).
+		loop {
+			let ranked = rank(
+				found
+					.iter()
+					.enumerate()
+					.map(|(i, (r, c, _))| (r.clone(), c.clone(), i))
+					.collect(),
+			);
+			let mut falsified = None;
+			for (_, cand, i) in &ranked {
+				if self.falsified(job, found[*i].2, cand)? {
+					falsified = Some(*i);
+					break;
+				}
+			}
+			let Some(i) = falsified else {
+				return Ok(ranked.into_iter().map(|(r, c, _)| (r, c)).collect());
+			};
+			let _ = found.remove(i);
+		}
+	}
+
+	/// Whether a search for a counterexample finds one: a solution of the group
+	/// that breaks the candidate, or of the candidate that breaks the group
+	/// (both with the context and the channels). The samples can miss rare
+	/// counterexamples, e.g. the only assignment that breaks `sum(b) <= 29`.
+	/// A run that finds none in the time limit keeps the candidate.
+	fn falsified(&self, job: &Job, plan: &Plan, cand: &Candidate) -> Result<bool> {
+		let group = plan.conjunction();
+		let channels = self.channels(job, cand);
+		for (data, mut body) in self.instances(job, plan) {
+			if let Some(c) = &job.context_text {
+				writeln!(body, "constraint {c};").unwrap();
+			}
+			writeln!(body, "{channels}").unwrap();
+			let mut models = vec![format!(
+				"{body}constraint not ({group});\nconstraint {};\n",
+				cand.call()
+			)];
+			if cand.kind != Kind::Redundant {
+				models.push(format!(
+					"{body}constraint {group};\nconstraint not ({});\n",
+					cand.checked()
+				));
+			}
+			for model in models {
+				let outcome = self.runner.run(
+					&format!("{model}{}", job.search[0]),
+					data.as_deref(),
+					1,
+					true,
+				)?;
+				if outcome.error.is_none() && !outcome.solutions.is_empty() {
+					return Ok(true);
+				}
+			}
+		}
+		Ok(false)
 	}
 
 	/// Candidates that hold on all samples of the group (forward check)
@@ -383,19 +457,8 @@ impl<'a> Checker<'a> {
 	/// Whether all samples of the candidate (with the context) satisfy the
 	/// group (reverse check)
 	fn reverse(&self, job: &Job, plan: &Plan, cand: &Candidate) -> Result<bool> {
-		let conj = plan.group.iter().map(|c| format!("({c})")).join(" /\\ ");
-		// A viewpoint comes with its channelling constraint
-		let channels = job
-			.channels
-			.iter()
-			.filter(|(name, _)| {
-				cand.args.iter().any(|a| {
-					a.strip_prefix(name.as_str())
-						.is_some_and(|rest| rest.is_empty() || rest.starts_with('['))
-				})
-			})
-			.map(|(_, channel)| channel.as_str())
-			.join("\n");
+		let conj = plan.conjunction();
+		let channels = self.channels(job, cand);
 		let mut tested = false;
 		for (data, mut body) in self.instances(job, plan) {
 			if let Some(c) = &job.context_text {
@@ -411,6 +474,7 @@ impl<'a> Checker<'a> {
 					return Ok(false);
 				}
 			}
+			let base = body.len();
 			writeln!(body, "constraint {};", cand.call()).unwrap();
 			match self.sample(&body, &job.search, data, true)? {
 				Sample::Solutions(o) => {
@@ -421,6 +485,14 @@ impl<'a> Checker<'a> {
 				}
 				// Outside the `where` clauses of the leaders
 				Sample::Unsat => {}
+				// Without the candidate the run may still fail (e.g. a leader
+				// of an empty set): then the instance says nothing, as in
+				// `check_candidates`
+				Sample::Error
+					if matches!(
+						self.sample(&body[..base], &job.search, data, true)?,
+						Sample::Error
+					) => {}
 				Sample::Unknown | Sample::Error => return Ok(false),
 			}
 		}
@@ -484,6 +556,13 @@ impl<'a> Checker<'a> {
 		}
 		cands.extend(trivial);
 		Ok(cands)
+	}
+}
+
+impl Plan {
+	/// The parts of the group as one constraint
+	fn conjunction(&self) -> String {
+		self.group.iter().map(|c| format!("({c})")).join(" /\\ ")
 	}
 }
 

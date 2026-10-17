@@ -32,7 +32,7 @@ use shackle_hir::run_hir_phase;
 use shackle_syntax::InputLang;
 
 use super::{
-	candidates::Candidate,
+	candidates::{Blank, Candidate},
 	groups::{Unrolled, Variant},
 	*,
 };
@@ -145,6 +145,37 @@ fn finding_display() {
 	assert_eq!(
 		finding.to_string(),
 		"m.mzn|1|1|1|5;m.mzn|2|1|2|5 [ m.mzn|3|1|3|5 ] all_different(x)"
+	);
+}
+
+#[test]
+fn findings_do_not_need_removed_groups() {
+	let raw = |group: &[usize], context, name: &'static str| RawFinding {
+		group: group.to_vec(),
+		context,
+		replacement: name.to_owned(),
+		candidate: Candidate::raw(name, &[]),
+	};
+	let mut found = vec![
+		raw(&[1], Some(0), "true"),
+		raw(&[0], Some(1), "true"),
+		raw(&[2], Some(0), "g"),
+		raw(&[3], Some(2), "true"),
+		raw(&[2], None, "g"),
+	];
+	removable(&mut found);
+	// The second copy needs the removed first one, and `g` given 0 too
+	let kept = found
+		.iter()
+		.map(|f| (f.group.clone(), f.context, f.replacement.as_str()))
+		.collect::<Vec<_>>();
+	assert_eq!(
+		kept,
+		[
+			(vec![0], Some(1), "true"),
+			(vec![2], None, "g"),
+			(vec![3], Some(2), "true"),
+		]
 	);
 }
 
@@ -264,6 +295,19 @@ fn no_unrolling<R>(
 		fixed: vec![Vec::new(); group.len()],
 	};
 	unrolled(g, group, &variant, f)
+}
+
+#[test]
+fn normalise_inlines_nested_calls_of_the_same_function() {
+	// The inner `f(x)` is an argument of the outer call, not a recursive call
+	let src = r#"
+		function var int: f(var int: a) = a + 1;
+		var 1..5: x;
+		var 1..5: y;
+		constraint f(f(x)) <= y;
+	"#;
+	let printed = with(src, |g| g.print_part(&g.parts[0]));
+	assert!(!printed.contains("f("), "{printed}");
 }
 
 #[test]
@@ -724,6 +768,47 @@ fn solve_context_is_reported() {
 }
 
 #[test]
+fn solve_count_leq_bound_is_not_tightened() {
+	// The group allows up to 29 true values (`b[1]` would make all 30
+	// true), but the samples of the group rarely have more than 19: a bound
+	// from the largest count seen is stronger than the group, which the
+	// reverse check cannot notice. This depends on the samples: a change to
+	// sampling can make it pass while `Candidate::fill` still uses the
+	// largest count seen.
+	let src = r#"
+		array[1..30] of var bool: b;
+		constraint b[1] -> forall(i in 2..30)(b[i]);
+		constraint sum(i in 1..30)(bool2int(b[i])) <= 29;
+	"#;
+	let found = solve(src, 2, &["count"]);
+	let too_strong = found.iter().filter(|f| {
+		f.rsplit_once("<= ")
+			.and_then(|(_, k)| k.parse::<i64>().ok())
+			.is_some_and(|k| k < 29)
+	});
+	assert_eq!(too_strong.count(), 0, "{found:?}");
+}
+
+#[test]
+fn solve_empty_leader_set_is_skipped() {
+	// For `i = n` the set of `j` is empty: that instantiation has no
+	// samples, so it must not fail the reverse check
+	let src = r#"
+		int: n = 3;
+		int: m = 3;
+		array[1..n, 1..n, 1..m] of var 1..m: y;
+		constraint forall(i in 1..n, j in i+1..n, k in 1..m, l in k+1..m)(y[i, j, k] != y[i, j, l]);
+	"#;
+	let found = solve(src, 1, &["all_different"]);
+	assert!(
+		found
+			.iter()
+			.any(|f| f.contains("all_different(y[i, j, ..])")),
+		"{found:?}"
+	);
+}
+
+#[test]
 fn solve_existing_global_is_vacuous() {
 	let src =
 		"include \"all_different.mzn\";\narray[1..4] of var 1..5: x;\nconstraint all_different(x);";
@@ -810,6 +895,34 @@ fn solve_initial_pass_finds_viewpoints() {
 }
 
 #[test]
+fn solve_inlines_enum_and_index_set_parameters() {
+	// Enums and index sets of parameters are no constraints, so `p` is inlined
+	// and its parts are grouped apart
+	for (ty, elem) in [
+		("array[1..4] of var int", "1..4"),
+		("array[int] of var C", "C"),
+	] {
+		let src = format!(
+			"enum C = {{A, B, C2, D}};\narray[1..4] of var {elem}: x;\npredicate p({ty}: a) = forall(i, j in index_set(a) where i < j)(a[i] != a[j]) /\\ a[1] < a[2];\nconstraint p(x);"
+		);
+		let found = solve(&src, 1, &["all_different"]);
+		assert!(
+			found.contains(&"all_different(x)".to_owned()),
+			"{ty}: {found:?}"
+		);
+	}
+}
+
+#[test]
+fn solve_inlining_keeps_parameter_domains() {
+	// `valid(y)` restricts `y` to 1..3 through the parameter's domain, so
+	// it is not redundant even though its body is
+	let src = "predicate valid(var 1..3: x) = x >= 1;\nvar 1..9: y;\nconstraint valid(y);";
+	let found = replacements(globalize(src, &[], &initial(1, &[])));
+	assert!(!found.contains(&"true".to_owned()), "{found:?}");
+}
+
+#[test]
 fn solve_leaders_never_give_true() {
 	// For i = 1 and j = 8 the diagonal is rarely violated on samples
 	let src = "int: n = 8;\narray[1..n] of var 1..n: q;\nconstraint forall(i, j in 1..n where i < j)(q[i] + i != q[j] + j);";
@@ -818,11 +931,53 @@ fn solve_leaders_never_give_true() {
 }
 
 #[test]
+fn solve_locations_are_not_repeated() {
+	// The parts are `a != c`, the argument `a != d` and `c != d`: the call,
+	// the argument and the call again
+	let src = r#"
+		var 1..3: a;
+		var 1..3: c;
+		var 1..3: d;
+		predicate p(var bool: b) = a != c /\ b /\ c != d;
+		constraint p(a != d);
+	"#;
+	let result = globalize(src, &[], &options(3, &["all_different"]));
+	for f in &result.findings {
+		let locations = f
+			.locations
+			.iter()
+			.map(ToString::to_string)
+			.collect::<Vec<_>>();
+		let unique = locations.iter().unique().count();
+		assert_eq!(unique, locations.len(), "{locations:?}");
+	}
+	assert!(!result.findings.is_empty());
+}
+
+#[test]
+fn solve_mutually_redundant_constraints_are_not_both_removed() {
+	// Each copy is redundant given the other, but not both at once
+	let src = "var 1..3: x;\nvar 1..3: y;\nconstraint x < y;\nconstraint x < y;";
+	let found = replacements(globalize(src, &[], &initial(1, &[])));
+	let redundant = found.iter().filter(|f| *f == "true").count();
+	assert!(redundant <= 1, "{found:?}");
+}
+
+#[test]
 fn solve_other_names_of_the_same_global_are_not_suggested() {
 	let except_0 = "include \"all_different.mzn\";\narray[1..4] of var 0..4: x;\nconstraint all_different(x, {0});";
 	assert_eq!(solve(except_0, 1, &["all"]), Vec::<String>::new());
 	let greater = "include \"lex_greater.mzn\";\narray[1..3] of var 1..3: x;\narray[1..3] of var 1..3: y;\nconstraint lex_greater(x, y);";
 	assert_eq!(solve(greater, 1, &["lex"]), Vec::<String>::new());
+}
+
+#[test]
+fn solve_rarely_violated_constraint_is_not_redundant() {
+	// Only the assignment with all 30 values true violates it, which the
+	// samples without the constraint do not reach
+	let src = "array[1..30] of var bool: b;\nconstraint sum(i in 1..30)(bool2int(b[i])) <= 29;";
+	let found = replacements(globalize(src, &[], &initial(1, &[])));
+	assert!(!found.contains(&"true".to_owned()), "{found:?}");
 }
 
 #[test]
@@ -845,6 +1000,29 @@ fn solve_redundant_group_is_true() {
 	assert_eq!(solve(src), ["true"]);
 	let src = "array[1..3] of var 1..3: x;\nconstraint x[1] >= 2;";
 	assert!(solve(src).is_empty());
+}
+
+#[test]
+fn solve_replacements_do_not_use_a_removed_context() {
+	// `x[1] <= x[2]` is redundant given `x[1] < x[2]`, which is
+	// `all_different(x)` only given the first
+	let src = "array[1..2] of var 1..3: x;\nconstraint x[1] <= x[2];\nconstraint x[1] < x[2];";
+	let result = globalize(src, &[], &initial(1, &["all_different"]));
+	let removed = result
+		.findings
+		.iter()
+		.filter(|f| f.replacement == "true")
+		.flat_map(|f| f.locations.iter().map(ToString::to_string))
+		.collect::<Vec<_>>();
+	assert!(!removed.is_empty(), "{:?}", shown(&result));
+	for f in &result.findings {
+		let context = f.context.as_ref().map(ToString::to_string);
+		assert!(
+			!context.is_some_and(|c| removed.contains(&c)),
+			"{:?}",
+			shown(&result)
+		);
+	}
 }
 
 #[test]
@@ -1061,6 +1239,35 @@ fn solve_test_templates_match_the_globals() {
 }
 
 #[test]
+fn solve_undefined_feature_keeps_the_samples() {
+	// `max(x)` of the empty `x` is undefined, which makes the run
+	// unsatisfiable: the instance still has samples for the other candidate
+	let src = r#"
+		int: n = 0;
+		array[1..n] of var 1..3: x;
+		var 1..3: z;
+		constraint forall(i in 1..n)(x[i] <= z);
+	"#;
+	let kept = with(src, |g| {
+		no_unrolling(g, &[0], |u| {
+			let (preamble, search) = submodel(g, u);
+			let base = format!("{preamble}constraint {};\n", g.print_part(&g.parts[0]));
+			let mut maximum = Candidate::raw("maximum", &["0", "x"]);
+			maximum.blank = Some((0, Blank::Max(1)));
+			let cands = vec![Candidate::raw("all_different", &["x"]), maximum];
+			g.checker
+				.check_candidates(&base, &search, &None, cands)
+				.unwrap()
+		})
+	});
+	let kept = kept.expect("the instance has samples");
+	assert!(
+		kept.contains(&Candidate::raw("all_different", &["x"])),
+		"{kept:?}"
+	);
+}
+
+#[test]
 fn solve_unsatisfiable_group_is_skipped() {
 	let src =
 		"array[1..4] of var 1..3: x;\nconstraint forall(i, j in 1..4 where i < j)(x[i] != x[j]);";
@@ -1217,6 +1424,18 @@ fn unrolled_parts_and_leaders() {
         ),
     ]
 "#]].assert_debug_eq(&printed);
+}
+
+#[test]
+fn variants_do_not_fix_var_set_loops() {
+	// A leader over `s` would be a variable, but leaders must be par
+	let src = r#"
+		var set of 1..3: s;
+		array[1..3, 1..3] of var 1..3: x;
+		constraint forall(i in s)(x[i, 1] != x[i, 2]);
+	"#;
+	let variants = with(src, |g| printed_variants(g, &[0]));
+	assert_eq!(variants, ["[]"]);
 }
 
 #[test]
