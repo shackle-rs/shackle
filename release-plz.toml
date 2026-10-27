@@ -1,7 +1,7 @@
 [workspace]
 changelog_update = false # disable automatic changelog update
-git_tag_name = "{{ package }}-v{{ version }}"
-git_release_name = "{{ package }}-v{{ version }}"
+git_release_name = "{{ package }}-v{{ version }}" 
+git_tag_name = "{{ package }}-v{{ version }}" 
 
 ### DISABLE PACKAGES NOT READY FOR RELEASE ###
 [[package]]
@@ -21,12 +21,16 @@ name = "shackle-fmt"
 release = false
 
 [[package]]
+name = "shackle-globalizer"
+release = false
+
+[[package]]
 name = "shackle-hir"
 release = false
 
 [[package]]
-name = "shackle-ls"
 git_only = true
+name = "shackle-ls"
 publish = false
 
 [[package]]
@@ -62,6 +66,6 @@ name = "tree-sitter-minizinc"
 release = false
 
 [[package]]
-name = "shackle-wasm"
 git_only = true
+name = "shackle-wasm"
 publish = false
