@@ -496,6 +496,40 @@ fn test_class_set_attribute_input() {
 	);
 }
 
+/// The elements of a comprehension over a var set, or with a var `where`
+/// clause, are var and optional. An array, tuple or record has no such type, as
+/// only its elements or fields can be var.
+#[test]
+fn test_var_opt_structured_comprehension() {
+	let mut tester = TypeTester::new();
+	for (template, ty) in [
+		("[i, i]", "array [int] of int"),
+		("(i, i)", "tuple(int, int)"),
+		("(a: i, b: i)", "record(int: a, int: b)"),
+	] {
+		tester.check_error_message(
+			&format!("var set of 1..3: s; any: x = [{template} | i in s];"),
+			"Illegal type",
+			&format!("array [..] of var opt {ty}"),
+		);
+		tester.check_error_message(
+			&format!("var bool: p; any: x = [{template} | i in 1..3 where p];"),
+			"Illegal type",
+			&format!("array [..] of var opt {ty}"),
+		);
+	}
+	// Also through `A.x` on a var set of objects
+	tester.check_error_message(
+		r#"
+		class A (array [1..2] of var 1..3: v);
+		var set(1..2) of new A: as;
+		any: x = A.v;
+		"#,
+		"Illegal type",
+		"array [A] of var opt array [int] of var int",
+	);
+}
+
 /// An indexed comprehension over a class is indexed by the par class, also
 /// when it iterates over a var set of the class, whose generator binds `var`
 /// objects so that their attributes read as var.

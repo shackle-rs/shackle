@@ -703,7 +703,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		}
 		let el = self.collect_expression(c.template);
 		let element = if lift_to_opt {
-			el.make_opt(db).make_var(db).unwrap_or_else(|| {
+			var_opt(db, el).unwrap_or_else(|| {
 				let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
 				self.ctx.add_diagnostic(
 					db,
@@ -1538,7 +1538,7 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 					field,
 				);
 				let el = if let VarType::Var = set_var {
-					attribute.make_opt(db).make_var(db)
+					var_opt(db, attribute)
 				} else {
 					Some(attribute)
 				};
@@ -3601,5 +3601,16 @@ supported in operation types."
 	) -> Vec<PatternRef<'db>> {
 		let scope = self.item.scope(self.db);
 		scope.find_function(self.db, expression, identifier)
+	}
+}
+
+/// The type of an element of a comprehension over a var set: present only if
+/// its generator value is in the set, so var and optional. An array, tuple or
+/// record can't be absent depending on a decision, as only its elements or
+/// fields can be var, so there is no such type for them (as in MiniZinc).
+fn var_opt<'db>(db: &'db dyn Db, ty: Ty<'db>) -> Option<Ty<'db>> {
+	match ty.lookup(db) {
+		TyData::Array { .. } | TyData::Tuple(..) | TyData::Record(..) => None,
+		_ => ty.make_opt(db).make_var(db),
 	}
 }
