@@ -469,6 +469,33 @@ fn test_class_typecheck() {
 	);
 }
 
+/// A set of references is given as a set in the model, but the members of a
+/// `set of new` are given as an array of input records: records cannot form a
+/// set, and two equal records must still introduce two objects.
+#[test]
+fn test_class_set_attribute_input() {
+	let mut tester = TypeTester::new();
+	tester.check_error(
+		r#"
+		class C (1..3: c);
+		class A (set of C: rs; set of new C: cs);
+		new C: c1 = (c: 1);
+		new A: a = (rs: {c1, c1}, cs: [(c: 2), (c: 2)]);
+		"#,
+		expect!(""),
+	);
+	tester.check_error_message(
+		r#"
+		class C (1..3: c);
+		class A (set of C: rs);
+		new C: c1 = (c: 1);
+		new A: a = (rs: [c1]);
+		"#,
+		"Type mismatch",
+		"Expected 'record(set of C: rs)' but got 'record(array [int] of C: rs)'",
+	);
+}
+
 #[test]
 fn test_class_type_errors() {
 	let mut tester = TypeTester::new();
