@@ -1868,12 +1868,23 @@ impl<'db> ItemCollector<'db> {
 			} else {
 				input_record_ty
 			};
+			// A reference written in the model lowers to the referenced
+			// object's `<X>_potential` identity, so the inputs must be typed
+			// by it too. A record read from data keeps the class type, which
+			// the data reader resolves ids against.
+			let inputs_elem_ty = if data_root {
+				lowered_input_record_ty
+			} else {
+				collector
+					.parent
+					.substitute_class_with_potential_enum(lowered_input_record_ty)
+			};
 			let array_dom = Domain::array(
 				collector.parent.db,
 				item,
 				OptType::NonOpt,
 				Domain::unbounded(collector.parent.db, item, Ty::par_int(collector.parent.db)),
-				Domain::unbounded(collector.parent.db, item, lowered_input_record_ty),
+				Domain::unbounded(collector.parent.db, item, inputs_elem_ty),
 			);
 			let mut array_decl = Declaration::new(true, array_dom);
 			let inputs_name = format!("{}_inputs", class_and_decl_name);
@@ -1909,7 +1920,7 @@ impl<'db> ItemCollector<'db> {
 				);
 				record
 			} else {
-				alloc_expression(DummyValue(lowered_input_record_ty), &collector, item)
+				alloc_expression(DummyValue(inputs_elem_ty), &collector, item)
 			};
 			array_decl.set_definition(alloc_expression(
 				ArrayLiteral(vec![input_value]),
@@ -2402,10 +2413,23 @@ impl<'db> ItemCollector<'db> {
 				free_storage_record_ty
 					.with_inst(collector.parent.db, VarType::Var)
 					.unwrap_or(free_storage_record_ty)
-			} else if set_root_opt_new_input {
-				collector.parent.lower_opt_new_input_ty(input_record_ty)
 			} else {
-				input_record_ty
+				let input_ty = if set_root_opt_new_input {
+					collector.parent.lower_opt_new_input_ty(input_record_ty)
+				} else {
+					input_record_ty
+				};
+				// A reference written in the model lowers to the referenced
+				// object's `<X>_potential` identity, so the inputs must be
+				// typed by it too. Records read from data keep the class
+				// type, which the data reader resolves ids against.
+				if data_root {
+					input_ty
+				} else {
+					collector
+						.parent
+						.substitute_class_with_potential_enum(input_ty)
+				}
 			};
 			let elem_dom = if scalar_storage_only_var_root {
 				collector
