@@ -132,6 +132,11 @@ fn solve_enum_constructor_index() {
 	check_solve("enum_constructor_index", true, false);
 }
 
+#[test]
+fn solve_enum_equality() {
+	check_solve("enum_equality", true, false);
+}
+
 /// The interpreter's output has to be read as it is produced, so a solution
 /// bigger than the pipe's buffer must not deadlock the run. The expected output
 /// is too big to keep in a file, and a regression makes the solve hang rather
@@ -406,4 +411,9 @@ fn solve_object_round_trip() {
 		.join("\n");
 	std::fs::write(&data, assignments).unwrap();
 	check_solve_with_data("objects/17_round_trip_data", &[data], false, false);
+}
+
+#[test]
+fn solve_object_var_reference_equality() {
+	check_solve("objects/23_var_reference_equality", true, false);
 }

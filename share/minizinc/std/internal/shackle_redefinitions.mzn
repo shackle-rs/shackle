@@ -323,6 +323,10 @@ function var bool: '='(bool: x, var bool: y) = x <-> y;
 
 % Equality for integers
 
+function var bool: '='(var $$E: x, var $$E: y) = mzn_int_eq(enum2int(x), enum2int(y));
+function var bool: '='(var $$E: x, $$E: y) = mzn_int_eq(enum2int(x), enum2int(y));
+function var bool: '='($$E: x, var $$E: y) = mzn_int_eq(enum2int(x), enum2int(y));
+
 function var bool: '='(var int: x, var int: y) = mzn_int_eq(x, y);
 function var bool: '='(var int: x, int: y) = mzn_int_eq(x, y);
 function var bool: '='(int: x, var int: y) = mzn_int_eq(x, y);
