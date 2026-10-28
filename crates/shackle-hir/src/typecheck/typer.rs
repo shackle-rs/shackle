@@ -3375,15 +3375,17 @@ supported in operation types."
 
 			Type::Set { element, .. } => {
 				let element_ty = self.class_type_to_input_record_type(*element)?;
-				if ty.class_type(db).is_some() {
-					// The members of a `set of new C` are object identities, which
-					// cannot be given in data. Keep the array-of-input-records form,
-					// one slot per member; the actual set is derived from those inputs.
+				if self.data[*element].get_new_class(self.data).is_some() {
+					// The members of a `set of new C` are given as input records,
+					// which cannot form a set, and two equal records must still make
+					// two objects. Keep the array-of-input-records form, one slot per
+					// member; the actual set is derived from those inputs.
 					Ty::array(db, self.types.par_int, element_ty)
 				} else {
-					// A plain par set (`set of 0..3`) is an ordinary value, so it maps
-					// to a set-typed input slot and is stored directly. That keeps
-					// `card`, membership and iteration working on read-back.
+					// A plain par set (`set of 0..3`), or a set of references (`set
+					// of C`), is an ordinary value, so it maps to a set-typed input
+					// slot and is stored directly. That keeps `card`, membership and
+					// iteration working on read-back.
 					Ty::par_set(db, element_ty)
 				}
 			}
