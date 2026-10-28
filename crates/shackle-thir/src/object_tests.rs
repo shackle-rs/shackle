@@ -780,6 +780,25 @@ fn object_class_indexed_array_snapshot() {
 	}
 }
 
+/// `A.x` on a class name lowers to the indexed comprehension
+/// `[a: a.x | a in A]`. Each fixture also runs the full transform pipeline.
+#[test]
+fn object_class_name_attribute_access_snapshot() {
+	for name in [
+		"class_name_attribute_access_par",
+		"class_name_attribute_access_var_set",
+		"class_name_attribute_access_kinds",
+		"class_name_attribute_access_var_attribute",
+		"class_name_attribute_access_reference",
+	] {
+		check_snapshot(name);
+		let source = fs::read_to_string(fixtures_dir().join(format!("{name}.mzn"))).unwrap();
+		if let Err(err) = lowering_gate(&source) {
+			panic!("{name} failed the full pipeline:\n{err}");
+		}
+	}
+}
+
 /// Parse, type-check and THIR-lower `source` through the full transform
 /// pipeline. Returns `Ok(())` on a clean run, or `Err(<diagnostic text>)`
 /// for HIR diagnostics, a THIR transform error, or a panic caught via

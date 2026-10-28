@@ -1514,88 +1514,57 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 				}
 			},
 			TyData::Class(var_type, opt_type, class_ref) => {
-				let (var_type, opt_type, class_ref) = (*var_type, *opt_type, *class_ref);
-				match self.lookup_class_attribute(class_ref, field) {
-					Some((owner, mut ty)) => {
-						if let OptType::Opt = opt_type {
-							ty = ty.make_opt(db);
-						}
-						// A var-reached class has its whole storage record varified,
-						// so every read of one of its attributes is var — even
-						// through a par handle. A par `new C: p` declared alongside
-						// a `var new C` elsewhere still projects out of that one var
-						// storage array.
-						// An output context is the exception: the projection reads a
-						// SOLVED value, so it is par whatever the storage inst is,
-						// and the lowering wraps it in `fix`. Par-ifying here is
-						// what makes the rest of an output comprehension par too — a
-						// par `o.children` yields par generator identities, so the
-						// object-array accesses beneath it are par-indexed and
-						// totalise emits the PAR `if_then_else`, which has a par
-						// twin. Leaving it var is what left
-						// `shackle_if_then_else<.. var ..>` in the output with no par
-						// version to call.
-						if self.in_output_item {
-							ty = ty.make_par(db);
-						}
-						let reads_var_storage = !self.in_output_item
-							&& (matches!(var_type, VarType::Var)
-								|| class_pattern_for(db, class_ref)
-									.is_some_and(|p| var_reached_classes(db).contains(&p)));
-						if reads_var_storage {
-							// An array attribute must go through the guarded
-							// element-wise varification: a plain `make_var`
-							// varifies the elements blindly, but a ragged
-							// array (per-object length) must reject the read —
-							// its index set would be decision-dependent.
-							let varified = if matches!(ty.lookup(db), TyData::Array { .. }) {
-								self.varify_array_class_attribute(owner, field, ty)
-							} else {
-								ty.make_var(db)
-							};
-							ty = varified.unwrap_or_else(|| {
-								let (src, span) =
-									ExpressionRef::new(db, self.item, expr).source_span(db);
-								self.ctx.add_diagnostic(
-									db,
-									self.item,
-									IllegalType {
-										src,
-										span,
-										ty: format!("var {}", ty.pretty_print(db)),
-									},
-								);
-								self.types.error
-							});
-						}
-						ty
-					}
-					None => {
+				self.collect_class_attribute_access(expr, *var_type, *opt_type, *class_ref, field)
+			}
+			TyData::Set(set_var, OptType::NonOpt, element) if self.is_class_name(ra.record) => {
+				// `A.x` on a class name `A` is `[a: a.x | a in A]`: the attribute of
+				// every object, indexed by the object. It is typed exactly like that
+				// comprehension, so a var set of objects binds a var object and
+				// lifts the element to var opt (absent objects have no value).
+				let set_var = *set_var;
+				let class_ty = *element;
+				let class_ref = class_ty
+					.class_type(db)
+					.expect("a class name denotes a set of its objects");
+				let binding_var = match class_ty.inst(db) {
+					Some(VarType::Var) => VarType::Var,
+					_ => set_var,
+				};
+				let attribute = self.collect_class_attribute_access(
+					expr,
+					binding_var,
+					OptType::NonOpt,
+					class_ref,
+					field,
+				);
+				let el = if let VarType::Var = set_var {
+					attribute.make_opt(db).make_var(db)
+				} else {
+					Some(attribute)
+				};
+				el.and_then(|el| Ty::array(db, class_ty.make_par(db), el))
+					.unwrap_or_else(|| {
 						let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
 						self.ctx.add_diagnostic(
 							db,
 							self.item,
-							InvalidFieldAccess {
+							IllegalType {
 								src,
 								span,
-								msg: if field == self.identifiers.names.object_id {
-									format!(
-										"The object id of '{}' is only used in data files and \
-										 solutions, and cannot be accessed in the model",
-										class_ref.pretty_print(db)
-									)
-								} else {
-									format!(
-										"No such field {} for '{}'",
-										field.pretty_print(db),
-										class_ref.pretty_print(db)
-									)
-								},
+								ty: format!(
+									"array [{}] of {}{}",
+									class_ty.make_par(db).pretty_print(db),
+									if let VarType::Var = set_var {
+										"var opt "
+									} else {
+										""
+									},
+									attribute.pretty_print(db)
+								),
 							},
 						);
 						self.types.error
-					}
-				}
+					})
 			}
 			TyData::Error => self.types.error,
 			_ => {
@@ -1618,6 +1587,112 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		self.ctx
 			.add_declaration(db, ra.field, PatternTy::RecordField(ty));
 		ty
+	}
+
+	/// Whether `expr` is an identifier naming a class.
+	fn is_class_name(&mut self, expr: ExpressionId<'db>) -> bool {
+		let Expression::Identifier(i) = &self.data[expr] else {
+			return false;
+		};
+		let i = *i;
+		self.find_variable(expr, i).is_some_and(|p| {
+			matches!(
+				self.ctx.type_pattern(self.db, p),
+				PatternTy::ClassDecl { .. }
+			)
+		})
+	}
+
+	/// Type the read of attribute `field` through an object of class `class_ref`.
+	fn collect_class_attribute_access(
+		&mut self,
+		expr: ExpressionId<'db>,
+		var_type: VarType,
+		opt_type: OptType,
+		class_ref: ClassRef<'db>,
+		field: Identifier<'db>,
+	) -> Ty<'db> {
+		let db = self.db;
+		match self.lookup_class_attribute(class_ref, field) {
+			Some((owner, mut ty)) => {
+				if let OptType::Opt = opt_type {
+					ty = ty.make_opt(db);
+				}
+				// A var-reached class has its whole storage record varified,
+				// so every read of one of its attributes is var — even
+				// through a par handle. A par `new C: p` declared alongside
+				// a `var new C` elsewhere still projects out of that one var
+				// storage array.
+				// An output context is the exception: the projection reads a
+				// SOLVED value, so it is par whatever the storage inst is,
+				// and the lowering wraps it in `fix`. Par-ifying here is
+				// what makes the rest of an output comprehension par too — a
+				// par `o.children` yields par generator identities, so the
+				// object-array accesses beneath it are par-indexed and
+				// totalise emits the PAR `if_then_else`, which has a par
+				// twin. Leaving it var is what left
+				// `shackle_if_then_else<.. var ..>` in the output with no par
+				// version to call.
+				if self.in_output_item {
+					ty = ty.make_par(db);
+				}
+				let reads_var_storage = !self.in_output_item
+					&& (matches!(var_type, VarType::Var)
+						|| class_pattern_for(db, class_ref)
+							.is_some_and(|p| var_reached_classes(db).contains(&p)));
+				if reads_var_storage {
+					// An array attribute must go through the guarded
+					// element-wise varification: a plain `make_var`
+					// varifies the elements blindly, but a ragged
+					// array (per-object length) must reject the read —
+					// its index set would be decision-dependent.
+					let varified = if matches!(ty.lookup(db), TyData::Array { .. }) {
+						self.varify_array_class_attribute(owner, field, ty)
+					} else {
+						ty.make_var(db)
+					};
+					ty = varified.unwrap_or_else(|| {
+						let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+						self.ctx.add_diagnostic(
+							db,
+							self.item,
+							IllegalType {
+								src,
+								span,
+								ty: format!("var {}", ty.pretty_print(db)),
+							},
+						);
+						self.types.error
+					});
+				}
+				ty
+			}
+			None => {
+				let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+				self.ctx.add_diagnostic(
+					db,
+					self.item,
+					InvalidFieldAccess {
+						src,
+						span,
+						msg: if field == self.identifiers.names.object_id {
+							format!(
+								"The object id of '{}' is only used in data files and \
+								 solutions, and cannot be accessed in the model",
+								class_ref.pretty_print(db)
+							)
+						} else {
+							format!(
+								"No such field {} for '{}'",
+								field.pretty_print(db),
+								class_ref.pretty_print(db)
+							)
+						},
+					},
+				);
+				self.types.error
+			}
+		}
 	}
 
 	fn collect_if_then_else(&mut self, expr: ExpressionId<'db>, ite: &IfThenElse<'db>) -> Ty<'db> {

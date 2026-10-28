@@ -589,21 +589,66 @@ fn test_class_type_errors() {
     Syntax Error
     Type mismatch"#]),
 	);
-	// Field access off a class NAME (`A.b`, `B.as`) rather than an instance is a
-	// type error, not a lowering gap.
+}
+
+/// `A.x` on a class name `A` is the attribute of every object, typed like
+/// `[a: a.x | a in A]`.
+#[test]
+fn test_class_name_attribute_access() {
+	let mut tester = TypeTester::new();
+	tester.check_expression_preamble(
+		"class A (1..3: x); set of new A: as = [(x: 1), (x: 2)];",
+		"A.x",
+		expect!("array [A] of int"),
+	);
+	tester.check_expression_preamble(
+		"class A (1..3: x); var set(1..2) of new A: as;",
+		"A.x",
+		expect!("array [A] of var opt int"),
+	);
+	// A reference attribute, and an inherited one
+	tester.check_expression_preamble(
+		"class A (opt B: b); class B (1..3: y); set of new A: as = [(b: <>)];",
+		"A.b",
+		expect!("array [A] of opt B"),
+	);
+	tester.check_expression_preamble(
+		"class A (1..3: x); class B extends A (1..3: y); set of new B: bs = [(x: 1, y: 2)];",
+		"B.x",
+		expect!("array [B] of int"),
+	);
+	// An array attribute gives an array of arrays
+	tester.check_expression_preamble(
+		"class A (array [1..2] of 1..3: xs); set of new A: as = [(xs: [1, 2])];",
+		"A.xs",
+		expect!("array [A] of array [int] of int"),
+	);
+	tester.check_error_message(
+		r#"
+		class A (1..3: x);
+		set of new A: as = [(x: 1)];
+		any: y = A.nope;
+		"#,
+		"Invalid field access",
+		"No such field nope for 'A'",
+	);
+	tester.check_error_message(
+		r#"
+		class A (1..3: x);
+		set of new A: as = [(x: 1)];
+		any: y = A.id;
+		"#,
+		"Invalid field access",
+		"The object id of 'A' is only used in data files and solutions",
+	);
+	// Only a class name: any other set of objects is not a record
 	tester.check_error(
 		r#"
-		class A (
-		  opt B: b;
-		);
-		class B (
-		  set of A: as;
-		);
-		constraint association(A.b, B.as);
+		class A (1..3: x);
+		set of new A: as = [(x: 1)];
+		any: y = as.x;
 		"#,
-		expect!([r#"
-    Type mismatch
-    Type mismatch"#]),
+		expect!("Type mismatch"),
 	);
 }
 

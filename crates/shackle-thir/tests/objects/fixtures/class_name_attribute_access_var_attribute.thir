@@ -1,0 +1,22 @@
+enum A_potential = A_occ_0({1}) ++ A_occ_1({1});
+array [int] of record(var '..'(1, 3): v, int: x): A_objects = '++'(A_a1_objects, A_a2_objects);
+set of A_potential: A = array_union([A_occ_0({1}), A_occ_1({1})]);
+array [A_potential] of string: A_ids = array1d(A_potential, '++'(["a1"], ["a2"]));
+array [int] of record(int: x): A_a1_inputs = [(x: 1)];
+int: A_a1_root_start = 1;
+int: A_a1_root_end = 2;
+array [int] of record(var '..'(1, 3): v, int: x): A_a1_objects = [(v: v, x: x) | p in index_set(A_a1_inputs), input = '[]'(A_a1_inputs, p), x = (input).x, v = let {
+  var '..'(1, 3): v_init;
+} in v_init];
+A_potential: a1_ref :: (no_output) = A_occ_0(1);
+array [int] of record(int: x): A_a2_inputs = [(x: 2)];
+array [int] of record(var '..'(1, 3): v, int: x): A_a2_objects = [(v: v, x: x) | p in index_set(A_a2_inputs), input = '[]'(A_a2_inputs, p), x = (input).x, v = let {
+  var '..'(1, 3): v_init;
+} in v_init];
+A_potential: a2_ref :: (no_output) = A_occ_1(1);
+array [A_potential] of var int: vs = [_DECL_1: ('[]'(A_objects, enum2int(_DECL_1))).v | _DECL_1 in A];
+constraint '='(sum(vs), 4);
+output [concat(["[", join(", ", [concat([show('[]'(A_ids, _DECL_2)), ": ", show('[]'([_DECL_3: fix(('[]'(A_objects, enum2int(_DECL_3))).v) | _DECL_3 in A], _DECL_2))]) | _DECL_2 in A]), "]"])];
+record(string: id, int: v, int: x): a1 :: (output_only) :: ('output') = (id: '[]'(A_ids, a1_ref), v: fix(('[]'(A_objects, enum2int(a1_ref))).v), x: ('[]'(A_objects, enum2int(a1_ref))).x);
+record(string: id, int: v, int: x): a2 :: (output_only) :: ('output') = (id: '[]'(A_ids, a2_ref), v: fix(('[]'(A_objects, enum2int(a2_ref))).v), x: ('[]'(A_objects, enum2int(a2_ref))).x);
+solve satisfy;

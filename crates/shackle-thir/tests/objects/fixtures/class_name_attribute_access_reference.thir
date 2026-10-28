@@ -1,0 +1,18 @@
+enum C_potential = C_occ_0({1});
+array [int] of record('..'(1, 3): c): C_objects = C_c1_objects;
+set of C_potential: C = C_occ_0({1});
+array [C_potential] of string: C_ids = array1d(C_potential, ["c1"]);
+enum A_potential = A_occ_1({1});
+array [int] of record(C_potential: r, int: x): A_objects = A_a1_objects;
+set of A_potential: A = A_occ_1({1});
+array [A_potential] of string: A_ids = array1d(A_potential, ["a1"]);
+array [int] of record(int: c): C_c1_inputs = [(c: 1)];
+array [int] of record('..'(1, 3): c): C_c1_objects = C_c1_inputs;
+C_potential: c1_ref :: (no_output) = C_occ_0(1);
+array [int] of record(C_potential: r, int: x): A_a1_inputs = [(x: 1, r: c1_ref)];
+array [int] of record(C_potential: r, int: x): A_a1_objects = [(r: r, x: x) | p in index_set(A_a1_inputs), input = '[]'(A_a1_inputs, p), x = (input).x, r = (input).r];
+A_potential: a1_ref :: (no_output) = A_occ_1(1);
+array [A_potential] of C_potential: refs = [_DECL_1: ('[]'(A_objects, enum2int(_DECL_1))).r | _DECL_1 in A];
+record(int: c, string: id): c1 :: (output_only) :: ('output') = (id: '[]'(C_ids, c1_ref), c: ('[]'(C_objects, enum2int(c1_ref))).c);
+record(string: id, string: r, int: x): a1 :: (output_only) :: ('output') = (id: '[]'(A_ids, a1_ref), r: '[]'(C_ids, ('[]'(A_objects, enum2int(a1_ref))).r), x: ('[]'(A_objects, enum2int(a1_ref))).x);
+solve satisfy;
