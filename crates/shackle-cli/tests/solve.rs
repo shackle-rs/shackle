@@ -272,6 +272,11 @@ fn solve_object_class_indexed_show() {
 }
 
 #[test]
+fn solve_object_class_name_attribute() {
+	check_solve("objects/22_class_name_attribute", false, false);
+}
+
+#[test]
 fn solve_object_data_dzn() {
 	let name = "objects/15_data_objects";
 	check_solve_with_data(name, &[fixture(name, "dzn")], false, false);
