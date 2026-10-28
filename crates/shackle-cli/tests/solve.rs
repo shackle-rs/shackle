@@ -417,3 +417,8 @@ fn solve_object_round_trip() {
 fn solve_object_var_reference_equality() {
 	check_solve("objects/23_var_reference_equality", true, false);
 }
+
+#[test]
+fn solve_object_inline_references() {
+	check_solve("objects/24_inline_references", false, false);
+}
