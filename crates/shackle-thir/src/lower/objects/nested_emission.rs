@@ -328,6 +328,10 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
+	#[allow(
+		clippy::too_many_arguments,
+		reason = "nested reconstruction threads the full per-occurrence context"
+	)]
 	pub(in crate::lower) fn nested_occurrence_sum_expr(
 		&mut self,
 		item: Item<'db>,
@@ -336,10 +340,13 @@ impl<'db> ItemCollector<'db> {
 		record_access: Option<Expression<'db>>,
 		fallback_cardinality: Option<Expression<'db>>,
 		parent_class: PatternRef<'db>,
+		root_pattern: PatternRef<'db>,
+		parent_path: &[Identifier<'db>],
 	) -> Expression<'db> {
 		// When the per-parent slice size is a static constant (the nested
-		// fresh-child case), emit `card(<parent>_potential) * fallback`
-		// directly. Iterating over the parent's storage to sum the same
+		// fresh-child case), emit `card(<parents>) * fallback` directly, where
+		// `<parents>` is the universe of the parent occurrence (at `parent_path`
+		// under the root `root_pattern`). Iterating over the parent's storage to sum the same
 		// constant works mathematically but creates a circular type dependency:
 		// the parent's storage record type references `<child>_potential`,
 		// whose size we're trying to compute, which would then reference the
@@ -373,17 +380,45 @@ impl<'db> ItemCollector<'db> {
 		};
 		if let Some(fallback) = cycle_break_fallback {
 			let class_info = self.objects.class_map[&parent_class];
-			let parent_enum_expr =
-				Expression::new(self.db, &self.model, item, class_info.class_enum);
-			let card_expr = Expression::new(
-				self.db,
-				&self.model,
-				item,
-				LookupCall {
-					function: self.ids.functions.card.into(),
-					arguments: vec![parent_enum_expr],
-				},
-			);
+			// The child objects of an occurrence are built from its parent
+			// occurrence's objects alone, so its universe must be sized by them:
+			// the whole parent class is too big as soon as the class has another
+			// occurrence, such as a second root. A collection root's
+			// constructor is only added after its nested occurrences, so its size
+			// is recorded beforehand. Otherwise, without a constructor, the
+			// class's universe is the best bound.
+			let parent_occurrence = if parent_path.is_empty() {
+				self.top_level_occurrence(root_pattern)
+			} else {
+				self.nested_occurrence(root_pattern, parent_path)
+			};
+			let parent_index = self
+				.occurrence_contribution(parent_occurrence, parent_class)
+				.constructor_index;
+			let card = |parents| {
+				Expression::new(
+					self.db,
+					&self.model,
+					item,
+					LookupCall {
+						function: self.ids.functions.card.into(),
+						arguments: vec![parents],
+					},
+				)
+			};
+			let card_expr =
+				match self.class_enum_constructor_domain(class_info.class_enum, parent_index) {
+					Some(parents) => card(parents),
+					None => match self.objects.root_collection_sizes.get(&parent_occurrence) {
+						Some(size) => size.clone(),
+						None => card(Expression::new(
+							self.db,
+							&self.model,
+							item,
+							class_info.class_enum,
+						)),
+					},
+				};
 			return Expression::new(
 				self.db,
 				&self.model,

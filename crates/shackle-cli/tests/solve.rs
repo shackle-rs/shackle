@@ -513,3 +513,13 @@ fn solve_object_var_opt_class_indexed_output() {
 fn solve_object_names_of_internal_locals() {
 	check_solve("objects/27_names_of_internal_locals", false, false);
 }
+
+#[test]
+fn solve_object_two_par_roots_nested() {
+	check_solve("objects/28_two_par_roots_nested", false, false);
+}
+
+#[test]
+fn solve_object_var_and_par_roots_nested() {
+	check_solve("objects/29_var_and_par_roots_nested", false, false);
+}

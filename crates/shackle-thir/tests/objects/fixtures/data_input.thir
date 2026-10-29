@@ -1,7 +1,7 @@
-enum Leaf_potential = Leaf_occ_1('..'(1, sum([length((i).leaves) | i in nodes]))) ++ Leaf_occ_2('..'(1, '*'(card(Node_potential), 1))) ++ Leaf_occ_5('..'(1, '*'(card(Tree_potential), 1)));
+enum Leaf_potential = Leaf_occ_1('..'(1, sum([length((i).leaves) | i in nodes]))) ++ Leaf_occ_2('..'(1, '*'(length(nodes), 1))) ++ Leaf_occ_5('..'(1, '*'(card({1}), 1)));
 array [int] of record(int: w): Leaf_objects = '++'('++'(Leaf_leaves_objects, Leaf_main_objects), Leaf_top_objects);
 set of Leaf_potential: Leaf = array_union('++'('++'([Leaf_occ_1('..'(1, '-'(Node_nodes_leaves_end, 1)))], [{Leaf_occ_2(_DECL_1)} | _DECL_1 in index_set(Node_nodes_objects)]), [{Leaf_occ_5(_DECL_4)} | _DECL_4 in index_set(Tree_tree_objects)]));
-array [Leaf_potential] of string: Leaf_ids = array1d(Leaf_potential, '++'('++'(mzn_object_data_ids([(_DECL_2).id | r in nodes, _DECL_2 in (r).leaves], ['++'('++'("nodes.leaves[", show(p)), "]") | p in '..'(1, length([(_DECL_2).id | r in nodes, _DECL_2 in (r).leaves]))]), '++'(mzn_object_data_ids([((r).main).id | r in nodes], ['++'('++'("nodes.main[", show(p)), "]") | p in '..'(1, length([((r).main).id | r in nodes]))]), ['++'('++'("nodes.main[", show(p)), "]") | p in '..'('+'(length([((r).main).id | r in nodes]), 1), card('..'(1, '*'(card(Node_potential), 1))))])), '++'(mzn_object_data_ids([((tree).top).id], ["tree.top"]), ['++'('++'("tree.top[", show(p)), "]") | p in '..'('+'(length([((tree).top).id]), 1), card('..'(1, '*'(card(Tree_potential), 1))))])));
+array [Leaf_potential] of string: Leaf_ids = array1d(Leaf_potential, '++'('++'(mzn_object_data_ids([(_DECL_2).id | r in nodes, _DECL_2 in (r).leaves], ['++'('++'("nodes.leaves[", show(p)), "]") | p in '..'(1, length([(_DECL_2).id | r in nodes, _DECL_2 in (r).leaves]))]), '++'(mzn_object_data_ids([((r).main).id | r in nodes], ['++'('++'("nodes.main[", show(p)), "]") | p in '..'(1, length([((r).main).id | r in nodes]))]), ['++'('++'("nodes.main[", show(p)), "]") | p in '..'('+'(length([((r).main).id | r in nodes]), 1), card('..'(1, '*'(length(nodes), 1))))])), '++'(mzn_object_data_ids([((tree).top).id], ["tree.top"]), ['++'('++'("tree.top[", show(p)), "]") | p in '..'('+'(length([((tree).top).id]), 1), card('..'(1, '*'(card({1}), 1))))])));
 set of Leaf_potential: Leaf_data_objects = 'union'('union'(Leaf_occ_1('..'(1, sum([length((i).leaves) | i in nodes]))), Leaf_occ_2('..'(1, length([((r).main).id | r in nodes])))), Leaf_occ_5('..'(1, length([((tree).top).id]))));
 enum Pole_potential = Pole_occ_3('..'(1, sum([length((i).pole) | i in nodes])));
 array [int] of record(int: len): Pole_objects = Pole_pole_objects;
@@ -22,7 +22,7 @@ array [int] of record(int: len): Pole_pole_objects = [(len: len) | i in nodes, k
 int: Node_nodes_leaves_start = 1;
 int: Node_nodes_leaves_end = '+'(Node_nodes_leaves_start, sum([length((i).leaves) | i in nodes]));
 int: Node_nodes_main_start = Node_nodes_leaves_end;
-int: Node_nodes_main_end = '+'(Node_nodes_main_start, '*'(card(Node_potential), 1));
+int: Node_nodes_main_end = '+'(Node_nodes_main_start, '*'(length(nodes), 1));
 int: Node_nodes_root_start = 1;
 int: Node_nodes_root_end = '+'(Node_nodes_root_start, length(nodes));
 int: Node_nodes_pole_start = 1;
@@ -33,7 +33,7 @@ record(opt string: id, record(opt string: id, int: w): top): tree;
 array [int] of record(opt string: id, record(opt string: id, int: w): top): Tree_tree_inputs = [tree];
 array [int] of record(int: w): Leaf_top_objects = [(w: w) | i in Tree_tree_inputs, w = ((i).top).w];
 int: Tree_tree_top_start = Node_nodes_main_end;
-int: Tree_tree_top_end = '+'(Tree_tree_top_start, '*'(card(Tree_potential), 1));
+int: Tree_tree_top_end = '+'(Tree_tree_top_start, '*'(card({1}), 1));
 array [int] of record(Leaf_potential: top): Tree_tree_objects = [(top: top) | p in index_set(Tree_tree_inputs), input = '[]'(Tree_tree_inputs, p), top = Leaf_occ_5(p)];
 Tree_potential: tree_ref :: (no_output) = Tree_occ_4(1);
 string: pick;
