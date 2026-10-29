@@ -1,6 +1,6 @@
 enum B_potential = B_occ_1('..'(1, '*'(card({1}), 1)));
 array [int] of record(int: y): B_objects = B_b_objects;
-set of B_potential: B = array_union([{B_occ_1(_DECL_1)} | _DECL_1 in index_set(A_a_objects)]);
+set of B_potential: B = array_union([B_occ_1('..'(1, '-'(A_a_b_end, 1)))]);
 array [B_potential] of string: B_ids = array1d(B_potential, if '='(card('..'(1, '*'(card({1}), 1))), 1) then ["a.b"] else ['++'('++'("a.b[", show(p)), "]") | p in '..'(1, card('..'(1, '*'(card({1}), 1))))] endif);
 enum A_potential = A_occ_0({1});
 array [int] of record(B_potential: b, int: x): A_objects = A_a_objects;

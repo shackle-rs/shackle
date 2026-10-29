@@ -125,7 +125,7 @@ fn attribute_is_set_shaped<'db>(data: &ItemData<'db>, ty: TypeId<'db>) -> bool {
 ///
 /// This is the same mechanism scope collection uses for `extends`, and it
 /// avoids depending on type inference.
-fn resolve_class<'db>(
+pub(crate) fn resolve_class<'db>(
 	db: &'db dyn Db,
 	data: &ItemData<'db>,
 	expr: ExpressionId<'db>,
@@ -139,6 +139,8 @@ fn resolve_class<'db>(
 
 /// A `new` attribute declared by a class, as seen from the AST alone.
 struct NewAttribute<'db> {
+	/// The attribute's name.
+	attribute: Identifier<'db>,
 	/// The class whose objects the attribute introduces.
 	introduced: PatternRef<'db>,
 	/// Whether the attribute is a set/array of `new` rather than a singular `new`.
@@ -179,6 +181,7 @@ fn class_nodes<'db>(db: &'db dyn Db) -> Map<PatternRef<'db>, ClassNode<'db>> {
 					continue;
 				};
 				new_attributes.push(NewAttribute {
+					attribute: data[decl.pattern].identifier().unwrap(),
 					introduced,
 					set_shaped: attribute_is_set_shaped(data, decl.declared_type),
 					var_set: introduces_var_existence(data, decl.declared_type),
@@ -202,6 +205,73 @@ fn class_nodes<'db>(db: &'db dyn Db) -> Map<PatternRef<'db>, ClassNode<'db>> {
 		}
 	}
 	nodes
+}
+
+/// How many objects a `new` attribute or declaration introduces.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum NewShape {
+	/// `new C`: one object
+	Singular,
+	/// `opt new C`: zero or one object
+	Opt,
+	/// `set of new C`: any number of objects
+	Collection,
+}
+
+impl NewShape {
+	/// The shape of a declared `new` type
+	pub fn of<'db>(data: &ItemData<'db>, ty: TypeId<'db>) -> Self {
+		match &data[ty] {
+			Type::New {
+				opt: OptType::Opt, ..
+			} => NewShape::Opt,
+			Type::New { .. } => NewShape::Singular,
+			_ => NewShape::Collection,
+		}
+	}
+}
+
+/// An object-introducing (`new`) attribute of a class.
+#[derive(Clone, Debug)]
+pub struct OwnedChild<'db> {
+	/// The attribute's name.
+	pub attribute: Identifier<'db>,
+	/// The class of the child objects.
+	pub class: PatternRef<'db>,
+	/// How many child objects it introduces.
+	pub shape: NewShape,
+}
+
+/// Each class's superclass and owned children (its `new` attributes, inherited
+/// ones included), from the AST and the global scope alone.
+pub fn class_owned_children<'db>(
+	db: &'db dyn Db,
+) -> Map<PatternRef<'db>, (Option<PatternRef<'db>>, Vec<OwnedChild<'db>>)> {
+	let nodes = class_nodes(db);
+	nodes
+		.iter()
+		.map(|(class, node)| {
+			let mut children = Vec::new();
+			let mut ancestor = Some(*class);
+			let mut seen = Set::default();
+			while let Some(c) = ancestor.filter(|c| seen.insert(*c)) {
+				let Some(n) = nodes.get(&c) else { break };
+				children.extend(n.new_attributes.iter().map(|a| OwnedChild {
+					attribute: a.attribute,
+					class: a.introduced,
+					shape: if a.singular_opt {
+						NewShape::Opt
+					} else if a.set_shaped {
+						NewShape::Collection
+					} else {
+						NewShape::Singular
+					},
+				}));
+				ancestor = n.superclass;
+			}
+			(*class, (node.superclass, children))
+		})
+		.collect()
 }
 
 /// Every top-level declaration which introduces objects, as (class, declared type).

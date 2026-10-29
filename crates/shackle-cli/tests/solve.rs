@@ -528,3 +528,8 @@ fn solve_object_var_and_par_roots_nested() {
 fn solve_object_reference_into_same_data() {
 	check_solve("objects/30_reference_into_same_data", false, false);
 }
+
+#[test]
+fn solve_object_reference_into_same_data_children() {
+	check_solve("objects/31_reference_into_same_data_children", false, false);
+}

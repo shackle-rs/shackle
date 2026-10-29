@@ -355,6 +355,27 @@ impl<'db> ItemCollector<'db> {
 		child_class: PatternRef<'db>,
 		contribution_index: usize,
 	) -> Option<Expression<'db>> {
+		self.par_contribution_block_set_as(
+			item,
+			child_class,
+			contribution_index,
+			child_class,
+			contribution_index,
+		)
+	}
+
+	/// The identities of the block of `child_class`'s contribution
+	/// `contribution_index`, as the constructor `member_index` of
+	/// `member_class`: `<member>_occ_<j>('..'(1, <end> - <start>))`, for a
+	/// projection of the block onto a superclass, whose slots correspond 1:1
+	pub(in crate::lower) fn par_contribution_block_set_as(
+		&mut self,
+		item: Item<'db>,
+		child_class: PatternRef<'db>,
+		contribution_index: usize,
+		member_class: PatternRef<'db>,
+		member_index: usize,
+	) -> Option<Expression<'db>> {
 		// Stdlib-less models (the `ignore_stdlib` snapshot harness) have no
 		// `'-'`/`'..'` to build the block arithmetic with — fall back like
 		// any other underivable piece rather than failing the lookup.
@@ -422,8 +443,8 @@ impl<'db> ItemCollector<'db> {
 			},
 		);
 		let member = EnumMemberId::new(
-			self.objects.class_map[&child_class].class_enum,
-			contribution_index as u32,
+			self.objects.class_map[&member_class].class_enum,
+			member_index as u32,
 		);
 		Some(Expression::new(
 			self.db,
@@ -579,6 +600,19 @@ impl<'db> ItemCollector<'db> {
 					parent_index_ty,
 					child_enum_member,
 				);
+				// Every slot of a par parent has its child, so the children
+				// are the whole block. Unlike the parents' objects, the block
+				// doesn't depend on their data, whose references may refer to
+				// these children.
+				if !*opt
+					&& realised.is_none()
+					&& let Some(block) = self.par_contribution_block_image(
+						item,
+						child_class,
+						intro.child_contribution_index,
+					) {
+					return Some(block);
+				}
 				let guard = if *opt {
 					let occurs = Expression::new(
 						self.db,
@@ -653,6 +687,51 @@ impl<'db> ItemCollector<'db> {
 		direct_class: PatternRef<'db>,
 		direct_constructor_index: usize,
 	) -> Option<Expression<'db>> {
+		// All slots realised: the image of the direct class's whole block (or,
+		// if it isn't chained, of its constructor's domain), which unlike its
+		// objects doesn't depend on their data
+		if !self
+			.objects
+			.plan
+			.var_actual_set_classes
+			.contains(&direct_class)
+		{
+			let block = self
+				.par_contribution_block_set_as(
+					item,
+					direct_class,
+					direct_constructor_index,
+					super_class,
+					super_constructor_index,
+				)
+				.or_else(|| {
+					let domain = self.class_enum_constructor_domain(
+						self.objects.class_map[&direct_class].class_enum,
+						direct_constructor_index,
+					)?;
+					let member = EnumMemberId::new(
+						self.objects.class_map[&super_class].class_enum,
+						super_constructor_index as u32,
+					);
+					Some(Expression::new(
+						self.db,
+						&self.model,
+						item,
+						Call {
+							function: Callable::EnumConstructor(member),
+							arguments: vec![domain],
+						},
+					))
+				});
+			if let Some(block) = block {
+				return Some(Expression::new(
+					self.db,
+					&self.model,
+					item,
+					ArrayLiteral(vec![block]),
+				));
+			}
+		}
 		let direct_decl_idx =
 			self.class_object_contribution_declaration(direct_class, direct_constructor_index)?;
 		let direct_expr = Expression::new(

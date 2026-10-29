@@ -4,7 +4,7 @@ set of B_potential: B = B_occ_0({1});
 array [B_potential] of string: B_ids = array1d(B_potential, ["b"]);
 enum A_potential = A_occ_0({1});
 array [int] of record(var '..'(0, 2): x): A_objects = A_B_b_objects;
-set of A_potential: A = array_union([{A_occ_0(_DECL_1)} | _DECL_1 in index_set(B_b_objects)]);
+set of A_potential: A = array_union([A_occ_0({1})]);
 array [A_potential] of string: A_ids = array1d(A_potential, ["b"]);
 array [{1}] of record(var '..'(0, 2): x, var '..'(0, 2): y): B_b_storage :: (no_output);
 int: B_b__start = 1;
