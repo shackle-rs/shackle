@@ -137,6 +137,11 @@ fn solve_enum_equality() {
 	check_solve("enum_equality", true, false);
 }
 
+#[test]
+fn solve_opt_domain_absent() {
+	check_solve("opt_domain_absent", true, false);
+}
+
 /// The interpreter's output has to be read as it is produced, so a solution
 /// bigger than the pipe's buffer must not deadlock the run. The expected output
 /// is too big to keep in a file, and a regression makes the solve hang rather
@@ -436,4 +441,9 @@ fn solve_object_var_reference_equality() {
 #[test]
 fn solve_object_inline_references() {
 	check_solve("objects/24_inline_references", false, false);
+}
+
+#[test]
+fn solve_object_var_opt_new_child_in_var_set() {
+	check_solve("objects/25_var_opt_new_child_in_var_set", true, false);
 }
