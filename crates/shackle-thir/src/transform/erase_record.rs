@@ -2,7 +2,8 @@
 //!
 //! Records should already have been sorted, so we can just turn them directly into tuples.
 use shackle_diagnostics::Result;
-use shackle_hir::{IntegerLiteral, OptType};
+use shackle_hir::{BooleanLiteral, IntegerLiteral, OptType};
+use shackle_ty::Ty;
 use shackle_utils::maybe_grow_stack;
 
 use crate::{
@@ -39,7 +40,16 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for RecordEraser<'
 						.map(|(i, e)| (*i, self.fold_expression(db, model, e)))
 						.collect::<Vec<_>>();
 					pairs.sort_by_key(|(i, _)| i.lookup(db));
-					let fields = pairs.into_iter().map(|(_, e)| e).collect();
+					let mut fields: Vec<_> = pairs.into_iter().map(|(_, e)| e).collect();
+					if fields.is_empty() {
+						// MiniZinc has no empty tuple, so `()` becomes `(true,)`
+						fields.push(Expression::new(
+							db,
+							&self.model,
+							origin,
+							BooleanLiteral(true),
+						));
+					}
 					let mut e = Expression::new(db, &self.model, origin, TupleLiteral(fields));
 					e.annotations_mut().extend(
 						expression
@@ -87,10 +97,13 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for RecordEraser<'
 			let origin = domain.origin();
 			match &**domain {
 				DomainData::Record(items) => {
-					let fields = items
+					let mut fields = items
 						.iter()
 						.map(|(_, d)| self.fold_domain(db, model, d))
 						.collect::<Vec<_>>();
+					if fields.is_empty() {
+						fields.push(Domain::unbounded(db, origin, Ty::par_bool(db)));
+					}
 					Domain::tuple(db, origin, OptType::NonOpt, fields)
 				}
 				_ => fold_domain(self, db, model, domain),
@@ -147,6 +160,22 @@ mod tests {
     tuple(float, int): x = (2.5, 1);
     int: y = (x).2;
     float: z = (x).1;
+    solve satisfy;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_empty_record_erasure() {
+		check_no_stdlib(
+			Transform::EraseRecord,
+			r#"
+                any: x = ();
+                any: y = (foo: (), bar: 1);
+            "#,
+			expect!([r#"
+    tuple(bool): x = (true,);
+    tuple(int, tuple(bool)): y = (1, (true,));
     solve satisfy;
 "#]),
 		);
