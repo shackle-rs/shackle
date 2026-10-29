@@ -533,3 +533,8 @@ fn solve_object_reference_into_same_data() {
 fn solve_object_reference_into_same_data_children() {
 	check_solve("objects/31_reference_into_same_data_children", false, false);
 }
+
+#[test]
+fn solve_object_empty_record_data() {
+	check_solve("objects/32_empty_record_data", false, false);
+}
