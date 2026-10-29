@@ -31,6 +31,7 @@ pub mod input;
 pub mod interface;
 pub mod ir;
 pub mod lower;
+mod object_cycles;
 pub mod object_validation;
 pub mod overloading;
 pub mod pattern_matching;

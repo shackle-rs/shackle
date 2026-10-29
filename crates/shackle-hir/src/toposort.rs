@@ -17,6 +17,7 @@ use crate::{
 	diagnostics::Errors,
 	ids::{ExpressionRef, NodeRef, PatternRef},
 	lower::lower_models,
+	object_cycles::check_object_cycles,
 };
 
 /// Topologically sort items
@@ -50,6 +51,7 @@ pub fn topological_sort<'db>(db: &'db dyn Db) -> Vec<Item<'db>> {
 	for item in items.iter() {
 		topo_sorter.run(*item);
 	}
+	check_object_cycles(db, &items);
 
 	topo_sorter.finish()
 }
