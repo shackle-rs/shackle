@@ -58,8 +58,10 @@ predicate mzn_var_dom(var int: x, set of int: s) =
 	if has_bounds(x) /\ dom(x) subset s then true else x in s endif;
 
 test mzn_var_dom(opt int: x, set of int: s) = absent(x) \/ deopt(x) in s;
+% The value of an absent `x` is constrained too (by the channel), so it is read with
+% `mzn_destruct_opt`: `deopt` is undefined for an absent `x`, which would fail the domain.
 predicate mzn_var_dom(var opt int: x, set of int: s) =
-	mzn_var_dom(deopt(x), mzn_opt_domain(s)) /\ mzn_opt_channel(x, s);
+	mzn_var_dom(mzn_destruct_opt(x).2, mzn_opt_domain(s)) /\ mzn_opt_channel(x, s);
 test mzn_var_dom(set of int: x, set of int: s) = x subset s;
 predicate mzn_var_dom(var set of int: x, set of int: s) =
 	if has_ub_set(x) /\ ub(x) subset s then true else x subset s endif;
@@ -85,7 +87,7 @@ predicate mzn_var_dom(var float: x, set of float: s) = x in s;
 
 test mzn_var_dom(opt float: x, set of float: s) = absent(x) \/ deopt(x) in s;
 predicate mzn_var_dom(var opt float: x, set of float: s) =
-	mzn_var_dom(deopt(x), mzn_opt_domain(s)) /\ mzn_opt_channel(x, s);
+	mzn_var_dom(mzn_destruct_opt(x).2, mzn_opt_domain(s)) /\ mzn_opt_channel(x, s);
 
 test mzn_var_dom(set of float: x, set of float: s) = x subset s;
 
