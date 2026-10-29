@@ -193,6 +193,11 @@ fn solve_opt_domain_absent() {
 	check_solve("opt_domain_absent", true, false);
 }
 
+#[test]
+fn solve_opt_array_output() {
+	check_solve("opt_array_output", true, false);
+}
+
 /// The interpreter's output has to be read as it is produced, so a solution
 /// bigger than the pipe's buffer must not deadlock the run. The expected output
 /// is too big to keep in a file, and a regression makes the solve hang rather
@@ -497,4 +502,9 @@ fn solve_object_inline_references() {
 #[test]
 fn solve_object_var_opt_new_child_in_var_set() {
 	check_solve("objects/25_var_opt_new_child_in_var_set", true, false);
+}
+
+#[test]
+fn solve_object_var_opt_class_indexed_output() {
+	check_solve("objects/26_var_opt_class_indexed_output", true, false);
 }
