@@ -1439,9 +1439,26 @@ impl<'db> ItemCollector<'db> {
 					// nested child collection is identity-shaped. Capture
 					// it for the slice array emission below.
 					captured_max_card_per_parent = fallback_cardinality.clone();
+					let (size_generators, record_access) = collector
+						.parent
+						.nested_structure_walk(
+							item,
+							nested_iteration_expr,
+							&record_access,
+							root_pattern,
+							source_occurrence,
+							&attrib_path,
+							*a,
+							local_domain_source,
+							attrib_class_pattern_ref,
+							*declared_type,
+							class_item_data,
+							&class_item_types,
+						)
+						.unwrap_or((generators.clone(), record_access));
 					collector.parent.nested_occurrence_sum_expr(
 						item,
-						generators.clone(),
+						size_generators,
 						local_domain_source,
 						record_access,
 						fallback_cardinality,
@@ -1639,6 +1656,23 @@ impl<'db> ItemCollector<'db> {
 						attrib_class_pattern_ref.item(collector.parent.db),
 						&class_item_types,
 					);
+				let (generators, record_access) = collector
+					.parent
+					.nested_structure_walk(
+						item,
+						nested_iteration_expr,
+						&record_access,
+						root_pattern,
+						source_occurrence,
+						&attrib_path,
+						*attrib,
+						local_domain_source,
+						attrib_class_pattern_ref,
+						*declared_type,
+						class_item_data,
+						&class_item_types,
+					)
+					.unwrap_or((generators, record_access));
 				let sum = collector.parent.nested_occurrence_sum_expr(
 					item,
 					generators,
@@ -1914,7 +1948,7 @@ impl<'db> ItemCollector<'db> {
 			let mut array_decl = Declaration::new(true, array_dom);
 			let inputs_name = format!("{}_inputs", class_and_decl_name);
 			array_decl.set_name(Identifier::new(collector.parent.db, inputs_name));
-			let input_value = if let Some(rhs) = d.definition {
+			let collect_input = |collector: &mut ExpressionCollector<'db, '_, '_, '_>, rhs| {
 				let collected = collector.collect_expression(rhs);
 				if opt_new_input {
 					collector
@@ -1923,6 +1957,14 @@ impl<'db> ItemCollector<'db> {
 				} else {
 					collected
 				}
+			};
+			// Collected again, as the structure must not share its locals
+			let structure = d
+				.definition
+				.filter(|_| !data_root)
+				.map(|rhs| collect_input(&mut collector, rhs));
+			let input_value = if let Some(rhs) = d.definition {
+				collect_input(&mut collector, rhs)
 			} else if data_root {
 				// The object record, read from data under the user's name.
 				let mut data_decl = Declaration::new(
@@ -1957,6 +1999,15 @@ impl<'db> ItemCollector<'db> {
 				.parent
 				.model
 				.add_declaration(DeclarationItem::new(array_decl, item));
+			if let Some(structure) = structure {
+				let structure = alloc_expression(ArrayLiteral(vec![structure]), &collector, item);
+				collector.parent.register_inputs_structure(
+					item,
+					inputs_idx,
+					class_pattern_ref,
+					structure,
+				);
+			}
 			alloc_expression(inputs_idx, &collector, item)
 		};
 		let enum_constr_domain = Domain::bounded(
@@ -2486,27 +2537,41 @@ impl<'db> ItemCollector<'db> {
 				)
 			};
 			array_decl.set_name(array_name);
+			let mut structure = None;
 			if matches!(inst, VarType::Par)
 				&& let Some(rhs) = d.definition
 			{
-				let inputs = collector.collect_expression(rhs);
-				let inputs = if set_root_opt_new_input {
-					collector.parent.lower_opt_new_input_collection_value(
-						item,
-						inputs,
-						input_record_ty,
-					)
-				} else {
-					inputs
+				let collect_inputs = |collector: &mut ExpressionCollector<'db, '_, '_, '_>| {
+					let inputs = collector.collect_expression(rhs);
+					if set_root_opt_new_input {
+						collector.parent.lower_opt_new_input_collection_value(
+							item,
+							inputs,
+							input_record_ty,
+						)
+					} else {
+						inputs
+					}
 				};
-				array_decl.set_definition(inputs);
+				array_decl.set_definition(collect_inputs(&mut collector));
+				// Collected again, as the structure must not share its locals
+				if !scalar_storage_only_var_root && !data_root {
+					structure = Some(collect_inputs(&mut collector));
+				}
 			}
-			Some(
-				collector
-					.parent
-					.model
-					.add_declaration(DeclarationItem::new(array_decl, item)),
-			)
+			let inputs_idx = collector
+				.parent
+				.model
+				.add_declaration(DeclarationItem::new(array_decl, item));
+			if let Some(structure) = structure {
+				collector.parent.register_inputs_structure(
+					item,
+					inputs_idx,
+					class_pattern_ref,
+					structure,
+				);
+			}
+			Some(inputs_idx)
 		};
 
 		let storage_idx = if object_storage_backed_var_root {
@@ -2605,34 +2670,29 @@ impl<'db> ItemCollector<'db> {
 				},
 			)
 		});
-		let sum_expr = if let Some(rhs) = d.definition {
-			match &data[rhs] {
-				shackle_hir::Expression::ArrayLiteral(array_literal) => Expression::new(
-					collector.parent.db,
-					&collector.parent.model,
-					item,
-					IntegerLiteral(array_literal.members.len() as i64),
-				),
-				_ => Expression::new(
+		let sum_expr = match d.definition.map(|rhs| &data[rhs]) {
+			Some(shackle_hir::Expression::ArrayLiteral(array_literal)) => Expression::new(
+				collector.parent.db,
+				&collector.parent.model,
+				item,
+				IntegerLiteral(array_literal.members.len() as i64),
+			),
+			_ => {
+				// The structure, as the inputs may refer to these objects
+				let sized = collector
+					.parent
+					.inputs_structure(item, &inputs_expr)
+					.unwrap_or_else(|| inputs_expr.clone());
+				Expression::new(
 					collector.parent.db,
 					&collector.parent.model,
 					item,
 					LookupCall {
 						function: collector.parent.ids.functions.length.into(),
-						arguments: vec![inputs_expr.clone()],
+						arguments: vec![sized],
 					},
-				),
+				)
 			}
-		} else {
-			Expression::new(
-				collector.parent.db,
-				&collector.parent.model,
-				item,
-				LookupCall {
-					function: collector.parent.ids.functions.length.into(),
-					arguments: vec![inputs_expr.clone()],
-				},
-			)
 		};
 		let contribution_index = collector
 			.parent
