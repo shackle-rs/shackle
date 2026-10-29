@@ -2,6 +2,7 @@
 
 use std::fmt::Write;
 
+use rustc_hash::FxHashSet;
 use shackle_hir::{
 	Db, Identifier,
 	constants::IdentifierRegistry,
@@ -18,7 +19,7 @@ use crate::{
 		Printer, print_declaration_id, print_expression, print_function, print_generator,
 		print_item,
 	},
-	transform::{Transform, Transformer},
+	transform::{Transform, Transformer, inlining::inline_user_functions},
 };
 
 /// Pretty print the final THIR to be compatible with the old MiniZinc compiler
@@ -48,8 +49,13 @@ impl<'db> OldMiniZincPrinter<'db> {
 	/// Run the printer
 	pub fn run(db: &'db dyn Db, print_input_files_only: bool) -> String {
 		let model = final_thir(db).unwrap();
+		// Declarations are printed by name, so a local with the name of a
+		// top-level declaration would capture the references to it in its
+		// scope, such as a generator `p` introduced by a transform around a
+		// user's `p`. Inlining no functions only renames such locals.
+		let model = inline_user_functions(db, model.clone(), FxHashSet::default());
 		let totalised = Transformer::get_transforms(db).contains(&Transform::Totalise);
-		Self::new(db, totalised, print_input_files_only).print_model(db, model)
+		Self::new(db, totalised, print_input_files_only).print_model(db, &model)
 	}
 
 	/// Return the length and, when explicitly specified, the printed members of

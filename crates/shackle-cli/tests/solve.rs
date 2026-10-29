@@ -508,3 +508,8 @@ fn solve_object_var_opt_new_child_in_var_set() {
 fn solve_object_var_opt_class_indexed_output() {
 	check_solve("objects/26_var_opt_class_indexed_output", true, false);
 }
+
+#[test]
+fn solve_object_names_of_internal_locals() {
+	check_solve("objects/27_names_of_internal_locals", false, false);
+}
