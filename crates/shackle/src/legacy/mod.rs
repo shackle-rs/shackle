@@ -795,17 +795,22 @@ impl Value {
 						}
 					})
 					.collect();
+				// Only elements of a plain type are output as they are: optional
+				// elements are (occurs, value) pairs, for instance
 				let members = if matches!(
 					**element,
-					Type::Enum(_, _) | Type::Tuple(_, _) | Type::Record(_, _) | Type::Set(_, _)
+					Type::Boolean(OptType::NonOpt)
+						| Type::Integer(OptType::NonOpt)
+						| Type::Float(OptType::NonOpt)
+						| Type::String(OptType::NonOpt)
+						| Type::Annotation(OptType::NonOpt)
 				) {
 					x.members
-						.iter()
-						.cloned()
-						.map(|elt| elt.reverse_type_erase(element))
-						.collect()
 				} else {
 					x.members
+						.into_iter()
+						.map(|elt| elt.reverse_type_erase(element))
+						.collect()
 				};
 				Array { indices, members }.into()
 			}
