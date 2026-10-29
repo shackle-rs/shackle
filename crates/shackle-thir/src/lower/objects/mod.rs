@@ -60,6 +60,10 @@ pub(in crate::lower) struct ObjectState<'db> {
 	pub(in crate::lower) plan: ObjectLoweringPlan<'db>,
 	pub(in crate::lower) contribution_end_map:
 		FxHashMap<(PatternRef<'db>, usize), DeclarationId<'db>>,
+	/// The number of (potential) objects of each collection root occurrence,
+	/// known before its enum constructor is added, which happens after its
+	/// nested occurrences are sized
+	pub(in crate::lower) root_collection_sizes: FxHashMap<OccurrenceId, Expression<'db>>,
 	class_object_contributions: FxHashMap<PatternRef<'db>, Vec<(usize, DeclarationId<'db>)>>,
 	/// Per-occurrence slice array declarations (`<parent>_<field>_potential`),
 	/// keyed by the child class and contribution index. Consumed by the
@@ -159,6 +163,7 @@ impl<'db> ObjectState<'db> {
 			plan: ObjectLoweringPlan::new(db),
 			class_map: FxHashMap::default(),
 			contribution_end_map: FxHashMap::default(),
+			root_collection_sizes: FxHashMap::default(),
 			class_object_contributions: FxHashMap::default(),
 			slice_array_decls: FxHashMap::default(),
 			class_set_field_introductions: FxHashMap::default(),

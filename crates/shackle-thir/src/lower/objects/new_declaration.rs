@@ -199,6 +199,27 @@ impl<'db> ItemCollector<'db> {
 			.unwrap_or_else(|| inputs_expr.clone());
 		self.push_root_passthrough_slice(&cx, &pending_root_collection, &mut pending_slices);
 
+		// The nested occurrences below are sized by the root's number of
+		// objects, but a collection root's constructor is only added after them
+		if let Some(root_collection) = &pending_root_collection {
+			let size = match &root_collection.potential_ordinal_domain {
+				Some(domain) if root_collection.inst == VarType::Var => Expression::new(
+					self.db,
+					&self.model,
+					cx.item,
+					LookupCall {
+						function: self.ids.functions.card.into(),
+						arguments: vec![domain.clone()],
+					},
+				),
+				_ => root_collection.sum_expr.clone(),
+			};
+			let _ = self
+				.objects
+				.root_collection_sizes
+				.insert(cx.root_occurrence, size);
+		}
+
 		// Calculate the sizes of the different objects arrays based on the contained classes
 
 		self.register_reachable_occurrence_constructors(&cx, &nested_iteration_expr);
@@ -1425,6 +1446,8 @@ impl<'db> ItemCollector<'db> {
 						record_access,
 						fallback_cardinality,
 						attrib_class_pattern_ref,
+						root_pattern,
+						&attrib_path,
 					)
 				} else {
 					Expression::new(
@@ -1623,6 +1646,8 @@ impl<'db> ItemCollector<'db> {
 					record_access,
 					fallback_cardinality,
 					attrib_class_pattern_ref,
+					root_pattern,
+					&attrib_path,
 				);
 				collector
 					.parent
