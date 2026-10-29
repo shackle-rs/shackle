@@ -523,3 +523,8 @@ fn solve_object_two_par_roots_nested() {
 fn solve_object_var_and_par_roots_nested() {
 	check_solve("objects/29_var_and_par_roots_nested", false, false);
 }
+
+#[test]
+fn solve_object_reference_into_same_data() {
+	check_solve("objects/30_reference_into_same_data", false, false);
+}

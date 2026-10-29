@@ -782,6 +782,65 @@ impl<'db> ItemCollector<'db> {
 		(generators, prev_attrib)
 	}
 
+	/// The generators and record access to size a nested occurrence by when
+	/// its size is read from the data (`record_access`, from walking
+	/// `iteration_expr`, is an array): the same walk over the root's
+	/// structure, as the inputs may refer to the objects being sized (see
+	/// `structure.rs`). `None` to size it as walked.
+	#[allow(
+		clippy::too_many_arguments,
+		reason = "repeats the walk of `nested_path_generators_and_cursor`"
+	)]
+	pub(in crate::lower) fn nested_structure_walk(
+		&mut self,
+		item: Item<'db>,
+		iteration_expr: &Expression<'db>,
+		record_access: &Option<Expression<'db>>,
+		root_pattern: PatternRef<'db>,
+		source_occurrence: OccurrenceId,
+		attrib_path: &[Identifier<'db>],
+		attrib: Identifier<'db>,
+		local_domain_source: LocalDomainSource,
+		attrib_class_pattern_ref: PatternRef<'db>,
+		declared_type: Option<shackle_hir::TypeId<'db>>,
+		data: &shackle_hir::ItemData<'db>,
+		types: &TypeResult<'db>,
+	) -> Option<(Vec<Generator<'db>>, Option<Expression<'db>>)> {
+		let reads_data = matches!(
+			local_domain_source,
+			LocalDomainSource::FlattenedChildCollection
+		) && record_access
+			.as_ref()
+			.is_some_and(|ra| !ra.ty().is_set(self.db));
+		if !reads_data {
+			return None;
+		}
+		let structure = self.inputs_structure(item, iteration_expr)?;
+		let (generators, cursor) = self.nested_path_generators_and_cursor(
+			item,
+			&structure,
+			root_pattern,
+			source_occurrence,
+			attrib_path,
+			local_domain_source,
+			attrib_class_pattern_ref,
+			declared_type,
+			data,
+			types,
+		);
+		let (record_access, _) = self.nested_child_record_access_and_fallback_cardinality(
+			item,
+			cursor,
+			attrib,
+			local_domain_source,
+			declared_type,
+			data,
+			attrib_class_pattern_ref.item(self.db),
+			types,
+		);
+		Some((generators, record_access))
+	}
+
 	pub(in crate::lower) fn nested_contribution_generators_and_input(
 		&mut self,
 		item: Item<'db>,

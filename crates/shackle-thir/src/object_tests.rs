@@ -630,6 +630,14 @@ fn object_thir_lowering_nested_par_set_new_snapshot() {
 	check_snapshot("nested_par_set_new");
 }
 
+// A reference into the objects the same data creates: the children are sized
+// by the root's `_structure`, which leaves out the references, so the model
+// isn't cyclic.
+#[test]
+fn object_thir_lowering_reference_into_same_data_snapshot() {
+	check_snapshot("reference_into_same_data");
+}
+
 #[test]
 fn object_thir_lowering_nested_par_set_new_mixed_scalar_snapshot() {
 	check_snapshot("nested_par_set_new_mixed_scalar");

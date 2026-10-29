@@ -1,0 +1,17 @@
+enum Leaf_potential = Leaf_occ_1('..'(1, sum([length((i).leaves) | i in Tree_t_structure])));
+array [int] of record('..'(1, 3): v): Leaf_objects = Leaf_leaves_objects;
+set of Leaf_potential: Leaf = array_union([Leaf_occ_1('..'(1, '-'(Tree_t_leaves_end, 1)))]);
+array [Leaf_potential] of string: Leaf_ids = array1d(Leaf_potential, ['++'('++'("t.leaves[", show(p)), "]") | p in '..'(1, card('..'(1, sum([length((i).leaves) | i in Tree_t_structure]))))]);
+enum Tree_potential = Tree_occ_0({1});
+array [int] of record(Leaf_potential: favourite, set of Leaf_potential: leaves): Tree_objects = Tree_t_objects;
+set of Tree_potential: Tree = Tree_occ_0({1});
+array [Tree_potential] of string: Tree_ids = array1d(Tree_potential, ["t"]);
+array [int] of record(Leaf_potential: favourite, array [int] of record(int: v): leaves): Tree_t_inputs = [(leaves: [(v: 1), (v: 2)], favourite: min(Leaf))];
+array [int] of record(array [int] of bool: leaves): Tree_t_structure = [(leaves: [true, true])];
+array [int] of record('..'(1, 3): v): Leaf_leaves_objects = [k | i in Tree_t_inputs, k in (i).leaves];
+int: Tree_t_leaves_start = 1;
+int: Tree_t_leaves_end = '+'(Tree_t_leaves_start, sum([length((i).leaves) | i in Tree_t_structure]));
+array [int] of record(Leaf_potential: favourite, set of Leaf_potential: leaves): Tree_t_objects = [(favourite: favourite, leaves: leaves) | p in index_set(Tree_t_inputs), input = '[]'(Tree_t_inputs, p), leaves = Leaf_occ_1('..'('+'(1, sum([length(('[]'(Tree_t_inputs, q)).leaves) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(Tree_t_inputs, q)).leaves) | q in '..'(1, '-'(p, 1))]), length((input).leaves)))), favourite = (input).favourite];
+Tree_potential: t_ref :: (no_output) = Tree_occ_0(1);
+record(string: favourite, string: id, array [int] of record(string: id, int: v): leaves): t :: (output_only) :: ('output') = (id: '[]'(Tree_ids, t_ref), favourite: '[]'(Leaf_ids, ('[]'(Tree_objects, enum2int(t_ref))).favourite), leaves: [(id: '[]'(Leaf_ids, _DECL_1), v: ('[]'(Leaf_objects, enum2int(_DECL_1))).v) | _DECL_1 in ('[]'(Tree_objects, enum2int(t_ref))).leaves]);
+solve satisfy;

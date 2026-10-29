@@ -1,7 +1,7 @@
-enum D_potential = D_occ_3('..'(1, sum([length((((i).b).c).ds) | i in A_a_inputs]))) ++ D_occ_5('..'(1, '*'(card({1}), max('..'(1, 1)))));
+enum D_potential = D_occ_3('..'(1, sum([length((((i).b).c).ds) | i in A_a_structure]))) ++ D_occ_5('..'(1, '*'(card({1}), max('..'(1, 1)))));
 array [int] of record(var '..'(2, 3): v): D_objects = '++'(D_b_c_ds_objects, D_ds_objects);
 var set of D_potential: D = array_union('++'([D_occ_3('..'(1, '-'(A_a_b_c_ds_end, 1)))], [('[]'(C_c2_objects, _DECL_1)).ds | _DECL_1 in index_set(C_c2_objects)]));
-array [D_potential] of string: D_ids = array1d(D_potential, '++'(['++'('++'("a.b.c.ds[", show(p)), "]") | p in '..'(1, card('..'(1, sum([length((((i).b).c).ds) | i in A_a_inputs]))))], ['++'('++'("c2.ds[", show(p)), "]") | p in '..'(1, card('..'(1, '*'(card({1}), max('..'(1, 1))))))]));
+array [D_potential] of string: D_ids = array1d(D_potential, '++'(['++'('++'("a.b.c.ds[", show(p)), "]") | p in '..'(1, card('..'(1, sum([length((((i).b).c).ds) | i in A_a_structure]))))], ['++'('++'("c2.ds[", show(p)), "]") | p in '..'(1, card('..'(1, '*'(card({1}), max('..'(1, 1))))))]));
 enum C_potential = C_occ_2('..'(1, '*'(card('..'(1, '*'(card({1}), 1))), 1))) ++ C_occ_4({1});
 array [int] of record(var set of D_potential: ds): C_objects = '++'(C_b_c_objects, C_c2_objects);
 set of C_potential: C = array_union('++'([C_occ_4({1})], [{C_occ_2(_DECL_2)} | _DECL_2 in index_set(B_b_objects)]));
@@ -16,6 +16,7 @@ array [int] of record(B_potential: b): A_objects = A_a_objects;
 set of A_potential: A = A_occ_0({1});
 array [A_potential] of string: A_ids = array1d(A_potential, ["a"]);
 array [int] of record(record(record(array [int] of record(int: v): ds): c): b): A_a_inputs = [(b: (c: (ds: [(v: 2)])))];
+array [int] of record(record(record(array [int] of bool: ds): c): b): A_a_structure = [(b: (c: (ds: [true])))];
 array [int] of record(C_potential: c): B_b_objects = [(c: c) | p in index_set(A_a_inputs), input = ('[]'(A_a_inputs, p)).b, c = C_occ_2(p)];
 array [int] of record(var set of D_potential: ds): C_b_c_objects = let {
   array [int] of record(array [int] of record(int: v): ds): b_c_flat_inputs = [((i).b).c | i in A_a_inputs];
@@ -26,7 +27,7 @@ int: A_a_b_end = '+'(A_a_b_start, '*'(card({1}), 1));
 int: A_a_b_c_start = 1;
 int: A_a_b_c_end = '+'(A_a_b_c_start, '*'(card('..'(1, '*'(card({1}), 1))), 1));
 int: A_a_b_c_ds_start = 1;
-int: A_a_b_c_ds_end = '+'(A_a_b_c_ds_start, sum([length((((i).b).c).ds) | i in A_a_inputs]));
+int: A_a_b_c_ds_end = '+'(A_a_b_c_ds_start, sum([length((((i).b).c).ds) | i in A_a_structure]));
 array [int] of record(B_potential: b): A_a_objects = [(b: b) | p in index_set(A_a_inputs), input = '[]'(A_a_inputs, p), b = B_occ_1(p)];
 A_potential: a_ref :: (no_output) = A_occ_0(1);
 array [{1}] of record(var set of D_potential: ds): C_c2_storage :: (no_output);

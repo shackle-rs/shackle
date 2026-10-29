@@ -44,8 +44,10 @@ mod occurrence;
 mod output;
 mod references;
 mod storage;
+mod structure;
 
 pub(in crate::lower) use output::{OutputCandidateKind, ty_mentions_class};
+use structure::InputsStructure;
 
 /// Everything the object lowering accumulates while collecting items,
 /// alongside the read-only occurrence plan it is driven by.
@@ -155,6 +157,10 @@ pub(in crate::lower) struct ObjectState<'db> {
 	data_id_blocks: FxHashMap<OccurrenceId, Expression<'db>>,
 	/// `<C>_data_objects` for every class that data refers to.
 	class_data_objects: FxHashMap<PatternRef<'db>, DeclarationId<'db>>,
+	/// The structure of each root's inputs written in the model (see
+	/// `structure.rs`), keyed by the inputs declaration: the projected value
+	/// until it is first needed, then its declaration.
+	inputs_structures: FxHashMap<DeclarationId<'db>, InputsStructure<'db>>,
 }
 
 impl<'db> ObjectState<'db> {
@@ -179,6 +185,7 @@ impl<'db> ObjectState<'db> {
 			data_input_names: FxHashMap::default(),
 			data_id_blocks: FxHashMap::default(),
 			class_data_objects: FxHashMap::default(),
+			inputs_structures: FxHashMap::default(),
 		}
 	}
 }
