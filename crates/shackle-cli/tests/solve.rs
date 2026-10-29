@@ -132,6 +132,57 @@ fn solve_enum_constructor_index() {
 	check_solve("enum_constructor_index", true, false);
 }
 
+/// Solve `basic` with a stand-in for the MiniZinc interpreter, a shell script
+/// running `script`, and return the error report with its line wrapping undone
+#[cfg(unix)]
+fn solve_with_failing_interpreter(name: &str, script: &str) -> String {
+	use std::os::unix::fs::PermissionsExt;
+
+	let dir = scratch_dir(name);
+	let interpreter = dir.join("minizinc");
+	std::fs::write(&interpreter, format!("#!/bin/sh\n{script}\n")).unwrap();
+	std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o755)).unwrap();
+	let path = std::env::join_paths(
+		std::iter::once(dir).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+	)
+	.unwrap();
+	let output = Command::new(env!("CARGO_BIN_EXE_shackle"))
+		.arg("solve")
+		.arg(fixture("basic", "mzn"))
+		.env("PATH", path)
+		.output()
+		.unwrap();
+	assert!(
+		!output.status.success(),
+		"solve succeeded\nstdout:\n{}",
+		String::from_utf8_lossy(&output.stdout),
+	);
+	String::from_utf8_lossy(&output.stderr)
+		.split_whitespace()
+		.collect::<Vec<_>>()
+		.join(" ")
+}
+
+/// An interpreter that fails without reporting an error fails the solve
+#[cfg(unix)]
+#[test]
+fn solve_interpreter_exit_code() {
+	let error = solve_with_failing_interpreter("solve_interpreter_exit_code", "exit 3");
+	assert!(error.contains("exit status: 3"), "{error}");
+}
+
+/// An interpreter that crashes fails the solve, rather than the crash being
+/// reported as a successful run, or making shackle panic
+#[cfg(unix)]
+#[test]
+fn solve_interpreter_crash() {
+	let error = solve_with_failing_interpreter("solve_interpreter_crash", "kill -SEGV $$");
+	assert!(
+		error.contains("signal: 11") && !error.contains("panicked"),
+		"{error}"
+	);
+}
+
 #[test]
 fn solve_enum_equality() {
 	check_solve("enum_equality", true, false);

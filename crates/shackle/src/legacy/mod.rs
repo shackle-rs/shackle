@@ -153,14 +153,13 @@ impl Program {
 		let exit = child.wait();
 		read?;
 		match exit {
+			Ok(code) if code.success() => Ok(status),
+			// The interpreter failed without reporting an error of its own, such
+			// as when it crashes: its standard error has been passed through, and
+			// whatever it printed before failing cannot be trusted.
+			// `ExitStatus` shows a signal as well as an exit code.
 			Ok(code) => {
-				if !code.success() {
-					log::warn!(
-						"The MiniZinc process terminated with exit code {}",
-						code.code().unwrap()
-					)
-				};
-				Ok(status)
+				Err(InternalError::new(format!("the MiniZinc process failed ({code})")).into())
 			}
 			Err(e) => Err(InternalError::new(format!("process error: {}", e)).into()),
 		}
