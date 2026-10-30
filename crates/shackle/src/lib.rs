@@ -144,7 +144,12 @@ impl Model {
 			.unwrap());
 		}
 		let _ = final_thir(&self.db)?;
-		let print_input_files_only = Transformer::get_transforms(&self.db).is_empty();
+		// The MiniZinc target is the one without transforms (see `set_target`)
+		let target = if Transformer::get_transforms(&self.db).is_empty() {
+			CompileTarget::MiniZinc
+		} else {
+			CompileTarget::MicroZinc
+		};
 
 		Ok(Program {
 			db: self.db,
@@ -157,7 +162,7 @@ impl Model {
 			enable_stats: false,
 			time_limit: None,
 			minizinc_args: Vec::new(),
-			print_input_files_only,
+			target,
 		})
 	}
 }
@@ -198,7 +203,7 @@ pub struct Program {
 	enable_stats: bool,
 	time_limit: Option<Duration>,
 	minizinc_args: Vec<OsString>,
-	print_input_files_only: bool,
+	target: CompileTarget,
 }
 
 /// Status of running and solving a [`Program`]
@@ -528,7 +533,7 @@ impl Program {
 
 	/// Output the [`Program`] using the given output interface, using the [`Write`] trait
 	pub fn write<W: Write>(&self, out: &mut W) -> Result<(), std::io::Error> {
-		let code = OldMiniZincPrinter::run(&self.db, self.print_input_files_only);
+		let code = OldMiniZincPrinter::run(&self.db, self.target == CompileTarget::MiniZinc);
 		let formatted = format_str(
 			&code,
 			&MiniZincFormatOptions {

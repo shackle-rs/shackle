@@ -109,6 +109,12 @@ fn solve_output_item() {
 	check_solve("output_item", false, false);
 }
 
+/// The MiniZinc target leaves the output item to MiniZinc
+#[test]
+fn solve_output_item_target_minizinc() {
+	check_solve("output_item", false, true);
+}
+
 #[test]
 fn solve_output_item_absent() {
 	check_solve("output_item_absent", false, false);
@@ -305,6 +311,21 @@ fn solve_object_optimize_set_new() {
 #[test]
 fn solve_include_globals() {
 	check_solve("include_globals", false, true);
+}
+
+#[test]
+fn solve_target_data_output() {
+	let name = "target_data_output";
+	check_solve_with_data(name, &[fixture(name, "dzn")], false, false);
+	check_solve_with_data(name, &[fixture(name, "dzn")], false, true);
+}
+
+/// Only with the MiniZinc target: the MicroZinc target fails on an enum
+/// defined in data
+#[test]
+fn solve_target_minizinc_data_enum() {
+	let name = "target_minizinc_data_enum";
+	check_solve_with_data(name, &[fixture(name, "dzn")], false, true);
 }
 
 #[test]

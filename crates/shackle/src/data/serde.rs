@@ -281,10 +281,13 @@ impl<'de> Visitor<'de> for SerdeEnumVisitor {
 		Ok(ParserVal::Enum(v.into(), Vec::new()))
 	}
 
+	// A member is `{"e": name}`, or `{"e": name, "a": [args]}` for a constructor
+	// call. MiniZinc writes a constructor call as `{"c": name, "e": arg}`.
 	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-		const FIELDS: &[&str] = &["e", "a"];
+		const FIELDS: &[&str] = &["e", "a", "c"];
 		let mut e = None;
 		let mut a = None;
+		let mut c = None;
 
 		while let Some(k) = map.next_key::<&str>()? {
 			match k {
@@ -292,7 +295,13 @@ impl<'de> Visitor<'de> for SerdeEnumVisitor {
 					if e.is_some() {
 						return Err(Error::duplicate_field("e"));
 					}
-					e = Some(map.next_value()?);
+					e = Some(map.next_value_seed(self.clone())?);
+				}
+				"c" => {
+					if c.is_some() {
+						return Err(Error::duplicate_field("c"));
+					}
+					c = Some(map.next_value()?);
 				}
 				"a" => {
 					if a.is_some() {
@@ -304,10 +313,17 @@ impl<'de> Visitor<'de> for SerdeEnumVisitor {
 			}
 		}
 
-		match (e, a) {
-			(None, _) => Err(Error::missing_field("e")),
-			(Some(e), Some(a)) => Ok(ParserVal::Enum(e, a)),
-			(Some(e), None) => Ok(ParserVal::Enum(e, Vec::new())),
+		match (c, e, a) {
+			(_, None, _) => Err(Error::missing_field("e")),
+			(Some(c), Some(arg), None) => Ok(ParserVal::Enum(c, vec![arg])),
+			(Some(_), Some(_), Some(_)) => Err(Error::unknown_field("a", &["c", "e"])),
+			(None, Some(ParserVal::Enum(e, args)), None) if args.is_empty() => {
+				Ok(ParserVal::Enum(e, Vec::new()))
+			}
+			(None, Some(ParserVal::Enum(e, args)), Some(a)) if args.is_empty() => {
+				Ok(ParserVal::Enum(e, a))
+			}
+			(None, Some(_), _) => Err(Error::custom("expected the name of a member for \"e\"")),
 		}
 	}
 }

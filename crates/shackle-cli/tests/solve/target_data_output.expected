@@ -1,0 +1,4 @@
+v = (x: 3, y: <>);
+vc = Green;
+vw = [Red: 5, Green: 6, Blue: 7];
+----------
