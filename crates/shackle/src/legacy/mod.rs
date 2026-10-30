@@ -20,7 +20,7 @@ use shackle_diagnostics::{
 use tempfile::Builder;
 
 use crate::{
-	Enum, Error, Message, OptType, Program, Result, Status, Type,
+	CompileTarget, Enum, Error, Message, OptType, Program, Result, Status, Type,
 	data::serde::SerdeValueVisitor,
 	value::{Array, EnumInner, EnumRangeInclusive, EnumValue, Index, Polarity, Set, Value},
 };
@@ -72,6 +72,9 @@ impl Program {
 				other: vec![],
 			})
 		};
+		// The MicroZinc target erases records, optional values and enums, so the
+		// data is written and the solutions are read in the erased form
+		let erased = self.target == CompileTarget::MicroZinc;
 		// Write content to file
 		let file_mut = tmpfile.as_file_mut();
 		// Write model to file
@@ -85,11 +88,17 @@ impl Program {
 			} else {
 				unreachable!("missing inputs are reported above")
 			};
-			writeln!(file_mut, "{name} = {};", LegacyValue { val, ty }).map_err(write_err)?;
+			writeln!(file_mut, "{name} = {};", LegacyValue { val, ty, erased })
+				.map_err(write_err)?;
 		}
 		for e in &self.legacy_enums {
 			debug_assert!(e.state.lock().unwrap().deref() != &EnumInner::NoDefinition);
-			writeln!(file_mut, "{};", LegacyEnum(e)).map_err(write_err)?;
+			if erased {
+				writeln!(file_mut, "{};", LegacyEnum(e)).map_err(write_err)?;
+			} else {
+				// The definition of an enum is shown as a MiniZinc assignment
+				writeln!(file_mut, "{e};").map_err(write_err)?;
+			}
 		}
 
 		// Construct command for the MiniZinc intepreter
@@ -133,7 +142,10 @@ impl Program {
 					)))
 				})?;
 				match serde_json::Deserializer::from_str(&line)
-					.deserialize_map(SerdeMessageVisitor(&self.output_types))
+					.deserialize_map(SerdeMessageVisitor {
+						types: &self.output_types,
+						erased,
+					})
 					.map_err(|e| Error::from_serde_json(e, &SourceFile::unnamed(line.clone())))?
 				{
 					LegacyOutput::Status(s) => status = s,
@@ -166,17 +178,33 @@ impl Program {
 	}
 }
 
+/// A data value written as a MiniZinc expression
 struct LegacyValue<'a> {
 	val: &'a Value,
 	ty: &'a Type,
+	/// Whether the value is written in the erased form, where a record is a
+	/// tuple, an optional value an `(occurs, value)` pair and an enum value an
+	/// integer
+	erased: bool,
 }
 
 impl Display for LegacyValue<'_> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let val = self.val;
 		let ty = self.ty;
+		let erased = self.erased;
+		let value = |val, ty| LegacyValue { val, ty, erased };
+		// An enum value is named by its position, which needs no knowledge of
+		// its constructors
+		let enum_value = |v: &EnumValue| {
+			if erased {
+				v.int_val().to_string()
+			} else {
+				format!("to_enum({}, {})", v.enum_type().name(), v.int_val())
+			}
+		};
 
-		let is_opt = ty.is_opt();
+		let is_opt = erased && ty.is_opt();
 		if is_opt {
 			if val == &Value::Absent {
 				return write!(f, "(false, {})", DummyValue(ty));
@@ -185,6 +213,7 @@ impl Display for LegacyValue<'_> {
 			}
 		}
 		match val {
+			Value::Absent if !erased && ty.is_opt() => write!(f, "<>")?,
 			Value::Absent => unreachable!("found absent assigned to non-opt parameter"),
 			Value::Infinity(p) => {
 				write!(f, "{}infinity", if p == &Polarity::Neg { "-" } else { "" })?
@@ -193,7 +222,7 @@ impl Display for LegacyValue<'_> {
 			Value::Integer(v) => write!(f, "{}", v)?,
 			Value::Float(v) => write!(f, "{}", v)?,
 			Value::String(v) => write!(f, "\"{}\"", v)?,
-			Value::Enum(v) => write!(f, "{}", v.int_val())?,
+			Value::Enum(v) => write!(f, "{}", enum_value(v))?,
 			Value::Ann(name, args) => {
 				if args.is_empty() {
 					write!(f, "{name}")?
@@ -211,8 +240,8 @@ impl Display for LegacyValue<'_> {
 					unreachable!()
 				};
 				let extract_idx = |x: &Value| match x {
-					Value::Integer(i) => *i,
-					Value::Enum(v) => v.int_val() as i64,
+					Value::Integer(i) => i.to_string(),
+					Value::Enum(v) => enum_value(v),
 					_ => unreachable!(),
 				};
 				if v.is_empty() {
@@ -222,9 +251,7 @@ impl Display for LegacyValue<'_> {
 					write!(
 						f,
 						"[{first}: {}]",
-						v.iter()
-							.map(|(_, val)| LegacyValue { val, ty: element })
-							.format(",")
+						v.iter().map(|(_, val)| value(val, element)).format(",")
 					)?;
 				} else {
 					write!(
@@ -233,7 +260,7 @@ impl Display for LegacyValue<'_> {
 						v.iter().format_with(",", |(ii, val), f| f(&format_args!(
 							"({}): {}",
 							ii.iter().map(extract_idx).format(","),
-							LegacyValue { val, ty: element }
+							value(val, element)
 						)))
 					)?;
 				}
@@ -247,8 +274,8 @@ impl Display for LegacyValue<'_> {
 					"{}",
 					s.iter().format_with(" union ", |elt, f| f(&format_args!(
 						"{}..{}",
-						elt.start().int_val(),
-						elt.end().int_val()
+						enum_value(&elt.start()),
+						enum_value(&elt.end())
 					)))
 				)?,
 				Set::Int(s) => write!(
@@ -279,7 +306,7 @@ impl Display for LegacyValue<'_> {
 					"({}{})",
 					tys.iter()
 						.zip_eq(v)
-						.map(|(ty, val)| LegacyValue { val, ty })
+						.map(|(ty, val)| value(val, ty))
 						.format(","),
 					if tys.len() == 1 { "," } else { "" }
 				)?;
@@ -288,16 +315,30 @@ impl Display for LegacyValue<'_> {
 				let Type::Record(_, tys) = ty else {
 					unreachable!()
 				};
-				write!(
-					f,
-					"({}{})",
-					tys.iter()
-						.map(|(_, t)| t)
-						.zip_eq(v.iter().map(|(_, v)| v))
-						.map(|(ty, val)| LegacyValue { val, ty })
-						.format(","),
-					if tys.len() == 1 { "," } else { "" }
-				)?;
+				if erased {
+					write!(
+						f,
+						"({}{})",
+						tys.iter()
+							.map(|(_, t)| t)
+							.zip_eq(v.iter().map(|(_, v)| v))
+							.map(|(ty, val)| value(val, ty))
+							.format(","),
+						if tys.len() == 1 { "," } else { "" }
+					)?;
+				} else {
+					write!(
+						f,
+						"({})",
+						tys.iter().zip_eq(v.iter()).format_with(
+							",",
+							|((name, ty), (_, val)), f| f(&format_args!(
+								"{name}: {}",
+								value(val, ty)
+							))
+						)
+					)?;
+				}
 			}
 		}
 		if is_opt {
@@ -361,11 +402,13 @@ impl Display for LegacyEnum<'_> {
 						"(0, {}..{})",
 						LegacyValue {
 							val: &idx.start(),
-							ty: &INT
+							ty: &INT,
+							erased: true,
 						},
 						LegacyValue {
 							val: &idx.end(),
-							ty: &INT
+							ty: &INT,
+							erased: true,
 						}
 					)))
 				)))
@@ -373,7 +416,12 @@ impl Display for LegacyEnum<'_> {
 	}
 }
 
-struct SerdeMessageVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
+struct SerdeMessageVisitor<'a> {
+	/// The types of the output variables
+	types: &'a FxHashMap<Arc<str>, Type>,
+	/// Whether the model's types are erased (see [`Type::output_type`])
+	erased: bool,
+}
 
 enum LegacyOutput<'a> {
 	Status(Status),
@@ -425,8 +473,7 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 			"sections",
 			"what",
 		];
-		let type_map = self.0;
-
+		let mut error = None;
 		let mut msg_type = None;
 		let mut statistics = None;
 		let mut message = None;
@@ -454,12 +501,13 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 					if solution.is_some() {
 						return Err(SerdeError::duplicate_field("output"));
 					}
-					match map.next_value_seed(SerdeWrappedName {
-						name: "json",
-						seed: SerdeOutputVisitor(type_map),
+					match map.next_value_seed(SerdeSolutionVisitor {
+						types: self.types,
+						erased: self.erased,
 					})? {
 						Ok(sol) => solution = Some(sol),
-						Err(e) => return Ok(LegacyOutput::Error(e)),
+						// The rest of the message must still be read
+						Err(e) => error = Some(e),
 					}
 				}
 				"statistics" => {
@@ -512,6 +560,9 @@ impl<'de> Visitor<'de> for SerdeMessageVisitor<'_> {
 				}
 				_ => return Err(SerdeError::unknown_field(k, FIELDS)),
 			}
+		}
+		if let Some(e) = error {
+			return Ok(LegacyOutput::Error(e));
 		}
 
 		match msg_type {
@@ -573,8 +624,75 @@ struct SerdeSolution<'a> {
 	sections: Vec<(&'a str, String)>,
 }
 
-#[derive(Clone)]
-struct SerdeOutputVisitor<'a>(pub &'a FxHashMap<Arc<str>, Type>);
+/// The `output` of a solution message, which holds the values of the output
+/// variables in its `json` section.
+///
+/// The model's output item is rendered in one of two ways. When the model's
+/// types are erased, the THIR output transform has turned it into string
+/// variables, one per section (see [`OUTPUT_SECTION_PREFIXES`]). Otherwise the
+/// interpreter renders it, and each section is a key of the `output` itself.
+struct SerdeSolutionVisitor<'a> {
+	types: &'a FxHashMap<Arc<str>, Type>,
+	erased: bool,
+}
+
+impl<'de> DeserializeSeed<'de> for SerdeSolutionVisitor<'_> {
+	type Value = Result<SerdeSolution<'de>, Error>;
+
+	fn deserialize<D: serde::Deserializer<'de>>(
+		self,
+		deserializer: D,
+	) -> Result<Self::Value, D::Error> {
+		deserializer.deserialize_map(self)
+	}
+}
+
+impl<'de> Visitor<'de> for SerdeSolutionVisitor<'_> {
+	type Value = Result<SerdeSolution<'de>, Error>;
+
+	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(formatter, "map with json identifier")
+	}
+
+	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+		let mut sol = None;
+		let mut sections = Vec::new();
+		while let Some(k) = map.next_key::<&str>()? {
+			match k {
+				"json" => {
+					sol = Some(map.next_value_seed(SerdeOutputVisitor {
+						types: self.types,
+						erased: self.erased,
+					})?)
+				}
+				// All sections together
+				"raw" => {
+					map.next_value::<IgnoredAny>()?;
+				}
+				_ if !self.erased => sections.push((k, map.next_value::<String>()?)),
+				_ => {
+					map.next_value::<IgnoredAny>()?; // Ignore unknown
+				}
+			}
+		}
+		let Some(sol) = sol else {
+			return Err(SerdeError::missing_field("json"));
+		};
+		Ok(sol.map(|mut sol| {
+			sol.sections.extend(sections);
+			// Show the unnamed section first, then the named ones in a stable order
+			sol.sections
+				.sort_by_key(|(name, _)| (*name != DEFAULT_OUTPUT_SECTION, *name));
+			sol
+		}))
+	}
+}
+
+/// The `json` section of a solution's output
+struct SerdeOutputVisitor<'a> {
+	types: &'a FxHashMap<Arc<str>, Type>,
+	erased: bool,
+}
 
 impl<'de> Visitor<'de> for SerdeOutputVisitor<'_> {
 	type Value = Result<SerdeSolution<'de>, Error>;
@@ -584,11 +702,14 @@ impl<'de> Visitor<'de> for SerdeOutputVisitor<'_> {
 	}
 
 	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-		let type_map = self.0;
+		let type_map = self.types;
 
 		let mut sol = FxHashMap::default();
 		sol.reserve(type_map.len());
 		let mut sections = Vec::new();
+		// The first value that cannot be resolved; the rest of the map must
+		// still be read
+		let mut error = None;
 		while let Some(k) = map.next_key::<&str>()? {
 			if let Some(section) = OUTPUT_SECTION_PREFIXES
 				.iter()
@@ -596,21 +717,24 @@ impl<'de> Visitor<'de> for SerdeOutputVisitor<'_> {
 			{
 				sections.push((section, map.next_value::<String>()?));
 			} else if let Some(ty) = type_map.get(k) {
-				let out_type = ty.type_erase();
+				let out_type = ty.output_type(self.erased);
 				let v = map.next_value_seed(SerdeValueVisitor(&out_type))?;
 				match v.resolve_value(&out_type) {
 					Ok(v) => {
-						let v = v.reverse_type_erase(ty);
+						let v = v.resolve_output(ty, self.erased);
 						sol.insert(k, v);
 					}
-					Err(e) => return Ok(Err(e)),
+					Err(e) => {
+						error.get_or_insert(e);
+					}
 				}
 			} else {
 				map.next_value::<IgnoredAny>()?; // Ignore unknown
 			}
 		}
-		// Show the unnamed section first, then the named ones in a stable order
-		sections.sort_by_key(|(name, _)| (*name != DEFAULT_OUTPUT_SECTION, *name));
+		if let Some(e) = error {
+			return Ok(Err(e));
+		}
 		Ok(Ok(SerdeSolution {
 			assignments: sol,
 			sections,
@@ -629,88 +753,64 @@ impl<'de> DeserializeSeed<'de> for SerdeOutputVisitor<'_> {
 	}
 }
 
-struct SerdeWrappedName<X: Clone> {
-	name: &'static str,
-	seed: X,
-}
-
-impl<'de, X: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SerdeWrappedName<X> {
-	type Value = X::Value;
-
-	fn deserialize<D: serde::Deserializer<'de>>(
-		self,
-		deserializer: D,
-	) -> Result<Self::Value, D::Error> {
-		deserializer.deserialize_map(self)
-	}
-}
-
-impl<'de, X: DeserializeSeed<'de> + Clone> Visitor<'de> for SerdeWrappedName<X> {
-	type Value = X::Value;
-
-	fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(formatter, "map with {} identifier", self.name)
-	}
-
-	fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-		let mut ret = None;
-
-		while let Some(k) = map.next_key::<&str>()? {
-			if k == self.name {
-				ret = Some(map.next_value_seed(self.seed.clone())?);
-			} else {
-				map.next_value::<IgnoredAny>()?; // Ignore unknown
-			}
-		}
-		match ret {
-			None => Err(SerdeError::missing_field(self.name)),
-			Some(x) => Ok(x),
-		}
-	}
-}
-
 impl Type {
-	fn type_erase(&self) -> Type {
+	/// The type in which a value of this type is read from the interpreter's
+	/// output.
+	///
+	/// An array is output as nested lists, so its dimensions are read as
+	/// integers, and a keyed array as its (key, value) pairs. When the model's
+	/// types are `erased`, an enum value is an integer, a record a tuple and an
+	/// optional value an `(occurs, value)` pair, too.
+	fn output_type(&self, erased: bool) -> Type {
+		let opt = |opt: &OptType| if erased { OptType::NonOpt } else { *opt };
 		let ty = match self {
-			Type::Boolean(_) => Type::Boolean(OptType::NonOpt),
-			Type::Integer(_) => Type::Integer(OptType::NonOpt),
-			Type::Float(_) => Type::Float(OptType::NonOpt),
-			Type::Enum(_, _) => Type::Integer(OptType::NonOpt),
-			Type::String(_) => Type::String(OptType::NonOpt),
-			Type::Annotation(_) => Type::Annotation(OptType::NonOpt),
-			// A keyed array is output as its (key, value) pairs
+			Type::Boolean(o) => Type::Boolean(opt(o)),
+			Type::Integer(o) => Type::Integer(opt(o)),
+			Type::Float(o) => Type::Float(opt(o)),
+			Type::Enum(_, _) if erased => Type::Integer(OptType::NonOpt),
+			Type::Enum(o, e) => Type::Enum(*o, e.clone()),
+			Type::String(o) => Type::String(opt(o)),
+			Type::Annotation(o) => Type::Annotation(opt(o)),
 			Type::Array {
-				opt: _,
+				opt: o,
 				dim,
 				element,
 			} if Type::is_keyed(dim) => Type::Array {
-				opt: OptType::NonOpt,
+				opt: opt(o),
 				dim: [Type::Integer(OptType::NonOpt)].into(),
 				element: Box::new(Type::Tuple(
 					OptType::NonOpt,
-					Arc::new([Type::key(dim).type_erase(), element.type_erase()]),
+					Arc::new([
+						Type::key(dim).output_type(erased),
+						element.output_type(erased),
+					]),
 				)),
 			},
 			Type::Array {
-				opt: _,
+				opt: o,
 				dim,
 				element,
 			} => Type::Array {
-				opt: OptType::NonOpt,
-				dim: dim.iter().map(|t| t.type_erase()).collect(),
-				element: element.type_erase().into(),
+				opt: opt(o),
+				dim: dim.iter().map(|_| Type::Integer(OptType::NonOpt)).collect(),
+				element: element.output_type(erased).into(),
 			},
-			Type::Set(_, elt) => Type::Set(OptType::NonOpt, elt.type_erase().into()),
-			Type::Tuple(_, elts) => Type::Tuple(
+			Type::Set(o, elt) => Type::Set(opt(o), elt.output_type(erased).into()),
+			Type::Tuple(o, elts) => {
+				Type::Tuple(opt(o), elts.iter().map(|t| t.output_type(erased)).collect())
+			}
+			Type::Record(_, elts) if erased => Type::Tuple(
 				OptType::NonOpt,
-				elts.iter().map(|t| t.type_erase()).collect(),
+				elts.iter().map(|(_, t)| t.output_type(erased)).collect(),
 			),
-			Type::Record(_, elts) => Type::Tuple(
-				OptType::NonOpt,
-				elts.iter().map(|(_, t)| t.type_erase()).collect(),
+			Type::Record(o, elts) => Type::Record(
+				*o,
+				elts.iter()
+					.map(|(n, t)| (n.clone(), t.output_type(erased)))
+					.collect(),
 			),
 		};
-		if self.is_opt() {
+		if erased && self.is_opt() {
 			Type::Tuple(
 				OptType::NonOpt,
 				Arc::new([Type::Boolean(OptType::NonOpt), ty]),
@@ -722,9 +822,10 @@ impl Type {
 }
 
 impl Value {
-	fn reverse_type_erase(self, ty: &Type) -> Value {
+	/// The value of type `ty` for a value read in its [`Type::output_type`]
+	fn resolve_output(self, ty: &Type, erased: bool) -> Value {
 		let mut v = self;
-		if ty.is_opt() {
+		if ty.is_opt() && erased {
 			let Value::Tuple(mut tup) = v else {
 				panic!("expected opt type tuple")
 			};
@@ -736,9 +837,11 @@ impl Value {
 				return Value::Absent;
 			}
 			v = tup.pop().unwrap();
+		} else if v == Value::Absent {
+			return v;
 		}
 		match ty {
-			Type::Enum(_, e) => {
+			Type::Enum(_, e) if erased => {
 				let Value::Integer(pos) = v else {
 					panic!("expected integer value")
 				};
@@ -762,7 +865,10 @@ impl Value {
 							};
 							let [k, v] = <[Value; 2]>::try_from(pair)
 								.unwrap_or_else(|_| panic!("expected (key, value) tuple"));
-							(k.reverse_type_erase(&key), v.reverse_type_erase(element))
+							(
+								k.resolve_output(&key, erased),
+								v.resolve_output(element, erased),
+							)
 						})
 						.collect(),
 				)
@@ -809,7 +915,7 @@ impl Value {
 				} else {
 					x.members
 						.into_iter()
-						.map(|elt| elt.reverse_type_erase(element))
+						.map(|elt| elt.resolve_output(element, erased))
 						.collect()
 				};
 				Array { indices, members }.into()
@@ -821,18 +927,29 @@ impl Value {
 				Value::Tuple(
 					tup.into_iter()
 						.zip_eq(tys.iter())
-						.map(|(elt, t)| elt.reverse_type_erase(t))
+						.map(|(elt, t)| elt.resolve_output(t, erased))
 						.collect(),
 				)
 			}
-			Type::Record(_, tys) => {
+			Type::Record(_, tys) if erased => {
 				let Value::Tuple(tup) = v else {
 					panic!("expected tuple")
 				};
 				Value::Record(
 					tup.into_iter()
 						.zip_eq(tys.iter())
-						.map(|(elt, (n, t))| (n.clone(), elt.reverse_type_erase(t)))
+						.map(|(elt, (n, t))| (n.clone(), elt.resolve_output(t, erased)))
+						.collect(),
+				)
+			}
+			Type::Record(_, tys) => {
+				let Value::Record(rec) = v else {
+					panic!("expected record")
+				};
+				Value::Record(
+					rec.iter()
+						.zip_eq(tys.iter())
+						.map(|((n, elt), (_, t))| (n, elt.clone().resolve_output(t, erased)))
 						.collect(),
 				)
 			}
@@ -852,7 +969,10 @@ mod tests {
 	fn parse(line: &str) -> LegacyOutput<'_> {
 		let output_types = FxHashMap::default();
 		serde_json::Deserializer::from_str(line)
-			.deserialize_map(SerdeMessageVisitor(&output_types))
+			.deserialize_map(SerdeMessageVisitor {
+				types: &output_types,
+				erased: true,
+			})
 			.unwrap()
 	}
 

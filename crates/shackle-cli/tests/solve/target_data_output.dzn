@@ -1,0 +1,7 @@
+r = (a: 1, b: <>);
+o = 2;
+n = <>;
+c = Green;
+cs = {Red, Blue};
+w = [1, 2, 3];
+t = (4, true);

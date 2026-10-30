@@ -6,6 +6,7 @@ pub(crate) mod serde;
 use std::sync::Arc;
 
 use itertools::Itertools;
+use shackle_diagnostics::InternalError;
 
 use crate::{
 	Error, OptType, Result, Type,
@@ -63,6 +64,15 @@ impl ParserVal {
 			ParserVal::String(v) => Ok(Value::String(v.into())),
 			ParserVal::Enum(name, args) => {
 				let Type::Enum(_, e) = ty else { unreachable!() };
+				if !e.is_defined() {
+					// The model defines the members by constructors whose argument
+					// domains cannot be evaluated yet
+					return Err(InternalError::new(format!(
+						"the members of the enumerated type {} are not known, so its value {name} cannot be read",
+						e.name()
+					))
+					.into());
+				}
 				let Some((offset, doms)) = e.get(&name) else {
 					todo!("add location to throw error for undefined constructor")
 				};
@@ -119,9 +129,18 @@ impl ParserVal {
 					.into_iter()
 					.zip_eq(dim.iter())
 					.map(|(range, ty)| match range {
-						(ParserVal::Integer(start), ParserVal::Integer(end)) => {
-							Ok::<_, Error>(Index::Integer(start..=end))
-						}
+						// An array given as a list is indexed from 1, by position
+						// for an enum
+						(ParserVal::Integer(start), ParserVal::Integer(end)) => match ty {
+							Type::Enum(_, e) => Ok::<_, Error>(Index::Enum(
+								EnumRangeInclusive::from_enum_and_positions(
+									e.clone(),
+									start as usize,
+									end as usize,
+								),
+							)),
+							_ => Ok(Index::Integer(start..=end)),
+						},
 						(start @ ParserVal::Enum(_, _), ParserVal::Infinity(Polarity::Pos)) => {
 							debug_assert_eq!(dim.len(), 1);
 							let Value::Enum(start) = start.resolve_value(ty)? else {
