@@ -538,3 +538,8 @@ fn solve_object_reference_into_same_data_children() {
 fn solve_object_empty_record_data() {
 	check_solve("objects/32_empty_record_data", false, false);
 }
+
+#[test]
+fn solve_object_var_existence_in_par_child() {
+	check_solve("objects/33_var_existence_in_par_child", false, false);
+}
