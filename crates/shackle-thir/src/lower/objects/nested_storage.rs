@@ -37,13 +37,16 @@ impl<'db> ItemCollector<'db> {
 	/// the input record (it's a decision, not data — see
 	/// `class_type_to_input_record_type`), but it is still a storage field, so
 	/// each contributed object needs its own free decision of the field type.
+	/// A potential enum in `field_ty` is bounded by its enum, so that a `var
+	/// set of <C>_potential` stays finite once enums are erased.
 	pub(in crate::lower) fn fresh_storage_field_decision(
 		&mut self,
 		item: Item<'db>,
 		field_ident: Identifier<'db>,
 		field_ty: Ty<'db>,
 	) -> Expression<'db> {
-		let mut fresh_decl = Declaration::new(false, Domain::unbounded(self.db, item, field_ty));
+		let domain = self.substitute_class_with_potential_enum_domain(field_ty, item);
+		let mut fresh_decl = Declaration::new(false, domain);
 		fresh_decl.set_name(Identifier::new(
 			self.db,
 			format!("{}_init", field_ident.pretty_print(self.db)),

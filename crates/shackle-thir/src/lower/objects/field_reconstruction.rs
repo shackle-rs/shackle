@@ -183,25 +183,7 @@ impl<'db> ItemCollector<'db> {
 				// of the right storage type.
 				if input_field_ty.is_none() {
 					let storage_field_ty = self.substitute_class_with_potential_enum(field_ty);
-					let mut fresh_decl =
-						Declaration::new(false, Domain::unbounded(self.db, item, storage_field_ty));
-					fresh_decl.set_name(Identifier::new(
-						self.db,
-						format!("{}_init", field_ident.pretty_print(self.db)),
-					));
-					let fresh_decl_idx = self
-						.model
-						.add_declaration(DeclarationItem::new(fresh_decl, item));
-					let fresh_expr = Expression::new(self.db, &self.model, item, fresh_decl_idx);
-					return Expression::new(
-						self.db,
-						&self.model,
-						item,
-						Let {
-							items: vec![LetItem::Declaration(fresh_decl_idx)],
-							in_expression: Box::new(fresh_expr),
-						},
-					);
+					return self.fresh_storage_field_decision(item, field_ident, storage_field_ty);
 				}
 				let one_expr = Expression::new(self.db, &self.model, item, IntegerLiteral(1));
 				let current_children = Expression::new(
