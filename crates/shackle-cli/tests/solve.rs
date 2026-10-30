@@ -578,3 +578,8 @@ fn solve_object_var_subclass_root_par_superclass_root() {
 		false,
 	);
 }
+
+#[test]
+fn solve_object_var_collection_root_first() {
+	check_solve("objects/35_var_collection_root_first", true, false);
+}

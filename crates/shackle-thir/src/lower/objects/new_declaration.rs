@@ -1724,21 +1724,53 @@ impl<'db> ItemCollector<'db> {
 			..
 		} = cx;
 		let collector = ExpressionCollector::new(self, data, item, types);
+		let has_later_contribution = |contribution_index: usize| {
+			collector
+				.parent
+				.objects
+				.plan
+				.contributions_by_occurrence
+				.values()
+				.flatten()
+				.any(|contribution| {
+					contribution.target_class == class_pattern_ref
+						&& contribution.constructor_index > contribution_index
+				})
+		};
 		if let Some(root_collection) = &pending_root_collection
 			&& root_collection.emit_root_contribution
-			&& root_collection.inst != VarType::Var
 		{
-			pending_slices.push(PendingSlice {
-				target_class: class_pattern_ref,
-				contribution_index: root_collection.contribution_index,
-				name_suffix: "root".to_owned(),
-				sum_expr: root_collection.sum_expr.clone(),
-				max_card_per_parent: None,
-				parent_class: class_pattern_ref,
-				parent_contribution_index: root_collection.contribution_index,
-				field_attribute: None,
-				singular_opt: None,
-			});
+			// A par collection's own definition reads its end offset. A var
+			// collection's block is its potential ordinal domain, and only a
+			// later contribution needs its end, as for a singular root.
+			let sum_expr = match &root_collection.potential_ordinal_domain {
+				_ if root_collection.inst != VarType::Var => Some(root_collection.sum_expr.clone()),
+				Some(domain) if has_later_contribution(root_collection.contribution_index) => {
+					Some(Expression::new(
+						collector.parent.db,
+						&collector.parent.model,
+						item,
+						LookupCall {
+							function: collector.parent.ids.functions.card.into(),
+							arguments: vec![domain.clone()],
+						},
+					))
+				}
+				_ => None,
+			};
+			if let Some(sum_expr) = sum_expr {
+				pending_slices.push(PendingSlice {
+					target_class: class_pattern_ref,
+					contribution_index: root_collection.contribution_index,
+					name_suffix: "root".to_owned(),
+					sum_expr,
+					max_card_per_parent: None,
+					parent_class: class_pattern_ref,
+					parent_contribution_index: root_collection.contribution_index,
+					field_attribute: None,
+					singular_opt: None,
+				});
+			}
 		}
 
 		// Singular roots (`new C: x`, `var new C: x`, `var opt new C: x`)
@@ -1754,18 +1786,7 @@ impl<'db> ItemCollector<'db> {
 				.parent
 				.occurrence_contribution(root_occurrence, class_pattern_ref)
 				.constructor_index;
-			let has_later_contribution = collector
-				.parent
-				.objects
-				.plan
-				.contributions_by_occurrence
-				.values()
-				.flatten()
-				.any(|contribution| {
-					contribution.target_class == class_pattern_ref
-						&& contribution.constructor_index > contribution_index
-				});
-			if has_later_contribution {
+			if has_later_contribution(contribution_index) {
 				pending_slices.push(PendingSlice {
 					target_class: class_pattern_ref,
 					contribution_index,
