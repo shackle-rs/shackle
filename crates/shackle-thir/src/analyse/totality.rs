@@ -442,7 +442,7 @@ mod tests {
 				[let { constraint false; } in true | i in {1}]
             "#,
 			expect![[r#"
-    function array [int] of bool: foo() :: total :: needs_root;
+    function array [int] of bool: foo() :: total;
 "#]],
 		);
 	}

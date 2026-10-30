@@ -59,7 +59,7 @@ function var bool: forall(array [int] of var bool: x) = mzn_forall(x);
 
 function var bool: mzn_forall(array [int] of var bool: x) =
 	if mzn_in_root_context() then
-		let { any: xx = [let { constraint x_i } in true | x_i in x] } in true
+		let { any: xx = [let { constraint x_i :: promise_total } in true | x_i in x] } in true
 	else
 		mzn_forall_t(x)
 	endif;
