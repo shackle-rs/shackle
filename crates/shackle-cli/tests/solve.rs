@@ -198,6 +198,11 @@ fn solve_opt_array_output() {
 	check_solve("opt_array_output", true, false);
 }
 
+#[test]
+fn solve_opt_bool_array() {
+	check_solve("opt_bool_array", false, false);
+}
+
 /// The interpreter's output has to be read as it is produced, so a solution
 /// bigger than the pipe's buffer must not deadlock the run. The expected output
 /// is too big to keep in a file, and a regression makes the solve hang rather
