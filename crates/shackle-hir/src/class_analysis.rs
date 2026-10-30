@@ -452,11 +452,8 @@ pub fn var_actual_set_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 	let var_reached = var_reached_classes(db);
 	let mut result = Set::default();
 
-	// Seed var-actual-ness from the top-level introductions, and remember which
-	// classes have a top-level introduction at all: those get their actual set
-	// from the top-level lowering rather than from a superclass projection.
+	// Seed var-actual-ness from the top-level introductions
 	let mut reach_worklist = Vec::new();
-	let mut top_level_introduced = Set::default();
 	for (introduced, data, declared_type) in top_level_introductions(db) {
 		match classify_top_level_intro(data, declared_type) {
 			TopLevelIntroKind::Optional => {
@@ -472,7 +469,6 @@ pub fn var_actual_set_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 			}
 			TopLevelIntroKind::Par => {}
 		}
-		let _ = top_level_introduced.insert(introduced);
 		reach_worklist.push(introduced);
 	}
 
@@ -520,7 +516,9 @@ pub fn var_actual_set_classes<'db>(db: &'db dyn Db) -> Set<PatternRef<'db>> {
 				});
 				reach_worklist.push(attr.introduced);
 			}
-			if owner != class && !top_level_introduced.contains(&owner) {
+			// Every ancestor's actual set includes the projection of this class's
+			// objects, also when the ancestor has objects of its own
+			if owner != class {
 				edges.push(Edge {
 					owner: class,
 					child: owner,

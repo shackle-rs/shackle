@@ -569,3 +569,12 @@ fn solve_object_empty_record_data() {
 fn solve_object_var_existence_in_par_child() {
 	check_solve("objects/33_var_existence_in_par_child", false, false);
 }
+
+#[test]
+fn solve_object_var_subclass_root_par_superclass_root() {
+	check_solve(
+		"objects/34_var_subclass_root_par_superclass_root",
+		true,
+		false,
+	);
+}
