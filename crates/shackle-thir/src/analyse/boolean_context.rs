@@ -362,9 +362,9 @@ impl<'a, 'db, T: Marker> ModeAnalyser<'a, 'db, T> {
 				}
 				if it.expression.ty().elem_ty(db).unwrap().is_bool(db) {
 					if it.update_bools {
-						self.update(&c.template, Mode::NonRoot, false);
-					} else {
 						self.update(&c.template, it.mode, false);
+					} else {
+						self.update(&c.template, Mode::NonRoot, false);
 					}
 				} else {
 					self.update(&c.template, it.mode, false);
@@ -392,29 +392,25 @@ impl<'a, 'db, T: Marker> ModeAnalyser<'a, 'db, T> {
 				match &c.function {
 					Callable::Function(f) => {
 						let name = self.model[*f].name();
-						let is_builtin = self.model[*f].body().is_none();
 
-						if name == self.ids.functions.not && c.arguments.len() == 1 && is_builtin {
+						if name == self.ids.functions.not && c.arguments.len() == 1 {
 							self.update(&c.arguments[0], !it.mode, false);
 							return;
 						} else if (name == self.ids.functions.and && it.mode.is_root()
 							|| name == self.ids.functions.or && it.mode.is_root_neg())
 							&& c.arguments.len() == 2
-							&& is_builtin
 						{
 							self.update(&c.arguments[0], it.mode, false);
 							self.update(&c.arguments[1], it.mode, false);
 						} else if (name == self.ids.functions.forall && it.mode.is_root()
 							|| name == self.ids.functions.exists && it.mode.is_root_neg())
 							&& c.arguments.len() == 1
-							&& is_builtin
 						{
 							self.update(&c.arguments[0], it.mode, true);
 							return;
 						} else if name == self.ids.functions.clause
 							&& c.arguments.len() == 2
 							&& it.mode.is_root_neg()
-							&& is_builtin
 						{
 							self.update(&c.arguments[0], it.mode, true);
 							self.update(&c.arguments[1], !it.mode, true);
@@ -955,6 +951,42 @@ mod tests {
       var int: r;
       constraint bar(x :: ctx_root, r :: ctx_root) :: ctx_root;
     } in r :: ctx_root :: ctx_root;
+"#]],
+			true,
+		);
+	}
+
+	#[test]
+	fn test_bool_ctx_arrays() {
+		let program = r#"
+			predicate forall(array [int] of var bool: b);
+			var bool: b;
+			array [int] of var bool: x = [b | i in {1}];
+			array [int] of var bool: y = [b];
+			constraint forall([b]);
+			constraint forall([b | i in {1}]);
+		"#;
+		check_bool_ctx(
+			program,
+			expect![[r#"
+    predicate forall(array [int] of var bool: b);
+    var bool: b;
+    array [int] of var bool: x = [b :: ctx_non_root | i in {1 :: ctx_root} :: ctx_root] :: ctx_root;
+    array [int] of var bool: y = [b :: ctx_non_root] :: ctx_root;
+    constraint forall([b :: ctx_root] :: ctx_root) :: ctx_root;
+    constraint forall([b :: ctx_root | i in {1 :: ctx_root} :: ctx_root] :: ctx_root) :: ctx_root;
+"#]],
+			false,
+		);
+		check_bool_ctx(
+			program,
+			expect![[r#"
+    predicate forall(array [int] of var bool: b);
+    var bool: b;
+    array [int] of var bool: x = [b :: ctx_non_root | i in {1 :: ctx_root} :: ctx_root] :: ctx_root;
+    array [int] of var bool: y = [b :: ctx_non_root] :: ctx_root;
+    constraint forall([b :: ctx_root] :: ctx_root) :: ctx_root;
+    constraint forall([b :: ctx_root | i in {1 :: ctx_root} :: ctx_root] :: ctx_root) :: ctx_root;
 "#]],
 			true,
 		);
