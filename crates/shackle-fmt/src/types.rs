@@ -150,6 +150,9 @@ impl<'tree> Format for minizinc::TupleType<'tree> {
 		if let minizinc::VarType::Var = self.var_type() {
 			elements.push(Element::text("var "));
 		}
+		if let minizinc::OptType::Opt = self.opt_type() {
+			elements.push(Element::text("opt "));
+		}
 		elements.push(formatter.format_list("tuple(", ")", self.fields()));
 		Element::sequence(elements)
 	}
@@ -170,6 +173,9 @@ impl<'tree> Format for minizinc::RecordType<'tree> {
 		let mut elements = Vec::new();
 		if let minizinc::VarType::Var = self.var_type() {
 			elements.push(Element::text("var "));
+		}
+		if let minizinc::OptType::Opt = self.opt_type() {
+			elements.push(Element::text("opt "));
 		}
 		elements.push(formatter.format_list("record(", ")", self.fields()));
 		Element::sequence(elements)
