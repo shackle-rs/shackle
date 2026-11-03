@@ -577,6 +577,39 @@ fn test_var_structured_type() {
 	);
 }
 
+/// An opt tuple or record can only have par fields, as in MiniZinc, so there is
+/// no `var opt` tuple or record either
+#[test]
+fn test_opt_structured_type_with_var_field() {
+	let mut tester = TypeTester::new();
+	for (model, ty) in [
+		("opt tuple(var int): t;", "opt tuple(var int)"),
+		("var opt record(1..2: a): r;", "opt record(var int: a)"),
+		(
+			"opt tuple(int, tuple(var int)): t;",
+			"opt tuple(int, tuple(var int))",
+		),
+		(
+			"array [1..2] of opt record(var int: a): rs;",
+			"opt record(var int: a)",
+		),
+		(
+			"function opt tuple(var int): f(var int: x) = (x,);",
+			"opt tuple(var int)",
+		),
+		(
+			"var int: y; any: x = if true then (y, 1) else <> endif;",
+			"opt tuple(var int, int)",
+		),
+		(
+			"var int: y; any: x = [(a: y), <>];",
+			"array [int] of opt record(var int: a)",
+		),
+	] {
+		tester.check_error_message(model, "Illegal type", ty);
+	}
+}
+
 /// An indexed comprehension over a class is indexed by the par class, also
 /// when it iterates over a var set of the class, whose generator binds `var`
 /// objects so that their attributes read as var.

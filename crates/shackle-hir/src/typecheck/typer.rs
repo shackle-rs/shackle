@@ -192,6 +192,23 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 			Expression::Slice(_) => self.types.set_of_bottom,
 			Expression::Missing => self.types.error,
 		};
+		// An expression can't have an opt tuple or record type with var fields
+		// either, e.g. `if b then (x, 1) else <> endif` for a var `x`
+		let result = if has_opt_structure_with_var_field(db, result) {
+			let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
+			self.ctx.add_diagnostic(
+				db,
+				self.item,
+				IllegalType {
+					src,
+					span,
+					ty: result.pretty_print(db),
+				},
+			);
+			self.types.error
+		} else {
+			result
+		};
 		if self.in_output_item && !result.known_par(db) {
 			let (src, span) = ExpressionRef::new(db, self.item, expr).source_span(db);
 			self.ctx.add_diagnostic(
@@ -2795,7 +2812,8 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 	/// from its fields.
 	///
 	/// As in MiniZinc, `var` makes every field var, which is not possible for
-	/// fields that can't be var or for arrays.
+	/// fields that can't be var or for arrays, and an opt tuple or record can
+	/// only have par fields (so there is no `var opt` tuple or record).
 	fn complete_structured_type(
 		&mut self,
 		t: TypeId<'db>,
@@ -2815,7 +2833,11 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		} else {
 			ty
 		};
-		ty.with_opt(db, opt)
+		let ty = ty.with_opt(db, opt);
+		if opt == OptType::Opt && !ty.known_par(db) {
+			return self.illegal_type(t, ty.pretty_print(db));
+		}
+		ty
 	}
 
 	/// Report the type `t` as illegal, with the given type text
@@ -3662,6 +3684,21 @@ fn has_array_field<'db>(db: &'db dyn Db, ty: Ty<'db>) -> bool {
 	match ty.lookup(db) {
 		TyData::Tuple(_, fs) => fs.iter().any(|f| is_or_has_array(*f)),
 		TyData::Record(_, fs) => fs.iter().any(|(_, f)| is_or_has_array(*f)),
+		_ => false,
+	}
+}
+
+/// Whether this type is or contains an opt tuple or record with a var field
+fn has_opt_structure_with_var_field<'db>(db: &'db dyn Db, ty: Ty<'db>) -> bool {
+	match ty.lookup(db) {
+		TyData::Tuple(OptType::Opt, _) | TyData::Record(OptType::Opt, _) if !ty.known_par(db) => {
+			true
+		}
+		TyData::Tuple(_, fs) => fs.iter().any(|f| has_opt_structure_with_var_field(db, *f)),
+		TyData::Record(_, fs) => fs
+			.iter()
+			.any(|(_, f)| has_opt_structure_with_var_field(db, *f)),
+		TyData::Array { element, .. } => has_opt_structure_with_var_field(db, *element),
 		_ => false,
 	}
 }
