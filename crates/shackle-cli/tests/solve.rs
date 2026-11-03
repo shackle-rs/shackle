@@ -583,3 +583,8 @@ fn solve_object_var_subclass_root_par_superclass_root() {
 fn solve_object_var_collection_root_first() {
 	check_solve("objects/35_var_collection_root_first", true, false);
 }
+
+#[test]
+fn solve_object_two_subclass_collection_roots() {
+	check_solve("objects/36_two_subclass_collection_roots", false, false);
+}
