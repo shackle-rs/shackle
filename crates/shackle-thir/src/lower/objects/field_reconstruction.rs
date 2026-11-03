@@ -16,6 +16,35 @@ use shackle_ty::{Ty, TyData};
 use crate::{lower::ItemCollector, *};
 
 impl<'db> ItemCollector<'db> {
+	/// A reference attribute that its object isn't given: a free decision
+	/// `let { var <C>_potential: <field>_init } in <field>_init`
+	pub(in crate::lower) fn fresh_reference_decision(
+		&mut self,
+		item: Item<'db>,
+		field_ident: Identifier<'db>,
+		field_ty: Ty<'db>,
+	) -> Expression<'db> {
+		let subst_ty = self.substitute_class_with_potential_enum(field_ty);
+		let mut fresh_decl = Declaration::new(false, Domain::unbounded(self.db, item, subst_ty));
+		fresh_decl.set_name(Identifier::new(
+			self.db,
+			format!("{}_{}", field_ident.pretty_print(self.db), "init"),
+		));
+		let fresh_decl_idx = self
+			.model
+			.add_declaration(DeclarationItem::new(fresh_decl, item));
+		let fresh_expr = Expression::new(self.db, &self.model, item, fresh_decl_idx);
+		Expression::new(
+			self.db,
+			&self.model,
+			item,
+			Let {
+				items: vec![LetItem::Declaration(fresh_decl_idx)],
+				in_expression: Box::new(fresh_expr),
+			},
+		)
+	}
+
 	#[allow(
 		clippy::too_many_arguments,
 		reason = "nested reconstruction threads the full per-occurrence context"
@@ -135,26 +164,7 @@ impl<'db> ItemCollector<'db> {
 			// reads directly (`Owner_objects: record(var A_potential: ref)`);
 			// membership/target is the user's to constrain
 			// (`constraint o.ref = a` or `o.ref in A`).
-			let subst_ty = self.substitute_class_with_potential_enum(field_ty);
-			let mut fresh_decl =
-				Declaration::new(false, Domain::unbounded(self.db, item, subst_ty));
-			fresh_decl.set_name(Identifier::new(
-				self.db,
-				format!("{}_{}", field_ident.pretty_print(self.db), "init"),
-			));
-			let fresh_decl_idx = self
-				.model
-				.add_declaration(DeclarationItem::new(fresh_decl, item));
-			let fresh_expr = Expression::new(self.db, &self.model, item, fresh_decl_idx);
-			return Expression::new(
-				self.db,
-				&self.model,
-				item,
-				Let {
-					items: vec![LetItem::Declaration(fresh_decl_idx)],
-					in_expression: Box::new(fresh_expr),
-				},
-			);
+			return self.fresh_reference_decision(item, field_ident, field_ty);
 		};
 		let child_contribution = self.occurrence_contribution(child_occurrence, child_class);
 		let child_enum = self.objects.class_map[&child_class].class_enum;

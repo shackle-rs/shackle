@@ -588,3 +588,8 @@ fn solve_object_var_collection_root_first() {
 fn solve_object_two_subclass_collection_roots() {
 	check_solve("objects/36_two_subclass_collection_roots", false, false);
 }
+
+#[test]
+fn solve_object_reference_in_nested_object() {
+	check_solve("objects/37_reference_in_nested_object", false, false);
+}
