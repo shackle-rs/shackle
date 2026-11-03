@@ -593,3 +593,8 @@ fn solve_object_two_subclass_collection_roots() {
 fn solve_object_reference_in_nested_object() {
 	check_solve("objects/37_reference_in_nested_object", false, false);
 }
+
+#[test]
+fn solve_object_var_opt_root() {
+	check_solve("objects/38_var_opt_root", true, false);
+}

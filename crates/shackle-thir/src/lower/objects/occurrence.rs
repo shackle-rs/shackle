@@ -50,20 +50,31 @@ impl<'db> ItemCollector<'db> {
 		// after-the-fact widening (which would leave stale-typed references)
 		// is needed.
 		let par_class_set_ty = Ty::par_set(self.db, Ty::par_enum(self.db, class_enum_ref)).unwrap();
-		let class_set_ty = if self
+		let class_set_domain = if self
 			.objects
 			.plan
 			.var_actual_set_classes
 			.contains(&class_pattern)
 		{
-			par_class_set_ty
-				.make_var(self.db)
-				.unwrap_or(par_class_set_ty)
+			// A `var opt new` root leaves the set free, so it must be bounded
+			// by the potential enum, which erasing the enums would lose
+			Domain::set(
+				self.db,
+				item,
+				VarType::Var,
+				OptType::NonOpt,
+				Domain::bounded(
+					self.db,
+					item,
+					VarType::Par,
+					OptType::NonOpt,
+					Expression::new(self.db, &self.model, item, class_enum_idx),
+				),
+			)
 		} else {
-			par_class_set_ty
+			Domain::unbounded(self.db, item, par_class_set_ty)
 		};
-		let mut class_set_decl =
-			Declaration::new(true, Domain::unbounded(self.db, item, class_set_ty));
+		let mut class_set_decl = Declaration::new(true, class_set_domain);
 		class_set_decl.set_name(class_name);
 		let class_set_idx = self
 			.model
