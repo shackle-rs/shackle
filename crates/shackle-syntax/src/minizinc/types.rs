@@ -154,6 +154,18 @@ impl<'tree> TupleType<'tree> {
 			.unwrap_or(VarType::Par)
 	}
 
+	/// Get optionality of type
+	pub fn opt_type(&self) -> OptType {
+		self.cst_node()
+			.optional_child_with_field_name("opt")
+			.map(|c| match c.kind() {
+				"opt" => OptType::Opt,
+				"nonopt" => OptType::NonOpt,
+				_ => unreachable!(),
+			})
+			.unwrap_or(OptType::NonOpt)
+	}
+
 	/// The types of the tuple fields
 	pub fn fields(&self) -> Children<'tree, Type<'tree>> {
 		children_with_field_name(self, "field")
@@ -197,6 +209,18 @@ impl<'tree> RecordType<'tree> {
 				_ => unreachable!(),
 			})
 			.unwrap_or(VarType::Par)
+	}
+
+	/// Get optionality of type
+	pub fn opt_type(&self) -> OptType {
+		self.cst_node()
+			.optional_child_with_field_name("opt")
+			.map(|c| match c.kind() {
+				"opt" => OptType::Opt,
+				"nonopt" => OptType::NonOpt,
+				_ => unreachable!(),
+			})
+			.unwrap_or(OptType::NonOpt)
 	}
 
 	/// The types of the tuple fields
