@@ -65,6 +65,8 @@ pub enum Type<'db> {
 	},
 	/// Tuple type
 	Tuple {
+		/// Whether the type is declared var, which makes every field var
+		inst: VarType,
 		/// Optionality
 		opt: OptType,
 		/// Tuple field types
@@ -72,6 +74,8 @@ pub enum Type<'db> {
 	},
 	/// Record type
 	Record {
+		/// Whether the type is declared var, which makes every field var
+		inst: VarType,
 		/// Optionality
 		opt: OptType,
 		/// Record field types

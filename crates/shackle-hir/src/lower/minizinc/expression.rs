@@ -232,6 +232,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 						self.alloc_type(
 							t,
 							Type::Tuple {
+								inst: VarType::Par,
 								opt: OptType::NonOpt,
 								fields: dims,
 							},
@@ -275,6 +276,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				),
 			},
 			minizinc::Type::TupleType(t) => Type::Tuple {
+				inst: t.var_type(),
 				opt: t.opt_type(),
 				fields: t
 					.fields()
@@ -282,6 +284,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 					.collect(),
 			},
 			minizinc::Type::RecordType(r) => Type::Record {
+				inst: r.var_type(),
 				opt: r.opt_type(),
 				fields: r
 					.fields()

@@ -550,6 +550,33 @@ fn test_opt_structured_type() {
 	);
 }
 
+/// `var` on a tuple or record type makes every field var, as in MiniZinc, which
+/// doesn't allow arrays among the fields, nor types that can't be var
+#[test]
+fn test_var_structured_type() {
+	let mut tester = TypeTester::new();
+	tester.check_expression_preamble(
+		"var tuple(1..3, set of 1..2, tuple(int)): t;",
+		"t",
+		expect!("tuple(var int, var set of int, tuple(var int))"),
+	);
+	tester.check_expression_preamble(
+		"var record(par int: a, opt 1..2: b): r;",
+		"r",
+		expect!("record(var int: a, var opt int: b)"),
+	);
+	tester.check_error_message(
+		"var tuple(array [1..2] of int): t;",
+		"Illegal type",
+		"var tuple(array [int] of int)",
+	);
+	tester.check_error_message(
+		"var record(string: s): r;",
+		"Illegal type",
+		"var record(string: s)",
+	);
+}
+
 /// An indexed comprehension over a class is indexed by the par class, also
 /// when it iterates over a var set of the class, whose generator binds `var`
 /// objects so that their attributes read as var.

@@ -607,3 +607,9 @@ fn solve_opt_tuple_record() {
 		check_solve_with_data(name, &[fixture(name, data)], false, true);
 	}
 }
+
+#[test]
+fn solve_var_tuple_record() {
+	check_solve("var_tuple_record", true, false);
+	check_solve("var_tuple_record", true, true);
+}

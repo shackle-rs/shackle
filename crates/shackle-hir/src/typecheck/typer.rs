@@ -2791,6 +2791,42 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 		}
 	}
 
+	/// Apply the `var` and `opt` of a tuple or record type `t` to the type built
+	/// from its fields.
+	///
+	/// As in MiniZinc, `var` makes every field var, which is not possible for
+	/// fields that can't be var or for arrays.
+	fn complete_structured_type(
+		&mut self,
+		t: TypeId<'db>,
+		ty: Ty<'db>,
+		inst: VarType,
+		opt: OptType,
+	) -> Ty<'db> {
+		let db = self.db;
+		let ty = if inst == VarType::Var {
+			match ty
+				.with_inst(db, VarType::Var)
+				.filter(|_| !has_array_field(db, ty))
+			{
+				Some(ty) => ty,
+				None => return self.illegal_type(t, format!("var {}", ty.pretty_print(db))),
+			}
+		} else {
+			ty
+		};
+		ty.with_opt(db, opt)
+	}
+
+	/// Report the type `t` as illegal, with the given type text
+	fn illegal_type(&mut self, t: TypeId<'db>, ty: String) -> Ty<'db> {
+		let db = self.db;
+		let (src, span) = TypeRef::new(db, self.item, t).source_span(db);
+		self.ctx
+			.add_diagnostic(db, self.item, IllegalType { src, span, ty });
+		self.types.error
+	}
+
 	fn complete_type_inner(
 		&mut self,
 		t: TypeId<'db>,
@@ -3153,40 +3189,45 @@ supported in operation types."
 					})
 					.with_opt(db, *opt)
 			}
-			Type::Tuple { opt, fields } => match ty.map(|ty| ty.lookup(db)) {
-				Some(TyData::Tuple(_, fs)) => Ty::tuple(
-					db,
-					fields
-						.iter()
-						.zip(fs.iter().map(|f| Some(*f)).chain(std::iter::repeat(None)))
-						.map(|(f, f_ty)| {
+			Type::Tuple { inst, opt, fields } => {
+				let tuple = match ty.map(|ty| ty.lookup(db)) {
+					Some(TyData::Tuple(_, fs)) => Ty::tuple(
+						db,
+						fields
+							.iter()
+							.zip(fs.iter().map(|f| Some(*f)).chain(std::iter::repeat(None)))
+							.map(|(f, f_ty)| {
+								self.complete_type_inner(
+									*f,
+									f_ty,
+									mode,
+									has_bounded,
+									has_var_bounded,
+									has_unbounded,
+								)
+							}),
+					),
+					_ => Ty::tuple(
+						db,
+						fields.iter().map(|f| {
 							self.complete_type_inner(
 								*f,
-								f_ty,
+								None,
 								mode,
 								has_bounded,
 								has_var_bounded,
 								has_unbounded,
 							)
 						}),
-				)
-				.with_opt(db, *opt),
-				_ => Ty::tuple(
-					db,
-					fields.iter().map(|f| {
-						self.complete_type_inner(
-							*f,
-							None,
-							mode,
-							has_bounded,
-							has_var_bounded,
-							has_unbounded,
-						)
-					}),
-				)
-				.with_opt(db, *opt),
-			},
-			Type::Record { opt, fields: fs } => {
+					),
+				};
+				self.complete_structured_type(t, tuple, *inst, *opt)
+			}
+			Type::Record {
+				inst,
+				opt,
+				fields: fs,
+			} => {
 				let mut fields = Map::default();
 				for (p, t) in fs.iter() {
 					let i = self.data[*p]
@@ -3213,7 +3254,7 @@ supported in operation types."
 						}
 					}
 				}
-				Ty::record(
+				let record = Ty::record(
 					db,
 					fields.into_iter().map(|(i, (p, f))| {
 						let field_ty = self.complete_type_inner(
@@ -3235,8 +3276,8 @@ supported in operation types."
 
 						(i, field_ty)
 					}),
-				)
-				.with_opt(db, *opt)
+				);
+				self.complete_structured_type(t, record, *inst, *opt)
 			}
 			Type::Operation {
 				opt,
@@ -3612,5 +3653,15 @@ fn var_opt<'db>(db: &'db dyn Db, ty: Ty<'db>) -> Option<Ty<'db>> {
 	match ty.lookup(db) {
 		TyData::Array { .. } | TyData::Tuple(..) | TyData::Record(..) => None,
 		_ => ty.make_opt(db).make_var(db),
+	}
+}
+
+/// Whether a tuple or record type has an array field, at any depth
+fn has_array_field<'db>(db: &'db dyn Db, ty: Ty<'db>) -> bool {
+	let is_or_has_array = |f: Ty<'db>| f.is_array(db) || has_array_field(db, f);
+	match ty.lookup(db) {
+		TyData::Tuple(_, fs) => fs.iter().any(|f| is_or_has_array(*f)),
+		TyData::Record(_, fs) => fs.iter().any(|(_, f)| is_or_has_array(*f)),
+		_ => false,
 	}
 }

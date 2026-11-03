@@ -174,6 +174,7 @@ fn test_lower_declaration() {
                         primitive_type: Int,
                     },
                     <Type::3>: Tuple {
+                        inst: Par,
                         opt: NonOpt,
                         fields: [
                             <Type::1>,
@@ -807,6 +808,7 @@ fn test_lower_function() {
                         primitive_type: Int,
                     },
                     <Type::4>: Tuple {
+                        inst: Par,
                         opt: NonOpt,
                         fields: [
                             <Type::2>,
