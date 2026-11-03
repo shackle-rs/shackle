@@ -598,3 +598,12 @@ fn solve_object_reference_in_nested_object() {
 fn solve_object_var_opt_root() {
 	check_solve("objects/38_var_opt_root", true, false);
 }
+
+#[test]
+fn solve_opt_tuple_record() {
+	let name = "opt_tuple_record";
+	for data in ["dzn", "json"] {
+		check_solve_with_data(name, &[fixture(name, data)], false, false);
+		check_solve_with_data(name, &[fixture(name, data)], false, true);
+	}
+}

@@ -104,7 +104,12 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for RecordEraser<'
 					if fields.is_empty() {
 						fields.push(Domain::unbounded(db, origin, Ty::par_bool(db)));
 					}
-					Domain::tuple(db, origin, OptType::NonOpt, fields)
+					Domain::tuple(
+						db,
+						origin,
+						domain.ty().opt(db).unwrap_or(OptType::NonOpt),
+						fields,
+					)
 				}
 				_ => fold_domain(self, db, model, domain),
 			}
@@ -176,6 +181,25 @@ mod tests {
 			expect!([r#"
     tuple(bool): x = (true,);
     tuple(int, tuple(bool)): y = (1, (true,));
+    solve satisfy;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_opt_record_erasure() {
+		// An opt record becomes an opt tuple
+		check_no_stdlib(
+			Transform::EraseRecord,
+			r#"
+                opt record(int: foo, float: bar): x;
+				int: y = deopt(x).foo;
+				function record(int: foo, float: bar): deopt(opt record(int: foo, float: bar): x);
+            "#,
+			expect!([r#"
+    opt tuple(float, int): x;
+    function tuple(float, int): deopt(opt tuple(float, int): x);
+    int: y = (deopt(x)).2;
     solve satisfy;
 "#]),
 		);

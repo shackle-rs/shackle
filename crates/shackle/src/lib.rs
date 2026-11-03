@@ -309,11 +309,8 @@ impl Type {
 				)),
 			),
 			TyData::Tuple(opt, li) => {
-				let tmp = if *opt == OptType::NonOpt {
-					value
-				} else {
-					todo!()
-				};
+				// Cached by the non-opt type, the fields are the same
+				let tmp = value.with_opt(db, OptType::NonOpt);
 				let Type::Tuple(_, li) = (if let Some(x) = type_map.get(&tmp) {
 					x
 				} else {
@@ -335,11 +332,8 @@ impl Type {
 				Type::Tuple(*opt, li.clone())
 			}
 			TyData::Record(opt, li) => {
-				let tmp = if *opt == OptType::NonOpt {
-					value
-				} else {
-					todo!()
-				};
+				// Cached by the non-opt type, the fields are the same
+				let tmp = value.with_opt(db, OptType::NonOpt);
 				let Type::Record(_, li) = (if let Some(x) = type_map.get(&tmp) {
 					x
 				} else {

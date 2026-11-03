@@ -468,7 +468,9 @@ impl<'a, 'db, Src: Marker, Dst: Marker> TopDownTyper<'a, 'db, Dst, Src> {
 			),
 			ExpressionData::Case(c) => self.extend(db, c.branches.iter().map(|b| (&b.result, ty))),
 			ExpressionData::TupleLiteral(tl) => {
-				self.extend(db, tl.iter().zip(ty.fields(db).unwrap()))
+				self.extend(db, tl.iter().zip(ty.fields(db).unwrap()));
+				// The literal itself still needs coercing to an opt tuple
+				return ty.opt(db) != Some(OptType::Opt);
 			}
 			ExpressionData::RecordLiteral(rl) => {
 				let fields = ty.record_fields(db).unwrap();
@@ -481,7 +483,9 @@ impl<'a, 'db, Src: Marker, Dst: Marker> TopDownTyper<'a, 'db, Dst, Src> {
 							.expect("record literal field is in its type");
 						(e, *field_ty)
 					}),
-				)
+				);
+				// The literal itself still needs coercing to an opt record
+				return ty.opt(db) != Some(OptType::Opt);
 			}
 			ExpressionData::Let(l) => self.insert(db, &l.in_expression, ty),
 			ExpressionData::Call(c) => {
@@ -672,6 +676,27 @@ mod tests {
     record(int: a, array [int] of int: b): s = (a: 1, b: let {
       array [int] of int: _DECL_4 = [];
     } in _DECL_4);
+    solve satisfy;
+"#]),
+		)
+	}
+
+	#[test]
+	fn test_top_down_type_opt_structured_literal() {
+		// The fields get their own types, and the literal is made optional
+		check_no_stdlib(
+			Transform::TopDownType,
+			r#"
+					function opt $T: val2opt($T: x);
+					opt tuple(int, opt int): t = (1, 2);
+					opt record(int: a): r = if true then (a: 1) else <> endif;
+					"#,
+			expect!([r#"
+    function opt $T: val2opt($T: x);
+    opt tuple(int, opt int): t = val2opt((1, val2opt(2)));
+    opt record(int: a): r = if true then val2opt((a: 1)) else let {
+      opt record(int: a): _DECL_3 = <>;
+    } in _DECL_3 endif;
     solve satisfy;
 "#]),
 		)

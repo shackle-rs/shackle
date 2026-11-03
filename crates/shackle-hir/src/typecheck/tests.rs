@@ -530,6 +530,26 @@ fn test_var_opt_structured_comprehension() {
 	);
 }
 
+/// `opt` on a tuple or record type makes the tuple or record optional
+#[test]
+fn test_opt_structured_type() {
+	let mut tester = TypeTester::new();
+	tester.check_expression_preamble(
+		"opt tuple(int, 1..3): t = <>;",
+		"t",
+		expect!("opt tuple(int, int)"),
+	);
+	tester.check_expression_preamble(
+		"opt record(int: a): r = (a: 1);",
+		"r",
+		expect!("opt record(int: a)"),
+	);
+	tester.check_expression(
+		"if true then (a: 1) else <> endif",
+		expect!("opt record(int: a)"),
+	);
+}
+
 /// An indexed comprehension over a class is indexed by the par class, also
 /// when it iterates over a var set of the class, whose generator binds `var`
 /// objects so that their attributes read as var.
