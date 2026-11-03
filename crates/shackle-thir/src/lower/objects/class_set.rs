@@ -687,9 +687,11 @@ impl<'db> ItemCollector<'db> {
 		direct_class: PatternRef<'db>,
 		direct_constructor_index: usize,
 	) -> Option<Expression<'db>> {
-		// All slots realised: the image of the direct class's whole block (or,
-		// if it isn't chained, of its constructor's domain), which unlike its
-		// objects doesn't depend on their data
+		// All slots realised: the image of the direct class's whole block, which
+		// unlike its objects doesn't depend on their data. The superclass's
+		// constructor has the same domain as the direct class's, whether that
+		// is a private universe (`1..n`) or a chained block of a top-level root
+		// (`<start>..<end> - 1`).
 		if !self
 			.objects
 			.plan
@@ -697,23 +699,16 @@ impl<'db> ItemCollector<'db> {
 			.contains(&direct_class)
 		{
 			let block = self
-				.par_contribution_block_set_as(
-					item,
-					direct_class,
+				.class_enum_constructor_domain(
+					self.objects.class_map[&direct_class].class_enum,
 					direct_constructor_index,
-					super_class,
-					super_constructor_index,
 				)
-				.or_else(|| {
-					let domain = self.class_enum_constructor_domain(
-						self.objects.class_map[&direct_class].class_enum,
-						direct_constructor_index,
-					)?;
+				.map(|domain| {
 					let member = EnumMemberId::new(
 						self.objects.class_map[&super_class].class_enum,
 						super_constructor_index as u32,
 					);
-					Some(Expression::new(
+					Expression::new(
 						self.db,
 						&self.model,
 						item,
@@ -721,7 +716,16 @@ impl<'db> ItemCollector<'db> {
 							function: Callable::EnumConstructor(member),
 							arguments: vec![domain],
 						},
-					))
+					)
+				})
+				.or_else(|| {
+					self.par_contribution_block_set_as(
+						item,
+						direct_class,
+						direct_constructor_index,
+						super_class,
+						super_constructor_index,
+					)
 				});
 			if let Some(block) = block {
 				return Some(Expression::new(
