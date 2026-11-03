@@ -164,6 +164,10 @@ impl<'db> ItemCollector<'db> {
 						let Some(field_class) = field_ty.class_type(self.db) else {
 							return true;
 						};
+						// A reference introduces no objects of its own
+						if self.is_reference_field(target_class, *field_ident, *field_ty) {
+							return true;
+						}
 						let field_class = class_pattern_for(self.db, field_class)
 							.expect("class item for class type");
 						// The grand-child occurrence sits at the FULL path from the

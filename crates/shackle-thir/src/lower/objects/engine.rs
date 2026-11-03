@@ -415,6 +415,24 @@ impl<'db> ItemCollector<'db> {
 					&current_input,
 				);
 				self.resolve_data_references(item.into(), value, field_ty, referrer)
+			} else if field_ty.class_type(self.db).is_some() && decl.is_reference(self.db) {
+				// Reference rule: a reference selects existing objects, so only
+				// `new` fields mint identities. It is read from the input, which
+				// holds identities, or is a free decision when the input doesn't
+				// give it (a var reference of a par object).
+				if field_available_in_input {
+					Expression::new(
+						self.db,
+						&self.model,
+						item,
+						RecordAccess {
+							record: Box::new(current_input.clone()),
+							field: field_ident,
+						},
+					)
+				} else {
+					self.fresh_reference_decision(item, field_ident, field_ty)
+				}
 			} else if field_ty.class_type(self.db).is_some() {
 				// Identity-or-read rule for class-typed fields (including `set
 				// of`/`array of` class fields): read the input through when it

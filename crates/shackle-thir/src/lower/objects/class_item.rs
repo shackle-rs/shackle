@@ -940,4 +940,30 @@ impl<'db> ItemCollector<'db> {
 		collect(self, class_item, &mut fields);
 		fields
 	}
+
+	/// Whether the storage field `field` of `class` is a reference: of a class
+	/// type, but not `new`, so it refers to existing objects instead of
+	/// introducing its own
+	pub(in crate::lower) fn is_reference_field(
+		&self,
+		class: PatternRef<'db>,
+		field: Identifier<'db>,
+		field_ty: Ty<'db>,
+	) -> bool {
+		field_ty.class_type(self.db).is_some()
+			&& self
+				.class_storage_field_decls(class.item(self.db))
+				.iter()
+				.find(|decl| decl.ident == field)
+				.is_some_and(|decl| decl.is_reference(self.db))
+	}
+}
+
+impl<'db> StorageFieldDecl<'db> {
+	/// Whether the field is not a `new` field (see
+	/// [`ItemCollector::is_reference_field`] for class-typed fields)
+	pub(in crate::lower) fn is_reference(&self, db: &'db dyn Db) -> bool {
+		let data = self.owner.data(db);
+		data[self.declared_type].get_new_class(data).is_none()
+	}
 }
