@@ -275,14 +275,14 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 				),
 			},
 			minizinc::Type::TupleType(t) => Type::Tuple {
-				opt: OptType::NonOpt,
+				opt: t.opt_type(),
 				fields: t
 					.fields()
 					.map(|f| self.collect_type_with_tiids(&f, tiids, false, is_fn_parameter))
 					.collect(),
 			},
 			minizinc::Type::RecordType(r) => Type::Record {
-				opt: OptType::NonOpt,
+				opt: r.opt_type(),
 				fields: r
 					.fields()
 					.map(|f| {

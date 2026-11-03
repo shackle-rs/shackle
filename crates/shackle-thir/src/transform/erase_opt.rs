@@ -7,13 +7,16 @@
 //! Does not handle records, so records must be erased into tuples first
 
 use shackle_diagnostics::Result;
-use shackle_hir::{BooleanLiteral, OptType, VarType, constants::IdentifierRegistry};
+use shackle_hir::{
+	BooleanLiteral, IntegerLiteral, OptType, VarType, constants::IdentifierRegistry,
+};
 use shackle_ty::{Ty, registry::TypeRegistry};
 use shackle_utils::maybe_grow_stack;
 
 use crate::{
 	Constraint, Db, Declaration, Domain, DomainData, DummyValue, Expression, ExpressionData,
-	FunctionId, Item, Let, LetItem, LookupCall, LookupIdentifier, Marker, Model, TupleLiteral,
+	FunctionId, Item, Let, LetItem, LookupCall, LookupIdentifier, Marker, Model, TupleAccess,
+	TupleLiteral,
 	source::Origin,
 	traverse::{
 		Folder, ReplacementMap, add_function, fold_domain, fold_expression, fold_function_body,
@@ -141,15 +144,21 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for OptEraser<'db,
 				} else {
 					self.tys.par_bool
 				};
-				let deopt = domain.ty().make_occurs(db);
+				// The value of an opt tuple keeps its fields' domains, whose own
+				// opt types are erased too
+				let deopt = match &**domain {
+					DomainData::Tuple(ds) => self.fold_domain(
+						db,
+						model,
+						&Domain::tuple(db, origin, OptType::NonOpt, ds.iter().cloned()),
+					),
+					_ => Domain::unbounded(db, origin, domain.ty().make_occurs(db)),
+				};
 				return Domain::tuple(
 					db,
 					origin,
 					OptType::NonOpt,
-					[
-						Domain::unbounded(db, origin, occurs),
-						Domain::unbounded(db, origin, deopt),
-					],
+					[Domain::unbounded(db, origin, occurs), deopt],
 				);
 			}
 			fold_domain(self, db, model, domain)
@@ -187,6 +196,90 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for OptEraser<'db,
 				{
 					// Remove calls to mzn_construct_opt/mzn_destruct_opt
 					self.fold_expression(db, model, &c.arguments[0])
+				}
+				ExpressionData::TupleAccess(ta) if ta.tuple.ty().opt(db) == Some(OptType::Opt) => {
+					// A field of an opt tuple occurs when the tuple does: `(t.1,
+					// t.2.k)`, or `(t.1 /\ t.2.k.1, t.2.k.2)` for an opt field
+					let field_is_opt = ta.tuple.ty().fields(db).unwrap()[(ta.field.0 - 1) as usize]
+						.opt(db)
+						== Some(OptType::Opt);
+					let tuple = self.fold_expression(db, model, &ta.tuple);
+					let decl = Declaration::from_expression(db, false, tuple);
+					let idx = self.model.add_declaration(Item::new(decl, origin));
+					let ident = Expression::new(db, &self.model, origin, idx);
+					let occurs = Expression::new(
+						db,
+						&self.model,
+						origin,
+						TupleAccess {
+							tuple: Box::new(ident.clone()),
+							field: IntegerLiteral(1),
+						},
+					);
+					let value = Expression::new(
+						db,
+						&self.model,
+						origin,
+						TupleAccess {
+							tuple: Box::new(ident),
+							field: IntegerLiteral(2),
+						},
+					);
+					let field = Expression::new(
+						db,
+						&self.model,
+						origin,
+						TupleAccess {
+							tuple: Box::new(value),
+							field: ta.field,
+						},
+					);
+					let (occurs, field) = if field_is_opt {
+						let field_occurs = Expression::new(
+							db,
+							&self.model,
+							origin,
+							TupleAccess {
+								tuple: Box::new(field.clone()),
+								field: IntegerLiteral(1),
+							},
+						);
+						let field_value = Expression::new(
+							db,
+							&self.model,
+							origin,
+							TupleAccess {
+								tuple: Box::new(field),
+								field: IntegerLiteral(2),
+							},
+						);
+						let both = Expression::new(
+							db,
+							&self.model,
+							origin,
+							LookupCall {
+								function: self.ids.functions.and.into(),
+								arguments: vec![occurs, field_occurs],
+							},
+						);
+						(both, field_value)
+					} else {
+						(occurs, field)
+					};
+					Expression::new(
+						db,
+						&self.model,
+						origin,
+						Let {
+							items: vec![LetItem::Declaration(idx)],
+							in_expression: Box::new(Expression::new(
+								db,
+								&self.model,
+								origin,
+								TupleLiteral(vec![occurs, field]),
+							)),
+						},
+					)
 				}
 				_ => fold_expression(self, db, model, expression),
 			}
@@ -351,6 +444,52 @@ mod tests {
     } in ((true, (_DECL_17).1), (_DECL_17).2);
     function tuple(bool, int): foo(tuple(bool, int): x) = (true, 1);
     tuple(bool, int): f = foo((true, 1));
+    solve satisfy;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_opt_tuple_erasure() {
+		// An opt tuple is `(occurs, value)` with its fields' own opt erased
+		// too, and a field of it occurs when the tuple (and the field) does
+		check_no_stdlib(
+			vec![
+				Transform::TopDownType,
+				Transform::EraseRecord,
+				Transform::EraseOpt,
+			],
+			r#"
+				annotation mzn_opt_bool;
+				function var opt $T: val2opt(var $T: x);
+				function opt $T: val2opt($T: x);
+				test '/\'(bool: x, bool: y);
+				opt tuple(int, opt int): t = (1, <>);
+				opt tuple(int, opt int): u = <>;
+				opt record({1, 2, 3}: v): r = (v: 2);
+				opt int: a = t.1;
+				opt int: b = t.2;
+				opt int: c = r.v;
+			"#,
+			expect!([r#"
+    annotation mzn_opt_bool;
+    function bool: '/\'(bool: x, bool: y);
+    tuple(bool, tuple(int, tuple(bool, int))): t = (true, (1, let {
+      tuple(bool, int): _DECL_3 = (false, 0);
+    } in _DECL_3));
+    tuple(bool, tuple(int, tuple(bool, int))): u = let {
+      tuple(bool, tuple(int, tuple(bool, int))): _DECL_5 = (false, (0, (false, 0)));
+    } in _DECL_5;
+    tuple(bool, tuple({1, 2, 3})): r = (true, (2,));
+    tuple(bool, int): a = let {
+      tuple(bool, tuple(int, tuple(bool, int))): _DECL_8 = t;
+    } in ((_DECL_8).1, ((_DECL_8).2).1);
+    tuple(bool, int): b = let {
+      tuple(bool, tuple(int, tuple(bool, int))): _DECL_10 = t;
+    } in ('/\'((_DECL_10).1, (((_DECL_10).2).2).1), (((_DECL_10).2).2).2);
+    tuple(bool, int): c = let {
+      tuple(bool, tuple(int)): _DECL_12 = r;
+    } in ((_DECL_12).1, ((_DECL_12).2).1);
     solve satisfy;
 "#]),
 		);
