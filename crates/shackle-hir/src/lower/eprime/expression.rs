@@ -163,6 +163,7 @@ impl<'db, 'a> ExpressionCollector<'db, 'a> {
 					self.alloc_type(
 						m,
 						Type::Tuple {
+							inst: VarType::Par,
 							opt: OptType::NonOpt,
 							fields: domain_indexes,
 						},
