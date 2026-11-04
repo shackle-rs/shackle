@@ -1,0 +1,3 @@
+u_output = <>;
+t_output = (id: "t", leaves: [(id: "x", v: 1), (id: "t.leaves[2]", v: 2)], main: (id: "t.main", v: 3), spare: (id: "t.spare", v: 1));
+----------

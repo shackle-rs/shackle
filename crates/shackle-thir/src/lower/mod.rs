@@ -430,7 +430,13 @@ impl<'db> ItemCollector<'db> {
 		if uses_occurrence_lowering
 			&& matches!(
 				&data[d.declared_type],
-				shackle_hir::Type::Set { .. } | shackle_hir::Type::Array { .. }
+				shackle_hir::Type::Set { .. }
+					| shackle_hir::Type::Array { .. }
+					| shackle_hir::Type::New {
+						inst: VarType::Par,
+						opt: OptType::Opt,
+						..
+					}
 			)
 			&& let Some(class_domain) = data[d.declared_type].get_new_class(data)
 		{
@@ -456,7 +462,10 @@ impl<'db> ItemCollector<'db> {
 				// would force OTHER contributions' potentials into the class
 				// set the moment introductions mixed (an
 				// `array [1..2] of new A` root plus `var set(1..2) of new A`
-				// pinned both var slots realised).
+				// pinned both var slots realised). A par `opt new` root
+				// contributes its block too, which has zero or one objects:
+				// `<C>_occ_k(<its declared domain>)`, which is chained after the
+				// previous roots' blocks.
 				let contribution_expr = match &data[d.declared_type] {
 					shackle_hir::Type::Set { .. } => Expression::new(
 						collector.parent.db,
@@ -464,6 +473,28 @@ impl<'db> ItemCollector<'db> {
 						item,
 						ResolvedIdentifier::Declaration(idx),
 					),
+					shackle_hir::Type::New { .. } => {
+						let constructor_index = collector
+							.parent
+							.occurrence_contribution(root_occurrence, class_pattern_ref)
+							.constructor_index;
+						let domain = collector
+							.parent
+							.class_enum_constructor_domain(class_info.class_enum, constructor_index)
+							.expect("an optional root's constructor is added by now");
+						Expression::new(
+							collector.parent.db,
+							&collector.parent.model,
+							item,
+							Call {
+								function: Callable::EnumConstructor(EnumMemberId::new(
+									class_info.class_enum,
+									constructor_index as u32,
+								)),
+								arguments: vec![domain],
+							},
+						)
+					}
 					shackle_hir::Type::Array { .. } => {
 						let block_set = collector.parent.par_contribution_block_set(
 							item,
