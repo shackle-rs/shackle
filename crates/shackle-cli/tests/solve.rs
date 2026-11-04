@@ -195,6 +195,12 @@ fn solve_enum_equality() {
 }
 
 #[test]
+fn solve_enum_output_item() {
+	check_solve("enum_output_item", true, false);
+	check_solve("enum_output_item", true, true);
+}
+
+#[test]
 fn solve_opt_domain_absent() {
 	check_solve("opt_domain_absent", true, false);
 }
@@ -632,6 +638,12 @@ fn solve_object_opt_root() {
 #[test]
 fn solve_object_var_opt_root_beside_par_roots() {
 	check_solve("objects/42_var_opt_root_beside_par_roots", true, false);
+}
+
+#[test]
+fn solve_object_par_and_var_attributes() {
+	check_solve("objects/44_par_and_var_attributes", true, false);
+	check_solve("objects/44_par_and_var_attributes", true, true);
 }
 
 #[test]
