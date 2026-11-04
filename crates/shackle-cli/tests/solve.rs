@@ -634,6 +634,12 @@ fn solve_object_var_opt_root_beside_par_roots() {
 	check_solve("objects/42_var_opt_root_beside_par_roots", true, false);
 }
 
+#[test]
+fn solve_object_class_without_objects() {
+	check_solve("objects/43_class_without_objects", false, false);
+	check_solve("objects/43_class_without_objects", false, true);
+}
+
 /// Only with the MicroZinc target: the MiniZinc target lacks the library
 /// functions that objects in data use (`mzn_object_data_ids`)
 #[test]

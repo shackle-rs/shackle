@@ -447,7 +447,10 @@ impl<'db, Src: Marker, Dst: Marker> EnumEraser<'db, Dst, Src> {
 					));
 				}
 			}
-			Expression::new(db, &self.model, origin, ArrayLiteral(enum_def))
+			// Typed, so that an enum without constructors (`[]`) picks the
+			// overload of `mzn_get_enum` for constructors
+			let enum_def = Expression::new(db, &self.model, origin, ArrayLiteral(enum_def));
+			add_coercion(db, &mut self.model, self.tys.mzn_enum_definition, enum_def)
 		} else {
 			// Create declaration for enum data input
 			let mut enum_declaration = Declaration::new(
@@ -596,6 +599,22 @@ mod tests {
     int: C = mzn_construct_enum(_DECL_5, 3);
     int: x = B;
     int: y = mzn_construct_enum(_DECL_5, 4, [E]);
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_empty_enum_type_erasure() {
+		check(
+			vec![Transform::TypeSpecialise, Transform::EraseEnum],
+			r#"
+                enum Foo = {};
+            "#,
+			expect!([r#"
+    tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int)): _DECL_1 = mzn_get_enum(let {
+      array [int] of tuple(string, array [int] of tuple(int, set of int)): _DECL_2 = [];
+    } in _DECL_2);
+    set of int: _DECL_3 = mzn_defining_set(_DECL_1);
 "#]),
 		);
 	}
