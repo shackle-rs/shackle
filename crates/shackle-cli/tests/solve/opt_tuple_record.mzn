@@ -9,9 +9,10 @@ array [1..2] of opt tuple(5..6): ts = [<>, (5,)];
 function opt record(int: v): pick(bool: p) = if p then (v: 3) else <> endif;
 opt record(1..3: v): d;
 opt record(1..3: v): e;
+opt record(opt int: x, int: y): f;
 var 1..3: z;
 constraint z = deopt(r).v;
 output [
-  "\(r) \(s) \(t) \(x) \(ts) \(pick(false)) \(d) \(e)\n",
+  "\(r) \(s) \(t) \(x) \(ts) \(pick(false)) \(d) \(e) \(f)\n",
   "\(occurs(r)) \(r.v) \(r.w) \(s.v) \(t.2) \(deopt(x).v) \([occurs(u) | u in ts] == [false, true]) \(z)\n",
 ];

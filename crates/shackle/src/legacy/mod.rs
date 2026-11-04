@@ -368,7 +368,7 @@ impl Display for DummyValue<'_> {
 				write!(
 					f,
 					"({}{})",
-					tys.iter().map(DummyValue).format(","),
+					tys.iter().map(ErasedDummyValue).format(","),
 					if tys.len() == 1 { "," } else { "" }
 				)
 			}
@@ -376,10 +376,23 @@ impl Display for DummyValue<'_> {
 				write!(
 					f,
 					"({}{})",
-					tys.iter().map(|(_, ty)| DummyValue(ty)).format(","),
+					tys.iter().map(|(_, ty)| ErasedDummyValue(ty)).format(","),
 					if tys.len() == 1 { "," } else { "" }
 				)
 			}
+		}
+	}
+}
+
+/// A dummy value of the erased form of a type: `(false, <dummy>)` for an opt
+/// type, as a field of a dummy tuple or record
+struct ErasedDummyValue<'a>(&'a Type);
+impl Display for ErasedDummyValue<'_> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if self.0.is_opt() {
+			write!(f, "(false, {})", DummyValue(self.0))
+		} else {
+			write!(f, "{}", DummyValue(self.0))
 		}
 	}
 }
