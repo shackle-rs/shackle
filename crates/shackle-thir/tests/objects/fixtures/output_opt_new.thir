@@ -14,5 +14,7 @@ array [int] of record(var opt Handrail_potential: handrail): Pole_pole_objects =
 Pole_potential: pole_ref :: (no_output) = Pole_occ_0(1);
 constraint forall(['->'(occurs(('[]'(Pole_pole_objects, _DECL_2)).handrail), '='(('[]'(Pole_pole_objects, _DECL_2)).handrail, Handrail_occ_1(_DECL_2))) | _DECL_2 in index_set(Pole_pole_objects)]);
 constraint forall(['\/'('in'(x, Handrail), '='(('[]'(Handrail_objects, enum2int(x))).len, mzn_safe_default(('[]'(Handrail_objects, enum2int(x))).len))) | x in Handrail_potential]);
-record(array [int] of record(string: id, int: len): handrail, string: id): pole :: (output_only) :: ('output') = (id: '[]'(Pole_ids, pole_ref), handrail: [(id: '[]'(Handrail_ids, deopt(_DECL_3)), len: fix(('[]'(Handrail_objects, enum2int(deopt(_DECL_3)))).len)) | _DECL_3 in [fix(('[]'(Pole_objects, enum2int(pole_ref))).handrail)] where occurs(_DECL_3)]);
+record(opt record(string: id, int: len): handrail, string: id): pole :: (output_only) :: ('output') = (id: '[]'(Pole_ids, pole_ref), handrail: let {
+  opt Handrail_potential: _DECL_3 = fix(('[]'(Pole_objects, enum2int(pole_ref))).handrail);
+} in if occurs(_DECL_3) then (id: '[]'(Handrail_ids, deopt(_DECL_3)), len: fix(('[]'(Handrail_objects, enum2int(deopt(_DECL_3)))).len)) else <> endif);
 solve satisfy;

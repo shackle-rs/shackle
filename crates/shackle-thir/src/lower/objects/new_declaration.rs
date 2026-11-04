@@ -1987,10 +1987,11 @@ impl<'db> ItemCollector<'db> {
 			let input_value = if let Some(rhs) = d.definition {
 				collect_input(&mut collector, rhs)
 			} else if data_root {
-				// The object record, read from data under the user's name.
+				// The object record, read from data under the user's name, in
+				// its natural form (an optional child as an `opt` record)
 				let mut data_decl = Declaration::new(
 					true,
-					Domain::unbounded(collector.parent.db, item, lowered_input_record_ty),
+					Domain::unbounded(collector.parent.db, item, input_record_ty),
 				);
 				data_decl.set_name(root_pattern.identifier(collector.parent.db).unwrap());
 				let data_idx = collector
@@ -1998,6 +1999,13 @@ impl<'db> ItemCollector<'db> {
 					.model
 					.add_declaration(DeclarationItem::new(data_decl, item));
 				let record = alloc_expression(data_idx, &collector, item);
+				let record = if opt_new_input {
+					collector
+						.parent
+						.lower_opt_new_input_value(item, record, input_record_ty)
+				} else {
+					record
+				};
 				collector.parent.register_data_id_blocks(
 					item.into(),
 					root_pattern,
@@ -2558,6 +2566,37 @@ impl<'db> ItemCollector<'db> {
 				)
 			};
 			array_decl.set_name(array_name);
+			if data_root && set_root_opt_new_input {
+				// The data gives the records in their natural form, an optional
+				// child as an `opt` record: read them under the user's name, and
+				// convert them into the inputs
+				let mut data_decl = Declaration::new(
+					true,
+					Domain::array(
+						collector.parent.db,
+						item,
+						OptType::NonOpt,
+						build_index_domain(&potential_ordinal_domain),
+						Domain::unbounded(collector.parent.db, item, input_record_ty),
+					),
+				);
+				data_decl.set_name(root_pattern.identifier(collector.parent.db).unwrap());
+				let data_ty = data_decl.ty();
+				let data_idx = collector
+					.parent
+					.model
+					.add_declaration(DeclarationItem::new(data_decl, item));
+				let data_records = alloc_expression(data_idx, &collector, item);
+				array_decl.set_name(Identifier::new(
+					collector.parent.db,
+					format!("{}_inputs", class_and_decl_name),
+				));
+				array_decl.set_definition(collector.parent.lower_opt_new_input_value(
+					item,
+					data_records,
+					data_ty,
+				));
+			}
 			let mut structure = None;
 			if matches!(inst, VarType::Par)
 				&& let Some(rhs) = d.definition

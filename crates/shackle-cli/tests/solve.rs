@@ -613,3 +613,9 @@ fn solve_var_tuple_record() {
 	check_solve("var_tuple_record", true, false);
 	check_solve("var_tuple_record", true, true);
 }
+
+#[test]
+fn solve_object_opt_child_values() {
+	check_solve("objects/39_opt_child_values", false, false);
+	check_solve("objects/39_opt_child_values", false, true);
+}

@@ -311,8 +311,7 @@ impl<'db> ItemCollector<'db> {
 
 	/// Render the objects a `new` root of `class` introduces, given its (par)
 	/// identity value: a record for a singular root, and an array of records
-	/// for a collection. An optional object is an array of zero or one
-	/// records, as MiniZinc has no `opt record`.
+	/// for a collection. An optional object is an opt record, `<>` when absent.
 	fn render_introduced_objects(
 		&mut self,
 		origin: Origin<'db>,
@@ -325,11 +324,51 @@ impl<'db> ItemCollector<'db> {
 				self.render_object(origin, potential_classes, class, value)
 			}
 			TyData::Enum(_, OptType::Opt, _) => {
-				let present =
-					Expression::new(self.db, &self.model, origin, ArrayLiteral(vec![value]));
-				self.map_members(origin, present, true, |this, member| {
-					this.render_object(origin, potential_classes, class, member)
-				})
+				// `let { x = value } in if occurs(x) then <object deopt(x)> else
+				// <> endif`
+				let decl = Declaration::from_expression(self.db, false, value);
+				let decl = self
+					.model
+					.add_declaration(DeclarationItem::new(decl, origin));
+				let value = Expression::new(self.db, &self.model, origin, decl);
+				let occurs = Expression::new(
+					self.db,
+					&self.model,
+					origin,
+					LookupCall {
+						function: self.ids.functions.occurs.into(),
+						arguments: vec![value.clone()],
+					},
+				);
+				let deopt = Expression::new(
+					self.db,
+					&self.model,
+					origin,
+					LookupCall {
+						function: self.ids.functions.deopt.into(),
+						arguments: vec![value],
+					},
+				);
+				let object = self.render_object(origin, potential_classes, class, deopt);
+				let absent = Expression::new(self.db, &self.model, origin, Absent);
+				let rendered = Expression::new(
+					self.db,
+					&self.model,
+					origin,
+					IfThenElse {
+						branches: vec![Branch::new(occurs, object)],
+						else_result: Box::new(absent),
+					},
+				);
+				Expression::new(
+					self.db,
+					&self.model,
+					origin,
+					Let {
+						items: vec![LetItem::Declaration(decl)],
+						in_expression: Box::new(rendered),
+					},
+				)
 			}
 			TyData::Set(..) => self.map_members(origin, value, false, |this, member| {
 				this.render_object(origin, potential_classes, class, member)
