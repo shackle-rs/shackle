@@ -2237,118 +2237,15 @@ impl<'db> ItemCollector<'db> {
 				top_level,
 				Domain::unbounded(collector.parent.db, item, domain_ty),
 			);
-			// Whether ANOTHER introduction also reaches the direct
-			// class — i.e. `<C>_potential` has more than the opt root's own
-			// constructor. Only then does the naive defining form below
-			// (`x = if occurs then <C>_occ_k(1) else <>`) misbehave: with a
-			// multi-constructor enum MiniZinc flags a model inconsistency
-			// and drops the absent branch, silently forcing the optional
-			// occurrence present. The unmixed case keeps the byte-identical
-			// defining form (its enum is single-member).
-			let direct_is_mixed = collector
-				.parent
-				.objects
-				.plan
-				.contributions_by_occurrence
-				.iter()
-				.filter(|(occ, _)| **occ != root_occurrence)
-				.flat_map(|(_, cs)| cs.iter())
-				.any(|c| c.target_class == class_pattern_ref);
-			let identity_def = if direct_is_mixed {
-				// Constraint-decomposed identity, wrapped in a `let` so `x`
-				// stays a defined declaration:
-				//   let { var opt <C>_potential: t;
-				//         constraint occurs(t) <-> <occurs>;
-				//         constraint occurs(t) -> deopt(t) = <C>_occ_k(1);
-				//   } in t
-				let t_decl = Declaration::new(
-					false,
-					Domain::unbounded(collector.parent.db, item, domain_ty),
-				);
-				let t_idx = collector
-					.parent
-					.model
-					.add_declaration(DeclarationItem::new(t_decl, item));
-				let t_expr = alloc_expression(t_idx, &collector, item);
-				let occurs_t = alloc_expression(
-					LookupCall {
-						function: collector.parent.ids.functions.occurs.into(),
-						arguments: vec![t_expr.clone()],
-					},
-					&collector,
-					item,
-				);
-				let presence = alloc_expression(
-					LookupCall {
-						function: collector.parent.ids.functions.iff.into(),
-						arguments: vec![occurs_t, occurs_expr],
-					},
-					&collector,
-					item,
-				);
-				let presence_id = collector
-					.parent
-					.model
-					.add_constraint(ConstraintItem::new(Constraint::new(false, presence), item));
-				let occurs_t2 = alloc_expression(
-					LookupCall {
-						function: collector.parent.ids.functions.occurs.into(),
-						arguments: vec![t_expr.clone()],
-					},
-					&collector,
-					item,
-				);
-				let deopt_t = alloc_expression(
-					LookupCall {
-						function: collector.parent.ids.functions.deopt.into(),
-						arguments: vec![t_expr.clone()],
-					},
-					&collector,
-					item,
-				);
-				let value_eq = alloc_expression(
-					LookupCall {
-						function: collector.parent.ids.functions.eq.into(),
-						arguments: vec![deopt_t, call_expr],
-					},
-					&collector,
-					item,
-				);
-				let value_imp = alloc_expression(
-					LookupCall {
-						function: collector.parent.ids.functions.implies.into(),
-						arguments: vec![occurs_t2, value_eq],
-					},
-					&collector,
-					item,
-				);
-				let value_id = collector
-					.parent
-					.model
-					.add_constraint(ConstraintItem::new(Constraint::new(false, value_imp), item));
-				alloc_expression(
-					Let {
-						items: vec![
-							LetItem::Declaration(t_idx),
-							LetItem::Constraint(presence_id),
-							LetItem::Constraint(value_id),
-						],
-						in_expression: Box::new(t_expr),
-					},
-					&collector,
-					item,
-				)
-			} else {
-				let absent = alloc_expression(Absent, &collector, item);
-				alloc_expression(
-					IfThenElse {
-						branches: vec![Branch::new(occurs_expr, call_expr)],
-						else_result: Box::new(absent),
-					},
-					&collector,
-					item,
-				)
-			};
+			let absent = alloc_expression(Absent, &collector, item);
+			let identity_def = alloc_expression(
+				IfThenElse {
+					branches: vec![Branch::new(occurs_expr, call_expr)],
+					else_result: Box::new(absent),
+				},
+				&collector,
+				item,
+			);
 			domain_decl.set_definition(identity_def);
 			(domain_decl, inputs_expr, None)
 		} else {
