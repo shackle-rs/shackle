@@ -1,6 +1,6 @@
-ms = [(extra: <>, id: "ms[1]", w: 1), (extra: (id: "ms.extra[1]", v: 2), id: "ms[2]", w: 2), (extra: (id: "ms.extra[2]", v: 3), id: "ms[3]", w: 3)];
-t = (id: "t", main: (extra: (id: "t.main.extra[1]", v: 9), id: "t.main", w: 1));
+ms = [(extra: <>, id: "ms[1]", w: 1), (extra: (id: "ms.extra[2]", v: 2), id: "ms[2]", w: 2), (extra: (id: "ms.extra[3]", v: 3), id: "ms[3]", w: 3)];
+t = (id: "t", main: (extra: (id: "t.main.extra", v: 9), id: "t.main", w: 1));
 h = (extra: <>, id: "h", w: 6);
-g = (extra: (id: "g.extra[1]", v: 5), id: "g", w: 3);
-f = (extra: (id: "f.extra[1]", v: 4), id: "f", w: 2);
+g = (extra: (id: "g.extra", v: 5), id: "g", w: 3);
+f = (extra: (id: "f.extra", v: 4), id: "f", w: 2);
 ----------

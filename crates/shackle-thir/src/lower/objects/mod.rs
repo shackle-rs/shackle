@@ -66,6 +66,10 @@ pub(in crate::lower) struct ObjectState<'db> {
 	/// known before its enum constructor is added, which happens after its
 	/// nested occurrences are sized
 	pub(in crate::lower) root_collection_sizes: FxHashMap<OccurrenceId, Expression<'db>>,
+	/// For each par optional child occurrence, its parents' number of children
+	/// (0 or 1) in parent order, `<prefix>_present`, from which the children's
+	/// ids take their parents' positions
+	pub(in crate::lower) opt_child_presence: FxHashMap<OccurrenceId, DeclarationId<'db>>,
 	class_object_contributions: FxHashMap<PatternRef<'db>, Vec<(usize, DeclarationId<'db>)>>,
 	/// Per-occurrence slice array declarations (`<parent>_<field>_potential`),
 	/// keyed by the child class and contribution index. Consumed by the
@@ -170,6 +174,7 @@ impl<'db> ObjectState<'db> {
 			class_map: FxHashMap::default(),
 			contribution_end_map: FxHashMap::default(),
 			root_collection_sizes: FxHashMap::default(),
+			opt_child_presence: FxHashMap::default(),
 			class_object_contributions: FxHashMap::default(),
 			slice_array_decls: FxHashMap::default(),
 			class_set_field_introductions: FxHashMap::default(),
@@ -366,6 +371,8 @@ pub(in crate::lower) struct ObjectLoweringPlan<'db> {
 	local_domain_sources: FxHashMap<OccurrenceId, LocalDomainSource>,
 	/// How each occurrence's generated object ids are spelled.
 	pub(in crate::lower) occurrence_id_prefixes: FxHashMap<OccurrenceId, OccurrenceIdPrefix>,
+	/// The par optional child occurrences (`opt new`)
+	opt_occurrences: FxHashSet<OccurrenceId>,
 	pub(in crate::lower) contributions_by_occurrence:
 		FxHashMap<OccurrenceId, Vec<OccurrenceContribution<'db>>>,
 	pub(in crate::lower) var_reached_classes: FxHashSet<PatternRef<'db>>,
@@ -439,6 +446,11 @@ impl<'db> ObjectLoweringPlan<'db> {
 		classes.sort_by_key(|class| self.class_rank(*class));
 	}
 
+	/// Whether an occurrence is a par optional child (`opt new`)
+	pub(in crate::lower) fn occurrence_is_opt(&self, occurrence: OccurrenceId) -> bool {
+		self.opt_occurrences.contains(&occurrence)
+	}
+
 	/// The contribution lists, in ascending occurrence order.
 	///
 	/// `contributions_by_occurrence` is keyed by `OccurrenceId`, whose numeric
@@ -472,10 +484,12 @@ impl<'db> ObjectLoweringPlan<'db> {
 			let mut root = occurrence;
 			let mut singular = true;
 			loop {
-				singular &= matches!(
-					root.local_domain_source,
-					LocalDomainSource::SingleObject | LocalDomainSource::OnePerParent
-				);
+				// An optional child is identified like a singular one
+				singular &= root.is_opt
+					|| matches!(
+						root.local_domain_source,
+						LocalDomainSource::SingleObject | LocalDomainSource::OnePerParent
+					);
 				let Some(parent) = root.parent else {
 					break;
 				};
@@ -640,6 +654,12 @@ impl<'db> ObjectLoweringPlan<'db> {
 			nested_occurrences,
 			local_domain_sources,
 			occurrence_id_prefixes,
+			opt_occurrences: analysis
+				.occurrences
+				.iter()
+				.filter(|occurrence| occurrence.is_opt)
+				.map(|occurrence| occurrence.id)
+				.collect(),
 			contributions_by_occurrence,
 			var_reached_classes: analysis.var_reached_classes.iter().copied().collect(),
 			var_actual_set_classes: analysis.var_actual_set_classes.iter().copied().collect(),

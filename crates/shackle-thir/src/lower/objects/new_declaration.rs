@@ -1458,6 +1458,7 @@ impl<'db> ItemCollector<'db> {
 						.unwrap_or((generators.clone(), record_access));
 					collector.parent.nested_occurrence_sum_expr(
 						item,
+						source_occurrence,
 						size_generators,
 						local_domain_source,
 						record_access,
@@ -1675,6 +1676,7 @@ impl<'db> ItemCollector<'db> {
 					.unwrap_or((generators, record_access));
 				let sum = collector.parent.nested_occurrence_sum_expr(
 					item,
+					source_occurrence,
 					generators,
 					local_domain_source,
 					record_access,

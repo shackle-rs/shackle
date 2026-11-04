@@ -1,11 +1,7 @@
 {
 	"nodes": [
-		{
-			"leaves": [{ "id": "a", "w": 1 }, { "w": 2 }],
-			"pole": { "len": 5 },
-			"fav": "a"
-		},
-		{ "id": "n2", "leaves": [{ "w": 3 }], "pole": null, "fav": "a" }
+		{ "leaves": [{ "id": "a", "w": 1 }, { "w": 2 }], "pole": null, "fav": "a" },
+		{ "id": "n2", "leaves": [{ "w": 3 }], "pole": { "len": 5 }, "fav": "a" }
 	],
 	"solo": { "w": 7 },
 	"pick": "a"
