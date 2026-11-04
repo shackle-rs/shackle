@@ -22,5 +22,4 @@ function set of $$E: dom_bounds_array(array [$T] of var opt $$E: x) =
 function opt $T: fix(var opt $T: x) = mzn_construct_opt(fix(mzn_destruct_opt(x)));
 % Fixed element by element: MiniZinc's `fix` of a whole array of tuples keeps the
 % elements var
-function array [$U] of opt $T: fix(array [$U] of var opt $T: x) =
-	arrayXd(x, [fix(x_i) | x_i in x]);
+function array [$U] of opt $T: fix(array [$U] of var opt $T: x) = arrayXd(x, [fix(x_i) | x_i in x]);

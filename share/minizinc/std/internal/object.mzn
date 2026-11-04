@@ -44,7 +44,18 @@ function $$E: mzn_object_from_id(
 % Aborts on the first invalid id.
 test mzn_check_object_ids(array [$$E] of string: ids, string: cls) =
 	forall (i in index_set(ids)) (
-		ids[i] != "" \/ abort("object ids must not be empty, but a " ++ cls ++ " object in the data has the id \"\"")
-	) /\ let {
-		opt string: duplicate = first_duplicate(ids);
-	} in absent(duplicate) \/ abort("more than one " ++ cls ++ " object has the id \"" ++ deopt(duplicate) ++ "\"");
+		ids[i] != "" \/
+			abort(
+				"object ids must not be empty, but a " ++
+					cls ++
+					" object in the data has the id \"\"",
+			)
+	) /\
+		(
+			let {
+				opt string: duplicate = first_duplicate(ids);
+			} in absent(duplicate) \/
+				abort(
+					"more than one " ++ cls ++ " object has the id \"" ++ deopt(duplicate) ++ "\"",
+				)
+		);
