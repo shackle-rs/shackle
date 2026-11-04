@@ -1,8 +1,8 @@
 % Objects and references read from a data file. Every object record carries its
 % id, nested ones included, and a reference is written as the id of the object
-% it refers to: a set of references as an array of ids, an `opt new` child as a
-% list of zero or one records. `nodes` is output under `nodes_output`, as its
-% own name is taken by the data declaration.
+% it refers to: a set of references as an array of ids, and an `opt new` child is
+% a record or `<>`, as in the model. `nodes` is output under `nodes_output`, as
+% its own name is taken by the data declaration.
 class Leaf ( int: w; );
 class Pole ( int: len; );
 class Node (

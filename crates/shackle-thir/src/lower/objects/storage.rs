@@ -494,13 +494,13 @@ impl<'db> ItemCollector<'db> {
 		}
 	}
 
-	/// Lower an object input record VALUE to match `lower_opt_new_input_ty`.
-	/// A present optional child `(f: (…))` becomes `(f: [(…)])`; an absent one
-	/// `(f: <>)` becomes `(f: [])` (an empty list typed as the child input
-	/// record list). Recurses through record / list literals. Because MiniZinc
-	/// forbids `opt record` values, only STATICALLY present/absent literal
-	/// inputs are handled here; a non-literal optional input is left unchanged
-	/// (rejected earlier by validation).
+	/// Lower an object input VALUE of type `orig_ty` to match
+	/// `lower_opt_new_input_ty`: an optional child becomes a list of zero or
+	/// one records. This is the one conversion between the natural form, which
+	/// the model and the data use, and the 0/1 list, and it applies to any
+	/// value. A literal is rewritten in place (`(f: (…))` becomes `(f: [(…)])`,
+	/// `(f: <>)` becomes `(f: [])`); any other expression is bound by a `let`
+	/// and read through `occurs`/`deopt`, field access and a comprehension.
 	pub(in crate::lower) fn lower_opt_new_input_value(
 		&mut self,
 		item: Item<'db>,
@@ -508,66 +508,173 @@ impl<'db> ItemCollector<'db> {
 		orig_ty: Ty<'db>,
 	) -> Expression<'db> {
 		let db = self.db;
+		if !self.input_ty_needs_opt_new_lowering(orig_ty) {
+			return value;
+		}
 		match orig_ty.lookup(db) {
 			TyData::Record(OptType::Opt, fields) => {
 				let inner_ty = Ty::record(db, fields.to_vec());
-				match &*value {
-					ExpressionData::Absent => {
-						let list_ty =
-							Ty::array(db, Ty::par_int(db), self.lower_opt_new_input_ty(inner_ty))
-								.expect("opt-new child list type");
-						Expression::new_unchecked(list_ty, ArrayLiteral(vec![]), value.origin())
-					}
-					_ => {
-						let normalized = self.lower_opt_new_input_value(item, value, inner_ty);
-						Expression::new(self.db, &self.model, item, ArrayLiteral(vec![normalized]))
-					}
+				let list_ty = Ty::array(db, Ty::par_int(db), self.lower_opt_new_input_ty(inner_ty))
+					.expect("opt-new child list type");
+				let empty =
+					Expression::new_unchecked(list_ty, ArrayLiteral(vec![]), value.origin());
+				if matches!(&*value, ExpressionData::Absent) {
+					return empty;
 				}
+				if value.ty().opt(db) != Some(OptType::Opt) {
+					// Known to be present
+					let normalized = self.lower_opt_new_input_value(item, value, inner_ty);
+					return Expression::new(db, &self.model, item, ArrayLiteral(vec![normalized]));
+				}
+				// `let { x = value } in if occurs(x) then [deopt(x)] else [] endif`
+				let (x_idx, x) = self.bind_input_value(item, value, orig_ty);
+				let occurs = Expression::new(
+					db,
+					&self.model,
+					item,
+					LookupCall {
+						function: self.ids.functions.occurs.into(),
+						arguments: vec![x.clone()],
+					},
+				);
+				let deopt = Expression::new(
+					db,
+					&self.model,
+					item,
+					LookupCall {
+						function: self.ids.functions.deopt.into(),
+						arguments: vec![x],
+					},
+				);
+				let present = self.lower_opt_new_input_value(item, deopt, inner_ty);
+				let present = Expression::new(db, &self.model, item, ArrayLiteral(vec![present]));
+				let list = Expression::new(
+					db,
+					&self.model,
+					item,
+					IfThenElse {
+						branches: vec![Branch::new(occurs, present)],
+						else_result: Box::new(empty),
+					},
+				);
+				self.in_input_let(item, x_idx, list)
 			}
 			TyData::Record(_, fields) => {
-				if !self.input_ty_needs_opt_new_lowering(orig_ty) {
-					return value;
+				let fields = fields.clone();
+				let field_ty = |name: Identifier<'db>| {
+					fields
+						.iter()
+						.find(|(n, _)| Identifier(*n) == name)
+						.map(|(_, t)| *t)
+						.expect("input record field type")
+				};
+				if let ExpressionData::RecordLiteral(rl) = &*value {
+					let new_fields = rl
+						.iter()
+						.map(|(ident, fv)| {
+							let fty = field_ty(*ident);
+							(
+								*ident,
+								self.lower_opt_new_input_value(item, fv.clone(), fty),
+							)
+						})
+						.collect::<Vec<_>>();
+					return Expression::new(db, &self.model, item, RecordLiteral(new_fields));
 				}
-				match &*value {
-					ExpressionData::RecordLiteral(rl) => {
-						let fields = fields.clone();
-						let new_fields = rl
-							.iter()
-							.map(|(ident, fv)| {
-								let fty = fields
-									.iter()
-									.find(|(n, _)| Identifier(*n) == *ident)
-									.map(|(_, t)| *t)
-									.expect("input record field type");
-								(
-									*ident,
-									self.lower_opt_new_input_value(item, fv.clone(), fty),
-								)
-							})
-							.collect::<Vec<_>>();
-						Expression::new(self.db, &self.model, item, RecordLiteral(new_fields))
-					}
-					_ => value,
-				}
+				// `let { x = value } in (f: <f of x lowered>, …)`
+				let (x_idx, x) = self.bind_input_value(item, value, orig_ty);
+				let new_fields = fields
+					.iter()
+					.map(|(name, fty)| {
+						let ident = Identifier(*name);
+						let access = Expression::new(
+							db,
+							&self.model,
+							item,
+							RecordAccess {
+								record: Box::new(x.clone()),
+								field: ident,
+							},
+						);
+						(ident, self.lower_opt_new_input_value(item, access, *fty))
+					})
+					.collect::<Vec<_>>();
+				let record = Expression::new(db, &self.model, item, RecordLiteral(new_fields));
+				self.in_input_let(item, x_idx, record)
 			}
 			TyData::Array { element, .. } => {
-				if !self.input_ty_needs_opt_new_lowering(orig_ty) {
-					return value;
-				}
 				let element = *element;
-				match &*value {
-					ExpressionData::ArrayLiteral(al) => {
-						let new_elems = al
-							.iter()
-							.map(|e| self.lower_opt_new_input_value(item, e.clone(), element))
-							.collect::<Vec<_>>();
-						Expression::new(self.db, &self.model, item, ArrayLiteral(new_elems))
-					}
-					_ => value,
+				if let ExpressionData::ArrayLiteral(al) = &*value {
+					let new_elems = al
+						.iter()
+						.map(|e| self.lower_opt_new_input_value(item, e.clone(), element))
+						.collect::<Vec<_>>();
+					return Expression::new(db, &self.model, item, ArrayLiteral(new_elems));
 				}
+				// `[<x lowered> | x in value]`
+				let x_decl = Declaration::new(false, Domain::unbounded(db, item, element));
+				let x_idx = self
+					.model
+					.add_declaration(DeclarationItem::new(x_decl, item));
+				let x = Expression::new(db, &self.model, item, x_idx);
+				let template = self.lower_opt_new_input_value(item, x, element);
+				Expression::new(
+					db,
+					&self.model,
+					item,
+					ArrayComprehension::new(
+						[Generator::Iterator {
+							declarations: vec![x_idx],
+							collection: value,
+							where_clause: None,
+						}],
+						template,
+					),
+				)
 			}
 			_ => value,
 		}
+	}
+
+	/// A `let` declaration for an input value of type `ty` that a conversion
+	/// reads more than once, unless it is an identifier already, and an
+	/// expression for the value. The declaration has the input's type rather
+	/// than the value's, which can be less specific (`(leaves: [], …)`).
+	fn bind_input_value(
+		&mut self,
+		item: Item<'db>,
+		value: Expression<'db>,
+		ty: Ty<'db>,
+	) -> (Option<DeclarationId<'db>>, Expression<'db>) {
+		if matches!(&*value, ExpressionData::Identifier(_)) {
+			return (None, value);
+		}
+		let ty = self.substitute_class_with_potential_enum(ty);
+		let mut decl = Declaration::new(false, Domain::unbounded(self.db, item, ty));
+		decl.set_definition(value);
+		let idx = self.model.add_declaration(DeclarationItem::new(decl, item));
+		(Some(idx), Expression::new(self.db, &self.model, item, idx))
+	}
+
+	/// `let { <decl> } in body`, or `body` without a declaration
+	fn in_input_let(
+		&mut self,
+		item: Item<'db>,
+		decl: Option<DeclarationId<'db>>,
+		body: Expression<'db>,
+	) -> Expression<'db> {
+		let Some(decl) = decl else {
+			return body;
+		};
+		Expression::new(
+			self.db,
+			&self.model,
+			item,
+			Let {
+				items: vec![LetItem::Declaration(decl)],
+				in_expression: Box::new(body),
+			},
+		)
 	}
 
 	/// Lower a top-level collection input VALUE (the RHS of a
@@ -577,9 +684,7 @@ impl<'db> ItemCollector<'db> {
 	/// `element_record_ty` is the per-member input record type (`opt new`
 	/// children still `opt record`), which we wrap in an array type so
 	/// `lower_opt_new_input_value`'s array arm maps the transform over each
-	/// member. Passing the element record type directly (as if the value were a
-	/// single record) would fall through unchanged — the value is an array, not
-	/// a record. Non-literal collections are left unchanged (rejected earlier).
+	/// member.
 	pub(in crate::lower) fn lower_opt_new_input_collection_value(
 		&mut self,
 		item: Item<'db>,

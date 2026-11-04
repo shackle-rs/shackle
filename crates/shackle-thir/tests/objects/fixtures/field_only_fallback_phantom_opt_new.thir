@@ -16,5 +16,7 @@ W_potential: w_ref :: (no_output) = W_occ_0(1);
 output ["nH=", show(card(fix(H)))];
 constraint forall(['->'(occurs(('[]'(W_w_objects, _DECL_2)).h), '='(('[]'(W_w_objects, _DECL_2)).h, H_occ_1(_DECL_2))) | _DECL_2 in index_set(W_w_objects)]);
 constraint forall(['\/'('in'(x, H), '='(('[]'(H_objects, enum2int(x))).x, mzn_safe_default(('[]'(H_objects, enum2int(x))).x))) | x in H_potential]);
-record(array [int] of record(string: id, int: x): h, string: id): w :: (output_only) :: ('output') = (id: '[]'(W_ids, w_ref), h: [(id: '[]'(H_ids, deopt(_DECL_3)), x: fix(('[]'(H_objects, enum2int(deopt(_DECL_3)))).x)) | _DECL_3 in [fix(('[]'(W_objects, enum2int(w_ref))).h)] where occurs(_DECL_3)]);
+record(opt record(string: id, int: x): h, string: id): w :: (output_only) :: ('output') = (id: '[]'(W_ids, w_ref), h: let {
+  opt H_potential: _DECL_3 = fix(('[]'(W_objects, enum2int(w_ref))).h);
+} in if occurs(_DECL_3) then (id: '[]'(H_ids, deopt(_DECL_3)), x: fix(('[]'(H_objects, enum2int(deopt(_DECL_3)))).x)) else <> endif);
 solve satisfy;

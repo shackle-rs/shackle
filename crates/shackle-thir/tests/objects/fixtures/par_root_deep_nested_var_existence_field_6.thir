@@ -35,5 +35,7 @@ array [int] of record(set of B_potential: bs): A_a_objects = [(bs: bs) | p in in
 A_potential: a_ref :: (no_output) = A_occ_0(1);
 constraint forall(['->'(occurs(('[]'(C_bs_cs_objects, _DECL_2)).d), '='(('[]'(C_bs_cs_objects, _DECL_2)).d, D_occ_3(_DECL_2))) | _DECL_2 in index_set(C_bs_cs_objects)]);
 constraint forall(['\/'('in'(x, D), '='(('[]'(D_objects, enum2int(x))).v, mzn_safe_default(('[]'(D_objects, enum2int(x))).v))) | x in D_potential]);
-record(array [int] of record(array [int] of record(int: ck, array [int] of record(string: id, int: v): d, string: id): cs, string: id): bs, string: id): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), bs: [(id: '[]'(B_ids, _DECL_3), cs: [(id: '[]'(C_ids, _DECL_4), ck: ('[]'(C_objects, enum2int(_DECL_4))).ck, d: [(id: '[]'(D_ids, deopt(_DECL_5)), v: fix(('[]'(D_objects, enum2int(deopt(_DECL_5)))).v)) | _DECL_5 in [fix(('[]'(C_objects, enum2int(_DECL_4))).d)] where occurs(_DECL_5)]) | _DECL_4 in ('[]'(B_objects, enum2int(_DECL_3))).cs]) | _DECL_3 in ('[]'(A_objects, enum2int(a_ref))).bs]);
+record(array [int] of record(array [int] of record(int: ck, opt record(string: id, int: v): d, string: id): cs, string: id): bs, string: id): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), bs: [(id: '[]'(B_ids, _DECL_3), cs: [(id: '[]'(C_ids, _DECL_4), ck: ('[]'(C_objects, enum2int(_DECL_4))).ck, d: let {
+  opt D_potential: _DECL_5 = fix(('[]'(C_objects, enum2int(_DECL_4))).d);
+} in if occurs(_DECL_5) then (id: '[]'(D_ids, deopt(_DECL_5)), v: fix(('[]'(D_objects, enum2int(deopt(_DECL_5)))).v)) else <> endif) | _DECL_4 in ('[]'(B_objects, enum2int(_DECL_3))).cs]) | _DECL_3 in ('[]'(A_objects, enum2int(a_ref))).bs]);
 solve satisfy;

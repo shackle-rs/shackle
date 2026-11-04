@@ -14,5 +14,7 @@ array [int] of record(var opt B_potential: b): A_a_objects = [(b: b) | p in inde
 A_potential: a_ref :: (no_output) = A_occ_0(1);
 constraint forall(['->'(occurs(('[]'(A_a_objects, _DECL_2)).b), '='(('[]'(A_a_objects, _DECL_2)).b, B_occ_1(_DECL_2))) | _DECL_2 in index_set(A_a_objects)]);
 constraint forall(['\/'('in'(x, B), '='(('[]'(B_objects, enum2int(x))).y, mzn_safe_default(('[]'(B_objects, enum2int(x))).y))) | x in B_potential]);
-record(array [int] of record(string: id, int: y): b, string: id): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), b: [(id: '[]'(B_ids, deopt(_DECL_3)), y: fix(('[]'(B_objects, enum2int(deopt(_DECL_3)))).y)) | _DECL_3 in [fix(('[]'(A_objects, enum2int(a_ref))).b)] where occurs(_DECL_3)]);
+record(opt record(string: id, int: y): b, string: id): a :: (output_only) :: ('output') = (id: '[]'(A_ids, a_ref), b: let {
+  opt B_potential: _DECL_3 = fix(('[]'(A_objects, enum2int(a_ref))).b);
+} in if occurs(_DECL_3) then (id: '[]'(B_ids, deopt(_DECL_3)), y: fix(('[]'(B_objects, enum2int(deopt(_DECL_3)))).y)) else <> endif);
 solve satisfy;
