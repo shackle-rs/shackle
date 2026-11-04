@@ -195,6 +195,12 @@ fn solve_enum_equality() {
 }
 
 #[test]
+fn solve_bool_quantifiers() {
+	check_solve("bool_quantifiers", true, false);
+	check_solve("bool_quantifiers", true, true);
+}
+
+#[test]
 fn solve_enum_output_item() {
 	check_solve("enum_output_item", true, false);
 	check_solve("enum_output_item", true, true);

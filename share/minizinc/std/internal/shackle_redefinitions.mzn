@@ -75,7 +75,7 @@ function var bool: forall(array [int] of var bool: x) = mzn_forall(x);
 
 function var bool: mzn_forall(array [int] of var bool: x) =
 	if mzn_in_root_context() then
-		let { any: xx = [let { constraint x_i :: promise_total } in true | x_i in x] } in true
+		let { any: xx = [let { constraint x_i } in 1 | x_i in x] } in true
 	else
 		mzn_forall_t(x)
 	endif;
@@ -121,8 +121,8 @@ function var bool: mzn_clause_t(array [int] of var bool: x, array [int] of var b
 	let {
 		var bool: r;
 		constraint bool_clause(x, y ++ [r]);
-		any: dcx = [let { constraint bool_clause([r], [x_i]) } in true | x_i in x];
-		any: dcy = [let { constraint bool_clause([y_i, r], []) } in true | y_i in y];
+		any: dcx = [let { constraint bool_clause([r], [x_i]) } in 1 | x_i in x];
+		any: dcy = [let { constraint bool_clause([y_i, r], []) } in 1 | y_i in y];
 	} in r;
 
 % Boolean negation
@@ -131,7 +131,7 @@ function bool: 'not'(bool: x) :: mzn_inline_call_by_name = if x then false else 
 
 function var bool: 'not'(var bool: x) =
 	if mzn_in_root_context() then
-		let { constraint bool_clause([], [x]) } in true
+		let { constraint bool_clause([], [x]) :: promise_total } in true
 	else
 		mzn_not_t(x)
 	endif;
