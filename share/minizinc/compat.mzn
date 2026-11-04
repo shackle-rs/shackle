@@ -50,6 +50,12 @@ shackle_mzn_half_reify_clause =
 	else
 		(false, false)
 	endif;
+shackle_mzn_opt_eager_linear_aggregation =
+	if occurs(mzn_opt_eager_linear_aggregation) then
+		(true, deopt(mzn_opt_eager_linear_aggregation))
+	else
+		(false, false)
+	endif;
 
 function any $T: mzn_element_internal(array [int] of any $T: x, int: index) = x[index];
 function any $T: mzn_element_internal(array [int] of any $T: x, tuple(int): index) = x[index.1];
