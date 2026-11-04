@@ -630,9 +630,9 @@ pub struct Occurrence<'db> {
 	/// introducing declaration has var inst or any ancestor occurrence does.
 	/// Used to pick the varified storage record type at class registration.
 	pub is_var: bool,
-	/// Whether this occurrence is a par optional child (`opt new`), a
-	/// collection of zero or one objects per parent, whose objects are
-	/// identified by their parent's position like a singular child's.
+	/// Whether this occurrence is a par optional root or child (`opt new`): a
+	/// collection of zero or one objects (per parent), whose objects are
+	/// identified like a singular root's or child's.
 	pub is_opt: bool,
 }
 
@@ -822,7 +822,14 @@ pub fn analyse_new_objects<'db>(db: &'db dyn Db) -> ClassAnalysisResult<'db> {
 				Vec::new(),
 				local_domain_source,
 				is_var,
-				false,
+				matches!(
+					data[decl.declared_type],
+					Type::New {
+						inst: VarType::Par,
+						opt: OptType::Opt,
+						..
+					}
+				),
 				&mut expansion_path,
 			);
 		}
@@ -845,6 +852,16 @@ fn top_level_new_class_info<'db>(
 	declared_type: TypeId<'db>,
 ) -> Option<(PatternRef<'db>, LocalDomainSource)> {
 	match &data[declared_type] {
+		// A par optional root is a collection of zero or one objects, like a
+		// par optional child
+		Type::New {
+			domain,
+			inst: VarType::Par,
+			opt: OptType::Opt,
+		} => Some((
+			types.name_resolution(*domain).unwrap(),
+			LocalDomainSource::TopLevelCollection,
+		)),
 		Type::New { domain, .. } => Some((
 			types.name_resolution(*domain).unwrap(),
 			LocalDomainSource::SingleObject,

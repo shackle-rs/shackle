@@ -507,10 +507,11 @@ impl<'db> ObjectLoweringPlan<'db> {
 					prefix.push('.');
 					prefix.push_str(attribute.lookup(db));
 				}
-				// A singular chain has to start at a singular root: a `new`
-				// attribute of a collection member still has one child per member.
-				let singular =
-					singular && root.local_domain_source == LocalDomainSource::SingleObject;
+				// A singular chain has to start at a singular (or optional) root:
+				// a `new` attribute of a collection member still has one child
+				// per member.
+				let singular = singular
+					&& (root.is_opt || root.local_domain_source == LocalDomainSource::SingleObject);
 				let _ = occurrence_id_prefixes
 					.insert(occurrence.id, OccurrenceIdPrefix { prefix, singular });
 			}

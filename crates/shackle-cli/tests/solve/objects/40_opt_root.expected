@@ -1,0 +1,3 @@
+["t.leaves[1]", "t.leaves[2]", "t.main", "w.main", "w.spare", "ls[1]", "a", "s"] ["s"] ["t", "w"] 2
+"t" <> "w" "a" "s"
+----------

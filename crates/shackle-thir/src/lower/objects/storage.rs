@@ -677,26 +677,6 @@ impl<'db> ItemCollector<'db> {
 		)
 	}
 
-	/// Lower a top-level collection input VALUE (the RHS of a
-	/// `set of new C: cs = [..]` / `array [d] of new C: pool = [..]` root) whose
-	/// member records carry optional children. The collection is an array *of*
-	/// input records, so the element records must be lowered one level down:
-	/// `element_record_ty` is the per-member input record type (`opt new`
-	/// children still `opt record`), which we wrap in an array type so
-	/// `lower_opt_new_input_value`'s array arm maps the transform over each
-	/// member.
-	pub(in crate::lower) fn lower_opt_new_input_collection_value(
-		&mut self,
-		item: Item<'db>,
-		value: Expression<'db>,
-		element_record_ty: Ty<'db>,
-	) -> Expression<'db> {
-		let db = self.db;
-		let collection_ty = Ty::array(db, Ty::par_int(db), element_record_ty)
-			.expect("opt-new input collection type");
-		self.lower_opt_new_input_value(item, value, collection_ty)
-	}
-
 	/// Restrict a class's full storage record type to the fields that are
 	/// *free decisions* in the `_storage` array. Two kinds of field are dropped
 	/// because they are instead *defined* per object in the reconstruction

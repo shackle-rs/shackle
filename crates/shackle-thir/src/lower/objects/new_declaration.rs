@@ -93,6 +93,9 @@ struct NewRootContext<'db, 'a> {
 	/// A par root the model leaves uninitialised: its objects are read from
 	/// data, in their data form, under the user's name (see `data_input.rs`).
 	data_root: bool,
+	/// A par `opt new C` root: a collection of zero or one objects, whose
+	/// value is an `opt` record and whose identity is `opt`.
+	opt_root: bool,
 }
 
 impl<'db> ItemCollector<'db> {
@@ -140,12 +143,19 @@ impl<'db> ItemCollector<'db> {
 				.pretty_print(collector.parent.db)
 		);
 
+		let opt_root = matches!(
+			item_ty,
+			shackle_hir::Type::New {
+				inst: VarType::Par,
+				opt: OptType::Opt,
+				..
+			}
+		);
 		let data_root = d.definition.is_none()
 			&& matches!(
 				item_ty,
 				shackle_hir::Type::New {
 					inst: VarType::Par,
-					opt: OptType::NonOpt,
 					..
 				} | shackle_hir::Type::Set {
 					inst: VarType::Par,
@@ -170,9 +180,14 @@ impl<'db> ItemCollector<'db> {
 			root_occurrence,
 			enum_member_id,
 			class_and_decl_name: class_and_decl_name.clone(),
+			opt_root,
 		};
 
 		let (domain_decl, inputs_expr, pending_root_collection) = match item_ty {
+			// Lowered like a par collection root of zero or one objects
+			shackle_hir::Type::New { .. } if opt_root => {
+				self.lower_set_of_new_root(&cx, &None, &VarType::Par)
+			}
 			shackle_hir::Type::New { inst, opt, .. } => {
 				self.lower_singular_new_root(&cx, inst, opt)
 			}
@@ -257,6 +272,7 @@ impl<'db> ItemCollector<'db> {
 			class_pattern_ref,
 			root_occurrence,
 			enum_member_id,
+			opt_root,
 			..
 		} = cx;
 		let mut collector = ExpressionCollector::new(self, data, item, types);
@@ -320,6 +336,7 @@ impl<'db> ItemCollector<'db> {
 					ResolvedIdentifier::Declaration(end_decl),
 				)
 			};
+			let first = start_expr.clone();
 			let end_decl = collector.parent.objects.contribution_end_map
 				[&(class_pattern_ref, root_collection.contribution_index)];
 			let end_expr = Expression::new(
@@ -398,6 +415,44 @@ impl<'db> ItemCollector<'db> {
 				&collector,
 				item,
 			);
+			if opt_root {
+				// The object of an optional root, if its block has one:
+				// `if <size> > 0 then <C>_occ_k(<first>) else <> endif`
+				let zero = alloc_expression(IntegerLiteral(0), &collector, item);
+				let present = alloc_expression(
+					LookupCall {
+						function: collector.parent.ids.functions.gt.into(),
+						arguments: vec![root_collection.sum_expr.clone(), zero],
+					},
+					&collector,
+					item,
+				);
+				let object = alloc_expression(
+					Call {
+						function: Callable::EnumConstructor(enum_member_id),
+						arguments: vec![first],
+					},
+					&collector,
+					item,
+				);
+				let absent = alloc_expression(Absent, &collector, item);
+				domain_decl.set_domain(Domain::bounded(
+					collector.parent.db,
+					item,
+					VarType::Par,
+					OptType::Opt,
+					call_expr,
+				));
+				domain_decl.set_definition(alloc_expression(
+					IfThenElse {
+						branches: vec![Branch::new(present, object)],
+						else_result: Box::new(absent),
+					},
+					&collector,
+					item,
+				));
+				return domain_decl;
+			}
 			if matches!(item_ty, shackle_hir::Type::Array { .. }) {
 				let ordinal_decl = Declaration::new(
 					false,
@@ -485,10 +540,12 @@ impl<'db> ItemCollector<'db> {
 			root_occurrence,
 			data_root,
 			ref class_and_decl_name,
+			opt_root,
 			..
 		} = cx;
 		let collector = ExpressionCollector::new(self, data, item, types);
-		if matches!(item_ty, shackle_hir::Type::New { .. }) {
+		// A par optional root contributes like a collection root
+		if matches!(item_ty, shackle_hir::Type::New { .. }) && !opt_root {
 			// Of the singular root shapes, only `var opt new` has an
 			// unrealisable slot (par `new` and plain `var new` realise their
 			// single potential unconditionally), so only it pays the
@@ -2391,6 +2448,7 @@ impl<'db> ItemCollector<'db> {
 			root_occurrence,
 			data_root,
 			ref class_and_decl_name,
+			opt_root,
 			..
 		} = cx;
 		let mut collector = ExpressionCollector::new(self, data, item, types);
@@ -2507,6 +2565,21 @@ impl<'db> ItemCollector<'db> {
 		let set_root_opt_new_input = collector
 			.parent
 			.input_ty_needs_opt_new_lowering(input_record_ty);
+		// The type of the root's value in its natural form (an optional child,
+		// and an optional root, as an `opt` record), which is converted into the
+		// inputs: an array of records, or one optional record for an optional
+		// root
+		let natural_ty = if opt_root {
+			input_record_ty.make_opt(collector.parent.db)
+		} else {
+			Ty::array(
+				collector.parent.db,
+				Ty::par_int(collector.parent.db),
+				input_record_ty,
+			)
+			.expect("array of input records")
+		};
+		let convert_inputs = opt_root || set_root_opt_new_input;
 		let maybe_inputs_idx = if object_storage_backed_var_root {
 			None
 		} else {
@@ -2568,20 +2641,22 @@ impl<'db> ItemCollector<'db> {
 				)
 			};
 			array_decl.set_name(array_name);
-			if data_root && set_root_opt_new_input {
+			if data_root && convert_inputs {
 				// The data gives the records in their natural form, an optional
-				// child as an `opt` record: read them under the user's name, and
-				// convert them into the inputs
-				let mut data_decl = Declaration::new(
-					true,
+				// child or root as an `opt` record: read them under the user's
+				// name, and convert them into the inputs
+				let data_domain = if opt_root {
+					Domain::unbounded(collector.parent.db, item, natural_ty)
+				} else {
 					Domain::array(
 						collector.parent.db,
 						item,
 						OptType::NonOpt,
 						build_index_domain(&potential_ordinal_domain),
 						Domain::unbounded(collector.parent.db, item, input_record_ty),
-					),
-				);
+					)
+				};
+				let mut data_decl = Declaration::new(true, data_domain);
 				data_decl.set_name(root_pattern.identifier(collector.parent.db).unwrap());
 				let data_ty = data_decl.ty();
 				let data_idx = collector
@@ -2605,12 +2680,10 @@ impl<'db> ItemCollector<'db> {
 			{
 				let collect_inputs = |collector: &mut ExpressionCollector<'db, '_, '_, '_>| {
 					let inputs = collector.collect_expression(rhs);
-					if set_root_opt_new_input {
-						collector.parent.lower_opt_new_input_collection_value(
-							item,
-							inputs,
-							input_record_ty,
-						)
+					if convert_inputs {
+						collector
+							.parent
+							.lower_opt_new_input_value(item, inputs, natural_ty)
 					} else {
 						inputs
 					}

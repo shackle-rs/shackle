@@ -619,3 +619,19 @@ fn solve_object_opt_child_values() {
 	check_solve("objects/39_opt_child_values", false, false);
 	check_solve("objects/39_opt_child_values", false, true);
 }
+
+#[test]
+fn solve_object_opt_root() {
+	check_solve("objects/40_opt_root", false, false);
+	check_solve("objects/40_opt_root", false, true);
+}
+
+/// Only with the MicroZinc target: the MiniZinc target lacks the library
+/// functions that objects in data use (`mzn_object_data_ids`)
+#[test]
+fn solve_object_opt_root_data() {
+	let name = "objects/41_opt_root_data";
+	for data in ["dzn", "json"] {
+		check_solve_with_data(name, &[fixture(name, data)], false, false);
+	}
+}
