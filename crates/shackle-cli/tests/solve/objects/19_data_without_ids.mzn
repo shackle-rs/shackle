@@ -1,6 +1,7 @@
 % Objects read from a data file without ids. An object given without an id gets
-% the id generated for its slot (`nodes[1]`, `nodes.leaves[2]`, `solo`), while
-% the others keep the id given in the data, which references use.
+% the id generated for its slot (`nodes[1]`, `nodes.leaves[2]`, `solo`), and an
+% optional child its parent's position (`nodes.pole[2]`), while the others keep
+% the id given in the data, which references use.
 class Leaf ( int: w; );
 class Pole ( int: len; );
 class Node (

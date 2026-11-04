@@ -630,6 +630,10 @@ pub struct Occurrence<'db> {
 	/// introducing declaration has var inst or any ancestor occurrence does.
 	/// Used to pick the varified storage record type at class registration.
 	pub is_var: bool,
+	/// Whether this occurrence is a par optional child (`opt new`), a
+	/// collection of zero or one objects per parent, whose objects are
+	/// identified by their parent's position like a singular child's.
+	pub is_opt: bool,
 }
 
 /// Contribution of one occurrence to a target class enum.
@@ -818,6 +822,7 @@ pub fn analyse_new_objects<'db>(db: &'db dyn Db) -> ClassAnalysisResult<'db> {
 				Vec::new(),
 				local_domain_source,
 				is_var,
+				false,
 				&mut expansion_path,
 			);
 		}
@@ -893,6 +898,7 @@ fn add_occurrence<'db>(
 	path: Vec<Identifier<'db>>,
 	local_domain_source: LocalDomainSource,
 	is_var: bool,
+	is_opt: bool,
 	expansion_path: &mut Set<PatternRef<'db>>,
 ) -> OccurrenceId {
 	let id = OccurrenceId(occurrences.len() as u32);
@@ -904,6 +910,7 @@ fn add_occurrence<'db>(
 		path: path.clone(),
 		local_domain_source,
 		is_var,
+		is_opt,
 	});
 
 	let mut projection_depth = 0;
@@ -992,7 +999,8 @@ fn expand_nested_occurrences<'db>(
 		// `opt new C` on a var-reached owner, is instead a free decision
 		// (`child_is_var`) with no input list, so it stays `OnePerParent` and
 		// the var-scalar machinery handles it.
-		let local_domain_source = if attribute.is_opt_new && !child_is_var {
+		let is_opt = attribute.is_opt_new && !child_is_var;
+		let local_domain_source = if is_opt {
 			LocalDomainSource::FlattenedChildCollection
 		} else {
 			attribute.local_domain_source
@@ -1011,6 +1019,7 @@ fn expand_nested_occurrences<'db>(
 			path,
 			local_domain_source,
 			child_is_var,
+			is_opt,
 			expansion_path,
 		);
 	}

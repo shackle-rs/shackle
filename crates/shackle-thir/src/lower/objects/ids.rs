@@ -48,9 +48,10 @@ impl<'db> ItemCollector<'db> {
 					.expect("object constructor has a bounded parameter domain");
 				let occurrence = occurrence_of[&(class, constructor_index)];
 				let prefix = self.objects.plan.occurrence_id_prefixes[&occurrence].clone();
+				let present = self.objects.opt_child_presence.get(&occurrence).copied();
 				let block = match self.objects.data_id_blocks.get(&occurrence).cloned() {
 					Some(given) => {
-						let data = self.data_object_ids(item, given.clone(), &prefix);
+						let data = self.data_object_ids(item, given.clone(), &prefix, present);
 						self.data_occurrence_ids_block(
 							item,
 							occurrence,
@@ -60,7 +61,7 @@ impl<'db> ItemCollector<'db> {
 							|this, first, last| this.indexed_ids(item, &prefix.prefix, first, last),
 						)
 					}
-					None => self.occurrence_ids_block(item, domain, &prefix),
+					None => self.occurrence_ids_block(item, domain, &prefix, present),
 				};
 				ids = Some(match ids {
 					None => block,
@@ -102,12 +103,14 @@ impl<'db> ItemCollector<'db> {
 	/// The ids of the potential objects of one constructor, whose parameter
 	/// domain is `domain`: `[<prefix> ++ "[" ++ show(i) ++ "]" | i in
 	/// 1..card(<domain>)]`, or `[<prefix>]` for the single object of a
-	/// singular chain.
+	/// singular chain. The objects of an optional child occurrence, whose
+	/// parents have `present` children each, take their parents' positions.
 	fn occurrence_ids_block(
 		&mut self,
 		item: Item<'db>,
 		domain: Expression<'db>,
 		prefix: &OccurrenceIdPrefix,
+		present: Option<DeclarationId<'db>>,
 	) -> Expression<'db> {
 		// The single object of a singular root: `{1}`.
 		if prefix.singular
@@ -126,8 +129,13 @@ impl<'db> ItemCollector<'db> {
 				arguments: vec![domain],
 			},
 		);
-		let one = Expression::new(self.db, &self.model, item, IntegerLiteral(1));
-		let indexed = self.indexed_ids(item, &prefix.prefix, one, count.clone());
+		let indexed = match present {
+			Some(present) => self.present_parent_ids(item, &prefix.prefix, present),
+			None => {
+				let one = Expression::new(self.db, &self.model, item, IntegerLiteral(1));
+				self.indexed_ids(item, &prefix.prefix, one, count.clone())
+			}
+		};
 		if !prefix.singular {
 			return indexed;
 		}
@@ -167,11 +175,15 @@ impl<'db> ItemCollector<'db> {
 		item: Item<'db>,
 		given: Expression<'db>,
 		prefix: &OccurrenceIdPrefix,
+		present: Option<DeclarationId<'db>>,
 	) -> Expression<'db> {
 		let generated = if prefix.singular {
 			// A singular chain has a single data object.
 			let name = self.string_literal(item, &prefix.prefix);
 			Expression::new(self.db, &self.model, item, ArrayLiteral(vec![name]))
+		} else if let Some(present) = present {
+			// Optional children take their parents' positions
+			self.present_parent_ids(item, &prefix.prefix, present)
 		} else {
 			let one = Expression::new(self.db, &self.model, item, IntegerLiteral(1));
 			let count = Expression::new(
@@ -204,14 +216,6 @@ impl<'db> ItemCollector<'db> {
 		first: Expression<'db>,
 		last: Expression<'db>,
 	) -> Expression<'db> {
-		let mut position = Declaration::new(
-			false,
-			Domain::unbounded(self.db, item, Ty::par_int(self.db)),
-		);
-		position.set_name(Identifier::new(self.db, "p"));
-		let position_decl = self
-			.model
-			.add_declaration(DeclarationItem::new(position, item));
 		let positions = Expression::new(
 			self.db,
 			&self.model,
@@ -221,7 +225,71 @@ impl<'db> ItemCollector<'db> {
 				arguments: vec![first, last],
 			},
 		);
+		self.position_ids(item, prefix, positions, None)
+	}
+
+	/// The ids of the optional children of an occurrence, which take their
+	/// parents' positions: `[<prefix> ++ "[" ++ show(p) ++ "]" | p in
+	/// index_set(<present>) where <present>[p] > 0]`, where `<present>` is the
+	/// number of children of each parent
+	fn present_parent_ids(
+		&mut self,
+		item: Item<'db>,
+		prefix: &str,
+		present: DeclarationId<'db>,
+	) -> Expression<'db> {
+		let present = Expression::new(self.db, &self.model, item, present);
+		let positions = Expression::new(
+			self.db,
+			&self.model,
+			item,
+			LookupCall {
+				function: self.ids.functions.index_set.into(),
+				arguments: vec![present.clone()],
+			},
+		);
+		self.position_ids(item, prefix, positions, Some(present))
+	}
+
+	/// `[<prefix> ++ "[" ++ show(p) ++ "]" | p in <positions>]`, only for the
+	/// positions `p` with `<present>[p] > 0` if given
+	fn position_ids(
+		&mut self,
+		item: Item<'db>,
+		prefix: &str,
+		positions: Expression<'db>,
+		present: Option<Expression<'db>>,
+	) -> Expression<'db> {
+		let mut position = Declaration::new(
+			false,
+			Domain::unbounded(self.db, item, Ty::par_int(self.db)),
+		);
+		position.set_name(Identifier::new(self.db, "p"));
+		let position_decl = self
+			.model
+			.add_declaration(DeclarationItem::new(position, item));
 		let position = Expression::new(self.db, &self.model, item, position_decl);
+		let where_clause = present.map(|present| {
+			let count = Expression::new(
+				self.db,
+				&self.model,
+				item,
+				LookupCall {
+					function: self.ids.functions.array_access.into(),
+					arguments: vec![present, position.clone()],
+				},
+			);
+			let zero = Expression::new(self.db, &self.model, item, IntegerLiteral(0));
+			Expression::new(
+				self.db,
+				&self.model,
+				item,
+				LookupCall {
+					function: self.ids.functions.gt.into(),
+					arguments: vec![count, zero],
+				},
+			)
+		});
 		let shown_position = Expression::new(
 			self.db,
 			&self.model,
@@ -257,7 +325,7 @@ impl<'db> ItemCollector<'db> {
 				[Generator::Iterator {
 					declarations: vec![position_decl],
 					collection: positions,
-					where_clause: None,
+					where_clause,
 				}],
 				id,
 			),

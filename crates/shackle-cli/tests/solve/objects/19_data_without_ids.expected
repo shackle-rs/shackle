@@ -1,4 +1,4 @@
-nodes_output = [(fav: "a", id: "nodes[1]", leaves: [(id: "a", w: 1), (id: "nodes.leaves[2]", w: 2)], pole: (id: "nodes.pole[1]", len: 5)), (fav: "a", id: "n2", leaves: [(id: "nodes.leaves[3]", w: 3)], pole: <>)];
+nodes_output = [(fav: "a", id: "nodes[1]", leaves: [(id: "a", w: 1), (id: "nodes.leaves[2]", w: 2)], pole: <>), (fav: "a", id: "n2", leaves: [(id: "nodes.leaves[3]", w: 3)], pole: (id: "nodes.pole[2]", len: 5))];
 solo_output = (id: "solo", w: 7);
 total = 10;
 ----------

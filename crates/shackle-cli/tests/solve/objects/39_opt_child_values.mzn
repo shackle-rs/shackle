@@ -1,6 +1,7 @@
 % An `opt new` child given by any value of its `opt` record type: a literal, a
 % conditional in a comprehension, a `let`, a function call, an identifier, or a
-% whole input record. Optional children are output as a record or `<>`.
+% whole input record. Optional children are output as a record or `<>`, and
+% take their parents' positions in their ids (`ms.extra[2]`, not `[1]`).
 class Leaf ( 1..9: v );
 class Mid ( 1..9: w; opt new Leaf: extra );
 class Top ( new Mid: main );

@@ -339,6 +339,7 @@ impl<'db> ItemCollector<'db> {
 	pub(in crate::lower) fn nested_occurrence_sum_expr(
 		&mut self,
 		item: Item<'db>,
+		occurrence: OccurrenceId,
 		generators: Vec<Generator<'db>>,
 		local_domain_source: LocalDomainSource,
 		record_access: Option<Expression<'db>>,
@@ -439,12 +440,33 @@ impl<'db> ItemCollector<'db> {
 			record_access,
 			fallback_cardinality,
 		);
-		let compr = Expression::new(
+		let mut compr = Expression::new(
 			self.db,
 			&self.model,
 			item,
 			ArrayComprehension::new(generators, compr_template),
 		);
+		if self.objects.plan.occurrence_is_opt(occurrence) {
+			// The number of children of each parent, which the children's ids
+			// also read: `<prefix>_present`, declared once per occurrence
+			let present = match self.objects.opt_child_presence.get(&occurrence) {
+				Some(present) => *present,
+				None => {
+					let prefix = &self.objects.plan.occurrence_id_prefixes[&occurrence].prefix;
+					let mut present = Declaration::from_expression(self.db, true, compr);
+					present.set_name(Identifier::new(
+						self.db,
+						format!("{}_present", prefix.replace('.', "_")),
+					));
+					let present = self
+						.model
+						.add_declaration(DeclarationItem::new(present, item));
+					let _ = self.objects.opt_child_presence.insert(occurrence, present);
+					present
+				}
+			};
+			compr = Expression::new(self.db, &self.model, item, present);
+		}
 		Expression::new(
 			self.db,
 			&self.model,
