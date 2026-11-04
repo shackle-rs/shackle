@@ -266,6 +266,13 @@ fn object_var_opt_new_nested_card_absent_compiles() {
 	check_snapshot("var_opt_new_nested_card_absent");
 }
 
+// A `var opt new` root beside a par root of the same class keeps the defining
+// form of its identity.
+#[test]
+fn object_var_opt_new_beside_par_root_compiles() {
+	check_snapshot("var_opt_new_beside_par_root");
+}
+
 // The singular `var new A` counterpart of the test above: a class-typed field
 // (`set of new B: children`) plus a computed attribute (`int: nChildren =
 // card(children)`). A's class-typed field is a `<B>_potential` identity held in

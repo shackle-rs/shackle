@@ -626,6 +626,14 @@ fn solve_object_opt_root() {
 	check_solve("objects/40_opt_root", false, true);
 }
 
+/// Only with the MicroZinc target: the MiniZinc target can't read back the
+/// value of an object root, whose type's members MiniZinc writes with
+/// constructors
+#[test]
+fn solve_object_var_opt_root_beside_par_roots() {
+	check_solve("objects/42_var_opt_root_beside_par_roots", true, false);
+}
+
 /// Only with the MicroZinc target: the MiniZinc target lacks the library
 /// functions that objects in data use (`mzn_object_data_ids`)
 #[test]

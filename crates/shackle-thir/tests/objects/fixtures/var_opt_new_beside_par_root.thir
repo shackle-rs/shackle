@@ -1,0 +1,16 @@
+enum Leaf_potential = Leaf_occ_0({1}) ++ Leaf_occ_1({1});
+array [int] of record(var '..'(1, 3): v): Leaf_objects = '++'(Leaf_a_objects, Leaf_b_objects);
+var set of Leaf_potential: Leaf;
+array [Leaf_potential] of string: Leaf_ids = array1d(Leaf_potential, '++'(["a"], ["b"]));
+array [int] of record(int: v): Leaf_a_inputs = [(v: 1)];
+int: Leaf_a_root_start = 1;
+int: Leaf_a_root_end = 2;
+array [int] of record('..'(1, 3): v): Leaf_a_objects = Leaf_a_inputs;
+Leaf_potential: a_ref :: (no_output) = Leaf_occ_0(1);
+array [{1}] of record(var '..'(1, 3): v): Leaf_b_storage :: (no_output);
+array [int] of record(var '..'(1, 3): v): Leaf_b_objects = Leaf_b_storage;
+var opt Leaf_potential: b = if 'in'(Leaf_occ_1(1), Leaf) then Leaf_occ_1(1) else <> endif;
+constraint '->'(occurs(b), '='(if occurs(b) then ('[]'(Leaf_objects, enum2int(deopt(b)))).v else <> endif, 3));
+constraint 'subset'(enum2int(Leaf_occ_0({1})), enum2int(Leaf));
+constraint forall(['\/'('in'(x, Leaf), '='(('[]'(Leaf_objects, enum2int(x))).v, mzn_safe_default(('[]'(Leaf_objects, enum2int(x))).v))) | x in Leaf_potential]);
+record(string: id, int: v): a :: (output_only) :: ('output') = (id: '[]'(Leaf_ids, a_ref), v: fix(('[]'(Leaf_objects, enum2int(a_ref))).v));
