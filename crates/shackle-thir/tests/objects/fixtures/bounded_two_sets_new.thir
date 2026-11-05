@@ -3,13 +3,13 @@ array [int] of record(var '..'(0, 2): c): A_objects = '++'(A_as1_objects, A_as2_
 var set of A_potential: A = array_union([as1_ref, as2_ref]);
 array [A_potential] of string: A_ids = array1d(A_potential, '++'(['++'('++'("as1[", show(p)), "]") | p in '..'(1, card('..'(1, n)))], ['++'('++'("as2[", show(p)), "]") | p in '..'(1, card('..'(1, m)))]));
 int: n;
-array ['..'(1, n)] of record(var '..'(0, 2): c): A_as1_storage;
+array ['..'(1, n)] of record(var '..'(0, 2): c): A_as1_storage :: (no_output);
 int: A_as1_root_start = 1;
 int: A_as1_root_end = '+'(A_as1_root_start, card('..'(1, n)));
 array [int] of record(var '..'(0, 2): c): A_as1_objects = A_as1_storage;
 var set( '..'(1, n) ) of  A_occ_0('..'(1, n)): as1_ref :: (no_output);
 int: m;
-array ['..'(1, m)] of record(var '..'(0, 2): c): A_as2_storage;
+array ['..'(1, m)] of record(var '..'(0, 2): c): A_as2_storage :: (no_output);
 array [int] of record(var '..'(0, 2): c): A_as2_objects = A_as2_storage;
 var set( '..'(1, m) ) of  A_occ_1('..'(1, m)): as2_ref :: (no_output);
 constraint forall(['\/'('in'(x, A), '='(('[]'(A_objects, enum2int(x))).c, mzn_safe_default(('[]'(A_objects, enum2int(x))).c))) | x in A_potential]);

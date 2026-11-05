@@ -9,7 +9,7 @@ var set of A_potential: A = array_union([if 'in'(B_occ_0(_DECL_1), B) then {A_oc
 array [A_potential] of string: A_ids = array1d(A_potential, ['++'('++'("bs[", show(p)), "]") | p in '..'(1, card('..'(1, n)))]);
 constraint forall(['>='(('[]'(A_objects, enum2int(this))).x, 0) | this in A]);
 int: n;
-array ['..'(1, n)] of record(var '..'(0, 4): x, var '..'(0, 4): y): B_bs_storage;
+array ['..'(1, n)] of record(var '..'(0, 4): x, var '..'(0, 4): y): B_bs_storage :: (no_output);
 int: B_bs__start = 1;
 int: B_bs__end = 2;
 array [int] of record(var '..'(0, 4): x, var '..'(0, 4): y): B_bs_objects = B_bs_storage;

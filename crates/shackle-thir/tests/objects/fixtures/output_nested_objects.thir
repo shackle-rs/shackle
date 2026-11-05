@@ -27,7 +27,7 @@ int: Node_nodes_root_start = 1;
 int: Node_nodes_root_end = 2;
 array [int] of record(Leaf_potential: first, set of Leaf_potential: leaves): Node_nodes_objects = [(first: first, leaves: leaves) | p in index_set(Node_nodes_inputs), input = '[]'(Node_nodes_inputs, p), leaves = Leaf_occ_1('..'('+'(1, sum([length(('[]'(Node_nodes_inputs, q)).leaves) | q in '..'(1, '-'(p, 1))])), '+'(sum([length(('[]'(Node_nodes_inputs, q)).leaves) | q in '..'(1, '-'(p, 1))]), length((input).leaves)))), first = Leaf_occ_2(p)];
 set of Node_occ_0({1}): nodes_ref :: (no_output) = Node_occ_0({1});
-array ['..'(1, 2)] of record(var set of Seat_potential: seats): Wagon_ws_storage;
+array ['..'(1, 2)] of record(var set of Seat_potential: seats): Wagon_ws_storage :: (no_output);
 array [Seat_occ_4('..'(1, '*'(card('..'(1, 2)), max('..'(1, 2)))))] of record(var '..'(1, 2): comfort): Seat_seats_objects;
 int: Wagon_ws_seats_start = 1;
 int: Wagon_ws_seats_end = '+'(Wagon_ws_seats_start, '*'(card('..'(1, 2)), max('..'(1, 2))));

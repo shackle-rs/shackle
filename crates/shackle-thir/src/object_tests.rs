@@ -308,6 +308,11 @@ fn object_empty_class_and_var_new_output_annotations_compile() {
 	check_snapshot("var_new_no_output");
 }
 
+#[test]
+fn object_var_set_new_storage_is_not_output() {
+	check_snapshot("var_set_new_storage_no_output");
+}
+
 /// A VAR-REACHED object-carrying class introduced two or more
 /// `new`-hops below a par root now lowers (the last cross-introduction fence is
 /// gone). The class is deep under a par root (so its data-supplied object
