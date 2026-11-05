@@ -7,7 +7,7 @@ array [int] of record(var set of B_potential: children, var int: n): A_objects =
 var set of A_potential: A = as_ref;
 array [A_potential] of string: A_ids = array1d(A_potential, ['++'('++'("as[", show(p)), "]") | p in '..'(1, card('..'(1, 1)))]);
 constraint forall(['in'(card(('[]'(A_objects, enum2int(this))).children), '..'(2, 2)) | this in A]);
-array ['..'(1, 1)] of record(var set of B_potential: children): A_as_storage;
+array ['..'(1, 1)] of record(var set of B_potential: children): A_as_storage :: (no_output);
 array [B_occ_1('..'(1, '*'(card('..'(1, 1)), max('..'(2, 2)))))] of record(var '..'(2, 3): x): B_children_objects;
 int: A_as_children_start = 1;
 int: A_as_children_end = '+'(A_as_children_start, '*'(card('..'(1, 1)), max('..'(2, 2))));

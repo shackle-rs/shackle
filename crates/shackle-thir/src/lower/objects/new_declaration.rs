@@ -2538,6 +2538,17 @@ impl<'db> ItemCollector<'db> {
 				)
 			};
 			array_decl.set_name(array_name);
+			if scalar_storage_only_var_root {
+				// This declaration is lowering-private backing storage for a
+				// user-facing collection root. Keep it out of implicit output,
+				// just like every other generated `_storage` declaration.
+				array_decl.annotations_mut().push(Expression::new(
+					collector.parent.db,
+					&collector.parent.model,
+					item,
+					collector.parent.ids.annotations.no_output,
+				));
+			}
 			if data_root && convert_inputs {
 				// The data gives the records in their natural form, an optional
 				// child or root as an `opt` record: read them under the user's
@@ -2639,6 +2650,14 @@ impl<'db> ItemCollector<'db> {
 			storage_decl.set_name(Identifier::new(
 				collector.parent.db,
 				format!("{}_storage", class_and_decl_name),
+			));
+			// This declaration is lowering-private backing storage for a
+			// user-facing collection root. It must never be implicitly output.
+			storage_decl.annotations_mut().push(Expression::new(
+				collector.parent.db,
+				&collector.parent.model,
+				item,
+				collector.parent.ids.annotations.no_output,
 			));
 			Some(
 				collector

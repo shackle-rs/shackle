@@ -434,6 +434,14 @@ impl<'db> ItemCollector<'db> {
 				suffix += 1;
 			}
 			storage_decl.set_name(storage_ident);
+			// This array holds lowering-private object storage for a nested
+			// contribution, so it must not be implicitly output.
+			storage_decl.annotations_mut().push(Expression::new(
+				self.db,
+				&self.model,
+				item,
+				self.ids.annotations.no_output,
+			));
 			let storage_idx = self
 				.model
 				.add_declaration(DeclarationItem::new(storage_decl, item));
