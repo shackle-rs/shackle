@@ -5,7 +5,7 @@ license = {workspace = true}
 repository = {workspace = true}
 description = "Language server implementation for Shackle"
 name = "shackle-ls"
-version = "0.3.2"
+version = "0.3.3"
 
 [lib]
 name = "shackle_ls"
