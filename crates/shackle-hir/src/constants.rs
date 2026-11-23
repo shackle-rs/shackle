@@ -72,7 +72,6 @@ id_registry!(
 	mzn_inline,
 	mzn_inline_call_by_name,
 	mzn_unreachable,
-	mzn_opt_bool,
 	mzn_builtin,
 	mzn_internal_representation,
 	mzn_internal_generated,
@@ -94,6 +93,7 @@ id_registry!(
 	objective: "_objective",
 	this: "this",
 	object_id: "id",
+	root: "mzn_root",
 );
 
 id_registry!(

@@ -15,8 +15,7 @@ use shackle_utils::maybe_grow_stack;
 
 use crate::{
 	Constraint, Db, Declaration, Domain, DomainData, DummyValue, Expression, ExpressionData,
-	FunctionId, Item, Let, LetItem, LookupCall, LookupIdentifier, Marker, Model, TupleAccess,
-	TupleLiteral,
+	FunctionId, Item, Let, LetItem, LookupCall, Marker, Model, TupleAccess, TupleLiteral,
 	source::Origin,
 	traverse::{
 		Folder, ReplacementMap, add_function, fold_domain, fold_expression, fold_function_body,
@@ -87,11 +86,10 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for OptEraser<'db,
 				// Transform `<>` into `(false, ...)`
 				let origin = def.origin();
 				let bool_false = Expression::new(db, &self.model, origin, BooleanLiteral(false));
-				let bottom = Expression::new(
+				let bottom = DummyValue(declaration.ty().fields(db).unwrap()[1]).build_no_bottom(
 					db,
-					&self.model,
+					&mut self.model,
 					origin,
-					DummyValue(declaration.ty().fields(db).unwrap()[1]),
 				);
 				declaration.set_definition(Expression::new(
 					db,
@@ -285,13 +283,26 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for OptEraser<'db,
 			}
 		});
 		if expression.ty() == self.tys.par_opt_bool || expression.ty() == self.tys.var_opt_bool {
-			// Needed so we can implement partial semantics during totalisation
-			folded.annotations_mut().push(Expression::new(
+			folded = Expression::new(
 				db,
 				&self.model,
-				expression.origin(),
-				LookupIdentifier(self.ids.annotations.mzn_opt_bool),
-			));
+				origin,
+				LookupCall {
+					function: self.ids.functions.mzn_default_partial.into(),
+					arguments: vec![
+						folded,
+						Expression::new(
+							db,
+							&self.model,
+							origin,
+							TupleLiteral(vec![
+								Expression::new(db, &self.model, origin, BooleanLiteral(true)),
+								Expression::new(db, &self.model, origin, BooleanLiteral(false)),
+							]),
+						),
+					],
+				},
+			);
 		}
 		assert!(
 			folded.ty().opt(db) != Some(OptType::Opt),
@@ -401,7 +412,7 @@ mod tests {
 		check_no_stdlib(
 			vec![Transform::TopDownType, Transform::EraseOpt],
 			r#"
-				annotation mzn_opt_bool;
+				function any $T: mzn_default_partial(any $T: x, any $T: y);
 				function var opt $T: val2opt(var $T: x);
 				function opt $T: val2opt($T: x);
 				function set of int: mzn_opt_domain(set of int: x);
@@ -417,31 +428,31 @@ mod tests {
 				any: f = foo(1);
             "#,
 			expect!([r#"
-    annotation mzn_opt_bool;
+    function any $T: mzn_default_partial(any $T: x, any $T: y);
     function set of int: mzn_opt_domain(set of int: x);
     predicate mzn_opt_channel(tuple(var bool, var int): x, set of int: s);
     tuple(bool, int): x = (true, 2);
-    tuple(bool, bool): y = let {
-      tuple(bool, bool): _DECL_5 = (false, false);
-    } in _DECL_5 :: (mzn_opt_bool) :: (mzn_opt_bool);
+    tuple(bool, bool): y = mzn_default_partial(let {
+      tuple(bool, bool): _DECL_7 = (false, false);
+    } in mzn_default_partial(_DECL_7, (true, false)), (true, false));
     tuple(var bool, var int): a = let {
-      set of int: _DECL_7 = {1, 2, 3};
+      set of int: _DECL_9 = {1, 2, 3};
     } in let {
-      var bool: _DECL_8;
-      var mzn_opt_domain(_DECL_7): _DECL_9;
-      tuple(var bool, var int): _DECL_10 = (_DECL_8, _DECL_9);
-      constraint mzn_opt_channel(_DECL_10, _DECL_7);
-    } in _DECL_10;
+      var bool: _DECL_10;
+      var mzn_opt_domain(_DECL_9): _DECL_11;
+      tuple(var bool, var int): _DECL_12 = (_DECL_10, _DECL_11);
+      constraint mzn_opt_channel(_DECL_12, _DECL_9);
+    } in _DECL_12;
     tuple(bool, int): b = if true then (true, 1) else let {
-      tuple(bool, int): _DECL_12 = (false, 0);
-    } in _DECL_12 endif;
-    array [int] of tuple(bool, int): c = [(true, 1), let {
       tuple(bool, int): _DECL_14 = (false, 0);
-    } in _DECL_14];
+    } in _DECL_14 endif;
+    array [int] of tuple(bool, int): c = [(true, 1), let {
+      tuple(bool, int): _DECL_16 = (false, 0);
+    } in _DECL_16];
     tuple(int, tuple(bool, int)): d;
     tuple(tuple(bool, int), tuple(bool, int)): e = let {
-      tuple(int, tuple(bool, int)): _DECL_17 = d;
-    } in ((true, (_DECL_17).1), (_DECL_17).2);
+      tuple(int, tuple(bool, int)): _DECL_19 = d;
+    } in ((true, (_DECL_19).1), (_DECL_19).2);
     function tuple(bool, int): foo(tuple(bool, int): x) = (true, 1);
     tuple(bool, int): f = foo((true, 1));
     solve satisfy;
@@ -460,7 +471,7 @@ mod tests {
 				Transform::EraseOpt,
 			],
 			r#"
-				annotation mzn_opt_bool;
+				function any $T: mzn_default_partial(any $T: x, any $T: y);
 				function var opt $T: val2opt(var $T: x);
 				function opt $T: val2opt($T: x);
 				test '/\'(bool: x, bool: y);
@@ -472,24 +483,24 @@ mod tests {
 				opt int: c = r.v;
 			"#,
 			expect!([r#"
-    annotation mzn_opt_bool;
+    function any $T: mzn_default_partial(any $T: x, any $T: y);
     function bool: '/\'(bool: x, bool: y);
     tuple(bool, tuple(int, tuple(bool, int))): t = (true, (1, let {
-      tuple(bool, int): _DECL_3 = (false, 0);
-    } in _DECL_3));
+      tuple(bool, int): _DECL_5 = (false, 0);
+    } in _DECL_5));
     tuple(bool, tuple(int, tuple(bool, int))): u = let {
-      tuple(bool, tuple(int, tuple(bool, int))): _DECL_5 = (false, (0, (false, 0)));
-    } in _DECL_5;
+      tuple(bool, tuple(int, tuple(bool, int))): _DECL_7 = (false, (0, (false, 0)));
+    } in _DECL_7;
     tuple(bool, tuple({1, 2, 3})): r = (true, (2,));
     tuple(bool, int): a = let {
-      tuple(bool, tuple(int, tuple(bool, int))): _DECL_8 = t;
-    } in ((_DECL_8).1, ((_DECL_8).2).1);
-    tuple(bool, int): b = let {
       tuple(bool, tuple(int, tuple(bool, int))): _DECL_10 = t;
-    } in ('/\'((_DECL_10).1, (((_DECL_10).2).2).1), (((_DECL_10).2).2).2);
+    } in ((_DECL_10).1, ((_DECL_10).2).1);
+    tuple(bool, int): b = let {
+      tuple(bool, tuple(int, tuple(bool, int))): _DECL_12 = t;
+    } in ('/\'((_DECL_12).1, (((_DECL_12).2).2).1), (((_DECL_12).2).2).2);
     tuple(bool, int): c = let {
-      tuple(bool, tuple(int)): _DECL_12 = r;
-    } in ((_DECL_12).1, ((_DECL_12).2).1);
+      tuple(bool, tuple(int)): _DECL_14 = r;
+    } in ((_DECL_14).1, ((_DECL_14).2).1);
     solve satisfy;
 "#]),
 		);
@@ -520,6 +531,28 @@ mod tests {
       array [int] of var int: _DECL_9 = x;
     } in arrayXd(_DECL_9, [(true, _DECL_10) | _DECL_10 in _DECL_9]))): r;
     } in r;
+    solve satisfy;
+"#]),
+		);
+	}
+
+	#[test]
+	fn test_opt_bool_erase() {
+		check_no_stdlib(
+			vec![Transform::TopDownType, Transform::EraseOpt],
+			r#"
+    		function any $T: mzn_default_partial(any $T: x, any $T: y);
+			opt bool: b = let {
+				constraint false;
+			} in <>;
+			"#,
+			expect!([r#"
+    function any $T: mzn_default_partial(any $T: x, any $T: y);
+    tuple(bool, bool): b = mzn_default_partial(let {
+      constraint false;
+    } in mzn_default_partial(let {
+      tuple(bool, bool): _DECL_3 = (false, false);
+    } in mzn_default_partial(_DECL_3, (true, false)), (true, false)), (true, false));
     solve satisfy;
 "#]),
 		);

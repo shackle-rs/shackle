@@ -36,8 +36,6 @@ function var bool: '='(
 		any: (by, dy) = mzn_destruct_opt(y);
 	} in bx = by /\ dx = dy;
 
-annotation mzn_opt_bool;
-
 function $T: mzn_default_opt(opt $T: x, $T: y) :: mzn_inline_call_by_name =
 	let {
 		any: yy = y;

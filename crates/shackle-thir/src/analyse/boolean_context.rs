@@ -230,7 +230,9 @@ impl<'a, 'db, T: Marker> ModeAnalyser<'a, 'db, T> {
 								.annotations()
 								.has(model, analyser.ids.annotations.promise_total)
 							{
-								if model[f].return_type() == analyser.tys.var_bool {
+								if model[f].return_type() == analyser.tys.var_bool
+									|| model[f].return_type() == analyser.tys.par_bool
+								{
 									Mode::PromiseTotal
 								} else {
 									root
@@ -987,6 +989,36 @@ mod tests {
     array [int] of var bool: y = [b :: ctx_non_root] :: ctx_root;
     constraint forall([b :: ctx_root] :: ctx_root) :: ctx_root;
     constraint forall([b :: ctx_root | i in {1 :: ctx_root} :: ctx_root] :: ctx_root) :: ctx_root;
+"#]],
+			true,
+		);
+	}
+
+	#[test]
+	fn test_bool_ctx_promise_total() {
+		let program = r#"
+   			annotation promise_total;
+    		function bool: foo(bool: b) :: promise_total = let {
+				constraint b;
+			} in false;
+		"#;
+		check_bool_ctx(
+			program,
+			expect![[r#"
+    annotation promise_total;
+    function bool: foo(bool: b) :: (promise_total :: ctx_root) = let {
+      constraint b :: ctx_root;
+    } in false :: ctx_non_root :: ctx_non_root;
+"#]],
+			false,
+		);
+		check_bool_ctx(
+			program,
+			expect![[r#"
+    annotation promise_total;
+    function bool: foo(bool: b) :: (promise_total :: ctx_root) = let {
+      constraint b :: ctx_root;
+    } in false :: ctx_root :: ctx_root;
 "#]],
 			true,
 		);
