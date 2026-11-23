@@ -877,6 +877,21 @@ impl<'db, T: Marker> Solve<'db, T> {
 		&self.goal
 	}
 
+	/// Whether or not this solve item is for a satisfaction problem
+	pub fn is_satisfy(&self) -> bool {
+		matches!(self.goal(), Goal::Satisfy)
+	}
+
+	/// Whether or not this solve item is for a maximization problem
+	pub fn is_maximize(&self) -> bool {
+		matches!(self.goal(), Goal::Maximize { .. })
+	}
+
+	/// Whether or not this solve item is for a minimization problem
+	pub fn is_minimize(&self) -> bool {
+		matches!(self.goal(), Goal::Minimize { .. })
+	}
+
 	/// Get the objective value
 	pub fn objective(&self) -> Option<DeclarationId<'db, T>> {
 		match self.goal() {

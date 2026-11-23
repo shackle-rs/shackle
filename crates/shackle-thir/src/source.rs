@@ -2,8 +2,6 @@
 //!
 //! Tracks desugarings performed when lowering HIR to THIR.
 
-use std::fmt::Write;
-
 use miette::SourceSpan;
 use shackle_diagnostics::SourceFile;
 use shackle_hir::{
@@ -69,12 +67,19 @@ impl<'db> Origin<'db> {
 
 	/// Pretty print this origin
 	pub fn pretty_print(&self, db: &'db dyn Db) -> String {
-		let (src, span) = self.source_span(db);
-		let mut from_line = 0;
-		let mut from_char = 0;
-		let mut to_line = 0;
-		let mut to_char = 0;
+		format!("{}:{}", self.name(db), self.line_char(db))
+	}
 
+	/// Get the name of the source file of this origin
+	pub fn name(&self, db: &'db dyn Db) -> String {
+		let (src, _) = self.source_span(db);
+		src.name()
+	}
+
+	/// Get the line and character span of this origin
+	pub fn line_char(&self, db: &'db dyn Db) -> LineCharSpan {
+		let (src, span) = self.source_span(db);
+		let mut lc = LineCharSpan::default();
 		let mut iter = src.contents()[0..span.offset() + span.len()]
 			.chars()
 			.enumerate()
@@ -82,27 +87,46 @@ impl<'db> Origin<'db> {
 		while let Some((i, char)) = iter.next() {
 			if matches!(char, '\r' | '\n') {
 				if i < span.offset() {
-					from_line += 1;
-					from_char = 0;
+					lc.from_line += 1;
+					lc.from_char = 0;
 				}
-				to_line += 1;
-				to_char = 0;
+				lc.to_line += 1;
+				lc.to_char = 0;
 				if char == '\r' {
 					let _ = iter.next_if(|(_, c)| *c == '\n');
 				}
 			} else {
 				if i < span.offset() {
-					from_char += 1;
+					lc.from_char += 1;
 				}
-				to_char += 1;
+				lc.to_char += 1;
 			}
 		}
-		let mut s = format!("{}:{}.{}", src.name(), from_line + 1, from_char + 1);
-		if from_line != to_line {
-			write!(&mut s, "-{}.{}", to_line + 1, to_char + 1).unwrap();
-		} else if from_char != to_char {
-			write!(&mut s, "-{}", to_char + 1).unwrap();
+		lc
+	}
+}
+
+/// A span in terms of line and character numbers
+#[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
+pub struct LineCharSpan {
+	/// The line number where the span starts
+	pub from_line: u32,
+	/// The character number where the span starts
+	pub from_char: u32,
+	/// The line number where the span ends
+	pub to_line: u32,
+	/// The character number where the span ends
+	pub to_char: u32,
+}
+
+impl std::fmt::Display for LineCharSpan {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}.{}", self.from_line + 1, self.from_char + 1)?;
+		if self.from_line != self.to_line {
+			write!(f, "-{}.{}", self.to_line + 1, self.to_char + 1)?;
+		} else if self.from_char != self.to_char {
+			write!(f, "-{}", self.to_char + 1)?;
 		}
-		s
+		Ok(())
 	}
 }

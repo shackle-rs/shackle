@@ -9,8 +9,8 @@ use std::{
 use derive_more::From;
 use salsa::Setter;
 use shackle_diagnostics::{Error as ShackleError, IncludeError, SourceFile};
+pub use shackle_syntax::InputLang;
 use shackle_syntax::{
-	InputLang,
 	ast::{AstNode, ConstraintModel},
 	cst::Cst,
 	eprime::EPrimeModel,
