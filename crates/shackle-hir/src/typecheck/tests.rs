@@ -208,6 +208,33 @@ fn test_type_expressions() {
 }
 
 #[test]
+fn test_let_promise_total() {
+	let mut tester = TypeTester::new();
+	let preamble = "annotation promise_total; var int: x; var bool: b;";
+	for (expression, expected) in [
+		("let { var int: y = x; } in true", expect!("var bool")),
+		(
+			"let { var int: y :: promise_total = x; } in true",
+			expect!("bool"),
+		),
+		(
+			"let { tuple(int, var int): y :: promise_total = (1, x); } in true",
+			expect!("bool"),
+		),
+		(
+			"let { var int: y :: promise_total = x; constraint b; } in true",
+			expect!("var bool"),
+		),
+		(
+			"let { var int: y :: promise_total = x; var int: z = x; } in true",
+			expect!("var bool"),
+		),
+	] {
+		tester.check_expression_preamble(preamble, expression, expected);
+	}
+}
+
+#[test]
 fn test_function_resolution() {
 	let mut tester = TypeTester::new();
 	tester.check_expression_preamble(

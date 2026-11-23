@@ -182,6 +182,103 @@ impl<'db, T: Marker> From<Infinity> for ExpressionData<'db, T> {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DummyValue<'db>(pub Ty<'db>);
 
+impl<'db> DummyValue<'db> {
+	/// Create a dummy value without bottom types
+	pub fn build_no_bottom<T: Marker>(
+		&self,
+		db: &'db dyn Db,
+		model: &mut Model<'db, T>,
+		origin: impl Into<Origin<'db>>,
+	) -> Expression<'db, T> {
+		let ty = self.0;
+		let origin = origin.into();
+		if ty.opt(db) == Some(OptType::Opt) {
+			let mut decl = Declaration::new(false, Domain::unbounded(db, origin, ty));
+			decl.set_definition(Expression::new(db, model, origin, Absent));
+			let idx = model.add_declaration(Item::new(decl, origin));
+			let ident = Expression::new(db, model, origin, idx);
+			return Expression::new(
+				db,
+				model,
+				origin,
+				Let {
+					items: vec![LetItem::Declaration(idx)],
+					in_expression: Box::new(ident),
+				},
+			);
+		}
+		let ids = IdentifierRegistry::lookup(db);
+		match ty.lookup(db) {
+			TyData::Annotation(_) => Expression::new(
+				db,
+				model,
+				origin,
+				LookupAnnotation {
+					name: ids.annotations.empty_annotation,
+					arguments: Vec::new(),
+				},
+			),
+			TyData::Array { .. } => {
+				let mut decl = Declaration::new(false, Domain::unbounded(db, origin, ty));
+				decl.set_definition(Expression::new(db, model, origin, ArrayLiteral(vec![])));
+				let idx = model.add_declaration(Item::new(decl, origin));
+				let ident = Expression::new(db, model, origin, idx);
+				Expression::new(
+					db,
+					model,
+					origin,
+					Let {
+						items: vec![LetItem::Declaration(idx)],
+						in_expression: Box::new(ident),
+					},
+				)
+			}
+			TyData::Boolean(_, _) => Expression::new(db, model, origin, BooleanLiteral(false)),
+			TyData::Float(_, _) => Expression::new(db, model, origin, FloatLiteral::new(0.0)),
+			TyData::Integer(_, _) => Expression::new(db, model, origin, IntegerLiteral(0)),
+			TyData::Record(_, fs) => RecordLiteral(
+				fs.iter()
+					.map(|(i, ty)| {
+						(
+							(*i).into(),
+							DummyValue(*ty).build_no_bottom(db, model, origin),
+						)
+					})
+					.collect(),
+			)
+			.build(db, model, origin),
+			TyData::Set(_, _, _) => {
+				let mut decl = Declaration::new(false, Domain::unbounded(db, origin, ty));
+				decl.set_definition(Expression::new(db, model, origin, SetLiteral(vec![])));
+				let idx = model.add_declaration(Item::new(decl, origin));
+				let ident = Expression::new(db, model, origin, idx);
+				Expression::new(
+					db,
+					model,
+					origin,
+					Let {
+						items: vec![LetItem::Declaration(idx)],
+						in_expression: Box::new(ident),
+					},
+				)
+			}
+			TyData::String(_) => Expression::new(
+				db,
+				model,
+				origin,
+				StringLiteral::from(ids.literals.empty_string),
+			),
+			TyData::Tuple(_, fs) => TupleLiteral(
+				fs.iter()
+					.map(|ty| DummyValue(*ty).build_no_bottom(db, model, origin))
+					.collect(),
+			)
+			.build(db, model, origin),
+			_ => panic!("Cannot create dummy value for type {}", ty.pretty_print(db)),
+		}
+	}
+}
+
 impl<'db, T: Marker> ExpressionBuilder<'db, T> for DummyValue<'db> {
 	fn build(
 		self,
@@ -1108,6 +1205,7 @@ impl<'db, T: Marker> ExpressionBuilder<'db, T> for Let<'db, T> {
 		model: &Model<'db, T>,
 		origin: Origin<'db>,
 	) -> Expression<'db, T> {
+		let ids = IdentifierRegistry::lookup(db);
 		let types = TypeRegistry::lookup(db);
 		let mut ty = self.in_expression.ty();
 		if ty != types.ann
@@ -1116,6 +1214,9 @@ impl<'db, T: Marker> ExpressionBuilder<'db, T> for Let<'db, T> {
 				LetItem::Constraint(idx) => model[*idx].expression().ty() == types.var_bool,
 				LetItem::Declaration(idx) => {
 					model[*idx].definition().is_some()
+						&& !model[*idx]
+							.annotations()
+							.has(model, ids.annotations.promise_total)
 						&& model[*idx]
 							.domain()
 							.walk()

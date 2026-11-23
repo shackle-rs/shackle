@@ -1952,8 +1952,11 @@ impl<'ctx, 'db, T: TypeContext<'db>> Typer<'ctx, 'db, T> {
 						.walk(db)
 						.any(|ty| ty != self.types.var_bool && ty.inst(db) == Some(VarType::Var))
 						&& d.definition.is_some()
-					{
-						// Var declarations make the return type var
+						&& !d.annotations.iter().any(|ann| {
+							matches!(&self.data[*ann], Expression::Identifier(i)
+								if *i == self.identifiers.annotations.promise_total)
+						}) {
+						// Var declarations may be partial unless promised total.
 						make_var = true;
 					}
 				}
