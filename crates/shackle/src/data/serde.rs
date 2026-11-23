@@ -357,6 +357,12 @@ impl<'de> Visitor<'de> for SerdeArrayVisitor<'_> {
 	fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
 		let mut i = 0;
 		debug_assert!(self.depth <= self.dim);
+		let first_at_depth = self.size.len() < self.depth as usize;
+		if first_at_depth {
+			debug_assert_eq!(self.size.len() + 1, self.depth as usize);
+			// Reserve this dimension before visiting children, which record deeper dimensions.
+			self.size.push(0);
+		}
 		if self.depth >= self.dim {
 			// Parse elements
 			while let Some(elt) = seq.next_element_seed(SerdeValueVisitor(self.element))? {
@@ -379,9 +385,8 @@ impl<'de> Visitor<'de> for SerdeArrayVisitor<'_> {
 				i += 1
 			}
 		}
-		if self.size.len() < self.depth as usize {
-			debug_assert_eq!(self.size.len() + 1, self.depth as usize);
-			self.size.push(i);
+		if first_at_depth {
+			self.size[self.depth as usize - 1] = i;
 		} else if self.size[self.depth as usize - 1] != i {
 			return Err(Error::invalid_length(
 				i as usize,
@@ -897,7 +902,7 @@ mod tests {
 	use serde::Deserializer;
 	use shackle_diagnostics::SourceFile;
 
-	use super::SerdeFileVisitor;
+	use super::{ParserVal, SerdeFileVisitor, SerdeValueVisitor};
 	use crate::{Enum, Error, OptType, Type};
 
 	fn check_serialization(input: &str, ty: &Type, expected: &Expect) {
@@ -1290,6 +1295,90 @@ mod tests {
 			},
 			&expect!("[<>, <>, 1, <>]"),
 		);
+	}
+
+	#[test]
+	fn test_parse_multidimensional_arrays() {
+		for (input, lengths) in [
+			("[[1,2]]", vec![1, 2]),
+			("[[1,2],[3,4]]", vec![2, 2]),
+			("[[1,2,3],[4,5,6]]", vec![2, 3]),
+			("[[[1,2,3]],[[4,5,6]]]", vec![2, 1, 3]),
+		] {
+			let ty = Type::Array {
+				opt: OptType::NonOpt,
+				dim: vec![Type::Integer(OptType::NonOpt); lengths.len()].into(),
+				element: Type::Integer(OptType::NonOpt).into(),
+			};
+			let parsed = serde_json::Deserializer::from_str(input)
+				.deserialize_any(SerdeValueVisitor(&ty))
+				.unwrap();
+			assert_eq!(
+				parsed,
+				ParserVal::SimpleArray(
+					lengths
+						.iter()
+						.map(|&len| (ParserVal::Integer(1), ParserVal::Integer(len)))
+						.collect(),
+					(1..=lengths.iter().product())
+						.map(ParserVal::Integer)
+						.collect(),
+				),
+				"{input}"
+			);
+			let value = parsed.resolve_value(&ty).unwrap();
+			assert_eq!(
+				serde_json::to_value(value).unwrap(),
+				serde_json::from_str::<serde_json::Value>(input).unwrap(),
+				"{input}"
+			);
+		}
+	}
+
+	#[test]
+	fn test_parse_empty_multidimensional_arrays() {
+		for (input, dimensions) in [
+			("[]", 2),
+			("[[],[]]", 2),
+			("[]", 3),
+			("[[],[]]", 3),
+			("[[[],[]],[[],[]]]", 3),
+		] {
+			let ty = Type::Array {
+				opt: OptType::NonOpt,
+				dim: vec![Type::Integer(OptType::NonOpt); dimensions].into(),
+				element: Type::Integer(OptType::NonOpt).into(),
+			};
+			let parsed = serde_json::Deserializer::from_str(input)
+				.deserialize_any(SerdeValueVisitor(&ty))
+				.unwrap();
+			assert_eq!(parsed, ParserVal::SimpleArray(Vec::new(), Vec::new()));
+		}
+	}
+
+	#[test]
+	fn test_reject_ragged_multidimensional_arrays() {
+		for (input, dimensions) in [
+			("[[1,2],[3]]", 2),
+			("[[],[1]]", 2),
+			("[[1],[]]", 2),
+			("[[[1,2]],[[3]]]", 3),
+			("[[[1]],[[2],[3]]]", 3),
+			("[[],[[]]]", 3),
+		] {
+			let ty = Type::Array {
+				opt: OptType::NonOpt,
+				dim: vec![Type::Integer(OptType::NonOpt); dimensions].into(),
+				element: Type::Integer(OptType::NonOpt).into(),
+			};
+			let error = serde_json::Deserializer::from_str(input)
+				.deserialize_any(SerdeValueVisitor(&ty))
+				.unwrap_err();
+			assert!(
+				error.to_string().contains("invalid length"),
+				"{input}: {error}"
+			);
+		}
 	}
 
 	#[test]
