@@ -39,8 +39,8 @@ impl<'db, T: Marker> ReachabilityVisitor<'db, T> {
 			overloads,
 		};
 
+		let ids = IdentifierRegistry::lookup(db);
 		if keep_known_ids {
-			let ids = IdentifierRegistry::lookup(db);
 			for name in ids.annotations.all.iter() {
 				if let Some(ident) = model.lookup_identifier(db, *name) {
 					visitor.visit_identifier(&model, &ident);
@@ -52,6 +52,12 @@ impl<'db, T: Marker> ReachabilityVisitor<'db, T> {
 						visitor.visit_item(&model, f.into());
 					}
 				}
+			}
+		}
+
+		for (idx, f) in model.top_level_functions() {
+			if f.annotations().has(&model, ids.annotations.mzn_no_remove) {
+				visitor.visit_item(&model, idx.into());
 			}
 		}
 
