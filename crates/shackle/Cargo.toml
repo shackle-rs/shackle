@@ -8,7 +8,7 @@ name = "shackle"
 version = "0.1.0"
 
 [dependencies]
-itertools = "0.15.0"
+itertools = {workspace = true}
 log = {workspace = true}
 rustc-hash = {workspace = true}
 serde = {workspace = true}
