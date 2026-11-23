@@ -1333,8 +1333,33 @@ pub fn fold_expression<'a, 'db, T: Marker, U: Marker, F: Folder<'a, 'db, U, T> +
 	model: &'a Model<'db, T>,
 	expression: &'a Expression<'db, T>,
 ) -> Expression<'db, U> {
+	let mut e = fold_expression_without_annotations(folder, db, model, expression);
+	e.annotations_mut().extend(
+		expression
+			.annotations()
+			.iter()
+			.map(|ann| folder.fold_expression(db, model, ann)),
+	);
+	e
+}
+
+/// Fold an expression without attaching annotations.
+///
+/// First visits annotations and then calls the specific `folder.fold_foo()` method for the kind of expression
+pub fn fold_expression_without_annotations<
+	'a,
+	'db,
+	T: Marker,
+	U: Marker,
+	F: Folder<'a, 'db, U, T> + ?Sized,
+>(
+	folder: &mut F,
+	db: &'db dyn Db,
+	model: &'a Model<'db, T>,
+	expression: &'a Expression<'db, T>,
+) -> Expression<'db, U> {
 	let origin = expression.origin();
-	let mut e = match &**expression {
+	match &**expression {
 		ExpressionData::Absent => alloc_expression(db, origin, Absent, folder),
 		ExpressionData::BooleanLiteral(b) => {
 			alloc_expression(db, origin, folder.fold_boolean(db, model, *b), folder)
@@ -1400,14 +1425,7 @@ pub fn fold_expression<'a, 'db, T: Marker, U: Marker, F: Folder<'a, 'db, U, T> +
 		ExpressionData::Lambda(l) => {
 			alloc_expression(db, origin, folder.fold_lambda(db, model, l), folder)
 		}
-	};
-	e.annotations_mut().extend(
-		expression
-			.annotations()
-			.iter()
-			.map(|ann| folder.fold_expression(db, model, ann)),
-	);
-	e
+	}
 }
 
 /// Fold a generator

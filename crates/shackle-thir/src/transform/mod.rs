@@ -25,9 +25,10 @@ use self::{
 	type_specialise::type_specialise,
 };
 use super::Model;
-use crate::{Db, lower::lower_model};
+use crate::{Db, lower::lower_model, transform::annotation::rewrite_annotations};
 
 // pub mod capturing_fn;
+pub mod annotation;
 pub mod comprehension;
 pub mod dead_code;
 pub mod domain_constraint;
@@ -69,6 +70,8 @@ pub enum Transform {
 	EraseOpt,
 	/// Inline function calls
 	InlineFunctions,
+	/// Rewrite annotations
+	RewriteAnnotations,
 	/// Totalise the model
 	Totalise,
 	/// Eliminate dead code aggressively
@@ -91,6 +94,7 @@ impl Transform {
 			Transform::DesugarComprehension => desugar_comprehension(db, model),
 			Transform::EraseOpt => erase_opt(db, model),
 			Transform::InlineFunctions => inline_functions(db, model),
+			Transform::RewriteAnnotations => rewrite_annotations(db, model),
 			Transform::Totalise => totalise(db, model),
 			Transform::EliminateDeadCode => eliminate_dead_code(db, model),
 		}
@@ -111,6 +115,7 @@ pub const DEFAULT_TRANSFORMS: &[Transform] = &[
 	Transform::DesugarComprehension,
 	Transform::EraseOpt,
 	Transform::InlineFunctions,
+	Transform::RewriteAnnotations,
 	Transform::Totalise,
 	Transform::EliminateDeadCode,
 ];
