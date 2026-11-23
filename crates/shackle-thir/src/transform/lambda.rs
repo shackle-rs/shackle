@@ -1,14 +1,8 @@
-// //! Rewriting of capturing functions expressions into non-capturing ones
-// //!
-// //! - Functions which refer to global variables are rewritten to take those variables
-// //!   as a tuple parameter
-// //! - Each call to the function is changed to pass the tuple literal of captures
-// //! - Captures are transitive, so if you call a function A in the body of a function B,
-// //!   then function B's captures are a superset of function A's captures
+//! Rewriting of lambda functions
 
 // use rustc_hash::{FxHashMap, FxHashSet};
 // use shackle_diagnostics::Result;
-// use shackle_hir::OptType;
+// use shackle_ty::Ty;
 // use shackle_utils::maybe_grow_stack;
 
 // use crate::{
@@ -50,11 +44,6 @@
 // 			return;
 // 		}
 // 		let _ = self.visited.insert(function);
-// 		// Domain checks will get moved to the body, so have to capture them as well
-// 		self.visit_domain(model, model[function].domain());
-// 		for p in model[function].parameters().iter() {
-// 			self.visit_domain(model, model[*p].domain());
-// 		}
 // 		if let Some(body) = model[function].body() {
 // 			self.visit_expression(model, body);
 // 		}
@@ -99,13 +88,20 @@
 // 		&mut self.replacement_map
 // 	}
 
-// 	fn add_function(&mut self, db: &'db dyn Db, model: &Model<'db>, f: FunctionId<'db>) {
-// 		let _ = add_function(self, db, model, f);
-// 		self.decapture_fn(db, model, f);
-// 		let new_f = self.fold_function_id(db, model, f);
-// 		if let Some(d) = self.decaptured.get(&f) {
-// 			self.model[new_f].add_parameter(d.parameter);
-// 		}
+// 	fn fold_function_id(
+// 		&mut self,
+// 		db: &'db dyn Db,
+// 		model: &'_ Model<'db, ()>,
+// 		f: FunctionId<'db, ()>,
+// 	) -> FunctionId<'db, Dst> {
+// 		self.replacement_map().get_function(f).unwrap_or_else(|| {
+// 			let new_f = add_function(self, db, model, f);
+// 			self.decapture_fn(db, model, f);
+// 			if let Some(d) = self.decaptured.get(&f) {
+// 				self.model[new_f].add_parameter(d.parameter);
+// 			}
+// 			new_f
+// 		})
 // 	}
 
 // 	fn fold_function_body(&mut self, db: &'db dyn Db, model: &Model<'db>, f: FunctionId<'db>) {
@@ -270,18 +266,12 @@
 // 			declarations.sort();
 
 // 			let origin = model[f].origin();
-// 			let domain = if declarations.len() > 1 {
-// 				Domain::tuple(
-// 					db,
-// 					origin,
-// 					OptType::NonOpt,
-// 					declarations
-// 						.iter()
-// 						.map(|d| Domain::unbounded(db, origin, self.model[*d].ty())),
-// 				)
+// 			let ty = if declarations.len() > 1 {
+// 				Ty::tuple(db, declarations.iter().map(|d| self.model[*d].ty()))
 // 			} else {
-// 				self.model[declarations[0]].domain().clone()
+// 				self.model[declarations[0]].ty()
 // 			};
+// 			let domain = Domain::unbounded(db, origin, ty);
 
 // 			// Create a declaration for the captures (or reuse existing declaration if there's only one variable)
 // 			let captured_values = if declarations.len() > 1 {
@@ -338,7 +328,7 @@
 // }
 
 // /// Rewrite capturing functions into non-capturing functions
-// pub fn decapture_model<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db>> {
+// pub fn rewrite_captured_globals<'db>(db: &'db dyn Db, model: Model<'db>) -> Result<Model<'db>> {
 // 	log::info!("Rewriting functions to be non-capturing");
 // 	let mut d = Decapturer {
 // 		model: Model::with_capacities(&model.item_counts()),
@@ -356,13 +346,13 @@
 // mod tests {
 // 	use expect_test::expect;
 
-// 	use super::decapture_model;
+// 	use super::rewrite_captured_globals;
 // 	use crate::transform::tests::check_no_stdlib;
 
 // 	#[test]
 // 	fn test_decapture() {
 // 		check_no_stdlib(
-// 			decapture_model,
+// 			rewrite_captured_globals,
 // 			r#"
 //                 var int: x;
 //                 function var int: foo() = x;
@@ -378,9 +368,31 @@
 // 	}
 
 // 	#[test]
+// 	fn test_decapture_2() {
+// 		check_no_stdlib(
+// 			rewrite_captured_globals,
+// 			r#"
+// 				var {1, 2, 3}: a;
+// 				var {1, 2, 3}: b;
+// 				predicate bar(var int: x, var int: y);
+// 				predicate foo(var int: x) = bar(x, b);
+// 				constraint foo(a);
+//             "#,
+// 			expect!([r#"
+//     var {1, 2, 3}: a;
+//     var {1, 2, 3}: b;
+//     predicate bar(var int: x, var int: y);
+//     function var bool: foo(var int: x, var int: _DECL_6) = bar(x, _DECL_6);
+//     constraint foo(a, b);
+//     solve satisfy;
+// "#]),
+// 		);
+// 	}
+
+// 	#[test]
 // 	fn test_decapture_complex() {
 // 		check_no_stdlib(
-// 			decapture_model,
+// 			rewrite_captured_globals,
 // 			r#"
 //                 var int: x;
 //                 var int: y;
@@ -397,29 +409,6 @@
 //     tuple(var int, var int): _DECL_5 = (x, y);
 //     function var int: foo(var int: _DECL_7) = _DECL_7;
 //     var int: z = bar(_DECL_5);
-//     solve satisfy;
-// "#]),
-// 		);
-// 	}
-
-// 	#[test]
-// 	fn test_decapture_domains() {
-// 		check_no_stdlib(
-// 			decapture_model,
-// 			r#"
-// 				set of int: A;
-// 				set of int: B;
-// 				set of int: C;
-// 				function A: foo(B: x, C: y);
-// 				any: x = foo(1, 2);
-//             "#,
-// 			expect!([r#"
-//     set of int: A;
-//     set of int: B;
-//     set of int: C;
-//     function A: foo(B: x, C: y, tuple(set of int, set of int, set of int): _DECL_7);
-//     tuple(set of int, set of int, set of int): _DECL_6 = (A, B, C);
-//     int: x = foo(1, 2, _DECL_6);
 //     solve satisfy;
 // "#]),
 // 		);

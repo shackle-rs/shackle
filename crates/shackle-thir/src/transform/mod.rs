@@ -37,6 +37,7 @@ pub mod erase_opt;
 pub mod erase_record;
 pub mod function_dispatch;
 pub mod inlining;
+pub mod lambda;
 pub mod name_mangle;
 pub mod output;
 pub mod top_down_type;
