@@ -128,11 +128,11 @@
 		"@types/mocha": "^10.0.10",
 		"@types/node": "22.20.1",
 		"@types/vscode": "1.125.0",
-		"@typescript-eslint/eslint-plugin": "^8.72.2",
+		"@typescript-eslint/eslint-plugin": "^8.73.0",
 		"@typescript-eslint/parser": "^8.63.0",
 		"@vscode/vsce": "^4.1.1",
 		"esbuild": "^0.28.2",
-		"eslint": "^10.14.0",
+		"eslint": "^10.15.0",
 		"mocha": "^12.0.3",
 		"typescript": "^7.0.2"
 	},
