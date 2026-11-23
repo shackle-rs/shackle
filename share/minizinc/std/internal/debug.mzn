@@ -1,9 +1,6 @@
 function bool: mzn_add_warning(string: msg);
 function bool: mzn_assert_warn(bool: b, string: msg) :: mzn_inline_call_by_name =
-	let {
-		bool: condition = b;
-		constraint if condition then true else mzn_add_warning(msg) endif;
-	} in condition;
+	if b then true else let { constraint mzn_add_warning(msg) } in false endif;
 
 test assert(bool: b, string: msg) :: mzn_inline_call_by_name = if b then true else abort(msg) endif;
 function any $T: assert(bool: b, string: msg, any $T: x) :: mzn_inline_call_by_name =

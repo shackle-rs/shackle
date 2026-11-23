@@ -230,6 +230,27 @@ function bool: xorall(array [$T] of bool: x) =
 	mod_internal(length([x_i | x_i in x where x_i]), 2) = 1;
 function bool: iffall(array [$T] of bool: x) = xorall([true] ++ array1d(x));
 
+% $$E covers integer and enum indices and takes precedence over the generic
+% standard-library overload, whose value form calls an unreified predicate.
+function var bool: xorall(array [$$E] of var bool: x) =
+	if mzn_in_root_context() then
+		let { constraint array_bool_xor(array1d(x)) } in true
+	else
+		mzn_xorall_t(array1d(x))
+	endif;
+
+function var bool: mzn_xorall_t(
+	array [int] of var bool: x,
+)
+	:: promise_total =
+	let {
+		var bool: r;
+		% Odd parity of x ++ [not r] is equivalent to r = xorall(x).
+		constraint array_bool_xor(x ++ [not r]);
+	} in r;
+
+function var bool: iffall(array [$$E] of var bool: x) = xorall([true] ++ array1d(x));
+
 % Subset
 
 function bool: 'subset'(set of $T: x, set of $T: y) = forall (x_i in x) (x_i in y);
@@ -714,6 +735,7 @@ function var int: '+'(var int: x, var int: y) :: promise_total = sum([x, y]);
 
 function var int: sum(array [$T] of var int: x) = mzn_sum_t(array1d(x));
 function var int: sum(array [int] of var int: x) = mzn_sum_t(array1d(x));
+function var int: sum(array [int] of var opt int: x) = sum (xi in array1d(x)) (xi default 0);
 
 function var int: mzn_sum_t(
 	array [int] of var int: x,
@@ -741,6 +763,7 @@ function int: sum(array [int] of int: x) =
 				mzn_slice_internal(xx, [3..length(xx)]),
 		)
 	endif;
+function int: sum(array [int] of opt int: x) = sum (xi in array1d(x)) (xi default 0);
 
 % Addition of floats
 
@@ -985,7 +1008,6 @@ function var set of $$E: 'symdiff'(var set of $$E: x, var set of $$E: y) =
 
 % Coercions
 
-function int: bool2int(bool: x) = if x then 1 else 0 endif;
 function var int: bool2int(var bool: x) = bool2int_t(x);
 
 function var int: bool2int_t(
@@ -1049,10 +1071,10 @@ function array [int] of any $T: '++'(array [$$X] of any $T: x, array [$$Y] of an
 		i in 1..length(x) + length(y),
 ];
 
-function $$E: arg_val(array [$$E] of $T: xs, $T: value);
-
-function $$E: arg_min_internal(array [$$E] of $T: xs) = arg_val(xs, min(xs));
-function $$E: arg_max_internal(array [$$E] of $T: xs) = arg_val(xs, max(xs));
+function $$E: arg_min_internal(array [$$E] of $T: xs) =
+	let { any: matches = [i | i in index_set(xs) where xs[i] = min(xs)] } in matches[1];
+function $$E: arg_max_internal(array [$$E] of $T: xs) =
+	let { any: matches = [i | i in index_set(xs) where xs[i] = max(xs)] } in matches[1];
 
 function $T: min($T: x, $T: y) = if x < y then x else y endif;
 function $T: max($T: x, $T: y) = if x < y then y else x endif;
@@ -2090,3 +2112,9 @@ function array [int] of tuple(float, float): mzn_set_to_ranges(set of float: S) 
 		(mzn_element_internal(ranges, i), mzn_element_internal(ranges, i + 1)) |
 			i in index_set(ranges) where mod_internal(i, 2) = 1,
 	];
+
+predicate mzn_post(var bool: c) :: promise_total :: mzn_no_remove =
+	let { constraint bool_eq(c, true) } in true;
+
+function set of $$E: dom_array(array [$T] of var $$E: x) = array_union([dom(x_i) | x_i in x]);
+function set of $$E: dom_bounds_array(array [$T] of var $$E: x) = lb_array(x)..ub_array(x);
