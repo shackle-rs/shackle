@@ -12,7 +12,7 @@ name = "shackle_ls"
 path = "src/lib.rs"
 
 [dependencies]
-crossbeam-channel = "0.5.8"
+crossbeam-channel = "0.5.17"
 env_logger = {workspace = true}
 log = {workspace = true}
 lsp-server = "0.10.0"
@@ -30,7 +30,7 @@ threadpool = "1.8.1"
 # tree-sitter-minizinc = { path = "../../parsers/tree-sitter-minizinc" }
 
 [dev-dependencies]
-expect-test = "1.4.1"
+expect-test = "1.5.1"
 
 [lints]
 workspace = true

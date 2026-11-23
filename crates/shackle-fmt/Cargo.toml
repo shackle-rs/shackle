@@ -20,14 +20,14 @@ streaming-iterator = {workspace = true}
 tree-sitter = {workspace = true}
 tree-sitter-minizinc = {workspace = true}
 
-console = {version = "0.16.3", optional = true}
-glob = {version = "0.3.3", optional = true}
+console = {version = "0.16.6", optional = true}
+glob = {version = "0.3.4", optional = true}
 miette = {workspace = true, optional = true}
-similar = {version = "3.1.0", optional = true}
+similar = {version = "3.2.1", optional = true}
 
 [dev-dependencies]
 expect-test = {workspace = true}
-glob = "0.3.3"
+glob = "0.3.4"
 pretty_assertions = "1.4.1"
 shackle-hir = {workspace = true}
 
