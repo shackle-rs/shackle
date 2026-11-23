@@ -25,6 +25,23 @@ function array [$X] of var set of bool: enum2int(array [$X] of var set of bool: 
 function set of $$E: enum_of(var $$E: x) :: mzn_internal_representation;
 function set of $$E: enum_of(array [$T] of var $$E: x) :: mzn_internal_representation;
 
+function $$E: enum_next(set of $$E: e, $$E: x) =
+	let {
+		constraint
+			mzn_assert_warn(
+				x < max(e),
+				"The value \(x) is the max of the enum, cannot get next value.",
+			);
+	} in to_enum_internal(e, enum2int(x) + 1);
+function $$E: enum_prev(set of $$E: e, $$E: x) =
+	let {
+		constraint
+			mzn_assert_warn(
+				x > min(e),
+				"The value \(x) is the min of the enum, cannot get previous value.",
+			);
+	} in to_enum_internal(e, enum2int(x) - 1);
+
 % (cardinality, [(constrcutor name, [(param enum id, domain)], offset)])
 type MznEnum = tuple(int, array [int] of tuple(string, array [int] of tuple(int, set of int), int));
 
@@ -302,3 +319,5 @@ function $$E: to_enum(set of $$E: X, int: x) =
 	let {
 		constraint mzn_assert_warn(x in enum2int(enum_of(X)), "The value \(x) is out of bounds");
 	} in to_enum_internal(X, x);
+
+function string: enum_name_internal(set of $$E: x);

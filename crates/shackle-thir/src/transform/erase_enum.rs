@@ -56,6 +56,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for EnumEraser<'db
 			|| model[f].name() == self.ids.functions.to_enum_internal
 			|| model[f].name() == self.ids.functions.index2int
 			|| model[f].name() == self.ids.functions.enum_of
+			|| model[f].name() == self.ids.functions.enum_name_internal
 		{
 			// Remove unnecessary functions
 			return;
@@ -73,6 +74,7 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for EnumEraser<'db
 			|| model[f].name() == self.ids.functions.to_enum_internal
 			|| model[f].name() == self.ids.functions.index2int
 			|| model[f].name() == self.ids.functions.enum_of
+			|| model[f].name() == self.ids.functions.enum_name_internal
 		{
 			// Remove unnecessary functions
 			return;
@@ -327,6 +329,25 @@ impl<'db, Dst: Marker, Src: Marker> Folder<'_, 'db, Dst, Src> for EnumEraser<'db
 									function: self.ids.functions.mzn_infinite_range.into(),
 									arguments: vec![],
 								},
+							);
+						} else if model[*f].name() == self.ids.functions.enum_name_internal {
+							log::debug!(
+								"Erasing enum_name call at {}",
+								expression.origin().pretty_print(db)
+							);
+							if let Some(e) = c.arguments[0].ty().enum_ty(db) {
+								return Expression::new(
+									db,
+									&self.model,
+									expression.origin(),
+									StringLiteral::from(e.name()),
+								);
+							}
+							return Expression::new(
+								db,
+								&self.model,
+								expression.origin(),
+								StringLiteral::new(db, ""),
 							);
 						}
 					}
