@@ -173,8 +173,10 @@ function array [$$E, $$F, $$G, $$H, $$I, $$J] of any $T: mzn_indexed_array(
 		[x_i.2 | x_i in x],
 	);
 
-function set of int: mzn_array2set(array [int] of int: x) = array2set(x);
-function set of float: mzn_array2set(array [int] of float: x) = array2set(x);
+function set of int: array2set_internal_int(array [int] of int: x) = array2set(x);
+function set of float: array2set_internal_float(array [int] of float: x) = array2set(x);
+function set of $T: array2set_internal_discrete(array [int] of $T: x) =
+	let { constraint abort("not supported") } in {};
 
 function bool: mzn_add_warning(string: msg) = trace("WARNING: " ++ msg);
 

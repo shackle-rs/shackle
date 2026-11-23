@@ -14,10 +14,10 @@ use shackle_utils::maybe_grow_stack;
 use super::top_down_type::add_coercion;
 use crate::{
 	Absent, ArrayComprehension, ArrayLiteral, Branch, Call, Callable, Db, Declaration,
-	DeclarationId, Expression, ExpressionData, Generator, IfThenElse, IntegerLiteral, Item,
-	LookupCall, LookupIdentifier, Marker, Model, ResolvedIdentifier, SetComprehension,
+	DeclarationId, Expression, ExpressionData, FunctionId, Generator, IfThenElse, IntegerLiteral,
+	Item, LookupCall, LookupIdentifier, Marker, Model, ResolvedIdentifier, SetComprehension,
 	TupleLiteral, VarType,
-	traverse::{Folder, ReplacementMap, Visitor, fold_call, fold_expression},
+	traverse::{Folder, ReplacementMap, Visitor, add_function, fold_call, fold_expression},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +41,14 @@ impl<'db, Dst: Marker> Folder<'_, 'db, Dst> for ComprehensionRewriter<'db, Dst> 
 
 	fn replacement_map(&mut self) -> &mut ReplacementMap<'db, Dst> {
 		&mut self.replacement_map
+	}
+
+	fn add_function(&mut self, db: &'db dyn Db, model: &'_ Model<'db, ()>, f: FunctionId<'db, ()>) {
+		if model[f].name() == self.ids.functions.set2iter && model[f].body().is_none() {
+			// Remove unused set2iter
+			return;
+		}
+		let _ = add_function(self, db, model, f);
 	}
 
 	fn fold_call(
@@ -134,7 +142,7 @@ impl<'db, Dst: Marker> Folder<'_, 'db, Dst> for ComprehensionRewriter<'db, Dst> 
 						&self.result,
 						expression.origin(),
 						LookupCall {
-							function: self.ids.functions.mzn_array2set.into(),
+							function: self.ids.functions.array2set_internal.into(),
 							arguments: vec![Expression::new(
 								db,
 								&self.result,
@@ -737,7 +745,7 @@ mod tests {
 			expect!([r#"
     set of int: S;
     function var int: foo(int: x);
-    var set of int: x = mzn_array2set([foo(i) | i in S]);
+    var set of int: x = array2set_internal([foo(i) | i in S]);
 "#]),
 		)
 	}
@@ -758,7 +766,7 @@ mod tests {
 			expect!([r#"
     var set of int: S;
     function var int: foo(int: x);
-    var set of int: x = mzn_array2set([if _DECL_1 then val2opt(foo(i)) else let {
+    var set of int: x = array2set_internal([if _DECL_1 then val2opt(foo(i)) else let {
       var opt int: _DECL_2 = <>;
     } in _DECL_2 endif | i in ub(S), _DECL_1 :: (mzn_var_where_clause) = 'in'(i, S)]);
 "#]),
