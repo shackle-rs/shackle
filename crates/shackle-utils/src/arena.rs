@@ -76,10 +76,30 @@ unsafe impl<T> salsa::SalsaValue for ArenaIndex<T> {}
 
 impl<T> ArenaIndex<T> {
 	/// Create a new arena index from a raw 1-based index
-	fn new(raw: u32) -> Self {
+	pub fn new(raw: u32) -> Self {
 		Self {
 			index: NonZeroU32::new(raw).expect("Expected non-zero index"),
 			phantom: PhantomData,
+		}
+	}
+
+	/// Get the next index after this one (which may or may not exist in the arena)
+	pub fn next(&self) -> Self {
+		Self {
+			index: NonZeroU32::new(self.index.get() + 1).expect("Expected non-zero index"),
+			phantom: PhantomData,
+		}
+	}
+
+	/// Get the previous index before this one (which may or may not exist in the arena)
+	pub fn prev(&self) -> Option<Self> {
+		if self.index.get() == 1 {
+			None
+		} else {
+			Some(Self {
+				index: NonZeroU32::new(self.index.get() - 1).expect("Expected non-zero index"),
+				phantom: PhantomData,
+			})
 		}
 	}
 }
@@ -167,6 +187,11 @@ impl<T> Arena<T> {
 	/// Return whether the arena is empty.
 	pub fn is_empty(&self) -> bool {
 		self.items.is_empty()
+	}
+
+	/// Get the next index that will be allocated in the arena.
+	pub fn next_index(&self) -> ArenaIndex<T> {
+		ArenaIndex::new(self.len() + 1)
 	}
 
 	/// Allocate a value in the arena.
