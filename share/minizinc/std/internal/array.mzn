@@ -208,7 +208,7 @@ function array [$E] of any $T: mzn_indexed_array(array [int] of tuple($E, any $T
 function array [$$E] of any $T: mzn_start_indexed_array($$E: start, array [int] of any $T: x) =
 	array1d(start..to_enum(enum_of(start), enum2int(start) + length(x) - 1), x);
 
-function var set of int: mzn_array2set(array [int] of var int: x) :: promise_total =
+function var set of int: array2set_internal(array [int] of var int: x) :: promise_total =
 	if length(x) = 0 then
 		{}
 	else
@@ -224,7 +224,7 @@ function var set of int: mzn_array2set(array [int] of var int: x) :: promise_tot
 		} in y
 	endif;
 
-function var set of int: mzn_array2set(array [int] of var opt int: x) :: promise_total =
+function var set of int: array2set_internal(array [int] of var opt int: x) :: promise_total =
 	if length(x) = 0 then
 		{}
 	else
@@ -240,18 +240,21 @@ function var set of int: mzn_array2set(array [int] of var opt int: x) :: promise
 		} in y
 	endif;
 
-function set of int: mzn_array2set(array [int] of int: x);
-function set of int: mzn_array2set(array [int] of opt int: x) = {
-	deopt(x[i]) |
-		i in index_set(x) where occurs(x[i]),
-};
+function set of int: array2set_internal(array [int] of int: x) = array2set_internal_int(x);
+function set of int: array2set_internal(array [int] of opt int: x) =
+	array2set_internal_int([deopt(x_i) | x_i in x where occurs(x_i)]);
 
-function set of bool: mzn_array2set(array [int] of bool: x) =
+function set of bool: array2set_internal(array [int] of bool: x) =
 	let {
 		bool: f = exists (b in x) (not b);
 		bool: t = exists (b in x) (b);
 	} in if f /\ t then {false, true} elseif f then {false} elseif t then {true} else {} endif;
 
-function set of float: mzn_array2set(array [int] of float: x);
+function set of float: array2set_internal(array [int] of float: x) = array2set_internal_float(x);
 
-function set of $$E: mzn_array2set(array [int] of $$E: x) :: mzn_unreachable;
+function set of $$E: array2set_internal(array [int] of $$E: x) =
+	to_enum_internal(enum_of(x), array2set_internal_int([enum2int(x_i) | x_i in x]));
+
+function set of int: array2set_internal_int(array [int] of int: x);
+function set of float: array2set_internal_float(array [int] of float: x);
+function set of $T: array2set_internal_discrete(array [int] of $T: x);
