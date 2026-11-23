@@ -50,14 +50,24 @@ impl Request for ViewScope {
 	const METHOD: &'static str = "shackle-ls/viewScope";
 }
 
-/// Request to view pretty printed MiniZinc for a file
-pub(crate) enum ViewPrettyPrint {}
+/// Request to view THIR before transforms for a file
+pub(crate) enum ViewLoweredThir {}
 
-impl Request for ViewPrettyPrint {
+impl Request for ViewLoweredThir {
 	type Params = TextDocumentPositionParams;
 	type Result = String;
 
-	const METHOD: &'static str = "shackle-ls/viewPrettyPrint";
+	const METHOD: &'static str = "shackle-ls/viewLoweredThir";
+}
+
+/// Request to view THIR after transforms for a file
+pub(crate) enum ViewTransformedThir {}
+
+impl Request for ViewTransformedThir {
+	type Params = TextDocumentPositionParams;
+	type Result = String;
+
+	const METHOD: &'static str = "shackle-ls/viewTransformedThir";
 }
 
 /// Request to view pretty printed MIR for a file
