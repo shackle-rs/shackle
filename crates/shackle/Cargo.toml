@@ -20,7 +20,7 @@ shackle-syntax = {workspace = true}
 shackle-thir = {workspace = true}
 shackle-ty = {workspace = true}
 shackle-utils = {workspace = true}
-tempfile = "3.5.0"
+tempfile = "3.27.0"
 
 [dev-dependencies]
 expect-test = {workspace = true}

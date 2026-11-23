@@ -89,6 +89,7 @@ pub(super) fn item_signature<'db>(
 fn unknown_item_signature<'db>(
 	_db: &'db dyn Db,
 	_id: salsa::Id,
+	_last_provisional_value: Option<&Option<SignatureTypesResult<'db>>>,
 	_item: Item<'db>,
 ) -> Option<SignatureTypesResult<'db>> {
 	None

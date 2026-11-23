@@ -18,7 +18,7 @@ shackle-fmt = {workspace = true}
 shackle-hir = {workspace = true}
 shackle-thir = {workspace = true}
 shackle-ty = {workspace = true}
-tempfile = "3.5.0"
+tempfile = "3.27.0"
 
 [dev-dependencies]
 expect-test = {workspace = true}

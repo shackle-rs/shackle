@@ -30,8 +30,8 @@ path = "bindings/rust/lib.rs"
 tree-sitter-language = {workspace = true}
 
 [build-dependencies]
-cc = "1.2"
-serde_json = "1.0.149"
+cc = "1.11"
+serde_json = "1.0.154"
 
 [dev-dependencies]
 tree-sitter = {workspace = true}
