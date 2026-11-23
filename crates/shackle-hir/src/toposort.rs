@@ -442,11 +442,26 @@ impl<'db> TopoSorter<'db> {
 					if visit_call_body.is_some()
 						&& let Item::Function(f) = it
 					{
-						if !seen.contains(&p)
-							&& let Some(body) = f.function(self.db).body
-						{
-							let _ = seen.insert(p);
-							todo.push(ExpressionRef::new(self.db, it, body));
+						if !seen.contains(&p) {
+							let func = f.function(self.db);
+							let mut pushed = false;
+							if let Some(body) = func.body {
+								todo.push(ExpressionRef::new(self.db, it, body));
+								pushed = true;
+							}
+							let d = it.data(self.db);
+							for e in func
+								.parameters
+								.iter()
+								.flat_map(|p| Type::expressions(p.declared_type, d))
+								.chain(Type::expressions(func.return_type, d))
+							{
+								todo.push(ExpressionRef::new(self.db, it, e));
+								pushed = true;
+							}
+							if pushed {
+								let _ = seen.insert(p);
+							}
 						}
 						continue;
 					}
@@ -578,5 +593,23 @@ mod tests {
     var new B: b1;
 "#]),
 		);
+	}
+
+	#[test]
+	fn test_nested_param_domain_topological_sort() {
+		check_toposort(
+			r#"
+			test bar() = foo(10);
+			constraint bar();
+			test foo({1, n}: x) = true;
+			int: n = 2;
+		"#,
+			expect!([r#"
+    int: n = 2;
+    test bar() = foo(10);
+    constraint bar();
+    test foo({1, n}: x) = true;
+"#]),
+		)
 	}
 }
