@@ -71,8 +71,13 @@
 				"enablement": "editorLangId == minizinc"
 			},
 			{
-				"command": "minizincLanguageServer.viewPrettyPrint",
-				"title": "MiniZinc: View Pretty Printed MiniZinc",
+				"command": "minizincLanguageServer.viewLoweredThir",
+				"title": "MiniZinc: View Lowered THIR",
+				"enablement": "editorLangId == minizinc"
+			},
+			{
+				"command": "minizincLanguageServer.viewTransformedThir",
+				"title": "MiniZinc: View Transformed THIR",
 				"enablement": "editorLangId == minizinc"
 			},
 			{

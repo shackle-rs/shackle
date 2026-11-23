@@ -11,7 +11,7 @@ import {
 import { handleAstViewCommand } from "./view-ast"
 import { handleCstViewCommand } from "./view-cst"
 import { handleHirViewCommand } from "./view-hir"
-import { handlePrettyPrintViewCommand } from "./view-pretty-print"
+import { handleThirViewCommand } from "./view-thir"
 import { handleScopeViewCommand } from "./view-scope"
 import { handleFormatIrViewCommand } from "./view-format-ir"
 import { handleMirViewCommand } from "./view-mir"
@@ -86,8 +86,13 @@ export async function activate(context: ExtensionContext) {
 		)
 	)
 	context.subscriptions.push(
-		commands.registerCommand("minizincLanguageServer.viewPrettyPrint", () =>
-			handlePrettyPrintViewCommand(client)
+		commands.registerCommand("minizincLanguageServer.viewLoweredThir", () =>
+			handleThirViewCommand(client, context, "lowered")
+		)
+	)
+	context.subscriptions.push(
+		commands.registerCommand("minizincLanguageServer.viewTransformedThir", () =>
+			handleThirViewCommand(client, context, "transformed")
 		)
 	)
 	context.subscriptions.push(

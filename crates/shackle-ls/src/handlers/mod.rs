@@ -13,13 +13,13 @@ mod view_cst;
 mod view_format_ir;
 mod view_hir;
 mod view_mir;
-mod view_pretty_print;
 mod view_scope;
+mod view_thir;
 
 pub(crate) use self::{
 	completions::*, format::*, goto_definition::*, hover::*, inlay_hints::*, references::*,
 	rename_symbol::*, semantic_tokens::*, signature_help::*, vfs::*, view_ast::*, view_cst::*,
-	view_format_ir::*, view_hir::*, view_mir::*, view_pretty_print::*, view_scope::*,
+	view_format_ir::*, view_hir::*, view_mir::*, view_scope::*, view_thir::*,
 };
 
 #[cfg(test)]

@@ -18,24 +18,36 @@ import {
 import { LanguageClient } from "vscode-languageclient/node"
 import { isMiniZinc } from "./utils"
 
-const viewPrettyPrintRequest = new RequestType<
-	TextDocumentPositionParams,
-	string,
-	void
->("shackle-ls/viewPrettyPrint")
+type ThirStage = "lowered" | "transformed"
 
-class PrettyPrintProvider implements TextDocumentContentProvider {
+const views = {
+	lowered: {
+		uri: Uri.parse("shackle-ls-thir://viewLoweredThir/lowered-thir.mzn"),
+		request: new RequestType<TextDocumentPositionParams, string, void>(
+			"shackle-ls/viewLoweredThir"
+		),
+	},
+	transformed: {
+		uri: Uri.parse(
+			"shackle-ls-thir://viewTransformedThir/transformed-thir.mzn"
+		),
+		request: new RequestType<TextDocumentPositionParams, string, void>(
+			"shackle-ls/viewTransformedThir"
+		),
+	},
+}
+
+class ThirProvider implements TextDocumentContentProvider, Disposable {
 	readonly eventEmitter = new EventEmitter<Uri>()
-	readonly uri: Uri = Uri.parse("shackle-ls://viewPrettyPrint/pretty.mzn")
 
 	private client: LanguageClient
 	private subscriptions: Disposable[] = []
 
-	constructor(client: LanguageClient, onFinish: () => void) {
+	constructor(client: LanguageClient) {
 		this.client = client
 
 		this.subscriptions.push(
-			workspace.registerTextDocumentContentProvider("shackle-ls", this)
+			workspace.registerTextDocumentContentProvider("shackle-ls-thir", this)
 		)
 
 		workspace.onDidChangeTextDocument(
@@ -53,30 +65,28 @@ class PrettyPrintProvider implements TextDocumentContentProvider {
 			this,
 			this.subscriptions
 		)
+	}
 
-		workspace.onDidCloseTextDocument(
-			(e) => {
-				if (e.uri.toString() == this.uri.toString()) {
-					for (const disposable of this.subscriptions) {
-						disposable.dispose()
-					}
-					onFinish()
-				}
-			},
-			this,
-			this.subscriptions
-		)
+	dispose() {
+		for (const disposable of this.subscriptions) {
+			disposable.dispose()
+		}
+		this.eventEmitter.dispose()
+		provider = null
 	}
 
 	private invalidate() {
 		if (isMiniZinc(window.activeTextEditor)) {
-			this.eventEmitter.fire(this.uri)
+			for (const view of Object.values(views)) {
+				this.eventEmitter.fire(view.uri)
+			}
 		}
 	}
 
-	async activate() {
-		const document = await workspace.openTextDocument(this.uri)
-		this.eventEmitter.fire(this.uri)
+	async activate(stage: ThirStage) {
+		const uri = views[stage].uri
+		const document = await workspace.openTextDocument(uri)
+		this.eventEmitter.fire(uri)
 		await window.showTextDocument(document, {
 			viewColumn: ViewColumn.Two,
 			preserveFocus: true,
@@ -84,7 +94,7 @@ class PrettyPrintProvider implements TextDocumentContentProvider {
 	}
 
 	provideTextDocumentContent(
-		_uri: Uri,
+		uri: Uri,
 		ct: CancellationToken
 	): ProviderResult<string> {
 		const editor = window.activeTextEditor
@@ -99,7 +109,10 @@ class PrettyPrintProvider implements TextDocumentContentProvider {
 				editor.selection.active
 			),
 		}
-		return this.client.sendRequest(viewPrettyPrintRequest, params, ct)
+		const view = Object.values(views).find(
+			(view) => view.uri.toString() === uri.toString()
+		)
+		return view ? this.client.sendRequest(view.request, params, ct) : ""
 	}
 
 	get onDidChange(): Event<Uri> {
@@ -107,12 +120,15 @@ class PrettyPrintProvider implements TextDocumentContentProvider {
 	}
 }
 
-let provider: PrettyPrintProvider | null = null
-export async function handlePrettyPrintViewCommand(client: LanguageClient) {
+let provider: ThirProvider | null = null
+export async function handleThirViewCommand(
+	client: LanguageClient,
+	context: ExtensionContext,
+	stage: ThirStage
+) {
 	if (!provider) {
-		provider = new PrettyPrintProvider(client, () => {
-			provider = null
-		})
+		provider = new ThirProvider(client)
+		context.subscriptions.push(provider)
 	}
-	await provider.activate()
+	await provider.activate(stage)
 }
